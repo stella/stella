@@ -15,17 +15,20 @@ import { SEARCH_PAGE_END, type SearchExcerpt } from "@stll/api-contract/search";
 
 import {
   decisionDateRange,
-  decisionSortOrder,
   isStrictSearch,
 } from "@/features/case-law/case-law-index-search.logic";
 import type { CaseLawIndexSearch } from "@/features/case-law/case-law-index-search.logic";
 import { caseLawCountryScope } from "@/features/case-law/case-law-jurisdiction";
+import { preferredDecisionTarget } from "@/features/case-law/decision-cell-target.logic";
+import {
+  decisionListSortOf,
+  searchSortOf,
+} from "@/features/case-law/decision-order.logic";
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
-  decisionsPageOptions,
   type DecisionListFilters,
+  decisionsPageOptions,
 } from "@/features/case-law/queries/decisions";
-import { pickPreferredCaseLawLanguageVariant } from "@/lib/case-law-language-preference";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -85,7 +88,7 @@ export const createDecisionFiltersFromSearch = (
     readDecisionIntent(q, { jurisdiction: scope }),
   );
 
-  return {
+  const scoped = {
     country: scope,
     excerpt,
     ...(court ? { court } : {}),
@@ -94,17 +97,18 @@ export const createDecisionFiltersFromSearch = (
     ...(range.to === undefined ? {} : { dateTo: range.to }),
     ...(type ? { decisionType: type } : {}),
     ...(lang ? { language: lang } : {}),
-    // An order is a property of a ranked answer, so a browse listing carries
-    // none: it is newest-first by definition. Requiring every word is a
-    // property of a query, so a listing carries that no more than an order.
-    ...(search === undefined
-      ? {}
-      : {
-          search,
-          sort: decisionSortOrder(sort),
-          ...(isStrictSearch(strict) ? { strict: true } : {}),
-        }),
   };
+  // Each kind of result set takes its own orders: a search ranks, a listing
+  // walks the dates. Requiring every word is a property of a query, so a
+  // listing carries it no more than a ranking.
+  return search === undefined
+    ? { ...scoped, sort: decisionListSortOf(sort) }
+    : {
+        ...scoped,
+        search,
+        sort: searchSortOf(sort),
+        ...(isStrictSearch(strict) ? { strict: true } : {}),
+      };
 };
 
 type OpenDecisionMatchOptions = {
@@ -154,23 +158,16 @@ export const decisionMatchToOpen = <THit>(
   }
 };
 
-/**
- * Open the decision the entry names, when one answers to it. Several (the
- * decisions of one file, the same docket at several courts, or a sheet no
- * decision is known to carry) are left to the reader to choose between, so
- * the caller falls back to its list; the return value says which happened.
- */
-export const openDecisionMatch = async ({
+/** Shared citation lookup for the legal database and global search. */
+export const readDecisionMatch = async ({
   excerpt,
-  navigate,
   queryClient,
   search,
-  uiLocale,
-}: OpenDecisionMatchOptions): Promise<boolean> => {
+}: Pick<OpenDecisionMatchOptions, "excerpt" | "queryClient" | "search">) => {
   const jurisdiction = caseLawCountryScope(search.country);
   const intent = readDecisionIntent(search.q, { jurisdiction });
   if (intent.type !== "identifier") {
-    return false;
+    return null;
   }
 
   const firstPage = await ensureRouteQueryData(
@@ -188,12 +185,34 @@ export const openDecisionMatch = async ({
   // court's decision under the same docket may still be coming, so the list
   // stays and the reader picks.
   if (firstPage.end !== SEARCH_PAGE_END.COMPLETE) {
-    return false;
+    return null;
   }
 
-  const match = decisionMatchToOpen(
-    resolveDecisionIdentity(intent, firstPage.decisions),
+  return resolveDecisionIdentity(
+    intent,
+    firstPage.decisions.map((decision) => ({
+      ...decision,
+      identifiers: "identifiers" in decision ? decision.identifiers : undefined,
+    })),
   );
+};
+
+/**
+ * Open the decision the entry names, when one answers to it. Several (the
+ * decisions of one file, the same docket at several courts, or a sheet no
+ * decision is known to carry) are left to the reader to choose between, so
+ * the caller falls back to its list; the return value says which happened.
+ */
+export const openDecisionMatch = async ({
+  excerpt,
+  navigate,
+  queryClient,
+  search,
+  uiLocale,
+}: OpenDecisionMatchOptions): Promise<boolean> => {
+  const resolution = await readDecisionMatch({ excerpt, queryClient, search });
+  const match =
+    resolution === null ? undefined : decisionMatchToOpen(resolution);
   if (match === undefined) {
     return false;
   }
@@ -202,33 +221,9 @@ export const openDecisionMatch = async ({
     ? { match: PUBLIC_DECISION_MATCH.FILE_INCOMPLETE }
     : {};
 
-  const preferred = pickPreferredCaseLawLanguageVariant({
-    alternates: only.languageAlternates,
-    matchedLanguage: only.language,
-    uiLocale,
-  });
-  const target =
-    preferred === null
-      ? {
-          caseNumber: only.caseNumber,
-          country: only.country,
-          court: only.court,
-          decisionId: only.id,
-          language: only.language,
-          slug: only.slug,
-        }
-      : {
-          caseNumber: preferred.caseNumber,
-          country: preferred.country,
-          court: preferred.court,
-          decisionId: preferred.id,
-          language: preferred.language,
-          slug: preferred.slug,
-        };
-  const params = createCaseLawDecisionRouteParams({
-    ...target,
-    languageAlternates: only.languageAlternates,
-  });
+  const params = createCaseLawDecisionRouteParams(
+    preferredDecisionTarget(only, { uiLocale }),
+  );
 
   await (params.language === undefined
     ? navigate({

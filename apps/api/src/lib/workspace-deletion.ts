@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, not } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
@@ -21,7 +21,11 @@ import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-del
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
+import {
+  completeWorkspaceDeletion,
+  WorkspaceBillingHistoryError,
+  workspaceRetainsBillingHistory,
+} from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
@@ -109,12 +113,10 @@ const actorCanAccessWorkspace = async ({
 }): Promise<boolean> => {
   // This condition only preserves the assignment-lock scope. The database
   // rule in the later statement alone decides matter reach.
-  if (
-    !(
-      workspace.clientId !== null &&
-      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
-    )
-  ) {
+  if (!(
+    workspace.clientId !== null &&
+    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
+  )) {
     await lockMatterAccessAssignments({
       tx,
       organizationId,
@@ -233,10 +235,25 @@ export const executeAuthorizedWorkspaceDeletion = async (
         }
 
         // audit: skip; internal write fence for the DELETE event below.
-        await tx
+        const fenced = await tx
           .update(workspaces)
           .set({ status: "deleting" })
-          .where(eq(workspaces.id, workspaceId));
+          .where(
+            and(
+              eq(workspaces.id, workspaceId),
+              not(
+                workspaceRetainsBillingHistory({ organizationId, workspaceId }),
+              ),
+            ),
+          )
+          .returning({ id: workspaces.id });
+        if (fenced.length === 0) {
+          throw new WorkspaceBillingHistoryError({
+            message:
+              "This matter has time, expenses or invoices and cannot be deleted. Archive it to keep its billing records intact.",
+            workspaceId,
+          });
+        }
 
         const teardown = await completeWorkspaceDeletion({
           organizationId,

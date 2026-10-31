@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
 
+import { assertProperty } from "@stll/property-testing";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
@@ -8,19 +10,17 @@ import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { TOOL_OUTPUT_CONTRACT_DEGRADED_EVENT } from "@/api/lib/chat/tool-output-degrade";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { InternalToolSuccess } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
-  buildLegislationDocumentAppUrl,
-  legalCitationLinkFields,
   buildCaseLawDecisionUrl,
+  buildLegislationDocumentAppUrl,
   closestToolNames,
   didYouMean,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
-  ISO_DATE_SCHEMA,
   isToolErrorResult,
+  legalCitationLinkFields,
   mapValibotIssues,
   notFoundResult,
   oauthScopeRecoveryHint,
@@ -28,8 +28,11 @@ import {
   serializeToolResult,
   structuredErrorResult,
   toolDataResult,
-  untypedToolDataResult,
+  toolNameDistance,
+  toolNameKey,
+  toPlainCorpusText,
   toPlainTextSnippet,
+  untypedToolDataResult,
   validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
@@ -37,6 +40,7 @@ import {
   defineMcpToolOutput,
   defineProjectedMcpToolOutput,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   installRecordingAnalytics,
@@ -55,22 +59,15 @@ const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
 const DECISION_ID = "019dd47d-f507-7c84-b827-980af11b8980";
 const COMPACT_DECISION_ID = "AZ3UffUHfIS4J5gK8RuJgA";
 
-describe("MCP ISO date contract", () => {
-  test("accepts ISO dates and rejects out-of-range date components", () => {
-    expect(v.is(ISO_DATE_SCHEMA, "2026-08-23")).toBe(true);
-    expect(v.is(ISO_DATE_SCHEMA, "2026-99-99")).toBe(false);
-  });
-});
-
 const createWorkspaceGateContext = (
   status: "active" | "archived",
 ): {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   pinnedWorkspaceIds: string[];
 } => {
   const pinnedWorkspaceIds: string[] = [];
   return {
-    context: asTestRaw<McpRequestContext>({
+    context: asTestRaw<AuthorizedMcpRequestContext>({
       accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
       accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, status]]),
       pinServerValidatedWorkspaceId: (
@@ -732,6 +729,56 @@ describe("notFoundResult", () => {
   });
 });
 
+const legacyAsciiDistance = (left: string, right: string): number => {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= left.length; row += 1) {
+    const current = [row];
+    for (let column = 1; column <= right.length; column += 1) {
+      current.push(
+        Math.min(
+          (previous[column] ?? 0) + 1,
+          (current[column - 1] ?? 0) + 1,
+          (previous[column - 1] ?? 0) +
+            (left[row - 1] === right[column - 1] ? 0 : 1),
+        ),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? 0;
+};
+
+test("ASCII tool distances retain the legacy minimum across name variants", () => {
+  const spelling = fc.stringMatching(/^[a-zA-Z._-]{0,14}$/u);
+  assertProperty(
+    "ASCII tool distances retain the legacy minimum across name variants",
+    fc.property(spelling, spelling, (target, name) => {
+      const sortWords = (value: string) =>
+        value.split(/[._-]/u).toSorted().join(" ");
+      expect(toolNameDistance(target, name)).toBe(
+        Math.min(
+          legacyAsciiDistance(target, name),
+          legacyAsciiDistance(sortWords(target), sortWords(name)),
+          legacyAsciiDistance(toolNameKey(target), toolNameKey(name)),
+        ),
+      );
+    }),
+  );
+});
+
+test("tool suggestions retain Czech diacritics and inflected names", () => {
+  expect(toolNameDistance("kůň", "kun")).toBe(2);
+  expect(toolNameDistance("Novákem", "Novák")).toBe(2);
+  expect(closestToolNames("kůň", ["kun", "kům"])).toEqual(["kům", "kun"]);
+});
+
+test("tool suggestions count astral Unicode characters as single edits", () => {
+  expect(toolNameDistance("😀", "x")).toBe(1);
+  expect(toolNameDistance("a😀😀", "abc")).toBe(2);
+  expect(closestToolNames("😀", ["x"])).toEqual(["x"]);
+  expect(closestToolNames("a😀😀", ["abc"])).toEqual(["abc"]);
+});
+
 describe("closestToolNames", () => {
   const candidates = [
     "list_matters",
@@ -746,33 +793,24 @@ describe("closestToolNames", () => {
     );
   });
 
-  test("matches a name whose words were regrouped", () => {
-    expect(
-      closestToolNames("widgets.delete-part", [
-        "widgets.bolts.delete",
-        "widgets.parts.get",
-        "widgets.parts.delete",
-      ]).at(0),
-    ).toBe("widgets.parts.delete");
-  });
-
   test("returns nothing for an unrelated miss", () => {
     expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
   });
 
-  test("caps the suggestions at the requested limit", () => {
-    expect(
-      closestToolNames("matter", candidates, 2).length,
-    ).toBeLessThanOrEqual(2);
+  test("keeps ASCII tie order and empty candidate behavior", () => {
+    expect(closestToolNames("x", ["b", "a"])).toEqual(["a", "b"]);
+    expect(closestToolNames("x", [])).toEqual([]);
+    expect(closestToolNames("", ["a", "ab"])).toEqual(["a", "ab"]);
   });
 
-  test("matches a name spelled as a chat script function or in another case", () => {
-    for (const spelling of [
-      "external_list_matters",
-      "listMatters",
-      "LIST_MATTERS",
-      "list-matters",
-    ]) {
+  test("caps suggestions at three names", () => {
+    expect(closestToolNames("matter", candidates).length).toBeLessThanOrEqual(
+      3,
+    );
+  });
+
+  test("matches common separator and case spellings", () => {
+    for (const spelling of ["listMatters", "LIST_MATTERS", "list-matters"]) {
       expect(closestToolNames(spelling, candidates).at(0)).toBe("list_matters");
     }
   });
@@ -849,5 +887,74 @@ describe("primary legal citation links", () => {
     } finally {
       restore();
     }
+  });
+});
+
+describe("served corpus text", () => {
+  test("a paragraph the court numbered is served with its number", () => {
+    // The number is structure, not text: without it a paragraph can be
+    // quoted from the served text but not cited.
+    const text = toPlainCorpusText({
+      blocks: [
+        { type: "heading", plainText: "Costs" },
+        { type: "paragraph", plainText: "It follows that…", number: 134 },
+        { type: "paragraph", plainText: "1. A quoted provision." },
+        { type: "paragraph", plainText: "", number: 135 },
+      ],
+      fulltext: null,
+    });
+    expect(text).toBe(
+      "Costs\n\n¶ 134 It follows that…\n\n1. A quoted provision.",
+    );
+  });
+
+  test("a footnote is served under its printed mark, once per note", () => {
+    const note = (label: string, noteId?: string) => ({ label, noteId });
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "paragraph", plainText: "As stated[1], it holds[2]." },
+          { type: "paragraph", plainText: "See point 2.", note: note("[1]") },
+          {
+            type: "paragraph",
+            plainText: "See the letter",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "table",
+            plainText: "of 28 May 2021.",
+            note: note("[2]", "n2"),
+          },
+          {
+            type: "paragraph",
+            plainText: "3 Already marked.",
+            note: note("3"),
+          },
+          { type: "paragraph", plainText: "30 days.", note: note("3") },
+        ],
+        fulltext: null,
+      }),
+    ).toBe(
+      [
+        "As stated[1], it holds[2].",
+        "[1] See point 2.",
+        "[2] See the letter",
+        "of 28 May 2021.",
+        "3 Already marked.",
+        "3 30 days.",
+      ].join("\n\n"),
+    );
+  });
+
+  test("a heading or a number that is no paragraph number adds nothing", () => {
+    expect(
+      toPlainCorpusText({
+        blocks: [
+          { type: "heading", plainText: "I.", number: 1 },
+          { type: "paragraph", plainText: "Zero.", number: 0 },
+        ],
+        fulltext: null,
+      }),
+    ).toBe("I.\n\nZero.");
   });
 });

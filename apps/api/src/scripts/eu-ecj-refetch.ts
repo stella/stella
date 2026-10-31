@@ -18,12 +18,13 @@ import { createSourceContractResolver } from "@/api/handlers/case-law/ingestion/
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import {
-  openCaseLawReadOnlySession,
   enterCaseLawMaintenanceLane,
+  openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 import { runEcjFormexRefresh } from "@/api/scripts/eu-ecj-formex-refresh";
+import { runEuEcjLanguageBackfill } from "@/api/scripts/eu-ecj-language-backfill";
 import { operatorFlags } from "@/api/scripts/operator-flags";
 
 /**
@@ -63,6 +64,8 @@ const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
   --after <id>         Resume after a CELEX or Formex row id (sorted order).
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
   --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).
+  --missing-languages  Instead: fill in language versions no row holds, month
+                       by month (see --missing-languages --help).
 
 A publisher rate-limit stop exits 1; resume after its reported cooldown.`;
 
@@ -258,6 +261,26 @@ const loadRequestedCelex = async ({
   })();
 };
 
+const validateRequestedCelex = (
+  requestedCelex: readonly string[],
+  after: string | null,
+): void => {
+  // Validated here, before the lease: a malformed entry deep in the plan
+  // would otherwise burn the consecutive-failure budget mid-run and could
+  // halt a valid recovery.
+  const malformed = requestedCelex.filter((celex) => !isValidCelex(celex));
+  if (malformed.length > 0) {
+    console.error(
+      `Invalid CELEX number(s): ${malformed.slice(0, 5).join(", ")}${malformed.length > 5 ? ` (+${malformed.length - 5} more)` : ""}`,
+    );
+    process.exit(1);
+  }
+  if (after !== null && !isValidCelex(after)) {
+    console.error(`--after must be a CELEX number, got: ${after}`);
+    process.exit(1);
+  }
+};
+
 type CelexRefreshOptions = Omit<FormexOnlyOptions, "resultsOut"> & {
   delayMs: number;
   failedOutPath: string;
@@ -291,20 +314,7 @@ const runCelexRefresh = async ({
     celexFilePath,
   });
 
-  // Validated here, before the lease: a malformed entry deep in the plan
-  // would otherwise burn the consecutive-failure budget mid-run and could
-  // halt a valid recovery.
-  const malformed = requestedCelex.filter((celex) => !isValidCelex(celex));
-  if (malformed.length > 0) {
-    console.error(
-      `Invalid CELEX number(s): ${malformed.slice(0, 5).join(", ")}${malformed.length > 5 ? ` (+${malformed.length - 5} more)` : ""}`,
-    );
-    process.exit(1);
-  }
-  if (after !== null && !isValidCelex(after)) {
-    console.error(`--after must be a CELEX number, got: ${after}`);
-    process.exit(1);
-  }
+  validateRequestedCelex(requestedCelex, after);
 
   const plan = [...new Set(requestedCelex)]
     .toSorted()
@@ -420,7 +430,7 @@ const runCelexRefresh = async ({
             sourceId: source.id,
           });
           // db-await-in-loop: per-decision ingest pipeline, ordered by the observation number allocated just above
-          const processed = await processDecision(
+          const written = await processDecision(
             {
               input: result,
               sourceId: source.id,
@@ -431,6 +441,12 @@ const runCelexRefresh = async ({
             },
             resolveSourceContract,
           );
+          if (written.isErr()) {
+            celexFailed = true;
+            printError(`${celex}: failed`, written.error);
+            continue;
+          }
+          const processed = written.value;
           if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
             counts.retryable += 1;
             celexFailed = true;
@@ -483,13 +499,25 @@ const runCelexRefresh = async ({
   return haltReason === null || haltReason === "interrupted" ? 0 : 1;
 };
 
+/** Selects the missing-language-versions backfill instead of a refetch. */
+const MISSING_LANGUAGES_FLAG = "--missing-languages";
+
 type EuEcjRefetchOptions = {
   formexRefresh?: typeof runStoredFormexRefresh;
+  missingLanguages?: typeof runEuEcjLanguageBackfill;
 };
 export const runEuEcjRefetch = async (
   argv: readonly string[],
-  { formexRefresh = runStoredFormexRefresh }: EuEcjRefetchOptions = {},
+  {
+    formexRefresh = runStoredFormexRefresh,
+    missingLanguages = runEuEcjLanguageBackfill,
+  }: EuEcjRefetchOptions = {},
 ): Promise<number> => {
+  if (argv.includes(MISSING_LANGUAGES_FLAG)) {
+    return await missingLanguages(
+      argv.filter((arg) => arg !== MISSING_LANGUAGES_FLAG),
+    );
+  }
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(USAGE);
     return 0;

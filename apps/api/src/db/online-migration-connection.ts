@@ -16,12 +16,7 @@ import type { OnlineTableGate } from "./online-ddl";
  * joined string and split it in SQL (`string_to_array($1, ',')::uuid[]`).
  */
 export type OnlineMigrationParam =
-  | string
-  | number
-  | bigint
-  | boolean
-  | Date
-  | null;
+  string | number | bigint | boolean | Date | null;
 
 const isOnlineMigrationParam = (
   value: unknown,
@@ -86,6 +81,14 @@ export type OnlineMigrationOutcome =
   | { type: "complete" }
   | { type: "deferred"; step: string; retryAfterMs: number };
 
+/** A code-owned step follows its source's live postcondition on every boot. */
+export type CodeOwnedOnlineStep = {
+  type: "code";
+  owner: `src/${string}.ts`;
+};
+
+export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
+
 /**
  * A data repair that a schema migration left to the online phase.
  *
@@ -101,11 +104,12 @@ export type OnlineMigrationOutcome =
  *
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
- * one read rather than a pass over the table. A durable pending backfill is
- * resumable and may pass deploy/startup; an unattempted incomplete repair
- * still refuses those gates.
+ * one read rather than a pass over the table. Repair mode may defer a durable
+ * pending backfill. Startup reports unfinished work only for the newest
+ * applied migration; work introduced by an older migration must be complete.
  */
 export type OnlineRepair = {
+  introducedBy: OnlineStepIntroduction;
   name: string;
   readCompletion: (
     connection: OnlineMigrationConnection,
@@ -114,4 +118,9 @@ export type OnlineRepair = {
     connection: OnlineMigrationConnection,
     tables: OnlineTableGate,
   ) => Promise<OnlineMigrationOutcome>;
+};
+
+/** A migration-owned repair keeps its ledger identity available to callers. */
+export type MigrationOwnedOnlineRepair = OnlineRepair & {
+  introducedBy: string;
 };

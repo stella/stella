@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/corpus-index-promotion-gates.ts",
+  "delta": 2,
+  "reason": "Promotion gates are sequential on purpose: the drift census stops at the first index an operator must act on, and it is a keyset walk whose next page's cursor comes from the page before it."
+}

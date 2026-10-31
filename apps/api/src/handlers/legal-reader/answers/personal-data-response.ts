@@ -31,6 +31,7 @@ export const projectPrivateReaderAnswerForAccountExport = (
     quote: row.quote,
     startOffset: row.startOffset,
     endOffset: row.endOffset,
+    continuationSpans: row.continuationSpans,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     questions: messages

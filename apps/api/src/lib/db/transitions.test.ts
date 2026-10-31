@@ -2,13 +2,13 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, sql } from "drizzle-orm";
 import {
+  index,
   integer,
+  PgDialect,
   pgTable,
   primaryKey,
-  index,
-  uniqueIndex,
   text,
-  PgDialect,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
@@ -18,18 +18,21 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { timestamptz } from "@/api/db/columns";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
-import { TRANSITIONS } from "@/api/lib/db/transition-specs";
+import {
+  SITEMAP_DRAIN_TRANSITION_IDENTITY,
+  TRANSITIONS,
+} from "@/api/lib/db/transition-specs";
 import {
   defineFixedLifecycle,
-  defineLifecycle,
-  defineTransitions,
   defineKeyedTransitions,
+  defineLifecycle,
+  defineScopedTransitions,
+  defineTransitions,
+  permitsTransition,
+  transition,
   transitionBatch,
   transitionLifecycle,
   transitionLifecycleBatch,
-  permitsTransition,
-  transition,
-  defineScopedTransitions,
   transitionScopedBatch,
   transitionScopedCount,
   transitionUpsertBatch,
@@ -84,10 +87,25 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: ["organizationId", "userId"],
     stateColumn: "status",
   };
+  // An organization's access state is one row keyed by the organization.
+  const organizationAccessState = {
+    tableName: "organizationAccessStates",
+    key: "organizationId",
+    scope: [],
+    stateColumn: "state",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      SITEMAP_DRAIN_TRANSITION_IDENTITY,
       desktopBatchReceipt,
+      {
+        tableName: "requestIdempotencyReceipts",
+        key: "id",
+        scope: [],
+        stateColumn: "state",
+      },
+      organizationAccessState,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
       ...Object.values(FOLIO_COLLAB_TRANSITION_IDENTITIES),
     ].toSorted(order),

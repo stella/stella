@@ -1,6 +1,6 @@
-import { Value } from "@sinclair/typebox/value";
 import { expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import {
   SEARCH_PAGINATION_COMPLETE,
@@ -50,6 +50,8 @@ const hitWithText = (text: string, headline: string) =>
     documentType: text,
     status: text,
     effectiveDate: text,
+    versionValidFrom: text,
+    versionValidTo: text,
     sourceUrl: text,
     headline,
     score: -Number.MAX_VALUE,
@@ -154,9 +156,9 @@ test("search projection bounds Unicode text and balances highlight markup", () =
           paginationOutcome: SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
           total: SEARCH_TOTAL_NOT_COUNTED,
         };
-        expect(
-          Value.Check(searchLegislationSuccessResponseSchema, response),
-        ).toBe(true);
+        expect(v.is(searchLegislationSuccessResponseSchema, response)).toBe(
+          true,
+        );
         expect(
           Buffer.byteLength(JSON.stringify(response), "utf-8"),
         ).toBeLessThanOrEqual(PUBLIC_LEGISLATION_SEARCH_RESPONSE_MAX_BYTES);
@@ -178,9 +180,7 @@ test("every text field rejects multi-byte values beyond its schema byte bound", 
       paginationOutcome: SEARCH_PAGINATION_COMPLETE,
       total: SEARCH_TOTAL_NOT_COUNTED,
     };
-    expect(Value.Check(searchLegislationSuccessResponseSchema, response)).toBe(
-      false,
-    );
+    expect(v.is(searchLegislationSuccessResponseSchema, response)).toBe(false);
   }
 });
 

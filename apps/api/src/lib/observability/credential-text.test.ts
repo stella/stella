@@ -20,6 +20,7 @@ test("redacts recognized credential shapes without truncating text", () => {
     "sk-or-v1-fixture",
     "AIzaFixture",
     "hf_fixture",
+    `stl_syn_${"a".repeat(43)}`,
   ]) {
     expect(
       sanitizeCredentialText(`Provider rejected ${key}; next step`).text,

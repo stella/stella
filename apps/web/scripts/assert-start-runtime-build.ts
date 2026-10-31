@@ -38,6 +38,12 @@ const RUNTIME_ASSET_CONTRACTS = [
   },
   {
     expectedCount: 1,
+    label: "PDF page text worker",
+    pattern: "dist/client/assets/pdf-page-text-worker-????????.js",
+    sourceEntry: "src/workers/pdf-page-text-worker.ts",
+  },
+  {
+    expectedCount: 1,
     label: "PDF page editor worker",
     pattern: "dist/client/assets/pdf-page-editor-worker-????????.js",
     sourceEntry: "src/workers/pdf-page-editor-worker.ts",
@@ -98,6 +104,26 @@ const RUNTIME_ASSET_CONTRACTS = [
     // `new URL(..., import.meta.url)`, so Vite emits it as a hashed asset.
     label: "markdown editor diff WASM",
     pattern: "dist/client/assets/diff_wasm_bg-*.wasm",
+  },
+  {
+    expectedCount: 1,
+    label: "RegexSet search WASM",
+    pattern: "dist/client/assets/regex-set.wasm32-wasi-????????.wasm",
+  },
+  {
+    expectedCount: 1,
+    // @stll/scan-engine starts its own module worker with
+    // `new URL("scan-engine.worker.ts", import.meta.url)` the first time the
+    // page editor cleans a scan.
+    label: "scan cleanup engine worker",
+    pattern: "dist/client/assets/scan-engine.worker-????????.js",
+  },
+  {
+    expectedCount: 1,
+    // Fetched by that worker (and the engine's in-thread fallback) through
+    // `new URL("../generated/scan_engine_bg.wasm", import.meta.url)`.
+    label: "scan cleanup engine WASM",
+    pattern: "dist/client/assets/scan_engine_bg-????????.wasm",
   },
   {
     expectedCount: 1,

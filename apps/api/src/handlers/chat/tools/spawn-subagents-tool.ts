@@ -2,9 +2,9 @@ import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
 import {
+  type SpawnSubagentsInput,
   spawnSubagentsInputSchema,
   spawnSubagentsOutputSchema,
-  type SpawnSubagentsInput,
 } from "@stll/api-contract/spawn-subagents";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -34,8 +34,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import {
-  requireChatToolModelAdmission,
   type ModelDispatchAdmission,
+  requireChatToolModelAdmission,
 } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   getTanStackTextModelInfoForTask,
@@ -215,8 +215,7 @@ export const resolveValidatedSubagentModelId = ({
 };
 
 type SubagentBatchPreflightResult =
-  | { ok: true }
-  | { ok: false; message: string };
+  { ok: true } | { ok: false; message: string };
 
 type PreflightSubagentBatchUsageArgs = {
   safeDb: SafeDb;

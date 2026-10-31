@@ -27,8 +27,8 @@ import type { AnswerSourceSelection } from "./answer-edit-selection";
 import { AnswerFormatProposal } from "./answer-format-proposal";
 import { AnswerLinkForm } from "./answer-link-form";
 import {
-  selectedMarkdownLinkUrl,
   formatAnswerSpan,
+  selectedMarkdownLinkUrl,
 } from "./markdown-format.logic";
 import type { AnswerFormatAction } from "./markdown-format.logic";
 

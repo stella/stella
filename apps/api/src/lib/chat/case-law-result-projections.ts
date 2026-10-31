@@ -2,14 +2,17 @@ import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { caseLawCourtYearSchema } from "@stll/api-contract/case-law-court-year";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
+  DECISION_TEXT_AVAILABILITY,
   DECISION_TEXT_WITHHELD_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
+  DECISION_SEARCH_MATCHES,
   FACET_COUNT_TYPE,
   SEARCH_TOTAL_TYPE,
 } from "@stll/api-contract/search";
@@ -21,8 +24,8 @@ import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-p
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
 import {
   passthroughId,
-  publicUrl,
   projectionBranch,
+  publicUrl,
 } from "./projection-fields";
 
 /**
@@ -104,6 +107,7 @@ const caseLawSearchIdentityFields = {
   decisionId: passthroughId(),
   resourceName: passthroughId(),
   decisionType: v.nullable(v.string()),
+  decisionTypeKind: v.nullable(v.picklist(DECISION_TYPE_KINDS)),
   ecli: v.nullable(v.string()),
   language: v.string(),
   // Which of the call's `queries` returned this decision, by index,
@@ -111,6 +115,10 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  textAvailability: v.picklist(Object.values(DECISION_TEXT_AVAILABILITY)),
+  // Whether the decision holds every word of the query, or only some of them
+  // (appended after the others when few decisions held every word).
+  match: v.picklist(DECISION_SEARCH_MATCHES),
   // The publisher's own decision URL, which may embed the publisher's
   // own UUID — never a Stella tenant id, so it is forwarded unchanged.
   sourceUrl: v.nullable(publicUrl()),

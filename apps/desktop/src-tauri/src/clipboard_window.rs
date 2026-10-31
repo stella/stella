@@ -5,7 +5,7 @@ use std::{
 #[cfg(target_os = "macos")]
 use tauri::window::{Effect, EffectState, EffectsBuilder};
 use tauri::{
-  AppHandle, LogicalPosition, LogicalSize, Manager, WebviewWindow,
+  AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow,
   webview::PageLoadEvent,
 };
 
@@ -51,9 +51,12 @@ impl ClipboardStartupTrace {
   }
 
   fn elapsed(&self) -> Option<(Duration, ClipboardOpenKind)> {
-    let trace = self.0.lock().ok()?;
-    let trace = trace.as_ref()?;
-    Some((trace.started.elapsed(), trace.open_kind))
+    self
+      .0
+      .lock()
+      .ok()?
+      .as_ref()
+      .map(|trace| (trace.started.elapsed(), trace.open_kind))
   }
 
   pub fn open_kind(&self) -> Option<ClipboardOpenKind> {
@@ -63,13 +66,16 @@ impl ClipboardStartupTrace {
   /// Open kind for the first snapshot read after the window was created;
   /// `None` for every later read.
   pub fn claim_snapshot(&self) -> Option<ClipboardOpenKind> {
-    let mut trace = self.0.lock().ok()?;
-    let trace = trace.as_mut()?;
-    if trace.snapshot_claimed {
-      return None;
-    }
-    trace.snapshot_claimed = true;
-    Some(trace.open_kind)
+    self
+      .0
+      .lock()
+      .ok()?
+      .as_mut()
+      .filter(|trace| !trace.snapshot_claimed)
+      .map(|trace| {
+        trace.snapshot_claimed = true;
+        trace.open_kind
+      })
   }
 }
 
@@ -169,6 +175,76 @@ fn present(window: &WebviewWindow) -> tauri::Result<()> {
   window.show().and_then(|()| window.set_focus())
 }
 
+/// Shows the editor as the key window of the active app: WebKit draws the
+/// caret and focus ring only in an active app's key window. The editor opens
+/// from the non-activating clipboard panel, so the app the user was in is
+/// still frontmost; it is recorded here, before activation, and gets
+/// activation back when the editor closes.
+///
+/// A reopen reaches this synchronously from the Edit click: Tauri runs
+/// synchronous commands on the main thread, so the activation request is
+/// stella's direct response to the user's click in the panel. The panel's
+/// prevents-activation state stops only the window server activating stella
+/// on that click itself; the click is still delivered to stella. A first open
+/// presents once the editor page has loaded instead.
+#[cfg(target_os = "macos")]
+fn present_editor(window: &WebviewWindow) -> tauri::Result<()> {
+  let presented = on_main_thread(window, false, |window| {
+    remember_return_app(window);
+    stella_desktop_macos::present_activating_window(window)
+  });
+  if presented {
+    return Ok(());
+  }
+  window.show().and_then(|()| window.set_focus())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn present_editor(window: &WebviewWindow) -> tauri::Result<()> {
+  window.show().and_then(|()| window.set_focus())
+}
+
+/// Records the frontmost app unless it is stella itself: reopening the editor
+/// while stella is active keeps the app recorded when it first opened.
+#[cfg(target_os = "macos")]
+fn remember_return_app(window: &WebviewWindow) {
+  let Some(foreground) = crate::foreground_app::current_on_main_thread() else {
+    return;
+  };
+  if u32::try_from(foreground.process_id).is_ok_and(|id| id == std::process::id()) {
+    return;
+  }
+  window
+    .state::<ClipboardEditorSessions>()
+    .remember_return_app(foreground.process_id);
+}
+
+/// Hands activation back to the app recorded when the editor opened, if stella
+/// is still active and that app still runs.
+#[cfg(target_os = "macos")]
+fn return_activation(window: &WebviewWindow) {
+  use stella_desktop_macos::ActivationReturn;
+
+  let Some(process_id) = window.state::<ClipboardEditorSessions>().take_return_app()
+  else {
+    return;
+  };
+  let outcome = on_main_thread(window, ActivationReturn::NotOnMainThread, move |_| {
+    stella_desktop_macos::return_activation(process_id)
+  });
+  match outcome {
+    ActivationReturn::Requested
+    | ActivationReturn::NotActive
+    | ActivationReturn::PreviousAppGone => {}
+    ActivationReturn::Declined | ActivationReturn::NotOnMainThread => {
+      tracing::warn!(
+        ?outcome,
+        "clipboard editor could not return activation to the previous app"
+      );
+    }
+  }
+}
+
 /// Parks the window instead of hiding it. Returns false when parking is not
 /// possible (no main thread, no window handle); the caller then falls back to
 /// ordering the window out.
@@ -224,6 +300,10 @@ pub fn show_on_launch(app: &AppHandle) {
 /// `created_kind` labels the trace when the window has to be created; an
 /// existing window is always a reopen.
 fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
+  // Every way in (tray, shortcut, links, launch) ends here.
+  if crate::managed_policy::current().clipboard_disabled {
+    return;
+  }
   let requested = Instant::now();
 
   if let Some(window) = app.get_webview_window(CLIPBOARD_WINDOW_LABEL) {
@@ -302,6 +382,7 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
           open_kind,
         );
       }
+      prewarm_editor(app);
     });
 
   // Menu is the most translucent appearance-adaptive material: the desktop and
@@ -398,27 +479,181 @@ fn order_out(window: &WebviewWindow) -> Result<(), String> {
   })
 }
 
-pub fn editor_is_open(app: &AppHandle) -> bool {
-  app
-    .get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL)
-    .is_some()
+/// The clip the editor window shows. Each open starts a new session; the
+/// webview keys its editor by the session, so a reused window never carries
+/// the previous clip's draft.
+#[derive(Default)]
+pub struct ClipboardEditorSessions(Mutex<EditorSessions>);
+
+#[derive(Default)]
+struct EditorSessions {
+  last: u64,
+  open: Option<OpenEditor>,
+  /// Process identifier of the app that was frontmost when the editor opened.
+  #[cfg(target_os = "macos")]
+  return_app: Option<i32>,
 }
 
-pub fn show_editor(app: &AppHandle) -> Result<(), String> {
-  if let Some(window) = app.get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL) {
-    return window
-      .show()
-      .and_then(|()| window.set_focus())
-      .map_err(|error| {
-        capture_window_error(
-          app,
-          DesktopTelemetryOperation::ClipboardWindowOpen,
-          DesktopTelemetryWindow::ClipboardEditor,
-        );
-        format!("clipboard editor could not be focused: {error}")
-      });
+struct OpenEditor {
+  item_id: String,
+  requested: Instant,
+  open_kind: ClipboardOpenKind,
+  read: bool,
+}
+
+/// The open editor's clip, with the open latency on the first read of each
+/// session only.
+pub struct EditorRead {
+  pub item_id: String,
+  pub first_read: Option<(Duration, ClipboardOpenKind)>,
+}
+
+/// What the editor webview shows; sent on every open and close.
+#[derive(Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum EditorSessionEvent {
+  Open { session: u64 },
+  Idle,
+}
+
+pub const EDITOR_SESSION_EVENT: &str = "clipboard-editor-session";
+const EDITOR_SESSIONS_UNAVAILABLE: &str = "clipboard editor state is unavailable";
+
+impl ClipboardEditorSessions {
+  /// Starts a session timed from now: the open latency runs from here until
+  /// the editor first reads its clip.
+  fn begin(
+    &self,
+    item_id: String,
+    open_kind: ClipboardOpenKind,
+  ) -> Result<u64, String> {
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
+    sessions.last += 1;
+    let session = sessions.last;
+    sessions.open = Some(OpenEditor {
+      item_id,
+      requested: Instant::now(),
+      open_kind,
+      read: false,
+    });
+    drop(sessions);
+    Ok(session)
   }
 
+  fn end(&self) -> Result<(), String> {
+    self
+      .0
+      .lock()
+      .map_err(crate::logging::with_cause_logged(
+        EDITOR_SESSIONS_UNAVAILABLE,
+      ))?
+      .open = None;
+    Ok(())
+  }
+
+  #[cfg(target_os = "macos")]
+  fn remember_return_app(&self, process_id: i32) {
+    if let Ok(mut sessions) = self.0.lock() {
+      sessions.return_app = Some(process_id);
+    }
+  }
+
+  #[cfg(target_os = "macos")]
+  fn take_return_app(&self) -> Option<i32> {
+    self.0.lock().ok()?.return_app.take()
+  }
+
+  fn is_open(&self) -> bool {
+    self.0.lock().is_ok_and(|sessions| sessions.open.is_some())
+  }
+
+  /// `None` while no clip is open: a prewarmed window reads before any open.
+  pub fn read(&self) -> Result<Option<EditorRead>, String> {
+    let mut sessions = self.0.lock().map_err(crate::logging::with_cause_logged(
+      EDITOR_SESSIONS_UNAVAILABLE,
+    ))?;
+    let read = sessions.open.as_mut().map(|open| {
+      let first_read = (!open.read).then(|| (open.requested.elapsed(), open.open_kind));
+      open.read = true;
+      EditorRead {
+        item_id: open.item_id.clone(),
+        first_read,
+      }
+    });
+    drop(sessions);
+    Ok(read)
+  }
+}
+
+/// Opens the editor on `item_id`, reusing the window when it exists. A new
+/// window shows itself once its page has loaded.
+pub fn open_editor(app: &AppHandle, item_id: String) -> Result<(), String> {
+  let sessions = app.state::<ClipboardEditorSessions>();
+  let Some(window) = app.get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL) else {
+    sessions.begin(item_id, ClipboardOpenKind::FirstOpen)?;
+    return build_editor(app);
+  };
+  let session = sessions.begin(item_id, ClipboardOpenKind::Reopen)?;
+  announce_session(app, &EditorSessionEvent::Open { session });
+  place_editor(app, &window);
+  present_editor(&window).map_err(|error| {
+    capture_window_error(
+      app,
+      DesktopTelemetryOperation::ClipboardWindowOpen,
+      DesktopTelemetryWindow::ClipboardEditor,
+    );
+    format!("clipboard editor could not be shown: {error}")
+  })
+}
+
+/// Ends the session and hides the window for the next open; the webview drops
+/// the closed clip before it is shown again. Every close (Escape, the close
+/// buttons, save) ends here and hands activation back to the app the editor
+/// opened over.
+pub fn close_editor(window: &WebviewWindow) -> Result<(), String> {
+  window.state::<ClipboardEditorSessions>().end()?;
+  announce_session(window.app_handle(), &EditorSessionEvent::Idle);
+  #[cfg(target_os = "macos")]
+  return_activation(window);
+  window.hide().map_err(|error| {
+    tracing::warn!(error = %error, "clipboard editor could not be hidden");
+    format!("clipboard editor could not be closed: {error}")
+  })
+}
+
+fn announce_session(app: &AppHandle, event: &EditorSessionEvent) {
+  if app
+    .emit_to(CLIPBOARD_EDITOR_WINDOW_LABEL, EDITOR_SESSION_EVENT, event)
+    .is_err()
+  {
+    tracing::warn!("clipboard editor session could not be announced");
+  }
+}
+
+/// Loads the editor hidden after the panel is ready, so the first edit skips
+/// creating a WebView. Deferred so it does not compete with the panel's own
+/// first paint.
+fn prewarm_editor(app: &AppHandle) {
+  let app = app.clone();
+  tauri::async_runtime::spawn(async move {
+    tokio::time::sleep(EDITOR_PREWARM_DELAY).await;
+    if app
+      .get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL)
+      .is_some()
+    {
+      return;
+    }
+    if build_editor(&app).is_err() {
+      tracing::warn!("clipboard editor could not be prewarmed");
+    }
+  });
+}
+
+const EDITOR_PREWARM_DELAY: Duration = Duration::from_secs(2);
+
+fn build_editor(app: &AppHandle) -> Result<(), String> {
   let builder =
     crate::app_window::builder(app, CLIPBOARD_EDITOR_WINDOW_LABEL, "index.html")
       .title("Stella")
@@ -433,11 +668,14 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     builder,
     LogicalSize::new(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT),
   );
+  // A prewarmed window stays hidden until an open request arrives.
   let builder = builder.on_page_load(|window, payload| {
-    if payload.event() != PageLoadEvent::Finished {
+    if payload.event() != PageLoadEvent::Finished
+      || !window.state::<ClipboardEditorSessions>().is_open()
+    {
       return;
     }
-    if window.show().and_then(|()| window.set_focus()).is_err() {
+    if present_editor(&window).is_err() {
       capture_window_error(
         window.app_handle(),
         DesktopTelemetryOperation::ClipboardWindowOpen,
@@ -451,19 +689,101 @@ pub fn show_editor(app: &AppHandle) -> Result<(), String> {
     .title_bar_style(tauri::TitleBarStyle::Overlay)
     .hidden_title(true);
 
-  builder.build().map(|_| ()).map_err(|error| {
+  let window = builder.build().map_err(|error| {
     capture_window_error(
       app,
       DesktopTelemetryOperation::ClipboardWindowOpen,
       DesktopTelemetryWindow::ClipboardEditor,
     );
     format!("clipboard editor could not be opened: {error}")
-  })
+  })?;
+  // The close button hides the window like Escape does, keeping the WebView
+  // for the next open.
+  let window_to_close = window.clone();
+  window.on_window_event(move |event| {
+    let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+      return;
+    };
+    api.prevent_close();
+    if close_editor(&window_to_close).is_err() {
+      capture_window_error(
+        window_to_close.app_handle(),
+        DesktopTelemetryOperation::ClipboardWindowHide,
+        DesktopTelemetryWindow::ClipboardEditor,
+      );
+    }
+  });
+  Ok(())
+}
+
+/// Default size, centred on the target screen: where a new window opens.
+fn place_editor(app: &AppHandle, window: &WebviewWindow) {
+  let size = LogicalSize::new(CLIPBOARD_EDITOR_WIDTH, CLIPBOARD_EDITOR_HEIGHT);
+  let _ = window.set_size(size);
+  if let Some(work_area) = window_placement::target_work_area(app) {
+    let _ = window.set_position(window_placement::centered_origin(work_area, size));
+  }
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn frontend_event_contract_matches_native_names() {
+    let contract: serde_json::Value =
+      serde_json::from_str(include_str!("../../fixtures/clipboard-contract.json"))
+        .unwrap();
+    assert_eq!(contract["editorSessionEvent"], EDITOR_SESSION_EVENT);
+    assert_eq!(
+      contract["historyChangedEvent"],
+      crate::clipboard::HISTORY_EVENT
+    );
+  }
+
+  #[test]
+  fn each_editor_session_reports_its_open_latency_once() {
+    let sessions = ClipboardEditorSessions::default();
+    assert!(sessions.read().unwrap().is_none());
+
+    let first = sessions
+      .begin("a".to_string(), ClipboardOpenKind::FirstOpen)
+      .unwrap();
+    let read = sessions.read().unwrap().unwrap();
+    assert_eq!(read.item_id, "a");
+    assert!(matches!(
+      read.first_read,
+      Some((_, ClipboardOpenKind::FirstOpen))
+    ));
+    assert!(sessions.read().unwrap().unwrap().first_read.is_none());
+
+    let second = sessions
+      .begin("b".to_string(), ClipboardOpenKind::Reopen)
+      .unwrap();
+    assert!(second > first);
+    let read = sessions.read().unwrap().unwrap();
+    assert_eq!(read.item_id, "b");
+    assert!(matches!(
+      read.first_read,
+      Some((_, ClipboardOpenKind::Reopen))
+    ));
+
+    sessions.end().unwrap();
+    assert!(!sessions.is_open());
+    assert!(sessions.read().unwrap().is_none());
+  }
+
+  #[test]
+  fn editor_session_events_match_the_frontend_union() {
+    assert_eq!(
+      serde_json::to_value(EditorSessionEvent::Open { session: 3 }).unwrap(),
+      serde_json::json!({ "type": "open", "session": 3 })
+    );
+    assert_eq!(
+      serde_json::to_value(EditorSessionEvent::Idle).unwrap(),
+      serde_json::json!({ "type": "idle" })
+    );
+  }
 
   #[test]
   fn docks_to_the_bottom_of_a_secondary_screen_above_the_primary() {

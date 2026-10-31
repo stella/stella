@@ -1,6 +1,8 @@
-// parser-output-unchanged: document ownership does not alter parsing.
+// parser-output-unchanged: document ownership and its deadline timer do not alter parsing.
 import { Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
+
+import type { WithTimeoutScheduler } from "@stll/concurrency/with-timeout";
 
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction, type ScopedDb } from "@/api/db/safe-db";
@@ -40,14 +42,15 @@ export type DeferredDocumentSourceFence = {
 };
 
 export type DeferredDocumentOwnershipRefusal =
-  | { status: "busy" }
-  | { status: "lost" };
+  { status: "busy" } | { status: "lost" };
 
 type WithDeferredDocumentSourceOwnershipOptions<T> = {
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   signal?: AbortSignal;
   timeoutMs: number;
+  /** Starts the deadline timer; tests inject one to fire it at a chosen point. */
+  scheduleTimeout?: WithTimeoutScheduler;
   /**
    * The generation an earlier ownership claimed the decision under; a merge
    * completed since then makes that claim's snapshot stale.
@@ -72,6 +75,7 @@ export const withDeferredDocumentSourceOwnership = async <T>({
   scopedDb,
   signal,
   timeoutMs,
+  scheduleTimeout,
   expectedMergeEpoch,
   operation,
 }: WithDeferredDocumentSourceOwnershipOptions<T>): Promise<
@@ -205,7 +209,12 @@ export const withDeferredDocumentSourceOwnership = async <T>({
               value: await operation(fence),
             } as const;
           },
-          { label: "caseLaw.deferredDocumentOwnership", timeoutMs, signal },
+          {
+            label: "caseLaw.deferredDocumentOwnership",
+            timeoutMs,
+            signal,
+            scheduleTimeout,
+          },
         ),
       catch: (error) => error,
     });

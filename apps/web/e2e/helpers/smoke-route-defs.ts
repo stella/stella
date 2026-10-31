@@ -66,7 +66,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
   staticRoute("/settings/account/profile"),
-  staticRoute("/admin"),
+  staticRoute("/admin", {
+    expectation: { kind: "redirectsTo", to: "/admin/general" },
+  }),
   staticRoute("/admin/general"),
   staticRoute("/admin/tools"),
   staticRoute("/admin/ai"),
@@ -161,6 +163,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     template: "/workspaces/$workspaceId/invoices/new",
     path: (world) => `/workspaces/${world.workspace.id}/invoices/new`,
   },
+  staticRoute("/time/approvals"),
 ];
 
 // These routes need richer domain setup than cheap route smoke should own.

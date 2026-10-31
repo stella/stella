@@ -193,7 +193,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,
-        timeoutMs: opts.timeoutMs,
+        timeoutMs: opts.timeoutMs, // timeout: error payload copied from the caller, not a deadline
       });
     });
 
@@ -240,7 +240,7 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
       throw new TimeoutError({
         message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
         label: opts.label,
-        timeoutMs: opts.timeoutMs,
+        timeoutMs: opts.timeoutMs, // timeout: error payload copied from the caller, not a deadline
       });
     });
 

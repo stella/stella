@@ -96,22 +96,25 @@ describe.serial("no-direct-pdf-save", () => {
 
   test("keeps the unguarded save helpers to their owning modules", async () => {
     const source = [
-      'import { appendSigningRevision, savePdfForModelInput, savePdfRewrite } from "@/api/lib/files/pdf-signatures";',
-      "export const all = [appendSigningRevision, savePdfForModelInput, savePdfRewrite];",
+      'import { appendAnnotationRevision, appendSigningRevision, savePdfForModelInput, savePdfRewrite } from "@/api/lib/files/pdf-signatures";',
+      "export const all = [appendAnnotationRevision, appendSigningRevision, savePdfForModelInput, savePdfRewrite];",
     ];
 
-    // Anywhere else, both unguarded helpers are reported; the guarded one
+    // Anywhere else, every unguarded helper is reported; the guarded one
     // is not.
-    expect(await lint(source)).toEqual([1, 1]);
+    expect(await lint(source)).toEqual([1, 1, 1]);
     expect(
       await lint(
         source,
         "apps/api/src/lib/files/pdf-signing/validation-data.ts",
       ),
-    ).toEqual([1]);
+    ).toEqual([1, 1]);
     expect(
       await lint(source, "apps/api/src/lib/workflow/generate-batch.ts"),
-    ).toEqual([1]);
+    ).toEqual([1, 1]);
+    expect(await lint(source, "apps/api/src/lib/files/marked-pdf.ts")).toEqual([
+      1, 1,
+    ]);
   });
 
   test("reports nothing on the API's own PDF code", async () => {
@@ -131,18 +134,22 @@ describe.serial("no-direct-pdf-save", () => {
       .filter((file) => readFileSync(file, "utf-8").includes("@libpdf/core"));
     expect(modules.length).toBeGreaterThan(0);
 
-    const reports: Record<string, number[]> = {};
-    for (const file of modules) {
-      const relative = repoRelativePath(root, file);
-      const lines = await lintSingleRule(
-        "no-direct-pdf-save",
-        readFileSync(file, "utf-8"),
-        { sourcePath: relative },
-      );
-      if (lines.length > 0) {
-        reports[relative] = lines;
-      }
-    }
-    expect(reports).toEqual({});
+    const results = await Promise.all(
+      modules.map(async (file) => {
+        const relative = repoRelativePath(root, file);
+        const lines = await lintSingleRule(
+          "no-direct-pdf-save",
+          readFileSync(file, "utf-8"),
+          { sourcePath: relative },
+        );
+        return { label: relative, result: lines };
+      }),
+    );
+    expect(results).toEqual(
+      modules.map((file) => ({
+        label: repoRelativePath(root, file),
+        result: [],
+      })),
+    );
   });
 });

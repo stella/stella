@@ -15,11 +15,11 @@ import {
   PUBLIC_LEGISLATION_PAGE_COUNTRIES,
 } from "./legislation-publication";
 import {
-  publicCountriesFor,
   PUBLIC_COUNTRIES,
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
   PUBLIC_LAW_DOMAINS,
+  publicCountriesFor,
   publicCountryUnavailable,
   publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
@@ -30,16 +30,25 @@ describe("public country availability contract", () => {
     expect(Object.keys(PUBLIC_COUNTRY_CAPABILITIES)).toEqual(
       CASE_LAW_JURISDICTIONS,
     );
-    expect(publicCountriesFor("caseLaw", "search")).toEqual(
-      PUBLIC_CASE_LAW_COUNTRIES,
+    // The serving list carries branded codes; compare the codes themselves.
+    expect(PUBLIC_CASE_LAW_COUNTRIES.join(",")).toBe(
+      publicCountriesFor("caseLaw", "search").join(","),
     );
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(
       publicCountriesFor("legislation", "search"),
     );
+    expect(PUBLIC_COUNTRY_CAPABILITIES.EU).toEqual({
+      caseLaw: "admitted",
+      legislation: "pending_public",
+    });
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE.caseLaw).toBe("admitted");
+    expect(PUBLIC_COUNTRY_CAPABILITIES.HUN).toEqual({
+      caseLaw: "admitted",
+      legislation: "pending_public",
+    });
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toEqual({
-      caseLaw: "pages_public",
-      legislation: "pages_public",
+      caseLaw: "admitted",
+      legislation: "admitted",
     });
     for (const country of PUBLIC_COUNTRIES) {
       const unavailable = publicCountryUnavailable(country, {
@@ -62,9 +71,25 @@ describe("public country availability contract", () => {
     }
   });
 
+  test("EU case law is open on every surface while EU legislation stays closed", () => {
+    for (const surface of ["identity", "pages", "search"] as const) {
+      expect(publicCountriesFor("caseLaw", surface)).toContain("EU");
+      expect(
+        publicCountryUnavailable("EU", { domain: "caseLaw", surface }),
+      ).toBeNull();
+      expect(
+        publicCountryUnavailable("EU", {
+          domain: "legislation",
+          surface,
+        }),
+      ).toMatchObject({ reason: "pending_public" });
+    }
+  });
+
   test("each domain answers from its own capability for every country and state pair", () => {
     const states = [
       "admitted",
+      "identity_public",
       "pages_public",
       "pending_public",
       "withdrawn",
@@ -77,7 +102,7 @@ describe("public country availability contract", () => {
             [country]: { caseLaw, legislation },
           };
           for (const domain of PUBLIC_LAW_DOMAINS) {
-            for (const surface of ["pages", "search"] as const) {
+            for (const surface of ["identity", "pages", "search"] as const) {
               const expected = capabilities[country][domain];
               const response = publicCountryUnavailableIn({
                 capabilities,
@@ -131,7 +156,7 @@ describe("public country availability contract", () => {
       domain: "legislation",
       country: "EU",
       message: "Legislation for this country is not available.",
-      hint: "Choose a country with available legislation: CZE.",
+      hint: "Choose a country with available legislation: CZE, SVK.",
     });
   });
 
@@ -147,28 +172,13 @@ describe("public country availability contract", () => {
             " ".repeat(spaces) +
             (lower ? country.toLowerCase() : country) +
             " ".repeat(spaces);
-          expect(
-            publicCountryUnavailable(input, {
-              domain: "caseLaw",
-              surface: "search",
-            }),
-          ).toEqual(
-            publicCountryUnavailable(country, {
-              domain: "caseLaw",
-              surface: "search",
-            }),
-          );
-          expect(
-            publicCountryUnavailable(input, {
-              domain: "caseLaw",
-              surface: "pages",
-            }),
-          ).toEqual(
-            publicCountryUnavailable(country, {
-              domain: "caseLaw",
-              surface: "pages",
-            }),
-          );
+          for (const domain of PUBLIC_LAW_DOMAINS) {
+            for (const surface of ["identity", "pages", "search"] as const) {
+              expect(
+                publicCountryUnavailable(input, { domain, surface }),
+              ).toEqual(publicCountryUnavailable(country, { domain, surface }));
+            }
+          }
         },
       ),
     );

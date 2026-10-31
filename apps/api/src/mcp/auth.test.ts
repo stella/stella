@@ -1,13 +1,17 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import type { JWTPayload } from "jose";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
+
+import { hasAccountExportAuthority } from "@/api/lib/auth/account-export-policy";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import {
+  authenticateAccountExportRequest,
   classifyMcpTokenVerificationError,
   extractMcpSession,
   getMcpAccessTokenVerificationOptions,
-  isMcpSession,
 } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import {
@@ -30,6 +34,85 @@ const rejectionOf = (payload: JWTPayload): string => {
 };
 
 describe("extractMcpSession", () => {
+  test.each([
+    { organizationId: "org_review", expectedScopes: ["stella:read"] },
+    {
+      organizationId: "org_regular",
+      expectedScopes: ["stella:read", ...Object.values(ACCOUNT_EXPORT_SCOPES)],
+    },
+  ])(
+    "account export verification preserves the organization scope boundary for $organizationId",
+    async ({ organizationId, expectedScopes }) => {
+      const authenticated = await authenticateAccountExportRequest(
+        "oauth-token",
+        {
+          reviewAccount: { organizationId: "org_review" },
+          verifyToken: async () => ({
+            sub: "user_one",
+            org_id: organizationId,
+            client_id: "client",
+            scope: [
+              "stella:read",
+              ...Object.values(ACCOUNT_EXPORT_SCOPES),
+            ].join(" "),
+          }),
+        },
+      );
+      if (authenticated.isErr()) {
+        panic("The valid export token must authenticate", authenticated.error);
+      }
+      expect(authenticated.value.scopes).toEqual([...expectedScopes]);
+      for (const access of ["read", "write"] as const) {
+        expect(
+          hasAccountExportAuthority(
+            {
+              credential: authenticated.value.credential,
+              grantedScopes: authenticated.value.scopes,
+            },
+            access,
+          ),
+        ).toBe(organizationId !== "org_review");
+      }
+    },
+  );
+
+  test("account export verification accepts only audiences offering account consent", async () => {
+    let verifications = 0;
+    const authenticated = await authenticateAccountExportRequest(
+      "oauth-token",
+      {
+        verifyToken: async (
+          _token: string | undefined,
+          options?: { verifyOptions?: JWTVerifyOptions },
+        ) => {
+          verifications += 1;
+          expect(options?.verifyOptions?.audience).toEqual([
+            getMcpResourceUrl("advanced"),
+          ]);
+          expect(options?.verifyOptions?.issuer).toBe(getAuthIssuerUrl());
+          return {
+            sub: "user_one",
+            org_id: "org_one",
+            client_id: "client",
+            scope: "stella:account_export_read",
+          };
+        },
+      },
+    );
+    expect(Result.isOk(authenticated)).toBe(true);
+    expect(verifications).toBe(1);
+  });
+
+  test("account export verification rejects API keys before the JWT verifier", async () => {
+    const authenticated = await authenticateAccountExportRequest(
+      `${MACHINE_API_KEY_PREFIX}key`,
+      {
+        verifyToken: async () =>
+          panic("API keys must not reach the OAuth verifier"),
+      },
+    );
+    expect(Result.isError(authenticated)).toBe(true);
+  });
   test("requires a user principal on user-only MCP surfaces", () => {
     const result = extractMcpSession({
       sub: "synthetic-service-client",
@@ -194,106 +277,6 @@ describe("extractMcpSession", () => {
         sub: "user_123",
       }),
     ).toBe("Token missing org_id claim");
-  });
-});
-
-describe("isMcpSession", () => {
-  test("accepts every credential branch and optional workspace attenuation", () => {
-    const credentials = [
-      { type: "agent_run", runId: "run_1" },
-      { type: "oauth_client", clientId: "client_1" },
-      {
-        type: "machine_api_key",
-        id: "key_1",
-        name: "Automation",
-        permissions: { workspace: ["read"] },
-      },
-      { type: "delegated_user" },
-    ];
-
-    for (const credential of credentials) {
-      expect(
-        isMcpSession({
-          credential,
-          organizationId: "org_1",
-          scopes: ["read"],
-          userId: "user_1",
-          workspaceIds: ["workspace_1"],
-        }),
-      ).toBe(true);
-    }
-
-    expect(
-      isMcpSession({
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      }),
-    ).toBe(true);
-  });
-
-  test("rejects malformed nested session fields", () => {
-    const invalidSessions = [
-      { organizationId: "org_1", scopes: [42], userId: "user_1" },
-      { organizationId: "org_1", scopes: [""], userId: "user_1" },
-      {
-        credential: { type: "agent_run", runId: "" },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        credential: { type: "unexpected" },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-        workspaceIds: [null],
-      },
-      {
-        credential: undefined,
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-        workspaceIds: undefined,
-      },
-      // A key credential carries the permission set authorization holds it to,
-      // so one recovered without a usable set is not a session.
-      {
-        credential: {
-          type: "machine_api_key",
-          id: "key_1",
-          name: "Automation",
-        },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-      {
-        credential: {
-          type: "machine_api_key",
-          id: "key_1",
-          name: "Automation",
-          permissions: { notARealResource: ["read"] },
-        },
-        organizationId: "org_1",
-        scopes: ["read"],
-        userId: "user_1",
-      },
-    ];
-
-    for (const session of invalidSessions) {
-      expect(isMcpSession(session)).toBe(false);
-    }
   });
 });
 

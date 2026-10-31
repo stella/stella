@@ -6,8 +6,8 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import {
-  PROVISION_EXTRACTION_ADMISSION,
   PROVISION_EXTRACTION_ADMISSION_REVISION,
+  PROVISION_EXTRACTION_ADMISSION_SCOPES,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
@@ -97,9 +97,10 @@ const withFixture = async (
         `INSERT INTO ${schema}.case_law_provision_admission (key, revision) VALUES ('global', $1)`,
         [PROVISION_EXTRACTION_ADMISSION_REVISION],
       );
-      for (const { jurisdiction, language } of Object.values(
-        PROVISION_EXTRACTION_ADMISSION,
-      )) {
+      for (const {
+        jurisdiction,
+        language,
+      } of PROVISION_EXTRACTION_ADMISSION_SCOPES) {
         await operator.unsafe(
           `INSERT INTO ${schema}.case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)`,
           [jurisdiction, language],
@@ -320,7 +321,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         await held.run();
       } finally {
         await slot.close();
-        session.release();
+        await session.release();
       }
       expect(held.failures).toEqual([]);
       expect((await checkpoint()).batch.holdUntil).not.toBeNull();

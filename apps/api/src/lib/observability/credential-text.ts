@@ -17,7 +17,7 @@ const REDACTED_SECRET = "[redacted-secret]";
 // Provider keys, including the masked forms providers echo back in errors
 // ("sk-proj-****abcd", "sk-ab…wxyz"): the visible fragment is still a key.
 const PREFIXED_SECRET_REGEX =
-  /\b(?:sk-[A-Za-z0-9_*.\u2026-]*[A-Za-z0-9_*\u2026]|AIza[A-Za-z0-9_-]+|hf_[A-Za-z0-9]+)/gu;
+  /\b(?:sk-[A-Za-z0-9_*.\u2026-]*[A-Za-z0-9_*\u2026]|AIza[A-Za-z0-9_-]+|hf_[A-Za-z0-9]+|stl_syn_[A-Za-z0-9_-]{43})/gu;
 // Userinfo in a URL ("https://user:token@host/…").
 const URL_CREDENTIALS_REGEX = /\b([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/giu;
 const BEARER_SECRET_REGEX =

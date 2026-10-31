@@ -354,12 +354,14 @@ test("CourtListener source types and text never infer a decision type", () => {
         });
         const result = mapCourtListenerRecord(record).unwrap();
         expect(result.decisionType).toBeUndefined();
-        const sanitized = sanitizeResult(result);
+        const sanitized = sanitizeResult(result).unwrap();
         expect(sanitized.decisionType).toBeUndefined();
         expect(sanitized.metadata["decisionType"]).toEqual(
           result.metadata["decisionType"],
         );
-        expect(result.documentAst.metadata.decisionType).toBeNull();
+        expect(result.documentAst.metadata).toMatchObject({
+          decisionType: null,
+        });
         expect(result.metadata["decisionType"]).toEqual(
           toPlainTextMetadata({
             status: "not-stated",

@@ -1,14 +1,17 @@
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import {
+  API_CALENDAR_DATE_CHECK,
+  apiDateSchema,
+} from "@stll/api-contract/api-date";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
 import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tSafeId,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  resourceIdSchema,
 } from "@/api/lib/custom-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { withPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
@@ -25,66 +28,73 @@ export const PUBLIC_JURISDICTIONS_DESCRIPTION =
   "Omit jurisdiction to search all admitted jurisdictions.";
 
 /** Search the public legislation corpus and return legislation-shaped items. */
-export const searchLegislationBodySchema = t.Object({
-  query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
-  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
-  // A continuation past a capped scan window carries the acts it already
-  // showed, so the cursor may be longer than a bare keyset.
-  cursor: t.Optional(
-    tPaginationCursor({
+export const searchLegislationBodySchema = v.object({
+  query: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(LIMITS.searchQueryMaxLength),
+  ),
+  limit: v.optional(paginationLimitSchema(LIMITS.caseLawSearchPageSizeMax)),
+  cursor: v.optional(
+    paginationCursorSchema({
       maxChars: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   ),
-  jurisdiction: t.Optional(
-    t.String({ maxLength: 3, description: PUBLIC_JURISDICTIONS_DESCRIPTION }),
+  jurisdiction: v.optional(
+    v.pipe(
+      v.string(),
+      v.maxLength(3),
+      v.description(PUBLIC_JURISDICTIONS_DESCRIPTION),
+    ),
   ),
-  documentType: t.Optional(t.String({ maxLength: 128 })),
-  status: t.Optional(t.String({ maxLength: 32 })),
-  source: t.Optional(tSafeId("legislationSource")),
-  language: t.Optional(t.String({ maxLength: 8 })),
-  dateFrom: t.Optional(t.String({ format: "date" })),
-  dateTo: t.Optional(t.String({ format: "date" })),
+  documentType: v.optional(v.pipe(v.string(), v.maxLength(128))),
+  status: v.optional(v.pipe(v.string(), v.maxLength(32))),
+  source: v.optional(resourceIdSchema("legislationSource")),
+  language: v.optional(v.pipe(v.string(), v.maxLength(8))),
+  dateFrom: v.optional(apiDateSchema),
+  dateTo: v.optional(apiDateSchema),
+  asOf: v.optional(
+    v.pipe(
+      v.string(),
+      v.isoDate(),
+      API_CALENDAR_DATE_CHECK,
+      v.description(
+        "Search the consolidation in force on this date; omitted dates include historical wording.",
+      ),
+    ),
+  ),
 });
 
-export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
+export type SearchLegislationBody = v.InferOutput<
+  typeof searchLegislationBodySchema
+>;
 
 const textBytes = LIMITS.legislationSearchTextBytes;
 
-export const searchLegislationSuccessResponseSchema = t.Object(
-  {
-    items: t.Array(
-      t.Object(
-        {
-          match: t.Object(
-            {
-              type: t.UnionEnum(LEGISLATION_SEARCH_MATCH_TYPES),
-            },
-            { additionalProperties: false },
-          ),
-          documentId: boundedString(textBytes.documentId),
-          eli: boundedString(textBytes.eli),
-          slug: nullableBoundedString(textBytes.slug),
-          title: boundedString(textBytes.title),
-          country: boundedString(textBytes.country),
-          language: boundedString(textBytes.language),
-          documentType: nullableBoundedString(textBytes.documentType),
-          status: boundedString(textBytes.status),
-          effectiveDate: nullableBoundedString(textBytes.effectiveDate),
-          sourceUrl: nullableBoundedString(textBytes.sourceUrl),
-          headline: nullableBoundedString(textBytes.headline),
-          score: t.Number(),
-        },
-        { additionalProperties: false },
-      ),
-    ),
-    nextCursor: nullableBoundedString(
-      CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
-    ),
-    paginationOutcome: searchPaginationOutcomeSchema,
-    total: searchTotalSchema,
-  },
-  { additionalProperties: false },
-);
+export const searchLegislationSuccessResponseSchema = v.object({
+  items: v.array(
+    v.object({
+      match: v.object({ type: v.picklist(LEGISLATION_SEARCH_MATCH_TYPES) }),
+      documentId: boundedString(textBytes.documentId),
+      eli: boundedString(textBytes.eli),
+      slug: nullableBoundedString(textBytes.slug),
+      title: boundedString(textBytes.title),
+      country: boundedString(textBytes.country),
+      language: boundedString(textBytes.language),
+      documentType: nullableBoundedString(textBytes.documentType),
+      status: boundedString(textBytes.status),
+      effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+      versionValidFrom: nullableBoundedString(textBytes.versionValidFrom),
+      versionValidTo: nullableBoundedString(textBytes.versionValidTo),
+      sourceUrl: nullableBoundedString(textBytes.sourceUrl),
+      headline: nullableBoundedString(textBytes.headline),
+      score: v.number(),
+    }),
+  ),
+  nextCursor: nullableBoundedString(CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH),
+  paginationOutcome: searchPaginationOutcomeSchema,
+  total: searchTotalSchema,
+});
 
 export const searchLegislationResponseSchema = withPublicCountryUnavailable(
   safePublicHandlerResponseSchemasWithStatusText(

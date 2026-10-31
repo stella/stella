@@ -3,9 +3,10 @@ import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
-  readHttpActionAdmissionRefusal,
   type CliActionAdmissionRefusal,
+  readHttpActionAdmissionRefusal,
 } from "./action-admission-refusal.js";
+import { apiFetch } from "./api-fetch.js";
 import {
   AUTH_FETCH_TIMEOUT_MS,
   CLI_REQUIRED_RESOURCE_SCOPES,
@@ -341,7 +342,7 @@ export const checkServerCompatibility = async (
         MCP_DISCOVERY_PATH,
         `${serverUrl.replace(/\/$/u, "")}/`,
       );
-      const response = await fetch(discoveryUrl, {
+      const response = await apiFetch(discoveryUrl, {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(AUTH_FETCH_TIMEOUT_MS),
       });

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
-import { SEARCH_SORTS } from "@stll/api-contract/search";
+import { caseLawFilterValidationSchema } from "@stll/api-contract/case-law-filter-scope";
+import { DECISION_SORTS } from "@stll/api-contract/search";
 
 import {
   publicLawPageSearchSchemaUpTo,
@@ -13,6 +14,7 @@ import {
 import { CASE_LAW_MAX_PAGE } from "@/features/case-law/case-law-route-pages.logic";
 import { searchQuestionsParam } from "@/features/case-law/research/search-questions.logic";
 import { optionalUuidSearchSchema } from "@/lib/schema";
+import { routeSearchSchema } from "@/route-search-params";
 import { optionalLawSearchQuerySchema } from "@/routes/law/-search-query.logic";
 
 const optionalBrowseStringSchema = (maxLength: number) =>
@@ -56,8 +58,12 @@ const optionalStrictSchema = v.fallback(
   undefined,
 );
 
-export const searchSchema = v.object({
+export const searchSchema = routeSearchSchema({
   country: optionalBrowseStringSchema(3),
+  filterNotice: v.fallback(
+    v.optional(caseLawFilterValidationSchema.entries.removed),
+    undefined,
+  ),
   court: optionalBrowseStringSchema(512),
   from: optionalDateSchema,
   lang: optionalBrowseStringSchema(16),
@@ -76,7 +82,9 @@ export const searchSchema = v.object({
     ),
     undefined,
   ),
-  sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  rewrite: v.fallback(v.optional(v.picklist(["off"])), undefined),
+  rewrittenFrom: optionalLawSearchQuerySchema,
+  sort: v.fallback(v.optional(v.picklist(DECISION_SORTS)), undefined),
   sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
   to: optionalDateSchema,

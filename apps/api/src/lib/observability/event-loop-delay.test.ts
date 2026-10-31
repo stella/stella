@@ -2,8 +2,8 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 
 import {
   EVENT_LOOP_STALL_THRESHOLD_MS,
-  startEventLoopDelayMonitor,
   type EventLoopDelayReport,
+  startEventLoopDelayMonitor,
 } from "@/api/lib/observability/event-loop-delay";
 import {
   emitEventLoopDelayMetric,
@@ -135,7 +135,16 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
+          workPools: {
+            "heavy-sidecar": {
+              inFlight: 8,
+              queued: 9,
+              bytesInFlight: 10,
+              refusedBusy: 11,
+              refusedMemory: 12,
+              deadlineCancelled: 13,
+            },
+          },
         }),
       onReport: (report) => {
         reports.push(report);
@@ -153,7 +162,12 @@ describe("event-loop delay monitoring", () => {
           rssBytes: 10,
           heapUsedBytes: 5,
           arrayBuffersBytes: 2,
-          uploadFinalizeInFlightBytes: 0,
+          "work_pool.heavy-sidecar.inFlight": 8,
+          "work_pool.heavy-sidecar.queued": 9,
+          "work_pool.heavy-sidecar.bytesInFlight": 10,
+          "work_pool.heavy-sidecar.refusedBusy": 11,
+          "work_pool.heavy-sidecar.refusedMemory": 12,
+          "work_pool.heavy-sidecar.deadlineCancelled": 13,
         },
       ]);
     } finally {
@@ -201,7 +215,7 @@ describe("event-loop delay monitoring", () => {
       rssBytes: 1_500_000_000,
       heapUsedBytes: 400_000_000,
       arrayBuffersBytes: 300_000_000,
-      uploadFinalizeInFlightBytes: 50_000_000,
+      workPools: {},
     });
 
     expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
@@ -211,7 +225,6 @@ describe("event-loop delay monitoring", () => {
         rssBytes: 1_500_000_000,
         heapUsedBytes: 400_000_000,
         arrayBuffersBytes: 300_000_000,
-        uploadFinalizeInFlightBytes: 50_000_000,
       },
     ]);
     expect(lines.at(0)?.length).toBeLessThan(300);

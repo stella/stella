@@ -3,6 +3,15 @@ import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 
 import {
@@ -12,27 +21,33 @@ import {
 import { CopyActionButton } from "@/components/copy-action-button";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SettingsPageHeader } from "@/components/settings-page-header";
-import { env } from "@/env";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
+import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import { AIProviderRows } from "@/routes/_protected.admin/-components/organization/ai-provider-rows";
 
-import { SettingsLeaveGuard } from "../settings-leave-guard";
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";
+import { AIProviderSettingsBoundary } from "./ai-provider-settings-boundary";
 import { AISettingsSectionFeedback } from "./ai-settings-section";
 import { DeepLKeyCard } from "./deepl-key-card";
 import { DocumentProcessingCard } from "./document-processing-card";
 import { MemoryExtractionCard } from "./memory-extraction-card";
-import { OrganizationInstructionsCard } from "./organization-instructions-card";
 import { PromptCachingCard } from "./prompt-caching-card";
 import { useAIConfigForm } from "./use-ai-config-form";
 import type { AIConfigReadState } from "./use-ai-config-form";
 import { WebSearchKeysCard } from "./web-search-keys-card";
 
-export const AIConfigCard = () => {
+export const AIConfigCard = () => (
+  <AIProviderSettingsBoundary>
+    <AIConfigCardContent />
+  </AIProviderSettingsBoundary>
+);
+
+const AIConfigCardContent = () => {
   const t = useTranslations();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
@@ -153,34 +168,78 @@ const SettingsError = ({ error }: SettingsErrorProps) => {
   );
 };
 
+type LeaveGuardProps = {
+  blocker: AIConfigFormState["blocker"];
+};
+
+const LeaveGuard = ({ blocker }: LeaveGuardProps) => {
+  const common = useTranslations("common");
+  return (
+    <AlertDialog
+      open={blocker.status === "blocked"}
+      onOpenChange={(open) => {
+        if (!open && blocker.status === "blocked") {
+          blocker.reset();
+        }
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{common("confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {common("unsavedLeaveConfirm")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {common("goBackToEditing")}
+          </AlertDialogClose>
+          <Button
+            onClick={() => {
+              if (blocker.status === "blocked") {
+                blocker.proceed();
+              }
+            }}
+          >
+            {common("confirm")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
+
 type AuxiliaryCardsProps = {
   form: AIConfigFormState;
 };
 
 const AuxiliaryCards = ({
   form: { toggleSections, keySections, saving },
-}: AuxiliaryCardsProps) => (
-  <>
-    <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
-    <DocumentProcessingCard
-      {...toggleSections.documentProcessing}
-      disabled={saving}
-    />
-    {env.VITE_FEATURE_AI_MEMORY && (
-      <MemoryExtractionCard
-        {...toggleSections.memoryExtraction}
+}: AuxiliaryCardsProps) => {
+  const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
+  return (
+    <>
+      <PromptCachingCard {...toggleSections.promptCaching} disabled={saving} />
+      <DocumentProcessingCard
+        {...toggleSections.documentProcessing}
         disabled={saving}
       />
-    )}
-    <div className="my-8 border-t" />
-    <DeepLKeyCard {...keySections.deepl} disabled={saving} />
-    <div className="my-8 border-t" />
-    <WebSearchKeysCard
-      search={{ ...keySections.search, disabled: saving }}
-      fetch={{ ...keySections.fetch, disabled: saving }}
-    />
-  </>
-);
+      {memoryEnabled && (
+        <MemoryExtractionCard
+          {...toggleSections.memoryExtraction}
+          disabled={saving}
+        />
+      )}
+      <div className="my-8 border-t" />
+      <DeepLKeyCard {...keySections.deepl} disabled={saving} />
+      <div className="my-8 border-t" />
+      <WebSearchKeysCard
+        search={{ ...keySections.search, disabled: saving }}
+        fetch={{ ...keySections.fetch, disabled: saving }}
+      />
+    </>
+  );
+};
 
 export const AIConfigForm = ({
   readState,
@@ -247,9 +306,8 @@ export const AIConfigForm = ({
       {form.feedback.status !== "error" && (
         <AISettingsSectionFeedback feedback={form.feedback} />
       )}
-      <OrganizationInstructionsCard key={organizationId} />
       <AuxiliaryCards form={form} />
-      <SettingsLeaveGuard blocker={form.blocker} />
+      <LeaveGuard blocker={form.blocker} />
     </div>
   );
 };

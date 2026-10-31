@@ -47,7 +47,13 @@ export const OrganizationDangerZone = ({
           : await authClient.organization.leave({ organizationId });
       if (result.error) {
         // A refusal is an outcome the section shows, not a thrown failure.
-        analytics.captureError(toAuthClientError(result.error));
+        analytics.captureError(toAuthClientError(result.error), {
+          fingerprintKey: "OrganizationDangerZone.refused:failure",
+          scope: {
+            type: "handler",
+            handlerId: "OrganizationDangerZone.refused:failure",
+          },
+        });
         setOutcome({ status: "refused", code: result.error.code });
         return "refused" as const;
       }
@@ -57,7 +63,13 @@ export const OrganizationDangerZone = ({
       return "completed" as const;
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "OrganizationDangerZone.mutation:failure",
+        scope: {
+          type: "handler",
+          handlerId: "OrganizationDangerZone.mutation:failure",
+        },
+      });
       notifyUserError(error, t("errors.actionFailed"));
     },
   });

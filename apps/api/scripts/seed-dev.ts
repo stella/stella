@@ -35,7 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 import { writeZipEntry } from "@stll/docx-utils";
-import { logErrorOutput, printError } from "@stll/errors";
+import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
@@ -80,18 +80,22 @@ import type {
   PropertyTool,
 } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { contactTaxIdentifiers } from "@/api/lib/billing/invoice-prefill.logic";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createUserFileThumbnailKey } from "@/api/lib/file-key";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
-import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
+import { deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
@@ -124,21 +128,29 @@ import { seedMarketingCaseLaw } from "./seed-marketing-case-law";
 import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
-  ensureSeedColleaguesInOrganization,
   ensurePrimarySeedUserInOrganization,
+  ensureSeedColleaguesInOrganization,
   ensureTestUsers,
 } from "./seed-test-user";
 import {
   at,
   buildSeedUserIds,
   buildSeedUserRates,
-  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_ORG_ID,
+  DEFAULT_SEED_COLLEAGUE_COUNT,
   DEFAULT_USER_ID,
   pickAuthor,
-  seedId,
   seedFileIdentity,
+  seedId,
 } from "./seed-utils";
+
+export const seedRequiredCaseLaw = async (
+  seedCorpus: () => Promise<void>,
+  seedMarketing: () => Promise<void>,
+): Promise<void> => {
+  await seedCorpus();
+  await seedMarketing();
+};
 
 const db = openMaintenanceDb({ readOnly: false });
 
@@ -968,7 +980,7 @@ const isSeedEmailFileName = (fileName: string): fileName is SeedEmailFileName =>
 
 const wrapBase64 = (value: Buffer): string =>
   value
-    .toString("base64")
+    .toBase64()
     .match(/.{1,76}/gu)
     ?.join("\r\n") ?? "";
 
@@ -5026,6 +5038,31 @@ export const seedPlaybooks = async (
 
 // ─── Main ───────────────────────────────────────────────
 
+type UserFileCleanupRow = {
+  organizationId: string;
+  s3Key: string;
+  thumbnailFileId: string | null;
+  userId: string;
+};
+
+export const userFileCleanupKeys = ({
+  organizationId,
+  s3Key,
+  thumbnailFileId,
+  userId,
+}: UserFileCleanupRow): string[] => {
+  if (thumbnailFileId === null) {
+    return [s3Key];
+  }
+  const thumbnailKey = createUserFileThumbnailKey({
+    sourceKey: s3Key,
+    thumbnailFileId,
+    organizationId: brandPersistedOrganizationId(organizationId),
+    uploaderUserId: brandPersistedUserId(userId),
+  });
+  return thumbnailKey === null ? [s3Key] : [s3Key, thumbnailKey];
+};
+
 export async function seed(organizationId?: string, userId?: string) {
   requireLocalDevOpen("Seeding");
   const ORG_ID = toSafeId<"organization">(organizationId ?? DEFAULT_ORG_ID);
@@ -5071,6 +5108,7 @@ export async function seed(organizationId?: string, userId?: string) {
             id: userFiles.id,
             s3Key: userFiles.s3Key,
             thumbnailFileId: userFiles.thumbnailFileId,
+            organizationId: chatThreads.organizationId,
             userId: userFiles.userId,
           })
           .from(userFiles)
@@ -5078,20 +5116,7 @@ export async function seed(organizationId?: string, userId?: string) {
           .where(inArray(chatThreads.workspaceId, [...workspaceIds])),
     );
     for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
-      const deleted = await deleteS3Keys(
-        page.flatMap((file) =>
-          file.thumbnailFileId === null
-            ? [file.s3Key]
-            : [
-                file.s3Key,
-                createUserFileKey({
-                  fileId: file.thumbnailFileId,
-                  mimeType: THUMBNAIL_MIME_TYPE,
-                  userId: brandPersistedUserId(file.userId),
-                }),
-              ],
-        ),
-      );
+      const deleted = await deleteS3Keys(page.flatMap(userFileCleanupKeys));
       if (deleted.isErr()) {
         panic("Could not delete seeded chat files from storage", deleted.error);
       }
@@ -5259,7 +5284,10 @@ export async function seed(organizationId?: string, userId?: string) {
               color: c.color,
               registrationNumber:
                 "registrationNumber" in c ? c.registrationNumber : undefined,
-              taxId: "taxId" in c ? c.taxId : undefined,
+              ...contactTaxIdentifiers({
+                taxId: "taxId" in c ? c.taxId : null,
+                vatId: null,
+              }),
               bankAccounts: "bankAccounts" in c ? c.bankAccounts : undefined,
               billingAddress:
                 "billingAddress" in c ? c.billingAddress : undefined,
@@ -5290,7 +5318,7 @@ export async function seed(organizationId?: string, userId?: string) {
               displayName: c.displayName,
               organizationName: c.organizationName,
               registrationNumber: c.registrationNumber,
-              taxId: c.taxId,
+              ...contactTaxIdentifiers({ taxId: c.taxId, vatId: null }),
               billingAddress: c.billingAddress,
               defaultHourlyRate: cents(c.defaultHourlyRate),
               currency: c.currency,
@@ -6306,29 +6334,17 @@ export async function seed(organizationId?: string, userId?: string) {
   );
   await seedPlaybooks(ORG_ID);
 
-  // 16. Global case-law corpus for search and references. This pulls real prod
-  // fixtures and is the most schema-coupled step; a local schema drift here
-  // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
-  // whole seed or dump a giant error toast — warn and continue.
-  let caseLawSeeded = false;
-  try {
-    await seedCaseLaw();
-    caseLawSeeded = true;
-  } catch (error) {
-    logErrorOutput({
-      level: "warn",
-      values: [
-        "  Case-law seed skipped (non-fatal — likely local schema drift):",
-        error,
-      ],
-    });
-  }
-
-  // The marketing seed needs the corpus rows; skip it when the corpus seed
-  // was skipped, but keep its own failures fatal (the screenshots need them).
-  if (caseLawSeeded) {
-    await seedMarketingCaseLaw({ db, organizationId: ORG_ID, userId: USER_ID });
-  }
+  // 16. Global case-law corpus for search and references. The marketing seed
+  // needs these rows, so either failure must fail the whole seed.
+  await seedRequiredCaseLaw(
+    seedCaseLaw,
+    async () =>
+      await seedMarketingCaseLaw({
+        db,
+        organizationId: ORG_ID,
+        userId: USER_ID,
+      }),
+  );
 
   console.log("\nDone. Dev data seeded successfully.");
   return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };

@@ -1,20 +1,20 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   isTreeParentGuardError,
   lockTree,
@@ -22,16 +22,18 @@ import {
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
+import { isRecord } from "@/api/lib/type-guards";
 
-const moveEntityBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  parentId: t.Nullable(tSafeId("entity")),
+const moveEntityBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  parentId: v.nullable(resourceIdSchema("entity")),
 });
 
-type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
+type MoveEntityBodySchema = v.InferOutput<typeof moveEntityBodySchema>;
 
-const DESCENDANT_MOVE_MESSAGE =
+export const DESCENDANT_MOVE_MESSAGE =
   "Cannot move a folder into one of its descendants";
 
 export type MoveEntityHandlerProps = {
@@ -42,28 +44,32 @@ export type MoveEntityHandlerProps = {
   syncSearchActivity?: typeof syncWorkspaceSearchActivity;
 };
 
-type LockMoveOptions = {
+type LockMovesOptions = {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
-  body: MoveEntityBodySchema;
+  entityIds: readonly SafeId<"entity">[];
+  parentId: SafeId<"entity"> | null;
 };
 
 type LockedMove = {
+  entityId: SafeId<"entity">;
   kind: EntityKind;
   oldParentId: SafeId<"entity"> | null;
 };
 
 /**
- * Lock the entity (and target folder) and decide whether the move may
- * proceed. Reads and row locks only: the caller writes after an `Ok`, so a
- * rejection returned from its transaction commits nothing.
+ * Lock the entities (and target folder) and decide whether moving all of
+ * them under `parentId` may proceed. Reads and row locks only: the caller
+ * writes after an `Ok`, so a rejection returned from its transaction commits
+ * nothing. One refused entity refuses the whole set.
  */
-const lockMove = async ({
+const lockMoves = async ({
   tx,
   workspaceId,
-  body,
-}: LockMoveOptions): Promise<Result<LockedMove, HandlerError>> => {
-  // Lock the entity row to prevent concurrent moves.
+  entityIds,
+  parentId,
+}: LockMovesOptions): Promise<Result<LockedMove[], HandlerError>> => {
+  // Lock the entity rows, in id order, to prevent concurrent moves.
   const entityRows = await tx
     .select({
       id: entities.id,
@@ -74,31 +80,36 @@ const lockMove = async ({
     .from(entities)
     .where(
       and(
-        eq(entities.id, body.entityId),
+        inArray(entities.id, [...entityIds]),
         eq(entities.workspaceId, workspaceId),
       ),
     )
+    .orderBy(asc(entities.id))
+    .limit(entityIds.length)
     .for("update");
-  const entity = entityRows.at(0);
 
-  if (!entity) {
+  if (entityRows.length !== new Set(entityIds).size) {
     return Result.err(
       new HandlerError({ status: 404, message: "Entity not found" }),
     );
   }
-  if (entity.readOnly) {
+  if (entityRows.some((entity) => entity.readOnly)) {
     return Result.err(
       new HandlerError({ status: 409, message: "Entity is read-only" }),
     );
   }
 
-  const locked = { kind: entity.kind, oldParentId: entity.parentId };
-  if (body.parentId === null) {
+  const locked = entityRows.map((entity) => ({
+    entityId: entity.id,
+    kind: entity.kind,
+    oldParentId: entity.parentId,
+  }));
+  if (parentId === null) {
     return Result.ok(locked);
   }
 
   // Prevent moving to itself.
-  if (body.entityId === body.parentId) {
+  if (entityIds.includes(parentId)) {
     return Result.err(
       treeParentCycleError("Cannot move an entity into itself"),
     );
@@ -110,10 +121,7 @@ const lockMove = async ({
     .select({ id: entities.id, kind: entities.kind })
     .from(entities)
     .where(
-      and(
-        eq(entities.id, body.parentId),
-        eq(entities.workspaceId, workspaceId),
-      ),
+      and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
     )
     .for("update");
   const parent = parentRows.at(0);
@@ -136,13 +144,16 @@ const lockMove = async ({
     );
   }
 
-  // If the entity being moved is a folder, prevent cycles
-  // by checking that the target parent is not a descendant.
-  if (entity.kind === "folder") {
+  // Moving a folder must not close a cycle: the target parent may not be
+  // one of the moved folders' descendants.
+  const folderIds = entityRows
+    .filter((entity) => entity.kind === "folder")
+    .map((entity) => entity.id);
+  if (folderIds.length > 0) {
     const relation = await readAncestorRelation({
       tx,
-      startId: body.parentId,
-      targetAncestorId: body.entityId,
+      startId: parentId,
+      targetAncestorIds: folderIds,
       workspaceId,
     });
 
@@ -163,6 +174,60 @@ const lockMove = async ({
   return Result.ok(locked);
 };
 
+type MoveEntitiesOptions = LockMovesOptions & {
+  recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * Move entities under `parentId` (null: the matter root) inside the caller's
+ * transaction. Takes the matter's tree lock, locks and checks every entity,
+ * then reparents and audits them all and bumps the matter's activity; on an
+ * `Err` nothing was written.
+ */
+export const moveEntities = async ({
+  recordAuditEvent,
+  ...options
+}: MoveEntitiesOptions): Promise<Result<LockedMove[], HandlerError>> => {
+  const { tx, workspaceId, entityIds, parentId } = options;
+  // Serialize ancestry decisions before taking any entity locks. Disjoint
+  // source/target row pairs can still join into a cycle across two moves;
+  // the `entities_parent_acyclic` trigger holds the rule for any writer
+  // that skips this lock.
+  await lockTree(tx, { tree: "entities", scopeId: workspaceId });
+  const locked = await lockMoves(options);
+  if (Result.isError(locked)) {
+    return locked;
+  }
+
+  await tx
+    .update(entities)
+    .set({ parentId, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(entities.id, [...entityIds]),
+        eq(entities.workspaceId, workspaceId),
+      ),
+    );
+
+  await tx
+    .update(workspaces)
+    .set({ lastActivityAt: new Date() })
+    .where(eq(workspaces.id, workspaceId));
+
+  await recordAuditEvent(
+    tx,
+    locked.value.map(({ entityId, kind, oldParentId }) => ({
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+      resourceId: entityId,
+      metadata: { kind },
+      changes: { parentId: { old: oldParentId, new: parentId } },
+    })),
+  );
+
+  return locked;
+};
+
 export const moveEntityHandler = async function* ({
   safeDb,
   workspaceId,
@@ -171,39 +236,16 @@ export const moveEntityHandler = async function* ({
   syncSearchActivity = syncWorkspaceSearchActivity,
 }: MoveEntityHandlerProps) {
   const attempt = await safeDb(async (tx) => {
-    // Serialize ancestry decisions before taking any entity locks. Disjoint
-    // source/target row pairs can still join into a cycle across two moves;
-    // the `entities_parent_acyclic` trigger holds the rule for any writer
-    // that skips this lock.
-    await lockTree(tx, { tree: "entities", scopeId: workspaceId });
-    const locked = await lockMove({ tx, workspaceId, body });
-    if (Result.isError(locked)) {
-      return locked;
-    }
-    const { kind, oldParentId } = locked.value;
-
-    await tx
-      .update(entities)
-      .set({ parentId: body.parentId, updatedAt: new Date() })
-      .where(eq(entities.id, body.entityId));
-
-    await tx
-      .update(workspaces)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(workspaces.id, workspaceId));
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-      resourceId: body.entityId,
-      metadata: { kind },
-      changes: {
-        parentId: {
-          old: oldParentId,
-          new: body.parentId,
-        },
-      },
+    const reparented = await moveEntities({
+      tx,
+      workspaceId,
+      entityIds: [body.entityId],
+      parentId: body.parentId,
+      recordAuditEvent,
     });
+    if (Result.isError(reparented)) {
+      return reparented;
+    }
 
     return Result.ok();
   });
@@ -213,25 +255,29 @@ export const moveEntityHandler = async function* ({
   const moved = yield* attempt;
   yield* moved;
 
-  syncSearchActivity(workspaceId).catch(captureError);
+  syncSearchActivity(workspaceId).catch(
+    createErrorCapture(
+      handlerErrorContext("moveEntityHandler.syncSearchActivity"),
+    ),
+  );
 
   return Result.ok({});
 };
 
 /** `unrelated` is the only relation that lets the move proceed: the walk
- *  reached the top of the chain without meeting the target. */
+ *  reached the top of the chain without meeting any target. */
 type AncestorRelation = "descendant" | "unrelated" | "depth-exceeded";
 
 type ReadAncestorRelationProps = {
   tx: Transaction;
   startId: SafeId<"entity">;
-  targetAncestorId: SafeId<"entity">;
+  targetAncestorIds: readonly SafeId<"entity">[];
   workspaceId: SafeId<"workspace">;
 };
 
 /**
  * Walk up the parent chain from `startId` using a recursive
- * CTE (single query) to check whether `targetAncestorId` is an
+ * CTE (single query) to check whether any of `targetAncestorIds` is an
  * ancestor.
  *
  * The walk is bounded to `entityAncestorWalkDepthMax` levels so a circular
@@ -243,10 +289,10 @@ type ReadAncestorRelationProps = {
 const readAncestorRelation = async ({
   tx,
   startId,
-  targetAncestorId,
+  targetAncestorIds,
   workspaceId,
 }: ReadAncestorRelationProps): Promise<AncestorRelation> => {
-  const result = await tx.execute<{ found: boolean; truncated: boolean }>(sql`
+  const result = await tx.execute(sql`
     WITH RECURSIVE ancestors AS (
       SELECT ${entities.id}, ${entities.parentId}, 1 AS depth
       FROM ${entities}
@@ -261,7 +307,11 @@ const readAncestorRelation = async ({
     )
     SELECT
       EXISTS (
-        SELECT 1 FROM ancestors WHERE id = ${targetAncestorId}
+        SELECT 1 FROM ancestors
+        WHERE id IN (${sql.join(
+          targetAncestorIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
       ) AS found,
       EXISTS (
         SELECT 1 FROM ancestors
@@ -270,17 +320,21 @@ const readAncestorRelation = async ({
       ) AS truncated
   `);
 
-  const row = result.at(0);
-  if (row === undefined) {
+  const row = executedRows(result).at(0);
+  if (
+    !isRecord(row) ||
+    typeof row["found"] !== "boolean" ||
+    typeof row["truncated"] !== "boolean"
+  ) {
     // Both columns are `EXISTS` aggregates, so the query answers one row for
     // any input. No row means the walk did not run: reading that as "no
     // ancestor" would let the move through without the check.
-    panic("Ancestor relation query returned no row");
+    return panic("Ancestor relation query returned no row");
   }
-  if (row.found) {
+  if (row["found"]) {
     return "descendant";
   }
-  return row.truncated ? "depth-exceeded" : "unrelated";
+  return row["truncated"] ? "depth-exceeded" : "unrelated";
 };
 
 const config = {

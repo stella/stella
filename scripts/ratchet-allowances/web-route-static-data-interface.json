@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "TanStack Router extends StaticDataRouteOption through TypeScript declaration merging, which requires an interface. One scoped consistent-type-definitions suppression preserves this typed route metadata contract; a type alias cannot merge with the router interface."
+}

@@ -1,4 +1,4 @@
-import { Result, TaggedError, panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { InferOk } from "better-result";
 import { and, eq } from "drizzle-orm";
 
@@ -12,20 +12,21 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import type { InboundFiler } from "@/api/lib/email/inbound/acceptance";
 import {
-  InboundPersistenceError,
   type InboundDeliveryStore,
+  InboundPersistenceError,
 } from "@/api/lib/email/inbound/ingest";
 import { createInboundMailStore } from "@/api/lib/email/inbound/store";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import {
-  scanUpload,
   FileScanRejectedError,
+  scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import {
   detectFileEncryption,
   retainedFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 class InboundAttachmentAlreadyLinked extends TaggedError(
@@ -203,7 +204,10 @@ const finishInboundAttachments = async ({
               mimeType: file.mimeType,
               scanned: file,
             }),
-            { mimeType: file.mimeType, stage: "inbound-attachment" },
+            handlerErrorContext("inboundMail.detectEncryption", {
+              mimeType: file.mimeType,
+              stage: "inbound-attachment",
+            }),
           ),
         ] as const,
     }),

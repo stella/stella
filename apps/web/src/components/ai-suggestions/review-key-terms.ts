@@ -15,6 +15,8 @@ import { panic } from "better-result";
 
 import { diffWords } from "@stll/ui/review-word-diff";
 
+import { RegexSet } from "#regex-set";
+
 export const KEY_TERM_KIND = {
   /** A run the word diff says the other side words differently. */
   diff: "diff",
@@ -291,6 +293,29 @@ export const keyTermRanges = (text: string): KeyTermRange[] => [
   ...matchRanges(text, DEFINED_TERM_PATTERN, KEY_TERM_KIND.term),
 ];
 
+// Spell out ECMAScript whitespace: BOM matches, NEL does not.
+const PHRASE_WHITESPACE = String.raw`[\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+`;
+
+// Retain both sides' stable configurations; bound native state with FIFO eviction.
+export const PHRASE_MATCHER_CACHE_CAPACITY = 32;
+const phraseMatchers = new Map<string, RegexSet>();
+
+export const phraseMatcher = (source: string): RegexSet => {
+  const cached = phraseMatchers.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const matcher = new RegexSet([new RegExp(source, "giu")]);
+  if (phraseMatchers.size >= PHRASE_MATCHER_CACHE_CAPACITY) {
+    const oldestSource =
+      phraseMatchers.keys().next().value ??
+      panic("Phrase matcher cache unexpectedly empty");
+    phraseMatchers.delete(oldestSource);
+  }
+  phraseMatchers.set(source, matcher);
+  return matcher;
+};
+
 /**
  * Every occurrence of one phrase, matched across whatever whitespace the
  * block happens to use: a delta's `text` is quoted from the block, but the
@@ -298,17 +323,21 @@ export const keyTermRanges = (text: string): KeyTermRange[] => [
  */
 export const phraseRanges = (text: string, phrase: string): KeyTermRange[] => {
   const words = phrase
+    .toWellFormed()
     .trim()
     .split(/\s+/u)
     .filter((word) => word.length > 0);
   if (words.length === 0) {
     return [];
   }
-  const pattern = new RegExp(
-    words.map(escapeRegExp).join(String.raw`\s+`),
-    "giu",
+  const matcher = phraseMatcher(
+    words.map(escapeRegExp).join(PHRASE_WHITESPACE),
   );
-  return matchRanges(text, pattern, KEY_TERM_KIND.delta);
+  return matcher.findIter(text.toWellFormed()).map(({ start, end }) => ({
+    start,
+    end,
+    kind: KEY_TERM_KIND.delta,
+  }));
 };
 
 type DiffHighlightInput = { standardText: string; targetText: string };

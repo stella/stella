@@ -1,56 +1,48 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import {
+  durationSeconds as durationSecondsResult,
+  parseTestDurationWeights,
+  readTestDurationWeights as readTestDurationWeightsResult,
+  TEST_DURATION_HISTORY_LIMIT,
+  TEST_DURATION_SOURCE,
+  testFileDurationWeights as testFileDurationWeightsResult,
+  type TestShardPlanningResult,
+} from "@stll/scripts/src/test-shard-planning";
 import { sha256Hex } from "@stll/sha256/bun";
 
-export const API_TEST_DURATIONS_FILE_ENV = "API_TEST_DURATIONS_FILE";
+export { TEST_DURATION_HISTORY_LIMIT, TEST_DURATION_SOURCE };
 
-export const TEST_DURATION_SOURCE = {
-  measured: "measured",
-} as const;
+const unwrapPlanningResult = <T>(result: TestShardPlanningResult<T>): T =>
+  result.status === "ok" ? result.value : panic(result.message);
 
-const durationSchema = v.record(
-  v.string(),
-  v.strictObject({
-    seconds: v.pipe(v.number(), v.finite(), v.minValue(0)),
-    source: v.literal(TEST_DURATION_SOURCE.measured),
-  }),
-);
-
-export const readDurationWeights = (value: unknown) =>
-  v.parse(durationSchema, value);
+export const readTestDurationWeights = (value: unknown) =>
+  unwrapPlanningResult(readTestDurationWeightsResult(value));
 
 export const durationSeconds = (value: unknown) =>
-  Object.fromEntries(
-    Object.entries(readDurationWeights(value)).map(([file, { seconds }]) => [
-      file,
-      seconds,
-    ]),
-  );
+  unwrapPlanningResult(durationSecondsResult(value));
 
-/** Resolve missing live files with the same median for shard and lane planning. */
 export const testFileDurationWeights = (
   files: readonly string[],
   durations: Readonly<Record<string, number>>,
-) => {
-  const measured = files
-    .flatMap((file) => {
-      const duration = durations[file];
-      if (duration === undefined) {
-        return [];
-      }
-      if (!Number.isFinite(duration) || duration < 0) {
-        panic(`Invalid duration for ${file}`);
-      }
-      return [duration];
-    })
-    .toSorted((a, b) => a - b);
-  const fallback = measured.at(Math.floor(measured.length / 2)) ?? 1;
-  return Object.fromEntries(
-    files.map((file) => [file, durations[file] ?? fallback]),
-  );
+) => unwrapPlanningResult(testFileDurationWeightsResult(files, durations));
+
+export const API_TEST_DURATIONS_FILE_ENV = "API_TEST_DURATIONS_FILE";
+
+/** Median of samples; the mean of the middle pair for an even count. */
+export const medianSeconds = (samples: readonly number[]) => {
+  const sorted = samples.toSorted((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  const high = sorted[middle] ?? panic("Median of no samples");
+  return sorted.length % 2 === 1
+    ? high
+    : ((sorted[middle - 1] ?? high) + high) / 2;
 };
+
+export const readDurationWeights = (value: unknown) =>
+  readTestDurationWeights(value);
 
 export const API_TEST_DURATIONS_HASH_ENV = "API_TEST_DURATIONS_HASH";
 export const MISSING_TEST_DURATIONS_HASH = "missing";
@@ -113,14 +105,14 @@ export const loadTestDurationWeights = ({
       );
       fallbackNoticed = true;
     } else {
-      const validated = v.safeParse(durationSchema, parsed.value);
-      if (!validated.success) {
+      const validated = parseTestDurationWeights(parsed.value);
+      if (validated === undefined) {
         notice(
           `::notice::API test duration cache has an invalid schema; using uniform weights (${path})`,
         );
         fallbackNoticed = true;
       } else {
-        durations = durationSeconds(validated.output);
+        durations = durationSeconds(validated);
       }
     }
   }

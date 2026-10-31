@@ -1,15 +1,25 @@
 import { expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+
+import { listAdapters } from "./adapters/adapter-registry";
+import { replayCapability } from "./replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
   validateReplayEnrolment,
 } from "./replay-enrolment";
 
-test("the committed registry is off and enrolment validates its budget and reviewed dry run", () => {
+test("the committed registry previews only the Constitutional Court and the common courts portal, and enrolment validates its budget and reviewed dry run", () => {
   expect(
-    new Set(Object.values(REPLAY_ENROLMENT).map(({ mode }) => mode)),
-  ).toEqual(new Set(["off"]));
+    Object.entries(REPLAY_ENROLMENT).filter(([, { mode }]) => mode !== "off"),
+  ).toEqual([
+    [ADAPTER_KEYS.CZ_US, { mode: "dry-run", dailyBudget: 10_000 }],
+    [ADAPTER_KEYS.PL_NCOURT, { mode: "dry-run", dailyBudget: 10_000 }],
+  ]);
+  for (const policy of Object.values(REPLAY_ENROLMENT)) {
+    validateReplayEnrolment(policy);
+  }
   for (const dailyBudget of [
     0,
     -1,
@@ -43,4 +53,19 @@ test("the committed registry is off and enrolment validates its budget and revie
     dailyBudget: BACKGROUND_REPLAY_LIMITS.maxDailyBudget,
     reviewedDryRun: "fixture receipt",
   });
+});
+
+test("every enabled replay source can reparse its archived input", () => {
+  for (const adapter of listAdapters()) {
+    if (REPLAY_ENROLMENT[adapter.key].mode === "off") {
+      continue;
+    }
+    expect({
+      adapter: adapter.key,
+      capability: replayCapability(adapter).type,
+    }).toEqual({
+      adapter: adapter.key,
+      capability: "supported",
+    });
+  }
 });

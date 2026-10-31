@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   chatThreads,
@@ -11,7 +11,7 @@ import {
 import { readSavedChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { approvedMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
@@ -23,8 +23,10 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "chat_thread_ui" },
-  params: t.Object({ threadId: tSafeId("chatThread") }),
-  query: t.Object({ connectorSlug: t.String({ minLength: 1, maxLength: 80 }) }),
+  params: v.object({ threadId: resourceIdSchema("chatThread") }),
+  query: v.object({
+    connectorSlug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  }),
 } satisfies HandlerConfig;
 
 const connectorUnavailable = () =>

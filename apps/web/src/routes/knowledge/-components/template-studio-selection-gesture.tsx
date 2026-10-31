@@ -14,6 +14,7 @@ import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import type { LucideIcon } from "@stll/ui/icons";
 import {
+  AiActionIcon,
   BracesIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -21,7 +22,6 @@ import {
   RepeatIcon,
   SplitIcon,
   TextQuoteIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
 import { Separator } from "@stll/ui/separator";
@@ -40,8 +40,8 @@ import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { reusableConditions } from "@/routes/knowledge/-components/template-studio-condition-source";
 import { isInputType } from "@/routes/knowledge/-components/template-studio-model";
 import {
-  useTemplateStudioStore,
   type StudioField,
+  useTemplateStudioStore,
 } from "@/routes/knowledge/-components/template-studio-store";
 import type { TemplateEditableField } from "@/routes/knowledge/-components/template-value-source";
 
@@ -403,7 +403,15 @@ export const useTemplateStudioSelectionGesture = ({
       return;
     }
     if (error) {
-      getAnalytics().captureError(toAPIError(error));
+      getAnalytics().captureError(toAPIError(error), {
+        fingerprintKey:
+          "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        scope: {
+          type: "handler",
+          handlerId:
+            "useTemplateStudioSelectionGesture.fetchGestureSuggestion:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       return;
     }
@@ -440,7 +448,13 @@ export const useTemplateStudioSelectionGesture = ({
       if (sequence !== enrichSeqRef.current) {
         return;
       }
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "useTemplateStudioSelectionGesture:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useTemplateStudioSelectionGesture:failure",
+        },
+      });
       setEnrichment({ status: "idle" });
       notifyUserError(error, t("errors.actionFailed"));
     });

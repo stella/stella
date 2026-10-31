@@ -6,10 +6,10 @@ import nodePath from "node:path";
 
 import * as schema from "@/api/db/schema";
 import {
+  availableSchemaRelationNames as harnessSchemaRelationNames,
   createTestPglite,
   HARNESS_RELATIONS_SQL,
   ROLE_GRANT_STATEMENTS,
-  availableSchemaRelationNames as harnessSchemaRelationNames,
 } from "@/api/tests/pglite-test-db";
 import {
   deriveStellaTablePrivileges,

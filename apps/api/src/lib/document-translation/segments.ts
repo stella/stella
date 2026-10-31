@@ -2,9 +2,11 @@ import { panic, Result, TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 import type { FolioReviewChangeKind } from "@stll/folio-core/server";
 
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { replaceXmlElements } from "@/api/lib/files/xml-scan";
 
 const W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const MAIN_PART = "word/document.xml";
@@ -71,7 +73,11 @@ export class DocxTranslationError extends TaggedError("DocxTranslationError")<{
   message: string;
   reason: DocxTranslationErrorReason;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const fail = (
   reason: DocxTranslationErrorReason,
@@ -411,52 +417,35 @@ const patchTextNodes = (
   xml: string,
   replacements: ReadonlyMap<number, string>,
 ): Result<string, DocxTranslationError> => {
-  const elementName = wordTextElementName(xml).replace(
-    /[.*+?^${}()|[\]\\]/gu,
-    "\\$&",
-  );
-  const closingElementName = wordTextElementName(xml);
-  const textElement = new RegExp(
-    `<${elementName}\\b[^>]*?(?:>(?<content>[\\s\\S]*?)<\\/${elementName}>|\\s*/>)`,
-    "gu",
-  );
+  const elementName = wordTextElementName(xml);
   let ordinal = 0;
   const applied = new Set<number>();
-  const patched = xml.replace(textElement, (whole, ...args: unknown[]) => {
-    const groups = args.at(-1);
-    const groupsObject =
-      typeof groups === "object" && groups !== null && "content" in groups
-        ? groups
-        : undefined;
-    const content =
-      groupsObject !== undefined && typeof groupsObject.content === "string"
-        ? groupsObject.content
-        : "";
+  const patched = replaceXmlElements(xml, elementName, (match) => {
     const currentOrdinal = ordinal;
     const replacement = replacements.get(currentOrdinal);
     ordinal += 1;
     if (replacement === undefined) {
-      return whole;
+      return xml.slice(match.start, match.end);
     }
     applied.add(currentOrdinal);
-    if (content === "" && whole.trimEnd().endsWith("/>")) {
+    if (match.selfClosing) {
       if (replacement === "") {
-        return whole;
+        return match.openTag;
       }
-      const close = `</${closingElementName}>`;
-      return `${whole.slice(0, whole.lastIndexOf("/"))}>${escapeXml(replacement)}${close}`;
+      return `${match.openTag.slice(0, match.openTag.lastIndexOf("/"))}>${escapeXml(replacement)}</${elementName}>`;
     }
-    const start = whole.indexOf(">") + 1;
-    const end = whole.lastIndexOf("<");
-    return `${whole.slice(0, start)}${escapeXml(replacement)}${whole.slice(end)}`;
+    return `${match.openTag}${escapeXml(replacement)}${match.closeTag}`;
   });
+  if (patched.isErr()) {
+    return fail("malformed-xml", "DOCX translation XML is incomplete");
+  }
   if ([...replacements.keys()].some((key) => !applied.has(key))) {
     return fail(
       "malformed-xml",
       "DOCX translation markers did not map to the original w:t nodes",
     );
   }
-  return Result.ok(patched);
+  return Result.ok(patched.value);
 };
 
 /** Apply a complete, ordered set of model responses to the original DOCX. */

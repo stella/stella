@@ -1,14 +1,16 @@
 import { useSyncExternalStore } from "react";
 
+import { TaggedError } from "better-result";
+
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_LIMITS,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserClientCapability,
-  type BrowserControlResult,
   type BrowserControlCommand,
   type BrowserControlErrorCode,
+  type BrowserControlResult,
   type BrowserExtensionRequest,
   type BrowserObservedTab,
   isReadOnlyBrowserCommand,
@@ -52,10 +54,10 @@ let bridgeRuntime: BrowserExtensionBridgeRuntime | null = null;
 
 /** Fires whenever whether a browser client is connected may have changed. */
 const connectionEvents = new EventTarget();
-const CONNECTION_CHANGED = "connection-changed";
+const connectionChangedEvent = new Event("connection-changed");
 
 const notifyConnectionListeners = (): void => {
-  connectionEvents.dispatchEvent(new Event(CONNECTION_CHANGED));
+  connectionEvents.dispatchEvent(connectionChangedEvent);
 };
 
 const getBridgeRuntime = (): BrowserExtensionBridgeRuntime => {
@@ -215,9 +217,21 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
   };
 };
 
+/** Telemetry only: a send started while no bridge was mounted. */
+export class BrowserBridgeUnmountedError extends TaggedError(
+  "BrowserBridgeUnmountedError",
+)<{ message: string }> {}
+
+/**
+ * The bridge is mounted once by `AppFrameHost`, above every frame, so every chat send
+ * sees the extension's pairing. A send while it is unmounted drops the browser
+ * tool silently, which the send path reports.
+ */
+export const isBrowserExtensionBridgeMounted = (): boolean =>
+  bridgeRuntime !== null && bridgeRuntime.mountCount > 0;
+
 export const getBrowserClientCapability = ():
-  | BrowserClientCapability
-  | undefined =>
+  BrowserClientCapability | undefined =>
   bridgeRuntime?.allSitesGranted && bridgeRuntime.controllerId
     ? { protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION }
     : undefined;
@@ -226,9 +240,9 @@ const isBrowserClientConnected = (): boolean =>
   getBrowserClientCapability() !== undefined;
 
 const subscribeBrowserClientConnection = (listener: () => void) => {
-  connectionEvents.addEventListener(CONNECTION_CHANGED, listener);
+  connectionEvents.addEventListener(connectionChangedEvent.type, listener);
   return () => {
-    connectionEvents.removeEventListener(CONNECTION_CHANGED, listener);
+    connectionEvents.removeEventListener(connectionChangedEvent.type, listener);
   };
 };
 

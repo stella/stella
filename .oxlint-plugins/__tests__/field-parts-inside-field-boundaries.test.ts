@@ -11,25 +11,47 @@ const lint = async (source: string) =>
   });
 
 test("leaves named exported function and const components to their external mounting site", async () => {
-  for (const source of [
-    "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }",
-    "export const Hint = () => <section><FieldDescription>hint</FieldDescription></section>;",
-    "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport { Hint };",
-    "const Hint = function() { return <section><FieldControl /></section>; };\nexport { Hint as SharedHint };",
-  ]) {
-    expect(await lint(source)).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }",
+      "export const Hint = () => <section><FieldDescription>hint</FieldDescription></section>;",
+      "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport { Hint };",
+      "const Hint = function() { return <section><FieldControl /></section>; };\nexport { Hint as SharedHint };",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lint(source),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("leaves default exported components to their external mounting site", async () => {
-  for (const source of [
-    "export default function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }",
-    "const Hint = () => <section><FieldDescription>hint</FieldDescription></section>;\nexport default Hint;",
-    "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nconst Shared = Hint;\nexport default Shared;",
-    "export default () => <section><FieldDescription>hint</FieldDescription></section>;",
-  ]) {
-    expect(await lint(source)).toEqual([]);
-  }
+  const results = await Promise.all(
+    [
+      "export default function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }",
+      "const Hint = () => <section><FieldDescription>hint</FieldDescription></section>;\nexport default Hint;",
+      "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nconst Shared = Hint;\nexport default Shared;",
+      "export default () => <section><FieldDescription>hint</FieldDescription></section>;",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lint(source),
+        expected: [],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("does not infer an unmounted local component mounting context", async () => {
@@ -41,13 +63,24 @@ test("does not infer an unmounted local component mounting context", async () =>
 });
 
 test("still reports locally mounted exported parts without a Field root", async () => {
-  for (const source of [
-    "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Hint /></main>; }",
-    "export const Hint = () => <section><FieldControl /></section>;\nexport default function Page() { return <main><Hint /></main>; }",
-    "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport { Hint as SharedHint };\nconst Page = () => <main><Hint /></main>;\nexport default Page;",
-  ]) {
-    expect(await lint(source)).toEqual([2]);
-  }
+  const results = await Promise.all(
+    [
+      "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Hint /></main>; }",
+      "export const Hint = () => <section><FieldControl /></section>;\nexport default function Page() { return <main><Hint /></main>; }",
+      "function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport { Hint as SharedHint };\nconst Page = () => <main><Hint /></main>;\nexport default Page;",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lint(source),
+        expected: [2],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("accepts exported parts mounted locally under a Field root", async () => {
@@ -59,12 +92,23 @@ test("accepts exported parts mounted locally under a Field root", async () => {
 });
 
 test("keeps unrooted local mounts visible when another mount is covered", async () => {
-  for (const source of [
-    "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Field><Hint /></Field><Hint /></main>; }",
-    "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Hint /><Field><Hint /></Field></main>; }",
-  ]) {
-    expect(await lint(source)).toEqual([2]);
-  }
+  const results = await Promise.all(
+    [
+      "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Field><Hint /></Field><Hint /></main>; }",
+      "export function Hint() { return <section><FieldDescription>hint</FieldDescription></section>; }\nexport function Page() { return <main><Hint /><Field><Hint /></Field></main>; }",
+    ].map(async (lintCase, index) => {
+      const source = lintCase;
+
+      return {
+        label: `case ${index + 1}: ${JSON.stringify(lintCase)}`,
+        result: await lint(source),
+        expected: [2],
+      };
+    }),
+  );
+  expect(results.map(({ label, result }) => ({ label, result }))).toEqual(
+    results.map(({ label, expected }) => ({ label, result: expected })),
+  );
 });
 
 test("accepts local Field wrappers and shared wrappers with an unreadable external body", async () => {

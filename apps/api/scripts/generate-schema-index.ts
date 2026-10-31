@@ -18,7 +18,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
@@ -303,6 +303,45 @@ const describeColumn = (
 const propertyKey = (name: ts.PropertyName): string | null =>
   ts.isIdentifier(name) || ts.isStringLiteralLike(name) ? name.text : null;
 
+/** Named and composite constraints declare local columns outside their builder chains. */
+const tableForeignKeyColumns = (call: ts.CallExpression): Set<string> => {
+  const keys = new Set<string>();
+  const config = call.arguments.at(2);
+  if (config === undefined) {
+    return keys;
+  }
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      calleeName(node.expression) === "foreignKey"
+    ) {
+      const definition = node.arguments.at(0);
+      if (
+        definition !== undefined &&
+        ts.isObjectLiteralExpression(definition)
+      ) {
+        for (const property of definition.properties) {
+          if (
+            !ts.isPropertyAssignment(property) ||
+            propertyKey(property.name) !== "columns" ||
+            !ts.isArrayLiteralExpression(property.initializer)
+          ) {
+            continue;
+          }
+          for (const column of property.initializer.elements) {
+            if (ts.isPropertyAccessExpression(column)) {
+              keys.add(column.name.text);
+            }
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(config);
+  return keys;
+};
+
 type IndexSchemaSourceOptions = {
   fileName: string;
   source: string;
@@ -342,15 +381,25 @@ export const indexSchemaSource = ({
         declaration.initializer !== undefined,
     );
   });
-  const tableColumns = new Map<string, ts.ObjectLiteralExpression>();
+  const tableColumns = new Map<
+    string,
+    {
+      columns: ts.ObjectLiteralExpression;
+      foreignKeys: Set<string>;
+    }
+  >();
   for (const declaration of declarations) {
     const call = findTableCall(declaration.initializer);
     const columnsArgument = call?.arguments.at(1);
     if (
+      call !== null &&
       columnsArgument !== undefined &&
       ts.isObjectLiteralExpression(columnsArgument)
     ) {
-      tableColumns.set(declaration.name.text, columnsArgument);
+      tableColumns.set(declaration.name.text, {
+        columns: columnsArgument,
+        foreignKeys: tableForeignKeyColumns(call),
+      });
     }
   }
   for (const declaration of declarations) {
@@ -361,9 +410,10 @@ export const indexSchemaSource = ({
     const ownColumnsArgument = tableCall?.arguments.at(1);
     const viewSource =
       viewCall === null ? null : findViewSource(declaration.initializer);
-    const columnsArgument =
-      ownColumnsArgument ??
+    const tableDefinition =
+      tableColumns.get(declaration.name.text) ??
       (viewSource === null ? undefined : tableColumns.get(viewSource));
+    const columnsArgument = ownColumnsArgument ?? tableDefinition?.columns;
     if (
       call === null ||
       nameArgument === undefined ||
@@ -396,11 +446,17 @@ export const indexSchemaSource = ({
       if (key === null) {
         continue;
       }
+      const description = describeColumn(key, property.initializer);
+      const flags = new Set(description.flags);
+      if (tableDefinition?.foreignKeys.has(key)) {
+        flags.add("fk");
+      }
       columns.push({
         key,
         line: lineOf(property),
         summary: leadingSummary(property, source),
-        ...describeColumn(key, property.initializer),
+        ...description,
+        flags: FLAG_ORDER.filter((flag) => flags.has(flag)),
       });
     }
     const statement = declaration.parent.parent;

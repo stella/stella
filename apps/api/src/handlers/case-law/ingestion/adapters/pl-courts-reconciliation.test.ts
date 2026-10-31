@@ -15,7 +15,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SaosItem } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   PL_COURTS_FIRST_SLICE,
@@ -28,12 +27,13 @@ import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapter
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   listingIdentityKey,
   parseListingIdentityKey,

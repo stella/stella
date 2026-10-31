@@ -6,9 +6,9 @@ import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
-  DialogFormState,
   DialogClose,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -32,6 +32,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 
 import { ClauseEditor, type ClauseEditorReviewStatus } from "./clause-editor";
@@ -110,6 +111,7 @@ const ClauseFormDialogBody = ({
   categories,
   initial,
 }: ClauseFormDialogBodyProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const isEdit = !!initial?.id;
 
@@ -179,13 +181,17 @@ const ClauseFormDialogBody = ({
           ? undefined
           : toSafeId<"clauseCategory">(form.categoryId);
 
-      const response = await api.clauses.put({
-        title: form.title.trim(),
-        ...(description && { description }),
-        ...(usageNotes && { usageNotes }),
-        ...(language && { language }),
-        ...(categoryId && { categoryId }),
-        body,
+      const response = await idempotentSubmit.run({
+        operation: "clauses.create",
+        send: async (creationPayload) => api.clauses.put(creationPayload),
+        body: {
+          title: form.title.trim(),
+          ...(description && { description }),
+          ...(usageNotes && { usageNotes }),
+          ...(language && { language }),
+          ...(categoryId && { categoryId }),
+          body,
+        },
       });
 
       setSaving(false);

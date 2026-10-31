@@ -66,6 +66,7 @@ import {
 import { SelectColorIcon } from "@/components/workspaces/properties/shared";
 import { PropertyIcon } from "@/components/workspaces/property-helpers";
 import { WORK_TYPES } from "@/components/workspaces/tasks/task-detail-constants";
+import { filterFieldsByLabel } from "@/components/workspaces/view-toolbar-filters.logic";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceProperty } from "@/lib/types";
 
@@ -506,10 +507,7 @@ const AddFilterPicker = ({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
 
-  const normalized = query.trim().toLowerCase();
-  const visible = normalized
-    ? fields.filter((field) => field.label.toLowerCase().includes(normalized))
-    : fields;
+  const visible = filterFieldsByLabel(fields, query);
 
   const close = () => {
     setOpen(false);

@@ -66,8 +66,8 @@ import { caseLawDecisions } from "@/api/db/schema";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  ADAPTERS_DECLARING_ABSENT_TEXT,
   absentTextComparisonsFor,
+  ADAPTERS_DECLARING_ABSENT_TEXT,
 } from "@/api/lib/case-law/decision-text";
 import {
   enterCaseLawMaintenanceLane,

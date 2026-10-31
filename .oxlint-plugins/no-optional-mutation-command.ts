@@ -7,6 +7,9 @@
 // one variant may still carry a compound payload when fields form one atomic
 // operation.
 //
+// Applies to TanStack `useMutation` and to `useCapabilityMutation`, which wraps
+// it for capability-declaring writes.
+//
 // Flagged:
 //   useMutation({
 //     mutationFn: async (body: { name?: string; color?: string }) => save(body),
@@ -21,15 +24,20 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
-  getImportLocalName,
   getImportedName,
+  getImportLocalName,
   getPropertyName,
   isAstNode,
   isIdentifier,
   isStringLiteral,
 } from "./utils.ts";
 
-const REACT_QUERY_MODULE = "@tanstack/react-query";
+// Mutation hooks whose `mutationFn` first parameter is the command, keyed by
+// the module that exports them.
+const MUTATION_HOOKS: ReadonlyMap<string, string> = new Map([
+  ["@tanstack/react-query", "useMutation"],
+  ["@/lib/capabilities/use-capability-mutation", "useCapabilityMutation"],
+]);
 
 const isIdentityProperty = (name: string | null) =>
   name === "id" || name?.endsWith("Id") === true;
@@ -152,17 +160,17 @@ export default eslintCompatPlugin({
             callExpressions.length = 0;
           },
           ImportDeclaration(node) {
-            if (
-              !isStringLiteral(node.source) ||
-              node.source.value !== REACT_QUERY_MODULE
-            ) {
+            const hook = isStringLiteral(node.source)
+              ? MUTATION_HOOKS.get(node.source.value)
+              : undefined;
+            if (hook === undefined) {
               return;
             }
             const specifiers = Array.isArray(node.specifiers)
               ? node.specifiers
               : [];
             for (const specifier of specifiers) {
-              if (getImportedName(specifier) !== "useMutation") {
+              if (getImportedName(specifier) !== hook) {
                 continue;
               }
               const localName = getImportLocalName(specifier);

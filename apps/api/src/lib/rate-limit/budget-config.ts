@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type { RateLimitBudgetConfiguration } from "@/api/lib/rate-limit/budget-config-schema";
 
 let budgetReader: (() => RateLimitBudgetConfiguration) | null = null;
@@ -312,6 +314,40 @@ const createAdditionalBudgets = (
     },
   },
   MCP_RATE_LIMITS: {
+    handoffMint: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_MINT_MAX;
+      },
+      get windowMs() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_MINT_WINDOW_MS;
+      },
+    },
+    handoffRedeemAddress: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_ADDRESS_MAX;
+      },
+      get windowMs() {
+        return getConfiguration()
+          .RATE_LIMIT_MCP_HANDOFF_REDEEM_ADDRESS_WINDOW_MS;
+      },
+    },
+    handoffRedeemUser: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_USER_MAX;
+      },
+      get windowMs() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_USER_WINDOW_MS;
+      },
+    },
+    handoffRedeemGlobal: {
+      get max() {
+        return getConfiguration().RATE_LIMIT_MCP_HANDOFF_REDEEM_GLOBAL_MAX;
+      },
+      get windowMs() {
+        return getConfiguration()
+          .RATE_LIMIT_MCP_HANDOFF_REDEEM_GLOBAL_WINDOW_MS;
+      },
+    },
     capability: {
       get max() {
         return getConfiguration().RATE_LIMIT_MCP_CAPABILITY_MAX;
@@ -402,3 +438,8 @@ export const {
   API_KEY_RATE_LIMITS,
   OTP_DELIVERY_RATE_LIMITS,
 } = createRateLimitBudgetConfig(readConfiguredBudgets);
+
+export const SYNTHETIC_SESSION_MINT_BUDGETS = {
+  hour: { max: 6, durationMs: 60 * 60 * 1000 },
+  day: { max: 40, durationMs: DAY_IN_MS },
+} as const;

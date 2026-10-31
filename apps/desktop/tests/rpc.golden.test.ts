@@ -5,10 +5,10 @@ import path from "node:path";
 import { DESKTOP_EDIT_FILE_TYPES } from "@stll/api-contract";
 
 import {
-  isAppSnapshot,
   type AppSnapshot,
   type DesktopNotificationPreferences,
   type DesktopUpdateSnapshot,
+  isAppSnapshot,
   type LinkedAccountSnapshot,
   type OpenFileRequest,
   type OpenFileResponse,
@@ -89,7 +89,7 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 const appSnapshot = {
   bridgePort: 45_901,
   bridgeVersion: BRIDGE_VERSION,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v6"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,

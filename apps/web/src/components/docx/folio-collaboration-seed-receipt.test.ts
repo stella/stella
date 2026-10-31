@@ -4,10 +4,12 @@ import { Doc, encodeStateAsUpdate } from "yjs";
 
 import { sha256Hex } from "@stll/sha256/browser";
 
+import { APIError } from "@/lib/errors/api";
+
 import {
   completeFolioSeedReceipt,
-  waitForFolioCollaborationSeed,
   FolioCollaborationSeedPreparingError,
+  waitForFolioCollaborationSeed,
 } from "./folio-collaboration-seed-receipt";
 
 test("captures the pristine cut before later edits and waits for its receipt plus durable flush", async () => {
@@ -126,6 +128,36 @@ test("persistent receipt failure exhausts a bounded retry policy", async () => {
   expect(attempts).toBe(5);
   expect(waits).toBe(4);
 });
+
+test.each([403, 409])(
+  "an API refusal with status %i stops stale seed receipt retries",
+  async (status) => {
+    let attempts = 0;
+    let waits = 0;
+    const failure = new APIError({
+      message: "Room generation changed",
+      status,
+    });
+    const result = await completeFolioSeedReceipt({
+      snapshotBytes: new Uint8Array([1, 2, 3]),
+      acknowledge: async () => {
+        attempts += 1;
+        throw failure;
+      },
+      flushSnapshot: async () => undefined,
+      isCurrent: () => true,
+      onRetry: () => undefined,
+      signal: new AbortController().signal,
+      wait: async () => {
+        waits += 1;
+      },
+    });
+
+    expect(result).toEqual({ status: "failed", error: failure });
+    expect(attempts).toBe(1);
+    expect(waits).toBe(0);
+  },
+);
 
 test("another opener waits silently until the seed receipt and initial snapshot are ready", async () => {
   let attempts = 0;

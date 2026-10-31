@@ -79,6 +79,8 @@ const benchDecisions = (): Decision[] =>
     const sequence = 1400 + index * 7;
     return {
       id: `bench-${index}`,
+      match: "all_terms",
+      textAvailability: "available",
       caseNumber: `${senate} Cdo ${sequence}/2024`,
       caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
       ecli: `ECLI:BENCH:2024:${senate}.CDO.${sequence}.1`,
@@ -91,6 +93,7 @@ const benchDecisions = (): Decision[] =>
       slug: null,
       decisionDate: benchDate(index),
       decisionType: BENCH_TYPES[index % BENCH_TYPES.length] ?? "judgment",
+      decisionTypeKind: null,
       headline: BENCH_HEADNOTES[index % BENCH_HEADNOTES.length] ?? null,
       headnote: {
         type: TEXT_FIELD_TYPE.PRESENT,
@@ -142,6 +145,8 @@ export const WorkspaceTablePlayground = () => {
         </button>
       </div>
       <DecisionTable
+        // Bench rows have no endpoint to ask for another order.
+        dateOrder={null}
         decisions={decisions}
         firstRowNumber={1}
         isLoading={false}

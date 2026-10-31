@@ -14,13 +14,8 @@ import { isDecisionIdentifier } from "@stll/legal-ast/decision-identifier";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
-  CZ_NS_FIRST_SLICE,
   buildCzNsDecision,
+  CZ_NS_FIRST_SLICE,
   czNsAdapter,
   czNsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
@@ -32,10 +27,15 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
-  absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const reconciliation = requireReconciliation(czNsAdapter);

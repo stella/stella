@@ -5,6 +5,11 @@ import type { Block } from "@stll/legal-ast/document-ast";
 import { projectionPieces } from "@stll/legal-ast/projection-digest";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 import { dropOverlappingSpans } from "@stll/legal-ast/text-spans";
+import {
+  EU_PROVISION_ARTICLE_LABELS,
+  EU_PROVISION_PARAGRAPH_LABELS,
+  EU_PROVISION_POINT_LABELS,
+} from "@stll/legal-atlas/eu-provision-citations";
 import { escapeRegExp } from "@stll/text-normalize";
 
 type ProvisionOccurrenceContext = {
@@ -58,6 +63,14 @@ const sentencePattern = (sentenceText: string): RegExp | null => {
   return new RegExp(source, "u");
 };
 
+const REFERENCE_PATTERN_FLAGS = "giu";
+const labelSource = (labels: readonly { pattern: string }[]): string =>
+  labels.map(({ pattern }) => pattern).join("|");
+
+const EU_ARTICLE_LABEL_SOURCE = labelSource(EU_PROVISION_ARTICLE_LABELS);
+const EU_PARAGRAPH_LABEL_SOURCE = labelSource(EU_PROVISION_PARAGRAPH_LABELS);
+const EU_POINT_LABEL_SOURCE = labelSource(EU_PROVISION_POINT_LABELS);
+
 /**
  * The reference as the decision prints it: the sign or the article word, the
  * number with its inserted-provision letter, then each named
@@ -76,21 +89,25 @@ const referencePattern = ({
   subsection,
   unit,
 }: ProvisionAnchorSource["reference"]): RegExp => {
-  const head =
-    unit === "article" ? String.raw`(?:čl\.|článk\p{Ll}*|art\.|Art\.)` : "§";
   const number = `${String(section)}${sectionSuffix === null ? "" : escapeRegExp(sectionSuffix)}`;
-  const parts = [String.raw`${head}\s*${number}(?![\p{N}\p{L}])`];
+  const head =
+    unit === "article"
+      ? String.raw`(?:(?<!\p{L})(?:(?:${EU_ARTICLE_LABEL_SOURCE})|člán(?:ek|ok|ku|kem|kom|ky|ků|kov|kům|cích|koch))\s*${number}(?![\p{N}\p{L}])|${number}\.\s*cikk)`
+      : String.raw`§\s*${number}(?![\p{N}\p{L}])`;
+  const parts = [head];
   if (subsection !== null) {
+    const paragraph = escapeRegExp(subsection);
     parts.push(
-      String.raw`(?:\s*(?:odst\.|odstav\p{Ll}*|odsek\p{Ll}*|ods\.|ust\.|para\.)\s*${escapeRegExp(subsection)}(?![\p{N}\p{L}]))`,
+      String.raw`(?:\s*(?:(?:(?:${EU_PARAGRAPH_LABEL_SOURCE})|odstav\p{Ll}*|odsek\p{Ll}*)\s*${paragraph}(?![\p{N}\p{L}])|\(${paragraph}\)(?:\s*bekezd(?:és)?)?))`,
     );
   }
   if (letter !== null) {
+    const point = escapeRegExp(letter);
     parts.push(
-      String.raw`(?:\s*(?:písm\.|písmeno|lit\.)\s*${escapeRegExp(letter)}\)?)`,
+      String.raw`(?:\s*(?:(?:(?:${EU_POINT_LABEL_SOURCE})|písmeno)\s*${point}\)?|\(${point}\)|${point}\)\s*pont))`,
     );
   }
-  return new RegExp(parts.join(""), "u");
+  return new RegExp(parts.join(""), REFERENCE_PATTERN_FLAGS);
 };
 
 type OccurrenceSource = Pick<
@@ -209,12 +226,18 @@ export const locateProvisionAnchors = <T>({
         (competingPattern) =>
           competingPattern === reference.source
             ? []
-            : [...sentence[0].matchAll(new RegExp(competingPattern, "gu"))],
+            : [
+                ...sentence[0].matchAll(
+                  new RegExp(competingPattern, REFERENCE_PATTERN_FLAGS),
+                ),
+              ],
       );
       // A subsection or letter stored in the same sentence owns its longer
       // span; a section-only pattern must not count that span a second time.
       const occurrences = [
-        ...sentence[0].matchAll(new RegExp(reference.source, "gu")),
+        ...sentence[0].matchAll(
+          new RegExp(reference.source, REFERENCE_PATTERN_FLAGS),
+        ),
       ].filter(
         (match) =>
           !competingMatches.some(

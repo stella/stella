@@ -9,7 +9,9 @@ import {
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { Result } from "better-result";
+import * as v from "valibot";
 
+import { mcpHandoffSessionsSchema } from "@stll/api-contract/mcp-web-handoff";
 import { fetchWithTimeout } from "@stll/fetch";
 import { ac, roles } from "@stll/permissions";
 
@@ -19,8 +21,15 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { reportUnhandledAuthClientError } from "@/lib/account/auth-code-report";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { AuthClientError } from "@/lib/errors/auth";
+import {
+  notifyUserError,
+  reportUserVisibleError,
+} from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -107,9 +116,13 @@ const authClientPlugins = [
   lastLoginMethodClient(),
   organizationClient({ ac, roles }),
   inferAdditionalFields({
+    session: {
+      originConsentId: { type: "string", required: false },
+    },
     user: {
       preferredName: { type: "string", required: false },
       timezoneId: { type: "string" },
+      readerAnswerLanguage: { type: "string", required: false },
       wordEditShortcut: { type: "string", required: false },
       userShortcuts: { type: "string", required: false },
       guideProgress: { type: "string", required: false },
@@ -165,10 +178,19 @@ const createStellaAuthClient = (redirectMode: "automatic" | "manual") =>
       },
       onRequest: withOauthQueryFromHash,
       onError: (context) => {
+        if (notifyStepUp(context.error)) {
+          return;
+        }
         if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
           const t = getTranslator();
           notifyUserError(context.error, t("auth.rateLimitExceeded"));
+          return;
         }
+        reportUnhandledAuthClientError(
+          context.error,
+          reportUserVisibleError,
+          context.request.url,
+        );
       },
     },
   });
@@ -183,13 +205,65 @@ export const submitOAuthConsent = async (accept: boolean) => {
 
 export const listAuthSessions = async () => {
   const result = await authClient.listSessions();
-
   if (result.error) {
     return result;
   }
 
+  const hasHandoffSession = result.data.some(
+    (session) =>
+      "originConsentId" in session &&
+      typeof session.originConsentId === "string" &&
+      session.originConsentId.length > 0,
+  );
+  const clientsBySessionId = new Map<string, string | null>();
+  if (hasHandoffSession) {
+    const handoffSessionsResult = await Result.tryPromise({
+      try: async () =>
+        await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+      catch: (cause) => cause,
+    });
+
+    if (Result.isError(handoffSessionsResult)) {
+      getAnalytics().captureError(handoffSessionsResult.error, {
+        fingerprintKey: "auth.listSessions.handoffs:fetch",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
+      });
+    } else if (handoffSessionsResult.value.error) {
+      getAnalytics().captureError(handoffSessionsResult.value.error, {
+        fingerprintKey: "auth.listSessions.handoffs:response",
+        scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
+      });
+    } else {
+      const handoffsResult = v.safeParse(
+        mcpHandoffSessionsSchema,
+        handoffSessionsResult.value.data,
+      );
+      if (handoffsResult.success) {
+        for (const { id, clientName } of handoffsResult.output.sessions) {
+          clientsBySessionId.set(id, clientName);
+        }
+      } else {
+        getAnalytics().captureError(
+          new AuthClientError({
+            message: "Invalid MCP handoff session response",
+            status: 502,
+            statusText: "Bad Gateway",
+          }),
+          {
+            fingerprintKey: "auth.listSessions.handoffs:schema",
+            scope: { type: "handler", handlerId: "auth.listSessions.handoffs" },
+            context: {
+              type: "detached",
+              operation: "auth.list_sessions.handoffs",
+            },
+          },
+        );
+      }
+    }
+  }
   return {
     data: result.data.map((session) => ({
+      originClientName: clientsBySessionId.get(session.id) ?? null,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       id: session.id,

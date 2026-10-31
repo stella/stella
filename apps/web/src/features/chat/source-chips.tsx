@@ -1,21 +1,29 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
+import { useTranslations } from "use-intl";
 
 import { isEntityKind } from "@stll/api-contract";
+import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { chatAppOrigins } from "@/components/chat/chat-app-origins";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
-import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
+import type {
+  ExternalSourceEntry,
+  SourceChipEntry,
+} from "@/components/chat/source-chips.logic";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatMessage, ChatSourceDocument } from "@/lib/api-contract";
 import { detached } from "@/lib/detached";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 type SourceChipsProps = {
   messageId: string;
@@ -30,21 +38,23 @@ export const SourceChips = ({
   sourceDocuments,
   workspaceId,
 }: SourceChipsProps) => {
-  const { uniqueExternalSources, uniqueSources } = collectSourceChipEntries({
+  const { entries, uniqueExternalSources } = collectSourceChipEntries({
+    appOrigins: chatAppOrigins(),
     parts,
     sourceDocuments,
   });
   const registerSources = useExternalSourceStore(
     (state) => state.registerSources,
   );
+  const t = useTranslations("chat.sourceChips");
+  const cited = entries.filter((entry) => entry.relation === "cited");
+  const consulted = entries.filter((entry) => entry.relation === "consulted");
 
-  // Push the derived source list into the external-source store
-  // whenever it changes so the inspector can resolve cited sources.
   useExternalSyncEffect(() => {
     registerSources(uniqueExternalSources);
   }, [registerSources, uniqueExternalSources]);
 
-  if (uniqueSources.length === 0 && uniqueExternalSources.length === 0) {
+  if (entries.length === 0) {
     return null;
   }
 
@@ -56,22 +66,134 @@ export const SourceChips = ({
         orientation="vertical"
       />
       <div className="contents" data-chat-answer-citations>
-        {uniqueSources.map((part) => (
-          <SourceChip
-            key={`${messageId}-source-${part.id ?? part.data.entityId}`}
-            sourceDocument={part.data}
-            workspaceId={workspaceId}
-          />
-        ))}
-        {uniqueExternalSources.map((source) => (
-          <PublisherSourceChip
-            key={`${messageId}-external-source-${source.url}`}
-            source={source}
-            workspaceId={workspaceId ?? null}
-          />
-        ))}
+        <div className="w-full space-y-2">
+          {cited.length > 0 && (
+            <SourceEntryList
+              entries={cited}
+              messageId={messageId}
+              workspaceId={workspaceId}
+            />
+          )}
+          {consulted.length > 0 && (
+            <details className="group">
+              <summary className="focus-visible:ring-ring text-muted-foreground cursor-pointer rounded-sm text-xs focus-visible:ring-2 focus-visible:outline-none">
+                {t("alsoConsulted", { count: consulted.length })}
+              </summary>
+              <div className="mt-2">
+                <SourceEntryList
+                  entries={consulted}
+                  messageId={`${messageId}-consulted`}
+                  workspaceId={workspaceId}
+                />
+              </div>
+            </details>
+          )}
+        </div>
       </div>
     </>
+  );
+};
+
+const SourceEntryList = ({
+  entries,
+  messageId,
+  workspaceId,
+}: {
+  entries: SourceChipEntry[];
+  messageId: string;
+  workspaceId: string | undefined;
+}) => {
+  const t = useTranslations("caseLaw.courtTiers");
+  const caseLaw = entries.filter((entry) => entry.type === "case-law");
+  const remaining = entries.filter((entry) => entry.type !== "case-law");
+  const tiers = COURT_TIER_LABELS;
+  return (
+    <div className="space-y-2">
+      {tiers.map((tier) => {
+        const rows = caseLaw.filter((entry) => entry.caseLaw.tier === tier);
+        if (rows.length === 0) {
+          return null;
+        }
+        return (
+          <section key={tier}>
+            <h4 className="text-muted-foreground mb-1 text-xs font-medium">
+              {t(tier)}
+            </h4>
+            <div className="space-y-1">
+              {rows.map((entry) => (
+                <CaseLawSourceRow
+                  key={`${messageId}-${entry.source.url}`}
+                  entry={entry}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      {remaining.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {remaining.map((entry) =>
+            entry.type === "document" ? (
+              <SourceChip
+                key={`${messageId}-${entry.source.data.entityId}`}
+                sourceDocument={entry.source.data}
+                workspaceId={workspaceId}
+              />
+            ) : (
+              <PublisherSourceChip
+                key={`${messageId}-${entry.source.url}`}
+                source={entry.source}
+                workspaceId={workspaceId ?? null}
+              />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CaseLawSourceRow = ({
+  entry,
+}: {
+  entry: Extract<SourceChipEntry, { type: "case-law" }>;
+}) => {
+  const format = useFormatter();
+  const { caseLaw, source } = entry;
+  const date = caseLaw.decisionDate
+    ? format.dateTime(new Date(caseLaw.decisionDate), {
+        dateStyle: "medium",
+        timeZone: "UTC",
+      })
+    : null;
+  return (
+    <LegalCitationLink
+      appearance="tray"
+      fullTrayLabel
+      interactive
+      linkIconSource={{ kind: "tool-source" }}
+      source={source}
+    >
+      <span className="flex min-w-0 items-start gap-2">
+        <span
+          aria-label={caseLaw.court}
+          className="bg-muted shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+        >
+          {caseLaw.courtShortCode}
+        </span>
+        <span className="min-w-0">
+          <BidiText as="span" className="block text-xs font-medium">
+            {caseLaw.caseNumber}
+            {date ? ` · ${date}` : ""}
+          </BidiText>
+          {caseLaw.holding && (
+            <span className="text-muted-foreground block truncate text-xs">
+              {caseLaw.holding}
+            </span>
+          )}
+        </span>
+      </span>
+    </LegalCitationLink>
   );
 };
 
@@ -109,6 +231,7 @@ const PublisherSourceChip = ({
   <LegalCitationLink
     appearance="tray"
     interactive
+    linkIconSource={{ kind: "tool-source" }}
     source={source}
     workspaceId={workspaceId}
   >
@@ -125,9 +248,7 @@ const SourceChip = ({
 }) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const resolvedWorkspaceId =
     workspaceId ?? sourceDocument.workspaceId ?? undefined;
 
@@ -138,17 +259,18 @@ const SourceChip = ({
 
     detached(
       (async () => {
-        const result = await openEntityInInspector(
-          sourceDocument.entityId,
-          sourceDocument.title,
-          resolvedWorkspaceId,
-        );
+        const result = await openEntityInInspector({
+          documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+          entityId: sourceDocument.entityId,
+          label: sourceDocument.title,
+          workspaceId: resolvedWorkspaceId,
+        });
 
         if (result.type === "folder") {
           await navigateToWorkspaceFolder({
             folderId: result.entityId,
             navigate,
-            pathname,
+            router,
             queryClient,
             targetWorkspaceId: result.workspaceId,
           });

@@ -36,8 +36,7 @@ import {
 } from "@stll/ui/inspector";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
-import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
-import { ZoomControls } from "@/components/inspector/zoom-controls";
+import { FloatingZoomControls } from "@/components/inspector/zoom-controls";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { CitationYearStrip } from "@/features/case-law/components/citation-year-strip";
 import { toSafeId } from "@/lib/safe-id";
@@ -238,11 +237,15 @@ const BenchPane = ({ width }: { width: number }) => (
           />
         </main>
       </ScrollArea>
-      <ViewerOverlayBar>
-        {/* The bar's geometry is what the bench measures; its controls have
-            nothing to drive, so they stay at rest. */}
-        <ZoomControls atMax atMin level={1} onReset={noop} onZoom={noop} />
-      </ViewerOverlayBar>
+      {/* The bar's geometry is what the bench measures; its controls have
+          nothing to drive, so they stay at rest. */}
+      <FloatingZoomControls
+        atMax
+        atMin
+        level={1}
+        onReset={noop}
+        onZoom={noop}
+      />
     </div>
   </section>
 );

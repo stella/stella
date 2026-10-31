@@ -19,8 +19,8 @@ import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import {
   CACHE_SCHEMA_VERSION,
-  DEFAULT_TTL_SECONDS,
   cachePathFor,
+  DEFAULT_TTL_SECONDS,
   readCacheFile,
   writeCacheFile,
 } from "./registry-cache.js";
@@ -255,7 +255,6 @@ test("only a current authenticated response enables feature commands over the ca
     token: "caller-a",
     env,
     force: true,
-    fetchLatestVersion: async () => undefined,
     fetchRaw: async () =>
       Result.ok({
         rawBody: body(enabled),
@@ -327,7 +326,6 @@ test("callers and same-credential grant changes use fresh projections without cr
       env,
       force: requiresFeatureAccessRefresh(tree),
       now: Date.parse("2026-10-02T10:00:00.000Z"),
-      fetchLatestVersion: async () => undefined,
       fetchRaw: async () => {
         fetchedTokens.push(token);
         return Result.ok({

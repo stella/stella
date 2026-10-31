@@ -55,6 +55,7 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 const LOCAL_ONLY_GATES = new Set<string>([
   // Intentional contract regeneration writes reviewed fixtures; CI runs the read-only check.
   "STELLA_UPDATE_PLAN_CONTRACTS",
+  // Regenerates the reviewed role and policy censuses; CI runs the read-only comparison.
   // Physical statistics are a local comparison; CI reports the synthetic profile.
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Regenerates the read-fault baseline locally; CI runs the read-only comparison.
@@ -1129,6 +1130,7 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
     expect(workflowRunsPackageScript(sameUnnamedStep, runner)).toBe(true);
   });
 
+  // Measured p95: 14.4 s; this must scan all test gates, runners, and workflows.
   test("every env-gated test suite has a workflow that runs it with its gate set", async () => {
     const [gateScan, workflows, runners] = await Promise.all([
       collectGates(),
@@ -1165,5 +1167,5 @@ describe.skipIf(SKIP_INDIRECT)("indirect", () => {});`,
       .map(({ gate, file }) => `${gate} (declared in ${file})`)
       .toSorted();
     expect(uncovered).toEqual([]);
-  });
+  }, 30_000);
 });

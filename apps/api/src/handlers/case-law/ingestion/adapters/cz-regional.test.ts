@@ -21,12 +21,8 @@ import {
   test,
 } from "bun:test";
 
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { InvalidNumericTokenError } from "@stll/agent-input/numeric-token";
+
 import {
   assembleCzRegionalDecision,
   buildCzRegionalDecision,
@@ -55,6 +51,12 @@ import {
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
 import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   faultedResponse,
@@ -1596,4 +1598,31 @@ describe("a failed publisher read is never built", () => {
       });
     },
   );
+});
+
+// Cursor validation must finish before any publisher request or page selection.
+describe("regional cursor numeric tokens", () => {
+  test.each([
+    "2025-06-11:12junk",
+    "2025-06-11:12junk:0",
+    "2025-06-11:0:12junk",
+    "2025-06-11:",
+    "2025-06-11:-1",
+    "2025-06-11:1e3",
+    "2025-06-11:9007199254740992",
+  ])("refuses malformed cursor %s before fetching", async (cursor) => {
+    const fetchSpy = spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ items: [], totalPages: 0 })),
+    );
+    try {
+      const result = await czRegionalAdapter.fetchPage(cursor, {});
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.cause).toBeInstanceOf(InvalidNumericTokenError);
+      }
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });

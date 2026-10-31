@@ -2,7 +2,7 @@ import { queryOptions, skipToken } from "@tanstack/react-query";
 import type { QueryFunctionContext } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { organizationSettingsQueryRoot } from "@/lib/resource-query-roots.logic";
 
@@ -37,7 +37,7 @@ const fetchOrganizationSettings = async ({ signal }: QueryFunctionContext) => {
   const response = await api["organization-settings"].get({
     fetch: { signal },
   });
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
 export type OrganizationSettings = Awaited<

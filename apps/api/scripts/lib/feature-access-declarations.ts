@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 import { DESKTOP_FEATURE_IDS } from "@stll/api-contract/desktop-feature-access";
 import { compareCodeUnit } from "@stll/collation";

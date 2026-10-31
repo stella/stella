@@ -81,8 +81,7 @@ export type CorrespondenceAuthenticatedSender = CorrespondenceAuthentication & {
 };
 
 export type CorrespondenceOriginalSignature =
-  | { status: "unverified" }
-  | { status: "verified"; domain: string };
+  { status: "unverified" } | { status: "verified"; domain: string };
 
 export const CORRESPONDENCE_SOURCES = ["delivery", "upload"] as const;
 
@@ -111,8 +110,7 @@ type CorrespondenceUploadProvenance = {
 };
 
 export type CorrespondenceProvenance =
-  | CorrespondenceDeliveryProvenance
-  | CorrespondenceUploadProvenance;
+  CorrespondenceDeliveryProvenance | CorrespondenceUploadProvenance;
 
 export const CORRESPONDENCE_SENDER_KINDS = [
   "verified_alias",
@@ -129,8 +127,7 @@ export type CorrespondenceSenderScope =
   (typeof CORRESPONDENCE_SENDER_SCOPES)[number];
 
 export type CorrespondenceActorDisplay =
-  | { status: "active"; name: string; email: string }
-  | { status: "deleted" };
+  { status: "active"; name: string; email: string } | { status: "deleted" };
 
 export type CorrespondenceFiler =
   | {

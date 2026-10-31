@@ -89,13 +89,38 @@ const stackFrameLocation = (frame: string): StackFrameLocation | undefined => {
   return { lineSeparator, urlStart };
 };
 
-const sanitizeStackFrame = (frame: string): string | undefined => {
+// Browser frames name asset URLs. Server frames name files, and the path
+// above the app root is deployment layout that can name a person (a home
+// directory in development).
+type StackFrameRuntime = { type: "browser" } | { type: "server"; root: string };
+
+// A file under the app root keeps its app-relative path, so a server chunk
+// stays recognizable; any other file (a dependency) keeps its basename.
+const serverFramePath = (path: string, root: string): string => {
+  const terminator = path.search(/[?#]/u);
+  const file = terminator === -1 ? path : path.slice(0, terminator);
+  // A literal root prefix does not establish containment across dot segments.
+  if (file.split("/").some((segment) => segment === "." || segment === "..")) {
+    return file.slice(file.lastIndexOf("/") + 1);
+  }
+  return file.startsWith(`${root}/`)
+    ? file.slice(root.length + 1)
+    : file.slice(file.lastIndexOf("/") + 1);
+};
+
+const sanitizeStackFrame = (
+  frame: string,
+  runtime: StackFrameRuntime,
+): string | undefined => {
   const location = stackFrameLocation(frame);
   if (location === undefined) {
     return undefined;
   }
   const { lineSeparator, urlStart } = location;
   const serializedUrl = frame.slice(urlStart, lineSeparator);
+  if (runtime.type === "server" && serializedUrl.startsWith("/")) {
+    return `${frame.slice(0, urlStart)}${serverFramePath(serializedUrl, runtime.root)}${frame.slice(lineSeparator)}`;
+  }
   if (!URL.canParse(serializedUrl)) {
     return undefined;
   }
@@ -135,14 +160,23 @@ const runtimeStackFrameSyntax = (): StackFrameSyntax | undefined => {
     : undefined;
 };
 
+// SSR runs on Bun, which has a process working directory: the web app root
+// in the image. Browsers have no `process`.
+const runtimeStackFrameRuntime = (): StackFrameRuntime =>
+  typeof process === "undefined"
+    ? { type: "browser" }
+    : { type: "server", root: process.cwd() };
+
 type RedactTelemetryStackOptions = {
   errorType: string;
+  runtime: StackFrameRuntime;
   stack: string;
   syntax: StackFrameSyntax;
 };
 
 export const redactTelemetryStack = ({
   errorType,
+  runtime,
   stack,
   syntax,
 }: RedactTelemetryStackOptions): string | undefined => {
@@ -157,7 +191,7 @@ export const redactTelemetryStack = ({
     if (!frameSyntax.test(line)) {
       continue;
     }
-    const sanitized = sanitizeStackFrame(line);
+    const sanitized = sanitizeStackFrame(line, runtime);
     if (sanitized !== undefined) {
       frames.push(sanitized);
     }
@@ -176,6 +210,7 @@ const redactedStack = (error: Error): string | undefined => {
   }
   return redactTelemetryStack({
     errorType: telemetryErrorType(error),
+    runtime: runtimeStackFrameRuntime(),
     stack,
     syntax,
   });

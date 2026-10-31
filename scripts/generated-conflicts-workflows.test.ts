@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { GENERATED_MERGE_HEADLINE } from "./generated-conflicts";
 import { MAIN_ONLY_BUN_CACHE_SAVE } from "./workflow-cache-policy";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
@@ -62,6 +63,10 @@ const githubExpression = (value: string) => ["$", "{{ ", value, " }}"].join("");
 const HEAD = "a".repeat(40);
 const MAIN = "b".repeat(40);
 
+// Where a dispatched run's id comes from: the dispatch answer, a listing
+// after it, or nowhere.
+type RunIdSource = "named" | "listed" | "missing";
+
 describe("dispatch", () => {
   const dispatch = script(
     DISPATCH,
@@ -83,12 +88,36 @@ describe("dispatch", () => {
     plannedHeads: string[] = [],
     refusedRefs: string[] = [],
     failingStatus?: number,
+    runId: RunIdSource = "named",
   ) => {
     const dispatched: Record<string, unknown>[] = [];
+    const outputs: Record<string, string> = {};
+    const warnings: string[] = [];
+    const info: string[] = [];
+    const summaries: string[] = [];
     await dispatch.runInNewContext({
-      setTimeout,
+      setTimeout: (resolve: () => void) => {
+        resolve();
+      },
       context: { repo: { owner: "stella", repo: "stella" } },
-      core: { notice: () => {} },
+      core: {
+        info: (message: string) => {
+          info.push(message);
+        },
+        summary: {
+          addRaw: (message: string) => {
+            summaries.push(message);
+            return { write: async () => {} };
+          },
+        },
+        notice: () => {},
+        warning: (message: string) => {
+          warnings.push(message);
+        },
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+      },
       github: {
         rest: {
           repos: {
@@ -97,6 +126,34 @@ describe("dispatch", () => {
           actions: {
             listWorkflowRuns: async (request: Record<string, unknown>) => {
               expect(request["workflow_id"]).toBe(RESOLVE);
+              // The lookup of a dispatch that named no run.
+              if (request["branch"] !== undefined) {
+                const lookup = v.parse(
+                  v.looseObject({
+                    branch: v.string(),
+                    event: v.literal("workflow_dispatch"),
+                    created: v.pipe(v.string(), v.regex(/^>=\d{4}-/u)),
+                  }),
+                  request,
+                );
+                const index = dispatched.findIndex(
+                  (entry) => entry["ref"] === lookup.branch,
+                );
+                return {
+                  data: {
+                    workflow_runs:
+                      runId === "listed"
+                        ? [
+                            {
+                              id: 1001 + index,
+                              display_title: `Resolve generated-only conflicts on ${lookup.branch}`,
+                            },
+                            { id: 9999, display_title: "Some other run" },
+                          ]
+                        : [],
+                  },
+                };
+              }
               return {
                 data: {
                   workflow_runs: plannedHeads.map((head) => ({
@@ -118,7 +175,15 @@ describe("dispatch", () => {
                   status: 422,
                 });
               }
-              dispatched.push(request);
+              expect(request["return_run_details"]).toBe(true);
+              const { return_run_details: _, ...accepted } = request;
+              dispatched.push(accepted);
+              return {
+                data:
+                  runId === "named"
+                    ? { workflow_run_id: 1000 + dispatched.length }
+                    : undefined,
+              };
             },
           },
         },
@@ -132,14 +197,20 @@ describe("dispatch", () => {
         }),
       },
     });
-    return dispatched;
+    // Every accepted dispatch whose run was found is followed by the
+    // publish step; a run never found is only reported.
+    expect(JSON.parse(outputs["runs"] ?? "")).toEqual(
+      runId === "missing" ? [] : dispatched.map((_, index) => 1001 + index),
+    );
+    expect(warnings).toHaveLength(runId === "missing" ? dispatched.length : 0);
+    return { dispatched, info, summaries, outputs };
   };
   const sha = (index: number) => index.toString(16).padStart(40, "0");
   const updatedAt = (day: number) =>
     `2026-10-${String(day).padStart(2, "0")}T00:00:00Z`;
 
   test("starts one run per pull request, on that pull request's own branch", async () => {
-    const dispatched = await run([
+    const { dispatched } = await run([
       pull({ updatedAt: updatedAt(2) }),
       pull({
         number: 2,
@@ -191,11 +262,54 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20),
       }),
     );
-    const dispatched = await run([
+    const { dispatched } = await run([
       ...ineligible,
       pull({ headRefName: "feat/late", updatedAt: updatedAt(1) }),
     ]);
     expect(dispatched.map((request) => request["ref"])).toEqual(["feat/late"]);
+  });
+
+  const committed = (minutesAgo: number) => ({
+    nodes: [
+      {
+        commit: {
+          committedDate: new Date(
+            Date.now() - minutesAgo * 60_000,
+          ).toISOString(),
+        },
+      },
+    ],
+  });
+
+  test("defers a head committed 14 minutes ago and reports the typed skip", async () => {
+    const result = await run([
+      pull({ commits: committed(14), updatedAt: updatedAt(1) }),
+    ]);
+    expect(result.dispatched).toEqual([]);
+    expect(result.info).toContain("deferred #1: head-active (14 min < 15)");
+    expect(result.summaries).toEqual([
+      "deferred #1: head-active (14 min < 15)\ndispatched: 0; deferred-active: 1; other-skipped: 0\n",
+    ]);
+  });
+
+  test("dispatches a head committed 16 minutes ago", async () => {
+    const { dispatched } = await run([
+      pull({ commits: committed(16), updatedAt: updatedAt(1) }),
+    ]);
+    expect(dispatched).toHaveLength(1);
+  });
+
+  test("dispatches a head whose committed date is missing", async () => {
+    const { dispatched } = await run([
+      pull({ commits: { nodes: [] }, updatedAt: updatedAt(1) }),
+    ]);
+    expect(dispatched).toHaveLength(1);
+  });
+
+  test("queries the head commit date", () => {
+    expect(read(DISPATCH)).toContain(
+      "committedDate messageHeadline statusCheckRollup { state }",
+    );
   });
 
   test("a branch that refuses the dispatch never takes a slot", async () => {
@@ -207,7 +321,7 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20 + index),
       }),
     );
-    const dispatched = await run(
+    const { dispatched } = await run(
       [
         ...refused,
         pull({
@@ -235,6 +349,109 @@ describe("dispatch", () => {
     }
   });
 
+  test("a dispatch that names no run is found by listing, never fails main", async () => {
+    const pulls = [
+      pull({ updatedAt: updatedAt(2) }),
+      pull({
+        number: 2,
+        headRefName: "feat/b",
+        headRefOid: "c".repeat(40),
+        updatedAt: updatedAt(1),
+      }),
+    ];
+    for (const source of ["listed", "missing"] as const) {
+      expect(
+        (await run(pulls, [], [], undefined, source)).dispatched.map(
+          (request) => request["ref"],
+        ),
+        source,
+      ).toEqual(["feat/a", "feat/b"]);
+    }
+  });
+
+  test("green heads precede red heads even when green was already planned", async () => {
+    const greenHead = pull({
+      headRefName: "green/planned",
+      updatedAt: updatedAt(1),
+      commits: {
+        nodes: [{ commit: { statusCheckRollup: { state: "SUCCESS" } } }],
+      },
+    });
+    const red = Array.from({ length: 8 }, (_, index) =>
+      pull({
+        number: index + 10,
+        headRefName: `red/${index}`,
+        headRefOid: sha(index + 10),
+        updatedAt: updatedAt(20),
+        commits: {
+          nodes: [{ commit: { statusCheckRollup: { state: "FAILURE" } } }],
+        },
+      }),
+    );
+    const result = await run([...red, greenHead], [HEAD]);
+    expect(result.dispatched[0]?.["ref"]).toBe("green/planned");
+    expect(result.dispatched).toHaveLength(8);
+  });
+
+  test.each([0, 1, 2, 3, 4])(
+    "%i published heads with pending checks reserve publication capacity",
+    async (count) => {
+      const active = Array.from({ length: count }, (_, index) =>
+        pull({
+          number: index + 10,
+          mergeable: "MERGEABLE",
+          headRefName: `active/${index}`,
+          commits: {
+            nodes: [
+              {
+                commit: {
+                  messageHeadline:
+                    "chore: merge main and regenerate conflicted generated files",
+                  statusCheckRollup: { state: "FAILURE" },
+                  checkSuites:
+                    index % 2 === 0
+                      ? { nodes: [{ status: "IN_PROGRESS" }] }
+                      : null,
+                },
+              },
+            ],
+          },
+        }),
+      );
+      const result = await run([...active, pull({})]);
+      expect(result.outputs["publish-slots"]).toBe(
+        String(Math.max(0, 3 - count)),
+      );
+      expect(result.dispatched).toHaveLength(count >= 3 ? 0 : 1);
+      if (count >= 3) {
+        expect(result.summaries.join("")).toContain("deferred #1: ci-capacity");
+      }
+    },
+  );
+
+  test.each(["SUCCESS", "FAILURE", "ERROR"])(
+    "completed %s checks release capacity",
+    async (state) => {
+      const result = await run([
+        pull({
+          commits: {
+            nodes: [
+              {
+                commit: {
+                  messageHeadline:
+                    "chore: merge main and regenerate conflicted generated files",
+                  statusCheckRollup: { state },
+                  checkSuites: { nodes: [{ status: "COMPLETED" }] },
+                },
+              },
+            ],
+          },
+        }),
+      ]);
+      expect(result.outputs["publish-slots"]).toBe("3");
+    },
+  );
+
   test("unplanned heads go first, then the most recently updated", async () => {
     const stale = Array.from({ length: 8 }, (_, index) =>
       pull({
@@ -244,7 +461,7 @@ describe("dispatch", () => {
         updatedAt: updatedAt(20 + index),
       }),
     );
-    const dispatched = await run(
+    const { dispatched } = await run(
       [
         ...stale,
         pull({
@@ -274,6 +491,15 @@ describe("dispatch", () => {
     ]);
   });
 
+  test("capacity tracking uses the actual generated merge headline", () => {
+    for (const file of [DISPATCH, PUBLISH]) {
+      expect(read(file)).toContain(`=== '${GENERATED_MERGE_HEADLINE}'`);
+      const workflow = v.parse(workflowSchema, parse(file));
+      const job = Object.values(workflow.jobs).at(0);
+      expect(job?.permissions?.["checks"]).toBe("read");
+    }
+  });
+
   test("runs no branch code and holds no push key", () => {
     const job = workflows.dispatch.jobs["dispatch"];
     expect(
@@ -285,8 +511,274 @@ describe("dispatch", () => {
   });
 });
 
+describe("dispatch follows each resolve run to its publish", () => {
+  const follow = script(DISPATCH, "dispatch", "Publish each resolution");
+  type Run = { status: string; conclusion: string | null };
+  const done = (conclusion: string): Run => ({
+    status: "completed",
+    conclusion,
+  });
+  const running: Run = { status: "in_progress", conclusion: null };
+  type Scenario = {
+    resolves: number[];
+    // States each run reports on successive polls; the last one repeats.
+    polls: Map<number, Run[]>;
+    // Resolve runs that uploaded a resolution.
+    uploaded: Set<number>;
+    // Where each publish run's id comes from.
+    publishRunId: RunIdSource;
+    slots: number;
+  };
+  // Publish runs are numbered after the resolve run they publish.
+  const publishOf = (resolve: number) => resolve + 100;
+  const scenario = (): Scenario => ({
+    resolves: [1, 2, 3],
+    polls: new Map([
+      [1, [running, done("success")]],
+      [2, [done("success")]],
+      [3, [done("failure")]],
+      [101, [running, done("success")]],
+      [102, [done("success")]],
+    ]),
+    uploaded: new Set([1, 2, 3]),
+    publishRunId: "named",
+    slots: 3,
+  });
+  const followFor = async (input: Scenario) => {
+    const dispatches: Record<string, unknown>[] = [];
+    const failures: string[] = [];
+    const warnings: string[] = [];
+    const summaries: string[] = [];
+    const reads = new Map<number, number>();
+    await follow.runInNewContext({
+      process: {
+        env: {
+          RUNS: JSON.stringify(input.resolves),
+          PUBLISH_SLOTS: String(input.slots),
+        },
+      },
+      setTimeout: (resolve: () => void) => {
+        resolve();
+      },
+      context: { repo: { owner: "stella", repo: "stella" } },
+      core: {
+        summary: {
+          addRaw: (message: string) => {
+            summaries.push(message);
+            return { write: async () => {} };
+          },
+        },
+        warning: (message: string) => {
+          warnings.push(message);
+        },
+        setFailed: (message: string) => {
+          failures.push(message);
+        },
+      },
+      github: {
+        rest: {
+          actions: {
+            getWorkflowRun: async (params: Record<string, unknown>) => {
+              const id = Number(params["run_id"]);
+              const states = input.polls.get(id) ?? [running];
+              const polled = reads.get(id) ?? 0;
+              reads.set(id, polled + 1);
+              return {
+                data: {
+                  html_url: `run/${String(id)}`,
+                  ...states[Math.min(polled, states.length - 1)],
+                },
+              };
+            },
+            listWorkflowRunArtifacts: async (
+              params: Record<string, unknown>,
+            ) => {
+              expect(params["name"]).toBe("generated-conflicts");
+              return {
+                data: {
+                  artifacts: input.uploaded.has(Number(params["run_id"]))
+                    ? [{ name: "generated-conflicts", expired: false }]
+                    : [],
+                },
+              };
+            },
+            createWorkflowDispatch: async (
+              request: Record<string, unknown>,
+            ) => {
+              expect(request["return_run_details"]).toBe(true);
+              const { return_run_details: _, ...accepted } = request;
+              dispatches.push(accepted);
+              const inputs = v.parse(
+                v.object({ resolve_run_id: v.string() }),
+                request["inputs"],
+              );
+              return {
+                data:
+                  input.publishRunId === "named"
+                    ? {
+                        workflow_run_id: publishOf(
+                          Number(inputs.resolve_run_id),
+                        ),
+                      }
+                    : undefined,
+              };
+            },
+            listWorkflowRuns: async (params: Record<string, unknown>) => {
+              expect(params).toMatchObject({
+                workflow_id: PUBLISH,
+                branch: "main",
+                event: "workflow_dispatch",
+              });
+              if (input.publishRunId === "missing") {
+                return { data: { workflow_runs: [] } };
+              }
+              // Every publish dispatched so far is listed; the title names
+              // the resolve run each one publishes.
+              return {
+                data: {
+                  workflow_runs: dispatches.map((request) => {
+                    const resolve = v.parse(
+                      v.object({ resolve_run_id: v.string() }),
+                      request["inputs"],
+                    ).resolve_run_id;
+                    return {
+                      id: publishOf(Number(resolve)),
+                      display_title: `Publish generated-only conflict resolution of run ${resolve}`,
+                    };
+                  }),
+                },
+              };
+            },
+          },
+        },
+      },
+    });
+    return { dispatches, failures, warnings, summaries };
+  };
+
+  test.each([0, 1, 2, 3])(
+    "publishes at most %i available slots without queuing the remainder",
+    async (slots) => {
+      const input = scenario();
+      input.slots = slots;
+      const result = await followFor(input);
+      expect(result.dispatches).toHaveLength(Math.min(slots, 2));
+      expect(
+        result.summaries.filter((line) =>
+          line.includes("deferred-ci-capacity"),
+        ),
+      ).toHaveLength(Math.max(0, 2 - slots));
+    },
+  );
+
+  test("an unconfirmed publication stops further dispatches", async () => {
+    const input = scenario();
+    input.slots = 1;
+    input.publishRunId = "missing";
+    const result = await followFor(input);
+    expect(result.dispatches).toHaveLength(1);
+    expect(result.summaries).toContain("resolve-run 1: publish-run-missing\n");
+  });
+
+  test("publishes exactly each successful resolve run, from main", async () => {
+    const result = await followFor(scenario());
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+    expect(result.dispatches).toEqual(
+      [1, 2].map((id) => ({
+        owner: "stella",
+        repo: "stella",
+        workflow_id: PUBLISH,
+        ref: "main",
+        inputs: { resolve_run_id: String(id) },
+      })),
+    );
+  });
+
+  test("a publish run the dispatch did not name is found by its title", async () => {
+    const input = scenario();
+    input.publishRunId = "listed";
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  test("a publish run never found is reported, never fails main", async () => {
+    const input = scenario();
+    input.publishRunId = "missing";
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.warnings).toHaveLength(1);
+  });
+
+  test("a run that uploaded no resolution starts no publish", async () => {
+    const input = scenario();
+    input.uploaded.delete(2);
+    const result = await followFor(input);
+    expect(result.failures).toEqual([]);
+    expect(result.dispatches.map((request) => request["inputs"])).toEqual([
+      { resolve_run_id: "1" },
+    ]);
+  });
+
+  // The failure this guards against: a resolution that was never published
+  // while the run that started it finished green.
+  for (const [name, change] of [
+    [
+      "a failed publish",
+      (input: Scenario) => input.polls.set(101, [done("failure")]),
+    ],
+    [
+      "a publish that never finishes",
+      (input: Scenario) => input.polls.set(102, [running]),
+    ],
+    [
+      "a resolve run that never finishes",
+      (input: Scenario) => input.polls.set(2, [running]),
+    ],
+  ] as const) {
+    test(`${name} fails the run`, async () => {
+      const input = scenario();
+      change(input);
+      expect((await followFor(input)).failures).toHaveLength(1);
+    });
+  }
+
+  test("runs only after resolve runs were started", () => {
+    const step = workflows.dispatch.jobs["dispatch"]?.steps.find(
+      (candidate) => candidate.name === "Publish each resolution",
+    );
+    expect(step?.if).toBe(
+      "steps.dispatch.outputs.runs != '' && steps.dispatch.outputs.runs != '[]'",
+    );
+    expect(step?.env).toEqual({
+      RUNS: githubExpression("steps.dispatch.outputs.runs"),
+      PUBLISH_SLOTS: githubExpression("steps.dispatch.outputs.publish-slots"),
+    });
+  });
+});
+
 describe("resolve", () => {
   const job = workflows.resolve.jobs["resolve"];
+
+  test("merged lockfiles refresh without lifecycle scripts before frozen install", () => {
+    const steps = job?.steps ?? [];
+    const refresh = steps.findIndex(
+      (step) => step.name === "Re-resolve merged lockfile with frozen pins",
+    );
+    const install = steps.findIndex(
+      (step) => step.name === "Install dependencies",
+    );
+    expect(refresh).toBeGreaterThan(-1);
+    expect(refresh).toBeLessThan(install);
+    expect(steps.at(refresh)?.["timeout-minutes"]).toBe(5);
+    expect(steps.at(refresh)?.run).toContain("refresh-lock --repo .");
+    expect(steps.at(install)?.run).toContain("bun ci --ignore-scripts");
+    const regenerate = steps.find(
+      (step) => step.name === "Regenerate conflicted outputs",
+    );
+    expect(regenerate?.run).toContain('if [[ -n "$GENERATOR_IDS" ]]');
+  });
 
   test("never runs in a default-branch context and saves no cache", () => {
     // Branch code runs here. On a branch ref its caches and artifacts are
@@ -315,13 +807,19 @@ describe("publish", () => {
   const select = script(PUBLISH, "publish", "Select the pull request");
 
   type Scenario = {
+    runId: string;
     run: Record<string, unknown>;
     pulls: Record<string, unknown>[];
     artifacts: { name: string; expired: boolean }[];
+    active: number;
   };
   const scenario = (): Scenario => ({
+    runId: "9",
+    active: 0,
     run: {
       id: 9,
+      status: "completed",
+      conclusion: "success",
       path: ".github/workflows/generated-conflicts-resolve.yml",
       event: "workflow_dispatch",
       head_branch: "feat/a",
@@ -344,19 +842,42 @@ describe("publish", () => {
   const selectFor = async (input: Scenario) => {
     const outputs: Record<string, string> = {};
     await select.runInNewContext({
-      context: {
-        repo: { owner: "stella", repo: "stella" },
-        payload: { workflow_run: input.run },
-      },
+      process: { env: { RESOLVE_RUN_ID: input.runId } },
+      context: { repo: { owner: "stella", repo: "stella" } },
       core: {
+        summary: { addRaw: () => ({ write: async () => {} }) },
         setOutput: (name: string, value: string) => {
           outputs[name] = value;
         },
       },
       github: {
+        graphql: async () => ({
+          repository: {
+            pullRequests: {
+              pageInfo: { hasNextPage: false, endCursor: null },
+              nodes: Array.from({ length: input.active }, () => ({
+                commits: {
+                  nodes: [
+                    {
+                      commit: {
+                        messageHeadline:
+                          "chore: merge main and regenerate conflicted generated files",
+                        statusCheckRollup: null,
+                      },
+                    },
+                  ],
+                },
+              })),
+            },
+          },
+        }),
         rest: {
           pulls: { list: "pulls.list" },
           actions: {
+            getWorkflowRun: async (params: Record<string, unknown>) => {
+              expect(params["run_id"]).toBe(Number(input.runId));
+              return { data: input.run };
+            },
             listWorkflowRunArtifacts: async (
               params: Record<string, unknown>,
             ) => {
@@ -378,6 +899,18 @@ describe("publish", () => {
     return outputs;
   };
 
+  test.each([3, 4])(
+    "defers publication with %i active published heads",
+    async (active) => {
+      const input = scenario();
+      input.active = active;
+      expect(await selectFor(input)).toEqual({});
+      expect(workflows.publish.concurrency.group).toBe(
+        githubExpression("github.workflow"),
+      );
+    },
+  );
+
   test("publishes only to the branch the resolve run ran on", async () => {
     expect(await selectFor(scenario())).toEqual({
       branch: "feat/a",
@@ -387,6 +920,25 @@ describe("publish", () => {
   });
 
   const refused: { name: string; change: (input: Scenario) => void }[] = [
+    ...["", "0", "9x", "-9", "1".repeat(16)].map((runId) => ({
+      name: `the run id ${JSON.stringify(runId)}`,
+      change: (input: Scenario) => {
+        input.runId = runId;
+      },
+    })),
+    {
+      name: "a failed resolve run",
+      change: (input) => {
+        input.run["conclusion"] = "failure";
+      },
+    },
+    {
+      name: "a resolve run still running",
+      change: (input) => {
+        input.run["status"] = "in_progress";
+        input.run["conclusion"] = null;
+      },
+    },
     {
       name: "another workflow's run",
       change: (input) => {
@@ -460,7 +1012,31 @@ describe("publish", () => {
     });
   }
 
-  test("reads only the triggering run's artifact and never checks out the branch", () => {
+  test("takes its resolve run from the dispatch input, on main only", () => {
+    expect(job?.if).toBe(
+      "github.repository == 'stella/stella' && github.ref == 'refs/heads/main'",
+    );
+    expect(
+      v.parse(
+        v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+        parse(PUBLISH),
+      ).on,
+    ).toEqual({
+      workflow_dispatch: {
+        inputs: {
+          resolve_run_id: expect.objectContaining({
+            required: true,
+            type: "string",
+          }),
+        },
+      },
+    });
+    expect(
+      job?.steps.find((step) => step.name === "Select the pull request")?.env,
+    ).toEqual({ RESOLVE_RUN_ID: githubExpression("inputs.resolve_run_id") });
+  });
+
+  test("reads only the dispatched run's artifact and never checks out the branch", () => {
     const steps = job?.steps ?? [];
     const download = steps.find(
       (step) => step.name === "Download the resolution",

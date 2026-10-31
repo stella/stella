@@ -21,7 +21,10 @@ import {
   SEARCH_INDEX_UNAVAILABLE_HINT,
   SEARCH_INDEX_UNAVAILABLE_MESSAGE,
 } from "@/api/lib/legal-search/search-index-unavailable";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testAppliedProjectionsFor,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 
 /**
  * Where "the search index is unavailable" is decided: at the client, from
@@ -176,8 +179,11 @@ const readPage = async (scanTransport: CorpusIndexScanTransport) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
     extractSnippet: () => null,
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) =>
-      await Promise.resolve({
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
         context: null,
         groups: candidates.map((candidate) =>
           corpusSearchGroupToken(candidate.id),
@@ -189,7 +195,8 @@ const readPage = async (scanTransport: CorpusIndexScanTransport) =>
           citationAuthority: 0,
         })),
         revisionById: testRevisionsFor(candidates),
-      }),
+      };
+    },
   });
 
 /** What a scan threw, or a failure of the test when it threw nothing. */
@@ -318,6 +325,7 @@ describe("a scan answers an unavailable index with the typed refusal", () => {
       isSearchIndexUnavailable(
         new HandlerError({
           status: 503,
+          code: "internal_error",
           message: "Search is temporarily unavailable",
         }),
       ),

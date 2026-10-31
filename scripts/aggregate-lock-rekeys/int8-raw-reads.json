@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/scripts/ingestion-status.ts",
+    "from": "15fc14b794ffcb1dbcafea933e339ea9fec59dcb2e20aff782797ba2e3d15860",
+    "to": "e7c408f336ca0b7926a5a34941ffb6c46408ba9e80fc06ad2f054412ac1c5d35",
+    "reason": "Existing transaction boundary; the hourly and daily sums inside it now cast to int, which changed the site's fingerprint."
+  }
+]

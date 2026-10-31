@@ -11,14 +11,14 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   buildChatAnonPipelineConfig,
-  ChatAnonInputLimitError,
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
-  DEFAULT_CHAT_ANON_ENTITY_LABELS,
+  ChatAnonInputLimitError,
   createThirdPartyBoundaryRefusalPayload,
+  DEFAULT_CHAT_ANON_ENTITY_LABELS,
   findChatAnonPlaceholders,
-  FORCED_SENSITIVE_VALUES_MAX,
   FORCED_SENSITIVE_VALUE_MAX_LENGTH,
+  FORCED_SENSITIVE_VALUES_MAX,
   getPreferredChatSendMode,
   isThirdPartyBoundaryRefusalError,
   isThirdPartyBoundaryRefusalPayload,

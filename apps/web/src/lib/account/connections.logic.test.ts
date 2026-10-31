@@ -1,11 +1,44 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import {
   canApproveIntegrationAuthorization,
+  type IntegrationAuthorizationStatus,
   integrationStatus,
   matchesConnectionQuery,
-  type IntegrationAuthorizationStatus,
 } from "./connections.logic";
+
+const PROPERTY_MAX_TEXT_PARTS = 20;
+const PROPERTY_MAX_FIELDS = 6;
+const searchTextArbitrary = fc
+  .array(
+    fc.constantFrom(
+      "a",
+      "C",
+      "é",
+      "e\u0301",
+      "Č",
+      "c\u030C",
+      "ß",
+      "ς",
+      "😀",
+      "\ud800",
+      "\udc00",
+      "\ufffd",
+      "+",
+      "[",
+      " ",
+      "\t",
+    ),
+    { maxLength: PROPERTY_MAX_TEXT_PARTS },
+  )
+  .map((parts) => parts.join(""));
+
+const searchKey = (value: string): string =>
+  foldSearchMatchText(value.toWellFormed());
 
 describe("integration approval", () => {
   test("approval requires permission and a pending review", () => {
@@ -15,8 +48,7 @@ describe("integration approval", () => {
       "approved",
       "needs_reapproval",
     ] as const satisfies readonly (
-      | IntegrationAuthorizationStatus
-      | undefined
+      IntegrationAuthorizationStatus | undefined
     )[];
     for (const status of statuses) {
       expect(canApproveIntegrationAuthorization(false, status)).toBe(false);
@@ -52,6 +84,43 @@ describe("connection search", () => {
       matchesConnectionQuery("harbrook", [null, undefined, "Harbrook"]),
     ).toBe(true);
   });
+
+  test("matches punctuation literally and folds letters without a decomposition", () => {
+    expect(matchesConnectionQuery("+", ["Drive + files"])).toBe(true);
+    expect(matchesConnectionQuery("drive +", ["Drive files"])).toBe(false);
+    expect(matchesConnectionQuery("strasse", ["Straße"])).toBe(true);
+    expect(matchesConnectionQuery("lodzi", ["Sąd w Łodzi"])).toBe(true);
+  });
+
+  test("matches malformed surrogates as replacement characters and rejects half-astral queries", () => {
+    expect(matchesConnectionQuery("\ufffd", ["broken\ud800text"])).toBe(true);
+    expect(matchesConnectionQuery("\ud83d", ["😀"])).toBe(false);
+    expect(matchesConnectionQuery("\ude00", ["😀"])).toBe(false);
+  });
+
+  test("connection search requires every folded word for generated Unicode inputs", () => {
+    assertProperty(
+      "connection search requires every folded word for generated Unicode inputs",
+      fc.property(
+        searchTextArbitrary,
+        fc.array(
+          fc.oneof(
+            searchTextArbitrary,
+            fc.constant(null),
+            fc.constant(undefined),
+          ),
+          { maxLength: PROPERTY_MAX_FIELDS },
+        ),
+        (query, fields) => {
+          const haystack = searchKey(fields.filter(Boolean).join(" "));
+          const expected = query
+            .split(/\s+/u)
+            .every((word) => haystack.includes(searchKey(word)));
+          expect(matchesConnectionQuery(query, fields)).toBe(expected);
+        },
+      ),
+    );
+  });
 });
 
 describe("integration status", () => {
@@ -74,7 +143,7 @@ describe("integration status", () => {
       }),
     ).toEqual({
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     });
     expect(
       integrationStatus({
@@ -88,7 +157,7 @@ describe("integration status", () => {
       }),
     ).toEqual({
       tone: "neutral",
-      labelKey: "settings.connections.notConnected",
+      labelKey: "common.notConnected",
     });
   });
 
@@ -131,7 +200,7 @@ describe("integration status", () => {
           responseDisposition: "normal",
         },
       }),
-    ).toEqual({ tone: "success", labelKey: "settings.connections.connected" });
+    ).toEqual({ tone: "success", labelKey: "common.connected" });
   });
 
   test("shared re-approval is visible without this user's connection", () => {

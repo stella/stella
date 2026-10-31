@@ -5,6 +5,14 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { buildMemoryPromptParts } from "@/api/handlers/chat/memory-context";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  AI_MEMORY_FEATURE_ID,
+  FEATURE_REGISTRY,
+} from "@/api/lib/feature-access/registry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // Memory injection runs on the per-message chat path, which the route-smoke
@@ -21,6 +29,29 @@ const ORGANIZATION_ID = toSafeId<"organization">(
   "00000000-0000-4000-8000-000000000001",
 );
 const USER_ID = toSafeId<"user">("00000000-0000-4000-8000-000000000002");
+
+const featureAccessSnapshot = createFeatureAccessSnapshot({
+  organizationId: ORGANIZATION_ID,
+  userId: USER_ID,
+  decisions: new Map([
+    [
+      AI_MEMORY_FEATURE_ID,
+      decideFeatureAccess({
+        registry: FEATURE_REGISTRY,
+        featureId: AI_MEMORY_FEATURE_ID,
+        organizationId: ORGANIZATION_ID,
+        userId: USER_ID,
+        membership: true,
+        user: { email: "member@example.test", emailVerified: true },
+        grants: {
+          [AI_MEMORY_FEATURE_ID]: [
+            { type: "organization", organizationId: ORGANIZATION_ID },
+          ],
+        },
+      }),
+    ],
+  ]),
+});
 
 type MemoryRowStub = {
   id: SafeId<"aiMemory">;
@@ -60,6 +91,19 @@ const countingSafeDb = (rows: readonly MemoryRowStub[]) => {
 };
 
 describe("memory injection query budget", () => {
+  test("hidden memory performs no retrieval or recency writes", async () => {
+    const db = countingSafeDb([memoryRow("Use numbered paragraphs")]);
+    const result = await buildMemoryPromptParts({
+      hydrateRefs: (text) => text,
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+      contextMatterIds: [],
+      workspaceId: null,
+      safeDb: db.safeDb,
+    });
+    expect(result.unwrap()).toBe("");
+    expect(db.calls).toBe(0);
+  });
   test("costs at most two round-trips per message", async () => {
     const db = countingSafeDb([
       memoryRow("Prefers OSCOLA citations"),
@@ -67,6 +111,7 @@ describe("memory injection query budget", () => {
     ]);
 
     const result = await buildMemoryPromptParts({
+      featureAccessSnapshot,
       hydrateRefs: (text) => text,
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,
@@ -85,6 +130,7 @@ describe("memory injection query budget", () => {
     const db = countingSafeDb([]);
 
     const result = await buildMemoryPromptParts({
+      featureAccessSnapshot,
       hydrateRefs: (text) => text,
       organizationId: ORGANIZATION_ID,
       userId: USER_ID,

@@ -2,24 +2,20 @@ import { Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
-import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
+import { RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
-import { stellaToast } from "@stll/ui/toast";
 
+import { CopyActionButton } from "@/components/copy-action-button";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import {
-  correspondenceAddressOptions,
   CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
+  correspondenceAddressOptions,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
 } from "@/lib/workspaces/queries/correspondence";
@@ -74,7 +70,6 @@ export const CorrespondenceViewSkeleton = () => (
 
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
   const canUpdate = usePermissions({ workspace: ["update"] });
   const { data, isError, isPending, refetch } = useQuery(
     correspondenceAddressOptions(workspaceId),
@@ -82,19 +77,6 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const rotate = useRotateCorrespondenceAddress();
   const revoke = useRevokeCorrespondenceAddress();
   const address = data?.status === "configured" ? data.address : null;
-
-  const copyAddress = async () => {
-    if (!address) {
-      return;
-    }
-    const copied = await copyToClipboard(address);
-    if (Result.isError(copied)) {
-      analytics.captureError(copied.error);
-      notifyUserError(copied.error, t("common.error"));
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
 
   let addressStatus = (
     <p className="text-muted-foreground mt-1 text-sm">
@@ -116,7 +98,9 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   } else if (isError) {
     addressStatus = (
       <div className="mt-1 flex items-center gap-2">
-        <p className="text-destructive text-sm">{t("common.error")}</p>
+        <p className="text-destructive text-sm">
+          {t("common.somethingWentWrong")}
+        </p>
         <Button
           className="min-h-11"
           onClick={() => detached(refetch(), "correspondence.retry-address")}
@@ -139,17 +123,13 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
       </div>
       <div className="flex flex-wrap gap-2">
         {address && (
-          <Button
+          <CopyActionButton
             className="min-h-11"
-            onClick={() =>
-              detached(copyAddress(), "correspondence.copy-address")
-            }
+            iconClassName="size-4"
             size="sm"
+            text={address}
             variant="outline"
-          >
-            <CopyIcon className="size-4" />
-            {t("common.copy")}
-          </Button>
+          />
         )}
         {canUpdate && (
           <Button

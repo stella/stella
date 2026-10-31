@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 import {
-  PRUNABLE_BASELINES,
   PRUNABLE_BASELINE_WRITERS,
+  PRUNABLE_BASELINES,
   pruneViolations,
 } from "./autofix-baseline-prune";
 import { isAutofixProtectedPath } from "./autofix-protected-paths";
@@ -43,6 +43,41 @@ test("each committed baseline exposes its entries where the registry says", () =
     expect(typeof entries === "object" && entries !== null, path).toBe(true);
     expect(pruneViolations(path, text, text), path).toEqual([]);
   }
+});
+
+test("the design lint backlog only permits lower counts", () => {
+  const before = JSON.stringify({
+    "shadcn/no-restyle": {
+      "apps/web/src/example.tsx": 2,
+    },
+  });
+  const rewritten = (entries: Record<string, number>) =>
+    JSON.stringify({ "shadcn/no-restyle": entries });
+
+  expect(
+    pruneViolations(
+      BASELINE_PATHS.designLint,
+      before,
+      rewritten({ "apps/web/src/example.tsx": 1 }),
+    ),
+  ).toEqual([]);
+  expect(
+    pruneViolations(
+      BASELINE_PATHS.designLint,
+      before,
+      rewritten({ "apps/web/src/example.tsx": 3 }),
+    ),
+  ).not.toEqual([]);
+  expect(
+    pruneViolations(
+      BASELINE_PATHS.designLint,
+      before,
+      rewritten({
+        "apps/web/src/example.tsx": 2,
+        "apps/web/src/new-example.tsx": 1,
+      }),
+    ),
+  ).not.toEqual([]);
 });
 
 test("deleting a committed entry is applied and adding one is refused", () => {

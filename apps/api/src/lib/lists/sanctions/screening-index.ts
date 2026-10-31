@@ -3,6 +3,7 @@ import type { TaggedErrorClass } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
 
 import { createEventLoopSlicer } from "@stll/concurrency/event-loop";
+import { declareFingerprintFields } from "@stll/errors";
 import { buildScreeningIndexCooperatively } from "@stll/sanctions";
 import type {
   ParsedList,
@@ -55,7 +56,11 @@ class SanctionsIndexLoadFailure extends SanctionsIndexLoadFailureBase<{
   stage: LoadStage;
   message: string;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["stage"]);
+  }
+}
 
 type LoadEditionEntriesOptions = {
   db: SanctionsReadDb;

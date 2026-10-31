@@ -6,11 +6,11 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   BILLING_STATUS,
   EXPENSE_CATEGORIES,
+  type ExpenseCategory,
   TIME_ENTRY_SOURCE,
   TIME_ENTRY_SOURCES,
   TIME_ENTRY_STATUSES,
   TIME_ENTRY_SUGGESTION_STATUS,
-  type ExpenseCategory,
   type TimeEntrySource,
   type TimeEntryStatus,
 } from "@stll/api-contract";
@@ -23,40 +23,43 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { bytea, jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillChildPolicies,
-  agentSkillRevisionPolicies,
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  agentSkillRevisionPolicies,
   aiMemoryPolicies,
-  chatMessageSearchDocumentPolicies,
-  chatMessagePolicies,
-  chatMessageRevisionPolicies,
-  chatTurnPolicies,
-  chatThreadCompactionPolicies,
-  chatThreadNamePolicies,
-  chatThreadPreviewPassagePolicies,
-  chatThreadPolicies,
-  chatThreadSearchDocumentPolicies,
+  authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   caseLawAnalysisReaderDecisionPolicies,
   caseLawAnalysisReaderPolicies,
   caseLawAnalysisWriterPolicies,
   caseLawAnalysisWriterReadPolicies,
   caseLawIngestionOnlyPolicies,
+  chatMessagePolicies,
+  chatMessageRevisionPolicies,
+  chatMessageSearchDocumentPolicies,
+  chatThreadCompactionPolicies,
+  chatThreadNamePolicies,
+  chatThreadPolicies,
+  chatThreadPreviewPassagePolicies,
+  chatThreadSearchDocumentPolicies,
+  chatToolGrantPolicies,
+  chatTurnPolicies,
   corpusSampleReaderDecisionPolicies,
   corpusSampleReaderPolicies,
   fileChatThreadPolicies,
   globalCaseLawPolicies,
-  publicCaseLawReaderPolicies,
-  publicLawReaderPolicies,
   mcpConnectorAuthorizationReviewPolicies,
   mcpConnectorPolicies,
-  mcpOAuthStatePolicies,
   mcpOAuthClientPolicies,
+  mcpOAuthStatePolicies,
   mcpUserConnectionPolicies,
+  notificationPolicies,
   organizationCheck,
-  authoredNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
+  publicCaseLawReaderPolicies,
+  publicLawReaderPolicies,
   savedSearchPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
@@ -64,17 +67,16 @@ import {
   stellaPublicLawReader,
   templateChatThreadPolicies,
   userFilePolicies,
-  notificationPolicies,
   userOrganizationPolicies,
   userPolicies,
-  workspaceIdCheck,
   workspaceCheck,
+  workspaceIdCheck,
   workspaceViewTemplatePolicies,
-  wsOrganizationPolicies,
-  wsOrganizationUserPolicies,
-  wsOrganizationReadOnlyPolicies,
   wsDataScopePolicies,
+  wsOrganizationPolicies,
+  wsOrganizationReadOnlyPolicies,
   wsOrganizationScopedRequestPolicies,
+  wsOrganizationUserPolicies,
   wsPolicies,
 } from "@/api/db/rls";
 import type {
@@ -262,8 +264,7 @@ export type SchedulerDailySchedule = {
 };
 
 export type SchedulerSchedule =
-  | SchedulerDailySchedule
-  | SchedulerIntervalSchedule;
+  SchedulerDailySchedule | SchedulerIntervalSchedule;
 
 export type SchedulerPayload = Record<string, unknown>;
 
@@ -351,6 +352,11 @@ export type AccountDeletionStorageCleanup = {
 
 export const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
+});
+
+/** A full transaction id, read as its decimal text. */
+export const xid8 = customType<{ data: string }>({
+  dataType: () => "xid8",
 });
 
 export const safeWorkspaceId = (name: string) =>
@@ -556,10 +562,12 @@ export {
   mcpUserConnectionPolicies,
   organizationCheck,
   authoredNotePolicies,
+  authoredOptionalMatterNotePolicies,
   organizationOptionalWorkspacePolicies,
   orgPolicies,
   orgReadOnlyPolicies,
   savedSearchPolicies,
+  chatToolGrantPolicies,
   sharepointConnectionPolicies,
   sharepointOAuthStatePolicies,
   stella,

@@ -3,12 +3,12 @@ import { afterEach, describe, expect, it, mock, test } from "bun:test";
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
-  createPublisherSlot,
   createPublisherGateSlot,
+  createPublisherSlot,
   deferPublisherGate,
+  PUBLISHER_GATES,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
-  PUBLISHER_GATES,
   readPublisherCooldown,
   withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
@@ -20,6 +20,7 @@ import {
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+import { HAPPY_PATH_TIMEOUT_MS } from "@/api/tests/test-timeouts";
 
 describe("the shared publisher gate", () => {
   it("does not validate Redis configuration until a deployed request", () => {
@@ -131,7 +132,11 @@ describe("the shared publisher gate", () => {
     const rejection = await rejectionOf(reserve());
     expect(rejection).toBeInstanceOf(Error);
     expect(rejection).toMatchObject({
-      message: expect.stringContaining("invalid wait"),
+      code: "limiter_store_unavailable",
+      cause: {
+        message: expect.stringContaining("invalid wait"),
+        _tag: "PublisherGateReplyError",
+      },
     });
   });
 
@@ -237,7 +242,7 @@ describe("a publisher's rate-limit refusal", () => {
           fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.AT_COURTS,
           retryPolicy: "publisher-backoff",
-          timeoutMs: 1000,
+          timeoutMs: HAPPY_PATH_TIMEOUT_MS,
           refusalMode,
         });
         if (refusalMode === "stop-refusal") {
@@ -360,17 +365,17 @@ describe("a run-scoped publisher rate limit", () => {
         const listing = await fetchPublisher(`${publisher}/listing`, {
           fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const notice = await fetchPublisher(`${publisher}/notice`, {
           fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const html = await fetchPublisher(`${publisher}/html`, {
           fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
-          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
         });
         const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
           fetchStage: "document",
@@ -437,7 +442,7 @@ describe("a run-scoped publisher rate limit", () => {
           {
             fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
-            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
           },
         );
         const second = await fetchPublisher(
@@ -445,7 +450,7 @@ describe("a run-scoped publisher rate limit", () => {
           {
             fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
-            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST, // timeout: production adapter deadline under the gate's fake clock
           },
         );
         return { deferred, sharedDeadline, first, second };

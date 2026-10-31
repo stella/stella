@@ -17,33 +17,24 @@ publishable code lives in `packages/`. Use Glob/Grep to explore.
 Before changing a convention-governed domain, read and apply the matching
 `.agents/skills/conventions-*/SKILL.md`. This includes AI, databases, i18n and
 user-facing strings, ingestion, MCP tools and CLI capabilities (agent-facing
-schemas, errors, and reference resources), performance guard failures and hot
-paths, architecture and scale, auth and data access, files and external APIs,
+schemas, errors, and reference resources), performance measurement for routes,
+screens, endpoints, MCP tools, mutations, live events, background jobs and polling
+loops, architecture and scale, auth and data access, files and external APIs,
 tests, `apps/web` React effects, and user-facing UI. The skills own the detailed
 rules.
 
 ## Implementation Quality
 
-- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
-  the code exists. Do not narrate the next statement, add empty documentation
-  blocks, or label closing braces.
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts/<id>.ts` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
+- Dead-export checks (knip) enforce the no-placeholder rule where a package is
+  enrolled; enroll new packages.
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
-- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
-  helpers, and interfaces with one implementation unless they establish a real
-  ownership boundary, contract, or test seam.
-- Prefer deleting concepts, branches, and layers over moving complexity around.
-  Keep feature-specific behavior at its canonical owner; do not scatter flags and
-  special cases through shared flows.
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
-- No forward-compatibility placeholders: never ship a flag, option, field, or
-  export that is accepted but has no effect "for later" (a `--keychain` that
-  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
-  wires it end to end. Dead-export checks (knip) enforce this where a package is
-  enrolled; enroll new packages.
 
 ## Workspace Layout
 
@@ -70,16 +61,16 @@ rules.
 `bun run dev` | `dev:web` (3000) | `dev:api` (3001) |
 `build` | `lint` | `format` | `typecheck` | `test`
 
-`bun run typecheck` uses Bun 1.4.3’s native checker through the workspace
+`bun run typecheck` uses Bun’s native checker through the workspace
 tasks. Direct project checks use
 `bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for
 solution configs with project references. Manual checks dispatch offers
-`typecheck-parity` to compare TypeScript and Bun diagnostics on repository code
-and seeded cases, and `typecheck-probe` to verify seeded-error rejection.
-These optional proofs run only on explicit dispatch. Every PR retains Bun checks.
+`typecheck-probe` to verify seeded-error rejection; it runs only on explicit
+dispatch. Every PR retains Bun checks.
 Editors keep the TypeScript language service because Bun provides no LSP.
-Keep TypeScript and its compatibility alias for compiler-API tools and declaration
-generation.
+`typescript6` stays only for the compiler-API tools that still import it, and
+`apps/landing` keeps `typescript` because `astro check` needs it. Package
+declarations come from Oxc (`dts: { generator: "oxc" }`) or tsrs.
 
 To see a change working, `bun run agent:up` starts this checkout's own
 seeded, signed-in stack; `agent:cli` and `agent:drive` exercise it and
@@ -122,8 +113,7 @@ and on a declared input no test reads any more.
 
 Main has a merge queue: GitHub builds main plus the pull request, runs CI on that
 commit, and merges only if it passes. Add ready pull requests directly to the
-merge queue. `ci-result` remains the required aggregate check, and
-`STELLA_MERGE_HOLD` can hold non-release queue entries during a release.
+merge queue. `ci-result` remains the required aggregate check.
 
 ## Documentation Access
 
@@ -133,7 +123,7 @@ then pass a selected URL to `fetch_doc_chunks`. Use `list_doc_sources` to select
 narrow libraries; reserve `fetch_docs` for a small, known Markdown or plain-text
 index or page.
 
-**Not covered (no `llms.txt`):** Tailwind CSS, oxfmt. For these, use `WebFetch` or
+**Not covered (no `llms.txt`):** Tailwind CSS. For it, use `WebFetch` or
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.

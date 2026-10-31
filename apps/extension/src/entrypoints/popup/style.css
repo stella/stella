@@ -14,17 +14,39 @@ main {
   padding: 18px;
 }
 
+.status-line {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+.status-marker {
+  background: #737373;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+.status-line[data-state="connected"] .status-marker,
+.status-line[data-state="tab-handed-to-stella"] .status-marker {
+  background: #287a45;
+}
+.status-line[data-state="website-access-needed"] .status-marker {
+  background: #a16207;
+}
+
 .mark {
   align-items: center;
   background: #171717;
   border-radius: 9px;
   color: #fff;
   display: flex;
-  font-size: 18px;
-  font-weight: 700;
   height: 36px;
   justify-content: center;
   width: 36px;
+}
+
+.mark img {
+  filter: invert(1);
 }
 
 h1 {
@@ -55,9 +77,30 @@ button {
   gap: 8px;
 }
 
+.secondary-actions {
+  display: grid;
+  gap: 10px;
+}
+.secondary-action {
+  display: grid;
+  gap: 3px;
+}
+.secondary-action p {
+  font-size: 12px;
+}
+
 button.secondary {
-  background: #e5e5e5;
-  color: #171717;
+  background: transparent;
+  color: #525252;
+  justify-self: start;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+button:focus-visible {
+  outline: 2px solid #525252;
+  outline-offset: 2px;
 }
 
 button:disabled {

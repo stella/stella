@@ -73,6 +73,7 @@ type WebChatRuntime = {
 
 /** An assistant message's action, as `chat-user-actions.ts` offers it. */
 type AssistantMessageActionGate = (state: {
+  error: Error | undefined;
   isGenerating: boolean;
   messageId: string;
   messages: readonly UIMessage[];
@@ -270,6 +271,7 @@ export type WebChatClient = {
   /** Whether the runtime reports an error, has a request open, and where
    *  its Stop stands. */
   runtimeState: () => {
+    error: Error | undefined;
     hasError: boolean;
     requestActive: boolean;
     stopStatus: WebChatSnapshot["stop"]["status"];
@@ -545,6 +547,7 @@ export const createWebChatClient = async ({
     runtimeState: () => {
       const { error, isLoading, status, stop } = runtime.getSnapshot();
       return {
+        error,
         hasError: error !== undefined,
         requestActive:
           isLoading || status === "submitted" || status === "streaming",

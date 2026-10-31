@@ -1,0 +1,63 @@
+{
+  "cache_key": "fixture",
+  "columns": [
+    "release",
+    "kind",
+    "handler",
+    "error_class",
+    "error_code",
+    "failure_reason",
+    "occurrences"
+  ],
+  "hasMore": false,
+  "is_cached": false,
+  "limit": 10000,
+  "offset": 0,
+  "results": [
+    [
+      "1.4.0",
+      "fingerprint",
+      "/v1/files/:id",
+      "HandlerError",
+      "upstream_unavailable",
+      "upstream_unavailable",
+      41
+    ],
+    [
+      "1.4.0",
+      "fingerprint",
+      "chat.turn_failed",
+      "ProviderCallError",
+      "ProviderCallError",
+      "provider_unavailable",
+      7
+    ],
+    [
+      "1.4.1",
+      "fingerprint",
+      "/v1/files/:id",
+      "HandlerError",
+      "upstream_unavailable",
+      "upstream_unavailable",
+      38
+    ],
+    [
+      "1.4.1",
+      "fingerprint",
+      "/v1/summaries",
+      "SummaryGenerationError",
+      "model_output_incomplete",
+      "model_output_incomplete",
+      10
+    ]
+  ],
+  "types": [
+    ["release", "Nullable(String)"],
+    ["kind", "Nullable(String)"],
+    ["handler", "Nullable(String)"],
+    ["error_class", "Nullable(String)"],
+    ["error_code", "Nullable(String)"],
+    ["failure_reason", "Nullable(String)"],
+    ["occurrences", "Int64"]
+  ]
+}

@@ -791,7 +791,7 @@
     }
   },
   {
-    "name": "v1-text-file-metadata",
+    "name": "v1-text-file-metadata-stable-filename",
     "input": {
       "version": 1,
       "data": [
@@ -801,7 +801,7 @@
         },
         {
           "type": "file",
-          "filename": "../brief:v2.pdf",
+          "filename": "___brief_v2.pdf",
           "mediaType": "application/pdf",
           "url": "https://files.example/brief.pdf"
         },
@@ -939,16 +939,17 @@
           "input": {
             "status": "parsed",
             "value": {
+              "markdown": "@title Legacy agreement",
               "name": "Legacy agreement",
-              "source": "@title Legacy agreement"
+              "workspaceId": "legacy-matter-id"
             }
+          },
+          "metadata": {
+            "stellaToolExecutor": "client"
           },
           "name": "create-document",
           "state": "input-complete",
-          "type": "tool-call",
-          "metadata": {
-            "stellaToolExecutor": "client"
-          }
+          "type": "tool-call"
         }
       ],
       "version": 3
@@ -978,16 +979,17 @@
           "input": {
             "status": "parsed",
             "value": {
-              "name": "Current agreement",
-              "source": "@title Current"
+              "markdown": "@title Old",
+              "source": "@title Current",
+              "name": "Current agreement"
             }
+          },
+          "metadata": {
+            "stellaToolExecutor": "client"
           },
           "name": "create-document",
           "state": "input-complete",
-          "type": "tool-call",
-          "metadata": {
-            "stellaToolExecutor": "client"
-          }
+          "type": "tool-call"
         }
       ],
       "version": 3
@@ -1024,18 +1026,18 @@
           "input": {
             "status": "parsed",
             "value": {
-              "name": "Legacy agreement",
-              "source": "@title Legacy agreement"
+              "source": "@title Legacy agreement",
+              "name": "Legacy agreement"
             }
+          },
+          "metadata": {
+            "stellaToolExecutor": "client"
           },
           "name": "create-document",
           "output": {
             "value": {
               "success": true,
               "fileName": "Legacy agreement.docx",
-              "entityId": "",
-              "fieldId": "",
-              "workspaceId": "",
               "entityRef": "MAT-001/0001.v1",
               "matterRef": "MAT-001",
               "href": "/workspaces/legacy-matter-id",
@@ -1043,10 +1045,7 @@
             }
           },
           "state": "complete",
-          "type": "tool-call",
-          "metadata": {
-            "stellaToolExecutor": "client"
-          }
+          "type": "tool-call"
         }
       ],
       "version": 3
@@ -1192,6 +1191,153 @@
         }
       ],
       "version": 3
+    }
+  },
+  {
+    "name": "v1-reasoning-provider-metadata",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "reasoning",
+          "text": "x",
+          "state": "done",
+          "providerMetadata": {
+            "provider": {
+              "opaque": ["x", 1, false, null]
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "version": 3,
+      "data": [
+        {
+          "type": "thinking",
+          "content": "x",
+          "providerMetadata": {
+            "provider": {
+              "opaque": ["x", 1, false, null]
+            }
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "v1-dynamic-tool-sdk-approval",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "dynamic-tool",
+          "toolName": "mcp__example__search",
+          "toolCallId": "call_x",
+          "state": "approval-responded",
+          "input": {
+            "query": "x"
+          },
+          "approval": {
+            "id": "approval_x",
+            "approved": false
+          }
+        }
+      ]
+    },
+    "expected": {
+      "version": 3,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "call_x",
+          "name": "mcp__example__search",
+          "state": "approval-responded",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "query": "x"
+            }
+          },
+          "approval": {
+            "id": "approval_x",
+            "needsApproval": true,
+            "approved": false
+          },
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "name": "v1-output-error-provider-metadata",
+    "input": {
+      "version": 1,
+      "data": [
+        {
+          "type": "tool-search",
+          "toolCallId": "call_x",
+          "state": "output-error",
+          "input": {
+            "query": "x"
+          },
+          "errorText": "x",
+          "callProviderMetadata": {
+            "provider": {
+              "opaque": "call"
+            }
+          },
+          "resultProviderMetadata": {
+            "provider": {
+              "opaque": "result"
+            }
+          }
+        }
+      ]
+    },
+    "expected": {
+      "version": 3,
+      "data": [
+        {
+          "type": "tool-call",
+          "id": "call_x",
+          "name": "search",
+          "state": "error",
+          "input": {
+            "status": "parsed",
+            "value": {
+              "query": "x"
+            }
+          },
+          "providerMetadata": {
+            "call": {
+              "provider": {
+                "opaque": "call"
+              }
+            },
+            "result": {
+              "provider": {
+                "opaque": "result"
+              }
+            }
+          },
+          "metadata": {
+            "stellaToolExecutor": "server"
+          }
+        },
+        {
+          "type": "tool-result",
+          "toolCallId": "call_x",
+          "state": "error",
+          "content": {
+            "type": "text",
+            "value": "{\"error\":\"x\"}"
+          },
+          "error": "x"
+        }
+      ]
     }
   }
 ]

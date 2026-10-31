@@ -24,6 +24,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
 import { templatesOptions } from "@/lib/knowledge/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
+
+import { filterTemplatesByName } from "./new-document-from-template-dialog.logic";
 
 /**
  * "New document from template" inside a matter: pick a saved template
@@ -141,13 +144,7 @@ const TemplatePickList = ({
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const templates = data ? data.pages.flatMap((page) => page.items) : [];
-  const query = search.trim().toLowerCase();
-  const visibleTemplates =
-    query === ""
-      ? templates
-      : templates.filter((template) =>
-          template.name.toLowerCase().includes(query),
-        );
+  const visibleTemplates = filterTemplatesByName(templates, search);
 
   if (isLoading) {
     return (
@@ -222,6 +219,7 @@ const FillStep = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const fill = useTemplateFillSchema(template.id);
 
   if (fill.state === "loading") {
@@ -264,7 +262,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId/document",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                   search: { entity: entityId, field: created.fieldId },
                 }),
                 "new-document-from-template-dialog.navigate",
@@ -274,7 +272,7 @@ const FillStep = ({
               detached(
                 navigate({
                   to: "/workspaces/$workspaceId/$viewId",
-                  params: { workspaceId, viewId: "all" },
+                  params: viewParams,
                 }),
                 "new-document-from-template-dialog.navigate",
               );

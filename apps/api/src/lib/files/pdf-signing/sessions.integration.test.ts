@@ -39,8 +39,8 @@ import {
   hashPdfSigningToken,
   lockedCreatorAccess,
   openPdfSigningSession,
-  redeemPdfSigningHandoff,
   recordPdfSigningHandoffFailure,
+  redeemPdfSigningHandoff,
 } from "@/api/lib/files/pdf-signing/sessions";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -86,7 +86,7 @@ const seedHandoff = async ({
   tenant = "a",
 }: SeedOptions = {}) => {
   const sessionId = createSafeId<"pdfSigningSession">();
-  const handoffToken = createPdfSigningToken();
+  const handoffToken = createPdfSigningToken({ userId: null });
   const tenantIds = {
     a: {
       baseVersionId: ids.entityVersionA1,
@@ -361,9 +361,13 @@ describe("pdf signing handoff redemption", () => {
     const { sessionId } = await seedHandoff();
 
     expect(
-      await redeemPdfSigningHandoff(createPdfSigningToken(), tokenDb, {
-        identity: { userId: ids.userA1, organizationId: ids.orgA },
-      }),
+      await redeemPdfSigningHandoff(
+        createPdfSigningToken({ userId: null }),
+        tokenDb,
+        {
+          identity: { userId: ids.userA1, organizationId: ids.orgA },
+        },
+      ),
     ).toBeNull();
 
     const rows = await testDb
@@ -402,7 +406,7 @@ describe("pdf signing session authorization", () => {
       createdBy: ids.userAdmin,
       tenant: "personal",
     });
-    const sessionToken = createPdfSigningToken();
+    const sessionToken = createPdfSigningToken({ userId: null });
     await testDb
       .update(pdfSigningSessions)
       .set({
@@ -749,7 +753,7 @@ describe("pdf signing finalization attempts", () => {
         await authorizePdfSigningSession(
           {
             sessionId,
-            sessionToken: createPdfSigningToken(),
+            sessionToken: createPdfSigningToken({ userId: null }),
           },
           tokenDb,
         )
@@ -772,7 +776,9 @@ describe("opening a pdf signing exchange", () => {
         createdBy: ids.userA1,
         entityId: ids.entityA1,
         handoffExpiresAt: expiresAt,
-        handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+        handoffTokenHash: hashPdfSigningToken(
+          createPdfSigningToken({ userId: null }),
+        ),
         id,
         propertyId: ids.filePropertyA1,
         tokenExpiresAt: expiresAt,
@@ -807,7 +813,9 @@ describe("opening a pdf signing exchange", () => {
           createdBy: ids.userA1,
           entityId: ids.entityA1,
           handoffExpiresAt: expiresAt,
-          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          handoffTokenHash: hashPdfSigningToken(
+            createPdfSigningToken({ userId: null }),
+          ),
           id,
           propertyId: ids.filePropertyA1,
           tokenExpiresAt: expiresAt,
@@ -1003,7 +1011,9 @@ describe("pdf signing session row security", () => {
           createdBy: ids.userA1,
           entityId: ids.entityA1,
           handoffExpiresAt,
-          handoffTokenHash: hashPdfSigningToken(createPdfSigningToken()),
+          handoffTokenHash: hashPdfSigningToken(
+            createPdfSigningToken({ userId: null }),
+          ),
           id: createSafeId<"pdfSigningSession">(),
           propertyId: ids.filePropertyA1,
           tokenExpiresAt: handoffExpiresAt,
@@ -1077,7 +1087,7 @@ describe("pdf signing token scopes", () => {
     ]);
     // Another token, an empty one, or no token at all names nothing.
     for (const hash of [
-      hashPdfSigningToken(createPdfSigningToken()),
+      hashPdfSigningToken(createPdfSigningToken({ userId: null })),
       "",
       null,
     ]) {
@@ -1166,7 +1176,9 @@ test("PDF handoff failure acknowledges only its live unconsumed token", async ()
     });
   expect(await acknowledge(mine.handoffToken)).toBe(true);
   expect(await acknowledge(mine.handoffToken)).toBe(false);
-  expect(await acknowledge(createPdfSigningToken())).toBe(false);
+  expect(await acknowledge(createPdfSigningToken({ userId: null }))).toBe(
+    false,
+  );
   const rows = await testDb
     .select({
       id: pdfSigningSessions.id,

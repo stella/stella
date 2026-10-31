@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/soft-law-ingestion-store.ts",
+  "delta": 1,
+  "reason": "Only repaired extraction placeholders take the merge branch, rarely and one per item; each merge reads the owner's highest version sequence and then moves versions and locators in order inside the ingestion transaction, so the steps cannot be batched across items."
+}

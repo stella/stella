@@ -6,7 +6,8 @@
     "main",
     "selfHostConnectDialog",
     "takeoverDialog",
-    "activity"
+    "activity",
+    "onboarding"
   ],
   "operations": [
     "autostartRead",
@@ -25,7 +26,9 @@
     "runtime",
     "activityRead",
     "activitySubscribe",
-    "activityUpdate"
+    "activityUpdate",
+    "permissionsUpdate",
+    "shortcutUpdate"
   ],
   "errorCodes": [
     "eventSubscriptionFailed",

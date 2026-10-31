@@ -18,10 +18,12 @@ import {
   VERIFICATION_CODE_LENGTH,
 } from "@stll/api-contract";
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import type { DocxArchive } from "@/api/lib/docx-archive";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { firstXmlElement, xmlElements } from "@/api/lib/files/xml-scan";
 import { LIMITS } from "@/api/lib/limits";
 
 const STAMP_BOOKMARK = "stella_dms_ref";
@@ -112,8 +114,12 @@ const STAMP_TEXT_RE = new RegExp(`^\\S(?:.*\\S)? {2}stl:${VCODE_SOURCE}$`, "u");
 
 class DocxStampError extends TaggedError("DocxStampError")<{
   message: string;
-  reason: "too-many-footer-parts";
-}> {}
+  reason: "incomplete-xml" | "too-many-footer-parts";
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 // ── Public API ──────────────────────────────────────────
 
@@ -996,12 +1002,15 @@ const injectFooter = async (
         ...footerParts.map(({ xml }) => xml),
       ]);
       for (const footer of footerParts) {
-        await updateExistingFooter({
+        const updated = await updateExistingFooter({
           archive,
           footer,
           content,
           bookmarkId: String(bookmarkId),
         });
+        if (updated.isErr()) {
+          return updated;
+        }
         bookmarkId += 1;
       }
       return Result.ok();
@@ -1083,7 +1092,7 @@ const updateExistingFooter = async ({
   footer: LoadedFooterMatch;
   content: StampFooterContent;
   bookmarkId: string;
-}): Promise<void> => {
+}): Promise<Result<void, DocxStampError>> => {
   const footerRels = (await archive.readEntryString(footer.relsPath)) ?? "";
 
   const hyperlinkRId = STAMP_HYPERLINK_REL_ID;
@@ -1103,11 +1112,11 @@ const updateExistingFooter = async ({
   );
   if (footer.xml.includes(STAMP_BOOKMARK)) {
     // Replace existing stamp paragraph
-    writeZipEntry(
-      archive.zip,
-      footer.path,
-      replaceStampParagraph(footer.xml, stampPara),
-    );
+    const replaced = replaceStampParagraph(footer.xml, stampPara);
+    if (replaced.isErr()) {
+      return replaced;
+    }
+    writeZipEntry(archive.zip, footer.path, replaced.value);
   } else {
     // Append stamp paragraph before </w:ftr>
     writeZipEntry(
@@ -1116,6 +1125,7 @@ const updateExistingFooter = async ({
       footer.xml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
     );
   }
+  return Result.ok();
 };
 
 const createNewFooter = async ({
@@ -1228,19 +1238,37 @@ const findNextBookmarkId = (xmlParts: Iterable<string>): number => {
   return max + 1;
 };
 
-const replaceStampParagraph = (footerXml: string, newPara: string): string => {
-  // Match the entire paragraph containing the bookmark
-  const re = new RegExp(
-    `<w:p>[\\s\\S]*?w:name="${STAMP_BOOKMARK_NAME_SOURCE}"[\\s\\S]*?</w:p>`,
-    "u",
-  );
-
-  if (re.test(footerXml)) {
-    return footerXml.replace(re, () => newPara);
+const replaceStampParagraph = (
+  footerXml: string,
+  newPara: string,
+): Result<string, DocxStampError> => {
+  const elements = xmlElements(footerXml, "w:p");
+  let replacement: string | null = null;
+  let complete = false;
+  while (true) {
+    const next = elements.next();
+    if (next.done === true) {
+      complete = next.value.status === "complete";
+      break;
+    }
+    const match = next.value;
+    const paragraph = footerXml.slice(match.start, match.end);
+    if (paragraph.includes(`w:name="${STAMP_BOOKMARK}`)) {
+      replacement = `${footerXml.slice(0, match.start)}${newPara}${footerXml.slice(match.end)}`;
+    }
   }
-
-  // Fallback: append
-  return footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`);
+  if (!complete) {
+    return Result.err(
+      new DocxStampError({
+        message: "Footer XML contains an incomplete paragraph",
+        reason: "incomplete-xml",
+      }),
+    );
+  }
+  return Result.ok(
+    replacement ??
+      footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`),
+  );
 };
 
 const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
@@ -1357,17 +1385,21 @@ const extractBookmarkText = (
   verificationCode: string | null;
   stamp: string | null;
 } | null => {
-  const re = new RegExp(
-    `<w:bookmarkStart[^>]*w:name="${STAMP_BOOKMARK_NAME_SOURCE}"` +
-      "[\\s\\S]*?<w:bookmarkEnd[^>]*/>",
-    "u",
+  const start = [...xmlElements(xml, "w:bookmarkStart")].find((match) =>
+    STAMP_BOOKMARK_MARKER_RE.test(match.openTag),
   );
-  const match = re.exec(xml);
-  if (!match) {
+  if (start === undefined) {
+    return null;
+  }
+  const remaining = xml.slice(start.end);
+  const end = firstXmlElement(remaining, "w:bookmarkEnd");
+  if (end.kind === "absent" || end.kind === "incomplete") {
     return null;
   }
 
-  const fullText = collectRunText(match[0]).trim();
+  const fullText = collectRunText(
+    xml.slice(start.start, start.end + end.match.end),
+  ).trim();
   if (!fullText) {
     return null;
   }

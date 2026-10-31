@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import ts from "typescript";
 
 import {
   AI_PROVIDERS,
@@ -15,6 +14,17 @@ import {
   type ModelTask,
 } from "../packages/ai-catalog/src/model-defaults-ledger";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import {
+  type ImportSpecifier,
+  isObjectLiteralProperty,
+  type ModuleExportName,
+  type Node,
+  type ObjectProperty,
+  type ObjectPropertyKind,
+  parseSource,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
@@ -150,6 +160,36 @@ export const checkModelDefaultsLedger = ({
   return errors;
 };
 
+const moduleExportName = (name: ModuleExportName) =>
+  name.type === "Identifier" ? name.name : name.value;
+
+// `import { a as b }` and `export { a as b }`: an unrenamed specifier spells
+// one name, whose two nodes share a span.
+const renames = (from: Node, to: Node) => from.start !== to.start;
+
+// A `key: value` or shorthand entry, not a method or accessor.
+const isValueEntry = (
+  property: ObjectPropertyKind,
+): property is ObjectProperty =>
+  property.type === "Property" && property.kind === "init" && !property.method;
+
+// A computed key reads its expression the same way as a plain key.
+const keyText = (key: Node) => {
+  if (key.type === "Identifier") {
+    return key.name;
+  }
+  return key.type === "Literal" && typeof key.value === "string"
+    ? key.value
+    : undefined;
+};
+
+// `export` wraps the declaration it exports.
+const unwrapExport = (topLevel: Program["body"][number]) =>
+  topLevel.type === "ExportNamedDeclaration" ||
+  topLevel.type === "ExportDefaultDeclaration"
+    ? { exported: true, statement: topLevel.declaration }
+    : { exported: false, statement: topLevel };
+
 type CheckModelDefaultsSourceOptions = {
   relativePath: string;
   source: string;
@@ -160,12 +200,7 @@ export const checkModelDefaultsSource = ({
   source,
 }: CheckModelDefaultsSourceOptions): string[] => {
   const errors: string[] = [];
-  const file = ts.createSourceFile(
-    relativePath,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const { program } = parseSource(relativePath, source);
   const reportRemoved = (name: string) => {
     if (REMOVED_MODEL_EXPORTS.has(name)) {
       errors.push(
@@ -174,129 +209,104 @@ export const checkModelDefaultsSource = ({
     }
   };
   const modelCalls = new Map(Object.entries(LEGACY_FIELD_BY_MODEL_CALL));
-  const registerImport = (binding: ts.ImportSpecifier) => {
-    const name = (binding.propertyName ?? binding.name).text;
+  const registerImport = (binding: ImportSpecifier) => {
+    const name = moduleExportName(binding.imported);
     reportRemoved(name);
-    if (binding.propertyName !== undefined) {
-      reportRemoved(binding.name.text);
+    if (renames(binding.imported, binding.local)) {
+      reportRemoved(binding.local.name);
     }
     const legacyField = modelCalls.get(name);
     if (legacyField !== undefined) {
-      modelCalls.set(binding.name.text, legacyField);
+      modelCalls.set(binding.local.name, legacyField);
     }
   };
-  for (const statement of file.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      const bindings = statement.importClause?.namedBindings;
-      if (bindings !== undefined && ts.isNamedImports(bindings)) {
-        for (const binding of bindings.elements) {
+  for (const topLevel of program.body) {
+    if (topLevel.type === "ImportDeclaration") {
+      for (const binding of topLevel.specifiers) {
+        if (binding.type === "ImportSpecifier") {
           registerImport(binding);
         }
       }
       continue;
     }
-    if (ts.isExportDeclaration(statement)) {
-      const clause = statement.exportClause;
-      if (clause !== undefined && ts.isNamedExports(clause)) {
-        for (const binding of clause.elements) {
-          reportRemoved(binding.name.text);
-          if (binding.propertyName !== undefined) {
-            reportRemoved(binding.propertyName.text);
-          }
+    if (
+      topLevel.type === "ExportNamedDeclaration" &&
+      topLevel.declaration === null
+    ) {
+      for (const binding of topLevel.specifiers) {
+        reportRemoved(moduleExportName(binding.exported));
+        if (renames(binding.local, binding.exported)) {
+          reportRemoved(moduleExportName(binding.local));
         }
       }
       continue;
     }
-    const exported =
-      ts.canHaveModifiers(statement) &&
-      ts
-        .getModifiers(statement)
-        ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name)) {
+    const { exported, statement } = unwrapExport(topLevel);
+    if (statement?.type === "VariableDeclaration") {
+      for (const declaration of statement.declarations) {
+        if (declaration.id.type !== "Identifier") {
           continue;
         }
         if (exported || relativePath.startsWith("packages/ai-catalog/src/")) {
-          reportRemoved(declaration.name.text);
+          reportRemoved(declaration.id.name);
         }
         if (
           relativePath === CATALOG_SOURCE &&
-          declaration.name.text === "BYOK_DEFAULT_MODELS" &&
-          declaration.initializer !== undefined
+          declaration.id.name === "BYOK_DEFAULT_MODELS" &&
+          declaration.init !== null
         ) {
-          const inspectPresentation = (node: ts.Node) => {
+          walk(declaration.init, (node, ancestors) => {
             if (
-              ts.isPropertyAssignment(node) ||
-              ts.isShorthandPropertyAssignment(node)
+              isObjectLiteralProperty(node, ancestors.at(-1)) &&
+              isValueEntry(node) &&
+              keyText(node.key) === "modelId"
             ) {
-              const name = ts.isComputedPropertyName(node.name)
-                ? node.name.expression
-                : node.name;
-              if (
-                (ts.isIdentifier(name) || ts.isStringLiteral(name)) &&
-                name.text === "modelId"
-              ) {
-                errors.push(
-                  `${relativePath}: BYOK default model IDs must be projected from the task ledger`,
-                );
-              }
+              errors.push(
+                `${relativePath}: BYOK default model IDs must be projected from the task ledger`,
+              );
             }
-            ts.forEachChild(node, inspectPresentation);
-          };
-          inspectPresentation(declaration.initializer);
+          });
         }
       }
       continue;
     }
     if (
       (exported || relativePath.startsWith("packages/ai-catalog/src/")) &&
-      (ts.isFunctionDeclaration(statement) ||
-        ts.isTypeAliasDeclaration(statement) ||
-        ts.isInterfaceDeclaration(statement)) &&
-      statement.name !== undefined
+      (statement?.type === "FunctionDeclaration" ||
+        statement?.type === "TSDeclareFunction" ||
+        statement?.type === "TSTypeAliasDeclaration" ||
+        statement?.type === "TSInterfaceDeclaration") &&
+      statement.id !== null
     ) {
-      reportRemoved(statement.name.text);
+      reportRemoved(statement.id.name);
     }
   }
-  const inspectModelCalls = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const name = ts.isPropertyAccessExpression(node.expression)
-        ? node.expression.name
-        : node.expression;
-      const legacyField = ts.isIdentifier(name)
-        ? modelCalls.get(name.text)
-        : undefined;
-      if (legacyField !== undefined) {
-        for (const argument of node.arguments) {
-          if (!ts.isObjectLiteralExpression(argument)) {
-            continue;
-          }
-          for (const property of argument.properties) {
-            if (
-              !ts.isPropertyAssignment(property) &&
-              !ts.isShorthandPropertyAssignment(property)
-            ) {
-              continue;
-            }
-            const key = ts.isComputedPropertyName(property.name)
-              ? property.name.expression
-              : property.name;
-            if (
-              (ts.isIdentifier(key) || ts.isStringLiteral(key)) &&
-              key.text === legacyField
-            ) {
-              errors.push(
-                `${relativePath}: ${name.getText(file)} requires the task contract; remove ${legacyField}`,
-              );
-            }
-          }
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
+    }
+    const name =
+      node.callee.type === "MemberExpression" && !node.callee.computed
+        ? node.callee.property
+        : node.callee;
+    const legacyField =
+      name.type === "Identifier" ? modelCalls.get(name.name) : undefined;
+    if (legacyField === undefined) {
+      return;
+    }
+    for (const argument of node.arguments) {
+      if (argument.type !== "ObjectExpression") {
+        continue;
+      }
+      for (const property of argument.properties) {
+        if (isValueEntry(property) && keyText(property.key) === legacyField) {
+          errors.push(
+            `${relativePath}: ${source.slice(name.start, name.end)} requires the task contract; remove ${legacyField}`,
+          );
         }
       }
     }
-    ts.forEachChild(node, inspectModelCalls);
-  };
-  inspectModelCalls(file);
+  });
   return errors;
 };
 

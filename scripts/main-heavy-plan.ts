@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 
+import { prDepthJobs } from "./ci-pr-jobs";
+import { HEAVY_PROOF_GATE } from "./heavy-proof-gate";
+
+export { prDepthJobs } from "./ci-pr-jobs";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -74,44 +79,6 @@ export const mainHeavyJobs = (workflow: unknown) => {
   return gated.filter((job) => !thin.includes(job));
 };
 
-export const prDepthJobs = (workflow: unknown) => {
-  const jobs = record(record(workflow)["jobs"]);
-  const result = record(jobs["ci-result"]);
-  const steps = result["steps"];
-  if (!Array.isArray(steps)) {
-    panic("Expected ci-result steps");
-  }
-  const outcome = steps.find(
-    (step: unknown) => record(step)["name"] === "Evaluate CI outcome",
-  );
-  const env = record(outcome)["env"];
-  const required = record(env)["FAST_REQUIRED"];
-  if (typeof required !== "string") {
-    panic("Expected FAST_REQUIRED JSON");
-  }
-  const fastRequired: unknown = JSON.parse(required);
-  if (
-    !Array.isArray(fastRequired) ||
-    !fastRequired.every((job) => typeof job === "string")
-  ) {
-    panic("Expected FAST_REQUIRED job names");
-  }
-  const checks = fastRequired.filter(
-    (job) => job.startsWith("ci-checks-") || job.startsWith("code-quality-"),
-  );
-  // The checks' producers (generated sources) run with them.
-  const producers = checks.flatMap((job) => {
-    const needs: unknown = record(jobs[job])["needs"];
-    if (typeof needs === "string") {
-      return [needs];
-    }
-    return Array.isArray(needs) ? needs : [];
-  });
-  return [...new Set([...checks, ...producers])].filter(
-    (job): job is string => typeof job === "string" && job !== "ci-plan",
-  );
-};
-
 // These jobs cannot certify the queued tree: they either consume a different
 // revision or duplicate a producer selected for an ordinary merge group.
 export const MERGE_GROUP_EXCEPTIONS = {
@@ -122,6 +89,66 @@ export const MERGE_GROUP_EXCEPTIONS = {
   "pr-heavy-gate":
     "Pull request ordering gate; a merge group starts its suites after the plan.",
 } as const;
+
+export {
+  ARMED_LABEL,
+  HEAVY_PROOF_GATE,
+  MERGE_GROUP_HEAVY_KEEP,
+} from "./heavy-proof-gate";
+
+const jobCondition = (job: unknown) => {
+  const condition = record(job)["if"];
+  return typeof condition === "string" ? condition : "";
+};
+
+// The gate as a conjunct. A job that only offers it as one alternative
+// (web-build, which also builds for selected browser specs) is not gated.
+const GATED = new RegExp(
+  `(?<!\\|\\|\\s*)${HEAVY_PROOF_GATE.replaceAll(".", "\\.")}`,
+  "u",
+);
+
+/** Every job gated on the armed heavy proof, in workflow order. */
+export const heavyProofJobs = (workflow: unknown) =>
+  Object.entries(record(record(workflow)["jobs"])).flatMap(([name, job]) =>
+    GATED.test(jobCondition(job)) ? [name] : [],
+  );
+
+export const heavyProofJobScopes = (workflow: unknown) => {
+  const result = record(record(record(workflow)["jobs"])["ci-result"]);
+  const steps = result["steps"];
+  if (!Array.isArray(steps)) {
+    panic("Expected ci-result steps");
+  }
+  const outcome = steps.find(
+    (step) => record(step)["name"] === "Evaluate CI outcome",
+  );
+  const source = record(record(outcome)["env"])["JOB_SCOPES"];
+  if (typeof source !== "string") {
+    panic("Expected JOB_SCOPES JSON");
+  }
+  const scopes = record(JSON.parse(source));
+  const foldedSource = record(record(outcome)["env"])["FOLDED_SUITES"];
+  if (typeof foldedSource !== "string") {
+    panic("Expected FOLDED_SUITES JSON");
+  }
+  const folded = record(JSON.parse(foldedSource));
+  const required = new Set([...thinJobs(workflow), ...mainHeavyJobs(workflow)]);
+  return Object.fromEntries(
+    heavyProofJobs(workflow)
+      .filter((name) => required.has(name))
+      .map((name) => {
+        if (Object.hasOwn(folded, name)) {
+          panic(`Folded suites require queued coverage: ${name}`);
+        }
+        const scope = scopes[name];
+        if (scope !== null && typeof scope !== "string") {
+          panic(`Missing heavy job scope: ${name}`);
+        }
+        return [name, scope];
+      }),
+  );
+};
 
 export const queueAdmittedJobs = (workflow: unknown) => {
   const gated = [...thinJobs(workflow), ...mainHeavyJobs(workflow)];
@@ -141,6 +168,9 @@ if (import.meta.main) {
   const workflow: unknown = Bun.YAML.parse(readFileSync(source, "utf-8"));
   console.log(`thin_jobs=${JSON.stringify(thinJobs(workflow))}`);
   console.log(`heavy_jobs=${JSON.stringify(mainHeavyJobs(workflow))}`);
+  console.log(
+    `armed_job_scopes=${JSON.stringify(heavyProofJobScopes(workflow))}`,
+  );
   console.log(`queue_jobs=${JSON.stringify(queueAdmittedJobs(workflow))}`);
   console.log(`pr_depth_jobs=${JSON.stringify(prDepthJobs(workflow))}`);
 }

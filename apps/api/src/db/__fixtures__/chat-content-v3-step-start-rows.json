@@ -1,0 +1,1838 @@
+[
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-ares_search_companies",
+        "input": {
+          "name": "x"
+        },
+        "state": "output-available",
+        "output": [
+          {
+            "ico": "x",
+            "name": "x",
+            "address": "x"
+          }
+        ],
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "data": {
+          "pairs": [
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            }
+          ]
+        },
+        "type": "data-stella-anon-restorations"
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "person1": [],
+            "person2": []
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-error",
+        "errorText": "x",
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-error",
+        "errorText": "x",
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": [
+            {
+              "name": "x",
+              "mention": "x",
+              "matterRef": "x",
+              "reference": "x",
+              "lastActivityAt": "x"
+            }
+          ],
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "docs1": [],
+            "docs2": [],
+            "entities": [
+              {
+                "kind": "x",
+                "name": "x",
+                "fields": [
+                  {
+                    "content": {
+                      "id": "x",
+                      "type": "file",
+                      "version": 1,
+                      "fileName": "x",
+                      "mimeType": "x",
+                      "encrypted": false,
+                      "pdfFileId": null,
+                      "sha256Hex": "x",
+                      "sizeBytes": 1,
+                      "pdfDerivative": {
+                        "status": "x"
+                      }
+                    },
+                    "propertyRef": "x"
+                  }
+                ],
+                "mention": "x",
+                "entityRef": "x",
+                "matterRef": "x",
+                "parentRef": null
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": [
+            {
+              "name": "x",
+              "text": "x",
+              "mention": "x",
+              "charCount": 1,
+              "entityRef": "x",
+              "matterRef": "x",
+              "truncated": true,
+              "sourceDocument": {
+                "kind": "x",
+                "title": "x",
+                "mention": "x",
+                "entityId": "x",
+                "mimeType": "x",
+                "entityRef": "x",
+                "matterRef": "x",
+                "workspaceId": "x"
+              }
+            }
+          ],
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "data": {
+          "pairs": [
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            },
+            {
+              "original": "x",
+              "placeholder": "x"
+            }
+          ]
+        },
+        "type": "data-stella-anon-restorations"
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "name": "x",
+                "text": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "truncated": true,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                }
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": ["x"],
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": [],
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "s1": 1,
+            "s101": 1,
+            "length": 1
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": "x",
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": true,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  },
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-run-stella-query",
+        "input": {
+          "code": "x"
+        },
+        "state": "output-available",
+        "output": {
+          "value": {
+            "items": [
+              {
+                "hits": [
+                  {
+                    "snippet": "x"
+                  }
+                ],
+                "name": "x",
+                "mention": "x",
+                "charCount": 1,
+                "entityRef": "x",
+                "matterRef": "x",
+                "totalHits": 1,
+                "truncated": false,
+                "sourceDocument": {
+                  "kind": "x",
+                  "title": "x",
+                  "mention": "x",
+                  "entityId": "x",
+                  "mimeType": "x",
+                  "entityRef": "x",
+                  "matterRef": "x",
+                  "workspaceId": "x"
+                },
+                "totalHitsCapped": false
+              }
+            ]
+          },
+          "hostCalls": 1,
+          "durationMs": 1
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        },
+        "resultProviderMetadata": {
+          "openrouter": {
+            "reasoning_details": [
+              {
+                "id": "x",
+                "data": "x",
+                "type": "reasoning.encrypted",
+                "index": 1,
+                "format": "x"
+              }
+            ]
+          }
+        }
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "text": "x",
+        "type": "text",
+        "state": "done"
+      }
+    ]
+  },
+  {
+    "version": 1,
+    "data": [
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-list_templates",
+        "input": {},
+        "state": "output-available",
+        "output": {
+          "templates": [
+            {
+              "id": "x",
+              "name": "x",
+              "tags": null,
+              "whenToUse": null,
+              "fieldCount": 1,
+              "whenNotToUse": null
+            },
+            {
+              "id": "x",
+              "name": "x",
+              "tags": null,
+              "whenToUse": null,
+              "fieldCount": 1,
+              "whenNotToUse": null
+            },
+            {
+              "id": "x",
+              "name": "x",
+              "tags": null,
+              "whenToUse": null,
+              "fieldCount": 1,
+              "whenNotToUse": null
+            }
+          ]
+        },
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "google": {
+            "thoughtSignature": "x"
+          }
+        },
+        "resultProviderMetadata": {
+          "google": {
+            "thoughtSignature": "x"
+          }
+        }
+      },
+      {
+        "type": "step-start"
+      },
+      {
+        "type": "tool-ask-user",
+        "input": {
+          "analysis": "x",
+          "questions": [
+            {
+              "reason": "x",
+              "default": "x",
+              "options": ["x", "x", "x"],
+              "question": "x"
+            },
+            {
+              "reason": "x",
+              "default": "x",
+              "options": ["x", "x"],
+              "question": "x"
+            },
+            {
+              "reason": "x",
+              "question": "x"
+            },
+            {
+              "reason": "x",
+              "question": "x"
+            }
+          ]
+        },
+        "state": "input-available",
+        "toolCallId": "x",
+        "callProviderMetadata": {
+          "google": {
+            "thoughtSignature": "x"
+          }
+        }
+      }
+    ]
+  }
+]

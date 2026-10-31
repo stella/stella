@@ -11,30 +11,24 @@ import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
+import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { DECISION_CITATION_PRESENTATION } from "@/components/references/decision-citation-presentation.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 
-export type DecisionCitationMetadata = {
-  decisionId: string;
-  court: string;
-  courtShortCode: string;
-  caseNumber: string;
-  decisionDate: string | null;
-  readerUrl: string;
-  originalUrl: string | null;
-};
-
-type DecisionCitationChipProps = {
+export type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
+  /** A complete, lazily mounted preview for surfaces with richer metadata. */
+  preview?: ReactNode;
   presentation?: DecisionCitationPresentation | undefined;
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
@@ -45,6 +39,14 @@ type DecisionCitationChipProps = {
    * badge that repeats the court the text just named.
    */
   label?: ReactNode;
+  /**
+   * The citing text's own words for the decision, drawn ahead of the badge
+   * inside the same trigger, so the whole reference opens the preview and
+   * not only its badge.
+   */
+  citingText?: ReactNode;
+  /** The citation range owner emits the badge; later text runs do not. */
+  showBadge?: boolean | undefined;
 };
 
 const DecisionCitationLabel = ({
@@ -91,6 +93,14 @@ const DecisionCitationLabel = ({
           {paragraph}
         </span>
       );
+    case DECISION_CITATION_PRESENTATION.inline:
+      return (
+        <span className="inline-flex items-center gap-1">
+          {badge}
+          <BidiText as="span">{decision.caseNumber}</BidiText>
+          {paragraph}
+        </span>
+      );
     default:
       presentation satisfies never;
       return panic(
@@ -99,14 +109,87 @@ const DecisionCitationLabel = ({
   }
 };
 
-/** The same decision annotation in answers, provenance cards and reader text. */
+/** How the trigger sits in its line, by what it draws. */
+const triggerShapeClassName = ({
+  label,
+  citingText,
+}: Pick<DecisionCitationChipProps, "label" | "citingText">): string => {
+  if (label !== undefined) {
+    return "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150";
+  }
+  if (citingText !== undefined) {
+    // Inline, so a long reference still wraps with the prose.
+    return "rounded-sm";
+  }
+  return "inline-flex rounded align-baseline";
+};
+
+const DecisionCitationTriggerContent = ({
+  citingText,
+  decision,
+  label,
+  paragraph,
+  presentation,
+  showBadge,
+}: Pick<
+  DecisionCitationChipProps,
+  "citingText" | "decision" | "label" | "showBadge"
+> & {
+  /** The court's number, already in the reader's formatting locale. */
+  paragraph: string | null;
+  presentation: DecisionCitationPresentation;
+}): ReactNode => {
+  const t = useTranslations();
+  const badge = (
+    <DecisionCitationLabel
+      decision={decision}
+      presentation={presentation}
+      paragraphNumber={paragraph}
+    />
+  );
+  if (label !== undefined) {
+    return (
+      <>
+        {label}
+        {paragraph !== null && (
+          <span className="ms-1 whitespace-nowrap">
+            {t("caseLaw.citation.paragraphMark", { paragraph })}
+          </span>
+        )}
+      </>
+    );
+  }
+  if (citingText === undefined) {
+    return badge;
+  }
+  if (!showBadge) {
+    return citingText;
+  }
+  return (
+    <>
+      {citingText}
+      {/* The badge is not the citing text's words: as reader chrome it stays
+          off the offsets a selection is stored in, so a quote around a
+          citation still matches the decision text. */}
+      <span data-reader-chrome=""> {badge}</span>
+    </>
+  );
+};
+
+/**
+ * The same decision annotation in answers, provenance cards and reader text.
+ * Surfaces render it through `CitationChip`, which owns citation kinds.
+ */
 export const DecisionCitationChip = ({
   decision,
   passage,
+  preview,
   presentation = DECISION_CITATION_PRESENTATION.compact,
   paragraphNumber = null,
   onOpen,
   label,
+  citingText,
+  showBadge = true,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -177,32 +260,21 @@ export const DecisionCitationChip = ({
           <a
             className={cn(
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-              label === undefined
-                ? "inline-flex rounded align-baseline"
-                : "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150",
+              triggerShapeClassName({ label, citingText }),
             )}
             href={sanitizeHref(readerHref)}
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
-        {label === undefined ? (
-          <DecisionCitationLabel
-            decision={decision}
-            presentation={presentation}
-            paragraphNumber={paragraph}
-          />
-        ) : (
-          <>
-            {label}
-            {paragraph !== null && (
-              <span className="ms-1 whitespace-nowrap">
-                {t("caseLaw.citation.paragraphMark", { paragraph })}
-              </span>
-            )}
-          </>
-        )}
+        <DecisionCitationTriggerContent
+          citingText={citingText}
+          decision={decision}
+          label={label}
+          paragraph={paragraph}
+          presentation={presentation}
+          showBadge={showBadge}
+        />
       </PopoverTrigger>
       <PopoverPanel
         align="start"
@@ -215,24 +287,29 @@ export const DecisionCitationChip = ({
           return false;
         }}
       >
-        <div className="flex flex-col gap-1">
-          <BidiText as="span" className="text-sm font-medium">
-            {decision.court}
-          </BidiText>
-          <BidiText as="span" className="text-sm">
-            {decision.caseNumber}
-          </BidiText>
-          {paragraph !== null && (
-            <span className="text-sm">
-              {t("caseLaw.citation.paragraphLabel", { paragraph })}
-            </span>
-          )}
-          <span className="text-muted-foreground text-xs">{date}</span>
-        </div>
+        {preview ?? (
+          <div className="flex flex-col gap-1">
+            <BidiText as="span" className="text-sm font-medium">
+              {decision.court}
+            </BidiText>
+            <BidiText as="span" className="text-sm">
+              {decision.caseNumber}
+            </BidiText>
+            {paragraph !== null && (
+              <span className="text-sm">
+                {t("caseLaw.citation.paragraphLabel", { paragraph })}
+              </span>
+            )}
+            <span className="text-muted-foreground text-xs">{date}</span>
+          </div>
+        )}
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div
-              className="text-sm wrap-anywhere whitespace-pre-wrap"
+              className={cn(
+                LEGAL_TEXT_CLASS_NAME,
+                "text-sm whitespace-pre-wrap",
+              )}
               dir="auto"
             >
               {passage}

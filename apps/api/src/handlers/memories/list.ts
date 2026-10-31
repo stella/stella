@@ -1,15 +1,21 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ne } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { aiMemories } from "@/api/db/schema";
 import { toMemoryResponse } from "@/api/handlers/memories/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+} from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import type { Page } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
@@ -17,32 +23,39 @@ import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 const DEFAULT_LIMIT = 50;
 
 const config = {
+  featureAccess: { type: "required", featureId: AI_MEMORY_FEATURE_ID },
   contract: "patch",
+  description:
+    "List the assistant memories you can see, newest first: firm-wide " +
+    "memory, your own, and memory of matters you can access. Archived " +
+    "memories are left out unless status asks for them. Narrow by scope " +
+    "(organization, user, workspace = a matter), status, or matterId.",
   // Memory is an AI-assistant capability; gate reads on chat access.
   // Row visibility (firm / own / accessible matters) is enforced by RLS,
   // so firm memory still reads org-wide for any chat-capable member.
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
-  mcp: { type: "internal", reason: "assistant_chat" },
-  query: t.Object({
-    scope: t.Optional(
-      t.Union([
-        t.Literal("organization"),
-        t.Literal("user"),
-        t.Literal("workspace"),
-      ]),
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "assistant_memory",
+    consumesServices: false,
+  },
+  // The `chat:create` gate is the caller floor, not the operation: this only
+  // reads.
+  access: "read",
+  query: v.object({
+    scope: v.optional(v.picklist(["organization", "user", "workspace"])),
+    status: v.optional(
+      v.picklist(["suggested", "active", "stale", "archived"]),
     ),
-    status: t.Optional(
-      t.Union([
-        t.Literal("suggested"),
-        t.Literal("active"),
-        t.Literal("stale"),
-        t.Literal("archived"),
-      ]),
+    workspaceId: v.optional(resourceIdSchema("workspace")),
+    cursor: v.optional(paginationCursorSchema()),
+    limit: v.optional(
+      numberFromString(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+      ),
     ),
-    workspaceId: t.Optional(tSafeId("workspace")),
-    cursor: t.Optional(tPaginationCursor()),
-    limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
   }),
 } satisfies HandlerConfig;
 

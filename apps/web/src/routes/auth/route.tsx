@@ -6,11 +6,13 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { ThemePicker } from "@/components/theme-picker";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const landingUrl = "https://stll.app";
 
 export const Route = createFileRoute("/auth")({
+  staticData: { appFrame: APP_FRAME_SCOPE.none },
   beforeLoad: async ({ context }) => await loadAuthContext(context.queryClient),
   component: AuthLayout,
 });

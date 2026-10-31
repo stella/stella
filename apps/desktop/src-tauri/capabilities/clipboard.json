@@ -18,6 +18,7 @@
     "allow-is-autostart-enabled",
     "allow-set-autostart",
     "allow-clipboard-get-snapshot",
+    "allow-clipboard-get-capture-update",
     "allow-clipboard-get-image-preview",
     "allow-clipboard-complete-welcome",
     "allow-clipboard-set-capture-status",
@@ -44,6 +45,7 @@
     "allow-desktop-report-timing",
     "allow-account-get-state",
     "allow-account-disconnect",
-    "allow-open-stella-account"
+    "allow-open-stella-account",
+    "allow-shortcut-get-snapshot"
   ]
 }

@@ -10,7 +10,7 @@ import {
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import type { ActiveDocxEditModeState } from "@/lib/chat-edit-mode";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toSafeId, type SafeId } from "@/lib/safe-id";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 
 /** The document a composer has open, as its next send carries it. */
 type ComposerSkillDocument =
@@ -52,8 +52,7 @@ export const fileOverlaySkillDocument = ({
   hasActiveDraft,
 }: {
   activeFile:
-    | { entityId: string; fileFieldId?: string | undefined }
-    | undefined;
+    { entityId: string; fileFieldId?: string | undefined } | undefined;
   editMode: ActiveDocxEditModeState;
   hasActiveDraft: boolean;
 }): Pick<ComposerSkillChatContext, "document" | "editApplyMode"> => {
@@ -184,13 +183,18 @@ export const CHAT_SKILL_NEED_MESSAGE_KEY = {
 
 /**
  * The needs this composer can meet in one click: turning web search on where
- * the organization offers it, and queueing an open document's edits for
- * review where the composer has an edit-mode switch.
+ * the organization offers it, queueing an open document's edits for review
+ * where the composer has an edit-mode switch, and opening the extension's
+ * store listing where the released extension connects.
  */
 export const oneClickSkillNeeds = (
   chat: ComposerSkillChatContext | undefined,
+  browserExtensionStoreUrl: string | null,
 ): ReadonlySet<ChatSkillContextNeed> =>
   new Set([
+    ...(browserExtensionStoreUrl === null
+      ? []
+      : [CHAT_SKILL_CONTEXT_NEED.browserExtension]),
     ...(chat?.webSearch?.available === true
       ? [CHAT_SKILL_CONTEXT_NEED.webSearch]
       : []),

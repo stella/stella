@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The test-only bysquare decoder independently verifies PAY by square payloads against a separate implementation, including Unicode fields, framing and interoperability; production retains one canonical encoder and does not import this dependency."
+}

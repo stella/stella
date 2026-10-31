@@ -13,7 +13,7 @@
     "./resource-uri": "./src/resource-uri.ts",
     "./shared/contracts": "./src/shared/generated/contracts.js",
     "./document-upload/upload-target": "./src/document-upload/upload-target.ts",
-    "./bundles": "./src/generated/bundles.ts",
+    "./bundles": "./src/bundles.ts",
     "./case-law-results/model": "./src/case-law-results/model.ts",
     "./case-law-results/parse": "./src/case-law-results/parse.ts"
   },
@@ -24,7 +24,6 @@
     "typecheck": "bun ../../scripts/prepare-mcp-apps.ts && bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
-    "format": "bun ../../scripts/run-oxfmt.ts .",
     "prepack": "bun run build",
     "build": "bun ../../scripts/prepare-mcp-apps.ts"
   },
@@ -40,7 +39,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/sha256": "workspace:*",
-    "@stll/time": "workspace:*",
+    "@stll/time": "0.4.1",
     "@stll/ui": "workspace:*",
     "@tanstack/charts": "catalog:",
     "better-result": "catalog:",
@@ -51,7 +50,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "20.14.5",
+    "@happy-dom/global-registrator": "21.0.4",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",
@@ -66,7 +65,6 @@
     "cheerio": "^1.2.0",
     "domhandler": "^6.0.1",
     "fast-check": "catalog:",
-    "oxc-transform-react": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:"
   }

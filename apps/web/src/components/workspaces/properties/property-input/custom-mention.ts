@@ -12,6 +12,8 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { MentionList } from "@/components/workspaces/properties/property-input/mention-list";
 import { MentionNode } from "@/components/workspaces/properties/property-input/mention-node";
 
+import { filterMentionItems } from "./custom-mention.logic";
+
 // don't change this type, tiptap expects id and label
 // otherwise mention-node won't have correct attributes
 export type MentionOption = {
@@ -45,10 +47,7 @@ export const createSuggestion = (
   mentionItems: MentionOption[],
 ): Omit<SuggestionOptions<MentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
-  items: ({ query }) =>
-    mentionItems.filter((item) =>
-      item.label.toLowerCase().includes(query.toLowerCase()),
-    ),
+  items: ({ query }) => filterMentionItems(mentionItems, query),
 
   render: () => {
     let component: ReactRenderer<

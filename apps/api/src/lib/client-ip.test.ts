@@ -6,17 +6,18 @@ import {
   clientAddressConfigurationWarning,
   isTrustedProxy,
   normalizeRateLimitClientAddress,
-  resolveRateLimitClientAddress,
+  ORIGIN_VERIFY_HEADER,
   parseEdgeClientAddress,
   parseTrustedProxies,
-  ORIGIN_VERIFY_HEADER,
   resolveClientAddress,
   resolveClientIp,
+  resolveRateLimitClientAddress,
   resolveSignupRateLimitClientIp,
   sealEdgeHeaders,
   stampClientAddressHeader,
 } from "@/api/lib/client-ip";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
+import { runWithRequestIdScope } from "@/api/lib/observability/request-context";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const fakeServer = (peer: string | null) => ({
@@ -544,21 +545,25 @@ describe("edge origin verification", () => {
     expect(resolve({ [EDGE_HEADER]: "203.0.113.7:443" })).toBe("198.51.100.1");
   });
 
+  // The sealed address lives in the request's scope, which the pipeline
+  // opens around every request.
   test("sealing removes the verification header and keeps the resolved address", () => {
-    const sealed = request({
-      [EDGE_HEADER]: "203.0.113.7:443",
-      [ORIGIN_VERIFY_HEADER]: CURRENT,
+    runWithRequestIdScope(() => {
+      const sealed = request({
+        [EDGE_HEADER]: "203.0.113.7:443",
+        [ORIGIN_VERIFY_HEADER]: CURRENT,
+      });
+      const address = resolveClientAddress(
+        sealed,
+        fakeServer("10.0.0.5"),
+        options,
+      );
+      sealEdgeHeaders(sealed, address);
+      expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
+      expect(resolveClientAddress(sealed, fakeServer("10.0.0.5"))).toEqual(
+        address,
+      );
     });
-    const address = resolveClientAddress(
-      sealed,
-      fakeServer("10.0.0.5"),
-      options,
-    );
-    sealEdgeHeaders(sealed, address);
-    expect(sealed.headers.get(ORIGIN_VERIFY_HEADER)).toBeNull();
-    expect(resolveClientAddress(sealed, fakeServer("10.0.0.5"))).toEqual(
-      address,
-    );
   });
 });
 

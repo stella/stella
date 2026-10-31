@@ -8,6 +8,11 @@ publish = false
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+map_err_ignore = "deny"
+await_holding_lock = "deny"
+significant_drop_in_scrutinee = "deny"
+significant_drop_tightening = "warn"
+unused_result_ok = "deny"
 undocumented_unsafe_blocks = "deny"
 
 [lints.rustdoc]

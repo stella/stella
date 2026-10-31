@@ -11,6 +11,7 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.country = 'AUT' AND d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 3
       WHEN d.country = 'CZE' AND d.court ~* 'nejvyšší' THEN 3
       WHEN d.country = 'EU' AND d.court ~* 'general court' THEN 3
+      WHEN d.country = 'GBR' AND d.court ~* '^uksc$|^ukpc$|^ukhl$|^supreme court( of the united kingdom)?$|^judicial committee of the privy council$|^house of lords$' THEN 3
       WHEN d.country = 'HUN' AND d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
       WHEN d.country = 'POL' AND d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
       WHEN d.country = 'SVK' AND d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 3
@@ -18,11 +19,14 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.country = 'USA' AND d.court ~* '^supreme court of the united states$' THEN 3
       WHEN d.country = 'AUT' AND d.court ~* 'oberlandesgericht|landesgericht' THEN 2
       WHEN d.country = 'CZE' AND d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
+      WHEN d.country = 'GBR' AND d.court ~* '^ewca( civ| crim)?$|^court of appeal( \\(civil division\\)| \\(criminal division\\))?$' THEN 2
+      WHEN d.country = 'GBR' AND d.court ~* '^ewhc($| )|^ukut($| )|^eat$|^high court( of justice)?($| )|^upper tribunal($| )|^employment appeal tribunal$' THEN 2
       WHEN d.country = 'HUN' AND d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 2
       WHEN d.country = 'HUN' AND d.court ~* 'ítélőtábla' THEN 2
       WHEN d.country = 'POL' AND d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 2
       WHEN d.country = 'POL' AND d.court ~* 'sąd okręgowy' THEN 2
       WHEN d.country = 'SVK' AND d.court ~* 'krajský súd' THEN 2
+      WHEN d.country = 'GBR' AND d.court ~* '^ukftt($| )|^ewfc$|^ewcop$|^first-tier tribunal($| )|^family court$|^court of protection$' THEN 1
       WHEN d.country = 'HUN' AND d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 1
       WHEN d.country = 'HUN' AND d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
       WHEN d.country = 'POL' AND d.court ~* 'krajowa izba odwoławcza' THEN 1
@@ -40,6 +44,7 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 3
       WHEN d.court ~* 'nejvyšší' THEN 3
       WHEN d.court ~* 'general court' THEN 3
+      WHEN d.court ~* '^uksc$|^ukpc$|^ukhl$|^supreme court( of the united kingdom)?$|^judicial committee of the privy council$|^house of lords$' THEN 3
       WHEN d.court ~* 'kúria|legfelsőbb bíróság' THEN 3
       WHEN d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 3
       WHEN d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 3
@@ -47,11 +52,14 @@ exports[`the name rank SQL renders byte for byte as before: tier 1`] = `
       WHEN d.court ~* '^supreme court of the united states$' THEN 3
       WHEN d.court ~* 'oberlandesgericht|landesgericht' THEN 2
       WHEN d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 2
+      WHEN d.court ~* '^ewca( civ| crim)?$|^court of appeal( \\(civil division\\)| \\(criminal division\\))?$' THEN 2
+      WHEN d.court ~* '^ewhc($| )|^ukut($| )|^eat$|^high court( of justice)?($| )|^upper tribunal($| )|^employment appeal tribunal$' THEN 2
       WHEN d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 2
       WHEN d.court ~* 'ítélőtábla' THEN 2
       WHEN d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 2
       WHEN d.court ~* 'sąd okręgowy' THEN 2
       WHEN d.court ~* 'krajský súd' THEN 2
+      WHEN d.court ~* '^ukftt($| )|^ewfc$|^ewcop$|^first-tier tribunal($| )|^family court$|^court of protection$' THEN 1
       WHEN d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 1
       WHEN d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 1
       WHEN d.court ~* 'krajowa izba odwoławcza' THEN 1
@@ -74,6 +82,7 @@ exports[`the name rank SQL renders byte for byte as before: weight 1`] = `
       WHEN citing_d.court ~* 'oberster gerichtshof|verwaltungsgerichtshof|^ogh$|^vwgh$' THEN 8
       WHEN citing_d.court ~* 'nejvyšší' THEN 8
       WHEN citing_d.court ~* 'general court' THEN 8
+      WHEN citing_d.court ~* '^uksc$|^ukpc$|^ukhl$|^supreme court( of the united kingdom)?$|^judicial committee of the privy council$|^house of lords$' THEN 8
       WHEN citing_d.court ~* 'kúria|legfelsőbb bíróság' THEN 8
       WHEN citing_d.court ~* 'sąd najwyższy|naczelny sąd administracyjny' THEN 8
       WHEN citing_d.court ~* 'najvyšší[\\s ]+správny[\\s ]+súd' THEN 8
@@ -81,11 +90,14 @@ exports[`the name rank SQL renders byte for byte as before: weight 1`] = `
       WHEN citing_d.court ~* '^supreme court of the united states$' THEN 8
       WHEN citing_d.court ~* 'oberlandesgericht|landesgericht' THEN 4
       WHEN citing_d.court ~* 'vrchní soud|krajský soud|městský soud' THEN 4
+      WHEN citing_d.court ~* '^ewca( civ| crim)?$|^court of appeal( \\(civil division\\)| \\(criminal division\\))?$' THEN 5
+      WHEN citing_d.court ~* '^ewhc($| )|^ukut($| )|^eat$|^high court( of justice)?($| )|^upper tribunal($| )|^employment appeal tribunal$' THEN 4
       WHEN citing_d.court ~* 'törvényszék|megyei bíróság|fővárosi bíróság' THEN 4
       WHEN citing_d.court ~* 'ítélőtábla' THEN 5
       WHEN citing_d.court ~* 'sąd apelacyjny|wojewódzki sąd administracyjny' THEN 5
       WHEN citing_d.court ~* 'sąd okręgowy' THEN 4
       WHEN citing_d.court ~* 'krajský súd' THEN 4
+      WHEN citing_d.court ~* '^ukftt($| )|^ewfc$|^ewcop$|^first-tier tribunal($| )|^family court$|^court of protection$' THEN 2
       WHEN citing_d.court ~* 'járásbíróság|kerületi bíróság|városi bíróság' THEN 2
       WHEN citing_d.court ~* 'közigazgatási és munkaügyi bíróság' THEN 3
       WHEN citing_d.court ~* 'krajowa izba odwoławcza' THEN 3

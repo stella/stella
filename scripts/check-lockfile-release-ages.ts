@@ -17,9 +17,12 @@
  *   walk up), so each lockfile is governed by the bunfig.toml beside it. A
  *   changed lockfile with no quarantine there fails: Bun would not gate it.
  * - A name in that file's `minimumReleaseAgeExcludes` is exempt, matched
- *   exactly, whatever its annotation says. The annotations and the removal of
- *   expired entries belong to scripts/check-stll-quarantine-excludes.ts, whose
- *   parser this check reads the file with.
+ *   exactly, until a temporary entry's `quarantine-expires` instant. From then
+ *   on a new pin of it is gated again, though Bun would still skip it: an
+ *   elapsed waiver grants nothing, so it cannot let the next version of that
+ *   package past the quarantine while its removal waits. The annotations
+ *   belong to scripts/check-stll-quarantine-excludes.ts, whose parser this
+ *   check reads the file with; `quarantine-prune.yml` removes elapsed entries.
  * - Only versions from the npm registry have a release age. Workspace, link
  *   and file entries are local; git and tarball sources are reported, not
  *   gated, as Bun does not gate them either.
@@ -153,7 +156,7 @@ type ReleaseAgePolicy = {
   bunfigPath: string;
   excludes: ReadonlySet<string>;
   minimumReleaseAgeSeconds: number;
-  /** Annotated instant of each temporary exclude, for the report. */
+  /** Annotated instant of each temporary exclude; it exempts until then. */
   temporaryExpiries: ReadonlyMap<string, string>;
 };
 
@@ -406,7 +409,11 @@ export const checkLockfileReleaseAges = async ({
     const quarantine = `${describeAge(policy.minimumReleaseAgeSeconds)} quarantine of ${policy.bunfigPath}`;
     const results = await Promise.all(
       added.map(async (pin) => {
-        if (policy.excludes.has(pin.name)) {
+        const expiresAt = policy.temporaryExpiries.get(pin.name);
+        if (
+          policy.excludes.has(pin.name) &&
+          (expiresAt === undefined || now.getTime() < Date.parse(expiresAt))
+        ) {
           return { outcome: undefined, pin };
         }
         return { outcome: await lookup(pin), pin };

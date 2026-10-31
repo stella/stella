@@ -1,8 +1,51 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+
+import {
+  type ArrowFunctionExpression,
+  type Expression,
+  type Function as FunctionNode,
+  type Node,
+  type ParsedSource,
+  parseSource,
+  type VariableDeclarator,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
+
+type RendererFunction = FunctionNode | ArrowFunctionExpression;
+type SourceTree = ParsedSource & { parents: ReadonlyMap<Node, Node> };
+const nodeText = (node: Node, file: ParsedSource) =>
+  file.sourceText.slice(node.start, node.end);
+const isFunctionLike = (node: Node): node is RendererFunction =>
+  node.type === "FunctionDeclaration" ||
+  node.type === "FunctionExpression" ||
+  node.type === "ArrowFunctionExpression";
+const isFalse = (node: Node) => node.type === "Literal" && node.value === false;
+const visitChildren = (root: Node, visit: (node: Node) => void) => {
+  walk(root, (node) => {
+    if (node !== root) {
+      visit(node);
+      return "skip-children";
+    }
+    return undefined;
+  });
+};
+const statementsOf = (file: ParsedSource) =>
+  file.program.body.map((statement) =>
+    statement.type === "ExportNamedDeclaration" && statement.declaration
+      ? statement.declaration
+      : statement,
+  );
 
 const BADGE_OWNER = "packages/ui/src/components/document-identity-badge.tsx";
+export const REQUIRED_DOCUMENT_IDENTITY_SURFACES = [
+  "apps/web/src/features/statutes/statute-inspector-registration.tsx#StatuteRailIcon",
+  "apps/web/src/features/statutes/components/statute-search-results.tsx#StatuteSearchResults",
+  "apps/web/src/components/search-dialog-results.tsx#SearchHitIcon",
+  "apps/web/src/components/search-dialog-results.tsx#RecentFileIcon",
+  "apps/web/src/features/case-law/components/decision-cells.tsx#CaseNumberCell",
+  "packages/mcp-apps/src/case-law-results/view.tsx#ResultTableRow",
+] as const;
 const DOCUMENT_ROW_DATA =
   /\b(?:StatuteListItem|StatuteSearchHit|DecisionCitation|LeadingCitation|StatuteViewPayload|ProvisionViewPayload|CaseDecisionViewPayload|statuteTitle|courtAbbreviation|caseNumber|documentIdentity)\b|\bstatute\.title\b|["'](?:statute|decision|case-law)["']/u;
 const ROW_TAG =
@@ -54,47 +97,46 @@ const resolveImport = (filename: string, specifier: string) => {
  * loader resolves to: `default`, or the member mapped onto `default`.
  */
 const lazyComponentTarget = (
-  declaration: ts.VariableDeclaration,
-  file: ts.SourceFile,
+  declaration: VariableDeclarator,
+  file: SourceTree,
 ) => {
-  const call = declaration.initializer;
+  const call = declaration.init;
   if (
-    call === undefined ||
-    !ts.isCallExpression(call) ||
-    !/^(?:React\.)?lazy$/u.test(call.expression.getText(file))
+    !call ||
+    call.type !== "CallExpression" ||
+    !/^(?:React\.)?lazy$/u.test(nodeText(call.callee, file))
   ) {
     return undefined;
   }
   let specifier: string | undefined;
   let member = "default";
-  const visit = (node: ts.Node) => {
+  walk(call, (node) => {
     if (
-      ts.isCallExpression(node) &&
-      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
-      node.arguments[0] !== undefined &&
-      ts.isStringLiteralLike(node.arguments[0])
+      node.type === "ImportExpression" &&
+      node.source.type === "Literal" &&
+      typeof node.source.value === "string"
     ) {
-      specifier = node.arguments[0].text;
+      specifier = node.source.value;
     }
     if (
-      ts.isPropertyAssignment(node) &&
-      node.name.getText(file) === "default" &&
-      ts.isPropertyAccessExpression(node.initializer)
+      node.type === "Property" &&
+      !node.method &&
+      nodeText(node.key, file) === "default" &&
+      node.value.type === "MemberExpression" &&
+      !node.value.computed &&
+      node.value.property.type === "Identifier"
     ) {
-      member = node.initializer.name.text;
+      member = node.value.property.name;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(call);
+  });
   return specifier === undefined ? undefined : { specifier, member };
 };
 
 type SourceReferencesOptions = {
   filename: string;
-  file: ts.SourceFile;
+  file: SourceTree;
   sources: ReadonlyMap<string, string>;
 };
-
 const sourceReferences = ({
   filename,
   file,
@@ -110,59 +152,48 @@ const sourceReferences = ({
           sources.has(candidate),
         );
   };
-  for (const statement of file.statements) {
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
+  for (const statement of statementsOf(file)) {
+    if (statement.type === "VariableDeclaration") {
+      for (const declaration of statement.declarations) {
         const lazyTarget = lazyComponentTarget(declaration, file);
         const target =
           lazyTarget === undefined
             ? undefined
             : resolveSource(lazyTarget.specifier);
-        if (
-          lazyTarget !== undefined &&
-          target !== undefined &&
-          ts.isIdentifier(declaration.name)
-        ) {
-          imports.set(declaration.name.text, `${target}#${lazyTarget.member}`);
+        if (lazyTarget && target && declaration.id.type === "Identifier") {
+          imports.set(declaration.id.name, `${target}#${lazyTarget.member}`);
         }
       }
       continue;
     }
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const target = resolveSource(statement.moduleSpecifier.text);
+    const target = resolveSource(statement.source.value);
     if (target === undefined) {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        imports.set(
-          binding.name.text,
-          `${target}#${binding.propertyName?.text ?? binding.name.text}`,
-        );
+    for (const binding of statement.specifiers) {
+      if (binding.type === "ImportSpecifier") {
+        const name =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        imports.set(binding.local.name, `${target}#${name}`);
+      } else if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.set(binding.local.name, target);
+      } else {
+        imports.set(binding.local.name, `${target}#default`);
       }
-    }
-    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
-      namespaces.set(bindings.name.text, target);
-    }
-    const defaultName = statement.importClause?.name;
-    if (defaultName !== undefined) {
-      imports.set(defaultName.text, `${target}#default`);
     }
   }
   return (name: string) => {
     const [namespace, member] = name.split(".");
     const target =
       namespace === undefined ? undefined : namespaces.get(namespace);
-    if (target !== undefined && member !== undefined) {
-      return `${target}#${member}`;
-    }
-    return imports.get(name) ?? `${filename}#${name}`;
+    return target !== undefined && member !== undefined
+      ? `${target}#${member}`
+      : (imports.get(name) ?? `${filename}#${name}`);
   };
 };
 
@@ -197,8 +228,8 @@ const reachesRenderer = ({
 
 type CollectInitializerOptions = {
   name: string;
-  expression: ts.Expression;
-  collect: (name: string, node: ts.FunctionLikeDeclaration) => void;
+  expression: Node;
+  collect: (name: string, node: RendererFunction) => void;
 };
 
 const collectInitializer = ({
@@ -206,15 +237,21 @@ const collectInitializer = ({
   expression,
   collect,
 }: CollectInitializerOptions) => {
-  if (ts.isArrowFunction(expression) || ts.isFunctionExpression(expression)) {
+  if (
+    expression.type === "ArrowFunctionExpression" ||
+    expression.type === "FunctionExpression"
+  ) {
     collect(name, expression);
     return;
   }
-  if (!ts.isCallExpression(expression)) {
+  if (!(expression.type === "CallExpression")) {
     return;
   }
   for (const argument of expression.arguments) {
-    if (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)) {
+    if (
+      argument.type === "ArrowFunctionExpression" ||
+      argument.type === "FunctionExpression"
+    ) {
       collect(name, argument);
     }
   }
@@ -222,8 +259,8 @@ const collectInitializer = ({
 
 type DocumentRendererOptions = {
   name: string;
-  node: ts.FunctionLikeDeclaration;
-  file: ts.SourceFile;
+  node: RendererFunction;
+  file: SourceTree;
   hasJsx: boolean;
   hasRows: boolean;
   rowProjectsIdentity: boolean;
@@ -242,21 +279,27 @@ const isDocumentRenderer = ({
   if (!hasJsx) {
     return false;
   }
-  const typedDocumentInput = node.parameters.some((parameter) => {
-    if (DOCUMENT_INPUT.test(parameter.getText(file))) {
+  const typedDocumentInput = node.params.some((parameter) => {
+    if (DOCUMENT_INPUT.test(nodeText(parameter, file))) {
       return true;
     }
-    const inputType = parameter.type;
-    if (inputType === undefined || !ts.isTypeReferenceNode(inputType)) {
+    const input =
+      parameter.type === "TSParameterProperty"
+        ? parameter.parameter
+        : parameter;
+    const inputType = input.typeAnnotation?.typeAnnotation;
+    if (inputType === undefined || !(inputType.type === "TSTypeReference")) {
       return false;
     }
-    const inputName = inputType.typeName.getText(file);
-    return file.statements.some(
+    const inputName = nodeText(inputType.typeName, file);
+    return statementsOf(file).some(
       (statement) =>
-        ts.isTypeAliasDeclaration(statement) &&
-        statement.name.text === inputName &&
-        DOCUMENT_INPUT.test(statement.type.getText(file)) &&
-        /\[\]|\b(?:ReadonlyArray|Array)</u.test(statement.type.getText(file)),
+        statement.type === "TSTypeAliasDeclaration" &&
+        statement.id.name === inputName &&
+        DOCUMENT_INPUT.test(nodeText(statement.typeAnnotation, file)) &&
+        /\[\]|\b(?:ReadonlyArray|Array)</u.test(
+          nodeText(statement.typeAnnotation, file),
+        ),
     );
   });
   // Maps of language menus, legal text ASTs and charts are not document rows.
@@ -265,178 +308,168 @@ const isDocumentRenderer = ({
     (hasRows &&
       (rowProjectsIdentity ||
         typedDocumentInput ||
-        /\bDecisionRowData\b/u.test(node.getText(file)))) ||
+        /\bDecisionRowData\b/u.test(nodeText(node, file)))) ||
     (hasIdentityValue && name.endsWith("Cell")) ||
     (typedDocumentInput && /Item$|References$/u.test(name)) ||
-    (DOCUMENT_ROW_DATA.test(node.getText(file)) &&
+    (DOCUMENT_ROW_DATA.test(nodeText(node, file)) &&
       /RailIcon$|HitIcon$|Recent.*Icon$/u.test(name))
   );
 };
 
-const gatherBindings = (
-  body: ts.Node,
-  bindings: Map<string, ts.Expression>,
-) => {
-  const visit = (child: ts.Node) => {
-    if (child !== body && ts.isFunctionLike(child)) {
+const gatherBindings = (body: Node, bindings: Map<string, Expression>) => {
+  const visit = (child: Node) => {
+    if (child !== body && isFunctionLike(child)) {
       return;
     }
     if (
-      ts.isVariableDeclaration(child) &&
-      ts.isIdentifier(child.name) &&
-      child.initializer !== undefined
+      child.type === "VariableDeclarator" &&
+      child.id.type === "Identifier" &&
+      child.init !== null
     ) {
-      bindings.set(child.name.text, child.initializer);
+      bindings.set(child.id.name, child.init);
     }
-    ts.forEachChild(child, visit);
+    visitChildren(child, visit);
   };
   visit(body);
 };
 
 type VisitReturnedOutputOptions = {
-  body: ts.Node;
-  visit: (node: ts.Expression) => void;
+  body: Node;
+  visit: (node: Expression) => void;
 };
 
 const visitReturnedOutput = ({ body, visit }: VisitReturnedOutputOptions) => {
-  const returned = (child: ts.Node) => {
-    if (child !== body && ts.isFunctionLike(child)) {
+  const returned = (child: Node) => {
+    if (child !== body && isFunctionLike(child)) {
       return;
     }
-    if (
-      ts.isIfStatement(child) &&
-      child.expression.kind === ts.SyntaxKind.FalseKeyword
-    ) {
-      if (child.elseStatement !== undefined) {
-        returned(child.elseStatement);
+    if (child.type === "IfStatement" && isFalse(child.test)) {
+      if (child.alternate !== null) {
+        returned(child.alternate);
       }
       return;
     }
-    if (ts.isBlock(child)) {
-      for (const statement of child.statements) {
+    if (child.type === "BlockStatement") {
+      for (const statement of child.body) {
         returned(statement);
-        if (ts.isReturnStatement(statement)) {
+        if (statement.type === "ReturnStatement") {
           break;
         }
       }
       return;
     }
-    if (ts.isReturnStatement(child)) {
-      if (child.expression !== undefined) {
-        visit(child.expression);
+    if (child.type === "ReturnStatement") {
+      if (child.argument) {
+        visit(child.argument);
       }
       return;
     }
-    ts.forEachChild(child, returned);
+    visitChildren(child, returned);
   };
   returned(body);
 };
 
-const documentKindOutputs = (body: ts.Node, file: ts.SourceFile) => {
-  const outputs: ts.Expression[] = [];
+const documentKindOutputs = (body: Node, file: SourceTree) => {
+  const outputs: Expression[] = [];
   const panicBindings = new Set(
-    file.statements.flatMap((statement) => {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier) ||
-        statement.moduleSpecifier.text !== "better-result"
-      ) {
-        return [];
-      }
-      const bindings = statement.importClause?.namedBindings;
-      if (bindings === undefined || !ts.isNamedImports(bindings)) {
-        return [];
-      }
-      return bindings.elements
-        .filter(
-          (binding) =>
-            (binding.propertyName?.text ?? binding.name.text) === "panic",
-        )
-        .map((binding) => binding.name.text);
-    }),
+    file.program.body.flatMap((statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.source.value === "better-result"
+        ? statement.specifiers.flatMap((binding) =>
+            binding.type === "ImportSpecifier" &&
+            (binding.imported.type === "Identifier"
+              ? binding.imported.name
+              : binding.imported.value) === "panic"
+              ? [binding.local.name]
+              : [],
+          )
+        : [],
+    ),
   );
-  const append = (expression: ts.Expression) => {
-    if (ts.isParenthesizedExpression(expression)) {
+  const append = (expression: Expression) => {
+    if (expression.type === "ParenthesizedExpression") {
       append(expression.expression);
       return;
     }
-    if (ts.isConditionalExpression(expression)) {
-      if (expression.condition.kind !== ts.SyntaxKind.FalseKeyword) {
-        append(expression.whenTrue);
+    if (expression.type === "ConditionalExpression") {
+      if (!isFalse(expression.test)) {
+        append(expression.consequent);
       }
-      append(expression.whenFalse);
+      append(expression.alternate);
       return;
     }
     if (
-      expression.kind === ts.SyntaxKind.NullKeyword ||
-      expression.kind === ts.SyntaxKind.FalseKeyword ||
-      (ts.isIdentifier(expression) && expression.text === "undefined")
+      (expression.type === "Literal" &&
+        (expression.value === null || expression.value === false)) ||
+      (expression.type === "Identifier" && expression.name === "undefined")
     ) {
       return;
     }
     // A never-returning invariant failure has no rendered document branch.
     if (
-      ts.isCallExpression(expression) &&
-      ts.isIdentifier(expression.expression) &&
-      panicBindings.has(expression.expression.text)
+      expression.type === "CallExpression" &&
+      expression.callee.type === "Identifier" &&
+      panicBindings.has(expression.callee.name)
     ) {
       return;
     }
     outputs.push(expression);
   };
-  const isDocumentCondition = (condition: ts.Expression) =>
-    /\.(?:kind|type|documentKind)\b/u.test(condition.getText(file)) &&
-    /["'](?:statute|decision|case-law)["']/u.test(condition.getText(file));
-  const scan = (child: ts.Node) => {
+  const isDocumentCondition = (condition: Expression) =>
+    /\.(?:kind|type|documentKind)\b/u.test(nodeText(condition, file)) &&
+    /["'](?:statute|decision|case-law)["']/u.test(nodeText(condition, file));
+  const scan = (child: Node) => {
     if (
-      ts.isJsxAttribute(child) &&
-      /^on[A-Z]/u.test(child.name.getText(file))
+      child.type === "JSXAttribute" &&
+      /^on[A-Z]/u.test(nodeText(child.name, file))
     ) {
       return;
     }
     if (
-      ts.isConditionalExpression(child) &&
-      isDocumentCondition(child.condition)
+      child.type === "ConditionalExpression" &&
+      isDocumentCondition(child.test)
     ) {
-      append(child.whenTrue);
-      append(child.whenFalse);
+      append(child.consequent);
+      append(child.alternate);
     }
-    if (ts.isIfStatement(child) && isDocumentCondition(child.expression)) {
-      visitReturnedOutput({ body: child.thenStatement, visit: append });
-      if (child.elseStatement !== undefined) {
-        visitReturnedOutput({ body: child.elseStatement, visit: append });
-      } else if (ts.isBlock(child.parent)) {
-        const position = child.parent.statements.indexOf(child);
-        for (const statement of child.parent.statements.slice(position + 1)) {
-          visitReturnedOutput({ body: statement, visit: append });
-          if (ts.isReturnStatement(statement)) {
-            break;
+    if (child.type === "IfStatement" && isDocumentCondition(child.test)) {
+      visitReturnedOutput({ body: child.consequent, visit: append });
+      if (child.alternate !== null) {
+        visitReturnedOutput({ body: child.alternate, visit: append });
+      } else {
+        const parent = file.parents.get(child);
+        if (parent?.type === "BlockStatement") {
+          const position = parent.body.indexOf(child);
+          for (const statement of parent.body.slice(position + 1)) {
+            visitReturnedOutput({ body: statement, visit: append });
+            if (statement.type === "ReturnStatement") {
+              break;
+            }
           }
         }
       }
     }
     if (
-      ts.isSwitchStatement(child) &&
-      /\.(?:kind|type|documentKind)\b/u.test(child.expression.getText(file))
+      child.type === "SwitchStatement" &&
+      /\.(?:kind|type|documentKind)\b/u.test(nodeText(child.discriminant, file))
     ) {
-      for (const [index, clause] of child.caseBlock.clauses.entries()) {
+      for (const [index, clause] of child.cases.entries()) {
         if (
-          !ts.isCaseClause(clause) ||
-          !ts.isStringLiteral(clause.expression) ||
-          !/^(?:statute|decision|case-law)$/u.test(clause.expression.text)
+          clause.test?.type !== "Literal" ||
+          typeof clause.test.value !== "string" ||
+          !/^(?:statute|decision|case-law)$/u.test(clause.test.value)
         ) {
           continue;
         }
-        // A grouped case inherits the next non-empty clause's returned output.
-        const effective = child.caseBlock.clauses
+        const effective = child.cases
           .slice(index)
-          .find((candidate) => candidate.statements.length > 0);
-        for (const statement of effective?.statements ?? []) {
+          .find((candidate) => candidate.consequent.length > 0);
+        for (const statement of effective?.consequent ?? []) {
           visitReturnedOutput({ body: statement, visit: append });
         }
       }
     }
-    ts.forEachChild(child, scan);
+    visitChildren(child, scan);
   };
   scan(body);
   return outputs;
@@ -500,29 +533,30 @@ const documentIdentityResult = (
 };
 
 const collectSourceRenderers = (
-  file: ts.SourceFile,
-  collect: (name: string, node: ts.FunctionLikeDeclaration) => void,
+  file: SourceTree,
+  collect: (name: string, node: RendererFunction) => void,
 ) => {
-  for (const statement of file.statements) {
-    if (ts.isFunctionDeclaration(statement)) {
-      collect(statement.name?.text ?? "default", statement);
+  for (const statement of statementsOf(file)) {
+    if (statement.type === "FunctionDeclaration") {
+      collect(statement.id?.name ?? "default", statement);
     }
-    if (ts.isExportAssignment(statement)) {
-      collectInitializer({
-        name: "default",
-        expression: statement.expression,
-        collect,
-      });
+    if (statement.type === "ExportDefaultDeclaration") {
+      if (statement.declaration.type === "FunctionDeclaration") {
+        collect("default", statement.declaration);
+      } else if (statement.declaration.type !== "ClassDeclaration") {
+        collectInitializer({
+          name: "default",
+          expression: statement.declaration,
+          collect,
+        });
+      }
     }
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.initializer !== undefined
-        ) {
+    if (statement.type === "VariableDeclaration") {
+      for (const declaration of statement.declarations) {
+        if (declaration.id.type === "Identifier" && declaration.init) {
           collectInitializer({
-            name: declaration.name.text,
-            expression: declaration.initializer,
+            name: declaration.id.name,
+            expression: declaration.init,
             collect,
           });
         }
@@ -539,72 +573,69 @@ export const checkDocumentIdentitySources = (
   const roots = new Set<string>();
 
   for (const [filename, text] of sources) {
-    const file = ts.createSourceFile(
-      filename,
-      text,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    );
+    const parsed = parseSource(filename, text);
+    const parents = new Map<Node, Node>();
+    walk(parsed.program, (node, ancestors) => {
+      const parent = ancestors.at(-1);
+      if (parent) {
+        parents.set(node, parent);
+      }
+    });
+    const file = { ...parsed, parents };
     const reference = sourceReferences({ filename, file, sources });
-    const collect = (name: string, node: ts.FunctionLikeDeclaration) => {
+    const collect = (name: string, node: RendererFunction) => {
       const id = `${filename}#${name}`;
       const references = new Set<string>();
       let outputReferences = references;
       const rowReferences = new Set<string>();
-      const bindings = new Map<string, ts.Expression>();
+      const bindings = new Map<string, Expression>();
       let hasRows = false;
       let rowProjectsIdentity = false;
       let hasJsx = false;
       let hasIdentityValue = false;
       const body = node.body;
-      if (body === undefined) {
+      if (body === null) {
         return;
       }
       gatherBindings(body, bindings);
       const visitedBindings = new Set<string>();
       const visitedRowBindings = new Set<string>();
-      const visit = (child: ts.Node, rowContext = false) => {
+      const visit = (child: Node, rowContext = false) => {
         const inRow =
           rowContext ||
-          (ts.isJsxElement(child) &&
-            ROW_TAG.test(child.openingElement.tagName.getText(file))) ||
-          (ts.isJsxSelfClosingElement(child) &&
-            ROW_TAG.test(child.tagName.getText(file)));
-        if (ts.isIdentifier(child)) {
-          const initializer = bindings.get(child.text);
+          (child.type === "JSXElement" &&
+            ROW_TAG.test(nodeText(child.openingElement.name, file)));
+        if (child.type === "Identifier") {
+          const initializer = bindings.get(child.name);
           const visited = inRow ? visitedRowBindings : visitedBindings;
-          if (initializer !== undefined && !visited.has(child.text)) {
-            visited.add(child.text);
+          if (initializer !== undefined && !visited.has(child.name)) {
+            visited.add(child.name);
             visit(initializer, inRow);
           }
         }
         if (
-          ts.isJsxAttribute(child) &&
-          /^on[A-Z]/u.test(child.name.getText(file))
+          child.type === "JSXAttribute" &&
+          /^on[A-Z]/u.test(nodeText(child.name, file))
         ) {
           return;
         }
         if (
-          ts.isJsxExpression(child) &&
-          child.expression !== undefined &&
+          child.type === "JSXExpressionContainer" &&
+          child.expression.type !== "JSXEmptyExpression" &&
           /\b(?:caseNumber|courtAbbreviation|statuteTitle|documentIdentity)\b/u.test(
-            child.expression.getText(file),
+            nodeText(child.expression, file),
           )
         ) {
           hasIdentityValue = true;
         }
-        if (
-          ts.isJsxOpeningElement(child) ||
-          ts.isJsxSelfClosingElement(child)
-        ) {
+        if (child.type === "JSXOpeningElement") {
           hasJsx = true;
-          const tag = child.tagName.getText(file);
+          const tag = nodeText(child.name, file);
           outputReferences.add(reference(tag));
           if (ROW_TAG.test(tag)) {
             hasRows = true;
-            const row = ts.isJsxOpeningElement(child) ? child.parent : child;
-            if (ROW_IDENTITY.test(row.getText(file))) {
+            const row = file.parents.get(child) ?? child;
+            if (ROW_IDENTITY.test(nodeText(row, file))) {
               rowProjectsIdentity = true;
             }
           }
@@ -612,31 +643,28 @@ export const checkDocumentIdentitySources = (
             rowReferences.add(reference(tag));
           }
         }
-        if (ts.isCallExpression(child)) {
-          const dependency = reference(child.expression.getText(file));
+        if (child.type === "CallExpression") {
+          const dependency = reference(nodeText(child.callee, file));
           outputReferences.add(dependency);
           if (inRow) {
             rowReferences.add(dependency);
           }
         }
         if (
-          ts.isBinaryExpression(child) &&
-          child.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
-          child.left.kind === ts.SyntaxKind.FalseKeyword
+          child.type === "LogicalExpression" &&
+          child.operator === "&&" &&
+          isFalse(child.left)
         ) {
           return;
         }
         // A literal-false conditional cannot render its consequent.
-        if (
-          ts.isConditionalExpression(child) &&
-          child.condition.kind === ts.SyntaxKind.FalseKeyword
-        ) {
-          visit(child.whenFalse, inRow);
+        if (child.type === "ConditionalExpression" && isFalse(child.test)) {
+          visit(child.alternate, inRow);
           return;
         }
-        ts.forEachChild(child, (descendant) => visit(descendant, inRow));
+        visitChildren(child, (descendant) => visit(descendant, inRow));
       };
-      if (ts.isBlock(body)) {
+      if (body.type === "BlockStatement") {
         visitReturnedOutput({ body, visit });
       } else {
         visit(body);
@@ -652,7 +680,7 @@ export const checkDocumentIdentitySources = (
             references: outputReferences,
             projectsIdentity:
               /\b(?:identity|documentIdentity|CourtBadge|courtAbbreviation|caseNumber|statuteNumber|statuteYear)\b/u.test(
-                output.getText(file),
+                nodeText(output, file),
               ),
           });
         }
@@ -666,8 +694,8 @@ export const checkDocumentIdentitySources = (
         hasJsx,
         hasRows,
         carriesDocumentKind:
-          /\.(?:kind|type|documentKind)\b/u.test(node.getText(file)) &&
-          /["'](?:statute|decision|case-law)["']/u.test(node.getText(file)),
+          /\.(?:kind|type|documentKind)\b/u.test(nodeText(node, file)) &&
+          /["'](?:statute|decision|case-law)["']/u.test(nodeText(node, file)),
       });
       if (
         isDocumentRenderer({
@@ -684,32 +712,37 @@ export const checkDocumentIdentitySources = (
       }
     };
     collectSourceRenderers(file, collect);
-    for (const statement of file.statements) {
+    for (const statement of statementsOf(file)) {
       if (
-        !ts.isExpressionStatement(statement) ||
-        !ts.isCallExpression(statement.expression)
+        !(statement.type === "ExpressionStatement") ||
+        !(statement.expression.type === "CallExpression")
       ) {
         continue;
       }
       const call = statement.expression;
       if (
-        call.expression.getText(file) !== "registerInspectorView" ||
-        !DOCUMENT_ROW_DATA.test(call.getText(file))
+        nodeText(call.callee, file) !== "registerInspectorView" ||
+        !DOCUMENT_ROW_DATA.test(nodeText(call, file))
       ) {
         continue;
       }
       for (const argument of call.arguments) {
-        if (!ts.isObjectLiteralExpression(argument)) {
+        if (!(argument.type === "ObjectExpression")) {
           continue;
         }
         for (const property of argument.properties) {
           if (
-            !ts.isPropertyAssignment(property) ||
-            property.name.getText(file) !== "railIcon"
+            !(
+              property.type === "Property" &&
+              !property.method &&
+              !property.shorthand &&
+              property.kind === "init"
+            ) ||
+            nodeText(property.key, file) !== "railIcon"
           ) {
             continue;
           }
-          roots.add(reference(property.initializer.getText(file)));
+          roots.add(reference(nodeText(property.value, file)));
         }
       }
     }
@@ -738,16 +771,73 @@ export const readDocumentIdentitySources = (root: string) => {
   return sources;
 };
 
-if (import.meta.main) {
-  const result = checkDocumentIdentitySources(
-    readDocumentIdentitySources(process.cwd()),
+type DocumentIdentityResult = {
+  surfaces: readonly string[];
+};
+
+export const missingRequiredSurfaces = (
+  result: DocumentIdentityResult,
+  required: readonly string[],
+) => required.filter((surface) => !result.surfaces.includes(surface));
+
+/**
+ * Replace every shared badge with a hand-rolled identity renderer. The guard
+ * must then report each surface it discovered, or it can no longer see the
+ * rendered badge it claims to enforce.
+ */
+const withUnsharedBadges = (sources: ReadonlyMap<string, string>) =>
+  new Map(
+    [...sources].map(([filename, source]) => [
+      filename,
+      source.includes("<DocumentIdentityBadge")
+        ? `${source.replaceAll("<DocumentIdentityBadge", "<UnsharedDocumentIdentityBadge")}
+            const UnsharedDocumentIdentityBadge = ({ identity }) =>
+              identity.kind === "decision"
+                ? <span>{identity.courtAbbreviation}</span>
+                : <span>{identity.number}/{identity.year}</span>;`
+        : source,
+    ]),
   );
+
+/** Discovered surfaces whose badge removal the guard would not report. */
+export const undetectedBadgeRemovals = (
+  sources: ReadonlyMap<string, string>,
+  surfaces: readonly string[],
+) => {
+  const reported = new Set(
+    checkDocumentIdentitySources(withUnsharedBadges(sources)).violations,
+  );
+  return surfaces.filter((surface) => !reported.has(surface));
+};
+
+if (import.meta.main) {
+  const sources = readDocumentIdentitySources(process.cwd());
+  const result = checkDocumentIdentitySources(sources);
+  const missing = missingRequiredSurfaces(
+    result,
+    REQUIRED_DOCUMENT_IDENTITY_SURFACES,
+  );
+  const undetected = undetectedBadgeRemovals(sources, result.surfaces);
+  for (const surface of undetected) {
+    console.error(
+      `Removing the shared badge from this surface would go unreported: ${surface}`,
+    );
+  }
   for (const violation of result.violations) {
     console.error(
       `Document row or rail must render DocumentIdentityBadge: ${violation}`,
     );
   }
-  if (result.violations.length > 0) {
+  for (const surface of missing) {
+    console.error(
+      `Required document identity surface was not discovered: ${surface}`,
+    );
+  }
+  if (
+    result.violations.length > 0 ||
+    missing.length > 0 ||
+    undetected.length > 0
+  ) {
     process.exitCode = 1;
   } else {
     console.log(

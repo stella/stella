@@ -11,7 +11,10 @@
 //   2. scripts/code-check-affected.ts, the exact lint and typecheck plan of
 //      CI's Code quality legs, at concurrency 1. A change that needs the full
 //      repository check is left to CI;
-//   3. the tests of changed root scripts.
+//   3. the tests of changed root scripts;
+//   4. the dead-export budget (one repository-wide knip run, about 20 s),
+//      when a source file or the knip budget itself changed. Deleting a
+//      call can leave an export unused, so any source change counts.
 //
 // The repository's own pre-push hook stays lightweight (see
 // scripts/pre-push-policy.test.ts). A host-level hook runs this only when the
@@ -30,6 +33,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { BASELINE_PATHS } from "./baseline-paths";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
@@ -99,12 +103,27 @@ export const rootScriptTests = (
     ),
   ].toSorted();
 
+const KNIP_INPUT = /\.[cm]?[jt]sx?$|(?:^|\/)package\.json$/u;
+const KNIP_BUDGET_FILES = new Set([
+  "knip.json",
+  BASELINE_PATHS.knipExports,
+  "scripts/knip-exports-ratchet.ts",
+]);
+
+/** Whether a change can move the dead-export count CI budgets. */
+export const knipBudgetAffected = (changedPaths: readonly string[]): boolean =>
+  changedPaths.some(
+    (file) => KNIP_INPUT.test(file) || KNIP_BUDGET_FILES.has(file),
+  );
+
 export const prePushCommands = ({
   base,
   scriptTests,
+  knipBudget,
 }: {
   base: string;
   scriptTests: readonly string[];
+  knipBudget: boolean;
 }): string[][] => [
   ["bun", "run", "generate"],
   [
@@ -117,6 +136,7 @@ export const prePushCommands = ({
   ...(scriptTests.length === 0
     ? []
     : [["bun", "test", "--timeout", SCRIPT_TEST_TIMEOUT_MS, ...scriptTests]]),
+  ...(knipBudget ? [["bun", "run", "check:knip-exports"]] : []),
 ];
 
 /**
@@ -263,6 +283,7 @@ const main = async (): Promise<number> => {
       scriptTests: rootScriptTests(changed, (file) =>
         existsSync(path.join(REPO_ROOT, file)),
       ),
+      knipBudget: knipBudgetAffected(changed),
     }),
     options.dryRun,
   );

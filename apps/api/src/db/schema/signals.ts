@@ -1,6 +1,6 @@
 import {
-  SIGNAL_KINDS,
   SIGNAL_KIND_ORIGIN,
+  SIGNAL_KINDS,
   SIGNAL_ORIGINS,
   SIGNAL_SEVERITIES,
   SIGNAL_STATUSES,
@@ -63,8 +63,7 @@ export type SignalAcceptedResult =
     }
   | {
       suggestionKind:
-        | typeof SUGGESTION_KIND.ASSIGN
-        | typeof SUGGESTION_KIND.OPEN_CHAT;
+        typeof SUGGESTION_KIND.ASSIGN | typeof SUGGESTION_KIND.OPEN_CHAT;
       result: { type: "none" };
     };
 

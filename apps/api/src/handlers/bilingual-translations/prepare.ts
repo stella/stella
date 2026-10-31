@@ -8,6 +8,8 @@
 import { Result } from "better-result";
 
 import { prepareBilingualTranslationBodySchema } from "@/api/handlers/bilingual-translations/schemas";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
@@ -26,6 +28,7 @@ import { workspaceParams } from "@/api/lib/custom-schema";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readScannedBilingualDocx } from "@/api/lib/file-scan/document-parsers";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 const PREPARE_TIMEOUT_MS = 150_000;
 
@@ -51,6 +54,7 @@ const config = {
 const prepareBilingualTranslation = createSafeHandler(
   config,
   async function* ({
+    orgAIConfigStatus,
     modelAdmission,
     body,
     orgAIConfig,
@@ -62,6 +66,10 @@ const prepareBilingualTranslation = createSafeHandler(
     user,
     workspaceId,
   }) {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.err(storedAIConfigUnreadableError());
+    }
+
     if (body.sourceLang.toLowerCase() === body.targetLang.toLowerCase()) {
       return Result.err(
         new HandlerError({
@@ -86,7 +94,13 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(manifest)) {
-      captureError(manifest.error, { source: "bilingual-prepare" });
+      captureError(
+        manifest.error,
+        handlerErrorContext(
+          "bilingualtranslations.prepareBilingualTranslation.manifest_error",
+          { source: "bilingual-prepare" },
+        ),
+      );
       return Result.err(
         new HandlerError({
           status: 422,
@@ -159,10 +173,17 @@ const prepareBilingualTranslation = createSafeHandler(
       catch: (cause) => cause,
     });
     if (Result.isError(prepared)) {
-      captureError(prepared.error, { source: "bilingual-prepare" });
+      captureError(
+        prepared.error,
+        handlerErrorContext(
+          "bilingualtranslations.prepareBilingualTranslation.prepared_error",
+          { source: "bilingual-prepare" },
+        ),
+      );
       return Result.err(
         new HandlerError({
           status: 502,
+          code: "internal_error",
           message: "The translation could not be prepared. Try again.",
         }),
       );

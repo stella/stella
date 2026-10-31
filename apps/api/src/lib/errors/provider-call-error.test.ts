@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  aiErrorStatusBody,
   aiHandlerError,
   classifyAIError,
   providerStatusCode,
@@ -36,6 +37,7 @@ describe("provider call error structural contract", () => {
         };
         const original = new HandlerError({
           status: 502,
+          code: "internal_error",
           message: SENTINEL,
           cause: evidence,
         });
@@ -167,14 +169,14 @@ describe("provider call error codes", () => {
     );
   });
 
-  test("leaves an absent code absent", () => {
+  test("names an absent provider code explicitly", () => {
     expect(
       createProviderCallError({
         model: { provider: "openrouter", keySource: "byok" },
         status: 502,
         evidence: {},
       }).code,
-    ).toBeUndefined();
+    ).toBe(PROVIDER_ERROR_CODE);
   });
 
   test("reach the HTTP body and telemetry as the closed value", () => {
@@ -203,4 +205,20 @@ describe("provider call error codes", () => {
     }
     expect(JSON.stringify(error)).not.toContain(sentinel);
   });
+});
+
+test("a status body keeps the managed-provider code the handler preserved", () => {
+  const error = createProviderCallError({
+    model: { provider: "openrouter", keySource: "instance" },
+    status: 503,
+    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+    evidence: { status: 503, isRetryable: false },
+  });
+
+  const { body } = aiErrorStatusBody(error, {
+    status: 502,
+    message: "Generation failed",
+  });
+
+  expect(body.code).toBe(MANAGED_PROVIDER_UNAVAILABLE_CODE);
 });

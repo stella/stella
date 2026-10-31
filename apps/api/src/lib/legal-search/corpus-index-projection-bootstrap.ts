@@ -13,16 +13,22 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import {
+  type CorpusIndexManifest,
+  corpusIndexManifestScopeJurisdictions,
+  requireCorpusIndexManifest,
+} from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
   buildCorpusIndexProjectionDesiredStateValues,
   caseLawProjectionInputFromCanonical,
+  type CorpusIndexProjectionSubject,
   LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
   legislationProjectionInputFromCanonical,
   lockActiveCorpusProjectionManifestForMutation,
-  type CorpusIndexProjectionSubject,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import type { isRedistributable } from "@/api/lib/legal-search/corpus-source";
 
 /**
@@ -384,6 +390,9 @@ const bootstrapCaseLaw = async ({
 }: FamilyBootstrapOptions<SafeId<"caseLawDecision">>): Promise<
   CorpusBootstrapPage<SafeId<"caseLawDecision">>
 > => {
+  const scope = corpusIndexManifestScopeJurisdictions(
+    requireCorpusIndexManifest("case_law", generation),
+  );
   const projectionConditions = [
     eq(corpusIndexProjectionStates.family, "case_law"),
     eq(corpusIndexProjectionStates.generation, generation),
@@ -408,9 +417,16 @@ const bootstrapCaseLaw = async ({
           eq(caseLawSources.id, caseLawDecisions.sourceId),
         )
         .where(
-          afterEntityId === undefined
-            ? undefined
-            : gt(caseLawDecisions.id, afterEntityId),
+          and(
+            afterEntityId === undefined
+              ? undefined
+              : gt(caseLawDecisions.id, afterEntityId),
+            // A partial generation holds some jurisdictions only; the walk
+            // never visits (or seeds) a decision it owes nothing for.
+            scope === null
+              ? undefined
+              : inArray(caseLawDecisions.country, [...scope]),
+          ),
         )
         .orderBy(asc(caseLawDecisions.id))
         .limit(limit)
@@ -495,6 +511,17 @@ const bootstrapCaseLaw = async ({
         }
         values.push({ type: identifier.type, value: identifier.value });
       }
+      const vacatedByJurisdiction = await readCaseLawJurisdictionVacatedTx(
+        tx,
+        rows.map(({ jurisdiction }) => jurisdiction),
+      );
+      const provisionKeysByDecision = await readCaseLawProvisionKeys(
+        tx,
+        rows.map(({ documentId, jurisdiction }) => ({
+          id: documentId,
+          jurisdiction,
+        })),
+      );
       return rows.map((row) =>
         buildCorpusIndexProjectionDesiredStateValues({
           subject: { family: "case_law", entityId: row.documentId },
@@ -525,6 +552,12 @@ const bootstrapCaseLaw = async ({
               decisionDate: row.decisionDate,
               ecli: row.ecli,
               metadata: row.metadata,
+              vacatedFrom: vacatedByJurisdiction.get(row.jurisdiction) ?? null,
+              provisionKeys:
+                provisionKeysByDecision.get(row.documentId) ??
+                panic(
+                  `Corpus projection bootstrap lost provision keys for decision ${row.documentId}`,
+                ),
               sourceDescriptor: descriptorOf(row.sourceId),
             }),
           ),

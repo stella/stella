@@ -1,4 +1,4 @@
-import { EventType, convertSchemaToJsonSchema } from "@tanstack/ai";
+import { convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { Panic, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -14,8 +14,10 @@ import {
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
-import type { OrgAIConfig, CachingDecision } from "@/api/lib/ai-config";
+import { env } from "@/api/env";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -31,14 +33,15 @@ import {
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
   ModelRunError,
-  ProviderCallError,
+  ModelRunUnfinishedError,
   PROVIDER_CALL_ERROR_MESSAGE,
   PROVIDER_ERROR_CODE,
+  ProviderCallError,
 } from "@/api/lib/errors/provider-call-error";
 import {
-  HandlerError,
-  ChatLoopDetectedError,
   ChatEmptyCompletionError,
+  ChatLoopDetectedError,
+  HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -77,6 +80,9 @@ import type {
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const testState = createTestState({ file: import.meta.path, config: env });
+testState.setConfig("OPENROUTER_API_KEY", "test-openrouter-instance-key");
 
 // The real `chat()` engine runs here; only the provider boundary is faked.
 // Replacing the engine instead lets a fixture invent public chunk shapes the
@@ -467,6 +473,7 @@ describe("TanStack AI structured output generation", () => {
         caching: noCaching,
         finishPolicy: "require-complete" as const,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer" as const,
         managedAIResidency: "eu" as const,
@@ -601,6 +608,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -630,6 +638,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -685,6 +694,7 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -710,6 +720,7 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
@@ -741,6 +752,7 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1020,20 +1032,51 @@ describe("TanStack AI structured output generation", () => {
       provider: "google" | "openai" | "openrouter",
       modelId: string,
     ) => {
-      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
-      const model = {
-        adapter: {},
+      const common = {
+        adapter: providerAdapter,
         keySource: "byok",
         modelId,
-        modelOptions: tanStackModelOptionsForTask({
-          modelId,
-          organizationId: null,
-          provider,
-          task: "short-text",
-        }),
-        provider,
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-      } as ResolvedTanStackTextModel;
+      } as const;
+      const model = (() => {
+        switch (provider) {
+          case "google":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+          case "openai":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+          case "openrouter":
+            return {
+              ...common,
+              modelOptions: tanStackModelOptionsForTask({
+                modelId,
+                organizationId: null,
+                provider,
+                task: "short-text",
+              }),
+              provider,
+            } satisfies ResolvedTanStackTextModel;
+          default:
+            provider satisfies never;
+            throw new Panic({ message: "Unsupported TanStack AI provider" });
+        }
+      })();
       const options: object = mergeGenerationOptions({
         caching: noCaching,
         maxOutputTokens: SHORT_REPLY,
@@ -1069,9 +1112,8 @@ describe("TanStack AI structured output generation", () => {
     test("the reservation never lifts a request past the model's limit", () => {
       const limit = getOutputTokenLimit("gemini-3.8-flash") ?? 0;
       expect(limit).toBeGreaterThan(0);
-      // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
       const model = {
-        adapter: {},
+        adapter: providerAdapter,
         keySource: "byok",
         modelId: "gemini-3.8-flash",
         modelOptions: tanStackModelOptionsForTask({
@@ -1081,8 +1123,7 @@ describe("TanStack AI structured output generation", () => {
           task: "short-text",
         }),
         provider: "google",
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-      } as ResolvedTanStackTextModel;
+      } satisfies ResolvedTanStackTextModel;
       expect(
         mergeGenerationOptions({
           caching: noCaching,
@@ -1139,6 +1180,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1168,6 +1210,7 @@ describe("TanStack AI structured output generation", () => {
       abortSignal: controller.signal,
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1205,6 +1248,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1250,6 +1294,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1276,6 +1321,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1316,6 +1362,7 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
@@ -1358,6 +1405,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1405,12 +1453,13 @@ describe("TanStack AI model-ingress guard", () => {
   const publicDecisionId = "7c0f7d51-70a4-4d64-9f0e-0a4d64e9911b";
 
   test("redacts tenant ids out of the dispatched messages", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1439,12 +1488,13 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("leaves a request without tenant ids untouched and silent", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1467,12 +1517,13 @@ describe("TanStack AI model-ingress guard", () => {
   });
 
   test("redacts an untrusted-embedding system prompt, fails closed on a server-built one", async () => {
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
 
     await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1502,11 +1553,12 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
 
     resetProvider();
-    queueRun(textRun(["ok"]));
+    queueRun(textRun(["ok"], "stop"));
     const serverBuiltFailure = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1543,8 +1595,9 @@ describe("model dispatch within its admitted action", () => {
   const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
   const dispatchOptions = {
     caching: noCaching,
-    finishPolicy: "allow-incomplete",
+    finishPolicy: "require-complete",
     organizationId,
+    userId: null,
     dataClass: "customer",
     managedAIResidency: "eu",
     orgAIConfig: null,
@@ -1560,6 +1613,7 @@ describe("model dispatch within its admitted action", () => {
 
     const caught = await admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "document-reviews.background",
       organizationStateDb: testOrganizationStateDb,
       signal: lease.signal,
@@ -1581,13 +1635,15 @@ describe("model dispatch within its admitted action", () => {
   });
 
   test("refuses a dispatch on a proof that outlived its admitted run", async () => {
-    const escaped = await admitModelDispatch({
+    const escapedResult = await admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "templates.fill",
       organizationStateDb: testOrganizationStateDb,
       signal: new AbortController().signal,
       run: async (admission) => await Promise.resolve(admission),
     });
+    const escaped = escapedResult.unwrap();
     expect(escaped.signal.aborted).toBe(true);
     queueRun(textRun(["never sent"]));
 
@@ -1616,6 +1672,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1638,32 +1695,6 @@ describe("TanStack AI text generation", () => {
   // one adapter, and `testModel` is not the provider that shape was first seen
   // on: normalizing only the adapters named for it leaves the same truncated
   // answer returned on one provider and raised as a failure on the next.
-  test("returns the text a ceiling stop produced whichever adapter reports it", async () => {
-    queueRun(
-      runErrorRun({
-        code: "max_tokens",
-        deltas: ["as far as it got"],
-        message: "The response hit the output ceiling.",
-      }),
-    );
-
-    expect(
-      await generateTextForTestModel({
-        caching: noCaching,
-        finishPolicy: "allow-incomplete",
-        organizationId: null,
-        admission: NO_ORGANIZATION_MODEL_DISPATCH,
-        dataClass: "customer",
-        managedAIResidency: "eu",
-        orgAIConfig: null,
-        prompt: "Recap it.",
-        task: "chat",
-        serviceTier: "standard",
-        tenantWorkspaceIds: [],
-      }),
-    ).toBe("as far as it got");
-  });
-
   test("accepts a ceiling stop as the length finish an output-ceiling caller allows", async () => {
     queueRun(
       runErrorRun({
@@ -1678,6 +1709,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
@@ -1705,6 +1737,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1730,15 +1763,16 @@ describe("TanStack AI text generation", () => {
     );
   });
 
-  test("rejects a cancelled run instead of returning its truncated text", async () => {
+  test("names a cancelled run as cancelled, not as an unfinished answer", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["half an ans"], controller));
 
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1776,8 +1810,9 @@ describe("TanStack AI text generation", () => {
     const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1802,8 +1837,9 @@ describe("TanStack AI text generation", () => {
     const output = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1817,15 +1853,18 @@ describe("TanStack AI text generation", () => {
     expect(output).toBe("a whole answer");
   });
 
-  test("keeps the output of a run that finished without a reason before the cancellation", async () => {
+  // A reported finish, even one without a reason, means the run completed
+  // before the signal fired: it is graded on that finish, never as cancelled.
+  test("grades a run that finished without a reason before the cancellation on its finish", async () => {
     const controller = new AbortController();
     queueRun(cancelledTextRun(["a whole answer"], controller, "unreasoned"));
 
-    const output = await generateTextForTestModel({
+    const caught = await generateTextForTestModel({
       abortSignal: controller.signal,
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1834,18 +1873,26 @@ describe("TanStack AI text generation", () => {
       task: "chat",
       serviceTier: "standard",
       tenantWorkspaceIds: [],
-    });
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
 
-    expect(output).toBe("a whole answer");
+    expect(controller.signal.aborted).toBe(true);
+    expect(caught).toBeInstanceOf(ModelRunUnfinishedError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).not.toBe(
+      "generation_cancelled",
+    );
   });
 
   test("collects text through the error-aware streaming boundary", async () => {
-    queueRun(textRun(["hello", " world"]));
+    queueRun(textRun(["hello", " world"], "stop"));
 
     const output = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1872,8 +1919,9 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1901,8 +1949,9 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1940,8 +1989,9 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1964,8 +2014,9 @@ describe("TanStack AI text generation", () => {
 
     const caught = await generateTextForTestModel({
       caching: noCaching,
-      finishPolicy: "allow-incomplete",
+      finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -1995,6 +2046,7 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        userId: null,
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
@@ -2208,17 +2260,13 @@ describe("Anthropic extended-thinking budgets", () => {
             reasoningEffort,
             task,
           });
-          // SAFETY: mergeGenerationOptions only reads
-          // provider/modelOptions/modelId. The adapter is irrelevant for this
-          // pure option-merge invariant.
           const model = {
-            adapter: {},
+            adapter: providerAdapter,
             keySource: "byok",
             modelId,
             modelOptions,
             provider: "anthropic",
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-          } as ResolvedTanStackTextModel;
+          } satisfies ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {
             ...mergeGenerationOptions({
@@ -2253,9 +2301,8 @@ describe("Anthropic extended-thinking budgets", () => {
     for (const modelId of BYOK_MODEL_OPTIONS.anthropic) {
       for (const task of MODEL_TASKS) {
         for (const reasoningEffort of [undefined, ...REASONING_EFFORTS]) {
-          // SAFETY: the helpers read only provider/modelOptions/modelId.
           const model = {
-            adapter: {},
+            adapter: providerAdapter,
             keySource: "byok",
             modelId,
             modelOptions: tanStackModelOptionsForTask({
@@ -2266,8 +2313,7 @@ describe("Anthropic extended-thinking budgets", () => {
               task,
             }),
             provider: "anthropic",
-            // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
-          } as ResolvedTanStackTextModel;
+          } satisfies ResolvedTanStackTextModel;
 
           const merged: Record<string, unknown> = {
             ...mergeGenerationOptions({
@@ -2473,6 +2519,7 @@ describe("model output that fails its schema", () => {
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     caching: noCaching,
     organizationId: null,
+    userId: null,
     dataClass: "customer" as const,
     managedAIResidency: "eu" as const,
     orgAIConfig: null,
@@ -2525,6 +2572,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     caching: noCaching,
     organizationId: null,
+    userId: null,
     dataClass: "customer" as const,
     managedAIResidency: "eu" as const,
     orgAIConfig: null,
@@ -2591,7 +2639,7 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(classifyAIError(caught)).toBe("output_invalid");
     expect(providerRequests).toHaveLength(2);
     expect(outcomeLogs()).toEqual([
-      { result: "failed", rung: "fallback_skipped", issueTypes: "number" },
+      { result: "failed", rung: "fallback_model", issueTypes: "number" },
     ]);
     // The outcome line carries paths and types, never the model's values.
     expect(JSON.stringify(logs.records)).not.toContain("three");
@@ -2645,6 +2693,7 @@ describe("a chat run a caller consumes itself", () => {
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
         admission: NO_ORGANIZATION_MODEL_DISPATCH,
+        userId: null,
         model: testModel,
         adapter: testModel.adapter,
         messages: [{ role: "user", content: "Hello" }],
@@ -2705,6 +2754,7 @@ describe("an unrepaired structured answer falls back once within the approved se
   const options = {
     admission: NO_ORGANIZATION_MODEL_DISPATCH,
     organizationId: null,
+    userId: null,
     orgAIConfig,
     caching: noCaching,
     dataClass: "customer",
@@ -2773,6 +2823,7 @@ describe("an unrepaired structured answer falls back once within the approved se
     const resolutions: ResolveOptions[] = [];
     const result = await admitModelDispatch({
       organizationId,
+      userId: null,
       actionKind: "templates.fill",
       organizationStateDb: testOrganizationStateDb,
       signal: new AbortController().signal,
@@ -2796,7 +2847,7 @@ describe("an unrepaired structured answer falls back once within the approved se
           },
         }),
     });
-    expect(result).toEqual({ answer: "ok", page: 3 });
+    expect(result.unwrap()).toEqual({ answer: "ok", page: 3 });
     expect(resolutions).toHaveLength(2);
     expect(resolutions[1]?.modelId).toStartWith("openai::");
     expect(providerRequests[2]?.messages).toEqual(
@@ -3007,6 +3058,7 @@ const OBJECT_OPTIONS = {
   admission: NO_ORGANIZATION_MODEL_DISPATCH,
   caching: noCaching,
   organizationId: null,
+  userId: null,
   dataClass: "customer",
   managedAIResidency: "eu",
   orgAIConfig: null,
@@ -3156,6 +3208,7 @@ describe("a generation bounded by its own deadline", () => {
       deadlineMs: 40,
       finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
@@ -3238,6 +3291,7 @@ describe("a generation bounded by its own deadline", () => {
       deadlineMs: 40,
       finishPolicy: "require-complete",
       organizationId: null,
+      userId: null,
       admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",

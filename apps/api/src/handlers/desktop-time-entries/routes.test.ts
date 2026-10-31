@@ -1,11 +1,16 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
-import Elysia from "elysia";
+
+import { createTestState } from "@stll/test-state";
 
 import { timeEntries } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import type { RouteEntry } from "@/api/http/route";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   authorizedMemberRole,
   sessionMemberRole,
@@ -14,7 +19,7 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
-import { createTestState } from "@/api/tests/helpers/test-state";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopMatterCandidatesEndpoint } from "./candidates";
@@ -26,6 +31,9 @@ const testState = createTestState({ file: import.meta.path, config: env });
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 const ORGANIZATION_ID = "org_test";
 const USER_ID = "user_test";
+const serve = (table: readonly RouteEntry[]) =>
+  serveForTest(createHttpApp({ routes: table, middleware: [errorBoundary] }));
+
 const BODY = {
   dateWorked: new Date().toISOString().slice(0, 10),
   timezoneId: "UTC",
@@ -35,16 +43,23 @@ const BODY = {
 };
 
 test("desktop time entry endpoints require desktop account credentials", async () => {
-  const app = new Elysia().use(desktopTimeEntriesRoute);
+  await using server = serve(desktopTimeEntriesRoute);
   for (const path of [
     "matters",
     "matter-candidates",
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
     "time-entries/batch/status",
+    "time-entries/narrative",
   ]) {
     let body = JSON.stringify(BODY);
-    if (path === "time-entries/batch/status") {
+    if (path === "time-entries/narrative") {
+      body = JSON.stringify({
+        titles: ["Katastr nemovitostí"],
+        locale: "cs-CZ",
+        matterName: null,
+      });
+    } else if (path === "time-entries/batch/status") {
       body = JSON.stringify({ idempotencyKey: "test" });
     } else if (path === "time-entries/batch") {
       body = JSON.stringify({
@@ -52,12 +67,12 @@ test("desktop time entry endpoints require desktop account credentials", async (
         entries: [{ matterId: WORKSPACE_ID, ...BODY }],
       });
     }
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request(
         `http://localhost/v1/desktop/${path}`,
         path.startsWith("time-entries/")
           ? {
-              method: "PUT",
+              method: path === "time-entries/narrative" ? "POST" : "PUT",
               headers: { "content-type": "application/json" },
               body,
             }
@@ -188,20 +203,16 @@ const exercise = async ({
   const matters = createDesktopMattersEndpoint(authorizeAccount);
   const candidateEndpoint =
     createDesktopMatterCandidatesEndpoint(authorizeAccount);
-  const endpointApp = new Elysia({ normalize: false })
-    .get("/v1/desktop/matter-candidates", candidateEndpoint.handler, {
-      response: candidateEndpoint.config.response,
-    })
-    .put("/v1/desktop/time-entries/:workspaceId", create.handler, {
-      body: create.config.body,
-      params: create.config.params,
-      response: create.config.response,
-    })
-    .get("/v1/desktop/matters", matters.handler, {
-      query: matters.config.query,
-      response: matters.config.response,
-    });
-  const app = new Elysia().use(endpointApp);
+  await using server = serve(
+    routes(
+      {
+        "/matter-candidates": { GET: candidateEndpoint },
+        "/time-entries/:workspaceId": { PUT: create },
+        "/matters": { GET: matters },
+      },
+      { prefix: "/v1/desktop" },
+    ),
+  );
   testState.setConfig("FEATURE_TIME_BILLING", true);
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline":
@@ -222,7 +233,7 @@ const exercise = async ({
   if (candidates) {
     url = "http://localhost/v1/desktop/matter-candidates";
   }
-  const response = await app.handle(
+  const response = await server.fetch(
     new Request(
       url,
       picker || candidates

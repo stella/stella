@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { RELATION_TYPES } from "@stll/boe";
 import type { RelationType } from "@stll/boe";
@@ -9,18 +9,18 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
-const paramsSchema = t.Object({
-  lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
+const paramsSchema = v.object({
+  lawId: v.pipe(v.string(), v.regex(/^BOE-[A-Z]-\d{4}-\d+$/u)),
 });
 
-const querySchema = t.Object({
-  relationType: t.Optional(
-    t.Union([
-      t.Literal(RELATION_TYPES.all),
-      t.Literal(RELATION_TYPES.modifies),
-      t.Literal(RELATION_TYPES.modifiedBy),
-      t.Literal(RELATION_TYPES.derogates),
-      t.Literal(RELATION_TYPES.derogatedBy),
+const querySchema = v.object({
+  relationType: v.optional(
+    v.union([
+      v.literal(RELATION_TYPES.all),
+      v.literal(RELATION_TYPES.modifies),
+      v.literal(RELATION_TYPES.modifiedBy),
+      v.literal(RELATION_TYPES.derogates),
+      v.literal(RELATION_TYPES.derogatedBy),
     ]),
   ),
 });

@@ -11,11 +11,16 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
-import { Button } from "@stll/ui/button";
 import { CircleUserRoundIcon, PanelLeftIcon } from "@stll/ui/icons";
+import { InspectorRailIconButton } from "@stll/ui/inspector";
+import { matterChromeStyle } from "@stll/ui/matter-colors";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceShell } from "@stll/ui/workspace-shell";
 
+import {
+  appSidebarSurfaceProps,
+  UNTINTED_APP_SIDEBAR_SURFACE,
+} from "@/components/app-sidebar-surface";
 import { resolveFeedbackChannel } from "@/components/feedback-dialog.logic";
 import { FeedbackSidebarItem } from "@/components/feedback-sidebar-item";
 import { PublicInspectorRail } from "@/components/public-inspector-rail";
@@ -26,10 +31,10 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarHeader,
+  sidebarIdentityTriggerClassName,
   SidebarMenu,
   SidebarMenuBadge,
   SidebarMenuButton,
-  sidebarIdentityTriggerClassName,
   SidebarMenuItem,
   SidebarProvider,
   SidebarToggleHotkey,
@@ -39,6 +44,7 @@ import {
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useHydrationSafeHotkeyPlatform } from "@/hooks/use-hydration-safe-hotkey-platform";
 import { usePublicShellInboxEntryEnabled } from "@/hooks/use-inbox-preview";
@@ -46,7 +52,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
@@ -107,8 +113,8 @@ export const PublicWorkspaceShell = ({
   topBar,
 }: PublicWorkspaceShellProps) => {
   const authStatus = useClientAuthStatus();
-  const createMatterDialogOpen = useCreateMatterStore(
-    (state) => state.dialog.status === "open",
+  const createMatterDialogMounted = useCreateMatterStore(
+    (state) => state.dialog.status !== "closed",
   );
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
   const requestAuth = (redirectTo: string) => {
@@ -122,62 +128,70 @@ export const PublicWorkspaceShell = ({
     }
 
     navigate({ to: "/chat/new" }).catch((error: unknown) => {
-      getAnalytics().captureError(error);
+      getAnalytics().captureError(error, {
+        fingerprintKey: "PublicWorkspaceShell.openChat:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PublicWorkspaceShell.openChat:failure",
+        },
+      });
     });
   };
 
   const defaultInspector = <PublicInspectorRail onActivate={openChat} />;
 
   const shell = (
-    <PublicSignInRequestContext value={requestAuth}>
-      <SidebarProvider>
-        <SidebarToggleHotkey />
-        <WorkspaceShell
-          endDock={inspector ?? defaultInspector}
-          navigation={{
-            content: authStatus.isAuthenticated ? (
-              <Suspense
-                fallback={
-                  <PublicSidebar
-                    authStatus={authStatus}
-                    requestAuth={requestAuth}
-                  />
-                }
-              >
-                <AppSidebar />
-              </Suspense>
-            ) : (
-              <PublicSidebar
-                authStatus={authStatus}
-                requestAuth={requestAuth}
+    <div className="contents" style={matterChromeStyle(null)}>
+      <PublicSignInRequestContext value={requestAuth}>
+        <SidebarProvider>
+          <SidebarToggleHotkey />
+          <WorkspaceShell
+            endDock={inspector ?? defaultInspector}
+            navigation={{
+              content: authStatus.isAuthenticated ? (
+                <Suspense
+                  fallback={
+                    <PublicSidebar
+                      authStatus={authStatus}
+                      requestAuth={requestAuth}
+                    />
+                  }
+                >
+                  <AppSidebar surface={UNTINTED_APP_SIDEBAR_SURFACE} />
+                </Suspense>
+              ) : (
+                <PublicSidebar
+                  authStatus={authStatus}
+                  requestAuth={requestAuth}
+                />
+              ),
+              mode: "responsive",
+            }}
+            topBar={() => topBar}
+          >
+            {content ?? <Outlet />}
+          </WorkspaceShell>
+          {authRedirectTo !== null && (
+            <Suspense fallback={null}>
+              <SignInDialog
+                onOpenChange={(open) => {
+                  if (!open) {
+                    setAuthRedirectTo(null);
+                  }
+                }}
+                open
+                redirectTo={authRedirectTo}
               />
-            ),
-            mode: "responsive",
-          }}
-          topBar={() => topBar}
-        >
-          {content ?? <Outlet />}
-        </WorkspaceShell>
-        {authRedirectTo !== null && (
-          <Suspense fallback={null}>
-            <SignInDialog
-              onOpenChange={(open) => {
-                if (!open) {
-                  setAuthRedirectTo(null);
-                }
-              }}
-              open
-              redirectTo={authRedirectTo}
-            />
-          </Suspense>
-        )}
-        {authStatus.isAuthenticated && createMatterDialogOpen && (
-          <Suspense fallback={null}>
-            <CreateMatterDialog />
-          </Suspense>
-        )}
-      </SidebarProvider>
-    </PublicSignInRequestContext>
+            </Suspense>
+          )}
+          {authStatus.isAuthenticated && createMatterDialogMounted && (
+            <Suspense fallback={null}>
+              <CreateMatterDialog />
+            </Suspense>
+          )}
+        </SidebarProvider>
+      </PublicSignInRequestContext>
+    </div>
   );
 
   if (authStatus.isAuthenticated) {
@@ -204,6 +218,7 @@ const PublicSidebar = ({
     select: (state) => state.location.href,
   });
   const { toggleSidebar } = useSidebar();
+  const mounted = useHasMounted();
   const sidebarLayout = useSidebarLayout();
   const isCollapsed = sidebarLayout === "rail";
   const feedbackChannel = resolveFeedbackChannel(authStatus.status);
@@ -222,7 +237,7 @@ const PublicSidebar = ({
   // gate is isomorphic, and anyone rendering this shell passed it.
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxEntryEnabled,
-    includePublicLaw: isPublicLawSsrRouteEnabled(),
+    includePublicLaw: isPublicLawEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
     includeTimesheets: false,
     publicKnowledge: isPublicKnowledgeEnabled(),
@@ -253,11 +268,11 @@ const PublicSidebar = ({
 
   return (
     <Sidebar
+      {...appSidebarSurfaceProps(UNTINTED_APP_SIDEBAR_SURFACE)}
       aria-label={t("navigation.toggleSidebar")}
-      className="border-sidebar-border"
       collapsible="icon"
     >
-      <SidebarHeader className="border-sidebar-border h-12 border-b p-0">
+      <SidebarHeader className="h-12 border-b p-0">
         <div
           className={cn(
             isCollapsed
@@ -266,16 +281,20 @@ const PublicSidebar = ({
           )}
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
-          <Button
-            aria-label={t("navigation.toggleSidebar")}
-            className="size-7"
-            onClick={toggleSidebar}
-            size="icon"
-            variant="muted"
+          {/* The inspector's toggle primitive, so both pane toggles share
+              one size and ink (a `Button` dims its icon to 80%). */}
+          <Tooltip
+            content={t("navigation.toggleSidebar")}
+            render={
+              <InspectorRailIconButton
+                aria-label={t("navigation.toggleSidebar")}
+                disabled={!mounted}
+                onClick={toggleSidebar}
+              />
+            }
           >
             <PanelLeftIcon className="size-4" />
-            <span className="sr-only">{t("navigation.toggleSidebar")}</span>
-          </Button>
+          </Tooltip>
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -331,7 +350,13 @@ const PublicSidebar = ({
                     onClick={() => {
                       if (authStatus.isAuthenticated) {
                         navigate({ to: item.to }).catch((error: unknown) => {
-                          getAnalytics().captureError(error);
+                          getAnalytics().captureError(error, {
+                            fingerprintKey: "PublicSidebar:failure",
+                            scope: {
+                              type: "handler",
+                              handlerId: "PublicSidebar:failure",
+                            },
+                          });
                         });
                         return;
                       }

@@ -21,23 +21,26 @@
 import { panic } from "better-result";
 
 import {
-  CHAT_CORPUS_HREF_PREFIX,
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatSourceScopeKindOfHref,
+  isChatSourceScopeKind,
   isEntityKind,
-  parseChatCorpusHref,
-  parseChatCorpusId,
   parseChatDecisionPassageHref,
   parseChatResourceHref,
+  parseChatSourceScopeHref,
+  parseChatSourceScopeId,
   RESOURCE_TYPE,
   resourceRef,
   SKILL_REF_HREF_PREFIX,
-  toChatCorpusHref,
   toChatMentionResourceHref,
   toChatResourceHref,
+  toChatSourceScopeHref,
 } from "@stll/api-contract";
 import type {
+  BusinessRegistrySlug,
   ChatCorpusScope,
   ChatMentionResourceHref,
+  ChatSourceScope,
   EntityKind,
 } from "@stll/api-contract";
 import type { CaseLawDecisionRouteParams } from "@stll/api-contract/case-law-decision-route";
@@ -77,7 +80,33 @@ export type ChatReference =
   | { type: "skill"; slug: string; label: string }
   | { type: "user"; userId: string; label: string }
   /** A public corpus the turn is scoped to ("@Case law · Czechia"). */
-  | { type: "corpus"; scope: ChatCorpusScope; label: string };
+  | { type: "corpus"; scope: ChatCorpusScope; label: string }
+  /** A business registry the turn is scoped to ("@ARES"). */
+  | { type: "registry"; registry: BusinessRegistrySlug; label: string }
+  /** One of the user's MCP connectors the turn is scoped to. */
+  | { type: "connector"; connector: string; label: string };
+
+/** A source chip's scope as the reference it renders. */
+const sourceReference = (
+  scope: ChatSourceScope,
+  label: string,
+): ChatReference => {
+  switch (scope.kind) {
+    case "corpus":
+      return {
+        type: "corpus",
+        scope: { corpus: scope.corpus, country: scope.country },
+        label,
+      };
+    case "registry":
+      return { type: "registry", registry: scope.registry, label };
+    case "connector":
+      return { type: "connector", connector: scope.connector, label };
+    default:
+      scope satisfies never;
+      return panic(`Unhandled source scope: ${String(scope)}`);
+  }
+};
 
 /** What a source string resolved to: a reference, a reference the server
  * marked unresolvable (renders as its plain label), or not a reference. */
@@ -110,7 +139,7 @@ export const isReferenceHref = (href: string): boolean =>
   href.startsWith(LEGACY_ENTITY_REF_PREFIX) ||
   href.startsWith(LEGACY_MATTER_REF_PREFIX) ||
   href.startsWith(SKILL_REF_HREF_PREFIX) ||
-  href.startsWith(CHAT_CORPUS_HREF_PREFIX);
+  chatSourceScopeKindOfHref(href) !== null;
 
 type HrefContext = {
   /** The matter the surface renders in, for an entity href that names none. */
@@ -174,11 +203,11 @@ export const referenceFromHref = (
     });
   }
 
-  if (href.startsWith(CHAT_CORPUS_HREF_PREFIX)) {
-    const scope = parseChatCorpusHref(href);
+  if (chatSourceScopeKindOfHref(href) !== null) {
+    const scope = parseChatSourceScopeHref(href);
     return scope === null
       ? { type: "unresolved" }
-      : asReference({ type: "corpus", scope, label });
+      : asReference(sourceReference(scope, label));
   }
 
   if (href.startsWith(SKILL_REF_HREF_PREFIX)) {
@@ -295,6 +324,10 @@ export const referenceFromMentionAttrs = (
   if (id === null) {
     return null;
   }
+  if (isChatSourceScopeKind(category)) {
+    const scope = parseChatSourceScopeId(category, id);
+    return scope === null ? null : sourceReference(scope, label);
+  }
   switch (category) {
     case "workspace":
       return { type: "matter", matterId: id, label };
@@ -305,10 +338,6 @@ export const referenceFromMentionAttrs = (
         paragraph: null,
         label,
       };
-    case "corpus": {
-      const scope = parseChatCorpusId(id);
-      return scope === null ? null : { type: "corpus", scope, label };
-    }
     case "entity": {
       const kind = attrs["kind"];
       return {
@@ -354,6 +383,10 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
   if (id === null || category === null) {
     return null;
   }
+  if (isChatSourceScopeKind(category)) {
+    const scope = parseChatSourceScopeId(category, id);
+    return scope === null ? null : toChatSourceScopeHref(scope);
+  }
   switch (category) {
     case "workspace":
       return toChatResourceHref({
@@ -371,10 +404,6 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
           id: toSafeId<"caseLawDecision">(id),
         }),
       });
-    case "corpus": {
-      const scope = parseChatCorpusId(id);
-      return scope === null ? null : toChatCorpusHref(scope);
-    }
     case "entity": {
       const sourceWorkspaceId = readString(attrs, "sourceWorkspaceId");
       return sourceWorkspaceId === null
@@ -423,6 +452,8 @@ export type ReferenceGlyph =
   | { type: "decision" }
   | { type: "skill" }
   | { type: "corpus"; corpus: ChatCorpusScope["corpus"] }
+  | { type: "registry" }
+  | { type: "connector" }
   | { type: "user"; name: string; image: string | null; deleted: boolean };
 
 export type ReferenceMatterColor =
@@ -559,6 +590,14 @@ export const resolveReferenceVisual = (
         matter: { type: "none" },
         label: reference.label,
       };
+    case "registry":
+    case "connector":
+      return {
+        type: "chip",
+        glyph: { type: reference.type },
+        matter: { type: "none" },
+        label: reference.label,
+      };
     case "user":
       // Only people the viewer's organization lists get a person chip; any
       // other id stays the plain text the message already shows.
@@ -595,6 +634,8 @@ export const referenceMatterId = (reference: ChatReference): string | null => {
     case "decision":
     case "skill":
     case "corpus":
+    case "registry":
+    case "connector":
     case "user":
       return null;
     default:

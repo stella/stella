@@ -1,8 +1,9 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: a download the publisher does not serve is reported as an unread item; built decisions are unchanged.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type { Document as FolioDocument } from "@stll/docx-core/model";
 /**
@@ -66,6 +67,31 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  fetchWithRetry,
+  rethrowCycleStop,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import {
+  huBhgyHeaderLabelsOf,
+  parseHuBhgyDecision,
+} from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
+import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
+import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  absentDecisionTextFields,
+  checkedDecisionMetadata,
+  presentTextField,
+  TEXT_ABSENCE_REASON,
+} from "@/api/lib/case-law/decision-text";
+import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { errorTag } from "@/api/lib/errors/utils";
+import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import {
   defineSourceAdapter,
   EMPTY_AST,
@@ -74,13 +100,13 @@ import {
   excludedSourceSurface,
   isPersistableSourceDocumentId,
   readStoredRawListing,
-  storedSourceSurface,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
+  sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   EmptyAst,
   IngestionResult,
@@ -98,33 +124,8 @@ import type {
   SyncPage,
   UnreadListedItem,
   UnreadOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import {
-  fetchWithRetry,
-  rethrowCycleStop,
-} from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import {
-  huBhgyHeaderLabelsOf,
-  parseHuBhgyDecision,
-} from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import type { HuBhgyHeaderLabel } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import { arrayOrEmpty } from "@/api/lib/array";
-import {
-  TEXT_ABSENCE_REASON,
-  absentDecisionTextFields,
-  checkedDecisionMetadata,
-  presentTextField,
-} from "@/api/lib/case-law/decision-text";
-import { readOutcomeOfStatus } from "@/api/lib/errors/read-outcome";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { parseScannedDocx } from "@/api/lib/file-scan/document-parsers";
-import { publisherDocument } from "@/api/lib/file-scan/publisher-document";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { readRtf, isRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+} from "@/api/lib/legal-search/ingestion-types";
+import { isRtf, readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -1007,7 +1008,8 @@ export const huBhgyRawPartsOf = (
   ...(document === undefined
     ? {}
     : {
-        [RAW_PART.DOCUMENT]: Buffer.from(document.bytes).toString("base64"),
+        // parser-output-unchanged: [hu-bhgy] toBase64() emits the same padded base64 as toString("base64").
+        [RAW_PART.DOCUMENT]: Buffer.from(document.bytes).toBase64(),
         [RAW_PART.DOCUMENT_CONTENT_TYPE]: document.contentType,
       }),
 });

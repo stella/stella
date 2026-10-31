@@ -2,6 +2,10 @@ import { createContext, use } from "react";
 
 import { panic } from "better-result";
 
+import type {
+  ConnectConnectorDecision,
+  ConnectConnectorOutput,
+} from "@stll/api-contract/chat-connector";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 
 import type {
@@ -62,6 +66,18 @@ type ChatApprovalContextValue = {
     toolCallId: string,
     receipt: RequestSecretOutput,
   ) => PromiseLike<void>;
+  /**
+   * Reports what the user did on a connector card. The server answers
+   * `connected` only for a stored, usable connection and refuses otherwise.
+   */
+  handleConnectConnector: (
+    toolCallId: string,
+    decision: ConnectConnectorDecision,
+  ) => PromiseLike<ConnectConnectorOutput>;
+  continueConnectConnector: (
+    toolCallId: string,
+    receipt: ConnectConnectorOutput,
+  ) => PromiseLike<void>;
   secretAvailabilityKey: string;
   resolveSecretTarget: (
     connectorSlug: string,
@@ -69,6 +85,14 @@ type ChatApprovalContextValue = {
   ) => Promise<SecretTargetResolution>;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
   conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
+  /**
+   * Whether the API still holds a stored grant covering `toolName`, read
+   * fresh. A card answers itself on a grant only after this confirms it, so
+   * a grant removed in another session never answers a new card.
+   */
+  confirmStoredApprovalGrant: (
+    toolName: ApprovalToolName,
+  ) => PromiseLike<boolean>;
   /**
    * Optional set of tool names that should be auto-denied (e.g.
    * tools blocked while a specific file overlay is active). Leaves

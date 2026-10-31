@@ -61,19 +61,46 @@ const canonicalDocketArbitraries = {
           `${chamber}. XÝ ${ordinal}/${year.toString().padStart(2, "0")}`,
       ),
   ),
-  EU: fc
+  EU: fc.oneof(
+    fc
+      .tuple(
+        fc.constantFrom("C", "T", "F"),
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 0, max: 99 }),
+        fc.boolean(),
+      )
+      .map(
+        ([court, ordinal, year, appeal]) =>
+          `${court}-${ordinal}/${year.toString().padStart(2, "0")}${
+            appeal ? " P" : ""
+          }`,
+      ),
+    // Numbered before 1989, without a court letter.
+    fc
+      .tuple(fc.integer({ min: 1, max: 9999 }), fc.integer({ min: 0, max: 99 }))
+      .map(
+        ([ordinal, year]) => `${ordinal}/${year.toString().padStart(2, "0")}`,
+      ),
+  ),
+  GBR: fc
     .tuple(
-      fc.constantFrom("C", "T", "F"),
-      fc.integer({ min: 1, max: 9999 }),
-      fc.integer({ min: 0, max: 99 }),
-      fc.boolean(),
+      fc.integer({ min: 1600, max: 2099 }),
+      fc.constantFrom(
+        "UKSC",
+        "UKPC",
+        "UKHL",
+        "EWCA Civ",
+        "EWCA Crim",
+        "EWHC",
+        "UKUT",
+        "UKFTT",
+        "EAT",
+        "EWFC",
+        "EWCOP",
+      ),
+      fc.integer({ min: 1, max: 999_999 }),
     )
-    .map(
-      ([court, ordinal, year, appeal]) =>
-        `${court}-${ordinal}/${year.toString().padStart(2, "0")}${
-          appeal ? " P" : ""
-        }`,
-    ),
+    .map(([year, court, number]) => `[${year}] ${court} ${number}`),
   HUN: fc.oneof(
     fc
       .tuple(
@@ -275,6 +302,35 @@ describe("declared decision docket grammars", () => {
     );
   });
 
+  test("a Court of Justice case numbered before 1989 is read only under the EU scope", () => {
+    // The Court numbered its cases without a letter until the Court of First
+    // Instance was set up, and a stored row keeps the docket as printed.
+    const scoped = (docket: string) =>
+      parseDecisionDocket(docket, { grammar: DECISION_DOCKET_GRAMMARS.EU });
+    for (const [docket, formatted] of [
+      ["120/78", "120/78"],
+      ["8/55", "8/55"],
+      ["Case 302/87", "302/87"],
+      ["věc 6/64", "6/64"],
+    ] as const) {
+      const parsed = scoped(docket);
+      expect([docket, parsed?.formatted]).toEqual([docket, formatted]);
+      expect(storedDecisionDocketOf(formatted, "EU")).toEqual({
+        type: "canonical",
+        caseNumber: formatted,
+      });
+    }
+    // The letter names another case: `C-120/78` never keys as `120/78`.
+    expect(scoped("120/78")?.canonical).not.toBe(scoped("C-120/78")?.canonical);
+    // Bare, any number over a two-digit year: never claimed unscoped.
+    for (const text of ["120/78", "Case 302/87", "1/20"]) {
+      expect(parseDecisionDocket(text)?.jurisdiction, text).not.toBe("EU");
+    }
+    for (const text of ["120/1978", "120/7", "C120/78", "120/78 P", "/78"]) {
+      expect(scoped(text), text).toBeNull();
+    }
+  });
+
   test("a bare number or prose is not a United States docket", () => {
     for (const text of [
       "1",
@@ -369,6 +425,44 @@ describe("declared decision docket grammars", () => {
   }
 });
 
+describe("British neutral citations", () => {
+  test("court-specific divisions reject malformed and foreign citations", () => {
+    for (const raw of [
+      "2024 UKSC 12",
+      "[24] UKSC 12",
+      "[2024] UKSC 0",
+      "[2024] UKSC -12",
+      "[2024] UKSC 12 (KB)",
+      "[2024] EWCA 12",
+      "[2024] EWCA Admin 12",
+      "[2024] EWHC 123 (IAC)",
+      "[2024] EWHC 123 (Unknown)",
+      "[2024] EWHC 123 KB",
+      "[2024] EWHC 123 (KB) extra",
+      "[2024] CSIH 12",
+      "[2024] NICA 12",
+      "[2024] UKSC 12/13",
+    ]) {
+      expect(DECISION_DOCKET_GRAMMARS.GBR.parse(raw), raw).toBeNull();
+    }
+  });
+
+  test("EWHC division metadata remains formatted but leaves the identity key", () => {
+    const citations = DECISION_DOCKET_GRAMMAR_FIXTURES.GBR.filter(
+      ({ canonical }) => canonical === "[2024] EWHC 123",
+    ).flatMap(({ variants }) => variants);
+    expect(citations.length).toBe(14);
+    for (const citation of citations) {
+      expect(DECISION_DOCKET_GRAMMARS.GBR.parse(citation)).toEqual({
+        jurisdiction: "GBR",
+        formatted: citation,
+        canonical: "[2024]ewhc123",
+        filingYear: { type: "none-in-format" },
+      });
+    }
+  });
+});
+
 describe("Slovak Constitutional Court dockets", () => {
   const grammar = DECISION_DOCKET_GRAMMARS.SVK;
 
@@ -388,6 +482,7 @@ describe("Slovak Constitutional Court dockets", () => {
         jurisdiction: "SVK",
         formatted,
         canonical,
+        filingYear: grammar.filingYear(typed),
       });
     }
   });

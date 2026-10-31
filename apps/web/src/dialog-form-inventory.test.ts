@@ -1,13 +1,17 @@
 import { expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import * as ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 import {
   containsJsxTag,
   sourceFileIndex,
 } from "@stll/scripts/src/source-file-index";
+import {
+  type Node,
+  type ParsedSource,
+  walk as walkSyntax,
+} from "@stll/scripts/src/syntax-tree";
 
 const SOURCE_ROOT = import.meta.dirname;
 const DESKTOP_SOURCE_ROOT = path.resolve(SOURCE_ROOT, "../../desktop/src");
@@ -26,26 +30,22 @@ const EDITABLE_CONTROLS = new Set([
 type Component = {
   key: string;
   file: string;
-  node: ts.Node;
-  source: ts.SourceFile;
+  node: Node;
+  source: ParsedSource;
   tags: Set<string>;
   dialogChildren: Set<string>;
   imports: Map<string, { file: string; name: string }>;
   hasDirtySignal: boolean;
 };
 
-const jsxTags = (node: ts.Node, source: ts.SourceFile): Set<string> => {
+const jsxTags = (node: Node, source: ParsedSource): Set<string> => {
   const tags = new Set<string>();
-  const visit = (current: ts.Node) => {
-    if (
-      ts.isJsxOpeningElement(current) ||
-      ts.isJsxSelfClosingElement(current)
-    ) {
-      tags.add(current.tagName.getText(source));
+  const visit = (current: Node): undefined => {
+    if (current.type === "JSXOpeningElement") {
+      tags.add(source.sourceText.slice(current.name.start, current.name.end));
     }
-    ts.forEachChild(current, visit);
   };
-  visit(node);
+  walkSyntax(node, visit);
   return tags;
 };
 
@@ -61,7 +61,7 @@ const isEditableControl = (component: Component, tag: string) => {
 
 const inventory = () => {
   const components = new Map<string, Component>();
-  const dialogHosts: ts.Node[] = [];
+  const dialogHosts: Node[] = [];
   for (const entry of [
     ...sourceFileIndex(SOURCE_ROOT),
     ...sourceFileIndex(DESKTOP_SOURCE_ROOT),
@@ -75,64 +75,55 @@ const inventory = () => {
     const sourceRoot = file.startsWith(DESKTOP_SOURCE_ROOT)
       ? DESKTOP_SOURCE_ROOT
       : SOURCE_ROOT;
-    const source = entry.sourceFile(false);
+    const source = entry.sourceFile();
     const imports = new Map<string, { file: string; name: string }>();
-    for (const statement of source.statements) {
-      if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
-      ) {
+    for (const statement of source.program.body) {
+      if (statement.type !== "ImportDeclaration") {
         continue;
       }
-      const specifier = statement.moduleSpecifier.text;
-      const bindings = statement.importClause?.namedBindings;
-      if (specifier.startsWith("@stll/ui/")) {
-        if (bindings && ts.isNamedImports(bindings)) {
-          for (const binding of bindings.elements) {
-            imports.set(binding.name.text, {
-              file: specifier,
-              name: binding.propertyName?.text ?? binding.name.text,
-            });
-          }
+      const specifier = statement.source.value;
+      let resolved = specifier;
+      if (!specifier.startsWith("@stll/ui/")) {
+        if (!specifier.startsWith("@/") && !specifier.startsWith(".")) {
+          continue;
         }
-        continue;
+        const stem = specifier.startsWith("@/")
+          ? path.join(sourceRoot, specifier.slice(2))
+          : path.resolve(path.dirname(file), specifier);
+        const filename = [stem, `${stem}.tsx`, `${stem}.ts`].find((candidate) =>
+          existsSync(candidate),
+        );
+        if (!filename) {
+          continue;
+        }
+        resolved = filename;
       }
-      if (!specifier.startsWith("@/") && !specifier.startsWith(".")) {
-        continue;
-      }
-      const stem = specifier.startsWith("@/")
-        ? path.join(sourceRoot, specifier.slice(2))
-        : path.resolve(path.dirname(file), specifier);
-      const resolved = [stem, `${stem}.tsx`, `${stem}.ts`].find((filename) =>
-        existsSync(filename),
-      );
-      if (!resolved) {
-        continue;
-      }
-      if (bindings && ts.isNamedImports(bindings)) {
-        for (const binding of bindings.elements) {
-          imports.set(binding.name.text, {
+      for (const binding of statement.specifiers) {
+        if (binding.type === "ImportSpecifier") {
+          imports.set(binding.local.name, {
             file: resolved,
-            name: binding.propertyName?.text ?? binding.name.text,
+            name:
+              binding.imported.type === "Identifier"
+                ? binding.imported.name
+                : binding.imported.value,
           });
         }
-      }
-      if (statement.importClause?.name) {
-        imports.set(statement.importClause.name.text, {
-          file: resolved,
-          name: "default",
-        });
+        if (
+          binding.type === "ImportDefaultSpecifier" &&
+          !specifier.startsWith("@stll/ui/")
+        ) {
+          imports.set(binding.local.name, { file: resolved, name: "default" });
+        }
       }
     }
-    const add = (name: string, node: ts.Node) => {
+    const add = (name: string, node: Node) => {
       const dialogChildren = new Set<string>();
       let hasDirtySignal = false;
-      const visit = (current: ts.Node) => {
-        if (
-          ts.isJsxOpeningElement(current) ||
-          ts.isJsxSelfClosingElement(current)
-        ) {
-          const primitive = imports.get(current.tagName.getText(source));
+      const visit = (current: Node): undefined => {
+        if (current.type === "JSXOpeningElement") {
+          const primitive = imports.get(
+            source.sourceText.slice(current.name.start, current.name.end),
+          );
           if (
             primitive?.file === "@stll/ui/dialog" &&
             primitive.name === "DialogFormState"
@@ -144,20 +135,30 @@ const inventory = () => {
               primitive.name === "Form") ||
               (primitive?.file === "@stll/ui/dialog" &&
                 primitive.name === "Dialog")) &&
-            current.attributes.properties.some(
+            current.attributes.some(
               (attribute) =>
-                ts.isJsxAttribute(attribute) &&
-                attribute.name.getText(source) === "dirty",
+                attribute.type === "JSXAttribute" &&
+                source.sourceText.slice(
+                  attribute.name.start,
+                  attribute.name.end,
+                ) === "dirty",
             )
           ) {
             hasDirtySignal = true;
           }
         }
-        const root = ts.isJsxElement(current)
-          ? imports.get(current.openingElement.tagName.getText(source))
-          : undefined;
+        const root =
+          current.type === "JSXElement"
+            ? imports.get(
+                source.sourceText.slice(
+                  current.openingElement.name.start,
+                  current.openingElement.name.end,
+                ),
+              )
+            : undefined;
         if (
-          ts.isJsxElement(current) &&
+          current.type === "JSXElement" &&
+          !current.openingElement.selfClosing &&
           root?.file === "@stll/ui/dialog" &&
           root.name === "Dialog"
         ) {
@@ -166,9 +167,8 @@ const inventory = () => {
             dialogChildren.add(tag);
           }
         }
-        ts.forEachChild(current, visit);
       };
-      visit(node);
+      walkSyntax(node, visit);
       const key = `${sourceRoot === DESKTOP_SOURCE_ROOT ? "desktop/" : ""}${repoRelativePath(sourceRoot, file)}#${name}`;
       components.set(`${file}#${name}`, {
         key,
@@ -181,27 +181,32 @@ const inventory = () => {
         hasDirtySignal,
       });
     };
-    for (const statement of source.statements) {
-      if (ts.isVariableStatement(statement)) {
-        for (const declaration of statement.declarationList.declarations) {
+    for (const exported of source.program.body) {
+      const statement =
+        exported.type === "ExportNamedDeclaration" ||
+        exported.type === "ExportDefaultDeclaration"
+          ? exported.declaration
+          : exported;
+      if (statement?.type === "VariableDeclaration") {
+        for (const declaration of statement.declarations) {
           if (
-            ts.isIdentifier(declaration.name) &&
-            declaration.initializer &&
-            (ts.isArrowFunction(declaration.initializer) ||
-              ts.isFunctionExpression(declaration.initializer))
+            declaration.id.type === "Identifier" &&
+            declaration.init &&
+            (declaration.init.type === "ArrowFunctionExpression" ||
+              declaration.init.type === "FunctionExpression")
           ) {
-            add(declaration.name.text, declaration.initializer);
+            add(declaration.id.name, declaration.init);
           }
         }
       }
-      if (ts.isFunctionDeclaration(statement) && statement.name) {
-        add(statement.name.text, statement);
+      if (statement?.type === "FunctionDeclaration" && statement.id) {
+        add(statement.id.name, statement);
       }
       if (
-        ts.isExportAssignment(statement) &&
-        ts.isIdentifier(statement.expression)
+        exported.type === "ExportDefaultDeclaration" &&
+        exported.declaration.type === "Identifier"
       ) {
-        const existing = components.get(`${file}#${statement.expression.text}`);
+        const existing = components.get(`${file}#${exported.declaration.name}`);
         if (existing) {
           components.set(`${file}#default`, existing);
         }
@@ -227,33 +232,38 @@ const inventory = () => {
       if (component.hasDirtySignal) {
         continue;
       }
-      const visit = (node: ts.Node) => {
+      const visit = (node: Node): undefined => {
         if (
-          (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-          node.attributes.properties.some(
+          node.type === "JSXOpeningElement" &&
+          node.attributes.some(
             (attribute) =>
-              ts.isJsxAttribute(attribute) &&
-              attribute.name.getText(component.source) === "dirty",
+              attribute.type === "JSXAttribute" &&
+              component.source.sourceText.slice(
+                attribute.name.start,
+                attribute.name.end,
+              ) === "dirty",
           )
         ) {
           const target = resolve(
             component,
-            node.tagName.getText(component.source),
+            component.source.sourceText.slice(node.name.start, node.name.end),
           );
           if (target?.hasDirtySignal) {
             component.hasDirtySignal = true;
             propagation.changed = true;
           }
         }
-        ts.forEachChild(node, visit);
       };
-      visit(component.node);
+      walkSyntax(component.node, visit);
     }
   }
   const owners = new Map<string, Component>();
   const visited = new Set<string>();
   const walk = (component: Component, tags: Set<string>) => {
-    const source = component.node.getText(component.source);
+    const source = component.source.sourceText.slice(
+      component.node.start,
+      component.node.end,
+    );
     const hasForm =
       component.hasDirtySignal ||
       tags.has("form") ||
@@ -279,11 +289,14 @@ const inventory = () => {
   }
   // A reusable dialog shell receives its form as JSX children at its caller.
   for (const component of components.values()) {
-    const visit = (node: ts.Node) => {
-      if (ts.isJsxElement(node)) {
+    const visit = (node: Node): undefined => {
+      if (node.type === "JSXElement" && !node.openingElement.selfClosing) {
         const target = resolve(
           component,
-          node.openingElement.tagName.getText(component.source),
+          component.source.sourceText.slice(
+            node.openingElement.name.start,
+            node.openingElement.name.end,
+          ),
         );
         if (target && target.dialogChildren.size > 0) {
           const children = new Set<string>();
@@ -297,9 +310,8 @@ const inventory = () => {
           }
         }
       }
-      ts.forEachChild(node, visit);
     };
-    visit(component.node);
+    walkSyntax(component.node, visit);
   }
   return {
     owners,

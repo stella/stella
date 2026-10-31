@@ -673,11 +673,7 @@ const resolveModelTargets = (specs: readonly string[]): ModelTarget[] =>
 // --------------- Scoring ---------------
 
 type FieldOutcome =
-  | "correct"
-  | "wrong"
-  | "hallucinated"
-  | "missing"
-  | "schema-violation";
+  "correct" | "wrong" | "hallucinated" | "missing" | "schema-violation";
 
 type FieldGrade = {
   key: string;
@@ -929,6 +925,7 @@ const runTask = async ({
     organizationId: EVAL_ORGANIZATION_ID,
     // An offline evaluation runs no admission: it mints the proof itself.
     admission: admitFixtureModelDispatch({
+      userId: null,
       organizationId: EVAL_ORGANIZATION_ID,
       actionKind: "workflow.background",
       modelTier: MANAGED_MODEL_TIER.standard,
@@ -953,7 +950,7 @@ const runTask = async ({
     };
   }
 
-  const output = result.value;
+  const output = result.value.output;
   const fields = task.properties.map((fixture) => gradeField(fixture, output));
   return {
     modelId,

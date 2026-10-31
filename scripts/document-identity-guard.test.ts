@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import path from "node:path";
 
 import {
   checkDocumentIdentitySources,
-  readDocumentIdentitySources,
+  missingRequiredSurfaces,
+  REQUIRED_DOCUMENT_IDENTITY_SURFACES,
+  undetectedBadgeRemovals,
 } from "./document-identity-guard";
 
 const OWNER = "packages/ui/src/components/document-identity-badge.tsx";
@@ -201,29 +202,6 @@ describe("document identity ownership guard", () => {
     },
   );
 
-  test("every requested surface fails when shared badge rendering is removed from the component graph", () => {
-    const sources = readDocumentIdentitySources(
-      path.resolve(import.meta.dir, ".."),
-    );
-    const baseline = checkDocumentIdentitySources(sources);
-    expect(baseline.violations).toEqual([]);
-    const mutated = new Map(
-      [...sources].map(([filename, source]) => [
-        filename,
-        source.includes("<DocumentIdentityBadge")
-          ? `${source.replaceAll("<DocumentIdentityBadge", "<UnsharedDocumentIdentityBadge")}
-              const UnsharedDocumentIdentityBadge = ({ identity }) =>
-                identity.kind === "decision"
-                  ? <span>{identity.courtAbbreviation}</span>
-                  : <span>{identity.number}/{identity.year}</span>;`
-          : source,
-      ]),
-    );
-    const result = checkDocumentIdentitySources(mutated);
-    expect(result.surfaces).toEqual(baseline.surfaces);
-    expect(result.violations).toEqual(baseline.surfaces);
-  }, 30_000);
-
   test.each(["panic", "failInvariant"])(
     "a never-returning %s branch renders no identity",
     (name) => {
@@ -296,22 +274,50 @@ describe("document identity ownership guard", () => {
     },
   );
 
-  test("every discovered repository document row or rail reaches the shared badge", () => {
-    const sources = readDocumentIdentitySources(
-      path.resolve(import.meta.dir, ".."),
+  test("reports no required surfaces missing when every fixture surface is present", () => {
+    expect(
+      missingRequiredSurfaces(
+        { surfaces: [...REQUIRED_DOCUMENT_IDENTITY_SURFACES] },
+        REQUIRED_DOCUMENT_IDENTITY_SURFACES,
+      ),
+    ).toEqual([]);
+  });
+
+  test("reports the required surface removed from fixture discovery", () => {
+    const removed = REQUIRED_DOCUMENT_IDENTITY_SURFACES[5];
+    const surfaces = REQUIRED_DOCUMENT_IDENTITY_SURFACES.filter(
+      (surface) => surface !== removed,
     );
-    const result = checkDocumentIdentitySources(sources);
-    expect(result.surfaces.length).toBeGreaterThan(0);
-    expect(result.violations).toEqual([]);
-    for (const surface of [
-      "apps/web/src/features/statutes/statute-inspector-registration.tsx#StatuteRailIcon",
-      "apps/web/src/features/statutes/components/statute-search-results.tsx#StatuteSearchResults",
-      "apps/web/src/components/search-dialog-results.tsx#SearchHitIcon",
-      "apps/web/src/components/search-dialog-results.tsx#RecentFileIcon",
-      "apps/web/src/features/case-law/components/decision-cells.tsx#CaseNumberCell",
-      "packages/mcp-apps/src/case-law-results/view.tsx#ResultTableRow",
-    ]) {
-      expect(result.surfaces).toContain(surface);
-    }
+
+    expect(
+      missingRequiredSurfaces(
+        { surfaces },
+        REQUIRED_DOCUMENT_IDENTITY_SURFACES,
+      ),
+    ).toEqual([removed]);
+  });
+
+  test.each(Object.entries(ROWS))(
+    "reports removing the shared badge from a discovered %s",
+    (_name, row) => {
+      const sources = fixture(
+        "apps/web/src/features/statutes/new-results.tsx",
+        IMPORT + row,
+      );
+      const { surfaces } = checkDocumentIdentitySources(sources);
+      expect(surfaces).toHaveLength(1);
+      expect(undetectedBadgeRemovals(sources, surfaces)).toEqual([]);
+    },
+  );
+
+  test("names a discovered surface whose badge removal goes unreported", () => {
+    const sources = fixture(
+      "apps/web/src/features/statutes/new-results.tsx",
+      IMPORT + ROWS.statute,
+    );
+    const unreported = "apps/web/src/features/statutes/elsewhere.tsx#Elsewhere";
+    expect(undetectedBadgeRemovals(sources, [unreported])).toEqual([
+      unreported,
+    ]);
   });
 });

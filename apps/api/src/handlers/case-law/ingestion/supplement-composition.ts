@@ -28,16 +28,16 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
-import type {
-  DecisionSupplementTarget,
-  EmptyAst,
-  IngestionResult,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
 import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
+import type {
+  DecisionSupplementTarget,
+  EmptyAst,
+  IngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 

@@ -14,9 +14,9 @@ import {
   FEEDBACK_FALLBACK_AREA,
   FEEDBACK_KIND_LABEL_KEYS,
   feedbackReceiptSchema,
-  ROUTE_AREA_PATTERNS,
   resolveFeedbackArea,
   resolveFeedbackChannel,
+  ROUTE_AREA_PATTERNS,
 } from "@/components/feedback-dialog.logic";
 
 describe("feedback channel for the session", () => {

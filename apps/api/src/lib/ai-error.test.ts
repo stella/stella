@@ -16,9 +16,12 @@ import {
 import * as BedrockRuntime from "@aws-sdk/client-bedrock-runtime";
 import { describe, expect, test } from "bun:test";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+
 import {
-  classifyAIError,
+  aiHandlerError,
   classifyAIBoundaryFailure,
+  classifyAIError,
   isAnticipatedAIFailure,
   isUnanticipatedAIFailure,
   providerStatusCode,
@@ -33,7 +36,9 @@ import {
   ModelDeadlineExceededError,
   ModelOutputIncompleteError,
   ModelOutputInvalidError,
+  ModelOutputModeratedError,
   ModelRunError,
+  ModelRunUnfinishedError,
 } from "@/api/lib/errors/provider-call-error";
 import {
   AIGenerationCancelledError,
@@ -84,6 +89,43 @@ const providerErrorBody = (code: number, status: string) =>
       status,
     },
   }) satisfies Record<string, unknown>;
+
+describe("AI REST failure codes", () => {
+  const model = { provider: "google", keySource: "byok" } as const;
+  const cases = [
+    [apiCallError(429), "quota_exhausted", 429],
+    [apiCallError(402), "provider_billing", 402],
+    [apiCallError(401), "provider_credentials_rejected", 502],
+    [apiCallError(404), "model_unavailable", 502],
+    [apiCallError(503), "provider_unavailable", 502],
+    [new ModelRunUnfinishedError({ model }), "provider_stream_incomplete", 502],
+    [new ModelOutputIncompleteError({ model }), "output_incomplete", 502],
+    [new ModelOutputModeratedError({ model }), "output_moderated", 502],
+    [new ModelOutputInvalidError({ model }), "output_invalid", 502],
+    [
+      new ModelDeadlineExceededError({ deadlineMs: 1 }),
+      "deadline_exceeded",
+      502,
+    ],
+    [new ChatLoopDetectedError({ message: "loop" }), "loop_detected", 502],
+    [
+      new ChatEmptyCompletionError({ message: "empty" }),
+      "empty_completion",
+      502,
+    ],
+    [new Error("unknown"), "unknown", 500],
+  ] as const;
+
+  test.each(cases)("maps %s to %s", (error, kind, status) => {
+    const result = aiHandlerError(error, {
+      status: 500,
+      message: "AI failed",
+    });
+
+    expect(result.status).toBe(status);
+    expect(result.code).toBe(AI_FAILURE_CODES[kind]);
+  });
+});
 
 describe("classifyAIError", () => {
   test("classifies configured provider availability errors consistently", () => {
@@ -142,6 +184,7 @@ describe("classifyAIError", () => {
       cause: apiCallError(404),
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("model_unavailable");
@@ -206,6 +249,7 @@ describe("classifyAIError", () => {
       cause: apiCallError(401),
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("provider_credentials_rejected");
@@ -247,6 +291,7 @@ describe("classifyAIError", () => {
     const error = new HandlerError({
       message: "generation failed",
       status: 502,
+      code: "internal_error",
     });
 
     expect(classifyAIError(error)).toBe("unknown");
@@ -350,6 +395,7 @@ describe("isAnticipatedAIFailure", () => {
     for (const status of SERVER_STATUS_CODES) {
       const error = new HandlerError({
         status,
+        code: "internal_error",
         message: `failed with ${status}`,
       });
       const kind = classifyAIError(error);
@@ -376,6 +422,7 @@ describe("isAnticipatedAIFailure", () => {
     // service constructed carries no provider status to classify by.
     const cancelled = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation was cancelled",
       cause: new AIGenerationCancelledError({
         message: "AI generation was cancelled",
@@ -394,6 +441,7 @@ describe("isAnticipatedAIFailure", () => {
     // quietly absorb every wrapped server-side failure.
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "generation failed",
       cause: new Error("stream ended before completion"),
     });
@@ -445,6 +493,7 @@ describe("providerStatusFields", () => {
   test("does not read a HandlerError's service status as provider code", () => {
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "generation failed",
     });
 
@@ -510,17 +559,18 @@ describe("providerStatusFields", () => {
     // substring: every fixture here embeds the status in its message, so a
     // helper that leaked the message would still satisfy a "does not contain"
     // check against any one literal.
-    for (const [error, status] of [
-      [apiCallError(503), "503"],
-      [tanStackProviderError(429), "429"],
-      [providerErrorBody(404, "NOT_FOUND"), "404"],
+    for (const [error, status, reason] of [
+      [apiCallError(503), "503", "unclassified"],
+      [tanStackProviderError(429), "429", "unclassified"],
+      [providerErrorBody(404, "NOT_FOUND"), "404", "unclassified"],
       // The wrapper's fixed 502 would report an outage for an unmapped
       // provider status; the code it carries is the one the classifier read.
-      [wrappedRunError(403), "403"],
+      [wrappedRunError(403), "403", "tagged_failure"],
     ] as const) {
       expect(providerStatusFields(error)).toEqual({
         "error.provider.status": status,
         ...UNCLASSIFIED_SHADOW,
+        "failure.shadow_reason": reason,
       });
     }
   });
@@ -533,13 +583,18 @@ describe("isUnanticipatedAIFailure", () => {
     const cases: unknown[] = [
       new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "AI generation was cancelled",
         cause: new AIGenerationCancelledError({
           message: "AI generation was cancelled",
         }),
       }),
       new HandlerError({ status: 403, message: "no key for role" }),
-      new HandlerError({ status: 502, message: "generation failed" }),
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "generation failed",
+      }),
       new ChatEmptyCompletionError({ message: "no content" }),
       apiCallError(429),
       new Error("stream ended before completion"),
@@ -558,6 +613,7 @@ describe("isUnanticipatedAIFailure", () => {
     // a generation that genuinely broke.
     const cancelled = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation was cancelled",
       cause: new AIGenerationCancelledError({
         message: "AI generation was cancelled",
@@ -570,6 +626,7 @@ describe("isUnanticipatedAIFailure", () => {
   test("reports a 502 the cancellation tag does not explain", () => {
     const error = new HandlerError({
       status: 502,
+      code: "internal_error",
       message: "AI generation did not complete",
     });
 
@@ -753,19 +810,24 @@ describe("AWS SDK service exceptions", () => {
     // `chat({ outputSchema })` rethrows as `new Error(message, { cause })`;
     // the generation helper answers with a 502 `HandlerError`.
     const wrappers = [
-      new Error(throttled.message, { cause: throttled }),
-      new HandlerError({
-        status: 502,
-        message: throttled.message,
-        cause: throttled,
-      }),
-    ];
+      [new Error(throttled.message, { cause: throttled }), "unclassified"],
+      [
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: throttled.message,
+          cause: throttled,
+        }),
+        "tagged_failure",
+      ],
+    ] as const;
 
-    for (const wrapped of wrappers) {
+    for (const [wrapped, reason] of wrappers) {
       expect(classifyAIError(wrapped)).toBe("quota_exhausted");
       expect(providerStatusFields(wrapped)).toEqual({
         "error.provider.status": "429",
         ...UNCLASSIFIED_SHADOW,
+        "failure.shadow_reason": reason,
       });
     }
   });
@@ -834,7 +896,9 @@ describe("model runs this service names itself", () => {
   test("a bare model run error stays unknown: only a named outcome is named", () => {
     const error = new ModelRunError({ model });
     expect(classifyAIError(error)).toBe("unknown");
-    expect(gradeFailure(readEvidence(error), sink).reason).toBe("unclassified");
+    expect(gradeFailure(readEvidence(error), sink).reason).toBe(
+      "tagged_failure",
+    );
   });
 });
 

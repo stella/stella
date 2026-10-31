@@ -1,6 +1,7 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).
@@ -33,31 +34,6 @@ import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  excludedSourceSurface,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import {
@@ -78,8 +54,8 @@ import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/ad
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   parsePlNsaDecision,
-  plNsaSectionHeading,
   PL_NSA_TEXT_SECTIONS,
+  plNsaSectionHeading,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import type {
   PlNsaSectionTexts,
@@ -97,6 +73,31 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -169,8 +170,7 @@ const SOURCE_NESTED_FIELDS = [
 ] as const;
 
 type SourceField =
-  | (typeof SOURCE_COLUMNS)[number]
-  | (typeof SOURCE_NESTED_FIELDS)[number];
+  (typeof SOURCE_COLUMNS)[number] | (typeof SOURCE_NESTED_FIELDS)[number];
 
 // ── Normalization ────────────────────────────────────────
 
@@ -783,7 +783,12 @@ export const plNsaFinality = (
 
 // ── Case symbols ─────────────────────────────────────────
 
-/** "6110 Podatek od towarów i usług": the court's case symbol and its name. */
+/**
+ * "6110 Podatek od towarów i usług": the court's case symbol and its name.
+ * The name stays as the dataset states it, cut short where it is cut
+ * ("…budowa obiektu, prz"); only its padding (a no-break space beside a
+ * space) is read away, and `asPublished` keeps the label as it stands.
+ */
 const CASE_SYMBOL = /^(?<code>\d{3,4})(?:\s(?<description>.*))?$/u;
 
 export type PlNsaCaseSymbol = {
@@ -796,7 +801,7 @@ const caseSymbol = (asPublished: string): PlNsaCaseSymbol => {
   const groups = CASE_SYMBOL.exec(asPublished.trim())?.groups;
   return {
     code: groups?.["code"] ?? null,
-    description: nonEmpty(groups?.["description"]),
+    description: nonEmpty(groups?.["description"]?.replaceAll(/\s+/gu, " ")),
     asPublished,
   };
 };
@@ -833,7 +838,8 @@ const verbatim = (value: unknown): unknown => {
     return value.toString();
   }
   if (value instanceof Uint8Array) {
-    return Buffer.from(value).toString("base64");
+    // parser-output-unchanged: [pl-nsa] toBase64() emits the same padded base64 as toString("base64").
+    return Buffer.from(value).toBase64();
   }
   if (Array.isArray(value)) {
     return value.map(verbatim);
@@ -1153,7 +1159,7 @@ export const assemblePlNsaDecision = ({
       // above the decision; the source carries no other summary.
       textFields: {
         abstract: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, row.thesis),
+        headnote: sourceTextField(ADAPTER_KEYS.PL_NSA, parsed.thesis),
         legalSentence: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       },

@@ -1,16 +1,14 @@
 import { Result, TaggedError } from "better-result";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   discoverOAuthMetadataForApproval,
-  getOAuthEndpointOrigins,
   endpointsRequiringConfirmation,
+  getOAuthEndpointOrigins,
 } from "@/api/lib/mcp-upstream/oauth";
-import {
-  safeOutboundFetchBytes,
-  validateOutboundFetchTarget,
-} from "@/api/lib/safe-outbound-fetch";
+import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const PROBE_TIMEOUT_MS = 10_000;

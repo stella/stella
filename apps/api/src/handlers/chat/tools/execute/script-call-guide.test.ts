@@ -6,8 +6,8 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   buildScriptCallGuide,
   classifyScriptName,
-  scriptNameMessage,
   type ScriptCallCatalog,
+  scriptNameMessage,
 } from "@/api/handlers/chat/tools/execute/script-call-guide";
 
 const CATALOG = {
@@ -191,6 +191,16 @@ describe("a tool this chat does not offer", () => {
 });
 
 describe("any other undefined name", () => {
+  test("does not suggest near matches for a long name", () => {
+    const name = "x".repeat(10_000);
+    const startedAt = performance.now();
+    expect(classifyScriptName(name, CATALOG)).toEqual({
+      kind: "unknown",
+      name,
+    });
+    expect(performance.now() - startedAt).toBeLessThan(50);
+  });
+
   test("keeps the script's own error", () => {
     for (const name of ["result", "matters", "x", "window", "_"]) {
       expect(classifyScriptName(name, CATALOG).kind).toBe("unknown");

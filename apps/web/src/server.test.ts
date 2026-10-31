@@ -142,6 +142,8 @@ test("document status determines the final response policy", async () => {
     expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
     expect(response.headers.get("X-Robots-Tag")).toBe("noindex");
     expect(response.headers.get(SSR_STATUS_HEADER)).toBeNull();
+    // An unread SSR body keeps its lifetime timer; release it with the test.
+    await response.body?.cancel();
   }
 });
 

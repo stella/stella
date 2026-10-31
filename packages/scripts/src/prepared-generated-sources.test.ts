@@ -2,10 +2,10 @@ import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
   lstatSync,
-  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readlinkSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -15,18 +15,22 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
+import { createTestState } from "@stll/test-state";
 
 import { ciGeneratedFiles } from "./generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  hasPreparedGeneratedSources,
+  preparedGeneratedFile,
+  preparedManifestPath,
   requireUnchangedGeneratedInputs,
+  restorePreparedGeneratedSources,
   validatePreparedManifest,
   verifyPreparedGeneratedFiles,
-  restorePreparedGeneratedSources,
-  preparedManifestPath,
-  hasPreparedGeneratedSources,
 } from "./prepared-generated-sources";
+
+const state = createTestState({ file: import.meta.path, config: {} });
 
 const fixture = () => {
   const root = realpathSync(
@@ -38,7 +42,7 @@ const fixture = () => {
     writeFileSync(destination, bytes);
   };
   write(
-    "node_modules/typescript/package.json",
+    "node_modules/typescript6/package.json",
     JSON.stringify({ version: "test-compiler" }),
   );
   write("input.ts", "export const input = 1;\n");
@@ -81,6 +85,15 @@ const fixture = () => {
   };
   return { root, write, manifest };
 };
+
+test("the identity names the TypeScript 6 compiler the generators run on", () => {
+  const { root, manifest } = fixture();
+  try {
+    expect(manifest.compilerVersion).toBe("test-compiler");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("every prepared output has required identity and byte coverage", () => {
   const { root, manifest, write } = fixture();
@@ -246,21 +259,20 @@ test("restore validates the whole artifact before any writes and restores every 
 
 test("regeneration keeps its concrete file diff after a verified handoff is cleared", () => {
   const { root, manifest, write } = fixture();
-  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
   try {
     write(
       ".cache/ci-generated-sources/manifest.json",
       JSON.stringify(manifest),
     );
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
     expect(hasPreparedGeneratedSources(root)).toBe(true);
     write("input.ts", "export const input = 2;\n");
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "Generated source artifact does not match this source and toolchain",
     );
-    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = "";
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", "");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
     const drift = Bun.spawnSync(
       ["git", "diff", "--exit-code", "--", "input.ts"],
@@ -273,29 +285,60 @@ test("regeneration keeps its concrete file diff after a verified handoff is clea
     expect(drift.stdout.toString()).toContain("+export const input = 2;");
     expect(drift.stderr.toString()).not.toContain("artifact");
   } finally {
-    if (previous === undefined) {
-      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
-    } else {
-      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
-    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// It never reads CI_GENERATED_SOURCES_MANIFEST, so a regeneration guard that
+// cleared the handoff cannot hide the producer's printout.
+test("a prepared file is offered only for the recorded inputs and bytes", () => {
+  const { root, manifest, write } = fixture();
+  const [file] = ciGeneratedFiles(root);
+  if (file === undefined) {
+    panic("Fixture has no generated outputs");
+  }
+  try {
+    // No manifest on disk.
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    expect(
+      Buffer.from(preparedGeneratedFile(root, file) ?? []).toString("utf-8"),
+    ).toBe(`prepared:${file}\n`);
+    // A file the manifest does not name.
+    expect(preparedGeneratedFile(root, "input.ts")).toBeUndefined();
+    // Bytes on disk no longer those the producer recorded.
+    write(file, "rewritten\n");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write(file, `prepared:${file}\n`);
+    expect(preparedGeneratedFile(root, file)).toBeDefined();
+    // Source inputs changed since the producer ran.
+    write("input.ts", "export const input = 2;\n");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+    write("input.ts", "export const input = 1;\n");
+    // A malformed manifest offers nothing rather than failing.
+    write(".cache/ci-generated-sources/manifest.json", "{");
+    expect(preparedGeneratedFile(root, file)).toBeUndefined();
+  } finally {
     rmSync(root, { recursive: true, force: true });
   }
 });
 
 test("configured preparation fails closed and an ordinary checkout generates locally", () => {
   const { root, manifest, write } = fixture();
-  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
   try {
-    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    state.deleteEnv("CI_GENERATED_SOURCES_MANIFEST");
     expect(hasPreparedGeneratedSources(root)).toBe(false);
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = path.join(
-      root,
-      "other.json",
+    state.setEnv(
+      "CI_GENERATED_SOURCES_MANIFEST",
+      path.join(root, "other.json"),
     );
     expect(() => hasPreparedGeneratedSources(root)).toThrow(
       "must belong to this checkout",
     );
-    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    state.setEnv("CI_GENERATED_SOURCES_MANIFEST", preparedManifestPath(root));
     expect(() => hasPreparedGeneratedSources(root)).toThrow("ENOENT");
     write(
       ".cache/ci-generated-sources/manifest.json",
@@ -310,11 +353,6 @@ test("configured preparation fails closed and an ordinary checkout generates loc
       "Prepared generated source differs",
     );
   } finally {
-    if (previous === undefined) {
-      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
-    } else {
-      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
-    }
     rmSync(root, { recursive: true, force: true });
   }
 });

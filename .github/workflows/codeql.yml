@@ -59,7 +59,7 @@ jobs:
       || (github.event.pull_request.draft != true
           && (startsWith(github.event.pull_request.head.ref, 'chore/release-')
               || startsWith(github.event.pull_request.head.ref, 'changeset-release/')))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
@@ -97,7 +97,8 @@ jobs:
       always()
       && needs.scope.result != 'skipped'
       && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: read

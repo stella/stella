@@ -72,6 +72,15 @@ const MARKER_ONLY_SOURCE =
 // ── Content completeness ────────────────────────────────────
 
 describe("validateAst", () => {
+  test("paragraph input validates extracted text without interpreting it as HTML", () => {
+    const result = validateAst(
+      { type: "paragraphs", paragraphs: ["alpha <missingword> omega"] },
+      [makeBlock({ plainText: "alpha omega" })],
+    );
+
+    expect(result.stats.missingWords).toContain("missingword");
+  });
+
   // A view that changes more than whitespace could hide a real loss, so it is
   // ignored and the source words decide.
   test("a comparison override that changes words is ignored", () => {

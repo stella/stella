@@ -1,5 +1,9 @@
 import { toSafeId } from "@/api/lib/branded-types";
-import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
+import {
+  corpusAppliedProjection,
+  type CorpusProjectionRevision,
+} from "@/api/lib/legal-search/corpus-index-revision-clause";
 
 const assigned = new Map<string, CorpusProjectionRevision>();
 
@@ -19,3 +23,17 @@ export const testRevisionsFor = (
   candidates: readonly { id: string }[],
 ): ReadonlyMap<string, CorpusProjectionRevision> =>
   new Map(candidates.map(({ id }) => [id, testRevisionOf(id)]));
+
+/** The applied manifest and revision a ranker reports for these candidates. */
+export const testAppliedProjectionsFor = (
+  candidates: readonly { id: string }[],
+) =>
+  new Map(
+    candidates.map(({ id }) => [
+      id,
+      corpusAppliedProjection(
+        CORPUS_INDEX_MANIFESTS.case_law_v9,
+        testRevisionOf(id),
+      ),
+    ]),
+  );

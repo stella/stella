@@ -3,18 +3,31 @@ import { Result } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { SEARCH_PAGINATION_COMPLETE } from "@stll/api-contract/search";
+import { cents } from "@stll/money";
 
+import { BILLING_STATUS, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { encryptContent } from "@/api/lib/content-encryption";
-import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
   isMcpEgressPlan,
   type McpEgressPlan,
   type McpToolResponse,
 } from "@/api/mcp/tool-types";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
+import {
+  invoiceDetailRowFixture,
+  invoiceListRowFixture,
+} from "@/api/tests/helpers/invoice-tool-fixtures";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+
+beforeEach(() => {
+  anonymizeTextFieldsMock.mockClear();
+  loadOrgAIConfigMock.mockClear();
+});
 
 /**
  * Registry-driven canary corpus over the MCP anonymized surface (plan 049,
@@ -176,20 +189,6 @@ const chainableRows = (rows: readonly unknown[]): ChainableRows => {
 };
 
 /**
- * A `tx.select` stand-in for a join query with no page limit, terminating at
- * `.where()` (the compat `search` tool's fetchable-entity join). Mirrors
- * `chainableRows` but with an awaitable terminal `.where()` instead of
- * `.limit()`.
- */
-const chainableJoinRows = (rows: readonly unknown[]) => ({
-  from: () => ({
-    innerJoin: () => ({
-      leftJoin: () => ({ where: async () => rows }),
-    }),
-  }),
-});
-
-/**
  * A `tx.select` stand-in for `list_time_entries`, whose handler runs two
  * distinct select queries against one scopedDb double inside a single call:
  * the entries page (terminates at `.limit()`), then a join resolving each
@@ -238,13 +237,15 @@ const buildContext = ({
   tx = {},
   workspaceIds = ["00000000-0000-4000-8000-0000000a0001"],
 }: {
-  memberRole?: McpRequestContext["memberRole"];
+  memberRole?: AuthorizedMcpRequestContext["memberRole"];
   organizationId?: string;
   tx?: unknown;
   workspaceIds?: readonly string[];
-} = {}): McpRequestContext => {
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
-  return {
+} = {}): AuthorizedMcpRequestContext => {
+  const { safeDb, scopedDb } = createScopedDbMock(tx, {
+    authorizedWorkspaceIds: workspaceIds,
+  });
+  return authorizedMcpContextForTest({
     accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
     accessibleWorkspaceIdSet: new Set(workspaceIds),
     accessibleWorkspaceStatusById: new Map(
@@ -256,6 +257,8 @@ const buildContext = ({
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),
     testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
       // The canary is about tenant text leaving the pipeline. `search` also
       // asks the public corpus, whose hits carry no tenant text at all, so
@@ -299,7 +302,7 @@ const buildContext = ({
     scopedDb,
     userId: toSafeId<"user">("user_1"),
     userEmail: "standard@example.test",
-  };
+  });
 };
 
 const parseResultText = (result: CallToolResult): string => {
@@ -312,7 +315,7 @@ const parseResultText = (result: CallToolResult): string => {
 
 /** Runs a handler's response through the real anonymized egress pipeline. */
 const finalize = async (
-  context: McpRequestContext,
+  context: AuthorizedMcpRequestContext,
   response: McpToolResponse,
 ) => await finalizeMcpEgress({ context, mode: "anonymized", response });
 
@@ -396,12 +399,14 @@ describe("MCP anonymization canary corpus", () => {
       status: "active",
       client: null,
     });
-    readOverviewHandlerMock.mockResolvedValue({
-      entityCount: 0,
-      documentCount: 0,
-      taskCount: 0,
-      recentEntities: [],
-    });
+    readOverviewHandlerMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 0,
+        documentCount: 0,
+        taskCount: 0,
+        recentEntities: [],
+      }),
+    );
     readWorkspaceMembersHandlerMock.mockResolvedValue([]);
     readWorkspaceContactsHandlerMock.mockResolvedValue(
       Result.ok({
@@ -470,15 +475,42 @@ describe("MCP anonymization canary corpus", () => {
       totalCount: 1,
     });
     const tx = {
-      query: { organizationSettings: { findFirst: async () => undefined } },
-      select: () =>
-        chainableJoinRows([
-          {
-            entityId: "00000000-0000-4000-8000-0000000e0001",
-            workspaceId: "00000000-0000-4000-8000-0000000a0001",
-            fieldId: "field_1",
-          },
-        ]),
+      query: {
+        organizationSettings: { findFirst: async () => undefined },
+        extractedContent: {
+          findMany: async () => [
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              workspaceId: "00000000-0000-4000-8000-0000000a0001",
+              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+              sourceEntityVersionId: "ver_current",
+              sourceFieldId: "field_1",
+              sourceFileId: "file_current",
+              sourceSha256Hex: "a".repeat(64),
+              entity: {
+                name: titleSeed,
+                workspace: { status: "active" },
+                versions: [{ id: "ver_current" }],
+                currentVersion: {
+                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                  deletedAt: null,
+                  id: "ver_current",
+                  fields: [
+                    {
+                      id: "field_1",
+                      content: {
+                        type: "file",
+                        id: "file_current",
+                        sha256Hex: "a".repeat(64),
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
     };
     const context = buildContext({ tx });
 
@@ -502,15 +534,40 @@ describe("MCP anonymization canary corpus", () => {
       query: {
         entities: { findFirst: async () => null },
         extractedContent: {
-          findFirst: async () => ({
-            charCount: textSeed.length,
-            ciphertext: extracted.ciphertext,
-            iv: extracted.iv,
-            entity: {
-              name: titleSeed,
+          findMany: async () => [
+            {
+              charCount: textSeed.length,
+              ciphertext: extracted.ciphertext,
+              iv: extracted.iv,
+              entityId: "00000000-0000-4000-8000-0000000e0001",
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
+              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+              sourceEntityVersionId: "ver_current",
+              sourceFieldId: "field_current",
+              sourceFileId: "file_current",
+              sourceSha256Hex: "a".repeat(64),
+              entity: {
+                name: titleSeed,
+                workspace: { status: "active" },
+                versions: [{ id: "ver_current" }],
+                currentVersion: {
+                  createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                  deletedAt: null,
+                  id: "ver_current",
+                  fields: [
+                    {
+                      id: "field_current",
+                      content: {
+                        type: "file",
+                        id: "file_current",
+                        sha256Hex: "a".repeat(64),
+                      },
+                    },
+                  ],
+                },
+              },
             },
-          }),
+          ],
         },
       },
     };
@@ -595,34 +652,36 @@ describe("MCP anonymization canary corpus", () => {
         status: "active",
         client: { displayName: clientNameSeed },
       });
-      readOverviewHandlerMock.mockResolvedValue({
-        entityCount: 1,
-        documentCount: 1,
-        taskCount: 0,
-        recentEntities: [
-          {
-            entityId: "00000000-0000-4000-8000-0000000e0001",
-            name: recentNameSeed,
-            kind: "document",
-            status: null,
-            priority: null,
-            dueDate: null,
-            mimeType: null,
-            fieldId: null,
-            propertyId: null,
-            pdfFileId: null,
-            encrypted: false,
-            createdAt: "2026-01-01T00:00:00.000Z",
-            updatedAt: null,
-            createdBy: createdBySeed,
-            createdByImage: null,
-            createdByDeletedAt: null,
-            assignedTo: assignedToSeed,
-            assignedToImage: null,
-            assignedToDeletedAt: null,
-          },
-        ],
-      });
+      readOverviewHandlerMock.mockResolvedValue(
+        Result.ok({
+          entityCount: 1,
+          documentCount: 1,
+          taskCount: 0,
+          recentEntities: [
+            {
+              entityId: "00000000-0000-4000-8000-0000000e0001",
+              name: recentNameSeed,
+              kind: "document",
+              status: null,
+              priority: null,
+              dueDate: null,
+              mimeType: null,
+              fieldId: null,
+              propertyId: null,
+              pdfFileId: null,
+              encrypted: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: null,
+              createdBy: createdBySeed,
+              createdByImage: null,
+              createdByDeletedAt: null,
+              assignedTo: assignedToSeed,
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+        }),
+      );
       readWorkspaceContactsHandlerMock.mockResolvedValue(
         Result.ok({
           contacts: [
@@ -750,15 +809,37 @@ describe("MCP anonymization canary corpus", () => {
             }),
           },
           extractedContent: {
-            findFirst: async () => ({
-              ciphertext: extracted.ciphertext,
-              extractedAt: new Date("2026-01-02T00:00:00.000Z"),
-              iv: extracted.iv,
-              sourceEntityVersionId: "ver_current",
-              sourceFieldId: "field_current",
-              sourceFileId: "file_current",
-              sourceSha256Hex: "a".repeat(64),
-            }),
+            findMany: async () => [
+              {
+                ciphertext: extracted.ciphertext,
+                extractedAt: new Date("2026-01-02T00:00:00.000Z"),
+                iv: extracted.iv,
+                sourceEntityVersionId: "ver_current",
+                sourceFieldId: "field_current",
+                sourceFileId: "file_current",
+                sourceSha256Hex: "a".repeat(64),
+                entity: {
+                  name: nameSeed,
+                  workspace: { status: "active" },
+                  versions: [{ id: "ver_current" }],
+                  currentVersion: {
+                    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+                    deletedAt: null,
+                    id: "ver_current",
+                    fields: [
+                      {
+                        id: "field_current",
+                        content: {
+                          type: "file",
+                          id: "file_current",
+                          sha256Hex: "a".repeat(64),
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
           },
           entityVersions: {
             findFirst: async () => ({ id: "ver_current" }),
@@ -1438,8 +1519,10 @@ describe("MCP anonymization canary corpus", () => {
       const tx = {
         select: () =>
           chainableRows([
-            {
+            invoiceListRowFixture({
               id: "inv_1",
+              clientId: null,
+              matterShare: 1000,
               invoiceNumber: null,
               documentType: "invoice",
               originalInvoiceId: null,
@@ -1449,8 +1532,9 @@ describe("MCP anonymization canary corpus", () => {
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 1000,
+              paidAmount: 0,
               createdAtCursor: new Date("2026-01-01"),
-            },
+            }),
           ]),
       };
       const context = buildContext({ tx });
@@ -1485,6 +1569,9 @@ describe("MCP anonymization canary corpus", () => {
       const exEntityNameSeed = mkSeed(tool, 8);
       const lineDescriptionSeed = mkSeed(tool, 9);
       const lineUnitSeed = mkSeed(tool, 10);
+      const recordedDescriptionSeed = mkSeed(tool, 19);
+      const recordedUnitSeed = mkSeed(tool, 20);
+      const matterNameSeed = mkSeed(tool, 21);
       const buyerSeeds = {
         buyerName: mkSeed(tool, 11),
         buyerRegistrationId: mkSeed(tool, 12),
@@ -1498,79 +1585,118 @@ describe("MCP anonymization canary corpus", () => {
       const tx = {
         query: {
           invoices: {
-            findFirst: async () => ({
-              id: "00000000-0000-4000-8000-000000020002",
-              workspaceId: "00000000-0000-4000-8000-0000000a0001",
-              invoiceNumber: null,
-              documentType: "invoice",
-              originalInvoiceId: null,
-              reference: referenceSeed,
-              status: "draft",
-              invoiceDate: "2026-01-01",
-              dueDate: "2026-02-01",
-              currency: "EUR",
-              totalAmount: 2000,
-              netAmount: 100,
-              vatAmount: 21,
-              notes: notesSeed,
-              taxableSupplyDate: "2026-01-01",
-              sellerProfileId: null,
-              ...buyerSeeds,
-              paidAt: null,
-              createdAt: new Date("2026-01-01"),
-              updatedAt: new Date("2026-01-01"),
-              timeEntries: [
-                {
-                  id: "te_1",
-                  workItemId: "00000000-0000-4000-8000-0000000e0001",
-                  dateWorked: "2026-01-01",
-                  billedMinutes: 60,
-                  rateAtEntry: 100,
-                  currency: "EUR",
-                  narrative: teNarrativeSeed,
-                  invoiceNarrative: teInvoiceNarrativeSeed,
-                  status: "invoiced",
-                  workItem: {
-                    id: "00000000-0000-4000-8000-0000000e0001",
-                    name: teEntityNameSeed,
+            findFirst: async () =>
+              invoiceDetailRowFixture({
+                id: toSafeId<"invoice">("00000000-0000-4000-8000-000000020002"),
+                clientId: null,
+                workspaceId: toSafeId<"workspace">(
+                  "00000000-0000-4000-8000-0000000a0001",
+                ),
+                invoiceNumber: null,
+                documentType: "invoice",
+                originalInvoiceId: null,
+                reference: referenceSeed,
+                status: "draft",
+                invoiceDate: "2026-01-01",
+                dueDate: "2026-02-01",
+                currency: "EUR",
+                totalAmount: cents(2000),
+                netAmount: cents(100),
+                vatAmount: cents(21),
+                notes: notesSeed,
+                taxableSupplyDate: "2026-01-01",
+                sellerProfileId: null,
+                ...buyerSeeds,
+                paidAt: null,
+                createdAt: new Date("2026-01-01"),
+                updatedAt: new Date("2026-01-01"),
+                payments: [],
+                timeEntries: [
+                  {
+                    id: toSafeId<"timeEntry">("te_1"),
+                    workspaceId: toSafeId<"workspace">(
+                      "00000000-0000-4000-8000-0000000a0001",
+                    ),
+                    workItemId: toSafeId<"entity">(
+                      "00000000-0000-4000-8000-0000000e0001",
+                    ),
+                    workItemReference: null,
+                    dateWorked: "2026-01-01",
+                    billedMinutes: 60,
+                    rateAtEntry: cents(100),
+                    currency: "EUR",
+                    narrative: teNarrativeSeed,
+                    invoiceNarrative: teInvoiceNarrativeSeed,
+                    status: BILLING_STATUS.BILLED,
+                    noCharge: false,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(
+                        "00000000-0000-4000-8000-0000000e0001",
+                      ),
+                      name: teEntityNameSeed,
+                    },
                   },
-                },
-              ],
-              expenses: [
-                {
-                  id: "ex_1",
-                  matterId: "entity_2",
-                  dateIncurred: "2026-01-01",
-                  amount: 100,
-                  currency: "EUR",
-                  category: "travel",
-                  description: exDescriptionSeed,
-                  invoiceDescription: exInvoiceDescriptionSeed,
-                  billable: true,
-                  markup: 0,
-                  matter: { id: "entity_2", name: exEntityNameSeed },
-                },
-              ],
-              lines: [
-                {
-                  id: "line_1",
-                  position: 0,
-                  description: lineDescriptionSeed,
-                  quantity: "1.0000",
-                  unit: lineUnitSeed,
-                  unitPrice: 100,
-                  vatRateBps: 2100,
-                  vatTreatment: "domestic_vat",
-                  netAmount: 100,
-                  vatAmount: 21,
-                  grossAmount: 121,
-                  source: "manual",
-                  timeEntryId: null,
-                  expenseId: null,
-                  releasedAt: null,
-                },
-              ],
-            }),
+                ],
+                expenses: [
+                  {
+                    id: toSafeId<"expense">("ex_1"),
+                    workspaceId: toSafeId<"workspace">(
+                      "00000000-0000-4000-8000-0000000a0001",
+                    ),
+                    matterId: toSafeId<"entity">("entity_2"),
+                    matterReference: null,
+                    dateIncurred: "2026-01-01",
+                    amount: cents(100),
+                    currency: "EUR",
+                    category: "travel",
+                    description: exDescriptionSeed,
+                    invoiceDescription: exInvoiceDescriptionSeed,
+                    billable: true,
+                    markup: 0,
+                    matter: {
+                      id: toSafeId<"entity">("entity_2"),
+                      name: exEntityNameSeed,
+                    },
+                  },
+                ],
+                lines: [
+                  {
+                    id: toSafeId<"invoiceLine">("line_1"),
+                    workspaceId: toSafeId<"workspace">(
+                      "00000000-0000-4000-8000-0000000a0001",
+                    ),
+                    workspace: {
+                      id: toSafeId<"workspace">(
+                        "00000000-0000-4000-8000-0000000a0001",
+                      ),
+                      name: matterNameSeed,
+                      color: null,
+                    },
+                    recordedDescription: recordedDescriptionSeed,
+                    recordedQuantity: "1",
+                    recordedUnit: recordedUnitSeed,
+                    recordedUnitPrice: cents(100),
+                    recordedNetAmount: cents(100),
+                    position: 0,
+                    description: lineDescriptionSeed,
+                    quantity: "1.0000",
+                    unit: lineUnitSeed,
+                    unitPrice: cents(100),
+                    vatRateBps: 2100,
+                    vatTreatment: "domestic_vat",
+                    exemptionReason: null,
+                    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
+                    netAmount: cents(100),
+                    vatAmount: cents(21),
+                    grossAmount: cents(121),
+                    source: "manual",
+                    timeEntryId: null,
+                    expenseId: null,
+                    releasedAt: null,
+                  },
+                ],
+              }),
           },
         },
       };
@@ -1597,6 +1723,9 @@ describe("MCP anonymization canary corpus", () => {
         exEntityNameSeed,
         lineDescriptionSeed,
         lineUnitSeed,
+        recordedDescriptionSeed,
+        recordedUnitSeed,
+        matterNameSeed,
         ...Object.values(buyerSeeds),
       ];
       expectNoSeedLeak(result, seeds);

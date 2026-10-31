@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import type { LookupRegistryOption } from "@/components/templates/registry-options";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 type BusinessRegistryQueryOptions = {
@@ -24,7 +24,7 @@ export const businessRegistryQueryOptions = ({
       { registry, q: query },
     ],
     queryFn: async ({ signal }) =>
-      unwrapEden(
+      unwrapApiResponse(
         await api.contacts["business-registries"].get({
           query: { registry, q: query },
           fetch: { signal },

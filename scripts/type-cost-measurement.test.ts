@@ -120,7 +120,7 @@ test("compiler measurements only dispatch manually and serialize individual trac
     group: "type-cost-measurement",
     "cancel-in-progress": false,
   });
-  expect(workflow.jobs.measure["runs-on"]).toBe("ubuntu-latest");
+  expect(workflow.jobs.measure["runs-on"]).toBe("ubuntu-24.04");
   expect(workflow.jobs.measure.strategy["max-parallel"]).toBe(1);
   const runs = workflow.jobs.measure.steps
     .flatMap(({ run }) => (run ? [run] : []))

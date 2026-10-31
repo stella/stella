@@ -66,6 +66,7 @@ export type CapabilityCatalogEntry = {
   handlerKind: "workspace" | "root" | "session";
   access: "read" | "write";
   destructive: boolean;
+  confirmation?: "required";
   scope: string;
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
@@ -623,6 +624,9 @@ export const deriveCapabilityLeaf = (
       ...(paginationPart === undefined ? {} : { paginationPart }),
       ...(paginationPart === undefined ? {} : { itemsKey: "items" }),
       destructive: entry.destructive,
+      ...(entry.confirmation === undefined
+        ? {}
+        : { confirmation: entry.confirmation }),
       ...(scope === undefined ? {} : { scope }),
       ...(additionalScopes === undefined || additionalScopes.length === 0
         ? {}

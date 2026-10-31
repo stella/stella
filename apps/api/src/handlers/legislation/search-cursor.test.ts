@@ -142,6 +142,7 @@ test.each(["corpus-index", "pg-fts"] as const)(
       { source: toSafeId<"legislationSource">(DOCUMENT_ID) },
       { dateFrom: "2020-01-01" },
       { dateTo: "2030-01-01" },
+      { asOf: "2027-01-01" },
     ];
     for (const change of changes) {
       const { db, reads } = unreachableDb();

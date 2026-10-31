@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 import { Button } from "@stll/ui/button";
 import {
   CheckIcon,
@@ -27,11 +28,12 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
+import { filterToolsCatalogueEntries } from "@/features/knowledge/views/tools/tools-catalogue-search.logic";
 import type {
   KnowledgeTool,
   ToolsSource,
 } from "@/features/knowledge/views/tools/tools-seam";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
@@ -100,7 +102,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
   children,
 }: ToolsCatalogueViewProps<TTool>) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [filter, setFilter] = useState<ToolsCatalogueKind>(
     initialKind ?? "all",
   );
@@ -112,41 +114,18 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
 
   const entries = source.entries;
 
-  const filtered = (() => {
-    const normalised = query.trim().toLowerCase();
-    const localizedName = (entry: TTool) => {
-      const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
-      return key ? t(key) : entry.displayName;
-    };
-    const subset = entries.filter((entry) => {
-      if (filter !== "all" && entry.kind !== filter) {
-        return false;
-      }
-      if (
-        jurisdictionFilter.size > 0 &&
-        entry.jurisdictions.length > 0 &&
-        !entry.jurisdictions.some((code) => jurisdictionFilter.has(code))
-      ) {
-        return false;
-      }
-      if (normalised === "") {
-        return true;
-      }
-      return (
-        entry.displayName.toLowerCase().includes(normalised) ||
-        localizedName(entry).toLowerCase().includes(normalised) ||
-        entry.description.toLowerCase().includes(normalised) ||
-        entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
-      );
-    });
-    const compareName = compareByLocale(locale);
-    return [...subset].toSorted((left, right) => {
-      if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
-        return left.isRecommendedForOrg ? -1 : 1;
-      }
-      return compareName(localizedName(left), localizedName(right));
-    });
-  })();
+  const localizedName = (entry: TTool) => {
+    const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+    return key ? t(key) : entry.displayName;
+  };
+  const filtered = filterToolsCatalogueEntries({
+    compareName: compareByLocale(locale),
+    entries,
+    filter,
+    jurisdictionFilter,
+    localizedName,
+    query,
+  });
 
   const allJurisdictionCodes = (() => {
     const set = new Set<string>();
@@ -265,11 +244,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
                   </>
                 )}
                 {(() => {
-                  const matches = allJurisdictionCodes.filter((code) =>
-                    code
-                      .toLowerCase()
-                      .includes(jurisdictionQuery.trim().toLowerCase()),
-                  );
+                  const matches = filterBySearchQuery({
+                    items: allJurisdictionCodes,
+                    query: jurisdictionQuery,
+                    fields: (code) => [code],
+                  });
                   if (matches.length === 0) {
                     return (
                       <p className="text-muted-foreground px-2 py-3 text-center text-xs">
@@ -318,10 +297,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
         </ResponsiveActionToolbarItem>
 
         {addAction !== undefined && (
-          <ResponsiveActionToolbarItem
-            className="ms-auto sm:ms-0"
-            slot="action"
-          >
+          <ResponsiveActionToolbarItem slot="action">
             {addAction}
           </ResponsiveActionToolbarItem>
         )}

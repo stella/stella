@@ -5,7 +5,10 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   PUBLIC_LEGISLATION_PAGE_COUNTRIES,
 } from "@stll/api-contract/legislation-publication";
-import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import {
+  publicCountriesFor,
+  type PublicCountrySurface,
+} from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
@@ -19,6 +22,7 @@ export const redistributableLegislationSource =
  * for pages-public countries, a search read only for search-admitted ones.
  */
 const LEGISLATION_COUNTRIES_BY_SURFACE = {
+  identity: publicCountriesFor("legislation", "identity"),
   pages: PUBLIC_LEGISLATION_PAGE_COUNTRIES,
   search: PUBLIC_LEGISLATION_COUNTRIES,
 } as const satisfies Record<PublicCountrySurface, readonly string[]>;

@@ -26,8 +26,6 @@ import {
   relations,
 } from "@/api/db/schema";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -39,9 +37,11 @@ import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -192,14 +192,16 @@ afterAll(async () => {
 });
 
 test("a refreshed decision's citations keep the polarity the rules give", async () => {
-  const ingested = await processDecision({
-    input: decision("hash-first-sight"),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-15T08:00:00.000Z"),
-    observationOrder: 1n,
-    corpus,
-  });
+  const ingested = (
+    await processDecision({
+      input: decision("hash-first-sight"),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-15T08:00:00.000Z"),
+      observationOrder: 1n,
+      corpus,
+    })
+  ).unwrap();
   expect(ingested.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 
   const published = await readCitations();
@@ -228,15 +230,17 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
   // dedup-skipping. Its citations are the rows already stored, so not one of
   // them is rewritten, deleted or even locked: every tuple header survives.
   const headersBefore = await citationTupleHeaders();
-  const refreshed = await processDecision({
-    input: decision("hash-after-the-publisher-touched-it"),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-15T09:00:00.000Z"),
-    observationOrder: 2n,
-    refresh: DECISION_REFRESH.ALWAYS,
-    corpus,
-  });
+  const refreshed = (
+    await processDecision({
+      input: decision("hash-after-the-publisher-touched-it"),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-15T09:00:00.000Z"),
+      observationOrder: 2n,
+      refresh: DECISION_REFRESH.ALWAYS,
+      corpus,
+    })
+  ).unwrap();
   expect(refreshed.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   expect(await citationTupleHeaders()).toEqual(headersBefore);
   expect(await readCitations()).toEqual(published);
@@ -256,15 +260,17 @@ test("a refreshed decision's citations keep the polarity the rules give", async 
     .update(caseLawCitations)
     .set({ polarity: null, polarityRuleId: null })
     .where(eq(caseLawCitations.id, precedent.id));
-  const reclassified = await processDecision({
-    input: decision("hash-after-a-rule-was-retired"),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-15T10:00:00.000Z"),
-    observationOrder: 3n,
-    refresh: DECISION_REFRESH.ALWAYS,
-    corpus,
-  });
+  const reclassified = (
+    await processDecision({
+      input: decision("hash-after-a-rule-was-retired"),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-15T10:00:00.000Z"),
+      observationOrder: 3n,
+      refresh: DECISION_REFRESH.ALWAYS,
+      corpus,
+    })
+  ).unwrap();
   expect(reclassified.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
   const republished = await readCitations();
   expect(
@@ -316,28 +322,30 @@ test("a case recited and then overruled in one section is published as mixed", a
   const rejection =
     "Od závěrů rozsudku sp. zn. 23 Cdo 5068/2014 se velký senát odchyluje.";
   const section = `${recital}${" Další odůvodnění.".repeat(40)}${rejection}`;
-  const ingested = await processDecision({
-    input: plainTextIngestionResult({
-      caseNumber: "31 Cdo 5555/2026",
-      court: "Nejvyšší soud",
-      country: "CZE",
-      language: "cs",
-      decisionType: "rozsudek",
-      metadata: {},
-      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      rawHash: "hash-overruling",
-      fulltext: section,
-      sections: [
-        { index: 0, type: "argumentation", title: null, text: section },
-      ],
-      documentAst: EMPTY_AST,
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-21T08:00:00.000Z"),
-    observationOrder: 3n,
-    corpus,
-  });
+  const ingested = (
+    await processDecision({
+      input: plainTextIngestionResult({
+        caseNumber: "31 Cdo 5555/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        decisionType: "rozsudek",
+        metadata: {},
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: "hash-overruling",
+        fulltext: section,
+        sections: [
+          { index: 0, type: "argumentation", title: null, text: section },
+        ],
+        documentAst: EMPTY_AST,
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-21T08:00:00.000Z"),
+      observationOrder: 3n,
+      corpus,
+    })
+  ).unwrap();
   expect(ingested.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 
   const [row] = await db
@@ -371,18 +379,20 @@ test("a verdict from a rule retired mid-cycle is not published", async () => {
     .where(eq(caseLawPolarityRules.pattern, SROV_PATTERN));
   const retired = await readRule();
 
-  await processDecision({
-    input: plainTextIngestionResult({
-      ...decision("hash-ingested-during-the-reseed"),
-      caseNumber: "30 Cdo 5555/2026",
-    }),
-    sourceId,
-    scopedDb,
-    observedAt: new Date("2026-09-15T11:00:00.000Z"),
-    observationOrder: 4n,
-    polarityRules,
-    corpus,
-  });
+  (
+    await processDecision({
+      input: plainTextIngestionResult({
+        ...decision("hash-ingested-during-the-reseed"),
+        caseNumber: "30 Cdo 5555/2026",
+      }),
+      sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-15T11:00:00.000Z"),
+      observationOrder: 4n,
+      polarityRules,
+      corpus,
+    })
+  ).unwrap();
 
   // The stale cache still matched, and the publish refused the verdict: the
   // sweep that erased this rule's verdicts has already run, and nothing

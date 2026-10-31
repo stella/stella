@@ -6,13 +6,12 @@ import {
   DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-  TEXT_ABSENCE_REASONS,
   type DecisionTextFieldKey,
+  TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
   checkedDecisionMetadata,
@@ -25,6 +24,7 @@ import {
   splitStoredDecisionTextMetadata,
   storeDecisionTextFields,
   storeTextField,
+  TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import {
   MAX_METADATA_URL_DIAGNOSTICS,
@@ -315,6 +315,99 @@ describe("decision text fields", () => {
         ).toEqual(stored);
       }
     }
+  });
+
+  test("a source that publishes no decision date stores a typed marker", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const marker = (status: string) =>
+      storeDecisionTextFields({
+        metadata: { decisionDateAvailability: { status } },
+        textFields,
+      })[DECISION_TEXT_ABSENCE_METADATA_KEY];
+
+    expect(marker("not-published-by-source")).toContainEqual({
+      field: "decisionDate",
+      reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    });
+    expect(marker("published")).not.toContainEqual(
+      expect.objectContaining({ field: "decisionDate" }),
+    );
+    expect(() => marker("unknown")).toThrow(
+      "Decision date availability must carry a source status",
+    );
+  });
+
+  test("a text fidelity marker is stored as stated and checked", () => {
+    const textFields = absentDecisionTextFields(
+      TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+    );
+    const textFidelity = {
+      status: "mismatch",
+      missingChars: 3,
+      extraChars: 0,
+      firstDifferenceAt: 12,
+    };
+    expect(
+      storeDecisionTextFields({ metadata: { textFidelity }, textFields })[
+        "textFidelity"
+      ],
+    ).toEqual(textFidelity);
+    for (const invalid of [
+      { status: "mismatch" },
+      {
+        status: "mismatch",
+        missingChars: -1,
+        extraChars: 0,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 0,
+        extraChars: -2,
+        firstDifferenceAt: 0,
+      },
+      {
+        status: "mismatch",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: -1,
+      },
+      {
+        status: "reordered",
+        missingChars: 1,
+        extraChars: 0,
+        firstDifferenceAt: 4,
+      },
+      {
+        status: "reordered",
+        missingChars: 0,
+        extraChars: 2,
+        firstDifferenceAt: 4,
+      },
+    ]) {
+      expect(() =>
+        storeDecisionTextFields({
+          metadata: { textFidelity: invalid },
+          textFields,
+        }),
+      ).toThrow(
+        "Text fidelity must carry a status, character counts and its first difference",
+      );
+    }
+    const reordered = {
+      status: "reordered",
+      missingChars: 0,
+      extraChars: 0,
+      firstDifferenceAt: 4,
+    };
+    expect(
+      storeDecisionTextFields({
+        metadata: { textFidelity: reordered },
+        textFields,
+      })["textFidelity"],
+    ).toEqual(reordered);
   });
 
   test("preserves stored text when a new parse fails", () => {

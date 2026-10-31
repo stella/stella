@@ -21,13 +21,13 @@ import {
   fields,
   properties,
   workspaceMembers,
-  workspaceViews,
   workspaces,
+  workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
-import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";

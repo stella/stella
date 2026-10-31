@@ -13,19 +13,19 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import type { OpenRouterTextModelOptions } from "@tanstack/ai-openrouter";
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
   AI_PROVIDERS,
-  getModelReasoningCapabilities,
   BYOK_MODEL_OPTIONS,
-  MODEL_TASK_OVERRIDE_GROUP,
-  resolveDefaultModel,
   getModelRate,
+  getModelReasoningCapabilities,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   isChatPdfAttachmentModelSupported,
+  MODEL_TASK_OVERRIDE_GROUP,
+  resolveDefaultModel,
   resolveReasoningEffort,
   shouldEmitTemperature,
   supportsStreamingToolUse,
@@ -34,24 +34,25 @@ import {
 import type {
   AIProvider,
   BYOKProvider,
-  ModelTask,
   ModelOverrideGroup,
+  ModelTask,
   ReasoningEffort,
   ResolvedReasoningEffort,
   TanStackAIProvider,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 import type { ModelDefaultCandidate } from "@stll/ai-catalog/model-defaults-ledger";
+import { AI_FAILURE_CODES } from "@stll/api-contract";
 import { createSha256 } from "@stll/sha256/bun";
 
 import { env } from "@/api/env";
 import {
-  resolveOrgAIModelForTask,
-  normalizeProviderRegion,
   type AIRequestServiceTier,
   type DataRegion,
+  normalizeProviderRegion,
   type OrgAIConfig,
   type OrgAIProviderConfig,
+  resolveOrgAIModelForTask,
 } from "@/api/lib/ai-config";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
@@ -102,8 +103,7 @@ type StellaOpenRouterTextModelOptions = Omit<
   // The request-level prompt-cache marker OpenRouter forwards to Anthropic
   // models; the adapter spreads it into the SDK request, whose type has it.
   cacheControl?:
-    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
-    | undefined;
+    { ttl?: "5m" | "1h" | undefined; type: "ephemeral" } | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -206,8 +206,7 @@ type StellaOpenAITextProviderOptions = Omit<
 };
 
 export type TanStackAIProviderUnsupportedReason =
-  | "provider-not-implemented"
-  | "regional-routing-not-implemented";
+  "provider-not-implemented" | "regional-routing-not-implemented";
 
 export type TanStackAIProviderSupport =
   | { supported: true }
@@ -471,8 +470,7 @@ export const registerTanStackMockTextAdapterFactory = (
  * with the flag still set.
  */
 const activeMockTextAdapterFactory = ():
-  | TanStackTextAdapterFactory
-  | undefined =>
+  TanStackTextAdapterFactory | undefined =>
   env.USE_MOCK_AI === false ? undefined : mockTextAdapterFactory;
 
 /**
@@ -859,6 +857,7 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
     if (!response.stream) {
       throw new HandlerError({
         status: 502,
+        code: "internal_error",
         message: "Bedrock Converse returned no stream.",
       });
     }
@@ -1025,19 +1024,12 @@ const createProviderTextAdapterFactory = (
         options.apiKey === undefined
           ? options.managedOpenRouterCredential
           : undefined;
-      const staticKey = env.OPENROUTER_API_KEY?.trim()
-        ? env.OPENROUTER_API_KEY
-        : undefined;
-      if (
-        options.apiKey === undefined &&
-        staticKey === undefined &&
-        managedCredential === undefined
-      ) {
+      if (options.apiKey === undefined && managedCredential === undefined) {
         throw managedProviderUnavailable("openrouter");
       }
       const key = requireCredential(
         supportedProvider,
-        apiKey ?? staticKey ?? managedCredential?.apiKey,
+        apiKey ?? managedCredential?.apiKey,
         "OPENROUTER_API_KEY",
       );
       if (options.apiKey !== undefined) {
@@ -1048,10 +1040,10 @@ const createProviderTextAdapterFactory = (
             keySource: "byok",
           });
       }
-      const credential =
-        staticKey === undefined && managedCredential !== undefined
-          ? managedCredential
-          : { type: "static" as const, apiKey: key };
+      const credential = managedCredential ?? {
+        type: "static" as const,
+        apiKey: key,
+      };
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
@@ -1092,7 +1084,14 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "google":
       return !!env.GOOGLE_GENERATIVE_AI_API_KEY;
     case "openrouter":
-      return getManagedOpenRouterConfiguration().type !== "unavailable";
+      // Each request dispatches on its own tier's credential; the boot
+      // invariant in env-schema (managedProviderCheckInvariantViolation)
+      // provisions every tier an organization can stand on whenever any
+      // tier is, so one deployment-wide answer holds for each of them.
+      return Object.values(MANAGED_MODEL_TIER).some(
+        (tier) =>
+          getManagedOpenRouterConfiguration(tier).type !== "unavailable",
+      );
     case "openai":
       return !!env.OPENAI_API_KEY;
     case "anthropic":
@@ -1225,6 +1224,7 @@ const byokProviderTaskUnsupportedError = (
   task: ModelTask,
 ): HandlerError<400> =>
   new HandlerError({
+    code: AI_FAILURE_CODES.provider_task_unsupported,
     status: 400,
     message:
       `${provider} is not available for the "${task}" AI task. ` +
@@ -1945,6 +1945,7 @@ export function tanStackModelOptionsForTask(
 
 const byokRoleNotConfiguredError = (task: ModelTask): HandlerError =>
   new HandlerError({
+    code: AI_FAILURE_CODES.role_not_configured,
     status: 403,
     message:
       `AI is not available for the "${task}" task on this deployment. ` +

@@ -15,10 +15,12 @@ import {
   parseCorpusIndexClusterForGeneration,
   type QuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
+import { clearJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
-  corpusIndexManifestDigest,
-  requireCorpusIndexManifest,
   type CorpusIndexManifest,
+  corpusIndexManifestDigest,
+  corpusIndexManifestIsPartial,
+  requireCorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -308,9 +310,24 @@ export const setServingCorpusIndexGenerationTx = async (
     );
   }
   requireActiveGenerationTarget(targetRow, target);
+  // A partial generation holds some jurisdictions only. Promoting it would
+  // retire the generation that holds all the others; it is attached to a
+  // jurisdiction by the gated flip (`case-law-serving-flip.ts`) instead.
+  if (
+    corpusIndexManifestIsPartial(
+      requireCorpusIndexManifest(target.family, target.generation),
+    )
+  ) {
+    return panic(
+      `A partial corpus generation cannot serve a family: ${target.family}/${target.generation}`,
+    );
+  }
   if (targetRow.status === "serving") {
     return requireServingCorpusIndexGeneration(targetRow, target.family);
   }
+  // A whole generation holds every jurisdiction itself, so no jurisdiction is
+  // served by another generation once it serves.
+  await clearJurisdictionServingTx(tx, target.family);
   await tx
     .update(corpusIndexGenerations)
     .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })

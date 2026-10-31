@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { is } from "drizzle-orm";
-import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 
@@ -16,12 +16,16 @@ const SOURCE_SCOPE_COLUMN = "source_data_workspace_ids";
 
 /**
  * Tables that reference a thread but hold no content derived from it: they
- * point a file or template at its latest thread, and following the pointer
- * reads the thread under the thread's own scope.
+ * point a file, template or stored tool approval at a thread, and following
+ * the pointer reads the thread under the thread's own scope.
  */
 const POINTER_ONLY_TABLES: ReadonlyMap<string, string> = new Map([
   ["file_chat_threads", "maps a file to its latest thread id"],
   ["template_chat_threads", "maps a template to its latest thread id"],
+  [
+    "chat_tool_grants",
+    "names the conversation a tool approval applies in; holds a tool name, never thread content",
+  ],
 ]);
 
 const renderPolicies = (table: PgTable): string => {

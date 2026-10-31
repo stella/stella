@@ -1,6 +1,6 @@
 /**
  * An in-memory organization for the playbook-authoring eval: the smallest
- * `McpRequestContext` the production `list_playbooks` and `save_playbook`
+ * `McpRequestResources` the production `list_playbooks` and `save_playbook`
  * handlers run over. The eval calls `handleMcpToolCall`, so the schema parse,
  * the lenient value readers, the merge, the shared create and update paths,
  * and the error envelope are all production code; only the rows live here.
@@ -9,16 +9,20 @@
 import { panic } from "better-result";
 
 import { agentSkills, entities, playbookDefinitions } from "@/api/db/schema";
-import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import {
+  ORG_AI_CONFIG_STATUS,
+  resolvePromptCachingPreference,
+} from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ReadablePositionSource } from "@/api/lib/workflow/playbook-position-sources";
 import type {
   PlaybookPositions,
   PlaybookScope,
 } from "@/api/lib/workflow/playbook-positions";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -36,7 +40,7 @@ export type StoredPlaybook = {
 };
 
 export type PlaybookStore = {
-  context: McpRequestContext;
+  context: McpRequestResources;
   playbooks: () => readonly StoredPlaybook[];
   /**
    * Move a playbook's `updatedAt` forward, as a person saving in the editor
@@ -186,7 +190,7 @@ export const createPlaybookStore = ({
     }),
   };
 
-  const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+  const scopedDb = asTestRaw<McpRequestResources["scopedDb"]>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
   );
 
@@ -203,15 +207,14 @@ export const createPlaybookStore = ({
       organizationId: mintAuthProviderId<"organization">(),
       recordAuditEvent: asTestRaw<AuditRecorder>(() => undefined),
       testDependencies: {
-        // Saving a graded position derives its ask with a model call. The eval
-        // measures the tool contract, not that derivation, and `unreadable` is
-        // the production state in which a save makes no call.
+        // The tool-contract eval has no organization provider and does not
+        // admit instance model work, so saves skip automatic ask derivation.
         loadOrgSettingsForAuth: async () =>
           await Promise.resolve({
             orgAIConfig: null,
-            orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
-            managedAIResidency: "eu",
-            promptCachingEnabled: false,
+            orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ownKeyRequired,
+            managedAIResidency: DEFAULT_MANAGED_AI_RESIDENCY,
+            promptCachingEnabled: resolvePromptCachingPreference(undefined),
           }),
       },
       safeDb: toSafeDbMock(scopedDb),

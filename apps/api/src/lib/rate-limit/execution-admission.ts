@@ -95,6 +95,7 @@ export const startExecutionAdmission = async ({
       // Minted while still acquiring: a failed tier read refuses the execution.
       await admitModelDispatch({
         organizationId,
+        userId,
         actionKind: mode === "action" ? periodIdentity.actionKind : actionKind,
         organizationStateDb,
         signal,
@@ -136,7 +137,10 @@ export const startExecutionAdmission = async ({
           }
         },
       }),
-  }).then((outcome) => {
+  }).then((admitted) => {
+    const outcome = Result.isError(admitted)
+      ? Result.err(admitted.error)
+      : admitted.value;
     if (Result.isError(outcome)) {
       if (state.status === "acquiring") {
         ready.resolve(Result.err(executionAdmissionError(outcome.error)));

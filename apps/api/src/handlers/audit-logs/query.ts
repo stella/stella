@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, gte, lt, lte, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import { and, desc, eq, gte, inArray, lt, lte, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import {
+  API_STORABLE_INSTANT_CHECK,
+  apiDateTimeSchema,
+} from "@stll/api-contract/api-date";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
 import { workspaceCheck } from "@/api/db/rls";
@@ -20,9 +25,9 @@ import {
 } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  tPaginationCursor,
-  tSafeId,
-  tUserId,
+  paginationCursorSchema,
+  resourceIdSchema,
+  userIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
@@ -37,59 +42,72 @@ const auditLogCursor = createTimestampIdCursorCodec({
   brandId: brandPersistedAuditLogId,
 });
 
-export const readAuditLogsQuerySchema = t.Object({
-  workspaceId: t.Optional(
-    tSafeId("workspace", {
+export const readAuditLogsQuerySchema = v.object({
+  workspaceId: v.exactOptional(
+    resourceIdSchema("workspace", {
       description: "Only entries scoped to this matter",
     }),
   ),
-  // The shared validator below checks these strings against the domain
-  // constants so HTTP and MCP callers reject unknown values identically.
-  action: t.Optional(
-    t.String({
-      minLength: 1,
-      description: "Only entries with this audit action",
-    }),
+  action: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Only entries with this audit action"),
+    ),
   ),
-  resourceType: t.Optional(
-    t.String({
-      minLength: 1,
-      description: "Only entries about this resource type",
-    }),
+  resourceType: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description("Only entries about this resource type"),
+    ),
   ),
-  resourceId: t.Optional(
-    t.String({
-      minLength: 1,
-      description: "Only entries about this resource id; requires resourceType",
-    }),
+  resourceId: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.description(
+        "Only entries about this resource id; requires resourceType",
+      ),
+    ),
   ),
-  userId: t.Optional(
-    withDescription(tUserId, "Only entries whose actor is this user"),
+  userId: v.exactOptional(
+    withDescription(userIdSchema, "Only entries whose actor is this user"),
   ),
-  from: t.Optional(
-    t.String({
-      format: "date-time",
-      description: "Only entries created on or after this ISO date-time",
-    }),
+  from: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
+      v.description("Only entries created on or after this ISO date-time"),
+    ),
   ),
-  to: t.Optional(
-    t.String({
-      format: "date-time",
-      description: "Only entries created on or before this ISO date-time",
-    }),
+  to: v.exactOptional(
+    v.pipe(
+      v.string(),
+      v.isoTimestamp(),
+      API_STORABLE_INSTANT_CHECK,
+      v.description("Only entries created on or before this ISO date-time"),
+    ),
   ),
-  toExclusive: t.Optional(t.String({ format: "date-time" })),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.auditLogPageSizeMax,
-      description: "Max entries to return",
-    }),
+  toExclusive: v.exactOptional(apiDateTimeSchema),
+  limit: v.exactOptional(
+    numberFromString(
+      v.pipe(
+        v.pipe(
+          v.number(),
+          v.integer(),
+          v.minValue(1),
+          v.maxValue(LIMITS.auditLogPageSizeMax),
+        ),
+        v.description("Max entries to return"),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.exactOptional(paginationCursorSchema()),
 });
 
-export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
+export type ReadAuditLogsQuery = v.InferOutput<typeof readAuditLogsQuerySchema>;
 
 /**
  * The WHERE conditions of a compliance read: organization and matter access, then

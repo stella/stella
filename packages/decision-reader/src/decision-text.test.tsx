@@ -6,14 +6,24 @@ import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import {
-  TEXT_FIELD_TYPE,
   TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { PUBLISHER_SUMMARY_ROLES } from "@stll/legal-ast/document-ast";
+import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
+import {
+  euProvisionSourceUrl,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 
 import { CitedProvisionExpansion, CitedProvisionPeek } from "./cited-provision";
 import type { FullProvisionRead } from "./cited-provision";
-import { DecisionText, prepareDecisionTextPlacements } from "./decision-text";
+import {
+  DecisionText,
+  prepareDecisionProvisionCards,
+  prepareDecisionTextPlacements,
+} from "./decision-text";
 import { BlockRenderer } from "./document-ast-text";
 import {
   DecisionReaderProvider,
@@ -22,6 +32,7 @@ import {
 import type { DecisionReaderAdapters } from "./reader-adapters";
 import type {
   CitedProvisionTarget,
+  DecisionProvisionAnchor,
   ProvisionPreviewData,
   ReaderDecision,
 } from "./reader-types";
@@ -31,6 +42,7 @@ export const fakeReaderAdapters = {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",
     "common.copyLink": "Copy link",
+    "common.copied": "Copied",
     "common.back": "Back",
     "caseLaw.viewer.legalSentence": "Legal sentence",
     "caseLaw.viewer.abstract": "Abstract",
@@ -81,7 +93,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: () => undefined,
+  copyPermalink: async () => true,
   openProvision: () => undefined,
   loadProvisionPreview: async () => ({
     documentId: "act",
@@ -166,6 +178,156 @@ const decision = {
   },
 } satisfies ReaderDecision;
 
+test("publisher headings and caption information share one translated disclosure across analysis sections", () => {
+  for (const label of ["Case information", "معلومات القضية"]) {
+    for (const count of [1, 2, 10, 100]) {
+      const blocks = Array.from({ length: count }, (_, index) => [
+        {
+          type: "heading",
+          id: `publisher-heading-${index}`,
+          anchorId: `publisher-heading-${index}`,
+          role: "publisher-heading",
+          level: 2,
+          inlines: [{ type: "text", text: `Publisher heading ${index}.` }],
+          plainText: `Publisher heading ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+        {
+          type: "paragraph",
+          id: `summary-${index}`,
+          anchorId: `summary-${index}`,
+          role: index % 2 === 0 ? "syllabus" : "summary",
+          inlines: [{ type: "text", text: `Published summary ${index}.` }],
+          plainText: `Published summary ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+        {
+          type: "paragraph",
+          id: `caption-${index}`,
+          anchorId: `caption-${index}`,
+          role: "apparatus",
+          inlines: [{ type: "text", text: `Publisher information ${index}.` }],
+          plainText: `Publisher information ${index}.`,
+        } satisfies DocumentAst["blocks"][number],
+      ]).flat();
+      const sectionMap = new Map(
+        blocks.map((block) => [
+          block.anchorId,
+          { cssVar: "--muted", headingId: block.id },
+        ]),
+      );
+      const adapters = {
+        ...fakeReaderAdapters,
+        messages: {
+          ...fakeReaderAdapters.messages,
+          "caseLaw.reader.headMatter": label,
+        },
+      } satisfies DecisionReaderAdapters;
+      const markup = renderToStaticMarkup(
+        <DecisionReaderProvider adapters={adapters}>
+          <DecisionText
+            decision={{
+              ...decision,
+              documentAst: { ...ast, blocks: [...blocks, ...ast.blocks] },
+            }}
+            decisionId={decision.id}
+            placements={{
+              anchorsByPieceId: {},
+              provisionsByAnchorId: new Map(),
+              failures: [],
+            }}
+            sectionMap={sectionMap}
+          />
+        </DecisionReaderProvider>,
+      );
+      expect(markup.match(/<details class="reader-apparatus"/gu)).toHaveLength(
+        1,
+      );
+      expect(markup.match(/<details\b/gu)).toHaveLength(2);
+      expect(markup).toContain(
+        `class="reader-apparatus-summary">${label}</summary>`,
+      );
+      const disclosureStart = markup.indexOf(
+        '<details class="reader-apparatus"',
+      );
+      const disclosure = markup.slice(
+        disclosureStart,
+        markup.indexOf("</details>", disclosureStart),
+      );
+      for (const block of blocks) {
+        if (block.type === "heading" || block.role === "apparatus") {
+          expect(disclosure).toContain(block.plainText);
+        } else {
+          expect(disclosure).not.toContain(block.plainText);
+        }
+        expect(markup.split(block.plainText)).toHaveLength(2);
+      }
+    }
+  }
+});
+
+test("publisher-summary roles leave footnotes after the decision body", () => {
+  for (const role of PUBLISHER_SUMMARY_ROLES) {
+    const footnote = {
+      type: "paragraph",
+      id: "publisher-footnote",
+      anchorId: "publisher-footnote",
+      role,
+      note: { type: "footnote", label: "1" },
+      inlines: [{ type: "text", text: "Published footnote." }],
+      plainText: "Published footnote.",
+    } satisfies DocumentAst["blocks"][number];
+    const markup = renderReaderFixture(
+      <DecisionText
+        decision={{
+          ...decision,
+          documentAst: { ...ast, blocks: [...ast.blocks, footnote] },
+        }}
+        decisionId={decision.id}
+        placements={{
+          anchorsByPieceId: {},
+          provisionsByAnchorId: new Map(),
+          failures: [],
+        }}
+      />,
+    );
+    expect(markup).toContain(text);
+    expect(markup).toContain(footnote.plainText);
+    expect(markup.indexOf(footnote.plainText)).toBeGreaterThan(
+      markup.indexOf(text),
+    );
+  }
+});
+
+test("parties and their representatives remain visible together in the caption", () => {
+  const captionBlocks = (
+    ["parties", "counsel", "parties", "counsel"] as const
+  ).map((role, index) => ({
+    type: "paragraph",
+    id: `participant-${index}`,
+    anchorId: `participant-${index}`,
+    role,
+    inlines: [{ type: "text", text: `Participant ${index}.` }],
+    plainText: `Participant ${index}.`,
+  }));
+  const markup = renderReaderFixture(
+    <DecisionText
+      decision={{
+        ...decision,
+        documentAst: { ...ast, blocks: [...captionBlocks, ...ast.blocks] },
+      }}
+      decisionId={decision.id}
+      placements={{
+        anchorsByPieceId: {},
+        provisionsByAnchorId: new Map(),
+        failures: [],
+      }}
+    />,
+  );
+  expect(markup).not.toContain("reader-apparatus");
+  for (const block of captionBlocks) {
+    expect(markup).toContain(block.plainText);
+  }
+});
+
 test("a decision renders numbered anchored text and resolved marks without reading data", () => {
   let reads = 0;
   const renderedCitations: string[] = [];
@@ -175,6 +337,7 @@ test("a decision renders numbered anchored text and resolved marks without readi
       renderedCitations.push(citation.id);
       expect(citation.decision).toBe(props.decision);
       expect(citation.treatment).toBe(props.treatment);
+      expect(props.blockId).toBe("paragraph");
       return fakeReaderAdapters.renderDecisionLink({ citation, ...props });
     },
     loadProvisionPreview: async () => {
@@ -271,14 +434,19 @@ test("a decision renders numbered anchored text and resolved marks without readi
   expect(renderedCitations).toEqual(["citation"]);
 });
 
-const permalinkFixture = (variant: "case-law" | "statute") =>
+const PERMALINK_CORPORA = {
+  "case-law": { variant: "case-law" },
+  statute: { statuteLists: E_SBIRKA_LIST_SCHEME, variant: "statute" },
+} as const;
+
+const permalinkFixture = (variant: keyof typeof PERMALINK_CORPORA) =>
   ast.blocks.map((block) => (
     <BlockRenderer
       activeMatchIndex={-1}
       block={block}
       key={block.id}
       rangesByPieceId={{}}
-      variant={variant}
+      {...PERMALINK_CORPORA[variant]}
     />
   ));
 
@@ -304,7 +472,7 @@ test("readers without a copy adapter expose no permalink control", () => {
 test("a supplied copy adapter preserves existing permalink markup", () => {
   // Serialized copy controls before the optional adapter: placement and browser href stay exact.
   const anchorClass =
-    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100";
+    "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100";
   const previousControls = [
     `<a aria-label="Copy link" class="${anchorClass} ms-1" data-reader-chrome="" href="#h-1">¶</a>`,
     `<a aria-label="Copy link" class="${anchorClass} absolute end-full top-0 me-1" data-reader-chrome="" href="#p-7">¶</a>`,
@@ -317,11 +485,26 @@ test("a supplied copy adapter preserves existing permalink markup", () => {
   }
 });
 
+/** A card's quoted runs: whether each is marked cited, and its paragraphs. */
+const quotedRuns = (markup: string) =>
+  Array.from(
+    markup.matchAll(
+      /<div(?: class="[^"]*")?( data-cited="")? data-slot="provision-card-quote">(.*?)<\/div>/gu,
+    ),
+    ([, cited, body = ""]) => ({
+      cited: cited !== undefined,
+      texts: Array.from(
+        body.matchAll(/<p[^>]*>(.*?)<\/p>/gu),
+        ([, paragraph]) => paragraph,
+      ),
+    }),
+  );
+
 test("a provision card identifies unavailable parts until its full wording recovers them", () => {
   const provision = (part: string) =>
     ({
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -450,12 +633,10 @@ test("a provision card identifies unavailable parts until its full wording recov
     expect(unresolved).toContain("Odborná péče se posuzuje podle povolání.");
     expect(unresolved).toContain("Text of § 5 odst. 2 is not available");
     expect(unresolved).toContain('data-slot="provision-card-unavailable-part"');
-    expect(unresolved).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(unresolved).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(unresolved)).toEqual([
+      { cited: true, texts: [fullAvailableBlock.text] },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
     const recovered = render({
       availableWording: wording,
       missingWording,
@@ -478,18 +659,17 @@ test("a provision card identifies unavailable parts until its full wording recov
       'data-slot="provision-card-unavailable-part"',
     );
     expect(recovered).not.toContain("Text of § 5 odst. 2 is not available");
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Odborná péče se posuzuje podle povolání\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Doplněné znění druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span[^>]*data-cited=""[^>]*>Písmeno citovaného druhého odstavce\.<\/span>/u,
-    );
-    expect(recovered).toMatch(
-      /<span(?![^>]*data-cited=)[^>]*>Necitované znění třetího odstavce\.<\/span>/u,
-    );
+    expect(quotedRuns(recovered)).toEqual([
+      {
+        cited: true,
+        texts: [
+          fullAvailableBlock.text,
+          fullMissingBlock.text,
+          fullMissingChildBlock.text,
+        ],
+      },
+      { cited: false, texts: [uncitedFullBlock.text] },
+    ]);
   }
   const allUnavailable = render({
     availableWording: null,
@@ -517,7 +697,7 @@ for (const response of ["error", "null", "empty"] as const) {
     const root = createRoot(container);
     const citation = {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2012/89",
         id: "act",
         slug: null,
@@ -682,10 +862,10 @@ for (const response of ["error", "null", "empty"] as const) {
   });
 }
 
-test("a hover preview scrolls a long provision inside a viewport-bound cap while inline cards keep growing", async () => {
+test("a hover preview scrolls a long provision inside a viewport-bound cap, inline cards keep growing and a margin card shows a note-sized glimpse", async () => {
   const provision = {
     document: {
-      country: "cz",
+      country: "CZE",
       eli: "/eli/cz/sb/2012/89",
       id: "act",
       slug: null,
@@ -734,6 +914,16 @@ test("a hover preview scrolls a long provision inside a viewport-bound cap while
       wordings={wordings}
     />,
   );
+  const gutterMarkup = renderReaderFixture(
+    <CitedProvisionExpansion
+      citations={[provision]}
+      full={{ isPending: false, whole: null }}
+      onToggleFull={() => undefined}
+      placement="gutter"
+      showsFull={false}
+      wordings={wordings}
+    />,
+  );
   const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
   GlobalRegistrator.register();
   try {
@@ -766,7 +956,150 @@ test("a hover preview scrolls a long provision inside a viewport-bound cap while
     expect(
       inline.querySelector('[data-slot="scroll-area-viewport"]'),
     ).toBeNull();
+    expect(inlineWording.classList).toContain("reader-body");
+
+    // The margin is shared by every note on the page, so a folded margin
+    // card holds two lines of wording, typeset like the notes beside it.
+    const gutter = new DOMParser().parseFromString(gutterMarkup, "text/html");
+    const glimpse =
+      gutter.querySelector('[data-slot="provision-card-glimpse"]') ??
+      panic("Missing folded margin glimpse");
+    expect(glimpse.classList).toContain("max-h-[2lh]");
+    expect(glimpse.classList).toContain("overflow-hidden");
+    const gutterWording =
+      glimpse.querySelector('[data-slot="provision-card-wording"]') ??
+      panic("Missing margin wording");
+    expect(gutterWording.classList).toContain("reader-chrome");
+    expect(gutterWording.classList).not.toContain("reader-body");
+    expect(gutterWording.classList).toContain(
+      "text-[calc(0.75rem*var(--reader-text-scale))]",
+    );
   } finally {
     await GlobalRegistrator.unregister();
   }
+});
+
+test("EU provisions link to EUR-Lex in every supported citation language without hosted cards", () => {
+  const citations = [
+    "Article 6(1)(a) of Regulation (EU) 2016/679",
+    "čl. 6 odst. 1 písm. a) nařízení (EU) 2016/679",
+    "čl. 6 ods. 1 písm. a) nariadenia (EÚ) 2016/679",
+    "art. 6 ust. 1 lit. a) rozporządzenia 2016/679",
+    "6. cikk (1) bekezdés a) pont 2016/679/EU rendelet",
+    "Artikel 6 Abs. 1 Buchst. a) der Verordnung (EU) 2016/679",
+    "Article 6 paragraphe 1 lettre a) du règlement (UE) 2016/679",
+  ];
+  for (const sentenceText of citations) {
+    const citation = locateEuProvisionCitations(sentenceText).at(0);
+    expect(citation).toBeDefined();
+    if (citation === undefined) {
+      throw new TypeError("EU citation fixture was not recognized");
+    }
+    const href = euProvisionSourceUrl(citation.act.celex, citation.reference);
+    expect(href).not.toBeNull();
+    if (href === null) {
+      throw new TypeError("EU citation fixture has no publisher URL");
+    }
+    const placements = prepareDecisionTextPlacements({
+      adapters: fakeReaderAdapters,
+      blocks: [
+        {
+          id: "eu",
+          anchorId: "eu",
+          type: "paragraph",
+          plainText: sentenceText,
+          inlines: [{ type: "text", text: sentenceText }],
+        },
+      ],
+      annotationAnchors: [],
+      statuteCitationAnchors: [],
+      citationAnchors: [],
+      provisionAnchors: [],
+      externalProvisionAnchors: [
+        {
+          id: "eu-reference",
+          sentenceText,
+          spanStart: citation.start,
+          reference: citation.reference,
+          target: { href },
+        },
+      ],
+    });
+    expect(placements.failures).toEqual([]);
+    const anchor = placements.anchorsByPieceId["eu"]?.at(0);
+    expect(anchor).toBeDefined();
+    if (anchor === undefined) {
+      throw new TypeError("EU citation fixture was not placed");
+    }
+    const markup = renderToStaticMarkup(
+      anchor.render(sentenceText.slice(anchor.start, anchor.end), {
+        isRangeStart: true,
+      }),
+    );
+    expect(markup).toContain(`href="${href.replaceAll("&", "&amp;")}"`);
+    expect(markup).toContain('target="_blank"');
+    expect(placements.provisionsByAnchorId.size).toBe(0);
+  }
+});
+
+test("a margin card's ranges are the cited words of its paragraph", () => {
+  const sentence = "Podle § 90 a § 91 rozhodl soud.";
+  const provision = (section: number) =>
+    ({
+      id: `provision-${String(section)}`,
+      sentenceText: sentence,
+      spanStart: 0,
+      reference: {
+        section,
+        sectionSuffix: null,
+        subsection: null,
+        letter: null,
+        unit: "section",
+      },
+      target: {
+        document: {
+          country: "CZE",
+          id: "act",
+          eli: "eli/act",
+          slug: null,
+          versionValidFrom: null,
+        },
+        preview: null,
+        payload: {
+          documentId: "act",
+          eli: "eli/act",
+          jurisdiction: "CZE",
+          anchorId: `par_${String(section)}`,
+          provisionLabel: `§ ${String(section)}`,
+          statuteTitle: "Zákon",
+          versionValidFrom: null,
+          versionCount: 1,
+        },
+      },
+    }) satisfies DecisionProvisionAnchor;
+  const cards = prepareDecisionProvisionCards({
+    blocks: [
+      {
+        type: "paragraph",
+        id: "cited",
+        anchorId: "p-9",
+        number: 9,
+        inlines: [{ type: "text", text: sentence }],
+        plainText: sentence,
+      },
+    ],
+    provisionAnchors: [provision(90), provision(91)],
+  });
+  expect(
+    cards.map(({ ranges, startAnchorId }) => [
+      startAnchorId,
+      ranges.map(({ citationId, end, start }) => [
+        citationId,
+        sentence.slice(start, end),
+      ]),
+    ]),
+  ).toEqual([
+    ["p-9", [["provision-90", "§ 90"]]],
+    ["p-9", [["provision-91", "§ 91"]]],
+  ]);
 });

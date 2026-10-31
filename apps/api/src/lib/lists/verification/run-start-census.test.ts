@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 import createVerification from "@/api/handlers/lists/verifications/create";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.create";
@@ -9,83 +10,78 @@ const apiRoot = path.resolve(import.meta.dir, "../../../..");
 const owner = "src/lib/lists/verification/start-run.ts";
 const tableName = "legalListVerificationRuns";
 
-const collectRunInserts = (source: string) => {
-  const file = ts.createSourceFile(
-    "fixture.ts",
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+const collectRunInserts = (source: string, file = "fixture.ts") => {
+  const { program, sourceText } = parseSource(file, source);
   const aliases = new Set([tableName]);
   const namespaces = new Set<string>();
-  for (const statement of file.statements) {
-    if (!ts.isImportDeclaration(statement)) {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const bindings = statement.importClause?.namedBindings;
-    if (bindings && ts.isNamedImports(bindings)) {
-      for (const binding of bindings.elements) {
-        if ((binding.propertyName ?? binding.name).text === tableName) {
-          aliases.add(binding.name.text);
-        }
+    for (const binding of statement.specifiers) {
+      if (
+        binding.type === "ImportSpecifier" &&
+        (binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value) === tableName
+      ) {
+        aliases.add(binding.local.name);
       }
-    }
-    if (bindings && ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
+      if (binding.type === "ImportNamespaceSpecifier") {
+        namespaces.add(binding.local.name);
+      }
     }
   }
-  const isRunTable = (node: ts.Expression): boolean => {
-    if (ts.isIdentifier(node)) {
-      return aliases.has(node.text);
+  const isRunTable = (node: Node | null | undefined): boolean => {
+    if (node?.type === "Identifier") {
+      return aliases.has(node.name);
     }
-    if (ts.isPropertyAccessExpression(node)) {
-      return (
-        namespaces.has(node.expression.getText(file)) &&
-        node.name.text === tableName
-      );
+    if (
+      node?.type !== "MemberExpression" ||
+      node.object.type !== "Identifier" ||
+      !namespaces.has(node.object.name)
+    ) {
+      return false;
     }
-    if (ts.isElementAccessExpression(node)) {
-      return (
-        namespaces.has(node.expression.getText(file)) &&
-        ts.isStringLiteral(node.argumentExpression) &&
-        node.argumentExpression.text === tableName
-      );
-    }
-    return false;
+    return node.computed
+      ? node.property.type === "Literal" && node.property.value === tableName
+      : node.property.type === "Identifier" && node.property.name === tableName;
   };
   const sites: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(program, (node) => {
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.initializer &&
-      isRunTable(node.initializer)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "Identifier" &&
+      isRunTable(node.init)
     ) {
-      aliases.add(node.name.text);
+      aliases.add(node.id.name);
     }
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === "insert"
+      node.type === "CallExpression" &&
+      node.callee.type === "MemberExpression" &&
+      !node.callee.computed &&
+      node.callee.property.type === "Identifier" &&
+      node.callee.property.name === "insert" &&
+      isRunTable(node.arguments.at(0))
     ) {
-      const target = node.arguments.at(0);
-      if (target && isRunTable(target)) {
-        sites.push(node.getText(file));
-      }
+      sites.push(sourceText.slice(node.start, node.end));
+    }
+    // A template literal is read up to its first substitution.
+    let text: string | undefined;
+    if (node.type === "Literal" && typeof node.value === "string") {
+      text = node.value;
+    } else if (node.type === "TemplateLiteral") {
+      text = node.quasis.at(0)?.value.cooked ?? undefined;
     }
     if (
-      (ts.isStringLiteral(node) ||
-        ts.isNoSubstitutionTemplateLiteral(node) ||
-        ts.isTemplateHead(node)) &&
+      text !== undefined &&
       /\bINSERT\s+INTO\s+(?:"?\w+"?\.)?"?legal_list_verification_runs\b/iu.test(
-        node.text,
+        text,
       )
     ) {
-      sites.push(node.text);
+      sites.push(text);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return sites;
 };
 
@@ -97,6 +93,7 @@ test("every production verification insert is confined to the admission owner", 
     }
     const inserts = collectRunInserts(
       await Bun.file(path.join(apiRoot, file)).text(),
+      file,
     );
     for (const _insert of inserts) {
       sites.push(file);
@@ -121,5 +118,5 @@ test("the census detects named aliases, namespace aliases, local aliases and raw
 test("REST and generated MCP, CLI and chat capability dispatch share the create handler", async () => {
   const capability =
     await CAPABILITY_DISPATCH["lists.verifications.create"].load();
-  expect(capability.default).toBe(createVerification);
+  expect(capability["default"]).toBe(createVerification);
 });

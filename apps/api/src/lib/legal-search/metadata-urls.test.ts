@@ -8,6 +8,7 @@ import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import {
   approveMetadataUrls,
   MAX_METADATA_URL_DIAGNOSTICS,
+  META_URL_DIAGNOSTICS,
   metadataUrlAddresses,
   metadataUrlKeys,
   opaqueMetadataValue,
@@ -40,13 +41,21 @@ test("source schemas require every constructed URL branch without accepting raw 
   approveMetadataUrls(source, { documents: SCHEMA.documents });
   // @ts-expect-error Constructed nested URL branches cannot be omitted.
   approveMetadataUrls(source, { url: "url", documents: { items: {} } });
-  expect(() => {
-    approveMetadataUrls(
-      { urls: [toMetadataUrl(raw.url, "decoded")] },
-      // @ts-expect-error Scalar URL arrays have no metadata contract.
-      { urls: { items: "url" } },
-    );
-  }).toThrow("Scalar URL arrays have no metadata schema contract");
+  const urls = [toMetadataUrl(raw.url, "decoded")];
+  expect(approveMetadataUrls({ urls }, { urls: { items: "url" } })).toEqual({
+    urls,
+  });
+  // @ts-expect-error Constructed scalar URL lists cannot be omitted.
+  approveMetadataUrls({ urls }, {});
+  const stored = rehydrateMetadataUrls(
+    { urls: [raw.url, "https://example.test/pri\u0000vate"] },
+    { urls: { items: "url" } },
+  );
+  expect(stored["urls"]).toEqual([raw.url, null]);
+  expect(stored[META_URL_DIAGNOSTICS]).toEqual({
+    entries: [{ address: "urls[1]", reason: "control-character" }],
+    overflowCount: 0,
+  });
   approveMetadataUrls({ display: undefined, other: null }, {});
   expect({
     value: toPlainTextMetadataObject(

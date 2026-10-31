@@ -1,49 +1,51 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { createTestState } from "@stll/test-state";
+
 import {
+  drawPropertySamples,
   PROPERTY_TEST_SEED_ENV,
   PROPERTY_TEST_TIMEOUT_BASE_MS_ENV,
-  PropertyTestConfigError,
-  drawPropertySamples,
   propertyConfig,
   propertySeed,
+  PropertyTestConfigError,
   propertyTestDefaultTimeout,
   propertyTestTimeout,
 } from "./index";
 
 const FACTOR_ENV = "PROPERTY_TEST_NUM_RUNS_FACTOR";
 
-const withEnv = (
-  overrides: Record<string, string | undefined>,
-  run: () => void,
-): void => {
-  const previous = new Map<string, string | undefined>();
-  for (const key of Object.keys(overrides)) {
-    previous.set(key, process.env[key]);
-    const next = overrides[key];
-    if (next === undefined) {
-      Reflect.deleteProperty(process.env, key);
+const state = createTestState({ file: import.meta.path, config: {} });
+
+type EnvValues = Record<string, string | undefined>;
+
+const applyEnv = (values: EnvValues): void => {
+  for (const [key, value] of Object.entries(values)) {
+    if (value === undefined) {
+      state.deleteEnv(key);
     } else {
-      process.env[key] = next;
-    }
-  }
-  try {
-    run();
-  } finally {
-    for (const [key, value] of previous) {
-      if (value === undefined) {
-        Reflect.deleteProperty(process.env, key);
-      } else {
-        process.env[key] = value;
-      }
+      state.setEnv(key, value);
     }
   }
 };
 
-afterEach(() => {
-  Reflect.deleteProperty(process.env, FACTOR_ENV);
-  Reflect.deleteProperty(process.env, PROPERTY_TEST_SEED_ENV);
+// Scopes overrides within one test; the fixture restores the rest after it.
+const withEnv = (overrides: EnvValues, run: () => void): void => {
+  const previous = Object.fromEntries(
+    Object.keys(overrides).map((key) => [key, process.env[key]]),
+  );
+  applyEnv(overrides);
+  try {
+    run();
+  } finally {
+    applyEnv(previous);
+  }
+};
+
+beforeEach(() => {
+  state.deleteEnv(FACTOR_ENV);
+  state.deleteEnv(PROPERTY_TEST_SEED_ENV);
 });
 
 describe("propertyConfig", () => {

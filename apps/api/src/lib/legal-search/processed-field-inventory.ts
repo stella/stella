@@ -1,3 +1,4 @@
+// parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: declarations about parser output; no parser reads this module.
 /**
  * What each case-law source's parsed decision carries, field by field.
@@ -121,8 +122,7 @@ export type SkippedProcessedField = {
  * below, which is where a blank `how` or justification fails to compile.
  */
 export type ProcessedFieldDisposition =
-  | ProvidedProcessedField
-  | SkippedProcessedField;
+  ProvidedProcessedField | SkippedProcessedField;
 
 /** Recorded publisher bytes the conformance suite parses for the claim. */
 const recordedEvidence = (
@@ -335,6 +335,14 @@ export const PROCESSED_FIELD_INVENTORY = {
       ),
     ),
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    "court-paragraph-numbers": providedField(
+      "LegalDocML num values populate paragraph numbers.",
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/parsers/__fixtures__/uk-fcl.xml",
+      ),
+    ),
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     "court-paragraph-numbers": providedField(
       "parseHuBhgyDecision strips the leading [N] into ParagraphBlock.number",
@@ -367,6 +375,15 @@ export const PROCESSED_FIELD_INVENTORY = {
       "the PDF parser has no paragraph-number handling; the recorded PDFs have not been checked for numbered reasoning",
       unrecordedEvidence(
         "the recorded PDFs have not been checked for numbered reasoning",
+      ),
+    ),
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    "court-paragraph-numbers": providedField(
+      PARAGRAPH_NUMBERS_FROM_TEXT,
+      recordedEvidence(
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-R0137.pdf",
+        "src/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs-2026-S0383.pdf",
       ),
     ),
   },

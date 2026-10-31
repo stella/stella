@@ -36,4 +36,35 @@ describe.serial("no-raw-resource-uri", () => {
       ]),
     ).toEqual([2]);
   });
+
+  test("recognizes literal resource prefixes amid Unicode punctuation", async () => {
+    expect(
+      await lint([
+        'export const href = "⚖️ «#stella-decision=abc»";',
+        'export const resource = "⟦stella://resource/entity/abc⟧";',
+      ]),
+    ).toEqual([1, 2]);
+  });
+
+  test("checks every resource prefix when a skill-ref prefix shares the literal", async () => {
+    expect(
+      await lint([
+        'export const href = "#stella-skill-ref=slug #stella-workspace=abc";',
+      ]),
+    ).toEqual([1]);
+  });
+
+  test("accepts case variants, empty strings, and owned serializers", async () => {
+    expect(
+      await lint([
+        'import { toResourceName } from "@stll/api-contract/resource-ref";',
+        'import { toChatResourceHref } from "@stll/api-contract/resource-link";',
+        "declare const resource: Parameters<typeof toResourceName>[0];",
+        "export const name = toResourceName(resource);",
+        "export const href = toChatResourceHref(resource);",
+        'export const text = "";',
+        'export const prose = "#STELLA-DECISION=abc";',
+      ]),
+    ).toEqual([]);
+  });
 });

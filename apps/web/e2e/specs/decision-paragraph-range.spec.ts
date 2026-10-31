@@ -9,6 +9,11 @@ import type { SafeId } from "@stll/api-contract/safe-id";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { decisionParagraphRangePayloads } from "../helpers/decision-paragraph-range-payloads";
+import {
+  DECISION_READER_BOOT_PATH,
+  openMemberDecision,
+  openVisitorDecision,
+} from "../helpers/decision-reader";
 import { installDockedChatHistory } from "../helpers/docked-chat-fixtures";
 import {
   dockedChatFileThreadPage,
@@ -51,21 +56,6 @@ const installParagraphFixture = async (page: Page) => {
       await route.fulfill({ json: decision });
     },
   );
-};
-
-// A direct load renders the decision on the server, where page.route cannot
-// answer the decision read; boot the app on a public page and navigate on the
-// client so the read comes from the browser (as provision-layout-fixture does).
-// The router's history wraps pushState once it mounts; a push before that is a
-// bare URL change, so wait for the wrapper first.
-const openDecision = async (page: Page, path: string) => {
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  await page.waitForFunction(
-    () => !history.pushState.toString().includes("[native code]"),
-  );
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
-  }, path);
 };
 
 test.describe("reader chat decision citations", () => {
@@ -123,7 +113,10 @@ test.describe("reader chat decision citations", () => {
         await route.fulfill({ json: otherDecision });
       },
     );
-    await openDecision(page, canonicalPath);
+    await openMemberDecision(page, {
+      bootPath: DECISION_READER_BOOT_PATH,
+      path: canonicalPath,
+    });
     const panel = page.locator('[data-slot="inspector"]');
     const chips = panel
       .locator('[data-slot="inspector-rail"]')
@@ -253,7 +246,10 @@ test.describe("court paragraph deep links", () => {
   }) => {
     await installParagraphFixture(page);
     expect(idPath).not.toBe(canonicalPath);
-    await openDecision(page, `${idPath}#par=48-53`);
+    await openVisitorDecision(page, {
+      bootPath: DECISION_READER_BOOT_PATH,
+      path: `${idPath}#par=48-53`,
+    });
     await expect(page).toHaveURL(`${canonicalPath}#par=48-53`);
 
     const reader = page.locator(".reader-scroll");
@@ -328,7 +324,10 @@ test.describe("court paragraph deep links", () => {
       page,
     }) => {
       await installParagraphFixture(page);
-      await openDecision(page, `${canonicalPath}#par=48-53`);
+      await openVisitorDecision(page, {
+        bootPath: DECISION_READER_BOOT_PATH,
+        path: `${canonicalPath}#par=48-53`,
+      });
       const reader = page.locator(".reader-scroll");
       await expect(reader.locator("article [data-reader-landing]")).toHaveCount(
         6,
@@ -357,7 +356,10 @@ test.describe("court paragraph deep links", () => {
       page,
     }) => {
       await installParagraphFixture(page);
-      await openDecision(page, `${canonicalPath}#${fragment}`);
+      await openVisitorDecision(page, {
+        bootPath: DECISION_READER_BOOT_PATH,
+        path: `${canonicalPath}#${fragment}`,
+      });
       await expect(page).toHaveURL(`${canonicalPath}#${fragment}`);
       const reader = page.locator(".reader-scroll");
       await expect(reader.locator('[data-anchor="p-1"]')).toBeInViewport();
@@ -397,7 +399,10 @@ test.describe("court paragraph deep links", () => {
         });
       },
     );
-    await openDecision(page, `${canonicalPath}#par=48-53`);
+    await openVisitorDecision(page, {
+      bootPath: DECISION_READER_BOOT_PATH,
+      path: `${canonicalPath}#par=48-53`,
+    });
     await expect(page).toHaveURL(`${canonicalPath}#par=48-53`);
     await expect(
       page.getByText(

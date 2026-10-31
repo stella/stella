@@ -7,12 +7,12 @@ import {
 import { ACCOUNT_ATTEMPT_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import {
   BUDGET_NAMES,
-  recordBudgetRejection,
   type BudgetKeyKind,
+  recordBudgetRejection,
 } from "@/api/lib/rate-limit/budget-observability";
 import {
-  createOtpAccountBudget,
   createAccountAttemptBudget,
+  createOtpAccountBudget,
 } from "@/api/lib/rate-limit/otp-account-budget";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 

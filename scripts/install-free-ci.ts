@@ -730,12 +730,42 @@ const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
 /**
  * The repository retry helper, wherever the step finds it: `scripts/retry.sh`
- * from the root, or a copy kept elsewhere such as a release tooling checkout.
- * It runs the rest of its words as the command, so it is unwrapped like
- * `timeout`.
+ * from the root, a copy kept elsewhere such as a release tooling checkout, or
+ * the copy a job stages and exports as `NETWORK_RETRY_SCRIPT`. It runs the
+ * rest of its words as the command, so it is unwrapped like `timeout`.
  */
 const isRetryHelper = (word: string | undefined): boolean =>
-  word === "retry.sh" || word?.endsWith("/retry.sh") === true;
+  word === "retry.sh" ||
+  word?.endsWith("/retry.sh") === true ||
+  word === "$NETWORK_RETRY_SCRIPT";
+
+/**
+ * The release gate recorder (`scripts/release-gate.sh`, or its copy in the
+ * runner's temp directory): `run <gate>` runs the rest of its words as the
+ * command, so it is unwrapped like the retry helper.
+ */
+const isReleaseGateRun = (words: readonly string[]): boolean => {
+  const helper = words.at(1);
+  return (
+    (helper === "release-gate.sh" ||
+      helper?.endsWith("/release-gate.sh") === true) &&
+    words.at(2) === "run" &&
+    words.at(3) !== undefined
+  );
+};
+
+/** The command a repository wrapper run through bash hands its words to. */
+const bashWrapperCommand = (
+  words: readonly string[],
+): readonly string[] | undefined => {
+  if (words.at(0) !== "bash") {
+    return undefined;
+  }
+  if (isRetryHelper(words.at(1))) {
+    return words.slice(2);
+  }
+  return isReleaseGateRun(words) ? words.slice(4) : undefined;
+};
 
 /** The program and its arguments, past keywords, assignments and wrappers. */
 export const programWords = (words: readonly string[]): readonly string[] => {
@@ -792,10 +822,12 @@ export const programWords = (words: readonly string[]): readonly string[] => {
         return words;
       }
       rest = rest.slice(1); // Duration precedes the wrapped command.
-    } else if (first === "bash" && isRetryHelper(rest.at(1))) {
-      rest = rest.slice(2);
     } else {
-      return rest;
+      const wrapped = bashWrapperCommand(rest);
+      if (wrapped === undefined) {
+        return rest;
+      }
+      rest = wrapped;
     }
   }
 };
@@ -839,12 +871,27 @@ type ResolveRepoPathOptions = {
   readonly checkouts: readonly CheckoutSource[];
 };
 
+const PRESERVED_TOOLING_FILES = new Map([
+  ["$RUNNER_TEMP/ci-pr-jobs-cli.ts", "scripts/ci-pr-jobs-cli.ts"],
+  [
+    "$STAGING_PROOF_GATE_DIR/staging-proof-readiness-cli.ts",
+    "scripts/staging-proof-readiness-cli.ts",
+  ],
+]);
+
+const preservedToolingFile = (target: string) =>
+  PRESERVED_TOOLING_FILES.get(target);
+
 const resolveRepoPath = ({
   cwd,
   root,
   target,
   checkouts,
 }: ResolveRepoPathOptions): ResolvedPath => {
+  const preserved = preservedToolingFile(target);
+  if (preserved !== undefined) {
+    return { path: preserved, type: "file" };
+  }
   if (isComputed(target) || isComputed(cwd)) {
     return { reason: `${target} is computed at run time`, type: "invalid" };
   }
@@ -1256,7 +1303,10 @@ const classifyBun = ({
   if (subcommand === undefined) {
     return single(unclassified("names no script, file or subcommand"));
   }
-  if (isComputed(subcommand)) {
+  if (
+    isComputed(subcommand) &&
+    preservedToolingFile(subcommand) === undefined
+  ) {
     return single(unclassified(`${subcommand} is computed at run time`));
   }
   if (filter !== undefined) {

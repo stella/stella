@@ -864,9 +864,8 @@ describe("fill handler download response", () => {
     expect(result).toBeInstanceOf(Response);
     const resp = result;
     expect(resp.status).toBe(200);
-    // The Eden treaty client maps only application/octet-stream to
-    // arrayBuffer() and text-decodes every other content type, which
-    // UTF-8-mangles the ZIP container (Word: "unreadable content").
+    // The API client decodes application/octet-stream as an ArrayBuffer,
+    // which is how the browser reads the filled DOCX.
     expect(resp.headers.get("Content-Type")).toBe("application/octet-stream");
     expect(resp.headers.get("Content-Disposition")).toContain("attachment");
 

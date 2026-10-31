@@ -16,23 +16,13 @@ import nodePath from "node:path";
 import { parseArgs } from "node:util";
 
 import {
-  buildReport,
-  checkPage,
-  filterCountryShards,
-  isUndatedShardUrl,
-  parseSitemapLocs,
   renderMarkdown,
-  shuffled,
+  runPublicLawCheck,
 } from "./check-public-law-pages.logic";
-import type {
-  ExpectedRobots,
-  PageResult,
-} from "./check-public-law-pages.logic";
+import type { ExpectedRobots } from "./check-public-law-pages.logic";
 
 const REQUEST_INTERVAL_MS = 1000;
 const REQUEST_TIMEOUT_MS = 20_000;
-const MAX_SHARDS = 12;
-const POOL_FACTOR = 4;
 
 let lastRequestAt = 0;
 const politeFetch = async (url: string): Promise<Response> => {
@@ -45,14 +35,6 @@ const politeFetch = async (url: string): Promise<Response> => {
     redirect: "follow",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
-};
-
-const fetchText = async (url: string): Promise<string> => {
-  const response = await politeFetch(url);
-  if (!response.ok) {
-    return panic(`HTTP ${response.status}`);
-  }
-  return await response.text();
 };
 
 const withoutTrailingSlashes = (
@@ -108,73 +90,25 @@ const parseCliArgs = () => {
   };
 };
 
-const collectDecisionUrls = async (
-  baseUrl: string,
-  country: string,
-  wanted: number,
-): Promise<Map<string, boolean>> => {
-  const index = parseSitemapLocs(
-    await fetchText(`${baseUrl}/sitemaps/law.xml`),
-  );
-  const shards = shuffled(filterCountryShards(index, country));
-  if (shards.length === 0) {
-    return panic(`No ${country} case-law shards in the law sitemap.`);
-  }
-  // Decision URL -> whether its page must carry a decision date.
-  const urls = new Map<string, boolean>();
-  for (const shard of shards.slice(0, MAX_SHARDS)) {
-    // The index may carry absolute URLs of another origin; fetch via ours.
-    const path = new URL(shard).pathname;
-    for (const loc of parseSitemapLocs(await fetchText(`${baseUrl}${path}`))) {
-      urls.set(loc, !isUndatedShardUrl(path));
-    }
-    if (urls.size >= wanted * POOL_FACTOR) {
-      break;
-    }
-  }
-  return urls;
-};
-
 const main = async () => {
   const { baseUrl, country, expectedRobots, outDir, sample } = parseCliArgs();
-  const pool = await collectDecisionUrls(baseUrl, country, sample);
-  const picked = shuffled([...pool.keys()]).slice(0, sample);
-  await Bun.write(
-    nodePath.join(outDir, `public-law-pages-${country}-sample.txt`),
-    `${picked.map((url) => `${baseUrl}${new URL(url).pathname}`).join("\n")}\n`,
-  );
-  const results: PageResult[] = [];
-  const fetchErrors: string[] = [];
-  for (const url of picked) {
-    try {
-      const path = new URL(url).pathname;
-      const target = `${baseUrl}${path}`;
-      const response = await politeFetch(target);
-      results.push(
-        checkPage(
-          {
-            url: target,
-            status: response.status,
-            contentType: response.headers.get("content-type"),
-            xRobotsTag: response.headers.get("x-robots-tag"),
-            dateRequired: pool.get(url) ?? true,
-            html: await response.text(),
-          },
-          expectedRobots,
-        ),
-      );
-    } catch {
-      fetchErrors.push(url);
-    }
-  }
-  const report = buildReport({
+  const checked = await runPublicLawCheck({
     baseUrl,
     country,
     expectedRobots,
-    fetchErrors,
-    results,
+    fetch: politeFetch,
     sampleSize: sample,
   });
+  if (checked.isErr()) {
+    process.stderr.write(`${checked.error.message}\n`);
+    process.exitCode = 1;
+    return;
+  }
+  await Bun.write(
+    nodePath.join(outDir, `public-law-pages-${country}-sample.txt`),
+    `${checked.value.sampledUrls.join("\n")}\n`,
+  );
+  const { report } = checked.value;
   await Bun.write(
     nodePath.join(outDir, `public-law-pages-${country}.json`),
     `${JSON.stringify(report, null, 2)}\n`,

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { sql, type SQL } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 
 import { caseLawSearchDocuments } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";

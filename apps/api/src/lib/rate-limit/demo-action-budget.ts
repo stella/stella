@@ -54,8 +54,7 @@ const demoActionScope = new AsyncLocalStorage<DemoActionScope>();
 const DEMO_USER_ID_CACHE_MS = 5 * 60 * 1000;
 
 let resolvedDemoUser:
-  | { userId: SafeId<"user"> | undefined; expiresAtMs: number }
-  | undefined;
+  { userId: SafeId<"user"> | undefined; expiresAtMs: number } | undefined;
 
 const resolveConfiguredDemoUserId = async () => {
   const { email } = getDemoAccountConfig();
@@ -149,7 +148,7 @@ export const withDemoActionBudget = async <T>(
     catch: (cause: unknown) =>
       new ActionAdmissionError({
         message: "Action admission is unavailable",
-        reason: "unavailable",
+        reason: "organization_state_unreadable",
         cause,
       }),
   });
@@ -173,7 +172,7 @@ export const withDemoActionBudget = async <T>(
     catch: (cause: unknown) =>
       new ActionAdmissionError({
         message: "Action admission is unavailable",
-        reason: "unavailable",
+        reason: "store_unavailable",
         cause,
       }),
   });

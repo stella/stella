@@ -24,6 +24,7 @@ import {
   listIncomingDecisionCitations,
   listOutgoingDecisionCitations,
 } from "@/api/lib/case-law/decision-citations";
+import { readDecisionWork } from "@/api/lib/case-law/decision-work";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type {
   CaseLawSurfaceCountries,
@@ -36,15 +37,15 @@ import {
 } from "@/api/tests/pglite-test-db";
 
 /**
- * A pages-public country is open on decision pages and closed on search, MCP
- * and AI. No country holds that state today, so the gate is handed a table in
- * which SVK is on the pages list only, and every read reached from a gated
- * subject must answer to the subject's own surface: the gate itself, the
+ * A pages-public country is open on identity reads and decision pages, and
+ * closed on search. The gate is handed an explicit table so every read reached
+ * from a gated subject must answer to the subject's own surface: the gate itself, the
  * citation graph (list, summary, leaders, top citers) and the reader's
  * citation pages.
  */
 const PAGES_ONLY_COUNTRY = "SVK";
 const SURFACE_COUNTRIES: CaseLawSurfaceCountries = {
+  identity: ["CZE", PAGES_ONLY_COUNTRY],
   pages: ["CZE", PAGES_ONLY_COUNTRY],
   search: ["CZE"],
 };
@@ -184,7 +185,10 @@ const relatedIds = (
     .toSorted(byCodeUnit);
 };
 
-test("the gate admits a pages-public decision on pages only", async () => {
+test("the gate admits a pages-public decision on identity and pages but not search", async () => {
+  expect(
+    await onSurface("identity", pagesOnlyRelatedId, async ({ id }) => id),
+  ).toBe(pagesOnlyRelatedId);
   expect(
     await onSurface("pages", pagesOnlyRelatedId, async ({ id }) => id),
   ).toBe(pagesOnlyRelatedId);
@@ -271,7 +275,7 @@ test("the reader's citation pages answer to the subject's surface", async () => 
       const options = {
         tx: subject.tx,
         cursor: undefined,
-        decisionId: subject.id,
+        work: await readDecisionWork(subject.tx, subject.id),
         countries: subject.countries,
       };
       const [outgoing, incoming] = await Promise.all([

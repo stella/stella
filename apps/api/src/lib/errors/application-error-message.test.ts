@@ -1,4 +1,4 @@
-import { panic, Panic, TaggedError, UnhandledException } from "better-result";
+import { Panic, panic, TaggedError, UnhandledException } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {

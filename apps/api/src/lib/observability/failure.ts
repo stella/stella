@@ -19,6 +19,7 @@ import type { FailureGrade, FailureReason } from "@stll/errors";
 import { failureGradeOf } from "@stll/errors";
 
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
+import { GRADED_HANDLER_CODE_REASON } from "@/api/lib/errors/graded-handler-codes";
 import {
   MAX_TRANSPORT_WRAPPER_DEPTH,
   TRANSPORT_WRAPPERS,
@@ -33,6 +34,7 @@ import {
   PG_IDENTIFIER_PROPERTIES,
   readEvidence,
 } from "@/api/lib/observability/failure-evidence";
+import { taggedFailureReason } from "@/api/lib/observability/failure-tag-policy";
 
 // --- Closed code sets ---------------------------------------------------------
 
@@ -110,6 +112,9 @@ export const PG_SQL_STATE_REASON = {
   "57014": "pg_query_canceled",
   "28P01": "pg_auth_failed",
   "28000": "pg_auth_failed",
+  "22007": "pg_invalid_input",
+  "22008": "pg_invalid_input",
+  "22P02": "pg_invalid_input",
 } as const satisfies Record<PgLifecycleSqlState, FailureReason> &
   Record<string, FailureReason>;
 
@@ -161,18 +166,6 @@ export const NETWORK_ERROR_CODE_REASON = {
 
 const TIMEOUT_CLASS_NAME = "TimeoutError";
 
-/**
- * `HandlerError` codes that carry a grade. Closed, so a misspelt code fails to
- * compile at the constructor rather than silently grading as a defect.
- */
-const GRADED_HANDLER_CODES = ["upstream_unavailable"] as const;
-
-type GradedHandlerCode = (typeof GRADED_HANDLER_CODES)[number];
-
-const GRADED_HANDLER_CODE_REASON = {
-  upstream_unavailable: "upstream_unavailable",
-} as const satisfies Record<GradedHandlerCode, FailureReason>;
-
 type HandlerClientStatus = Exclude<HandlerErrorStatusCode, 500 | 502 | 503>;
 
 /** Total over the client statuses a handler can answer with. */
@@ -195,7 +188,8 @@ export type FrameworkFailure =
   | "request_malformed"
   | "request_validation"
   | "response_invalid"
-  | "route_not_found";
+  | "route_not_found"
+  | "method_not_allowed";
 
 /**
  * AWS SDK service exception names. The name is the exception's code, and it
@@ -329,6 +323,7 @@ export type FailureRule =
   | "handler_status"
   | "infra"
   | "infra_under_panic"
+  | "tag"
   | "unclassified"
   | "unobserved";
 
@@ -510,7 +505,8 @@ const matchesExpectation = (
  *     resolves it;
  *  5. infrastructure evidence anywhere in the chain;
  *  6. what the framework answered;
- *  7. otherwise a defect.
+ *  7. the tagged failure's exhaustive baseline declaration;
+ *  8. otherwise an unclassified defect.
  */
 export const gradeFailure = (
   evidence: FailureEvidence,
@@ -558,6 +554,15 @@ export const gradeFailure = (
 
   if (request.framework !== undefined) {
     return graded(request.framework, "framework", failureIndex);
+  }
+
+  const failureNode = nodes[failureIndex];
+  if (failureNode?.kind === "tagged") {
+    // Library wrappers are not project declarations in the tag policy.
+    if (isTransportWrapper(failureNode)) {
+      return graded("tagged_failure", "tag", failureIndex);
+    }
+    return graded(taggedFailureReason(failureNode.tag), "tag", failureIndex);
   }
 
   return graded("unclassified", "unclassified", failureIndex);
@@ -719,7 +724,10 @@ export const identityFields = (
   }
   const fields: Record<string, string> = {
     "error.class": root.className ?? UNKNOWN_ERROR_CLASS,
-    "error.code": root.code ?? root.awsName ?? root.tag,
+    "error.code":
+      root.extraction?.["workerErrorClass"] === undefined
+        ? (root.code ?? root.awsName ?? root.tag)
+        : `${root.code ?? root.tag}:${root.extraction["workerErrorClass"]}`,
   };
   const frame = frameValue(root.frame);
   if (frame !== undefined) {
@@ -841,10 +849,7 @@ export const providerStatusFieldsOf = ({
 };
 
 export type FingerprintDegradation =
-  | "class_generic"
-  | "frame_absent"
-  | "read_failed"
-  | "truncated";
+  "class_generic" | "frame_absent" | "read_failed" | "truncated";
 
 /**
  * Why a grouping identity is weaker than it should be, if it is. A plain

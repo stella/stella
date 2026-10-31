@@ -2,8 +2,8 @@ import { Temporal } from "@stll/time";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  resolveRateLimitClientAddress,
   normalizeRateLimitClientAddress,
+  resolveRateLimitClientAddress,
 } from "@/api/lib/client-ip";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
@@ -12,16 +12,12 @@ import type {
   RateLimitGenerator,
   RateLimitOptions,
 } from "@/api/lib/rate-limit/contracts";
+import { dedicatedBudget } from "@/api/lib/rate-limit/dedicated-budgets";
+import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import {
   createRedisRateLimit,
   createRedisRateLimitRequestKey,
 } from "@/api/lib/rate-limit/redis-context";
-
-const SKILL_SOURCE_PATHS = new Set([
-  "/skills/discover-url",
-  "/skills/import-url",
-  "/skills/import-urls",
-]);
 
 const SKILL_SOURCE_RATE_LIMIT_SCOPE = "skill-source";
 
@@ -116,18 +112,11 @@ export const consumeSkillSourceRateLimit = async ({
   };
 };
 
-export const isSkillSourceRateLimitedRequest = (
-  request: Pick<Request, "method" | "url">,
-): boolean => {
-  if (request.method !== "POST") {
-    return false;
-  }
-  const { pathname } = new URL(request.url);
-  const versionlessPath = pathname.startsWith("/v1/")
-    ? pathname.slice("/v1".length)
-    : pathname;
-  const normalizedPath = versionlessPath.endsWith("/")
-    ? versionlessPath.slice(0, -1)
-    : versionlessPath;
-  return SKILL_SOURCE_PATHS.has(normalizedPath);
-};
+/** The skill-source routes' own budget, keyed by user when signed in. */
+export const skillSourceBudget = dedicatedBudget(
+  rateLimit({
+    duration: API_RATE_LIMITS.skillSource.duration,
+    max: API_RATE_LIMITS.skillSource.max,
+    ...skillSourceRateLimitBinding,
+  }),
+);

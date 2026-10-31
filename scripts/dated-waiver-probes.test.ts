@@ -2,21 +2,25 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
 
+import { parseSource } from "../packages/scripts/src/syntax-tree";
 import {
-  removeWaiver,
-  runWaiverProbe,
-  probeDocUrl,
   createProbeBudget,
   PROBE_PHASE_BUDGET_MS,
   PROBE_TIMEOUT_MS,
+  probeDocUrl,
+  removeWaiver,
+  runWaiverProbe,
 } from "./dated-waiver-probes";
 import {
+  type DatedWaiver,
   readTestQuarantines,
   ZERO_AGE_OVERRIDE,
-  type DatedWaiver,
 } from "./dated-waivers";
+import {
+  type QuarantineEntry,
+  serializeRegistry,
+} from "./flaky-test-quarantine";
 
 const waiver = (
   kind: DatedWaiver["kind"],
@@ -99,13 +103,7 @@ test("AST docs edits preserve comments, unrelated objects, separators and remain
     expect(changed).toContain('expiresAt: "2026-10-06T00:00:00.000Z"');
     expect(changed).not.toContain('expiresAt: "2026-10-05T00:00:00.000Z"');
     expect(changed).toContain('url: "https://example.com/llms.txt"');
-    expect(
-      ts
-        .transpileModule(changed, { reportDiagnostics: true })
-        .diagnostics?.filter(
-          ({ category }) => category === ts.DiagnosticCategory.Error,
-        ) ?? [],
-    ).toEqual([]);
+    expect(parseSource("doc-sources.ts", changed).program.type).toBe("Program");
   }
   expect(() =>
     removeWaiver(
@@ -260,6 +258,52 @@ test("test green requires exactly one named passing selected receipt", async () 
     );
     expect(evidence.status).toBe(expected);
   }
+});
+
+test("a flaky-test quarantine probe passes only on its full test name", async () => {
+  const id = "packages/example/src/a.test.ts::group > case";
+  for (const [output, expected] of [
+    ["(pass) group > case [0.10ms]\n1 pass\n0 fail", "green"],
+    ["(pass) other > case [0.10ms]\n1 pass\n0 fail", "red"],
+    ["(pass) case [0.10ms]\n1 pass\n0 fail", "red"],
+    ["(fail) group > case [0.10ms]\n0 pass\n1 fail", "red"],
+  ] as const) {
+    const evidence = await runWaiverProbe(
+      waiver("flaky-test-quarantine", "scripts/flaky-test-quarantine.json", id),
+      { run: async () => ({ passed: true, output }) },
+    );
+    expect(evidence.status).toBe(expected);
+  }
+});
+
+test("flaky-test quarantine removal drops only the probed entry", () => {
+  const entry = (id: string, expires: string): QuarantineEntry => ({
+    id,
+    owner: "octocat",
+    reason: "Fails intermittently.",
+    created: "2026-10-01",
+    expires,
+  });
+  const kept = entry("packages/example/src/a.test.ts::kept", "2026-10-06");
+  const probed = entry("packages/example/src/b.test.ts::probed", "2026-10-05");
+  const source = serializeRegistry({ entries: [kept, probed] });
+  const target = {
+    ...waiver(
+      "flaky-test-quarantine",
+      "scripts/flaky-test-quarantine.json",
+      probed.id,
+    ),
+    expiresAt: probed.expires,
+  };
+  expect(
+    removeWaiver(target, reader({ [target.source]: source })).at(0)?.after,
+  ).toBe(serializeRegistry({ entries: [kept] }));
+  expect(() =>
+    removeWaiver(
+      { ...target, expiresAt: "2026-10-04" },
+      reader({ [target.source]: source }),
+    ),
+  ).toThrow("Flaky-test quarantine anchor missing");
 });
 
 test("real Bun filtered receipts accept only the selected passing declaration", async () => {
@@ -605,4 +649,69 @@ test.each([
   "bun install --minimum-release-age 01",
 ])("a nonzero release age %j is not a zero-age override", (command) => {
   expect(ZERO_AGE_OVERRIDE.test(` ${command}`)).toBe(false);
+});
+
+const rolloutFile = (id: string, fields: string) =>
+  `import type { GuardRollout } from "../guard-rollout-policy.ts";\n\nexport default { id: ${JSON.stringify(id)}, ${fields} check: ["bun", "scripts/check-${id}.ts"] } as const satisfies GuardRollout;\n`;
+
+test("guard rollout healing restores full enforcement in only the entry's own file", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.ts",
+    "fixture-guard",
+  );
+  const other = {
+    file: "scripts/guard-rollouts/other-guard.ts",
+    source: rolloutFile(
+      "other-guard",
+      'type: "changed-lines", expiresAt: "2026-10-06T00:00:00.000Z",',
+    ),
+  };
+  for (const fields of [
+    'type: "changed-lines", expiresAt: "2026-10-05T00:00:00.000Z",',
+    'expiresAt: "2026-10-05T00:00:00.000Z", type: "changed-lines",',
+  ]) {
+    const changes = removeWaiver(
+      entry,
+      reader({
+        [entry.source]: rolloutFile("fixture-guard", fields),
+        [other.file]: other.source,
+      }),
+    );
+    expect(changes.map(({ source }) => source)).toEqual([entry.source]);
+    const changed = changes.at(0)?.after ?? "";
+    expect(changed).toContain('id: "fixture-guard",');
+    expect(changed).toContain('type: "full"');
+    expect(changed).toContain(
+      'check: ["bun", "scripts/check-fixture-guard.ts"]',
+    );
+    expect(changed).toContain("as const satisfies GuardRollout;");
+    expect(changed).not.toContain(entry.expiresAt);
+    expect(() =>
+      removeWaiver(entry, reader({ [entry.source]: changed })),
+    ).toThrow("Guard rollout scope or expiry changed");
+  }
+  expect(() =>
+    removeWaiver(
+      { ...entry, source: other.file },
+      reader({ [other.file]: other.source }),
+    ),
+  ).toThrow(
+    "Guard rollout heals only in its own file: scripts/guard-rollouts/other-guard.ts (fixture-guard)",
+  );
+});
+
+test("guard rollout healing rejects a changed deadline", () => {
+  const entry = waiver(
+    "guard-rollout",
+    "scripts/guard-rollouts/fixture-guard.ts",
+    "fixture-guard",
+  );
+  const source = rolloutFile(
+    "fixture-guard",
+    'type: "changed-lines", expiresAt: "2026-10-06T00:00:00.000Z",',
+  );
+  expect(() => removeWaiver(entry, reader({ [entry.source]: source }))).toThrow(
+    "Guard rollout scope or expiry changed",
+  );
 });

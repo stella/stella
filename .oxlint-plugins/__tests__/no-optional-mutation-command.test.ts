@@ -19,6 +19,14 @@ describe("no-optional-mutation-command", () => {
       ),
     ).toEqual([3]);
   });
+  test("reports capability mutations with an optional bag", async () => {
+    expect(
+      await lintSingleRule(
+        "no-optional-mutation-command",
+        'import { useCapabilityMutation } from "@/lib/capabilities/use-capability-mutation";\nuseCapabilityMutation({ capability: "x.update", mutationFn: async (body: { name?: string; color?: string }, request) => save(body, request) });',
+      ),
+    ).toEqual([2]);
+  });
   test("accepts explicit operation variants", async () => {
     expect(
       await lintSingleRule(

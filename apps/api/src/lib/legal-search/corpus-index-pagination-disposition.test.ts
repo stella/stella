@@ -5,9 +5,9 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  type CorpusHitDispositionCounter,
   createCorpusHitDispositionCounter,
   reportCorpusHitDispositions,
-  type CorpusHitDispositionCounter,
 } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -17,7 +17,11 @@ import {
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { LIMITS } from "@/api/lib/limits";
-import { testRevisionsFor } from "@/api/tests/helpers/corpus-projection-revisions";
+import {
+  testAppliedProjectionsFor,
+  testRevisionOf,
+  testRevisionsFor,
+} from "@/api/tests/helpers/corpus-projection-revisions";
 import {
   installRecordingLogger,
   type RecordingLogger,
@@ -39,9 +43,18 @@ const modes = ["native", "scored", "bm25"] as const;
 type Mode = (typeof modes)[number];
 
 const stubHits = (
-  hits: readonly CorpusIndexHit[],
-  highlightHits: readonly CorpusIndexHit[] = hits,
+  rawHits: readonly CorpusIndexHit[],
+  rawHighlightHits: readonly CorpusIndexHit[] = rawHits,
 ) => {
+  const withRevision = (hit: CorpusIndexHit): CorpusIndexHit => ({
+    ...hit,
+    ...(typeof hit["document_id"] === "string" &&
+    hit["projection_revision"] === undefined
+      ? { projection_revision: testRevisionOf(hit["document_id"]) }
+      : {}),
+  });
+  const hits = rawHits.map(withRevision);
+  const highlightHits = rawHighlightHits.map(withRevision);
   globalThis.fetch = Object.assign(
     async (
       _input: Parameters<typeof fetch>[0],
@@ -103,16 +116,21 @@ const readDispositionPage = async (
       return typeof first === "string" ? first : null;
     },
     unseenScoreUpperBound: () => 0,
-    rankCandidates: async (candidates) => ({
-      context: null,
-      groups: [],
-      ranked: candidates.map((candidate) => ({
-        ...candidate,
-        lexicalScore: candidate.score,
-        citationAuthority: 0,
-      })),
-      revisionById: testRevisionsFor(candidates),
-    }),
+    rankCandidates: async (probes, { selectAppliedCandidates }) => {
+      const candidates = selectAppliedCandidates(
+        testAppliedProjectionsFor(probes),
+      );
+      return {
+        context: null,
+        groups: [],
+        ranked: candidates.map((candidate) => ({
+          ...candidate,
+          lexicalScore: candidate.score,
+          citationAuthority: 0,
+        })),
+        revisionById: testRevisionsFor(candidates),
+      };
+    },
   });
 
 test.each(modes)(
@@ -269,3 +287,57 @@ test("valid hits retain their physical score and id order across every dispositi
     ),
   );
 });
+
+// Both copies remain searchable after the serving pointer moves and before purge.
+test.each(modes)(
+  "%s counts only the applied copy while both generation indexes are populated",
+  async (mode) => {
+    const current = [
+      {
+        document_id: "cze",
+        projection_revision: testRevisionOf("cze"),
+        text: "Czech one",
+      },
+      {
+        document_id: "cze",
+        projection_revision: testRevisionOf("cze"),
+        text: "Czech two",
+      },
+      {
+        document_id: "svk",
+        projection_revision: testRevisionOf("svk"),
+        text: "Slovak one",
+      },
+    ];
+    stubHits(current);
+    const singleCopy = await readDispositionPage(mode);
+    // The retired Czech intent belongs to the old physical index; the ranker's
+    // revisionById models the applied state selected through the flipped pointer.
+    const old = current
+      .filter((hit) => hit.document_id === "cze")
+      .map((hit) => ({
+        ...hit,
+        projection_revision: testRevisionOf("cze-old-index"),
+      }));
+    expect(old.at(0)?.projection_revision).not.toBe(testRevisionOf("cze"));
+    stubHits([...old, ...current]);
+    const beforePurge = await readDispositionPage(mode);
+    expect(beforePurge.passageCountById).toEqual(singleCopy.passageCountById);
+    expect(beforePurge.passageCountById).toEqual(
+      new Map([
+        ["cze", 2],
+        ["svk", 1],
+      ]),
+    );
+    expect(beforePurge.pageRanked.map(({ id }) => id).toSorted()).toEqual(
+      singleCopy.pageRanked.map(({ id }) => id).toSorted(),
+    );
+    expect(
+      [...beforePurge.passageCountById.values()].reduce(
+        (sum, count) => sum + count,
+        0,
+      ),
+    ).toBe(3);
+    expect(beforePurge.pageRanked).toHaveLength(2);
+  },
+);

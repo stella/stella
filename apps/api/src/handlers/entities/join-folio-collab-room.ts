@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
 import {
   FOLIO_COLLAB_SEED_PREPARING_CODE,
@@ -24,10 +23,11 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUFFER_INTENT_STALE_MS } from "@/api/lib/buffer-intent-reconciliation";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
   lockDocxEditTarget,
@@ -46,14 +46,18 @@ import {
   recordFolioCollabContribution,
 } from "@/api/lib/folio-collab-rooms";
 import { isMemberRole } from "@/api/lib/member-roles";
+import { callerDownloadSource } from "@/api/lib/s3-presign";
+import type { SyntheticSessionAuthorityReader } from "@/api/lib/synthetic-principal/session-authority";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
-const joinFolioCollabRoomBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  propertyId: tSafeId("property"),
+const joinFolioCollabRoomBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  propertyId: resourceIdSchema("property"),
 });
 
-type JoinFolioCollabRoomBody = Static<typeof joinFolioCollabRoomBodySchema>;
+type JoinFolioCollabRoomBody = v.InferOutput<
+  typeof joinFolioCollabRoomBodySchema
+>;
 
 type JoinFolioCollabRoomResponse = {
   baseVersionId: SafeId<"entityVersion">;
@@ -69,9 +73,12 @@ type JoinFolioCollabRoomResponse = {
 };
 
 type JoinFolioCollabRoomProps = {
+  /** The browser session joining, or `null` for a credential that has none. */
+  sourceSessionId: string | null;
   body: JoinFolioCollabRoomBody;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
+  readSessionAuthority: SyntheticSessionAuthorityReader;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
@@ -245,7 +252,9 @@ const claimFolioCollabRoomSeed = async ({
 const joinFolioCollabRoomHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
+  sourceSessionId,
   recordAuditEvent,
+  readSessionAuthority,
   safeDb,
   userId,
   workspaceId,
@@ -501,6 +510,8 @@ const joinFolioCollabRoomHandler = async function* ({
       }
 
       const { token, tokenExpiresAt } = await issueFolioCollabToken({
+        sourceSessionId,
+        readSessionAuthority,
         generation,
         permissions: { canEdit: true },
         roomId: room.id,
@@ -539,11 +550,19 @@ const joinFolioCollabRoomHandler = async function* ({
     );
   }
 
-  const seedDownloadUrl = await presignDocxFieldDownload({
-    fileContent: joined.seedFileContent,
-    organizationId,
-    workspaceId,
-  });
+  const seedDownloadUrl = yield* Result.await(
+    safeDb(
+      async () =>
+        await presignDocxFieldDownload({
+          readSessionAuthority,
+          userId,
+          source: callerDownloadSource({ id: sourceSessionId }),
+          fileContent: joined.seedFileContent,
+          organizationId,
+          workspaceId,
+        }),
+    ),
+  );
 
   return Result.ok({
     baseVersionId: joined.baseVersionId,
@@ -572,25 +591,34 @@ const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies WorkspaceHandlerConfig;
 
-const joinFolioCollabRoom = createSafeHandler(
-  config,
-  async function* ({
-    body,
-    safeDb,
-    session,
-    user,
-    workspaceId,
-    recordAuditEvent,
-  }) {
-    return yield* joinFolioCollabRoomHandler({
+export const createJoinFolioCollabRoom = (
+  readSessionAuthority: SyntheticSessionAuthorityReader,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
       body,
-      organizationId: session.activeOrganizationId,
-      recordAuditEvent,
       safeDb,
-      userId: user.id,
+      session,
+      user,
       workspaceId,
-    });
-  },
+      recordAuditEvent,
+    }) {
+      return yield* joinFolioCollabRoomHandler({
+        sourceSessionId: session.id,
+        body,
+        organizationId: session.activeOrganizationId,
+        recordAuditEvent,
+        readSessionAuthority,
+        safeDb,
+        userId: user.id,
+        workspaceId,
+      });
+    },
+  );
+
+const joinFolioCollabRoom = createJoinFolioCollabRoom(
+  ownerSyntheticSessionAuthorityReader,
 );
 
 export default joinFolioCollabRoom;

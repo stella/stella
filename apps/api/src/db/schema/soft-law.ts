@@ -1,15 +1,17 @@
+import { GUIDANCE_KINDS } from "@stll/legal-ast/document-kind";
+
 import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type {
   SoftLawMetadata,
-  SoftLawEntry,
+  SoftLawRawObject,
+  StoredSoftLawDiscoveryEntry,
 } from "@/api/lib/legal-search/soft-law-types";
 import {
   SOFT_LAW_ATTEMPT_STATES,
-  SOFT_LAW_ITEM_TAGS,
-  SOFT_LAW_FAILURE_TAGS,
   SOFT_LAW_EXTRACTION_QUALITIES,
-  SOFT_LAW_KINDS,
+  SOFT_LAW_FAILURE_TAGS,
+  SOFT_LAW_ITEM_TAGS,
   SOFT_LAW_LISTING_STATES,
   SOFT_LAW_LOCATOR_STATES,
   SOFT_LAW_RUN_STATES,
@@ -81,7 +83,7 @@ export const softLawDocuments = p.pgTable.withRLS(
     identityKey: p.text("identity_key").notNull(),
     jurisdiction: p.text().notNull(),
     authority: p.text().notNull(),
-    kind: p.text({ enum: SOFT_LAW_KINDS }).notNull(),
+    kind: p.text({ enum: GUIDANCE_KINDS }).notNull(),
     title: p.text().notNull(),
     statedReference: p.text("stated_reference"),
     statedReferenceState: p
@@ -117,7 +119,7 @@ export const softLawDocuments = p.pgTable.withRLS(
     }),
     p.check(
       "soft_law_documents_kind_check",
-      sql`${t.kind} IN (${values(SOFT_LAW_KINDS)})`,
+      sql`${t.kind} IN (${values(GUIDANCE_KINDS)})`,
     ),
     p.check(
       "soft_law_documents_listing_check",
@@ -146,10 +148,12 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
     sequence: p.integer().notNull(),
     contentHash: p.text("content_hash").notNull(),
     rawObjects: jsonb("raw_objects")
-      .$type<readonly { role: string; key: string; contentType: string }[]>()
+      .$type<readonly SoftLawRawObject[]>()
       .notNull(),
     metadata: jsonb().$type<SoftLawMetadata>().notNull(),
     extractedText: p.text("extracted_text"),
+    /** Sanitized local extraction failure; publisher bytes remain available for repair. */
+    extractionFailure: p.text("extraction_failure"),
     extractionQuality: p
       .text("extraction_quality", { enum: SOFT_LAW_EXTRACTION_QUALITIES })
       .notNull(),
@@ -174,6 +178,10 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
     p.check(
       "soft_law_versions_quality_check",
       sql`${t.extractionQuality} IN (${values(SOFT_LAW_EXTRACTION_QUALITIES)})`,
+    ),
+    p.check(
+      "soft_law_versions_extraction_failure_check",
+      sql`${t.extractionFailure} IS NULL OR (${t.extractionQuality} = 'extraction_failed' AND length(btrim(${t.extractionFailure})) > 0)`,
     ),
     p.check("soft_law_versions_sequence_check", sql`${t.sequence} > 0`),
     p.check(
@@ -227,7 +235,12 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
     sourceId: safeUuid<"softLawSource">("source_id").notNull(),
     runId: p.uuid("run_id").notNull(),
     url: p.text().notNull(),
-    entry: jsonb().$type<SoftLawEntry>().notNull(),
+    entry: jsonb().$type<StoredSoftLawDiscoveryEntry>().notNull(),
+    /** Per-run source snapshots, including unchanged-document discovery evidence. */
+    rawObjects: jsonb("raw_objects")
+      .$type<readonly SoftLawRawObject[]>()
+      .default([])
+      .notNull(),
     status: p.text({ enum: SOFT_LAW_ATTEMPT_STATES }).notNull(),
     tag: p.text({ enum: SOFT_LAW_ITEM_TAGS }),
     identityKey: p.text("identity_key"),
@@ -246,7 +259,10 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
       columns: [t.sourceId],
       foreignColumns: [softLawSources.id],
     }),
-    p.check("soft_law_attempts_count_check", sql`${t.count} BETWEEN 1 AND 3`),
+    p.check(
+      "soft_law_attempts_count_check",
+      sql`${t.count} BETWEEN 0 AND 3 AND (${t.count} > 0 OR ${t.status} = 'retryable')`,
+    ),
     p.check(
       "soft_law_attempts_identity_check",
       sql`(${t.tag} IS NOT DISTINCT FROM 'identity_collision') = (${t.identityKey} IS NOT NULL)`,

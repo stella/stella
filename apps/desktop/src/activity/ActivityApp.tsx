@@ -21,16 +21,23 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   EyeOffIcon,
+  FileTextIcon,
   LockKeyholeIcon,
   PauseIcon,
   PlayIcon,
   ShieldAlertIcon,
   TextIcon,
-  FileTextIcon,
   Trash2Icon,
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import {
+  Popover,
+  PopoverDescription,
+  PopoverPopup,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@stll/ui/popover";
 import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
@@ -97,6 +104,7 @@ type ActivityCommand =
   | "activity_delete_other_account_history"
   | "activity_set_browser_title_capture"
   | "activity_set_capture_details"
+  | "activity_set_detect_calls"
   | "activity_set_app_detail_capture"
   | "activity_open_accessibility_settings"
   | "activity_exclude_app"
@@ -108,6 +116,7 @@ type RunCommand = (
   command: ActivityCommand,
   args?: Record<string, unknown>,
   onSuccess?: () => void,
+  onFailure?: () => void,
 ) => void;
 
 const RETENTION_LABEL_KEYS = {
@@ -118,13 +127,9 @@ const RETENTION_LABEL_KEYS = {
 
 const reportActivityError = (
   operation: (typeof DESKTOP_TELEMETRY_OPERATIONS)[
-    | "activityRead"
-    | "activitySubscribe"
-    | "activityUpdate"],
+    "activityRead" | "activitySubscribe" | "activityUpdate"],
   code: (typeof DESKTOP_TELEMETRY_ERROR_CODES)[
-    | "eventSubscriptionFailed"
-    | "invalidResponse"
-    | "invokeFailed"],
+    "eventSubscriptionFailed" | "invalidResponse" | "invokeFailed"],
 ) => {
   // Fixed codes only: nothing about what was recorded leaves the window.
   reportDesktopError({
@@ -183,6 +188,7 @@ const ActivityWelcomePreview = ({
       matterId: matter.id,
       document: null,
       windowTitle: null,
+      call: false,
     });
   }
   const newest = segments.at(-1);
@@ -324,6 +330,33 @@ const DetailsAccessNotice = ({
       access satisfies never;
       return panic("Unhandled activity details access");
   }
+};
+
+const DetectCallsControl = ({
+  onCommand,
+  snapshot,
+}: {
+  onCommand: RunCommand;
+  snapshot: ActivityDaySnapshot;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <div className="flex flex-col gap-2">
+      <Label className="items-start gap-2" htmlFor="activity-detect-calls">
+        <Checkbox
+          checked={snapshot.detectCalls}
+          id="activity-detect-calls"
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_detect_calls", { enabled })
+          }
+        />
+        <span>{t("detectCalls")}</span>
+      </Label>
+      <p className="text-muted-foreground text-xs">
+        {t("detectCallsDescription")}
+      </p>
+    </div>
+  );
 };
 
 type CaptureDetailsControlProps = {
@@ -551,15 +584,31 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
     );
   }
   return (
-    <span className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
+    <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
       {snapshot.recordingStatus === "recording" ? (
         <span
           data-activity-recording
           className="bg-destructive size-1.5 rounded-full"
         />
       ) : null}
-      <LockKeyholeIcon aria-hidden="true" className="size-3" />
-      {status} · {t("encrypted")}
+      {status}
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              aria-label={t("encrypted")}
+              size="icon-sm"
+              variant="ghost"
+            />
+          }
+        >
+          <LockKeyholeIcon aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverPopup className="w-72" side="bottom" align="start">
+          <PopoverTitle>{t("encrypted")}</PopoverTitle>
+          <PopoverDescription>{t("batchPrivacy")}</PopoverDescription>
+        </PopoverPopup>
+      </Popover>
     </span>
   );
 };
@@ -602,8 +651,13 @@ const DayContent = ({
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
-      onCopy={(text, onSuccess) =>
-        onCommand("activity_copy_text", { text }, onSuccess)
+      onCopy={(text, onSettled) =>
+        onCommand(
+          "activity_copy_text",
+          { text },
+          () => onSettled(true),
+          () => onSettled(false),
+        )
       }
     />
   );
@@ -830,6 +884,7 @@ const ActivitySettings = ({
   return (
     <section className="flex flex-col gap-4 border-t pt-6">
       <h3 className="text-sm font-semibold">{t("settings")}</h3>
+      <DetectCallsControl onCommand={onCommand} snapshot={snapshot} />
       <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
       {snapshot.appNameOnlyApps.length > 0 ? (
         <div className="flex flex-col gap-2">
@@ -1148,7 +1203,6 @@ const ConfirmDialog = ({
 const REVIEW_PENDING = {
   editing: false,
   submitting: true,
-  discarding: true,
   retry: true,
   saved: false,
 } as const satisfies Record<ActivityReviewStatus, boolean>;
@@ -1241,6 +1295,7 @@ const ActivityApp = () => {
     command: ActivityCommand,
     args: Record<string, unknown> = {},
     onSuccess?: () => void,
+    onFailure?: () => void,
   ) => {
     const pending =
       REVIEW_PENDING[reviewStatusRef.current] ||
@@ -1253,8 +1308,7 @@ const ActivityApp = () => {
           args["recovery"] === "discardUnreadable")) ||
         (command === "activity_delete_other_account_history" &&
           args["recovery"] === "discardUnrecoverable")) &&
-      reviewStatusRef.current !== "submitting" &&
-      reviewStatusRef.current !== "discarding";
+      reviewStatusRef.current !== "submitting";
     const inactiveRecoveryPreflight =
       command === "activity_delete_other_account_history" &&
       args["recovery"] === "preserve" &&
@@ -1277,6 +1331,7 @@ const ActivityApp = () => {
           ? t(BLOCKED_DELETION_NOTICE[view.snapshot.deletionStatus])
           : t("pendingActivityProtected"),
       );
+      onFailure?.();
       return;
     }
     setError(null);
@@ -1286,6 +1341,7 @@ const ActivityApp = () => {
         return undefined;
       })
       .catch((error: unknown) => {
+        onFailure?.();
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
@@ -1452,9 +1508,7 @@ const ActivityApp = () => {
         onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader
-            navigationDisabled={
-              reviewStatus === "submitting" || reviewStatus === "discarding"
-            }
+            navigationDisabled={reviewStatus === "submitting"}
             onNavigate={(next) =>
               setDate(next === snapshot.today ? null : next)
             }
@@ -1490,8 +1544,7 @@ const ActivityApp = () => {
           deletionDisabled={deletionDisabled}
           recoveryEraseStatus={
             snapshot.deletionStatus === "unreadable" &&
-            reviewStatus !== "submitting" &&
-            reviewStatus !== "discarding"
+            reviewStatus !== "submitting"
               ? "available"
               : "blocked"
           }

@@ -4,8 +4,8 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  templateLookupFormatUserDefaults,
   templateLookupFormats,
+  templateLookupFormatUserDefaults,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import createLookupFormat from "@/api/handlers/templates/lookup-formats/create";
@@ -21,8 +21,8 @@ import {
 } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";

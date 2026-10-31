@@ -1,13 +1,7 @@
-export {
-  ChatComposer,
-  ChatComposerAction,
-  resolveChatComposerAction,
-} from "./composer";
+export { resolveChatComposerAction } from "./composer";
 export type {
   ChatComposerActionMode,
   ChatComposerActionState,
-  ChatComposerLabels,
-  ChatComposerProps,
 } from "./composer";
 export {
   ChatModelSelector,

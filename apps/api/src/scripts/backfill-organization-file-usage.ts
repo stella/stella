@@ -20,8 +20,6 @@ import {
   openMaintenanceDb,
   openOrganizationFileUsageDb,
 } from "@/api/lib/db/maintenance-db";
-import { createUserFileKey } from "@/api/lib/file-key";
-import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import type { FileUsageInput } from "@/api/lib/files/organization-file-usage";
 import { reconcileOrganizationFileObjects } from "@/api/lib/files/organization-file-usage";
 import {
@@ -33,12 +31,12 @@ import { headObject } from "@/api/lib/s3-presign";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserFileId,
-  brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
 import {
   isTemporaryOrganizationObjectKey,
   reconcileAbsentOrganizationFileObjects,
   reportOrganizationFileUsageBackfill,
+  userFileUsageObjects,
 } from "@/api/scripts/backfill-organization-file-usage.helpers";
 
 const PAGE_SIZE = 200;
@@ -119,22 +117,10 @@ await runScriptWithErrorOutput(async () => {
           .orderBy(asc(userFiles.id))
           .limit(PAGE_SIZE),
     );
-    const objects: Pick<FileUsageInput, "organizationId" | "objectKey">[] = [];
-    for (const file of files) {
-      const organizationId = brandPersistedOrganizationId(file.organizationId);
-      objects.push({ organizationId, objectKey: file.s3Key });
-      if (file.thumbnailFileId) {
-        objects.push({
-          organizationId,
-          objectKey: createUserFileKey({
-            fileId: file.thumbnailFileId,
-            mimeType: THUMBNAIL_MIME_TYPE,
-            userId: brandPersistedUserId(file.userId),
-          }),
-        });
-      }
-    }
-    return { files, imported: await importObjectPage(objects) };
+    return {
+      files,
+      imported: await importObjectPage(userFileUsageObjects(files)),
+    };
   };
 
   let orgCursor: SafeId<"organization"> | null = null;

@@ -31,16 +31,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  LegacyRawShape,
-  SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getSourceRegistration,
   listSourceRegistrations,
   type SourceRegistrationKey,
@@ -48,25 +38,36 @@ import {
 import baseline from "@/api/handlers/case-law/ingestion/adapters/source-surface-backlog-baseline.json";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
   LEGACY_BACKLOG_ADAPTERS,
   LEGACY_RAW_SHAPES,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  LegacyRawShape,
+  SourceSurfaceDisposition,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
+  type AtRisFixtureAdapter,
   czNsFixture,
   czNssFixture,
   czRegionalFixture,
+  czUohsFixture,
   czUsFixture,
+  type EnrolledAdapterFixture,
   euEcjFixture,
   huBhgyFixture,
   plCourtsFixture,
   plCourtsSearchFixture,
   plKioFixture,
   plKisFixture,
-  plNsaFixture,
   plNcourtFixture,
+  plNsaFixture,
   plSnFixture,
   plTkFixture,
   plUodoFixture,
@@ -74,9 +75,10 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
-  type AtRisFixtureAdapter,
-  type EnrolledAdapterFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { nssRecoveryFixture } from "@/api/tests/helpers/cz-nss-recovery";
+import { deferredSkDocumentRawFixture } from "@/api/tests/helpers/sk-document-raw-storage";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -103,6 +105,7 @@ type SurfaceEvidence =
   | { readonly kind: "built"; readonly fixture: () => EnrolledAdapterFixture }
   | { readonly kind: "page-recording"; readonly file: string }
   | { readonly kind: "shared-path"; readonly with: SourceRegistrationKey }
+  | { readonly kind: "deferred-document" }
   | { readonly kind: "none"; readonly reason: string };
 
 /**
@@ -124,15 +127,20 @@ const SURFACE_EVIDENCE = {
     { kind: "built", fixture: czNsFixture },
     { kind: "page-recording", file: "cz-ns-page.json.gz" },
   ],
-  [ADAPTER_KEYS.CZ_NSS]: [{ kind: "built", fixture: czNssFixture }],
+  [ADAPTER_KEYS.CZ_NSS]: [
+    { kind: "built", fixture: czNssFixture },
+    { kind: "built", fixture: nssRecoveryFixture },
+  ],
   [ADAPTER_KEYS.CZ_US]: [
     { kind: "built", fixture: czUsFixture },
     { kind: "page-recording", file: "cz-us-page.json.gz" },
   ],
   [ADAPTER_KEYS.CZ_REGIONAL]: [{ kind: "built", fixture: czRegionalFixture }],
+  [ADAPTER_KEYS.CZ_UOHS]: [{ kind: "built", fixture: czUohsFixture }],
   [ADAPTER_KEYS.SK_COURTS]: [
     { kind: "built", fixture: skCourtsFixture },
     { kind: "page-recording", file: "sk-courts-page.json.gz" },
+    { kind: "deferred-document" },
   ],
   [ADAPTER_KEYS.SK_US]: [{ kind: "built", fixture: skUsFixture }],
   [ADAPTER_KEYS.PL_COURTS]: [
@@ -166,6 +174,7 @@ const SURFACE_EVIDENCE = {
   [ADAPTER_KEYS.AT_FINDOK]: [{ kind: "built", fixture: atFindokFixture }],
   [ADAPTER_KEYS.EU_ECJ]: [{ kind: "built", fixture: euEcjFixture }],
   [ADAPTER_KEYS.HU_BHGY]: [{ kind: "built", fixture: huBhgyFixture }],
+  [ADAPTER_KEYS.UK_FCL]: [{ kind: "built", fixture: ukFclFixture }],
   [ADAPTER_KEYS.PL_KIO]: [{ kind: "built", fixture: plKioFixture }],
   [ADAPTER_KEYS.PL_KIS]: [{ kind: "built", fixture: plKisFixture }],
   [ADAPTER_KEYS.PL_UODO]: [{ kind: "built", fixture: plUodoFixture }],
@@ -283,6 +292,11 @@ const evidenceNames = async (
       case "shared-path":
         add(await evidenceNames(evidence.with));
         break;
+      case "deferred-document": {
+        const { raw } = await deferredSkDocumentRawFixture();
+        add(Object.keys(decodeSourceRawEnvelopeObjects(raw)));
+        break;
+      }
       case "none":
         break;
       default:

@@ -13,15 +13,49 @@ import {
 } from "@/features/avt/avt.test-fixtures";
 import type { VerificationRun } from "@/features/avt/types";
 import {
+  claimMark,
   claimSpansForBlock,
   groupClaimsIntoPassages,
+  originalKind,
   passageReadingOrder,
   proseReadingOrder,
   readerParagraph,
-  selectClaimPresentation,
   segmentProse,
+  selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
+
+describe("originalKind", () => {
+  test("a DOCX run and a PDF run each have an original; no text or a mix has none", () => {
+    expect(originalKind([{ kind: "docx-block" }, { kind: "docx-block" }])).toBe(
+      "docx",
+    );
+    expect(originalKind([{ kind: "pdf-page" }, { kind: "pdf-page" }])).toBe(
+      "pdf",
+    );
+    expect(originalKind([])).toBeNull();
+    expect(originalKind([{ kind: "docx-block" }, { kind: "pdf-page" }])).toBe(
+      null,
+    );
+  });
+});
+
+describe("claimMark", () => {
+  test("selection wins, a filtered-out claim is not drawn", () => {
+    expect(claimMark({ selected: true, dim: true, highlight: false })).toBe(
+      "active",
+    );
+    expect(claimMark({ selected: false, dim: true, highlight: false })).toBe(
+      null,
+    );
+    expect(claimMark({ selected: false, dim: false, highlight: true })).toBe(
+      "matched",
+    );
+    expect(claimMark({ selected: false, dim: false, highlight: false })).toBe(
+      "rest",
+    );
+  });
+});
 
 describe("spanPresentation", () => {
   const cases: {

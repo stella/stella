@@ -12,7 +12,6 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchSkUsListing } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import {
@@ -21,11 +20,12 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,
-  writeSourceBinary,
   writeCaseLawRawPayload,
+  writeSourceBinary,
 } from "@/api/lib/legal-search/raw-source-storage";
 import {
   brandPersistedCaseLawDecisionId,
@@ -33,16 +33,16 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import {
   journalSkUsRawOutcome,
-  readSkUsRawCheckpoint,
   persistSkUsRawCheckpoint,
+  readSkUsRawCheckpoint,
 } from "@/api/scripts/complete-sk-us-raw-checkpoint";
 import {
-  completeSkUsRawStatement,
   completedSkUsRawEnvelope,
   completeSkUsRawObservation,
+  completeSkUsRawStatement,
   runSkUsRawBatch,
-  SK_US_RAW_OUTCOME_DISPOSITIONS,
   selectSkUsRawPageStatement,
+  SK_US_RAW_OUTCOME_DISPOSITIONS,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import type {
   SkUsRawCursor,

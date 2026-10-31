@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { legalAtlasImageSelected } from "./ci-plan-scope";
 import {
   commandEntries,
   sourceClosureProblems,
@@ -109,41 +110,10 @@ test("image selection includes every consumed source and workspace manifest and 
     ]),
   ];
   expect(consumed.some((file) => file.startsWith("apps/api/src/"))).toBe(true);
-  const workflow = readFileSync(
-    path.join(ROOT, ".github/workflows/ci.yml"),
-    "utf-8",
-  );
-  const caseBody = [
-    ...workflow.matchAll(/case "\$file" in(?:(?!\besac\b)[\s\S])*?\besac\b/gu),
-  ]
-    .map(([body]) => body)
-    .find((body) =>
-      /(?:^|\n)\s*legal_atlas_image_required=true\s*(?:\n|$)/u.test(body),
-    );
-  expect(caseBody).toBeDefined();
-  if (caseBody === undefined) {
-    panic("Missing legal-atlas image scope case");
-  }
-  const coarse = Bun.spawnSync(
-    [
-      "bash",
-      "-e",
-      "-c",
-      `for file in "$@"; do
-      legal_atlas_image_required=false
-      ${caseBody}
-      if [[ "$legal_atlas_image_required" == true ]]; then
-        printf '%s\\0' "$file"
-      fi
-    done`,
-      "legal-atlas-consumed-scope",
-      ...consumed,
-    ],
-    { cwd: ROOT },
-  );
-  expect(coarse.exitCode, coarse.stderr.toString()).toBe(0);
+  // The planner's coarse scope selects every consumed file before the
+  // closure narrows it.
   const selected = new Set(
-    coarse.stdout.toString().split("\0").filter(Boolean),
+    consumed.filter((file) => legalAtlasImageSelected([file])),
   );
   const required = legalAtlasApiSourcePredicate({ root: ROOT, trackedFiles });
   expect(required([UNRELATED])).toBe(false);

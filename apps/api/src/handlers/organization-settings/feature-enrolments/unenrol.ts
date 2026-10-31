@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { featureEnrolments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -22,7 +22,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
   mcp: { type: "internal", reason: "ui_navigation_state" },
-  params: t.Object({ featureId: t.UnionEnum(SELF_SERVE_FEATURE_IDS) }),
+  params: v.object({ featureId: v.picklist(SELF_SERVE_FEATURE_IDS) }),
 } satisfies HandlerConfig;
 
 export default createSafeRootHandler(

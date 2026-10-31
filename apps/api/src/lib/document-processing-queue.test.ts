@@ -13,8 +13,8 @@ import { createIdleExitCheck } from "@/api/lib/document-processing-idle-exit";
 import {
   abortDocumentProcessingWorkerBeforeClose,
   createDocumentProcessingLeaseRenewal,
-  createDocumentProcessingWorkerConnection,
   createDocumentProcessingReconciliationPhases,
+  createDocumentProcessingWorkerConnection,
   createRepairPassMemo,
   createWorkerReconciliationPhases,
   DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS,
@@ -304,7 +304,7 @@ describe("lease heartbeat", () => {
         renewalCount += 1;
         await stalledRenewal;
       },
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     renew();
@@ -318,7 +318,7 @@ describe("lease heartbeat", () => {
     expect(errors.at(0)).toBeInstanceOf(TimeoutError);
     expect(errors.at(0)).toMatchObject({
       label: "document processing lease heartbeat",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     finishRenewal();
@@ -331,10 +331,10 @@ describe("lease heartbeat", () => {
 
 describe("repair cursor Redis deadlines", () => {
   test("bounds a stalled cursor read", async () => {
-    const rejection: unknown = await readRepairScanCursor(async () => {
-      await Bun.sleep(50);
-      return null;
-    }, 5).then(
+    const rejection: unknown = await readRepairScanCursor(
+      async () => await new Promise<null>(() => {}),
+      5,
+    ).then(
       () => null,
       (error: unknown) => error,
     );
@@ -342,7 +342,7 @@ describe("repair cursor Redis deadlines", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "document OCR repair cursor read",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -350,11 +350,8 @@ describe("repair cursor Redis deadlines", () => {
     const rejection: unknown = await writeRepairScanCursor({
       expectedCursor: null,
       nextCursor: run.fieldId,
-      sendCommand: async () => {
-        await Bun.sleep(50);
-        return 1;
-      },
-      timeoutMs: 5,
+      sendCommand: async () => await new Promise<number>(() => {}),
+      timeoutMs: 5, // timeout under test
     }).then(
       () => null,
       (error: unknown) => error,
@@ -363,39 +360,12 @@ describe("repair cursor Redis deadlines", () => {
     expect(rejection).toBeInstanceOf(TimeoutError);
     expect(rejection).toMatchObject({
       label: "document OCR repair cursor write",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 });
 
 describe("reconciliation fault isolation", () => {
-  test("dispatches every durable processing kind and repairs native gaps", () => {
-    const dispatchStart = queueSource.indexOf(
-      "export const dispatchQueuedDocumentProcessingRuns",
-    );
-    const dispatchEnd = queueSource.indexOf(
-      "const dispatchScheduledDocumentProcessingRetries",
-      dispatchStart,
-    );
-    const dispatchSource = queueSource.slice(dispatchStart, dispatchEnd);
-    const repairStart = queueSource.indexOf(
-      "const recoverMissingNativeExtractionRuns",
-    );
-    const repairEnd = queueSource.indexOf(
-      "const updateQueuedRunSchedule",
-      repairStart,
-    );
-    const repairSource = queueSource.slice(repairStart, repairEnd);
-
-    expect(dispatchStart).toBeGreaterThan(-1);
-    expect(dispatchSource).not.toContain(
-      'eq(documentProcessingRuns.kind, "ocr")',
-    );
-    expect(repairStart).toBeGreaterThan(-1);
-    expect(repairSource).toContain("persistMissingNativeExtractionRuns");
-    expect(repairSource).not.toContain("organizationSettings");
-  });
-
   test("prioritizes never-dispatched OCR runs ahead of visibility retries", () => {
     const dispatchStart = queueSource.indexOf(
       "export const dispatchQueuedDocumentProcessingRuns",
@@ -489,11 +459,9 @@ describe("reconciliation fault isolation", () => {
       captureEnqueueError: (error) => {
         captured.push(error);
       },
-      enqueue: async () => {
-        await Bun.sleep(50);
-      },
+      enqueue: async () => await new Promise<void>(() => {}),
       runId: toSafeId<"documentProcessingRun">("run_test"),
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     expect(result.status).toBe("failed");
@@ -501,7 +469,7 @@ describe("reconciliation fault isolation", () => {
     expect(captured.at(0)).toBeInstanceOf(TimeoutError);
     expect(captured.at(0)).toMatchObject({
       label: "document OCR queue handoff",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -827,7 +795,7 @@ describe("bounded search-index replay", () => {
   test("classifies a stalled initial index write for durable replay", async () => {
     const indexed = await indexDocumentProjection({
       indexEntity: async () => await new Promise<void>(() => {}),
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
 
     expect(Result.isError(indexed)).toBe(true);
@@ -840,7 +808,7 @@ describe("bounded search-index replay", () => {
     expect(indexed.error.cause).toBeInstanceOf(TimeoutError);
     expect(indexed.error.cause).toMatchObject({
       label: "document processing initial search index",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
   });
 
@@ -921,7 +889,7 @@ describe("bounded search-index replay", () => {
                   calls.push("reindex-succeeded");
                   return true;
                 },
-                timeoutMs: 5,
+                timeoutMs: 5, // timeout under test
               }),
             ),
             hasMore: false,
@@ -943,7 +911,7 @@ describe("bounded search-index replay", () => {
     expect(replayError).toBeInstanceOf(TimeoutError);
     expect(replayError).toMatchObject({
       label: "document OCR search-index replay",
-      timeoutMs: 5,
+      timeoutMs: 5, // timeout under test
     });
     expect(calls).toEqual(["reindex-failed", "retry"]);
     expect(phaseErrors).toEqual([]);
@@ -970,7 +938,7 @@ describe("bounded search-index replay", () => {
             await new Promise<void>(() => {});
             return true;
           },
-          timeoutMs: 5,
+          timeoutMs: 5, // timeout under test
           transitionTimeoutMs: 5,
         }).then(
           () => null,
@@ -980,7 +948,7 @@ describe("bounded search-index replay", () => {
         expect(rejection).toBeInstanceOf(TimeoutError);
         expect(rejection).toMatchObject({
           label: `document OCR search-index replay ${transition} transition`,
-          timeoutMs: 5,
+          timeoutMs: 5, // timeout under test
         });
       }),
     );

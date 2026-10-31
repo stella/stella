@@ -11,13 +11,13 @@ import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { decryptContent } from "@/api/lib/content-encryption";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
-import { selectCurrentExtractedContent } from "@/api/lib/document-content-provenance";
+import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { createCursorPage, iterateCursorPages } from "@/api/lib/pagination";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -183,9 +183,7 @@ const buildSearchDocument = async (
       },
       extractedContent: {
         columns: {
-          ciphertext: true,
           extractedAt: true,
-          iv: true,
           language: true,
           sourceEntityVersionId: true,
           sourceFieldId: true,
@@ -223,7 +221,6 @@ const buildSearchDocument = async (
       cursorForItem: (row) => String(row.versionNumber),
     });
   });
-  let latestVersionId: SafeId<"entityVersion"> | undefined;
 
   const fieldTexts: string[] = [];
   let title = entity.name;
@@ -260,7 +257,6 @@ const buildSearchDocument = async (
   // way it stops resolving everywhere else.
   const stampTexts = new Set<string>();
   for await (const versions of versionPages) {
-    latestVersionId ??= versions.at(0)?.id;
     for (const { deletedAt, stamp } of versions) {
       if (deletedAt || !stamp) {
         continue;
@@ -280,32 +276,34 @@ const buildSearchDocument = async (
   let language: string | null = null;
 
   const extractedContentRow = entity.extractedContent;
-  const currentExtractedContent = selectCurrentExtractedContent({
-    extracted: extractedContentRow,
-    allowLegacy: latestVersionId === version.id,
-    currentVersionCreatedAt: version.createdAt,
-    currentVersionId: version.id,
-    fields: version.fields,
-  });
-  if (currentExtractedContent) {
-    const { ciphertext, iv } = currentExtractedContent;
-    language = isoToRegconfig(currentExtractedContent.language);
-    try {
-      const plaintext = await decryptContent(
-        workspace.organizationId,
-        ciphertext,
-        iv,
-      );
+  // Search indexing is an organization-wide system projection.
+  try {
+    const currentExtractedContent = (
+      await loadCurrentExtractedContentsForSearchIndex(
+        database,
+        "search-indexing",
+        {
+          entityIds: [entityId],
+          organizationId: workspace.organizationId,
+        },
+      )
+    ).at(0);
+    if (currentExtractedContent) {
+      language = isoToRegconfig(currentExtractedContent.language);
+      const plaintext = currentExtractedContent.text;
       if (plaintext) {
         fieldTexts.push(docxReviewMarkupToSearchText(plaintext));
       }
-    } catch (error) {
-      // Decryption fails when CONTENT_ENCRYPTION_KEY was
-      // added or rotated after this content was stored.
-      // Keep the last complete projection until re-extraction fixes it.
-      captureError(error, { entityId });
-      throw error;
     }
+  } catch (error) {
+    // Decryption fails when CONTENT_ENCRYPTION_KEY was
+    // added or rotated after this content was stored.
+    // Keep the last complete projection until re-extraction fixes it.
+    captureError(
+      error,
+      handlerErrorContext("search.buildSearchDocument", { entityId }),
+    );
+    throw error;
   }
 
   return {

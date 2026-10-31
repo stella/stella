@@ -23,9 +23,9 @@ import { DOCX_SUGGESTIONS_PENDING_MAX } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import {
-  docxSuggestions,
   documentReviewFindings,
   documentReviewRuns,
+  docxSuggestions,
   entities,
   entityVersions,
 } from "@/api/db/schema";

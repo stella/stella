@@ -1,5 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { PG_DRIVER_ERROR } from "@/api/lib/pg-error";
@@ -157,5 +160,61 @@ describe("isTransientConnectionError", () => {
         new Error(`pool failed: ${PG_DRIVER_ERROR.CONNECTION_CLOSED}`),
       ),
     ).toBe(true);
+  });
+});
+
+describe("connection closure message literals", () => {
+  it("retains case-sensitive substring matching for rendered values", () => {
+    for (const message of [
+      "😀 Čapek: Connection closed.",
+      `Novákovi: ${PG_DRIVER_ERROR.CONNECTION_CLOSED}!`,
+      `Connection closed ${PG_DRIVER_ERROR.CONNECTION_CLOSED}`,
+      "Connection closedConnection closed",
+      "\ud800Connection closed\ud801",
+      "\ufffdConnection closed\ufffd",
+    ]) {
+      expect(isTransientConnectionError(message)).toBe(true);
+      expect(isTransientConnectionError(new Error(message))).toBe(true);
+    }
+    for (const message of [
+      "",
+      "connection closed",
+      "Connection Closed",
+      "Connection clósed",
+      "Connection\nclosed",
+      "Spojenie uzavreté pre Novákovú",
+      "Connection clo\ud800sed",
+    ]) {
+      expect(isTransientConnectionError(message)).toBe(false);
+      expect(isTransientConnectionError(new Error(message))).toBe(false);
+    }
+  });
+
+  it("connection closure text preserves literal containment semantics", () => {
+    const message = fc
+      .tuple(
+        fc.string(),
+        fc.constantFrom(
+          "",
+          "Connection closed",
+          PG_DRIVER_ERROR.CONNECTION_CLOSED,
+          "connection closed",
+          "Connection clósed",
+          "😀Čapek",
+        ),
+        fc.string(),
+      )
+      .map((parts) => parts.join(""));
+    assertProperty(
+      "connection closure text preserves literal containment semantics",
+      fc.property(message, (text) => {
+        const expected = [
+          "Connection closed",
+          PG_DRIVER_ERROR.CONNECTION_CLOSED,
+        ].some((needle) => text.includes(needle));
+        expect(isTransientConnectionError(text)).toBe(expected);
+        expect(isTransientConnectionError(new Error(text))).toBe(expected);
+      }),
+    );
   });
 });

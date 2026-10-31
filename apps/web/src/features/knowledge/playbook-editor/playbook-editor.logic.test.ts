@@ -13,9 +13,9 @@ import type {
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
+  detailSeedGate,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  detailSeedGate,
   invalidPositionIds,
   latchedSeedGate,
   refetchSupersededDetail,

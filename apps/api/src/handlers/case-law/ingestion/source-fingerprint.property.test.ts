@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
-import { sha256Hex as hashContent, createSha256 } from "@stll/sha256/node";
+import { createSha256, sha256Hex as hashContent } from "@stll/sha256/node";
 
 import { sourceFingerprint } from "./source-fingerprint";
 

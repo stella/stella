@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseEnv } from "node:util";
-import ts from "typescript";
+import ts from "typescript6";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -30,9 +30,9 @@ import { collabEnvInvariantViolation } from "../apps/collab/src/env-schema";
 import { envWebInvariantViolation } from "../apps/web/src/env-schema";
 import {
   BUILD_KIND,
-  secretExampleInvariantViolation,
   LOCAL_DEV_OPT_IN,
   resolveRuntimeMode,
+  secretExampleInvariantViolation,
 } from "../packages/runtime-mode/src/index";
 import {
   AMBIENT_ENV_KEYS,
@@ -567,9 +567,6 @@ const AUDIT_IGNORE_FILES = new Set([
   "scripts/retry.test.sh",
 ]);
 const AUDIT_IGNORE_PATH_SEGMENTS = new Set([".cache", "node_modules"]);
-// Tests that must lint fixtures inside the tree (path-scoped lint config)
-// write them to `__<name>_<pid>__` directories while other checks run.
-const TRANSIENT_FIXTURE_SEGMENT = /^__[a-z_]+_\d+__$/u;
 /** Submodules: other repositories, with their own configuration surface. */
 const AUDIT_IGNORE_PATH_PREFIXES = ["packages/template-packs/content/"];
 
@@ -577,13 +574,7 @@ export const isIgnoredAuditPath = (file: string) =>
   // Turbo builds emit dist/**; bundled dependency reads are not application configuration.
   /^(?:apps|packages)\/[^/]+\/dist\//u.test(file) ||
   AUDIT_IGNORE_PATH_PREFIXES.some((prefix) => file.startsWith(prefix)) ||
-  file
-    .split("/")
-    .some(
-      (segment) =>
-        AUDIT_IGNORE_PATH_SEGMENTS.has(segment) ||
-        TRANSIENT_FIXTURE_SEGMENT.test(segment),
-    );
+  file.split("/").some((segment) => AUDIT_IGNORE_PATH_SEGMENTS.has(segment));
 
 type EnvUsage = { file: string; line: number; name: string };
 
@@ -655,9 +646,7 @@ const findComputedEnvUsages = (file: string, text: string): EnvUsage[] => {
   };
 
   type HelperDeclaration =
-    | ts.ArrowFunction
-    | ts.FunctionDeclaration
-    | ts.FunctionExpression;
+    ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression;
 
   const isHelperDeclaration = (node: ts.Node): node is HelperDeclaration =>
     ts.isArrowFunction(node) ||

@@ -1,14 +1,22 @@
 import { panic, TaggedError } from "better-result";
 
+import { isCaseLawIndexGroup } from "@/api/lib/legal-search/case-law-index-groups";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import { PROVISION_KEYS_FIELD } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  caseLawManifestGroups,
+  corpusIndexGroupContractForJurisdiction,
+  resolveCorpusIndexGroupContract,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   corpusIndexFastFields,
+  corpusIndexManifestCoversJurisdiction,
   corpusIndexPositionalFields,
+  type CorpusIndexPublisherFields,
   corpusIndexPublisherFields,
+  type CorpusIndexStemFields,
   corpusIndexStemFields,
   requireCorpusIndexManifest,
-  type CorpusIndexPublisherFields,
-  type CorpusIndexStemFields,
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusLegacyStemming,
@@ -131,14 +139,78 @@ export const requireCaseLawDecisionCountField = (
   return panic(message, new CorpusIndexReadContractError({ message }));
 };
 
+/**
+ * What one index group of a case-law generation lets a query name. Per group
+ * rather than per generation, because a group created under a contract of its
+ * own maps fields its generation's other groups do not, and a clause over a
+ * field the index never declared is not a narrower query but an invalid one.
+ */
+export type CaseLawIndexGroupReadContract = {
+  /** The raw multi-valued provision key field, or null where none is mapped. */
+  provisionKeysField: string | null;
+};
+
+/**
+ * The read contract of one index group of a case-law generation. A group the
+ * generation does not hold maps nothing in it.
+ */
+export const caseLawIndexGroupReadContract = (
+  generation: string,
+  indexGroup: string,
+): CaseLawIndexGroupReadContract => {
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  if (manifest.family !== "case_law") {
+    return panic(`Not a case-law generation: ${generation}`);
+  }
+  const held =
+    isCaseLawIndexGroup(indexGroup) &&
+    caseLawManifestGroups(manifest).includes(indexGroup);
+  const contract = held
+    ? resolveCorpusIndexGroupContract({ manifest, indexGroup })
+    : null;
+  return {
+    provisionKeysField:
+      contract?.type === "provision_keys_v1" ? PROVISION_KEYS_FIELD : null,
+  };
+};
+
+/**
+ * The read contract of the one group a jurisdiction's decisions are written
+ * to in this generation: does the target serving this jurisdiction have
+ * provision keys? A read with no jurisdiction spans groups and so names no
+ * group-specific field.
+ */
+export const caseLawJurisdictionReadContract = (
+  generation: string,
+  jurisdiction: string | undefined,
+): CaseLawIndexGroupReadContract => {
+  if (jurisdiction === undefined) {
+    return { provisionKeysField: null };
+  }
+  const manifest = requireCorpusIndexManifest("case_law", generation);
+  if (
+    manifest.family !== "case_law" ||
+    !corpusIndexManifestCoversJurisdiction(manifest, jurisdiction)
+  ) {
+    return { provisionKeysField: null };
+  }
+  const contract = corpusIndexGroupContractForJurisdiction(
+    manifest,
+    jurisdiction,
+  );
+  return {
+    provisionKeysField:
+      contract.type === "provision_keys_v1" ? PROVISION_KEYS_FIELD : null,
+  };
+};
+
 export type LegislationIndexReadContract = {
   family: "legislation";
   openingPassageQuery: string;
 };
 
 export type CorpusIndexReadContract =
-  | CaseLawIndexReadContract
-  | LegislationIndexReadContract;
+  CaseLawIndexReadContract | LegislationIndexReadContract;
 
 /**
  * Query capabilities owned by a generation's physical schema. Every field name

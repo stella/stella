@@ -32,6 +32,7 @@ export const LOCAL_ONLY_FEATURES = [
         "src/clipboard/ClipboardGroupFields.tsx",
         "src/clipboard/ClipboardImagePreview.tsx",
         "src/registry/RegistrySearch.tsx",
+        "src/shared/use-clipboard-shortcut.ts",
       ],
     },
     windows: ["clipboard", "clipboard-editor"],
@@ -47,6 +48,7 @@ export const LOCAL_ONLY_FEATURES = [
     nativeModules: [
       { file: "tray.rs", logging: "fixedMessages" },
       { file: "../crates/macos-park/src/focused_window.rs", logging: "none" },
+      { file: "../crates/macos-park/src/microphone.rs", logging: "none" },
       { file: "../crates/macos-park/src/windows_window.rs", logging: "none" },
     ],
     windowModules: {

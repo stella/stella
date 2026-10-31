@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { UI_LOCALES } from "@stll/locales";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
@@ -19,6 +20,11 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
+import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
+import {
+  SYNTHETIC_PRINCIPAL,
+  SYNTHETIC_SESSION_PREFIX,
+} from "@/api/lib/synthetic-principal/constants";
 
 export const user = pgTable(
   "user",
@@ -30,6 +36,10 @@ export const user = pgTable(
     image: text("image"),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
+    // Null or document follows the document language; a UI locale overrides it.
+    readerAnswerLanguage: text("reader_answer_language", {
+      enum: ["document", ...UI_LOCALES],
+    }),
     wordEditShortcut: text("word_edit_shortcut"),
     // Per-user keyboard-shortcut rebindings, serialized as a JSON object of
     // `{ [shortcutId]: "Mod+K" }`. Null when the user has never rebound a
@@ -46,6 +56,12 @@ export const user = pgTable(
     // did not advertise a country (local dev, self-hosted without a proxy).
     detectedCountry: text("detected_country"),
     twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    // The mail provider refused this address: which address (so a changed
+    // email is deliverable again), why, and since when. All null, or all set.
+    // Written only by the account-row owner from the provider's own events.
+    emailUndeliverableAddress: text("email_undeliverable_address"),
+    emailUndeliverableReason: text("email_undeliverable_reason"),
+    emailUndeliverableAt: timestamptz("email_undeliverable_at"),
     deletedAt: timestamptz("deleted_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
@@ -57,6 +73,10 @@ export const user = pgTable(
     // Keyset pagination over registrations (operator observability)
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
+    check(
+      "user_email_undeliverable_check",
+      sql`(${table.emailUndeliverableAddress} IS NULL AND ${table.emailUndeliverableReason} IS NULL AND ${table.emailUndeliverableAt} IS NULL) OR (${table.emailUndeliverableAddress} IS NOT NULL AND ${table.emailUndeliverableAt} IS NOT NULL AND ${table.emailUndeliverableReason} IS NOT NULL AND ${inArray(table.emailUndeliverableReason, ACCOUNT_EMAIL_UNDELIVERABLE_REASONS)})`,
+    ),
     ...authUserPolicies(),
   ],
 );
@@ -80,11 +100,15 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   image: "image",
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
+  readerAnswerLanguage: "reader_answer_language",
   wordEditShortcut: "word_edit_shortcut",
   userShortcuts: "user_shortcuts",
   guideProgress: "guide_progress",
   detectedCountry: "detected_country",
   twoFactorEnabled: "two_factor_enabled",
+  emailUndeliverableAddress: "email_undeliverable_address",
+  emailUndeliverableReason: "email_undeliverable_reason",
+  emailUndeliverableAt: "email_undeliverable_at",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
@@ -112,6 +136,15 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    // OAuth consent that owns this handoff session and its revocation.
+    originConsentId: text("origin_consent_id").references(
+      () => oauthConsent.id,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    // Fixed expiry for text handoffs; session refresh never extends this cap.
+    handoffAbsoluteExpiresAt: timestamptz("handoff_absolute_expires_at"),
     refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
       .default("automatic")
       .notNull(),
@@ -124,11 +157,21 @@ export const session = pgTable(
       "session_refreshMode_check",
       inArray(table.refreshMode, SESSION_REFRESH_MODES),
     ),
+    check(
+      "session_monitoring_principal_check",
+      sql`(${table.id} NOT LIKE 'synthetic-session-%' OR ${table.userId} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.user.id}'`)}) AND (${table.id} NOT LIKE 'smoke-session-%' OR ${table.userId} IN ('smoke-user-stella', 'smoke-ai-user-stella'))`,
+    ),
+    index("session_monitoring_id_idx")
+      .on(table.id)
+      .where(
+        sql`${table.id} LIKE ${sql.raw(`'${SYNTHETIC_SESSION_PREFIX}%'`)}`,
+      ),
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
     ),
     uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
+    index("session_originConsentId_idx").on(table.originConsentId),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -244,6 +287,10 @@ export const organization = pgTable(
   },
   (table) => [
     uniqueIndex("organization_slug_uidx").on(table.slug),
+    check(
+      "organization_monitoring_slug_check",
+      sql`${table.slug} <> ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.slug}'`)} OR ${table.id} = ${sql.raw(`'${SYNTHETIC_PRINCIPAL.org.id}'`)}`,
+    ),
     ...authOrganizationPolicies(),
   ],
 );
@@ -426,6 +473,10 @@ export const oauthClient = pgTable(
     clientId: text("client_id").notNull().unique(),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
+    // When this discovery-owned client's metadata document last passed a
+    // fetch and validation. It bounds how long the stored client keeps
+    // resolving while the document cannot be revalidated.
+    metadataValidatedAt: timestamptz("metadata_validated_at"),
     registrationOrigin: text("registration_origin", {
       enum: OAUTH_CLIENT_REGISTRATION_ORIGINS,
     })

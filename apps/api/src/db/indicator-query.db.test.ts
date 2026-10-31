@@ -98,8 +98,8 @@ describe.skipIf(!enabled)(
         } finally {
           await connection`ROLLBACK`;
           await blocker`SELECT pg_advisory_unlock(${lockKey}::bigint)`;
-          connection.release();
-          blocker.release();
+          await connection.release();
+          await blocker.release();
         }
       });
     });

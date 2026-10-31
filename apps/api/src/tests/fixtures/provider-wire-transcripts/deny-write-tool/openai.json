@@ -1,0 +1,190 @@
+{
+  "format": 1,
+  "scenario": "deny-write-tool",
+  "provider": "openai",
+  "model": "gpt-6-luna",
+  "entries": [
+    {
+      "type": "expect_outbound",
+      "label": "ask",
+      "request": {
+        "path": "/v1/responses",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": {
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "store": false,
+          "max_output_tokens": 128000,
+          "service_tier": "default",
+          "model": "gpt-6-luna",
+          "instructions": "[system prompt]",
+          "input": [
+            {
+              "type": "message",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Delete the draft"
+                }
+              ]
+            }
+          ],
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "list_connectable_connectors",
+            "connect_connector",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ],
+          "stream": true
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "tool-call"
+    },
+    {
+      "type": "expect_outbound",
+      "label": "after-denial",
+      "request": {
+        "path": "/v1/responses",
+        "headers": {
+          "accept": "application/json",
+          "content-type": "application/json"
+        },
+        "body": {
+          "include": [
+            "reasoning.encrypted_content"
+          ],
+          "store": false,
+          "max_output_tokens": 128000,
+          "service_tier": "default",
+          "model": "gpt-6-luna",
+          "instructions": "[system prompt]",
+          "input": [
+            {
+              "type": "message",
+              "role": "user",
+              "content": [
+                {
+                  "type": "input_text",
+                  "text": "Delete the draft"
+                }
+              ]
+            },
+            {
+              "type": "function_call",
+              "call_id": "[id-1]",
+              "id": "[id-2]",
+              "name": "mcp__external__delete",
+              "arguments": "{\"name\":\"draft\"}"
+            },
+            {
+              "type": "function_call_output",
+              "call_id": "[id-1]",
+              "output": "{\"error\":\"User declined tool execution\"}"
+            }
+          ],
+          "tools": [
+            "ask-user",
+            "request_secret",
+            "use_connector_secret",
+            "list_connectable_connectors",
+            "connect_connector",
+            "execute_typescript",
+            "discover_tools",
+            "load-skill",
+            "read-skill-resource",
+            "counterparty_check",
+            "update-entity-fields",
+            "list_templates",
+            "describe_template",
+            "fill_template",
+            "suggest_template_fields",
+            "search-chat-history",
+            "expand-chat-history",
+            "search-past-chats",
+            "create-document",
+            "review_folder_consistency",
+            "set_practice_jurisdictions",
+            "create_template",
+            "configure_template_fields",
+            "save_document",
+            "delete_document",
+            "set_field_value",
+            "save_matter",
+            "delete_matter",
+            "save_contact",
+            "delete_contact",
+            "save_task",
+            "delete_task",
+            "link_matter_contact",
+            "save_clause",
+            "delete_clause",
+            "save_playbook",
+            "run_playbook",
+            "create_reader_annotation",
+            "update_reader_annotation",
+            "delete_reader_annotation",
+            "add_matter_member",
+            "remove_matter_member",
+            "update_organization_settings",
+            "mcp__external__delete",
+            "spawn_subagents"
+          ],
+          "stream": true
+        }
+      }
+    },
+    {
+      "type": "emit_inbound",
+      "cassette": "text"
+    }
+  ]
+}

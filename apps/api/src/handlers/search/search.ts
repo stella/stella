@@ -1,44 +1,62 @@
-import { status, t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
+
+import { isEntityKind } from "@stll/api-contract";
+import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
+import type { DocumentProcessingStatus } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  paginationCursorSchema,
+  resourceIdSchema,
+  userIdSchema,
+} from "@/api/lib/custom-schema";
+import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { getSearchPreviewLocatorCandidates } from "@/api/lib/search/query";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
+import type {
+  EntityGlobalSearchHit,
+  GlobalSearchHit,
+} from "@/api/lib/search/types";
 
-const isoDateTime = t.String({ format: "date-time" });
+const isoDateTime = apiDateTimeSchema;
 
-export const searchBodySchema = t.Object({
-  query: t.String({
-    maxLength: LIMITS.searchQueryMaxLength,
-  }),
-  workspaceIds: t.Array(tSafeId("workspace"), { maxItems: 64 }),
-  types: t.Array(t.UnionEnum(GLOBAL_SEARCH_RESULT_TYPES), {
-    maxItems: GLOBAL_SEARCH_RESULT_TYPES.length,
-  }),
-  kinds: t.Array(entityKindSchema, { maxItems: ENTITY_KINDS.length }),
-  editedByUserIds: t.Array(tUserId, { maxItems: 64 }),
-  mimeTypes: t.Array(t.String({ minLength: 1, maxLength: 128 })),
-  updatedFrom: t.Optional(isoDateTime),
-  updatedTo: t.Optional(isoDateTime),
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(
-    t.Integer({
-      minimum: 1,
-      maximum: LIMITS.searchPageSizeMax,
-      default: LIMITS.searchPageSizeDefault,
-    }),
+export const searchBodySchema = v.object({
+  query: v.pipe(v.string(), v.maxLength(LIMITS.searchQueryMaxLength)),
+  workspaceIds: v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(64)),
+  types: v.pipe(
+    v.array(v.picklist(GLOBAL_SEARCH_RESULT_TYPES)),
+    v.maxLength(GLOBAL_SEARCH_RESULT_TYPES.length),
+  ),
+  kinds: v.pipe(v.array(entityKindSchema), v.maxLength(ENTITY_KINDS.length)),
+  editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
+  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  updatedFrom: v.optional(isoDateTime),
+  updatedTo: v.optional(isoDateTime),
+  cursor: v.optional(paginationCursorSchema()),
+  limit: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(LIMITS.searchPageSizeMax),
+    ),
+    LIMITS.searchPageSizeDefault,
   ),
 });
 
-type SearchBodySchema = Static<typeof searchBodySchema>;
+type SearchBodySchema = v.InferOutput<typeof searchBodySchema>;
+
+const isEntitySearchHit = (
+  hit: GlobalSearchHit,
+): hit is EntityGlobalSearchHit => isEntityKind(hit.type);
 
 type SearchFilterInput = {
   query: string;
@@ -180,15 +198,35 @@ export const searchHandler = async ({
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
       cursor: body.cursor,
-      limit: normalizeTenantPageLimit(
-        body.limit ?? LIMITS.searchPageSizeDefault,
-      ),
+      limit: normalizeTenantPageLimit(body.limit),
     },
     { scopedDb },
   );
 
+  const entityHits = result.hits.filter(isEntitySearchHit);
+  const processingStatuses =
+    entityHits.length === 0
+      ? new Map<string, DocumentProcessingStatus>()
+      : await scopedDb(
+          async (tx) =>
+            await getCurrentVersionProcessingStatuses(
+              tx,
+              entityHits.map((hit) => hit.resource.id),
+            ),
+        );
+
+  const hits: GlobalSearchHit[] = result.hits.map((hit) =>
+    isEntitySearchHit(hit)
+      ? {
+          ...hit,
+          processingStatus: processingStatuses.get(hit.resource.id) ?? null,
+        }
+      : hit,
+  );
+
   return {
     ...result,
+    hits,
     previewLocatorCandidates: getSearchPreviewLocatorCandidates(body.query),
   };
 };

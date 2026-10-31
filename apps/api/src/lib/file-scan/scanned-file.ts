@@ -74,7 +74,7 @@ export class ScannedFile {
   }
 
   /**
-   * The scanned bytes. `scanUpload` copied them out of the caller's buffer and
+   * The scanned bytes. `scanUpload` copied or transferred the caller's buffer and
    * `readStoredFile` read them fresh, so no one else holds this buffer; parsers
    * must treat it as read-only.
    */

@@ -5,11 +5,11 @@ import { propertyConfig } from "@stll/property-testing";
 import {
   assertNever,
   DIRECTIVE_KINDS,
-  scanInvalidMarkers,
-  scanMarkers,
   type DirectiveKind,
   type FilterCall,
   type MarkerMeta,
+  scanInvalidMarkers,
+  scanMarkers,
 } from "@stll/template-conditions";
 
 import {

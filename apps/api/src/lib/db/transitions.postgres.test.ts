@@ -5,13 +5,13 @@ import {
   customType,
   integer,
   pgTable,
-  text,
   primaryKey,
+  text,
 } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import { FLOW_RUN_STATUSES, FLOW_RUN_STEP_STATUSES } from "@stll/api-contract";
-import { assertProperty } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
@@ -25,11 +25,11 @@ import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionTriggerSql } from "@/api/lib/db/transition-sql";
 import {
   defineScopedTransitions,
-  transitionUpsertBatch,
-  transitionScopedCount,
   defineTransitions,
   permitsTransition,
   transition,
+  transitionScopedCount,
+  transitionUpsertBatch,
 } from "@/api/lib/db/transitions";
 import { isPgConstraintError } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -514,7 +514,7 @@ if (!databaseUrl || !enabled) {
               fc.constantFrom(...FLOW_RUN_STATUSES),
               checkPair,
             ),
-            { numRuns: 24 },
+            propertyConfig({ numRuns: 24 }),
           );
         } finally {
           await fixture.cleanup();

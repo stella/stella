@@ -31,7 +31,7 @@ jobs:
       !(github.event_name == 'workflow_dispatch'
       && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@'))
       || github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -58,7 +58,7 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -72,34 +72,6 @@ jobs:
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
-      - name: Resolve query performance baseline
-        if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
-        id: base
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-          HEAVY_ONLY: ${{ inputs.heavy_only }}
-          SHA: ${{ inputs.sha }}
-        run: |
-          set -euo pipefail
-          if [[ "$HEAVY_ONLY" == true ]]; then
-            tested_sha="$SHA"
-            base_sha="$(git rev-parse "$tested_sha^")"
-          else
-            test -n "$BASE_SHA"
-            git fetch --no-tags origin "$BASE_SHA"
-            tested_sha="$GITHUB_SHA"
-            base_sha="$(git merge-base "$BASE_SHA" "$tested_sha")"
-          fi
-          echo "QUERY_PERF_BASE_REF=$base_sha" >> "$GITHUB_ENV"
-          echo "tested_sha=$tested_sha" >> "$GITHUB_OUTPUT"
-
-      - name: Check query performance allowances
-        if: ${{ !(github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@')) }}
-        run: |
-          if [[ -f apps/api/src/tests/query-perf/baseline.json ]]; then
-            bun scripts/query-perf-baseline.ts "$QUERY_PERF_BASE_REF"
-          fi
-
       - name: Apply database migrations
         run: bun --filter @stll/api db:migrate
         env:
@@ -112,18 +84,3 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           STELLA_RUN_QUERY_PERF_TESTS: "true"
-          QUERY_PERF_BASELINE_MODE: ${{ github.event_name == 'workflow_dispatch' && contains(github.workflow_ref, '/.github/workflows/query-perf.yml@') && 'record' || 'compare' }}
-
-      - name: Validate recorded baseline
-        id: validation
-        if: ${{ !cancelled() && steps.measurements.outputs.baseline_recorded == 'true' }}
-        run: bun scripts/query-perf-baseline.ts --validate
-
-      - name: Upload recorded baseline
-        if: ${{ !cancelled() && steps.validation.outcome == 'success' && steps.measurements.outputs.baseline_recorded == 'true' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: query-perf-baseline-record-${{ github.sha }}
-          path: apps/api/src/tests/query-perf/baseline.json
-          if-no-files-found: error
-          retention-days: 7

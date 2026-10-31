@@ -110,8 +110,8 @@ import {
   applyFindingDecision,
   resolveReviewRunFreshness,
   resolveReviewRunRestore,
-  restoreReviewRun,
   restoredRunId,
+  restoreReviewRun,
   reviewDecisionProgress,
   reviewHistoryPresentation,
   reviewRunView,
@@ -193,8 +193,10 @@ import type {
   ReviewPaneSwap,
 } from "@/components/inspector/document-pane";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
 import type { FileFacet } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { filterPlaybooksByName } from "@/components/inspector/playbook-facet.logic";
 import {
   buildReviewResultItems,
   buildRunHistoryBasisSentence,
@@ -228,17 +230,19 @@ import { getWordEditAuthorName } from "@/features/chat/hooks/use-chat-user-conte
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import type { ExceptionFingerprintKey } from "@/lib/analytics/exception-fingerprint";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import type {
   Negotiation,
   PlaybookListItem,
-  Position,
   PlaybookPositionsValue,
+  Position,
 } from "@/lib/knowledge/playbook-types";
 import { positionReferencePassages } from "@/lib/knowledge/playbook-types";
 import {
@@ -247,10 +251,13 @@ import {
   playbooksOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { createUuid } from "@/lib/uuid";
 import type { EntityVersion } from "@/lib/workspaces/queries/entity-versions";
 import { entityVersionsOptions } from "@/lib/workspaces/queries/entity-versions";
+import { useCurrentWorkspaceView } from "@/lib/workspaces/use-workspace-view-params";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 import { PlaybookQuerySection } from "./playbook-query-section";
 
@@ -322,7 +329,8 @@ export const PlaybookFacet = ({
   const author = getWordEditAuthorName(user);
   const navigate = useNavigate();
 
-  const viewId = useMatterViewId();
+  const currentView = useCurrentWorkspaceView();
+  const { viewId } = resolveWorkspaceViewParams(workspaceId, currentView);
   const { placement, paneSwap } = useDocumentPaneRouting({
     entityId,
     fileFieldId,
@@ -418,7 +426,7 @@ export const PlaybookFacet = ({
   const versionsQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
-  const versions = useQueryView(versionsQuery);
+  const versions = queryView(versionsQuery);
 
   const { playbooks, view: playbooksView } = usePlaybookPickerItems(
     user.activeOrganizationId,
@@ -436,14 +444,20 @@ export const PlaybookFacet = ({
   const editorAvailable = registration !== undefined;
   const pendingPlaybookName = pendingPlaybookNameFor(session, playbooks);
 
-  const reportStartFailure = (result: StartReviewResult) => {
+  const reportStartFailure = (
+    result: StartReviewResult,
+    fingerprintKey: ExceptionFingerprintKey,
+  ) => {
     if (result.ok) {
       return;
     }
-    // A thrown request (client timeout / network) carries no Eden error to
+    // A thrown request (client timeout / network) carries no API error to
     // capture; still surface the toast.
     if (result.error) {
-      analytics.captureError(toAPIError(result.error));
+      analytics.captureError(toAPIError(result.error), {
+        fingerprintKey,
+        scope: { type: "handler", handlerId: fingerprintKey },
+      });
     }
     notifyUserError(
       result.error ? toAPIError(result.error) : undefined,
@@ -465,6 +479,7 @@ export const PlaybookFacet = ({
         startMode,
         seededPositions,
       }),
+      "PlaybookFacet:start-review",
     );
   };
 
@@ -484,6 +499,7 @@ export const PlaybookFacet = ({
         skipped: basis.skipped,
         unexpectedErrorMessage: t("common.unexpectedError"),
       }),
+      "PlaybookFacet:retry-review",
     );
   };
 
@@ -551,11 +567,7 @@ export const PlaybookFacet = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: {
-          workspaceId: reference.workspaceId,
-          // A reference from another matter has no view of this one to open in.
-          viewId: reference.workspaceId === workspaceId ? viewId : ALL_VIEW_ID,
-        },
+        params: resolveWorkspaceViewParams(reference.workspaceId, currentView),
         search: (prev) => ({
           ...prev,
           block: blockId,
@@ -580,7 +592,7 @@ export const PlaybookFacet = ({
     const { applied, tone, title, description } =
       reportCounterpartyNote(outcome);
     if (tone === "error") {
-      notifyUserError(undefined, t(title));
+      notifyUserProblem(t(title));
       return applied;
     }
     const toast = {
@@ -655,7 +667,13 @@ export const PlaybookFacet = ({
         : ({ type: "applied" } as const);
     });
     if (Result.isError(application)) {
-      analytics.captureError(application.error);
+      analytics.captureError(application.error, {
+        fingerprintKey: "PlaybookFacet.addCounterpartyNote:failure",
+        scope: {
+          type: "handler",
+          handlerId: "PlaybookFacet.addCounterpartyNote:failure",
+        },
+      });
       return reportNote({ type: "failed" }, blockId);
     }
     return reportNote(application.value, blockId);
@@ -735,6 +753,7 @@ export const PlaybookFacet = ({
                   fileFieldId,
                   t("common.unexpectedError"),
                 ),
+                "PlaybookFacet:confirm-positions",
               );
             })(),
             "playbook-facet.confirm-positions",
@@ -818,7 +837,10 @@ export const PlaybookFacet = ({
       onConfirm={() => {
         detached(
           (async () => {
-            reportStartFailure(await confirmRunSize(entityId, fileFieldId));
+            reportStartFailure(
+              await confirmRunSize(entityId, fileFieldId),
+              "PlaybookFacet:confirm-run-size",
+            );
           })(),
           "playbook-facet.confirm-run-size",
         );
@@ -947,9 +969,6 @@ const findingReferencePassages = (finding: ReviewFinding) =>
 const resultReferencePassages = (items: readonly ReviewResultItem[]) =>
   items.flatMap((item) => findingReferencePassages(item.finding));
 
-/** The matter view a document from another matter opens in: all of it. */
-const ALL_VIEW_ID = "all";
-
 /**
  * Which facet the document's inspector tab shows in each arrangement: the
  * document itself exactly when the main pane is not showing it. Total over the
@@ -975,16 +994,6 @@ const referenceNamesByField = (
  *  has picked none. */
 const referenceNameLookup = (setup: ReviewSetup | null): ReferenceNameLookup =>
   referenceNamesByField(setup === null ? [] : setup.references);
-
-/** The matter view a document opens in. The facet renders in shared chrome,
- *  so it may be mounted on a route that has none. */
-const useMatterViewId = (): string => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
-  return viewMatch?.params.viewId ?? ALL_VIEW_ID;
-};
 
 type DocumentPaneRoutingArgs = {
   entityId: string;
@@ -1078,8 +1087,8 @@ const usePlaybookPickerItems = (organizationId: string) => {
   const dataQuery = useQuery(
     playbooksOptions(organizationId, PLAYBOOK_PICKER_LIMIT),
   );
-  const dataView = useQueryView(dataQuery);
-  useQueryViewError(dataView);
+  const dataView = queryView(dataQuery);
+  useQueryViewError(dataView, "usePlaybookPickerItems:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
     playbooks: data && "items" in data ? data.items : [],
@@ -1135,7 +1144,7 @@ const useShownReviewRun = ({
     ...documentReviewRunsOptions({ workspaceId, entityId, fileFieldId }),
     select: (data) => data.items,
   });
-  const history = useQueryView(query);
+  const history = queryView(query);
   let runs: readonly DocumentReviewRunSummary[] = EMPTY_RUNS;
   switch (history.type) {
     case "pending":
@@ -1270,10 +1279,13 @@ const ReviewRunPanel = ({
         applyFindingDecision(previous, decided),
       );
     },
-    // `unwrapEden` already localized and tagged what the endpoint returned, so
+    // `unwrapApiResponse` already localized and tagged what the endpoint returned, so
     // the thrown error is what gets captured and shown.
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ReviewRunPanel:failure",
+        scope: { type: "handler", handlerId: "ReviewRunPanel:failure" },
+      });
       notifyUserError(error, t("inspector.review.decisionFailed"));
     },
   });
@@ -1289,13 +1301,13 @@ const ReviewRunPanel = ({
     ...playbookDetailOptions(organizationId, restoredPlaybookId ?? ""),
     enabled: restoredPlaybookId !== null,
   });
-  const playbookDetailView = useQueryView(playbookDetailQuery);
-  useQueryViewError(playbookDetailView);
+  const playbookDetailView = queryView(playbookDetailQuery);
+  useQueryViewError(playbookDetailView, "ReviewRunPanel:query");
   const playbookDetail =
     playbookDetailView.type === "items" ? playbookDetailView.items : undefined;
 
   const navigate = useNavigate();
-  const saveAsPlaybook = useMutation({
+  const saveAsPlaybook = useIdempotentMutation({
     mutationFn: saveRunAsPlaybook,
     onSuccess: () => {
       stellaToast.add({
@@ -1313,7 +1325,10 @@ const ReviewRunPanel = ({
       });
     },
     onError: (error) => {
-      analytics.captureError(error);
+      analytics.captureError(error, {
+        fingerprintKey: "ReviewRunPanel:failure-2",
+        scope: { type: "handler", handlerId: "ReviewRunPanel:failure-2" },
+      });
       notifyUserError(error, t("inspector.review.saveAsPlaybookFailed"));
     },
   });
@@ -1594,7 +1609,7 @@ const Launcher = ({
     ),
     select: (answer) => (answer.type === "cached" ? answer.parties : []),
   });
-  const parties = useQueryView(partiesQuery);
+  const parties = queryView(partiesQuery);
   const setup: ReviewSetup = {
     ...emptyReviewSetup(),
     playbookId: selectedPlaybookId,
@@ -1609,8 +1624,8 @@ const Launcher = ({
     ),
     enabled: selectedPlaybookId !== null,
   });
-  const selectedPlaybookView = useQueryView(selectedPlaybookQuery);
-  useQueryViewError(selectedPlaybookView);
+  const selectedPlaybookView = queryView(selectedPlaybookQuery);
+  useQueryViewError(selectedPlaybookView, "Launcher:query");
   const selectedPlaybook =
     selectedPlaybookView.type === "items"
       ? selectedPlaybookView.items
@@ -2061,13 +2076,7 @@ const PlaybookPicker = ({
 }: PlaybookPickerProps) => {
   const t = useTranslations();
   const [filter, setFilter] = useState("");
-  const normalizedFilter = filter.trim().toLocaleLowerCase();
-  const visiblePlaybooks =
-    normalizedFilter.length === 0
-      ? playbooks
-      : playbooks.filter((playbook) =>
-          playbook.name.toLocaleLowerCase().includes(normalizedFilter),
-        );
+  const visiblePlaybooks = filterPlaybooksByName(playbooks, filter);
 
   return (
     <section className="space-y-2">
@@ -2167,8 +2176,8 @@ const ReferenceFilePicker = ({
   const sourcePagesQuery = useInfiniteQuery(
     documentReviewSourcesOptions({ workspaceId, q: "" }),
   );
-  const sourcePagesView = useQueryView(sourcePagesQuery);
-  useQueryViewError(sourcePagesView);
+  const sourcePagesView = queryView(sourcePagesQuery);
+  useQueryViewError(sourcePagesView, "ReferenceFilePicker:query");
   const sourcePages =
     sourcePagesView.type === "items" ? sourcePagesView.items : undefined;
   const sources =
@@ -2194,7 +2203,7 @@ const ReferenceFilePicker = ({
       return;
     }
     if (reference.fileFieldId === target.fileFieldId) {
-      notifyUserError(undefined, t("inspector.review.targetAsReference"));
+      notifyUserProblem(t("inspector.review.targetAsReference"));
       return;
     }
     onChange([...references, reference]);
@@ -2411,7 +2420,6 @@ const PositionConfirmStep = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 onChange={(next) => updateAt(index, next)}
                 onRemove={() =>
                   onChange(positions.filter((_, at) => at !== index))
@@ -2512,7 +2520,6 @@ const ProposalStreamView = ({
               }}
             >
               <PositionQuickRow
-                index={index}
                 passageTexts={passageTexts}
                 position={position}
                 referenceNames={referenceNames}
@@ -2781,8 +2788,7 @@ type ResultsViewProps = {
  * Replace one finding's flag set.
  *
  * The decision travels with it unchanged: flags and dispositions are separate
- * axes, and the endpoint needs the decision on every write because an absent
- * optional `UnionEnum` would be coerced back to `open`.
+ * axes, and the endpoint's schema requires the decision on every write.
  */
 type SetReviewFindingFlags = (
   findingId: DocumentReviewFindingRow["id"],
@@ -3969,6 +3975,7 @@ const ReviewResultCard = ({
             onAddCounterpartyNote={addCounterpartyNote}
             onAskInChat={() =>
               useInspectorCommandStore.getState().requestFileChatDraft({
+                delivery: FILE_CHAT_DRAFT_DELIVERY.draft,
                 fileFieldId: targetFileFieldId,
                 markdown: buildFindingChatDraft({
                   item,

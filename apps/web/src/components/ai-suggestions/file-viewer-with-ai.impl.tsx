@@ -22,11 +22,12 @@ import {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "@stll/folio-react";
-import type { DocxEditorRef } from "@stll/folio-react";
+import type { AISuggestionPreset, DocxEditorRef } from "@stll/folio-react";
 
+import { ChatEditorScope } from "@/components/chat-editor-provider";
 import {
-  getCreateDocumentDraftPersistence,
   type CreateDocumentDraftPersistence,
+  getCreateDocumentDraftPersistence,
 } from "@/components/chat/create-document-draft-runtime";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
@@ -42,10 +43,7 @@ import {
   resolveFileReviewSessionId,
 } from "./file-review-session";
 import type { PendingReviewChoice } from "./file-review-session";
-import type {
-  FileChatOverlayActivation,
-  OverlayThreadPresentation,
-} from "./file-viewer-with-ai-config";
+import type { FileChatOverlayActivation } from "./file-viewer-with-ai-config";
 import {
   buildFolioReviewDecorations,
   resolveFolioReviewFocusId,
@@ -114,12 +112,11 @@ export type FileViewerWithAIProps = {
    */
   activeLegal?: ActiveLegalDocument | undefined;
   /**
-   * Where this viewer's conversation is read. `tab` means a docked tab is
-   * already showing the same thread, so the overlay keeps its composer and
-   * drops the floating card that would repeat the tab beside itself. Defaults
-   * to `card`, the shape a viewer with no docked twin wants.
+   * Prompts the surface offers as chips over the empty composer, sent as
+   * they are on a click. A legal reader's inspector offers the questions its
+   * page used to ask in a section of its own.
    */
-  threadPresentation?: OverlayThreadPresentation | undefined;
+  presets?: AISuggestionPreset[] | undefined;
   /** Optional class name applied to the wrapper. */
   className?: string | undefined;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
@@ -274,8 +271,8 @@ export const FileChatOverlayHost = ({
   onDocxCommentsChange,
   onChatThreadIdChange,
   onActiveDraftChatBound,
+  presets,
   requestDocxEditMode,
-  threadPresentation,
 }: FileChatOverlayHostProps) => {
   const draftPersistence: CreateDocumentDraftPersistence =
     activeDraft === undefined
@@ -330,36 +327,38 @@ export const FileChatOverlayHost = ({
   });
 
   return (
-    // The overlay's composer gates every send on the AI key. Readers mount it
-    // from routes outside the app shell (the public law surface and its
-    // inspector views), so the host brings the gate rather than trusting
-    // every route to have put one above it.
+    // The overlay's composer gates every send on the AI key and registers
+    // with a chat editor manager. Readers mount it from routes outside the
+    // app shell (the public law surface and its inspector views), so the host
+    // brings both rather than trusting every route to have put them above it.
     <AIAvailabilityProvider>
-      {docxEditorRef !== undefined && reviewSessionId !== undefined && (
-        <ReviewFolioDecorationsBridge
+      <ChatEditorScope>
+        {docxEditorRef !== undefined && reviewSessionId !== undefined && (
+          <ReviewFolioDecorationsBridge
+            docxEditorRef={docxEditorRef}
+            docxEditable={docxEditable === true}
+            entityId={reviewSessionId}
+          />
+        )}
+        <FileChatOverlay
+          activeExternal={activeExternal}
+          activeDraft={activeDraft}
+          activeFile={activeFile}
+          activeLegal={activeLegal}
+          chatThreadId={chatThreadId}
+          draftPersistence={draftPersistence}
+          docxComments={docxComments}
+          docxEditable={docxEditable}
+          docxEditSafety={docxEditSafety}
           docxEditorRef={docxEditorRef}
-          docxEditable={docxEditable === true}
-          entityId={reviewSessionId}
+          onDocxCommentsChange={onDocxCommentsChange}
+          onActiveDraftChatBound={onActiveDraftChatBound}
+          onNewThread={handleNewThread}
+          presets={presets}
+          requestDocxEditMode={requestDocxEditMode}
+          workspaceId={workspaceId}
         />
-      )}
-      <FileChatOverlay
-        activeExternal={activeExternal}
-        activeDraft={activeDraft}
-        activeFile={activeFile}
-        activeLegal={activeLegal}
-        chatThreadId={chatThreadId}
-        draftPersistence={draftPersistence}
-        docxComments={docxComments}
-        docxEditable={docxEditable}
-        docxEditSafety={docxEditSafety}
-        docxEditorRef={docxEditorRef}
-        onDocxCommentsChange={onDocxCommentsChange}
-        onActiveDraftChatBound={onActiveDraftChatBound}
-        onNewThread={handleNewThread}
-        requestDocxEditMode={requestDocxEditMode}
-        threadPresentation={threadPresentation}
-        workspaceId={workspaceId}
-      />
+      </ChatEditorScope>
     </AIAvailabilityProvider>
   );
 };

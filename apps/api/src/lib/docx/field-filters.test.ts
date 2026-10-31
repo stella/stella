@@ -15,7 +15,7 @@ import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { deriveManifest } from "./derived-manifest";
 import { discoverTemplate } from "./discover-template";
-import { fieldMetaFromFilters, FIELD_META_FILTERS } from "./field-filters";
+import { FIELD_META_FILTERS, fieldMetaFromFilters } from "./field-filters";
 import type { FieldMeta } from "./types";
 
 const WRAP = (body: string) =>

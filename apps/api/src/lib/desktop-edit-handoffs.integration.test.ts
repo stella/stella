@@ -9,9 +9,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   consumeDesktopEditHandoff,
+  DesktopHandoffAccountMismatchError,
   readDesktopEditHandoffAccess,
   recordDesktopHandoffFailure,
-  DesktopHandoffAccountMismatchError,
 } from "@/api/lib/desktop-edit-handoffs";
 import {
   createDesktopEditHandoffToken,
@@ -68,7 +68,7 @@ const seedHandoff = async (
   expiresAt = new Date(REDEMPTION_TIME.getTime() + 60_000),
 ) => {
   const id = createSafeId<"desktopEditHandoff">();
-  const handoffToken = createDesktopEditHandoffToken();
+  const handoffToken = createDesktopEditHandoffToken({ userId: null });
   await testDb.insert(desktopEditHandoffs).values({
     id,
     workspaceId: ids.wsA1,
@@ -179,7 +179,9 @@ test("token failure acknowledgement is terminal, scoped and replay safe", async 
     });
   expect(await acknowledge(pending.handoffToken)).toBe(true);
   expect(await acknowledge(pending.handoffToken)).toBe(false);
-  expect(await acknowledge(createDesktopEditHandoffToken())).toBe(false);
+  expect(
+    await acknowledge(createDesktopEditHandoffToken({ userId: null })),
+  ).toBe(false);
   const rows = await testDb
     .select({
       id: desktopEditHandoffs.id,

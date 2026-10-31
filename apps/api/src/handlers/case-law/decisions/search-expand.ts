@@ -1,9 +1,9 @@
 import { Result } from "better-result";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
+  type PublicCaseLawCountry,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -13,8 +13,10 @@ import {
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
+import type { SafeDb } from "@/api/db/safe-db";
 import { envBase } from "@/api/env-base";
-import { resolveCaching } from "@/api/lib/ai-config";
+import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -25,9 +27,12 @@ import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
+import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import {
+  type CorpusQueryToken,
   formatCorpusQueryTokens,
   partitionCorpusFunctionWords,
   tokenizeCorpusFreeText,
@@ -48,6 +53,7 @@ import {
 } from "@/api/lib/legal-search/public-law-country";
 import type { PublicCountryUnavailableAnswer } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models";
 
@@ -155,6 +161,101 @@ const settledAnswer = (alternatives: LegalAlternatives): ExpansionAnswer => ({
   outcome: alternatives.length === 0 ? "none" : "expanded",
 });
 
+/**
+ * The model call behind a search expansion: asks the organization's model for
+ * alternatives to the query's required words and settles its answer. Apart
+ * from the handler's admission and cache so a test runs exactly this request
+ * against a recorded provider answer.
+ *
+ * @public
+ */
+export const proposeLegalAlternatives = async ({
+  abortSignal,
+  admission,
+  country,
+  managedAIResidency,
+  orgAIConfig,
+  organizationId,
+  promptCachingEnabled,
+  query,
+  required,
+  safeDb,
+  userId,
+}: {
+  abortSignal: AbortSignal;
+  admission: ModelDispatchAdmission;
+  country: PublicCaseLawCountry;
+  managedAIResidency: ManagedAIResidency;
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization">;
+  promptCachingEnabled: boolean;
+  query: string;
+  required: readonly CorpusQueryToken[];
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<ExpansionAnswer> => {
+  const corpusLanguage = corpusMorphologyLanguage(country);
+  const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId: null,
+    },
+    feature: "case-law.search.expand",
+    modelTask: "search-expand",
+    orgAIConfig,
+    modelTier: admission.modelTier,
+    properties: { organization_id: organizationId, jurisdiction: country },
+    traceId: Bun.randomUUIDv7(),
+  });
+  const generated = await Result.tryPromise({
+    try: async () =>
+      await generateTanStackObjectForTask({
+        userId,
+        dataClass: "customer",
+        admission,
+        task: "search-expand",
+        serviceTier: "standard",
+        orgAIConfig,
+        managedAIResidency,
+        organizationId,
+        tenantWorkspaceIds: [],
+        analytics,
+        caching: resolveCaching({
+          promptCachingEnabled,
+          task: "search-expand",
+          scopeKey: null,
+        }),
+        system: EXPANSION_SYSTEM,
+        prompt: JSON.stringify({
+          jurisdiction: country,
+          corpusLanguage,
+          query: formatCorpusQueryTokens(required),
+        }),
+        outputSchema: expansionOutputSchema,
+        ...EXPANSION_REQUEST,
+        abortSignal,
+      }),
+    catch: (error: unknown) => error,
+  });
+  // A timeout or a failed call degrades to the search as typed, and is
+  // reported.
+  if (generated.isErr()) {
+    analytics.captureError(generated.error);
+    return DEGRADED;
+  }
+  return settledAnswer(
+    normalizeLegalAlternatives(generated.value.alternatives, {
+      functionWords: functionWordsFor(corpusLanguage),
+      query,
+    }),
+  );
+};
+
 const config = {
   contract: "patch",
   actionAdmission: { type: "handler", actionKind: "case-law.search-expand" },
@@ -172,8 +273,12 @@ const config = {
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "search_ui" },
-  body: t.Object({
-    query: t.String({ minLength: 1, maxLength: LIMITS.searchQueryMaxLength }),
+  body: v.object({
+    query: v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(LIMITS.searchQueryMaxLength),
+    ),
     country: tPublicLawCountry,
   }),
   requiresUsage: { actionType: "chat", modelTask: "search-expand" },
@@ -193,6 +298,10 @@ const expandCaseLawSearch = createSafeRootHandler(
     session,
     user,
   }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
+    if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+      return Result.ok(NO_ALTERNATIVES);
+    }
+
     const countryRead = readPublicLawCountry(body.country, {
       domain: "caseLaw",
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
@@ -241,8 +350,7 @@ const expandCaseLawSearch = createSafeRootHandler(
       return Result.ok(NO_ALTERNATIVES);
     }
 
-    const corpusLanguage = corpusMorphologyLanguage(country);
-    const functionWords = functionWordsFor(corpusLanguage);
+    const functionWords = functionWordsFor(corpusMorphologyLanguage(country));
     const { required } = partitionCorpusFunctionWords(
       tokenizeCorpusFreeText(body.query),
       functionWords,
@@ -262,65 +370,24 @@ const expandCaseLawSearch = createSafeRootHandler(
       return Result.ok(settledAnswer(cached));
     }
 
-    const analytics = createTanStackAIAnalyticsCallbacks({
-      dataClass: "customer",
-      usageMetering: {
-        actionType: "chat",
-        organizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: null,
-      },
-      feature: "case-law.search.expand",
-      modelTask: "search-expand",
+    const answer = await proposeLegalAlternatives({
+      abortSignal: request.signal,
+      admission: configuredModelAdmission({ modelAdmission }),
+      country,
+      managedAIResidency,
       orgAIConfig,
-      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
-      properties: { organization_id: organizationId, jurisdiction: country },
-      traceId: Bun.randomUUIDv7(),
+      organizationId,
+      promptCachingEnabled,
+      query: body.query,
+      required,
+      safeDb,
+      userId: user.id,
     });
-    const generated = await Result.tryPromise({
-      try: async () =>
-        await generateTanStackObjectForTask({
-          dataClass: "customer",
-          admission: configuredModelAdmission({ modelAdmission }),
-          task: "search-expand",
-          serviceTier: "standard",
-          orgAIConfig,
-          managedAIResidency,
-          organizationId,
-          tenantWorkspaceIds: [],
-          analytics,
-          caching: resolveCaching({
-            promptCachingEnabled,
-            task: "search-expand",
-            scopeKey: null,
-          }),
-          system: EXPANSION_SYSTEM,
-          prompt: JSON.stringify({
-            jurisdiction: country,
-            corpusLanguage,
-            query: formatCorpusQueryTokens(required),
-          }),
-          outputSchema: expansionOutputSchema,
-          ...EXPANSION_REQUEST,
-          abortSignal: request.signal,
-        }),
-      catch: (error: unknown) => error,
-    });
-    // A timeout or a failed call degrades to the search as typed. It is
-    // reported, and not cached, so the next search asks again.
-    if (generated.isErr()) {
-      analytics.captureError(generated.error);
-      return Result.ok(DEGRADED);
+    // A degraded answer is not cached, so the next search asks again.
+    if (answer.outcome !== "degraded") {
+      cacheExpansion(cacheKey, answer.alternatives);
     }
-
-    const alternatives = normalizeLegalAlternatives(
-      generated.value.alternatives,
-      { functionWords, query: body.query },
-    );
-    cacheExpansion(cacheKey, alternatives);
-    return Result.ok(settledAnswer(alternatives));
+    return Result.ok(answer);
   },
 );
 

@@ -17,9 +17,9 @@ import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
+  AiActionIcon,
   ChevronDownIcon,
   ChevronRightIcon,
-  AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
@@ -54,7 +54,7 @@ type VersionRowAuthor = {
 type VersionRowProps = {
   title: string;
   author: VersionRowAuthor | null;
-  /** ISO string (entity versions) or Date (Eden-deserialized). */
+  /** ISO string. */
   createdAt: string;
   isCurrent?: boolean;
   isViewing?: boolean;

@@ -1,6 +1,7 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
+import { SaxesParser } from "saxes";
 
 import { writeZipEntry } from "@stll/docx-utils";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -104,6 +105,9 @@ const readZipFile = async (
   }
   return file.async("string");
 };
+
+const isWellFormedXml = (xml: string): boolean =>
+  Result.try(() => new SaxesParser().write(xml).close()).isOk();
 
 // ── Tests ───────────────────────────────────────────────
 
@@ -234,6 +238,68 @@ describe("injectStamp", () => {
     expect(footer).toContain("Existing footer");
     expect(footer).toContain("stella_dms_ref");
     expect(footer).toContain(stamp);
+  });
+
+  test("updates a footer paragraph containing commented markup", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p><!-- <w:p> --><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+  });
+
+  test("replaces an outer footer paragraph containing the stamp bookmark", async () => {
+    const relNs =
+      "http://schemas.openxmlformats.org/package/2006/relationships";
+    const footerRelType =
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer";
+    const docx = await makeDocx({
+      footerXml: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<w:ftr xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+        '<w:p w:rsidR="outer"><w:pPr/><w:r><w:txbxContent>',
+        '<w:p><w:bookmarkStart w:id="0" w:name="stella_dms_ref"/><w:r><w:t>old stamp</w:t></w:r></w:p>',
+        "</w:txbxContent></w:r></w:p>",
+        "</w:ftr>",
+      ].join(""),
+      docRels: [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        `<Relationships xmlns="${relNs}">`,
+        `<Relationship Id="rId1" Type="${footerRelType}" Target="footer1.xml"/>`,
+        "</Relationships>",
+      ].join(""),
+    });
+
+    const stamped = await injectStamp(docx, stamp, code, baseUrl);
+    const footer = await readZipFile(stamped, "word/footer1.xml");
+
+    expect(isWellFormedXml(footer ?? "")).toBe(true);
+    expect(isWellFormedXml(`${footer ?? ""}</w:p>`)).toBe(false);
+    expect(footer).not.toContain('w:rsidR="outer"');
+    expect(footer).not.toContain("old stamp");
+    expect(footer).toContain(stamp);
+    expect(footer?.match(/<w:p(?:\s|>)/gu)).toHaveLength(1);
   });
 
   test("stamps every footer variant referenced across document sections once", async () => {

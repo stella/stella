@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 import * as slimdom from "slimdom";
 
 import { writeZipEntry } from "@stll/docx-utils";
+import { declareFingerprintFields } from "@stll/errors";
 
 import type { StoredRow } from "@/api/lib/bilingual/operations";
 import type { BilingualUnit } from "@/api/lib/bilingual/rows";
@@ -33,8 +34,7 @@ type BilingualInlineControl = Readonly<{
 }>;
 
 type BilingualInlineToken =
-  | (BilingualTextSpan & Readonly<{ type: "text" }>)
-  | BilingualInlineControl;
+  (BilingualTextSpan & Readonly<{ type: "text" }>) | BilingualInlineControl;
 
 export type FormattedBilingualUnit = BilingualUnit & {
   inline: readonly BilingualInlineToken[];
@@ -47,17 +47,18 @@ export type BilingualFormattedTranslation = Readonly<{
 }>;
 
 type BilingualFormattingErrorReason =
-  | "invalid-spans"
-  | "malformed-xml"
-  | "missing-document"
-  | "missing-paragraph";
+  "invalid-spans" | "malformed-xml" | "missing-document" | "missing-paragraph";
 
 export class BilingualFormattingError extends TaggedError(
   "BilingualFormattingError",
 )<{
   message: string;
   reason: BilingualFormattingErrorReason;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 const fail = (
   reason: BilingualFormattingErrorReason,

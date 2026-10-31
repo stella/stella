@@ -18,6 +18,8 @@ const identityFields = [
   "ecli",
   "url",
   "source_url",
+  "match",
+  "textAvailability",
 ] as const;
 export const APP_SEARCH_SCHEMA = v.union([
   unavailable,

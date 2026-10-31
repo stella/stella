@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript";
+import ts from "typescript6";
 
 const repository = path.resolve(import.meta.dir, "..");
 const generators = ["apps/api/scripts/generate-web-api-types.ts"];
@@ -83,10 +83,17 @@ const fixtureEnvironment = (inherited: NodeJS.ProcessEnv) => {
   };
 };
 
+// The host-wide generated-output store is shared across checkouts on purpose;
+// each fixture gets its own so one run cannot restore another's printout.
+const generatorEnvironment = (directory: string) => ({
+  ...fixtureEnvironment(process.env),
+  STELLA_GENERATED_STORE: path.join(directory, ".cache/generated-store"),
+});
+
 const run = (directory: string, command: string[]) => {
   const result = Bun.spawnSync(command, {
     cwd: directory,
-    env: fixtureEnvironment(process.env),
+    env: generatorEnvironment(directory),
   });
   expect({
     exitCode: result.exitCode,
@@ -115,6 +122,13 @@ const fixture = () => {
       file: ".gitignore",
       source: readFileSync(path.join(repository, ".gitignore"), "utf-8"),
     });
+    // The generator checks what the compiler read against the Turbo inputs it
+    // declares, as in a real checkout.
+    write({
+      directory,
+      file: "turbo.json",
+      source: readFileSync(path.join(repository, "turbo.json"), "utf-8"),
+    });
     write({
       directory,
       file: "apps/web/package.json",
@@ -137,7 +151,7 @@ const fixture = () => {
     });
     write({
       directory,
-      file: "apps/api/src/eden-contract.ts",
+      file: "apps/api/src/web-contract.ts",
       source:
         'import type { Routes } from "./routes";\nexport type WebApiContract = { routes: Routes };\n',
     });
@@ -290,6 +304,7 @@ test("API determinism check rejects output that changes between generation passe
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toMatch(
@@ -311,7 +326,10 @@ test("consumer generation prints once while the dedicated check validates identi
     expect(printed.match(/printed in/gu)).toHaveLength(1);
     expect(printed).not.toContain("identity verified");
     const checked = run(directory, [process.execPath, generator, "--check"]);
-    expect(checked.match(/printed in/gu)).toHaveLength(2);
+    // Two independent generations: the first prints, the second prints again and
+    // proves identity against the first's declared form in the same program.
+    expect(checked.match(/printed in/gu)).toHaveLength(1);
+    expect(checked.match(/printed and identity verified in/gu)).toHaveLength(1);
     expect(checked.match(/identity verified/gu)).toHaveLength(1);
     expect(checked).toContain("verified deterministic");
 
@@ -333,6 +351,7 @@ test("consumer generation prints once while the dedicated check validates identi
     );
     const result = Bun.spawnSync([process.execPath, generator, "--check"], {
       cwd: directory,
+      env: generatorEnvironment(directory),
     });
     expect(result.exitCode).not.toBe(0);
     expect(result.stderr.toString()).toContain(

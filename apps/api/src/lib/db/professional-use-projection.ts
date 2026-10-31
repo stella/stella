@@ -13,6 +13,7 @@ export const projectProfessionalUseAcceptanceForAccountExport = (
   statementVersion: row.statementVersion,
   termsVersion: row.termsVersion,
   acceptedAt: row.acceptedAt.toISOString(),
+  source: row.source,
 });
 
 type AcceptanceAccountExport = ReturnType<

@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, jest, test } from "bun:test";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
   type BrowserControlCommand,
   type BrowserControlResult,
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
+import { buildSendRequestBody } from "@/features/chat/chat-runtime";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { createUuid } from "@/lib/uuid";
 
 import {
@@ -18,6 +22,8 @@ import {
 } from "./browser-approval-mode";
 import {
   executeBrowserExtensionCommand,
+  getBrowserClientCapability,
+  isBrowserExtensionBridgeMounted,
   mountBrowserExtensionBridge,
 } from "./browser-extension-bridge";
 
@@ -26,7 +32,13 @@ const ORIGIN = "https://app.stella.test";
 const click = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Submit", ref: "e:0:0.1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Submit",
+    ref: "e:0:0.1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 const snapshot = { action: "snapshot" } satisfies BrowserControlCommand;
 
@@ -81,7 +93,7 @@ beforeEach(() => {
 afterEach(() => {
   unmount?.();
   unmount = null;
-  jest.useRealTimers();
+  restoreRealTimers();
   if (previousWindow) {
     Object.defineProperty(globalThis, "window", previousWindow);
   } else {
@@ -356,5 +368,70 @@ describe("approval after the controlled tab changes", () => {
     report("controller-1", 7);
 
     expect(autoApprovesReads()).toBe(true);
+  });
+});
+
+describe("the bridge outlives every chat surface", () => {
+  const sendBody = () => {
+    const threadId = toChatThreadId("thread-new");
+    return buildSendRequestBody({
+      context: {},
+      key: { scope: "global", threadId },
+      messages: [
+        {
+          id: createUuid(),
+          parts: [{ content: "hello", type: "text" }],
+          role: "user",
+        },
+      ],
+      run: { runId: "run-new", threadId },
+    });
+  };
+
+  test("the first send of a fresh chat carries the browser client once the extension answered", () => {
+    connect();
+
+    expect(sendBody().browserClient).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+    });
+  });
+
+  test("a send without a mounted bridge omits the browser client and is detectable", () => {
+    expect(isBrowserExtensionBridgeMounted()).toBe(false);
+    expect(sendBody().browserClient).toBeUndefined();
+  });
+
+  test("surfaces coming and going under the frame keep the pairing", () => {
+    connect();
+    const surface = mountBrowserExtensionBridge();
+    surface();
+
+    expect(isBrowserExtensionBridgeMounted()).toBe(true);
+    expect(getBrowserClientCapability()).toBeDefined();
+    expect(sendBody().browserClient).toBeDefined();
+  });
+});
+
+describe("the bridge mount site", () => {
+  test("only the app frame host mounts the bridge", async () => {
+    const root = new URL("../../..", import.meta.url).pathname;
+    const mounters: string[] = [];
+    for await (const file of new Bun.Glob("**/*.{ts,tsx}").scan(root)) {
+      if (
+        file.includes(".test.") ||
+        file.endsWith("browser-extension-bridge.ts")
+      ) {
+        continue;
+      }
+      if (
+        (await Bun.file(`${root}${file}`).text()).includes(
+          "mountBrowserExtensionBridge",
+        )
+      ) {
+        mounters.push(file);
+      }
+    }
+
+    expect(mounters).toEqual(["routes/-app-frame-host.tsx"]);
   });
 });

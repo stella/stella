@@ -468,7 +468,7 @@ if (!databaseUrl || !runPostgres) {
           await rejectionOf(
             withInterleaving({
               databaseUrl,
-              timeoutMs: 500,
+              timeoutMs: 500, // timeout under test
               a: {
                 transaction: connection.db.transaction.bind(connection.db),
                 steps: [
@@ -524,7 +524,7 @@ if (!databaseUrl || !runPostgres) {
           await rejectionOf(
             withInterleaving({
               databaseUrl,
-              timeoutMs: 500,
+              timeoutMs: 500, // timeout under test
               a: {
                 transaction: transaction("a"),
                 steps: [

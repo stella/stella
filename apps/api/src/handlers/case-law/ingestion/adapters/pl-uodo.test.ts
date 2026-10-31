@@ -14,11 +14,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assemblePlUodoDecision,
   classifyPlUodoRow,
   encodePlUodoCursor,
@@ -32,12 +27,17 @@ import {
   plUodoBodyFrom,
   plUodoDocketOfCourtUrn,
   plUodoListingIdentity,
-  plUodoRawPartsOf,
   plUodoQuarantineId,
+  plUodoRawPartsOf,
   tallyPlUodoSkips,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -701,7 +701,7 @@ describe("identity", () => {
       if (recordClass === "skipped") {
         continue;
       }
-      expect(heldWithoutDetail?.(plUodoListingIdentity(row)), row.refid).toBe(
+      expect(heldWithoutDetail(plUodoListingIdentity(row)), row.refid).toBe(
         recordClass === "court-ruling",
       );
     }
@@ -1167,7 +1167,7 @@ describe("a listed record is never dropped silently", () => {
     ).toEqual([]);
     // The reconciliation counts it held on its record, as it can hold no more.
     expect(
-      plUodoAdapter.reconciliation.heldWithoutDetail?.({
+      plUodoAdapter.reconciliation.heldWithoutDetail({
         type: "document",
         sourceDocumentId: stored?.sourceDocumentId ?? "",
       }),

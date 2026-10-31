@@ -1,10 +1,34 @@
 import { expect, test } from "bun:test";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { checkParserVersions, comparisonBase } from "./check-parser-versions";
+import {
+  checkParserVersions,
+  comparisonBase,
+  readGitTree,
+  valueImportGraph,
+} from "./check-parser-versions";
+import {
+  PARSER_ENTRY_DIRECTORY,
+  PARSER_REGISTRY_OUTPUT,
+} from "./parser-registry";
 
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
 const PARSERS = `${INGESTION}parsers/`;
+const LEGISLATION_ADAPTERS =
+  "apps/api/src/handlers/legislation/ingestion/adapters/";
+const ENV_BASE = "apps/api/src/env-base.ts";
+const TAGGED_ERRORS = "apps/api/src/lib/errors/tagged-errors.ts";
+const LOGGER = "apps/api/src/lib/observability/logger.ts";
+const VERSION = "apps/api/src/lib/version.ts";
 
 type FixtureOptions = {
   versions?: Partial<Record<"A" | "B" | "C", number>>;
@@ -14,6 +38,7 @@ type FixtureOptions = {
   markerSource?: string;
   missingVersion?: "A" | "B" | "C";
   bareVersion?: boolean;
+  entryLayout?: boolean;
 };
 
 const fixture = ({
@@ -24,6 +49,7 @@ const fixture = ({
   markerSource = "",
   missingVersion,
   bareVersion = false,
+  entryLayout = false,
 }: FixtureOptions = {}): Map<string, string> => {
   const entries = adapters
     .map((key) => `[ADAPTER_KEYS.${key}]: Adapter${key}`)
@@ -59,6 +85,10 @@ const fixture = ({
       ].join("\n"),
     ],
     [`${PARSERS}shared-helper.ts`, `${markerSource}${helperSource}`],
+    [ENV_BASE, "export const env = {};"],
+    [TAGGED_ERRORS, "export class TaggedError extends Error {}"],
+    [LOGGER, "export const logger = { info: () => {} };"],
+    [VERSION, "export const APP_VERSION = 'test';"],
   ]);
 
   for (const key of adapters) {
@@ -89,11 +119,92 @@ const fixture = ({
       ].join("\n"),
     );
   }
+  if (entryLayout) {
+    files.set(
+      `${INGESTION}ingestion-constants.ts`,
+      'export { ADAPTER_KEYS, PARSER_VERSIONS } from "../../../lib/legal-search/parser-registry.gen";\n',
+    );
+    const keyEntries = ["A", "B", "C"]
+      .map((key) => `${key}: "test-${key.toLowerCase()}"`)
+      .join(", ");
+    const inlineVersionEntries = adapters
+      .map((key) => `"test-${key.toLowerCase()}": ${versions[key] ?? 1}`)
+      .join(", ");
+    const fingerprintEntries = ["A", "B", "C"]
+      .map((key) => `"test-${key.toLowerCase()}": 0`)
+      .join(", ");
+    const scopeEntries = adapters
+      .map((key) => {
+        const sourceKey = `test-${key.toLowerCase()}`;
+        const version = versions[key] ?? 1;
+        return `"${sourceKey}": { version: ${version}, scope: { type: "all", reason: "fixture" } }`;
+      })
+      .join(", ");
+    files.set(
+      PARSER_REGISTRY_OUTPUT,
+      [
+        `export const ADAPTER_KEYS = { ${keyEntries} };`,
+        "export const IMPORT_SOURCE_KEYS = {};",
+        `export const PARSER_VERSIONS = { ${inlineVersionEntries} };`,
+        `export const SOURCE_FINGERPRINT_VERSIONS = { ${fingerprintEntries} };`,
+        `export const PARSER_VERSION_SCOPES = { ${scopeEntries} };`,
+      ].join("\n"),
+    );
+  }
   return files;
 };
 
 const changed = (base: Map<string, string>, head: Map<string, string>) =>
   checkParserVersions({ base, head });
+
+class LazySourceTree extends Map<string, string> {
+  private readonly sources: ReadonlyMap<string, string>;
+
+  constructor(sources: ReadonlyMap<string, string>) {
+    super([...sources.keys()].map((file) => [file, ""]));
+    this.sources = new Map(sources);
+  }
+
+  override get(file: string): string | undefined {
+    const cached = super.get(file);
+    if (cached !== "" || !this.has(file)) {
+      return cached;
+    }
+    const source = this.sources.get(file);
+    if (source !== undefined) {
+      this.set(file, source);
+    }
+    return source;
+  }
+
+  peek(file: string): string | undefined {
+    return super.get(file);
+  }
+}
+
+test("value import graphs read lazy sources without registry generation", () => {
+  const files = fixture({ entryLayout: true });
+  files.set(`${PARSER_ENTRY_DIRECTORY}unread.json`, "not a TypeScript module");
+  const lazy = new LazySourceTree(files);
+  const graph = valueImportGraph(lazy);
+  const parser = `${PARSERS}parser-a.ts`;
+  const helper = `${PARSERS}shared-helper.ts`;
+
+  expect(graph.imports(parser)).toContain(helper);
+  expect(graph.closure(parser).has(helper)).toBe(true);
+  expect(lazy.peek(`${PARSER_ENTRY_DIRECTORY}unread.json`)).toBe("");
+});
+
+test("dependency graphs follow imports through the generated registry", () => {
+  const files = fixture({ entryLayout: true });
+  const parser = `${PARSERS}parser-a.ts`;
+  files.set(
+    PARSER_REGISTRY_OUTPUT,
+    `import { parseA } from "@/api/handlers/case-law/ingestion/parsers/parser-a"; export const value = parseA;`,
+  );
+  const graph = valueImportGraph(new LazySourceTree(files));
+  expect(graph.closure(PARSER_REGISTRY_OUTPUT).has(parser)).toBe(true);
+});
 
 test("a parser change passes when its registered adapter version increases", () => {
   const base = fixture();
@@ -117,6 +228,25 @@ test("missing and equal bumps fail, catching merge-group version collisions", ()
     changed(higherBase, fixture({ versions: { A: 2 }, parserSources })),
   ).toEqual([
     expect.stringContaining("test-a: parser version 2 must exceed base 2"),
+  ]);
+});
+
+test("layout, comments and types never demand a bump, but output changes do", () => {
+  const base = fixture();
+  const reformatted = fixture({
+    parserSources: {
+      A: "// Reads one record.\nexport const parseA = (): string =>\n  helper( )\n",
+    },
+  });
+  const changedOutput = fixture({
+    parserSources: {
+      A: "export const parseA = (): string =>\n  helper() + '!'\n",
+    },
+  });
+
+  expect(changed(base, reformatted)).toEqual([]);
+  expect(changed(base, changedOutput)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
   ]);
 });
 
@@ -227,6 +357,128 @@ test("a shared helper change fans out to every importing adapter", () => {
   expect(changed(base, bothVersionsBumped)).toEqual([]);
 });
 
+test("a change confined to an output boundary needs no version bump", () => {
+  const base = fixture();
+  const head = fixture();
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      'import { logger } from "@/api/lib/observability/logger";\nexport const parseA = () => { logger.info(); return "same"; };',
+    );
+  }
+  head.set(LOGGER, "export const logger = { info: () => 'changed' };");
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("an output module reached only through a boundary is not owned", () => {
+  const base = fixture();
+  const head = fixture();
+  const hidden = "apps/api/src/lib/output-hidden-by-logger.ts";
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      'import { logger } from "@/api/lib/observability/logger";\nexport const parseA = () => { logger.info(); return "same"; };',
+    );
+    tree.set(
+      LOGGER,
+      'import { hidden } from "../output-hidden-by-logger";\nexport const logger = { info: () => hidden };',
+    );
+    tree.set(hidden, "export const hidden = 'base';");
+  }
+  head.set(hidden, "export const hidden = 'changed';");
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("a stale output boundary fails", () => {
+  const base = fixture();
+  const head = fixture();
+  head.delete(LOGGER);
+
+  expect(changed(base, head)).toContain(
+    `Parser output boundary does not exist in head tree: ${LOGGER}`,
+  );
+});
+
+test("output boundaries cannot lie in any output-shaping root", () => {
+  const roots = [
+    `${ADAPTERS}boundary.ts`,
+    `${LEGISLATION_ADAPTERS}boundary.ts`,
+    `${PARSERS}boundary.ts`,
+    "apps/api/src/lib/legal-search/parsers/boundary.ts",
+    "apps/api/src/lib/case-law/boundary.ts",
+    "packages/legal-ast/boundary.ts",
+    "packages/text-normalize/boundary.ts",
+    "packages/sha256/boundary.ts",
+    "apps/api/src/lib/legal-search/ingestion-constants.ts",
+    PARSER_REGISTRY_OUTPUT,
+    `${PARSER_ENTRY_DIRECTORY}a.json`,
+  ];
+  for (const boundary of roots) {
+    const base = fixture();
+    const head = fixture();
+    base.set(boundary, "export {};\n");
+    head.set(boundary, "export {};\n");
+
+    expect(
+      checkParserVersions({
+        base,
+        head,
+        boundaries: [{ path: boundary, reason: "invalid test boundary" }],
+      }),
+    ).toContain(
+      `Parser output boundary lies in an output-shaping root: ${boundary}`,
+    );
+  }
+});
+
+test("an output module also reachable without a boundary still needs a bump", () => {
+  const base = fixture();
+  const head = fixture();
+  for (const tree of [base, head]) {
+    tree.set(
+      `${PARSERS}parser-a.ts`,
+      [
+        'import { logger } from "@/api/lib/observability/logger";',
+        'import { helper } from "./shared-helper";',
+        "export const parseA = () => { logger.info(); return helper(); };",
+      ].join("\n"),
+    );
+    tree.set(
+      LOGGER,
+      [
+        'import { helper } from "@/api/handlers/case-law/ingestion/parsers/shared-helper";',
+        'import { hidden } from "../output-hidden-by-logger";',
+        "export const logger = { info: () => helper() + hidden };",
+      ].join("\n"),
+    );
+    tree.set(
+      "apps/api/src/lib/output-hidden-by-logger.ts",
+      "export const hidden = 'base';",
+    );
+  }
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    expect.stringContaining("test-b: parser version 1 must exceed base 1"),
+  ]);
+
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'base';\n",
+  );
+  head.set(
+    "apps/api/src/lib/output-hidden-by-logger.ts",
+    "export const hidden = 'changed';",
+  );
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("a newly added marker exempts only its changed file", () => {
   const base = fixture();
   const head = fixture({
@@ -309,7 +561,9 @@ const movedHelper = ({
   head.set(
     `${PARSERS}parser-a.ts`,
     [
-      "// parser-output-unchanged: helper moved without output changes",
+      ...(keepCounterpart
+        ? ["// parser-output-unchanged: helper moved without output changes"]
+        : []),
       keepCounterpart
         ? 'import { helper } from "./moved-helper";'
         : "const helper = () => 'base';",
@@ -471,6 +725,83 @@ test("parser source deletions without a counterpart still require a version bump
   ]);
 });
 
+const deletedWorkspaceDependency = (marker = "") => {
+  const base = fixture({ adapters: ["A"] });
+  const parser = `${PARSERS}parser-a.ts`;
+  base.set(
+    "packages/dependency/package.json",
+    JSON.stringify({ exports: "./src/index.ts" }),
+  );
+  base.set(
+    "packages/dependency/src/index.ts",
+    "export const dependency = () => 'base';\n",
+  );
+  base.set(
+    parser,
+    'import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n',
+  );
+  const head = new Map(base);
+  head.delete("packages/dependency/package.json");
+  head.delete("packages/dependency/src/index.ts");
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nimport { helper } from "./shared-helper";\nexport const parseA = () => dependency() + helper();\n`,
+  );
+  return { base, head, parser };
+};
+
+test("an owner-level marker exempts a deleted parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("a deleted parser dependency without an owner-level marker requires a version bump", () => {
+  const { base, head } = deletedWorkspaceDependency();
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("an owner-level marker does not exempt another modified parser dependency", () => {
+  const { base, head } = deletedWorkspaceDependency(
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n",
+  );
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
+test("an owner-level marker does not exempt another deleted parser dependency", () => {
+  const marker =
+    "// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\n";
+  const { base, head, parser } = deletedWorkspaceDependency(marker);
+  head.delete(`${PARSERS}shared-helper.ts`);
+  head.set(
+    parser,
+    `${marker}import { dependency } from "@stll/dependency";\nexport const parseA = () => dependency() + "base";\n`,
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining(`${PARSERS}shared-helper.ts`),
+  ]);
+});
+
+test("an owner-level marker does not exempt a removed package the parser no longer imports", () => {
+  const { base, head, parser } = deletedWorkspaceDependency();
+  head.set(
+    parser,
+    '// parser-output-unchanged: [test-a] dependency now resolves to the equivalent published package\nimport { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("packages/dependency/src/index.ts"),
+  ]);
+});
+
 test("deleted modules containing only reexports need no parser version bump", () => {
   for (const source of [
     'export { helper } from "./shared-helper";\n',
@@ -507,9 +838,11 @@ test("deleted reexport modules with any local code still need a bump", () => {
     const { base, head, facade } = deletedFacade(
       `export { helper } from "./shared-helper";\n${localCode}\n`,
     );
-    expect(changed(base, head)).toEqual([
-      `test-a: parser version 1 must exceed base 1; changed: ${facade}`,
-    ]);
+    head.set(
+      `${PARSERS}parser-a.ts`,
+      'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+    );
+    expect(changed(base, head)).toEqual([expect.stringContaining(facade)]);
   }
 });
 
@@ -550,7 +883,7 @@ test("registry additions are discovered automatically and still require versions
   expect(changed(base, fixture({ missingVersion: "A" }))).toEqual(
     expect.arrayContaining([
       expect.stringContaining(
-        "Registry entry ADAPTER_KEYS.A has no resolvable adapter or parser version",
+        'Registry entry "test-a" has no resolvable adapter or parser version',
       ),
     ]),
   );
@@ -565,6 +898,94 @@ test("bare imported version constants remain supported", () => {
   });
 
   expect(changed(base, head)).toEqual([]);
+});
+
+test("independent parser entries enforce the current version floor", () => {
+  const base = fixture({ entryLayout: true, versions: { A: 3 } });
+  const lowered = fixture({ entryLayout: true, versions: { A: 2 } });
+
+  expect(changed(base, lowered)).toEqual([
+    expect.stringContaining(
+      "test-a: parser version 2 must not be lower than base 3",
+    ),
+  ]);
+});
+
+test("independent parser entries accept the matching parser bump", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    versions: { A: 2 },
+    parserSources: { A: "export const parseA = () => 'changed';\n" },
+  });
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("an unrelated entry version change does not add a parser bump requirement", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    versions: { A: 2, B: 2 },
+    parserSources: { A: "export const parseA = () => 'changed';\n" },
+  });
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("duplicate source keys in the committed index fail static resolution", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({ entryLayout: true });
+  head.set(
+    PARSER_REGISTRY_OUTPUT,
+    (head.get(PARSER_REGISTRY_OUTPUT) ?? "").replace(
+      'B: "test-b"',
+      'B: "test-a"',
+    ),
+  );
+
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("Cannot statically read ADAPTER_REGISTRY"),
+    ]),
+  );
+});
+
+test("entry additions and version changes do not hide shared parser helper changes", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    adapters: ["A", "B", "C"],
+    versions: { B: 2 },
+  });
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    ]),
+  );
+});
+
+test("parser entry files cannot be declared as output boundaries", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({ entryLayout: true });
+  const entry = `${PARSER_ENTRY_DIRECTORY}a.json`;
+  base.set(entry, "{}");
+  head.set(entry, "{}");
+
+  expect(
+    checkParserVersions({
+      base,
+      head,
+      boundaries: [{ path: entry, reason: "invalid parser entry boundary" }],
+    }),
+  ).toContain(
+    `Parser output boundary lies in an output-shaping root: ${entry}`,
+  );
 });
 
 test("adapter-local output changes require a bump", () => {
@@ -751,4 +1172,125 @@ test("published packages are external while unresolved workspace exports fail cl
       ),
     ]),
   );
+});
+
+test("a blobless clone fetches every missing source blob in one round trip", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "parser-guard-blobless-"));
+  try {
+    const run = (cwd: string, ...args: string[]) => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=guard",
+          "-c",
+          "user.email=guard@example.com",
+          ...args,
+        ],
+        { cwd, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(
+        result.exitCode,
+        `${args.join(" ")}: ${result.stderr.toString()}`,
+      ).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const source = path.join(root, "source");
+    const clone = path.join(root, "clone");
+    const files = Array.from(
+      { length: 20 },
+      (_, index) => `apps/api/src/module-${String(index)}.ts`,
+    );
+    run(root, "init", "-q", "-b", "main", source);
+    run(source, "config", "uploadpack.allowFilter", "true");
+    run(source, "config", "uploadpack.allowAnySHA1InWant", "true");
+    mkdirSync(path.join(source, "apps/api/src"), { recursive: true });
+    const commit = (label: string) => {
+      for (const file of files) {
+        writeFileSync(
+          path.join(source, file),
+          `export const value = "${label}:${file}";\n`,
+        );
+      }
+      run(source, "add", "-A");
+      run(source, "commit", "-q", "-m", label);
+      return run(source, "rev-parse", "HEAD");
+    };
+    const base = commit("base");
+    commit("head");
+    // Reachability bitmaps make the server, like GitHub, skip objects reachable
+    // from commits the client negotiates as present, including missing blobs.
+    run(source, "repack", "-a", "-d", "-b", "-q");
+    run(root, "clone", "-q", "--filter=blob:none", `file://${source}`, clone);
+
+    // Count the server round trips the clone makes from here on.
+    const log = path.join(root, "upload-pack.log");
+    const wrapper = path.join(root, "upload-pack.sh");
+    writeFileSync(
+      wrapper,
+      `#!/bin/sh\necho fetch >> "${log}"\nexec git upload-pack "$@"\n`,
+      { mode: 0o755 },
+    );
+    writeFileSync(log, "");
+    run(clone, "config", "remote.origin.uploadpack", wrapper);
+    const baseBlob = run(clone, "rev-parse", `${base}:${files.at(0) ?? ""}`);
+    expect(
+      Bun.spawnSync(["git", "--no-lazy-fetch", "cat-file", "-e", baseBlob], {
+        cwd: clone,
+      }).exitCode,
+    ).not.toBe(0);
+
+    const tree = readGitTree(base, { repository: clone });
+
+    expect(tree.type).toBe("ok");
+    const read = tree.type === "ok" ? tree.files : new Map<string, string>();
+    for (const file of files) {
+      expect(read.get(file)).toBe(`export const value = "base:${file}";\n`);
+    }
+    expect(readFileSync(log, "utf-8").trim().split("\n")).toEqual(["fetch"]);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
+test("trees without decoded source retain empty and non-code identities", () => {
+  const repository = mkdtempSync(path.join(tmpdir(), "parser-guard-empty-"));
+  try {
+    const run = (...args: string[]) => {
+      const result = Bun.spawnSync(
+        [
+          "git",
+          "-c",
+          "user.name=guard",
+          "-c",
+          "user.email=guard@example.com",
+          ...args,
+        ],
+        { cwd: repository, stdout: "pipe", stderr: "pipe" },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    run("init", "-q");
+    run("commit", "-q", "--allow-empty", "-m", "empty");
+    const empty = readGitTree("HEAD", { repository });
+    expect(empty.type).toBe("ok");
+    if (empty.type === "ok") {
+      expect([...empty.files]).toEqual([]);
+    }
+
+    const file = "apps/api/src/fixture.wasm";
+    mkdirSync(path.join(repository, "apps/api/src"), { recursive: true });
+    writeFileSync(path.join(repository, file), "opaque fixture");
+    run("add", file);
+    run("commit", "-q", "-m", "non-code");
+    const identity = `git-blob:${run("rev-parse", `HEAD:${file}`)}`;
+    const nonCode = readGitTree("HEAD", { repository });
+    expect(nonCode.type).toBe("ok");
+    if (nonCode.type === "ok") {
+      expect([...nonCode.files]).toEqual([[file, identity]]);
+    }
+  } finally {
+    rmSync(repository, { force: true, recursive: true });
+  }
 });

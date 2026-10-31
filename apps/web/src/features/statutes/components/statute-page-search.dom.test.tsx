@@ -4,8 +4,8 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import {
-  readProvisionCitingSearch,
   publicStatuteSearchSchema,
+  readProvisionCitingSearch,
   updateProvisionCitingSearch,
 } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
@@ -55,9 +55,12 @@ test("citing filters update route search and the next API request, then clear bo
   const requests: URL[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL) => {
-      requests.push(
-        new URL(input instanceof Request ? input.url : String(input)),
-      );
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      // The leading-decisions read (one, filter-independent) asks for
+      // excerpts; only the filtered list's requests are under test.
+      if (url.searchParams.get("excerpt") !== "required") {
+        requests.push(url);
+      }
       return Response.json(responsePage);
     },
     { preconnect: originalFetch.preconnect },

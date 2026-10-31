@@ -1,21 +1,70 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { utimesSync } from "node:fs";
 import {
+  mkdir,
   mkdtemp,
+  readdir,
+  readFile,
   rm,
   writeFile,
-  readFile,
-  mkdir,
-  readdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { withGeneratedOutputCache } from "./generated-output-cache";
 import { withGenerationLock } from "./generation-lock";
+
+test("a fresh generated-output run keeps status messages off stdout", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-output-"));
+  const runner = path.join(root, "run.ts");
+  const cacheModule = pathToFileURL(
+    path.join(import.meta.dirname, "generated-output-cache.ts"),
+  ).href;
+  await writeFile(path.join(root, "input.txt"), "value");
+  await writeFile(
+    runner,
+    `import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
+import { withGeneratedOutputCache } from ${JSON.stringify(cacheModule)};
+
+const root = ${JSON.stringify(root)};
+const output = path.join(root, "generated/value.txt");
+await withGeneratedOutputCache({
+  root,
+  name: "fixture",
+  environment: "test",
+  inputs: ["input.txt"],
+  outputs: ["generated/*.txt"],
+  generate: async () => {
+    await mkdir(path.dirname(output), { recursive: true });
+    await writeFile(output, await readFile(path.join(root, "input.txt")));
+  },
+});
+`,
+  );
+
+  try {
+    const child = Bun.spawn([process.execPath, runner], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exitCode).toBe(0);
+    expect(stdout).toBe("");
+    expect(stderr).toMatch(/^fixture: generated in \d+ ms\n$/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("generation restores exact outputs and invalidates on source changes", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-"));
@@ -210,6 +259,60 @@ test("excluded inputs may change during generation while sources may not", async
       run(async () => {
         await writeFile(path.join(root, "packages/a/src/index.ts"), "again");
         await writeOutput();
+      }),
+    );
+    expect(rejected).toMatchObject({ message: "Generation failed: fixture" });
+    expect(Bun.inspect(rejected)).toContain(
+      "Generator fixture changed its source inputs",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("atomic siblings inherit only their generated destination's exclusion", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "generated-cache-atomic-"));
+  const source = path.join(root, "packages/source.ts");
+  const output = path.join(root, "generated/value.txt");
+  const temporary = path.join(root, `packages/derived.ts.${randomUUID()}.tmp`);
+  const sourceTemporary = `${source}.${randomUUID()}.tmp`;
+  let generations = 0;
+  const run = async (duringGeneration: () => Promise<void>) =>
+    withGeneratedOutputCache({
+      root,
+      name: "fixture",
+      environment: "test",
+      inputs: ["packages/**", "!packages/derived.ts"],
+      outputs: ["generated/*.txt"],
+      generate: async () => {
+        generations += 1;
+        await duringGeneration();
+        await mkdir(path.dirname(output), { recursive: true });
+        await writeFile(output, await readFile(source));
+      },
+    });
+  try {
+    await mkdir(path.dirname(source), { recursive: true });
+    await writeFile(source, "source");
+    await writeFile(temporary, "pending derived output");
+    // A concurrent writer removes its sibling through rename. Neither the
+    // initial identity nor the post-generation identity may include it.
+    await run(async () => {
+      await rm(temporary);
+    });
+    expect(await readFile(output, "utf-8")).toBe("source");
+    await writeFile(temporary, "another pending derived output");
+    await run(async () => {
+      panic("An excluded sibling must not invalidate the cache");
+    });
+    expect(generations).toBe(1);
+
+    // A UUID suffix alone does not make a real input disposable: only an
+    // already-excluded destination gives its sibling that disposition.
+    await writeFile(sourceTemporary, "real input");
+    const rejected = await rejectionOf(
+      run(async () => {
+        await rm(sourceTemporary);
       }),
     );
     expect(rejected).toMatchObject({ message: "Generation failed: fixture" });

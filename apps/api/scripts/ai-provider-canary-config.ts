@@ -2,11 +2,11 @@ import { panic } from "better-result";
 
 import {
   BYOK_MODEL_OPTIONS,
-  resolveDefaultModel,
   getOutputTokenLimit,
   isBYOKModelRoleSupported,
-  MODEL_TASKS,
   MODEL_TASK_OVERRIDE_GROUP,
+  MODEL_TASKS,
+  resolveDefaultModel,
 } from "@stll/ai-catalog";
 import type { ModelTask } from "@stll/ai-catalog";
 

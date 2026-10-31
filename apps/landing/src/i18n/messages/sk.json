@@ -96,6 +96,19 @@
     "changelog": "Zoznam zmien",
     "chooseLanguage": "Vyberte jazyk",
     "docxEditor": "Samostatný DOCX editor",
+    "featurePreviews": {
+      "documents": {
+        "comments": "Komentáre"
+      },
+      "matters": {
+        "done": "Hotová",
+        "inProgress": "Rozpracovaná",
+        "open": "Otvorená"
+      },
+      "research": {
+        "caseLaw": "Judikatúra"
+      }
+    },
     "github": "stella na GitHube",
     "openMenu": "Otvoriť navigáciu",
     "pillars": {
@@ -106,13 +119,13 @@
     "product": "Produkt",
     "products": {
       "agent": {
-        "blurb": "Pýtajte sa svojich spisov, dokumentov, registrov aj pripojených nástrojov na jednom mieste. AI agent koná so schválením a s náhľadmi zdrojov, opiera odpovede o citácie a rozširuje sa pomocou zručností a externých konektorov.",
+        "blurb": "Pracujte so svojimi spismi, dokumentmi, registrami aj pripojenými nástrojmi v jednom chate. AI agent si pred akciou vyžiada schválenie, ukazuje náhľady zdrojov, odpovede opiera o citácie a dá sa rozšíriť o zručnosti a externé konektory.",
         "discover": "Objavte AI agenta",
         "eyebrow": "AI agent",
-        "title": "AI agent, ktorý pracuje naprieč vašimi spismi, súbormi aj nástrojmi."
+        "title": "AI agent, ktorý pracuje s vašimi spismi, súbormi aj nástrojmi."
       },
       "anonymization": {
-        "blurb": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, priamo z chatu aj z revízie dokumentov, s upraveným výsledkom, ktorý si skontrolujete, kým čokoľvek pôjde ďalej.",
+        "blurb": "Odstráňte mená, subjekty a identifikačné údaje skôr, než sa podklady dostanú k AI, a to priamo z chatu aj z revízie dokumentov. Výsledok si pred ďalším použitím skontrolujete.",
         "discover": "Objavte Anonymizáciu",
         "eyebrow": "Anonymizácia",
         "title": "Pripravte podklady pre AI bez odhalenia identifikačných údajov."
@@ -124,31 +137,31 @@
         "title": "Jeden pracovný priestor, dostupný z každého nástroja."
       },
       "editor": {
-        "blurb": "Otvorte a upravte súbory Word .docx priamo v prehliadači: bez inštalácie a bez prevodu do iného formátu. Online DOCX editor v aplikácii stella zachováva pôvodné formátovanie aj sledovanie zmien, drží súbor prepojený so spisom a každú uloženú úpravu zapisuje do histórie verzií dokumentu.",
+        "blurb": "Otvorte a upravte súbory Word .docx priamo v prehliadači: bez inštalácie a bez prevodu do iného formátu. Online DOCX editor v aplikácii stella zachováva pôvodné formátovanie aj sledovanie zmien, súbor ponecháva prepojený so spisom a každú uloženú úpravu zapisuje do histórie verzií dokumentu.",
         "discover": "Objavte Editor",
         "eyebrow": "Editor",
         "title": "Upravujte wordové dokumenty v prehliadači bez toho, aby ste opustili spis."
       },
       "public-data": {
-        "blurb": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov, ktoré so zachovanou štruktúrou zbiera Legal Atlas aplikácie stella. Prečítajte si rozhodnutie, vyhľadajte spoločnosť, sledujte citácie a odkazujte na čokoľvek z toho zo spisu alebo to odovzdajte AI agentovi.",
+        "blurb": "Judikatúra a obchodné registre z oficiálnych verejných zdrojov, ktoré so zachovanou štruktúrou zbiera Legal Atlas aplikácie stella. Prečítajte si rozhodnutie, vyhľadajte spoločnosť, sledujte citácie a na čokoľvek z toho odkážte v spise alebo to odovzdajte AI agentovi.",
         "discover": "Objavte Verejné dáta",
         "eyebrow": "Verejné dáta",
         "title": "Právne dáta pripravené pre vašu prácu."
       },
       "tabular-review": {
-        "blurb": "Položte otázky nad celou sadou dokumentov a získajte štruktúrované odpovede ako tabuľku priamo v spise: zoraditeľnú, filtrovateľnú a dohľadateľnú až k zdrojovému textu. Pre due diligence aj rešerše.",
+        "blurb": "Položte otázky k celej sade dokumentov a získajte štruktúrované odpovede ako tabuľku priamo v spise: zoraditeľnú, filtrovateľnú a dohľadateľnú až k zdrojovému textu. Pre due diligence aj rešerše.",
         "discover": "Objavte Tabuľkovú revíziu",
         "eyebrow": "Tabuľková revízia",
         "title": "Premeňte kopu dokumentov na tabuľku pripravenú na revíziu."
       },
       "templates": {
-        "blurb": "Nadefinujte vzor raz, s poľami a podmienenými ustanoveniami, a potom ho vyplňte ručne alebo nechajte aplikáciu stella pripraviť návrh z dát spisu. Hotový dokument sa uloží priamo do spisu, pripravený na ďalšie úpravy.",
+        "blurb": "Vzor s poľami a podmienenými ustanoveniami vytvoríte raz a potom ho vyplníte ručne, alebo necháte aplikáciu stella pripraviť návrh z dát spisu. Hotový dokument sa uloží priamo do spisu, pripravený na ďalšie úpravy.",
         "discover": "Objavte Vzory",
         "eyebrow": "Vzory",
         "title": "Vytvárajte opakovane použiteľné vzory a nechajte ich vyplniť AI."
       },
       "workspace": {
-        "blurb": "Pracovný priestor drží pokope dokumenty spisu, úpravy Word .docx, revíziu, rešerše aj chat, takže práca zostáva v kontexte od podkladov až po odpoveď.",
+        "blurb": "Pracovný priestor drží pokope dokumenty spisu, úpravy Word .docx, revíziu, rešerše aj chat, takže od podkladov až po odpoveď máte celý kontext poruke.",
         "discover": "Objavte Pracovný priestor",
         "eyebrow": "Pracovný priestor",
         "title": "Spisy, dokumenty, revízia a chat v jednom pracovnom priestore."
@@ -174,11 +187,11 @@
       },
       "capabilities": {
         "0": {
-          "body": "Pýtajte sa na spisy, dokumenty a kontakty, ktoré už v aplikácii stella máte. Jedna konverzácia dosiahne na každý spis, ku ktorému máte prístup, s rovnakými oprávneniami, aké platia v celom pracovnom priestore.",
-          "title": "Pracuje naprieč vašimi spismi"
+          "body": "Pýtajte sa na spisy, dokumenty a kontakty, ktoré už v aplikácii stella máte. Jedna konverzácia môže zahŕňať každý spis, ku ktorému máte prístup, s rovnakými oprávneniami, aké platia v celom pracovnom priestore.",
+          "title": "Pracuje so všetkými vašimi spismi"
         },
         "1": {
-          "body": "Vložte dokumenty do konverzácie a nechajte AI agenta, nech ich prečíta, porovná alebo zhrnie.",
+          "body": "Vložte dokumenty do konverzácie a požiadajte AI agenta, aby ich prečítal, porovnal alebo zhrnul.",
           "title": "Prečíta vaše súbory"
         },
         "2": {
@@ -269,7 +282,7 @@
           "title": "Identifikačné údaje zostanú bokom"
         },
         "1": {
-          "body": "Beží priamo v chate a v revízii dokumentov, nie v oddelenom nástroji.",
+          "body": "Beží priamo v chate a v revízii dokumentov, nie v samostatnom nástroji.",
           "title": "Funguje v chate aj v revízii"
         },
         "2": {
@@ -277,7 +290,7 @@
           "title": "S vašimi vlastnými výrazmi"
         },
         "3": {
-          "body": "Ukáže upravený dokument v kontexte, takže si potvrdíte, čo zo spisu odchádza.",
+          "body": "Ukáže anonymizovaný dokument v kontexte, takže si potvrdíte, čo zo spisu odchádza.",
           "title": "Výsledok na kontrolu"
         }
       },
@@ -443,7 +456,7 @@
         },
         "1": {
           "body": "Dokument zostáva po celý čas vo formáte .docx, takže písma, štýly aj rozloženie vyzerajú a uložia sa tak, ako ich vytvoril Word.",
-          "title": "Formátovanie zostáva"
+          "title": "Formátovanie zostane zachované"
         },
         "2": {
           "body": "Sledované vloženia a zmazania sa zobrazujú na mieste a úpravy navrhnuté AI prichádzajú ako sledované zmeny, ktoré v dokumente prijmete, alebo odmietnete.",
@@ -454,12 +467,12 @@
           "title": "História verzií pri každom uložení"
         },
         "4": {
-          "body": "Dokument zostáva pripojený k svojmu spisu, vedľa jeho súborov, vlastností, úloh aj konverzácií.",
+          "body": "Dokument zostáva vo svojom spise spolu s jeho súbormi, vlastnosťami, úlohami aj konverzáciami.",
           "title": "Kontext spisu zostáva na očiach"
         },
         "5": {
-          "body": "Keď dokument potrebuje Microsoft Word, použite desktopový most a upravený súbor sa vráti do toho istého spisu.",
-          "title": "Most do lokálneho Office"
+          "body": "Keď dokument potrebuje Microsoft Word, otvorte ho cez desktopovú aplikáciu a upravený súbor sa vráti do toho istého spisu.",
+          "title": "Prepojenie s Office v počítači"
         }
       },
       "cta": {
@@ -556,7 +569,7 @@
           "title": "Podľa jurisdikcie"
         },
         "5": {
-          "body": "Odkážte na ktorýkoľvek zdroj zo spisu, aby odpovede AI agenta zostali dohľadateľné.",
+          "body": "Odkážte v spise na ktorýkoľvek zdroj, aby odpovede AI agenta zostali dohľadateľné až k nemu.",
           "title": "Podklad pre AI"
         }
       },
@@ -627,28 +640,28 @@
       },
       "capabilities": {
         "0": {
-          "body": "Stĺpec popíšete bežnou rečou; stella naň odpovie pri každom dokumente v sade.",
-          "title": "Stĺpce sú otázky"
+          "body": "Otázku do stĺpca napíšete bežnou rečou; stella na ňu odpovie pri každom dokumente v sade.",
+          "title": "Čo stĺpec, to otázka"
         },
         "1": {
-          "body": "Každá bunka odkazuje na presnú pasáž, z ktorej pochádza, takže overíte na jedno kliknutie.",
-          "title": "S citáciou k zdroju"
+          "body": "Každá bunka odkazuje na presnú pasáž, z ktorej pochádza, takže odpoveď overíte jedným kliknutím.",
+          "title": "S odkazom na zdroj"
         },
         "2": {
           "body": "Revízie prebiehajú priamo v spise, vedľa dokumentov, kontaktov a chatu, ku ktorým patria.",
           "title": "Súčasť spisu"
         },
         "3": {
-          "body": "Berte odpovede ako dáta: zoraďte podľa ľubovoľného stĺpca, vyfiltrujte riadky, ktoré potrebujú pozornosť.",
+          "body": "Pracujte s odpoveďami ako s dátami: zoraďte ich podľa ľubovoľného stĺpca a vyfiltrujte riadky, ktoré si vyžadujú pozornosť.",
           "title": "Zoraďovanie a filtre"
         },
         "4": {
-          "body": "Položte rovnaké otázky nad veľkými sadami dokumentov namiesto otvárania súboru po súbore.",
+          "body": "Položte rovnaké otázky celej veľkej sade dokumentov, namiesto toho, aby ste otvárali jeden súbor za druhým.",
           "title": "Zvládne veľké objemy"
         },
         "5": {
           "body": "Tabuľku si odnesiete v štandardných formátoch; vaše výstupy nikto nedrží pod zámkom.",
-          "title": "Export kamkoľvek"
+          "title": "Export do bežných formátov"
         }
       },
       "cta": {
@@ -718,7 +731,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Opakované dokumenty začínajú na overenom základe, nie na skopírovanom súbore.",
+          "body": "Dokumenty, ktoré píšete opakovane, začnete z overeného základu, nie zo skopírovaného súboru.",
           "title": "Opakovane použiteľné vzory"
         },
         "1": {
@@ -731,14 +744,14 @@
         },
         "3": {
           "body": "Nechajte aplikáciu stella pripraviť vyplnený dokument z dát spisu a potom ho doladíte.",
-          "title": "Vyplnenie cez AI"
+          "title": "Vyplnenie pomocou AI"
         },
         "4": {
           "body": "Vzory píšte a upravujte v editore a potom z nich zostavujte dokumenty.",
-          "title": "Úpravy na mieste"
+          "title": "Úpravy priamo v editore"
         },
         "5": {
-          "body": "Koncept vznikne priamo v spise a upravujete ho vedľa ostatnej práce.",
+          "body": "Koncept vznikne priamo v spise, kde ho môžete ďalej upravovať spolu s ostatnými dokumentmi.",
           "title": "Rovno do spisu"
         }
       },
@@ -816,7 +829,7 @@
       },
       "capabilities": {
         "0": {
-          "body": "Usporiadajte dokumenty, kontakty, revíziu aj chat okolo spisu, ku ktorému patria. Všetko, čo do spisu pridáte, pri ňom zostane a dohľadáte to naprieč celým pracovným priestorom, takže kontext nájdete aj po návrate.",
+          "body": "Usporiadajte dokumenty, kontakty, revíziu aj chat podľa spisov, ku ktorým patria. Všetko, čo do spisu pridáte, pri ňom zostane a dohľadáte to naprieč celým pracovným priestorom, takže kontext nájdete aj po návrate.",
           "title": "Spisy"
         },
         "1": {
@@ -824,7 +837,7 @@
           "title": "Dokumenty a úpravy .docx"
         },
         "2": {
-          "body": "Spustite tabuľkovú revíziu aj rešerše vedľa dokumentov, ku ktorým patria.",
+          "body": "Tabuľkovú revíziu aj rešerše spúšťajte priamo pri dokumentoch, ku ktorým patria.",
           "title": "Revízia a rešerše"
         },
         "3": {
@@ -897,7 +910,7 @@
     "dataEyebrow": "Právne dáta",
     "dataMainAlt": "Rozhodnutie českého Najvyššieho súdu 27 Cdo 59/2022 s číslovanými odsekmi, poznámkou AI k právnej otázke, zvýraznením, podčiarknutím, komentárom právnika a chatom s dvoma otázkami a odpoveďami s citáciami.",
     "dataSupremeAlt": "Rozhodnutie českého Najvyššieho súdu 27 Cdo 1525/2025 s číslovanými odsekmi, poznámkou AI k právnej otázke, zvýraznením, podčiarknutím, komentárom právnika a chatom s dvoma otázkami a odpoveďami s citáciami.",
-    "dataTitle": "Judikatúra a registre po ruke.",
+    "dataTitle": "Judikatúra a registre poruke.",
     "exploreAgent": "Preskúmať AI agenta",
     "exploreAnonymization": "Preskúmať anonymizáciu",
     "explorePublicData": "Preskúmať verejné dáta",
@@ -905,7 +918,7 @@
     "exploreTemplates": "Preskúmať vzory",
     "exploreWorkspace": "Preskúmať pracovný priestor",
     "eyebrow": "Prepojený pracovný priestor",
-    "intro": "Podklady, revízia aj výsledné dokumenty zostávajú v spise a nadväzujú na seba. Na spise pracujte spolu s AI agentom a každý jeho krok si overíte.",
+    "intro": "Podklady, revízia aj výsledné dokumenty zostávajú v spise a nadväzujú na seba. Na spise pracujete spolu s AI agentom a každý jeho krok si môžete overiť.",
     "openEditor": "Otvoriť editor",
     "proofByokBody": "Pre AI funkcie používajte vlastné kľúče od poskytovateľov.",
     "proofByokTitle": "Vlastné AI modely",

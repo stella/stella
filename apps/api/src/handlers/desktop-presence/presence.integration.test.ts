@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
-import Elysia from "elysia";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -15,16 +14,20 @@ import { assertProperty } from "@stll/property-testing";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { createHttpApp } from "@/api/http/app";
+import { routes } from "@/api/http/route";
+import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import {
+  createTestHandlerContext,
   NO_AUDIT,
   NO_DB,
-  createTestHandlerContext,
 } from "@/api/tests/helpers/handler-context";
+import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -86,13 +89,15 @@ test("authenticated reports converge on one row and use the server clock", async
         memberRole: sessionMemberRole("member"),
       }),
   });
-  const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
-    body: endpoint.config.body,
-    response: endpoint.config.response,
-  });
+  await using server = serveForTest(
+    createHttpApp({
+      routes: routes({ "/v1/desktop/presence": { POST: endpoint } }),
+      middleware: [errorBoundary],
+    }),
+  );
   const before = Date.now();
   for (const version of ["0.9.47", report.version]) {
-    const response = await app.handle(
+    const response = await server.fetch(
       new Request("http://localhost/v1/desktop/presence", {
         method: "POST",
         headers: { "content-type": "application/json" },

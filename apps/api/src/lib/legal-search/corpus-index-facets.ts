@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -236,6 +237,7 @@ export const corpusIndexBrowseFacets = async (
   const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
     observer,
     indexId,
+    filter: route.aggregationFilter,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
       jurisdictionClause,
@@ -272,3 +274,16 @@ export const corpusIndexBrowseFacets = async (
 
   return Result.ok({ country, court, year });
 };
+
+/** Resolve serving metadata on the caller's held database transaction. */
+export const corpusIndexBrowseFacetsWithin = async (
+  tx: CaseLawPublicReadTransaction,
+  query: LegalBrowseFacetsQuery,
+): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> =>
+  await corpusIndexBrowseFacets(query, "unobserved", {
+    readServingTarget: async (jurisdiction) =>
+      await readServingCorpusIndexTargetTx(tx, {
+        family: "case_law",
+        jurisdiction,
+      }),
+  });

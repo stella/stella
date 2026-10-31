@@ -8,17 +8,20 @@
   </head>
   <body>
     <main>
-      <div class="mark" aria-hidden="true">S</div>
+      <div class="mark" aria-hidden="true">
+        <img src="/brand/stella-symbol.svg" alt="" width="20" height="21" />
+      </div>
       <div>
         <h1 id="title"></h1>
-        <p id="status"></p>
+        <p id="purpose"></p>
+      </div>
+      <div class="status-line">
+        <span class="status-marker" aria-hidden="true"></span>
+        <p id="status" role="status"></p>
       </div>
       <div class="actions">
-        <button id="grant" type="button" hidden></button>
-        <button id="connect" type="button" hidden></button>
-        <button id="adopt" type="button" hidden></button>
-        <button id="disconnect" type="button" hidden></button>
-        <button class="secondary" id="revoke" type="button" hidden></button>
+        <button id="primary" type="button" hidden></button>
+        <div id="secondary-actions" class="secondary-actions"></div>
       </div>
     </main>
     <script type="module" src="./main.ts"></script>

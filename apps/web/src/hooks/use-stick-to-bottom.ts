@@ -3,11 +3,17 @@ import type { RefCallback, RefObject } from "react";
 
 import { panic } from "better-result";
 
-// The view is "pinned" (auto-scroll follows, button hidden) only when
-// essentially at the bottom. A scroll-up past this both releases the lock and
-// shows the button in lockstep — keeping that threshold small is what stops
-// the resize observer from yanking the view back and flickering the button.
-const PINNED_BOTTOM_THRESHOLD_PX = 8;
+import {
+  attachFollowState,
+  decideContentResize,
+  followAfterScroll,
+  followAfterScrollToBottomRequest,
+  followAfterWheel,
+} from "@/hooks/use-stick-to-bottom.logic";
+import type {
+  FollowState,
+  FollowTransition,
+} from "@/hooks/use-stick-to-bottom.logic";
 
 type StickToBottomContextValue = {
   scrollRef: RefCallback<HTMLDivElement>;
@@ -79,24 +85,16 @@ export const useStickToBottom = () => {
   const [isAtBottom, setIsAtBottom] = useState(true);
   /** Whether the scroll container has more content than fits the viewport. */
   const [isScrollable, setIsScrollable] = useState(false);
-  /** Tracks whether the user intentionally scrolled up. */
-  const userScrolledUp = useRef(false);
-  /**
-   * Guards against scroll-button flicker during programmatic
-   * smooth scrolls. Set to `true` in `scrollToBottom()`,
-   * cleared once the scroll animation reaches the bottom.
-   * While active, `onScroll` skips `setIsAtBottom` updates
-   * so the button does not reappear mid-animation.
-   */
-  const programmaticScroll = useRef(false);
+  /** Escape state of the attached element; the transitions live in
+   *  `use-stick-to-bottom.logic.ts`. */
+  const followState = useRef<FollowState>(attachFollowState(0));
 
   const scrollToBottom = () => {
     const el = scrollElementRef.current;
     if (!el) {
       return;
     }
-    userScrolledUp.current = false;
-    programmaticScroll.current = true;
+    followState.current = followAfterScrollToBottomRequest(followState.current);
     el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     setIsAtBottom(true);
   };
@@ -113,60 +111,29 @@ export const useStickToBottom = () => {
     // context), so a freshly mounted viewport must start pinned; otherwise
     // a scroll-up in the previous thread would carry over and the new
     // transcript would land wherever the old scroll offset happened to be.
-    userScrolledUp.current = false;
-    programmaticScroll.current = false;
+    followState.current = attachFollowState(el.scrollTop);
     // The observable state moves with the refs: the content observer would
     // restore it a frame later, but until then `isScrollable && !isAtBottom`
     // can flash the scroll button over a transcript that is already pinned.
     setIsAtBottom(true);
-    let lastScrollTop = el.scrollTop;
 
-    const onScroll = () => {
-      const currentTop = el.scrollTop;
-
-      // Don't treat scroll-up during text selection as escape.
-      if (currentTop < lastScrollTop && !isSelectingInside(el)) {
-        userScrolledUp.current = true;
-      }
-      lastScrollTop = currentTop;
-
-      const distanceFromBottom =
-        el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (distanceFromBottom <= PINNED_BOTTOM_THRESHOLD_PX) {
-        userScrolledUp.current = false;
-        programmaticScroll.current = false;
-      }
-
-      // Skip isAtBottom updates during programmatic smooth
-      // scrolls to prevent the scroll button from flickering.
-      if (!programmaticScroll.current) {
-        // Button visibility tracks the escape state exactly, so the two can
-        // never disagree: hidden only while pinned/following, shown the
-        // moment the user has scrolled away (which also pauses auto-scroll).
-        // Releasing the lock only near the bottom (above) is what prevents
-        // the resize-observer yank-and-flicker, without a dead band.
-        setIsAtBottom(!userScrolledUp.current);
+    const applyTransition = (transition: FollowTransition) => {
+      followState.current = transition.state;
+      if (transition.isAtBottom !== undefined) {
+        setIsAtBottom(transition.isAtBottom);
       }
     };
 
-    /**
-     * Wheel-escape detection. The browser may cancel an
-     * ongoing programmatic scroll when a wheel event fires,
-     * so we must escape the lock immediately on upward wheel
-     * input rather than waiting for the resulting scroll
-     * event. Mirrors `handleWheel` in the original library.
-     */
+    const onScroll = () => {
+      applyTransition(
+        followAfterScroll(followState.current, el, () => isSelectingInside(el)),
+      );
+    };
+
+    // Wheel-escape detection, mirroring `handleWheel` in the original
+    // library: see `followAfterWheel`.
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY >= 0) {
-        return;
-      }
-      // Only escape when the wheel targets the scroll
-      // container and the content is actually scrollable.
-      if (el.scrollHeight <= el.clientHeight) {
-        return;
-      }
-      userScrolledUp.current = true;
-      setIsAtBottom(false);
+      applyTransition(followAfterWheel(followState.current, event.deltaY, el));
     };
 
     el.addEventListener("scroll", onScroll, { passive: true });
@@ -196,11 +163,11 @@ export const useStickToBottom = () => {
         if (!el) {
           return;
         }
-        setIsScrollable(el.scrollHeight > el.clientHeight);
-        if (userScrolledUp.current) {
-          return;
-        }
-        if (isSelectingInside(scrollElementRef.current)) {
+        const decision = decideContentResize(followState.current, el, () =>
+          isSelectingInside(el),
+        );
+        setIsScrollable(decision.isScrollable);
+        if (!decision.scrollToBottom) {
           return;
         }
         el.scrollTo({

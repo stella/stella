@@ -1,17 +1,22 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
+import canonicalLogoPath from "@stll/api-contract/stella-logo-512.png" with { type: "file" };
 
 import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
+  getMcpProtectedResourceMetadataUrl,
+  getMcpResourceUrl,
   MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_DISCOVERY_ALLOWED_HEADERS,
   MCP_LAW_RESOURCE_SCOPES,
   MCP_STATELESS_ALLOW_HEADER,
   STELLA_API_CONTRACT,
-  getMcpProtectedResourceMetadataUrl,
-  getMcpResourceUrl,
-  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_LATEST_VERSION,
   STELLA_CLI_MINIMUM_VERSION,
   STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
@@ -20,8 +25,11 @@ import {
   createMcpDiscoveryPreflightHeaders,
   createMcpMetadataHeaders,
   createMcpPreflightHeaders,
+  getMcpLogoUri,
   getMcpProtectedResourceMetadata,
+  getMcpServerIcons,
   getMcpWwwAuthenticateHeader,
+  MCP_LOGO_PATH,
 } from "@/api/mcp/metadata";
 
 describe("MCP protected resource metadata", () => {
@@ -32,7 +40,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl(),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: [...MCP_DEFAULT_RESOURCE_SCOPES],
@@ -44,7 +52,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -85,7 +93,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl("anonymized"),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: [...MCP_ANONYMIZED_RESOURCE_SCOPES],
@@ -97,7 +105,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -111,7 +119,7 @@ describe("MCP protected resource metadata", () => {
       resource: getMcpResourceUrl("law"),
       resource_name: "stella",
       resource_logo_uri: new URL(
-        "favicon.svg",
+        "stella-logo-512.png",
         `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
       ).toString(),
       scopes_supported: MCP_LAW_RESOURCE_SCOPES,
@@ -123,7 +131,7 @@ describe("MCP protected resource metadata", () => {
       stella_compatibility: {
         api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
         cli_version: {
-          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          maximum: STELLA_CLI_LATEST_VERSION,
           minimum: STELLA_CLI_MINIMUM_VERSION,
         },
       },
@@ -150,10 +158,10 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(headers.get("Access-Control-Allow-Methods")).toBe("GET, OPTIONS");
     expect(headers.get("Access-Control-Allow-Headers")).toBe(
-      "Authorization, Content-Type, MCP-Protocol-Version",
+      MCP_DISCOVERY_ALLOWED_HEADERS.join(", "),
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
+      "WWW-Authenticate, x-stella-api-contract-version, x-stella-cli-minimum, x-stella-cli-latest, x-stella-organization, x-stella-scopes, x-stella-scope-omitted-tools, x-stella-feature-omitted-tools, x-stella-feature-omitted-capabilities, x-request-id",
     );
     expect(headers.get("x-stella-api-contract-version")).toBe(
       String(STELLA_MCP_API_CONTRACT_VERSION),
@@ -161,7 +169,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
     expect(headers.get("Cache-Control")).toBeNull();
   });
 
@@ -178,7 +186,7 @@ describe("MCP protected resource metadata", () => {
     expect(headers.get("x-stella-cli-minimum")).toBe(
       STELLA_CLI_MINIMUM_VERSION,
     );
-    expect(headers.get("x-stella-cli-latest")).toBeNull();
+    expect(headers.get("x-stella-cli-latest")).toBe(STELLA_CLI_LATEST_VERSION);
   });
 
   test("owns the transport preflight it advertises", () => {
@@ -226,5 +234,40 @@ describe("MCP protected resource metadata", () => {
     expect(getMcpWwwAuthenticateHeader({ error: "none" })).not.toContain(
       "error=",
     );
+  });
+});
+
+describe("MCP logo", () => {
+  // Hosts that list the connector do not all render SVG, so the advertised
+  // logo must be a PNG at its advertised size. The web app publishes this
+  // package file under its own name.
+  test("is the canonical 512x512 PNG", () => {
+    expect(path.basename(canonicalLogoPath)).toBe(MCP_LOGO_PATH);
+    const bytes = readFileSync(canonicalLogoPath);
+    expect([...bytes.subarray(0, 8)]).toEqual([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+    ]);
+    expect(bytes.subarray(12, 16).toString("ascii")).toBe("IHDR");
+    expect(bytes.readUInt32BE(16)).toBe(512);
+    expect(bytes.readUInt32BE(20)).toBe(512);
+  });
+
+  test("PRM and serverInfo icons advertise the same PNG", () => {
+    const logoUri = getMcpLogoUri();
+    expect(new URL(logoUri).pathname).toBe(`/${MCP_LOGO_PATH}`);
+    for (const mode of [
+      "default",
+      "advanced",
+      "documents",
+      "anonymized",
+      "law",
+    ] as const) {
+      expect(getMcpProtectedResourceMetadata(mode).resource_logo_uri).toBe(
+        logoUri,
+      );
+    }
+    expect(getMcpServerIcons()).toEqual([
+      { mimeType: "image/png", sizes: ["512x512"], src: logoUri },
+    ]);
   });
 });

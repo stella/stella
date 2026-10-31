@@ -3,9 +3,12 @@ import { sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
+  isEligibleLegislationExpression,
   LEGISLATION_APPLICABLE_EXPRESSION_KINDS,
   LEGISLATION_APPLICABLE_WINDOW_DISPOSITION,
+  type LegislationExpressionEligibility,
 } from "@stll/api-contract/legislation-expression";
+import { LEGISLATION_WINDOW_STATUSES } from "@stll/api-contract/legislation-status";
 
 /** Works with no version window sort below every dated consolidation. */
 export const UNVERSIONED_SORT_DATE = "0001-01-01";
@@ -154,6 +157,31 @@ export const inForceOn = (ref: LegislationVersionRef, asOf: SQLWrapper): SQL =>
 export const inForceToday = (ref: LegislationVersionRef): SQL =>
   inForceOn(ref, sql`CURRENT_DATE`);
 
+const WINDOW_STATUSES_SQL = sql.raw(
+  LEGISLATION_WINDOW_STATUSES.map((status) => `'${status}'`).join(", "),
+);
+
+/**
+ * A version's status as of today. `current` and `historical` only say whether
+ * the version is in force, and a stored one dates from ingest, so a version
+ * with a stated window is `current` exactly while `inForceToday` holds and
+ * `historical` before it opens and after it closes. A version with no stated
+ * opening has no window to read, and `repealed`, `draft` and `unknown` are
+ * publisher statements; those are returned as stored.
+ *
+ * Every read that shows or filters on a version's status goes through this,
+ * so a consolidation published ahead of its start date turns `current` on
+ * that date, and its predecessor `historical`, without a re-ingest.
+ */
+export const legislationStatusToday = (
+  ref: LegislationVersionRef,
+  storedStatus: SQLWrapper,
+): SQL<string> => sql<string>`(CASE
+  WHEN ${storedStatus} IN (${WINDOW_STATUSES_SQL}) AND ${ref.validFrom} IS NOT NULL
+    THEN CASE WHEN ${inForceToday(ref)} THEN 'current' ELSE 'historical' END
+  ELSE ${storedStatus}
+END)`;
+
 /** A version reference plus the Work key and id it is ordered by. */
 export type LegislationVersionRow = LegislationVersionRef & {
   id: SQLWrapper;
@@ -250,3 +278,14 @@ export const isInconsistentWindowGapAt = (
   )
 )`;
 };
+
+/** An explicit publisher effect can label a wording only at its eligible opening. */
+export const effectOpensVersion = (
+  effectiveDate: string | null,
+  version: LegislationExpressionEligibility & {
+    versionValidFrom: string | null;
+  },
+): boolean =>
+  effectiveDate !== null &&
+  isEligibleLegislationExpression(version) &&
+  effectiveDate === version.versionValidFrom;

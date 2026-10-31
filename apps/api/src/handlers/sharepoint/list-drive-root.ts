@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { sharepointConnections } from "@/api/db/schema";
 import { assertSharepointConnectionEnabled } from "@/api/handlers/sharepoint/enablement";
@@ -10,16 +12,20 @@ import {
 } from "@/api/handlers/sharepoint/graph-client";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_PAGE_SIZE = 50;
 
-const requestQuery = t.Object({
-  cursor: t.Optional(tPaginationCursor({ maxChars: 4096 })),
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+const requestQuery = v.object({
+  cursor: v.optional(paginationCursorSchema({ maxChars: 4096 })),
+  limit: v.optional(
+    numberFromString(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+    ),
+  ),
 });
 
 const config = {

@@ -1,10 +1,8 @@
 import { panic } from "better-result";
 
-import {
-  normalizeCountry,
-  normalizeDateBound,
-  normalizeStringList,
-} from "@stll/agent-input";
+import { normalizeCountry } from "@stll/agent-input/country";
+import { normalizeDateBound } from "@stll/agent-input/date-value";
+import { normalizeStringList } from "@stll/agent-input/string-list";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { compareCodeUnit, getCollator } from "@stll/collation";
 
@@ -17,6 +15,8 @@ type SearchPage = Extract<SearchResults, { results: unknown }>;
 type RowContent =
   | {
       type: "search";
+      textAvailability: SearchPage["results"][number]["textAvailability"];
+      match: SearchPage["results"][number]["match"];
       snippet: string | null;
       keywords: SearchPage["results"][number]["keywords"];
       headnote:
@@ -92,6 +92,8 @@ export const searchView = (data: SearchResults) => {
     results: data.results.map((row) =>
       resultRow(row, {
         type: "search",
+        match: row.match,
+        textAvailability: row.textAvailability,
         // A licence-withheld row carries no excerpt to show.
         snippet: "snippet" in row ? row.snippet : null,
         keywords:
@@ -189,8 +191,7 @@ export const resolveView = (data: ResolveResults) => {
   }
 };
 export type CaseLawView =
-  | ReturnType<typeof searchView>
-  | ReturnType<typeof resolveView>;
+  ReturnType<typeof searchView> | ReturnType<typeof resolveView>;
 
 export type CourtSelection =
   | { type: "all" }

@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import { softLawIdentityKey, softLawContentHash } from "./soft-law-fingerprint";
+import { softLawContentHash, softLawIdentityKey } from "./soft-law-fingerprint";
 import { SoftLawItemError } from "./soft-law-types";
-import type { SoftLawMetadata, SoftLawDocumentInput } from "./soft-law-types";
+import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
 const metadata: SoftLawMetadata = {
   title: "Guidance",
@@ -120,6 +120,31 @@ test("issue dates are validated before storage and reference keys use NFKC witho
     softLawIdentityKey("cz-uoou", metadata).unwrap(),
   );
   expect(fullwidth.statedReference.value).toBe("０２/２０２４");
+  expect(softLawIdentityKey("cz-uoou", metadata).unwrap()).toBe(
+    JSON.stringify(["cz-uoou", "reference", "02/2024"]),
+  );
+});
+
+test("WP29 revision keys discard leading zeroes", () => {
+  const key = (revision: string, referenceRevision: string) =>
+    softLawIdentityKey("eu-wp29", {
+      ...metadata,
+      sourceKind: "Guidelines",
+      statedReference: {
+        state: "stated",
+        value: `WP29 rev.${referenceRevision}`,
+      },
+      expression: {
+        type: "identified",
+        language: "en",
+        revision: { state: "stated", value: `rev.${revision}` },
+      },
+      stage: { state: "not_stated" },
+      relations: [],
+    }).unwrap();
+
+  expect(key("0007", "0007")).toBe(key("7", "7"));
+  expect(key("0000", "0000")).toBe(key("0", "0"));
 });
 
 test("missing stated identity fields return classified errors", () => {

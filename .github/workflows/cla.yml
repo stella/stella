@@ -42,7 +42,7 @@ jobs:
     # Notification runs for other authors complete with the job skipped; only a
     # successful dependabot notification requests verification.
     if: (github.event_name != 'pull_request_target' || github.actor != 'dependabot[bot]') && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.actor.login == 'dependabot[bot]' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.path == '.github/workflows/cla-notify.yml' && github.event.workflow_run.event == 'pull_request')) && (github.event_name != 'issue_comment' || (github.event.issue.pull_request && (github.event.comment.body == 'recheck' || github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA')))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Select signature credentials
@@ -100,7 +100,7 @@ jobs:
       - name: Signature store token
         id: store-token
         if: steps.credentials.outputs.store_required == 'true'
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: 2871141
           private-key: ${{ secrets.CLA_APP_PRIVATE_KEY }}

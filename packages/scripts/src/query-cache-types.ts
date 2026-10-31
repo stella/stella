@@ -1,6 +1,12 @@
 import { panic } from "better-result";
 import path from "node:path";
-import ts from "typescript";
+import * as ts from "tsrs/unstable/ast";
+import {
+  type Checker,
+  type Program,
+  type Type,
+  TypeFlags,
+} from "tsrs/unstable/async";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -18,21 +24,21 @@ type QueryCacheDiagnostic = {
 };
 
 type ScanQueryCacheOptions = {
-  readonly program: ts.Program;
+  readonly program: Program;
+  readonly checker: Checker;
   readonly sourceFiles: readonly ts.SourceFile[];
 };
 
 // QueryClient accepts untagged keys and silently infers unknown. Check the actual
 // TanStack tag across imports, where the fast oxlint syntax guard cannot follow it.
-export const scanQueryCacheTypes = ({
-  program,
+export const scanQueryCacheTypes = async ({
+  checker,
   sourceFiles,
-}: ScanQueryCacheOptions): QueryCacheDiagnostic[] => {
-  const checker = program.getTypeChecker();
-  const tags = new Map<ts.SourceFile, ts.Type>();
+}: ScanQueryCacheOptions): Promise<QueryCacheDiagnostic[]> => {
+  const tags = new Map<ts.SourceFile, Type>();
   const diagnostics: QueryCacheDiagnostic[] = [];
 
-  const dataTagType = (sourceFile: ts.SourceFile): ts.Type => {
+  const dataTagType = async (sourceFile: ts.SourceFile): Promise<Type> => {
     const cached = tags.get(sourceFile);
     if (cached !== undefined) {
       return cached;
@@ -45,27 +51,28 @@ export const scanQueryCacheTypes = ({
     if (declaration === undefined || !ts.isTypeAliasDeclaration(declaration)) {
       panic(`Cannot resolve TanStack AnyDataTag in ${sourceFile.fileName}`);
     }
-    const tag = checker.getTypeAtLocation(declaration);
+    const tag = await checker.getTypeAtLocation(declaration);
     tags.set(sourceFile, tag);
     return tag;
   };
 
-  const checkCall = (node: ts.CallExpression): void => {
+  const checkCall = async (node: ts.CallExpression): Promise<void> => {
     const callee = node.expression;
     let name: string | undefined;
     if (ts.isPropertyAccessExpression(callee)) {
       name = callee.name.text;
     } else if (
       ts.isElementAccessExpression(callee) &&
-      ts.isStringLiteralLike(callee.argumentExpression)
+      (ts.isStringLiteral(callee.argumentExpression) ||
+        ts.isNoSubstitutionTemplateLiteral(callee.argumentExpression))
     ) {
       name = callee.argumentExpression.text;
     }
     if (name === undefined || !CACHE_METHODS.has(name)) {
       return;
     }
-    const declaration = checker.getResolvedSignature(node)?.declaration;
-    const owner = declaration?.getSourceFile();
+    const declaration = (await checker.getResolvedSignature(node)).declaration;
+    const owner = (await declaration?.resolve())?.getSourceFile();
     if (
       !owner?.fileName
         .replaceAll(path.sep, "/")
@@ -77,10 +84,10 @@ export const scanQueryCacheTypes = ({
     if (key === undefined) {
       return;
     }
-    const keyType = checker.getTypeAtLocation(key);
+    const keyType = await checker.getTypeAtLocation(key);
     if (
-      keyType.flags !== ts.TypeFlags.Any &&
-      checker.isTypeAssignableTo(keyType, dataTagType(owner))
+      keyType.flags !== TypeFlags.Any &&
+      (await checker.isTypeAssignableTo(keyType, await dataTagType(owner)))
     ) {
       return;
     }
@@ -94,14 +101,18 @@ export const scanQueryCacheTypes = ({
     });
   };
 
+  const calls: ts.CallExpression[] = [];
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
-      checkCall(node);
+      calls.push(node);
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   };
   for (const sourceFile of sourceFiles) {
     visit(sourceFile);
+  }
+  for (const call of calls) {
+    await checkCall(call);
   }
   return diagnostics;
 };
@@ -109,25 +120,35 @@ export const scanQueryCacheTypes = ({
 if (import.meta.main) {
   const repositoryRoot = path.resolve(import.meta.dir, "../../..");
   const webRoot = path.join(repositoryRoot, "apps/web/src/");
-  const program = createProgram({
+  const opened = await createProgram({
     configPath: path.join(repositoryRoot, "apps/web/tsconfig.json"),
   });
   // Always scan all consumers: changing only an imported producer can erase tags.
-  const sourceFiles = program
-    .getSourceFiles()
-    .filter(
-      (sourceFile) =>
-        sourceFile.fileName.startsWith(webRoot) &&
-        !EXCLUDED_SOURCE.test(sourceFile.fileName.replaceAll(path.sep, "/")),
+  try {
+    const sourceFiles: ts.SourceFile[] = [];
+    for (const fileName of await opened.program.getSourceFileNames()) {
+      if (
+        !fileName.startsWith(webRoot) ||
+        EXCLUDED_SOURCE.test(fileName.replaceAll(path.sep, "/"))
+      ) {
+        continue;
+      }
+      const sourceFile = await opened.program.getSourceFile(fileName);
+      if (sourceFile !== undefined) {
+        sourceFiles.push(sourceFile);
+      }
+    }
+    const diagnostics = await scanQueryCacheTypes({ ...opened, sourceFiles });
+    for (const diagnostic of diagnostics) {
+      console.error(
+        `${repoRelativePath(repositoryRoot, diagnostic.file)}:${diagnostic.line}:${diagnostic.column} ${diagnostic.message} [query-cache-types]`,
+      );
+    }
+    console.log(
+      `query-cache-types: ${diagnostics.length} violation(s), ${sourceFiles.length} source files checked`,
     );
-  const diagnostics = scanQueryCacheTypes({ program, sourceFiles });
-  for (const diagnostic of diagnostics) {
-    console.error(
-      `${repoRelativePath(repositoryRoot, diagnostic.file)}:${diagnostic.line}:${diagnostic.column} ${diagnostic.message} [query-cache-types]`,
-    );
+    process.exitCode = diagnostics.length === 0 ? 0 : 1;
+  } finally {
+    await opened.close();
   }
-  console.log(
-    `query-cache-types: ${diagnostics.length} violation(s), ${sourceFiles.length} source files checked`,
-  );
-  process.exitCode = diagnostics.length === 0 ? 0 : 1;
 }

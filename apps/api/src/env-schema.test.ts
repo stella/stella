@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -123,6 +124,32 @@ test("the restricted review account is configured with both keys or neither", ()
   }
 });
 
+test("Sign in with Apple boots only fully configured, with a readable key", () => {
+  const apple = {
+    APPLE_AUTH_CLIENT_ID: "app.example.web",
+    APPLE_AUTH_TEAM_ID: "TEAM123456",
+    APPLE_AUTH_KEY_ID: "KEY1234567",
+    APPLE_AUTH_PRIVATE_KEY: generateKeyPairSync("ec", {
+      namedCurve: "prime256v1",
+    }).privateKey.export({ type: "pkcs8", format: "pem" }),
+  };
+  expect(envApiInvariantViolation({ ...environment, ...apple })).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      ...apple,
+      APPLE_AUTH_PRIVATE_KEY: undefined,
+    }),
+  ).toContain("must be configured together");
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      ...apple,
+      APPLE_AUTH_PRIVATE_KEY: "not a key",
+    }),
+  ).toContain("APPLE_AUTH_PRIVATE_KEY must be the PEM text");
+});
+
 test("managed checks require an explicit supported provider and bounded configuration", () => {
   for (const provider of [
     undefined,
@@ -202,6 +229,102 @@ test("managed checks require an explicit supported provider and bounded configur
     }
     expect(v.parse(schema, "17")).toBe(17);
   }
+});
+
+test("a managed free tier requires an isolated OpenRouter credential", () => {
+  const configured = {
+    ...environment,
+    AI_PROVIDER: "openrouter" as const,
+    FEATURE_FREE_TIER: true,
+    FEATURE_ORG_ACCESS_STATE: true,
+    FEATURE_ORG_SERVICE_BUDGETS: true,
+    FEATURE_ACTION_ADMISSION: true,
+    ORG_EVALUATION_PERIOD_DAYS: 14,
+    FEATURE_MANAGED_PROVIDER_CHECKS: true,
+    OPENROUTER_API_KEY: "standard-key",
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS: 71,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 13,
+  };
+  expect(envApiInvariantViolation(configured)).toContain(
+    "requires OPENROUTER_FAST_TIER_API_KEY",
+  );
+  // Catalog checks off: the free floor still runs on managed OpenRouter.
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      FEATURE_MANAGED_PROVIDER_CHECKS: false,
+    }),
+  ).toContain("requires OPENROUTER_FAST_TIER_API_KEY");
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...configured,
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID: "fast-policy",
+      OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+      OPENROUTER_WIF_STS_REGION: "eu-west-1",
+    }),
+  ).toBeNull();
+});
+
+test("a fast-tier OpenRouter credential requires the standard tier's", () => {
+  const fastOnly = {
+    ...environment,
+    AI_PROVIDER: "openrouter" as const,
+    OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+  };
+  expect(envApiInvariantViolation(fastOnly)).toContain(
+    "requires OPENROUTER_API_KEY",
+  );
+  expect(
+    envApiInvariantViolation({
+      ...environment,
+      AI_PROVIDER: "openrouter" as const,
+      OPENROUTER_FAST_TIER_WIF_POLICY_ID: "fast-policy",
+      OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+      OPENROUTER_WIF_STS_REGION: "eu-west-1",
+    }),
+  ).toContain("requires OPENROUTER_API_KEY");
+  expect(
+    envApiInvariantViolation({
+      ...fastOnly,
+      OPENROUTER_API_KEY: "standard-key",
+    }),
+  ).toBeNull();
+  expect(
+    envApiInvariantViolation({
+      ...fastOnly,
+      OPENROUTER_WIF_POLICY_ID: "standard-policy",
+      OPENROUTER_WIF_AUDIENCE: "fixture-audience",
+      OPENROUTER_WIF_STS_REGION: "eu-west-1",
+    }),
+  ).toBeNull();
+});
+
+test("a free tier that resolves to OpenRouter without AI_PROVIDER needs the fast credential", () => {
+  const resolved = {
+    ...environment,
+    AI_PROVIDER: undefined,
+    FEATURE_FREE_TIER: true,
+    FEATURE_ORG_ACCESS_STATE: true,
+    FEATURE_ORG_SERVICE_BUDGETS: true,
+    FEATURE_ACTION_ADMISSION: true,
+    ORG_EVALUATION_PERIOD_DAYS: 14,
+    OPENROUTER_API_KEY: "standard-key",
+  };
+  expect(envApiInvariantViolation(resolved)).toContain(
+    "requires OPENROUTER_FAST_TIER_API_KEY",
+  );
+  expect(
+    envApiInvariantViolation({
+      ...resolved,
+      OPENROUTER_FAST_TIER_API_KEY: "fast-key",
+    }),
+  ).toBeNull();
 });
 
 test("OpenRouter WIF settings are nonblank and configured as a complete set", () => {
@@ -473,4 +596,40 @@ test("visual preview configuration accepts an optional Lambda function identifie
   ]) {
     expect(v.safeParse(schema, value).success).toBe(false);
   }
+});
+
+test("monitoring session keys accept a bounded digest configuration", () => {
+  const schema = envApiServerSchema.SYNTHETIC_SESSION_KEYS;
+  const entry = {
+    label: "current",
+    sha256: "a".repeat(64),
+    notAfter: "2026-10-20T12:00:00Z",
+  };
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  expect(v.parse(schema, JSON.stringify([entry]))).toEqual([entry]);
+  expect(
+    v.parse(schema, JSON.stringify([entry, { ...entry, label: "next" }])),
+  ).toHaveLength(2);
+  for (const invalid of [
+    "invalid",
+    "[]",
+    JSON.stringify([entry, entry, entry]),
+    JSON.stringify([{ ...entry, sha256: "short" }]),
+    JSON.stringify([{ ...entry, notAfter: "tomorrow" }]),
+    JSON.stringify([{ ...entry, label: "" }]),
+  ]) {
+    expect(v.safeParse(schema, invalid).success).toBe(false);
+  }
+});
+
+test("deployment environment is optional and accepts only declared deployment kinds", () => {
+  const schema = envApiServerSchema.DEPLOY_ENVIRONMENT;
+  for (const kind of ["production", "staging", "development"] as const) {
+    expect(v.parse(schema, kind)).toBe(kind);
+  }
+  expect(v.parse(schema, undefined)).toBeUndefined();
+  for (const invalid of ["", "test", "prod"] as const) {
+    expect(v.safeParse(schema, invalid).success).toBe(false);
+  }
+  expect(schema).toBe(envBaseServerSchema.DEPLOY_ENVIRONMENT);
 });

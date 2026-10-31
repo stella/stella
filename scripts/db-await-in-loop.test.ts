@@ -7,12 +7,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+import { API, ModuleKind, ModuleResolutionKind } from "tsrs/unstable/async";
 
+import { createProgram } from "../packages/scripts/src/typescript-program";
 import {
+  countDbAwaitInLoopDirectives,
   type DbAwaitInLoopReport,
   isApiSourceInScope,
-  countDbAwaitInLoopDirectives,
   scanDbAwaitInLoop,
 } from "./db-await-in-loop";
 
@@ -647,7 +648,9 @@ let report: DbAwaitInLoopReport = {
   filesScanned: 0,
 };
 
-beforeAll(() => {
+// timeout: checking the fixture program against the Drizzle types can exceed
+// Bun's five-second default on a loaded runner; no wait is involved.
+beforeAll(async () => {
   mkdirSync(FIXTURE_PARENT, { recursive: true });
   fixtureRoot = mkdtempSync(path.join(FIXTURE_PARENT, "db-await-in-loop-"));
   const rootNames = Object.entries(FIXTURE_FILES).map(([relative, source]) => {
@@ -670,33 +673,47 @@ beforeAll(() => {
     path.join(fixtureRoot, "node_modules/@stll/concurrency"),
     "dir",
   );
-  const program = ts.createProgram({
+  const opened = await createProgram({
     rootNames,
-    options: {
+    compilerOptions: {
       preserveSymlinks: true,
-      module: ts.ModuleKind.ESNext,
-      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      module: "ESNext",
+      moduleResolution: "Bundler",
       noEmit: true,
       skipLibCheck: true,
       strict: true,
-      target: ts.ScriptTarget.ESNext,
-      lib: ["lib.esnext.d.ts"],
+      target: "ESNext",
+      lib: ["esnext"],
       types: [],
     },
   });
-  resolvedChunkFile = ts.resolveModuleName(
-    "@stll/concurrency/chunk",
-    path.join(fixtureRoot, "bounded-rounds.ts"),
-    program.getCompilerOptions(),
-    ts.sys,
-  ).resolvedModule?.resolvedFileName;
-  report = scanDbAwaitInLoop({
-    program,
-    repositoryRoot: fixtureRoot,
-    isInScope: (relative) => !relative.startsWith("db/"),
-    handleDeclarationFiles: HANDLE_MODULES,
-  });
-});
+  const api = new API({ cwd: fixtureRoot });
+  try {
+    const resolver = await api.createModuleResolver({
+      preserveSymlinks: true,
+      module: ModuleKind.ESNext,
+      moduleResolution: ModuleResolutionKind.Bundler,
+    });
+    resolvedChunkFile = (
+      await resolver.resolveModuleName(
+        "@stll/concurrency/chunk",
+        fixtureRoot,
+        undefined,
+        {},
+      )
+    ).resolvedModule?.resolvedFileName;
+    report = await scanDbAwaitInLoop({
+      program: opened.program,
+      checker: opened.checker,
+      repositoryRoot: fixtureRoot,
+      isInScope: (relative) => !relative.startsWith("db/"),
+      handleDeclarationFiles: HANDLE_MODULES,
+    });
+  } finally {
+    await api.close();
+    await opened.close();
+  }
+}, 60_000);
 
 afterAll(() => {
   if (fixtureRoot !== "") {

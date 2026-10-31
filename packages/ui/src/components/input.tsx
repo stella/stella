@@ -53,6 +53,7 @@ const Input = ({
   const inputClassName = cn(
     INPUT_ELEMENT_CLASS_NAME,
     INPUT_SIZE_CLASS_NAMES[controlSize],
+    unstyled && "px-0",
     props.type === "search" &&
       "ps-8 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none",
   );

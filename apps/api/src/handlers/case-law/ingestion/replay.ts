@@ -4,14 +4,15 @@ import {
   asc,
   desc,
   eq,
+  gt,
   isNotNull,
   isNull,
-  gt,
-  lte,
   lt,
+  lte,
+  not,
   or,
-  sql,
   type SQL,
+  sql,
 } from "drizzle-orm";
 
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
@@ -21,28 +22,18 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
-  caseLawReplayBlocked,
   caseLawReplayBatches,
+  caseLawReplayBlocked,
 } from "@/api/db/schema";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
+import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import {
   createSourceContractResolver,
   type SourceContractResolver,
 } from "@/api/handlers/case-law/ingestion/pipeline/source-contract";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
@@ -52,24 +43,44 @@ import {
   corpusCarriesDocument,
   payloadCarriesDocument,
 } from "@/api/lib/case-law/stored-payload";
+import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
+import {
+  PARSER_REPARSE_FEATURES,
+  PARSER_VERSION_SCOPES,
+  storedFeaturesForParserReparseScope,
+} from "@/api/lib/legal-search/parser-reparse-scopes";
+import type { ParserReparseScope } from "@/api/lib/legal-search/parser-reparse-scopes";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 import {
-  REPLAY_PREVIEW_FAILURE,
   classifyReplayFailure,
+  REPLAY_PREVIEW_FAILURE,
+  type ReplayFailure,
   replayFailure,
   ReplayStageError,
-  type ReplayFailure,
 } from "./replay-failure";
 
 /**
@@ -78,8 +89,8 @@ import {
  *
  * Two properties shape everything below.
  *
- * The re-parsed result goes through `processDecision`, the same function a
- * crawl feeds. Corpus-object storage, the content hash, the search
+ * The re-parsed result goes through `processStoredDecision`, the same
+ * persistence owner a crawl feeds, with the captured raw input fenced. Corpus-object storage, the content hash, the search
  * projection's staleness marker and citation extraction therefore behave
  * exactly as they do on a live crawl. Writing `fulltext`/`document_ast`
  * straight onto the row would bypass all of it and leave the projection
@@ -103,11 +114,10 @@ import {
  * `DECISION_REFRESH.ALWAYS`, since the pipeline's own dedup asks the
  * source-hash question this one deliberately does not.
  *
- * Together these make a re-run converge rather than accumulate: the second
- * pass derives the payload the row already holds, reports it unchanged, and
- * leaves the decision row untouched, including its parser version and
- * watermark. Where a write does run, the corpus writer compares the derived keys against the ones
- * the row records and skips re-uploading a payload the row already holds.
+ * Equal output may still need a provenance write when its parser or input
+ * proof changed. Once the exact current input and parser are proved, another
+ * equal parse leaves the decision and watermark untouched. The corpus writer
+ * also skips re-uploading objects whose derived keys already match.
  *
  * One outcome is outside that path. A row whose payload re-parses to no
  * document produces no result for the pipeline to write, so what is stored
@@ -120,7 +130,7 @@ import {
 export const REPLAY_ROW_OUTCOME = {
   /** The replay applied a changed re-parsed payload. */
   APPLIED: "applied",
-  /** Re-parsing reproduced the stored result; nothing to write. */
+  /** Re-parsing reproduced the output; its input proof may still be recorded. */
   UNCHANGED: "unchanged",
   /** Dry run: the re-parse differs from what is stored. */
   WOULD_APPLY: "would-apply",
@@ -166,7 +176,7 @@ export type ReplayDecisionRow = {
    */
   contentHash: string | null;
   parserVersion: number | null;
-  /** Exact PostgreSQL timestamp for receipt fencing, without Date truncation. */
+  /** Exact revision compared under the fixed-point row lock, not a batch identity. */
   updateToken: string;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
@@ -242,6 +252,7 @@ type ReplaySelection =
   | { type: "operator" }
   | {
       type: "background";
+      adapterKey?: AdapterKey;
       currentParserVersion: number;
       mode: "enrolled" | "dry-run";
     };
@@ -281,18 +292,94 @@ const replayableRows = (
     isNull(caseLawDecisions.redactedAt),
   );
 
-const replaySelectionPredicate = (
+/** One database predicate owns successful parsing of the current raw input. */
+export const parsedReplayInputPredicate = (targetParserVersion: number) =>
+  sql<boolean>`coalesce((
+    ${caseLawDecisions.parserVersion} >= ${targetParserVersion}
+    AND ${caseLawDecisions.parsedSourceHash} = ${caseLawDecisions.sourceHash}
+    AND ${caseLawDecisions.parsedSourceHashVersion} = ${caseLawDecisions.sourceHashVersion}
+    AND ${caseLawDecisions.parsedSourceRawS3Key} = ${caseLawDecisions.sourceRawS3Key}
+  ), false)`;
+
+/** Old writers may restore an earlier parser, but replay never downgrades one. */
+export const replayReadmissionInputPredicate = (targetParserVersion: number) =>
+  sql<boolean>`coalesce((${and(
+    isNotNull(caseLawDecisions.sourceRawS3Key),
+    isNull(caseLawDecisions.redactedAt),
+    eq(
+      caseLawDecisions.corpusMirrorStatus,
+      CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+    ),
+    or(
+      isNull(caseLawDecisions.parserVersion),
+      lte(caseLawDecisions.parserVersion, targetParserVersion),
+    ),
+    not(parsedReplayInputPredicate(targetParserVersion)),
+  )}), false)`;
+
+const REPLAY_READMISSION_DISPOSITIONS = [
+  {
+    status: "completed",
+    outcomes: [REPLAY_ROW_OUTCOME.APPLIED, REPLAY_ROW_OUTCOME.UNCHANGED],
+    result: "success",
+  },
+  { status: "superseded", outcomes: [null], result: "unconsumed" },
+] as const;
+
+type ReplayReadmissionRow = Pick<
+  typeof caseLawReplayBatches.$inferSelect,
+  "status" | "outcome" | "applied" | "blocked"
+>;
+
+export const canReadmitReplayBatch = (row: ReplayReadmissionRow) =>
+  REPLAY_READMISSION_DISPOSITIONS.some(
+    (rule) =>
+      row.status === rule.status &&
+      rule.outcomes.some((outcome) => row.outcome === outcome) &&
+      (rule.result !== "unconsumed" ||
+        (row.applied === 0 && row.blocked === 0)),
+  );
+
+/** The selector and locked owner consume the same readmission dispositions. */
+export const replayBatchReadmissionPredicate = () =>
+  sql<boolean>`coalesce((${or(
+    ...REPLAY_READMISSION_DISPOSITIONS.map((rule) =>
+      and(
+        eq(caseLawReplayBatches.status, rule.status),
+        or(
+          ...rule.outcomes.map((outcome) =>
+            outcome === null
+              ? isNull(caseLawReplayBatches.outcome)
+              : eq(caseLawReplayBatches.outcome, outcome),
+          ),
+        ),
+        rule.result === "unconsumed"
+          ? and(
+              eq(caseLawReplayBatches.applied, 0),
+              eq(caseLawReplayBatches.blocked, 0),
+            )
+          : undefined,
+      ),
+    ),
+  )}), false)`;
+
+export const replaySelectionPredicate = (
   selection: ReplaySelection,
-  tx: Transaction,
+  tx: Pick<Transaction, "select">,
 ): SQL | undefined => {
   switch (selection.type) {
     case "operator":
       return undefined;
     case "background":
       return and(
+        parserScopePredicate(selection.adapterKey),
         or(
           isNull(caseLawDecisions.parserVersion),
           lt(caseLawDecisions.parserVersion, selection.currentParserVersion),
+          and(
+            eq(caseLawDecisions.parserVersion, selection.currentParserVersion),
+            not(parsedReplayInputPredicate(selection.currentParserVersion)),
+          ),
         ),
         // Durable reservations are recovered through pendingBatch; the sweep
         // must not bypass a row's backoff or reselect a terminal receipt.
@@ -316,9 +403,15 @@ const replaySelectionPredicate = (
               ),
               eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
               eq(
+                caseLawReplayBatches.sourceRawS3Key,
+                caseLawDecisions.sourceRawS3Key,
+              ),
+              eq(
                 caseLawReplayBatches.parserVersionTo,
                 selection.currentParserVersion,
               ),
+              // Reopening is bounded and fenced by the locked reservation owner.
+              not(replayBatchReadmissionPredicate()),
             ),
           )
           .limit(1)})`,
@@ -329,9 +422,18 @@ const replaySelectionPredicate = (
             and(
               eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
               eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+              // Unknown legacy receipts cannot identify a consumed object.
+              eq(
+                caseLawReplayBlocked.sourceRawS3Key,
+                caseLawDecisions.sourceRawS3Key,
+              ),
               eq(
                 caseLawReplayBlocked.parserVersionTo,
                 selection.currentParserVersion,
+              ),
+              or(
+                eq(caseLawReplayBlocked.outcome, "rejected"),
+                parsedReplayInputPredicate(selection.currentParserVersion),
               ),
             ),
           )
@@ -341,6 +443,35 @@ const replaySelectionPredicate = (
       selection satisfies never;
       return panic(`Unhandled replay selection: ${String(selection)}`);
   }
+};
+
+const parserReparseScopeForAdapter = (
+  adapterKey: AdapterKey,
+): ParserReparseScope => PARSER_VERSION_SCOPES[adapterKey].scope;
+
+const parserScopePredicate = (
+  adapterKey: AdapterKey | undefined,
+): SQL | undefined => {
+  if (adapterKey === undefined) {
+    return undefined;
+  }
+  const scope = parserReparseScopeForAdapter(adapterKey);
+  if (scope.type === "all") {
+    return undefined;
+  }
+  const selectors = storedFeaturesForParserReparseScope(
+    scope,
+    PARSER_REPARSE_FEATURES,
+  );
+  return or(
+    ...selectors.map((feature) => {
+      const column = sql.identifier(feature.column);
+      if (feature.jsonbPath === undefined) {
+        return isNotNull(column);
+      }
+      return sql`${column} #> ${feature.jsonbPath} IS NOT NULL`;
+    }),
+  );
 };
 
 type SelectScopeEndOptions = {
@@ -483,10 +614,12 @@ export const buildBackgroundReplayProbe = (
   tx: Transaction,
   {
     sourceId,
+    adapterKey,
     currentParserVersion,
     mode,
   }: {
     sourceId: SafeId<"caseLawSource">;
+    adapterKey?: AdapterKey;
     currentParserVersion: number;
     mode: "enrolled" | "dry-run";
   },
@@ -498,7 +631,12 @@ export const buildBackgroundReplayProbe = (
       and(
         replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
         replaySelectionPredicate(
-          { type: "background", currentParserVersion, mode },
+          {
+            type: "background",
+            ...(adapterKey === undefined ? {} : { adapterKey }),
+            currentParserVersion,
+            mode,
+          },
           tx,
         ),
       ),
@@ -532,8 +670,8 @@ export const countReplayability = async ({
       // sql-perf-allow: bounded by one explicit operator replay preflight
       await tx
         .select({
-          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+          storedLocally: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)::int`,
+          needsRefetch: sql<number>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)::int`,
         })
         .from(caseLawDecisions)
         .where(
@@ -546,8 +684,8 @@ export const countReplayability = async ({
   );
 
   return {
-    storedLocally: Number(counts?.storedLocally ?? 0),
-    needsRefetch: Number(counts?.needsRefetch ?? 0),
+    storedLocally: counts?.storedLocally ?? 0,
+    needsRefetch: counts?.needsRefetch ?? 0,
   };
 };
 
@@ -575,8 +713,8 @@ export type ReplayRowReport = {
   caseNumber: string;
   language: string;
   outcome: ReplayRowOutcome;
-  /** Exact row revision inspected by the re-parse, for terminal receipt fencing. */
-  checkedUpdateToken?: string;
+  /** Raw generation actually read, independent of later decision updates. */
+  replayedSourceRawS3Key?: string;
   /** Present on `rejected`, `retryable` and `missing-payload`. */
   detail?: string | undefined;
   rejection?: StoredRawReparseRejection | undefined;
@@ -627,6 +765,7 @@ export const replayRowResult = (
 
 export type ReplayRunReport = {
   visited: number;
+  writeOutcomes: ReplayWriteOutcomeCounts;
   outcomes: Record<ReplayRowOutcome, number>;
   rejections: Record<StoredRawReparseRejection, number>;
   /**
@@ -648,6 +787,40 @@ export type ReplayRunReport = {
   haltReason: string | null;
   failure?: ReplayFailure;
 };
+
+export type ReplayWriteOutcomeCounts = {
+  unchanged: number;
+  rewritten: number;
+  failed: number;
+};
+
+const writeOutcomeOf = (
+  outcome: ReplayRowOutcome,
+): keyof ReplayWriteOutcomeCounts => {
+  switch (outcome) {
+    case REPLAY_ROW_OUTCOME.APPLIED:
+    case REPLAY_ROW_OUTCOME.WITHDRAWN:
+      return "rewritten";
+    case REPLAY_ROW_OUTCOME.UNCHANGED:
+      return "unchanged";
+    case REPLAY_ROW_OUTCOME.WOULD_APPLY:
+    case REPLAY_ROW_OUTCOME.WOULD_WITHDRAW:
+    case REPLAY_ROW_OUTCOME.REJECTED:
+    case REPLAY_ROW_OUTCOME.MISSING_PAYLOAD:
+    case REPLAY_ROW_OUTCOME.RETRYABLE:
+    case REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE:
+      return "failed";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled replay write outcome");
+  }
+};
+
+const emptyWriteOutcomeCounts = (): ReplayWriteOutcomeCounts => ({
+  unchanged: 0,
+  rewritten: 0,
+  failed: 0,
+});
 
 // Both counters are annotated with a total `Record` over their union, so a
 // new outcome or rejection reason fails to compile until it is counted here.
@@ -677,6 +850,10 @@ export const replaySingleRowReport = (
   row: ReplayRowReport,
 ): ReplayRunReport => ({
   visited: 1,
+  writeOutcomes: {
+    ...emptyWriteOutcomeCounts(),
+    [writeOutcomeOf(row.outcome)]: 1,
+  },
   outcomes: { ...emptyOutcomeCounts(), [row.outcome]: 1 },
   rejections: emptyRejectionCounts(),
   problems: [],
@@ -916,6 +1093,12 @@ const storedPayloadMatches = async ({
   );
 };
 
+/** The content hash is the canonical decision-output identity used by writes. */
+export const parsedOutputRequiresWrite = (
+  storedHash: string,
+  parsedHash: string,
+): boolean => storedHash !== parsedHash;
+
 /**
  * Whether the write would change a described column the row holds.
  *
@@ -952,8 +1135,8 @@ const describedColumnsChanged = ({
  * Whether replaying this result would change what the row holds.
  *
  * The source-side refresh check and sanitized canonical payload are compared
- * independently. A parser-version difference alone does not change the row;
- * an identical payload is recorded only in its replay receipt.
+ * independently. A parser-version difference alone does not change output;
+ * an identical payload may still need a parsed-input provenance write.
  *
  * - the source-side refresh check the pipeline itself applies, which covers
  *   the publisher's hash and the ingestion metadata (keywords included);
@@ -971,10 +1154,19 @@ const replayWouldChangeRow = async ({
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
-}): Promise<boolean> => {
-  const result = sanitizeResult(input, metadataUrlSchema);
+}): Promise<Result<boolean, unknown>> => {
+  const normalized = sanitizeResult(input, metadataUrlSchema);
+  if (normalized.isErr()) {
+    return normalized;
+  }
+  const result = normalized.value;
+  const canonical = caseLawCanonicalPayload(result);
+  if (canonical.isErr()) {
+    return canonical;
+  }
+  const payload = canonical.value;
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
-    return true;
+    return Result.ok(true);
   }
   // Derived from the payload like the text is, so a parser that reads the
   // reference or its kind differently changes the row. Read as the write
@@ -983,10 +1175,10 @@ const replayWouldChangeRow = async ({
     row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
-    return true;
+    return Result.ok(true);
   }
   if (describedColumnsChanged({ input, result, row })) {
-    return true;
+    return Result.ok(true);
   }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
@@ -995,20 +1187,74 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
+    return Result.ok(true);
   }
-  return !(await storedPayloadMatches({
-    payload: caseLawCanonicalPayload(result),
-    row,
-    scopedDb,
-  }));
+  // The stored hash answers what reading the stored payload back would.
+  if (row.contentHash !== null) {
+    return Result.ok(
+      parsedOutputRequiresWrite(row.contentHash, corpusContentHash(payload)),
+    );
+  }
+  return Result.ok(
+    !(await storedPayloadMatches({
+      payload,
+      row,
+      scopedDb,
+    })),
+  );
+};
+
+type ProvedReplayInputOptions = Pick<
+  ReplayRowOptions,
+  "row" | "sourceId" | "scopedDb" | "resolveSourceContract"
+> & { result: IngestionResult };
+
+/** Parser changes invalidate the tuple; the final stamp binds its parser again. */
+const alreadyProvedReplayInput = async ({
+  row,
+  sourceId,
+  scopedDb,
+  resolveSourceContract,
+  result,
+}: ProvedReplayInputOptions) => {
+  const { sourceFingerprintVersion } = await resolveSourceContract(sourceId);
+  const parserVersion = result.parserVersion ?? 0;
+  return (
+    (
+      await scopedDb(async (tx) => {
+        await lockCaseLawDecisionRows({ tx, decisionIds: [row.id] });
+        return await tx
+          .select({ id: caseLawDecisions.id })
+          .from(caseLawDecisions)
+          .where(
+            and(
+              eq(caseLawDecisions.id, row.id),
+              eq(caseLawDecisions.sourceId, sourceId),
+              eq(caseLawDecisions.sourceRawS3Key, row.sourceRawS3Key),
+              sql`${caseLawDecisions.updatedAt}::text = ${row.updateToken}`,
+              eq(caseLawDecisions.parserVersion, parserVersion),
+              eq(caseLawDecisions.sourceHash, result.rawHash),
+              eq(caseLawDecisions.sourceHashVersion, sourceFingerprintVersion),
+              parsedReplayInputPredicate(parserVersion),
+              eq(
+                caseLawDecisions.corpusMirrorStatus,
+                CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+              ),
+              isNull(caseLawDecisions.redactedAt),
+            ),
+          )
+          .limit(1);
+      })
+    ).length > 0
+  );
 };
 
 /**
  * Apply one re-parsed result, or say what applying it would do.
  *
- * An identical row returns before reaching the writer. A changed row is
- * written under `DECISION_REFRESH.ALWAYS`, because the pipeline's
+ * Missing or invalidated proof reaches the writer even for identical output;
+ * an already-proved same-parser input is a fixed point. Writes use
+ * `DECISION_REFRESH.ALWAYS`, because the pipeline's
  * own dedup asks only whether the publisher's document moved, and here it
  * did not: the payload the parser derives from it did.
  */
@@ -1025,36 +1271,38 @@ const replayRow = async ({
   withdraw,
   signal,
   s3Policy,
-}: ReplayRowOptions): Promise<ReplayRowReport> => {
+}: ReplayRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   const base = {
     id: row.id,
     caseNumber: row.caseNumber,
     language: row.language,
-    checkedUpdateToken: row.updateToken,
+    replayedSourceRawS3Key: row.sourceRawS3Key,
   };
 
   if (reparsed.type === "supplement") {
     // Written over its own row, a supplement would stay the standalone
     // decision it is not. `supplement-fold.ts` folds it into its judgment.
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.SUPPLEMENT,
       detail: `a ${reparsed.supplement.kind} supplement; fold it instead`,
-    };
+    });
   }
 
   if (reparsed.type === "rejected") {
-    return await withdrawRejectedRow({
-      row,
-      rejection: reparsed.rejection,
-      detail: reparsed.detail,
-      rejectionPolicy,
-      scopedDb,
-      sourceLease,
-      withdraw,
-    });
+    return Result.ok(
+      await withdrawRejectedRow({
+        row,
+        rejection: reparsed.rejection,
+        detail: reparsed.detail,
+        rejectionPolicy,
+        scopedDb,
+        sourceLease,
+        withdraw,
+      }),
+    );
   }
 
   // A legacy spelling the adapter vouched for stands in for the regenerated
@@ -1072,15 +1320,15 @@ const replayRow = async ({
   });
   const selectedIdentity = decisionReplayIdentity(row.country, row);
   if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `selected ${JSON.stringify(selectedIdentity)}, regenerated ${JSON.stringify(regeneratedIdentity)}`,
-    };
+    });
   }
 
-  const changed = await replayWouldChangeRow({
+  const planned = await replayWouldChangeRow({
     metadataUrlSchema,
     row,
     // The row holds the document its supplements were composed into, which
@@ -1095,21 +1343,36 @@ const replayRow = async ({
     scopedDb,
   });
 
-  // Parser provenance for an identical re-parse belongs in the replay receipt.
-  // Even an older parser version must leave the decision row untouched.
-  if (!changed) {
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
+  if (planned.isErr()) {
+    return planned;
+  }
+  const changed = planned.value;
+
+  if (
+    !changed &&
+    (sourceLease === null ||
+      (await alreadyProvedReplayInput({
+        row,
+        sourceId,
+        scopedDb,
+        resolveSourceContract,
+        result: reparsed.result,
+      })))
+  ) {
+    return Result.ok({ ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED });
   }
   const candidate = {
     outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY,
     result: reparsed.result,
     raw,
     sourceRawContentType: row.sourceRawContentType,
+    sourceRawS3Key: row.sourceRawS3Key,
+    decisionId: row.id,
   } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
-    return { ...base, outcome: candidate.outcome };
+    return Result.ok({ ...base, outcome: candidate.outcome });
   }
-  const processed = await writeReplayCandidate({
+  const written = await writeReplayCandidate({
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
     candidate,
@@ -1118,14 +1381,23 @@ const replayRow = async ({
     sourceId,
     resolveSourceContract,
   });
+  if (written.isErr()) {
+    return written;
+  }
+  const processed = written.value;
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
       detail: processed.reason,
-    };
+    });
   }
-  return { ...base, outcome: REPLAY_ROW_OUTCOME.APPLIED };
+  return Result.ok({
+    ...base,
+    outcome: changed
+      ? REPLAY_ROW_OUTCOME.APPLIED
+      : REPLAY_ROW_OUTCOME.UNCHANGED,
+  });
 };
 
 type ReplayWriteCandidate = {
@@ -1133,6 +1405,8 @@ type ReplayWriteCandidate = {
   result: IngestionResult;
   raw: Uint8Array;
   sourceRawContentType: string | null;
+  sourceRawS3Key: string;
+  decisionId: SafeId<"caseLawDecision">;
 };
 
 type WriteReplayCandidateOptions = {
@@ -1165,7 +1439,7 @@ const writeReplayCandidate = async ({
   });
 
   signal?.throwIfAborted();
-  return await processDecision(
+  return await processStoredDecision(
     {
       ...(signal === undefined ? {} : { signal }),
       ...(s3Policy === undefined ? {} : { s3Policy }),
@@ -1176,6 +1450,8 @@ const writeReplayCandidate = async ({
       // one thing that makes this local. These are the bytes this run read,
       // and the pipeline keys the object on their own hash, so it recognises
       // the key the row already holds and skips the re-upload.
+      sourceRawS3Key: candidate.sourceRawS3Key,
+      decisionId: candidate.decisionId,
       input: {
         ...candidate.result,
         sourceRawBytes: candidate.raw,
@@ -1189,7 +1465,6 @@ const writeReplayCandidate = async ({
       // as the observation's time, which is what orders it against a crawl.
       observedAt: new Date(),
       observationOrder,
-      refresh: DECISION_REFRESH.ALWAYS,
     },
     resolveSourceContract,
   );
@@ -1202,6 +1477,7 @@ type ReplayOneRowOptions = {
   metadataUrlSchema?: unknown;
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
+  expectedRawS3Key?: string;
   row: ReplayDecisionRow;
   rejectionPolicy: ReplayRejectionPolicy;
   scopedDb: ScopedDb;
@@ -1224,6 +1500,7 @@ const replayOneRow = async ({
   metadataUrlSchema,
   capability,
   readStoredRaw,
+  expectedRawS3Key,
   row,
   rejectionPolicy,
   scopedDb,
@@ -1234,6 +1511,17 @@ const replayOneRow = async ({
   s3Policy,
 }: ReplayOneRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
+  if (
+    expectedRawS3Key !== undefined &&
+    row.sourceRawS3Key !== expectedRawS3Key
+  ) {
+    return Result.err(
+      new ReplayStageError({
+        message: "The replay input changed after reservation",
+        failure: replayFailure("writer-retryable"),
+      }),
+    );
+  }
   const read = await Result.tryPromise({
     try: async () => await readStoredRaw(row.sourceRawS3Key),
     catch: (cause) => {
@@ -1258,12 +1546,17 @@ const replayOneRow = async ({
       id: row.id,
       caseNumber: row.caseNumber,
       language: row.language,
+      replayedSourceRawS3Key: row.sourceRawS3Key,
       outcome: REPLAY_ROW_OUTCOME.MISSING_PAYLOAD,
       detail: row.sourceRawS3Key,
     });
   }
   const parsed = await Result.tryPromise({
-    try: async () => await capability.reparse(storedInputFor(row, raw)),
+    try: async () =>
+      await capability.reparse({
+        ...storedInputFor(row, raw),
+        readObject: storedRawResultReader(readStoredRaw),
+      }),
     catch: (cause) =>
       new ReplayStageError({
         message: "Stored replay adapter failed",
@@ -1275,23 +1568,25 @@ const replayOneRow = async ({
     return parsed;
   }
   signal?.throwIfAborted();
-  return await Result.tryPromise(
-    async () =>
-      await replayRow({
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        row,
-        raw,
-        resolveSourceContract,
-        metadataUrlSchema,
-        reparsed: parsed.value,
-        rejectionPolicy,
-        scopedDb,
-        sourceId,
-        sourceLease,
-        withdraw,
-      }),
-  );
+  return (
+    await Result.tryPromise(
+      async () =>
+        await replayRow({
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+          row,
+          raw,
+          resolveSourceContract,
+          metadataUrlSchema,
+          reparsed: parsed.value,
+          rejectionPolicy,
+          scopedDb,
+          sourceId,
+          sourceLease,
+          withdraw,
+        }),
+    )
+  ).andThen((outcome) => outcome);
 };
 
 // Every row outcome completes under the source lease, including paths that
@@ -1396,8 +1691,7 @@ export const acquireReplayLease = async <TLease>({
  * means the first must not read as a very large second.
  */
 export type ReplayVisitBound =
-  | { type: "all" }
-  | { type: "at-most"; limit: number };
+  { type: "all" } | { type: "at-most"; limit: number };
 
 export type ReplayCaseLawSourceOptions = {
   signal?: AbortSignal;
@@ -1406,6 +1700,8 @@ export type ReplayCaseLawSourceOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   readStoredRaw: StoredRawReader;
+  /** A reserved run refuses a newer input before reading or parsing it. */
+  expectedRawS3Key?: string;
   /** Held for a writing run; null for a dry run, which writes nothing. */
   sourceLease: CaseLawSourceIngestionLease | null;
   bound: ReplayVisitBound;
@@ -1494,6 +1790,7 @@ export const replayCaseLawSource = async ({
   scopedDb,
   sourceId,
   readStoredRaw,
+  expectedRawS3Key,
   sourceLease,
   bound,
   pageSize,
@@ -1527,6 +1824,7 @@ export const replayCaseLawSource = async ({
 
   const resolveSourceContract = createSourceContractResolver(scopedDb);
   const outcomes = emptyOutcomeCounts();
+  const writeOutcomes = emptyWriteOutcomeCounts();
   const rejections = emptyRejectionCounts();
   const problems: ReplayRowReport[] = [];
   const listedProblems = emptyOutcomeCounts();
@@ -1541,6 +1839,7 @@ export const replayCaseLawSource = async ({
     type: "ran",
     report: {
       visited,
+      writeOutcomes,
       outcomes,
       rejections,
       problems,
@@ -1554,10 +1853,10 @@ export const replayCaseLawSource = async ({
   const replayPage = async (
     page: readonly ReplayDecisionRow[],
     index = 0,
-  ): Promise<boolean> => {
+  ): Promise<{ type: "complete" } | { type: "halted" }> => {
     const row = page.at(index);
     if (row === undefined) {
-      return true;
+      return { type: "complete" };
     }
 
     const attempted = await Result.tryPromise({
@@ -1569,6 +1868,7 @@ export const replayCaseLawSource = async ({
           metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,
           readStoredRaw,
+          ...(expectedRawS3Key === undefined ? {} : { expectedRawS3Key }),
           row,
           rejectionPolicy,
           scopedDb,
@@ -1588,13 +1888,14 @@ export const replayCaseLawSource = async ({
     if (Result.isError(attempt)) {
       failure = classifyReplayFailure(attempt.error);
       haltReason = `${row.caseNumber} (${row.language}) could not be replayed: ${failureDetail(attempt.error)}`;
-      return false;
+      return { type: "halted" };
     }
     const rowReport = attempt.value;
     await onRow?.({ row, report: rowReport });
 
     visited += 1;
     outcomes[rowReport.outcome] += 1;
+    writeOutcomes[writeOutcomeOf(rowReport.outcome)] += 1;
     if (rowReport.rejection !== undefined) {
       rejections[rowReport.rejection] += 1;
     }
@@ -1623,13 +1924,13 @@ export const replayCaseLawSource = async ({
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       failure = replayFailure("writer-retryable");
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
-      return false;
+      return { type: "halted" };
     }
     resumeAfter = row.id;
     if (Result.isError(recorded)) {
       failure = replayFailure("receipt-write");
       haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
-      return false;
+      return { type: "halted" };
     }
     return await replayPage(page, index + 1);
   };
@@ -1661,7 +1962,7 @@ export const replayCaseLawSource = async ({
     if (page.length === 0) {
       return;
     }
-    if (await replayPage(page)) {
+    if ((await replayPage(page)).type === "complete") {
       await walk();
     }
   };

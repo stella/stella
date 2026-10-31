@@ -33,8 +33,8 @@ import {
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Bounds ───────────────────────────────────────────────
@@ -413,6 +413,13 @@ const ADAPTER_CONFORMANCE = {
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },
+  [ADAPTER_KEYS.UK_FCL]: {
+    disposition: "exercised",
+    exhaustedSource: () =>
+      xmlResponse('<feed xmlns="http://www.w3.org/2005/Atom"/>'),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
   [ADAPTER_KEYS.HU_BHGY]: {
     disposition: "exercised",
     // The search answers a window it holds nothing for with an empty list and
@@ -484,6 +491,10 @@ const ADAPTER_CONFORMANCE = {
     // and a cycle on that day makes no request and returns its cursor.
     maxSteadyStateCursors: 1,
     maxSteadyStatePositions: 0,
+  },
+  [ADAPTER_KEYS.CZ_UOHS]: {
+    disposition: "excluded",
+    reason: "the complete JSON-LD export is covered by adapter fixture tests",
   },
 } as const satisfies Record<AdapterKey, AdapterCoverage>;
 

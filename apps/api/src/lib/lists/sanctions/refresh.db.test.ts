@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -11,8 +11,8 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  sanctionsEditions,
   sanctionsEditionEntries,
+  sanctionsEditions,
   sanctionsEntryPayloads,
   sanctionsSources,
 } from "@/api/db/schema";

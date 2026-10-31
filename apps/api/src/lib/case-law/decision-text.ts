@@ -1,26 +1,32 @@
+// parser-output-unchanged: the decision-date availability marker is derived only from metadata a source sets; sources that never set it parse as before.
 // parser-output-unchanged: Text and publication absence sidecars change metadata only; canonical documents and replay comparison inputs are unchanged.
+// parser-output-unchanged: The text fidelity check only validates a `textFidelity` entry a source sets and adds, drops or changes nothing; no source's parsed output differs.
 import { panic } from "better-result";
 
 import {
+  DECISION_DATE_AVAILABILITY_STATUSES,
   DECISION_HEADNOTE_KEYWORDS,
-  SK_US_ECLI_AVAILABILITY_STATUSES,
-  SK_COURTS_SOURCE_URL_STATUSES,
-  type SkUsEcliAvailability,
-  type SkCourtsSourceUrlStatus,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_FIDELITY_METADATA_KEY,
   DECISION_TEXT_FIELD,
   DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_METADATA_KEYS,
-  TEXT_ABSENCE_REASON,
-  parseDecisionTextAbsence,
-  TEXT_FIELD_TYPE,
+  type DecisionDateAvailability,
   type DecisionHeadnotePreview,
   type DecisionTextAbsenceEntry,
   type DecisionTextAbsenceParseResult,
   type DecisionTextFieldKey,
+  isDecisionTextFidelity,
+  parseDecisionTextAbsence,
   type ReadDecisionTextFields,
+  SK_COURTS_SOURCE_URL_STATUSES,
+  SK_US_ECLI_AVAILABILITY_STATUSES,
+  type SkCourtsSourceUrlStatus,
+  type SkUsEcliAvailability,
+  TEXT_ABSENCE_REASON,
+  TEXT_FIELD_TYPE,
   type TextAbsenceReason,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
@@ -34,9 +40,9 @@ import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import {
   approveMetadataUrls,
-  rehydrateMetadataUrls,
   META_URL_DIAGNOSTICS,
   type MetadataUrlSchema,
+  rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -168,6 +174,14 @@ const ECLI_ABSENCE_REASON_BY_STATUS = {
   TextAbsenceReason | undefined
 >;
 
+const DECISION_DATE_ABSENCE_REASON_BY_STATUS = {
+  published: undefined,
+  "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+} as const satisfies Record<
+  DecisionDateAvailability["status"],
+  TextAbsenceReason | undefined
+>;
+
 const SOURCE_URL_ABSENCE_REASON_BY_STATUS = {
   published: undefined,
   "not-published-by-source": TEXT_ABSENCE_REASON.NOT_PUBLISHED,
@@ -182,6 +196,11 @@ const isEcliAvailabilityStatus = (
   status: unknown,
 ): status is SkUsEcliAvailability["status"] =>
   SK_US_ECLI_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
+
+const isDecisionDateAvailabilityStatus = (
+  status: unknown,
+): status is DecisionDateAvailability["status"] =>
+  DECISION_DATE_AVAILABILITY_STATUSES.some((candidate) => candidate === status);
 
 const isSourceUrlStatus = (
   status: unknown,
@@ -227,8 +246,7 @@ export function checkedDecisionMetadata(
 export function checkedDecisionMetadata<Value extends Record<string, unknown>>(
   metadata: Value,
   schema?:
-    | NoInfer<MetadataUrlSchema<Value>>
-    | StoredDecisionMetadataProjectionOptions,
+    NoInfer<MetadataUrlSchema<Value>> | StoredDecisionMetadataProjectionOptions,
 ): Value | Record<string, unknown> {
   checkDecisionTextMetadata(metadata);
   if (isStoredMetadataProjection(schema)) {
@@ -282,6 +300,28 @@ export const storeDecisionTextFields = ({
     if (reason !== undefined) {
       absent.push({ field: "ecli", reason });
     }
+  }
+  const decisionDateAvailability = metadata["decisionDateAvailability"];
+  if (decisionDateAvailability !== undefined) {
+    if (
+      !isRecord(decisionDateAvailability) ||
+      !isDecisionDateAvailabilityStatus(decisionDateAvailability["status"])
+    ) {
+      return panic("Decision date availability must carry a source status");
+    }
+    const reason =
+      DECISION_DATE_ABSENCE_REASON_BY_STATUS[
+        decisionDateAvailability["status"]
+      ];
+    if (reason !== undefined) {
+      absent.push({ field: "decisionDate", reason });
+    }
+  }
+  const textFidelity = metadata[DECISION_TEXT_FIDELITY_METADATA_KEY];
+  if (textFidelity !== undefined && !isDecisionTextFidelity(textFidelity)) {
+    return panic(
+      "Text fidelity must carry a status, character counts and its first difference",
+    );
   }
   const sourceUrlStatus = metadata["sourceUrlStatus"];
   if (sourceUrlStatus !== undefined) {

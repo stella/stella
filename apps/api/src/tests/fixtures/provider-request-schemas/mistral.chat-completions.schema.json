@@ -84,7 +84,8 @@
         "web_search_premium",
         "code_interpreter",
         "image_generation",
-        "document_library"
+        "document_library",
+        "mistral_mcp"
       ],
       "type": "string"
     },
@@ -110,6 +111,16 @@
                 "$ref": "#/$defs/GuardrailConfig"
               },
               "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "logprobs": {
+          "anyOf": [
+            {
+              "type": "boolean"
             },
             {
               "type": "null"
@@ -151,6 +162,17 @@
             {
               "additionalProperties": true,
               "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "min_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
             },
             {
               "type": "null"
@@ -199,6 +221,16 @@
             }
           ]
         },
+        "prompt_logprobs": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "prompt_mode": {
           "anyOf": [
             {
@@ -224,6 +256,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "repetition_penalty": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 2,
+              "type": "number"
             },
             {
               "type": "null"
@@ -296,15 +340,6 @@
                     "$ref": "#/$defs/Tool"
                   },
                   {
-                    "$ref": "#/$defs/WebSearchTool"
-                  },
-                  {
-                    "$ref": "#/$defs/WebSearchPremiumTool"
-                  },
-                  {
-                    "$ref": "#/$defs/CodeInterpreterTool"
-                  },
-                  {
                     "$ref": "#/$defs/ImageGenerationTool"
                   },
                   {
@@ -322,6 +357,27 @@
             }
           ]
         },
+        "top_k": {
+          "anyOf": [
+            {
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_logprobs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "top_p": {
           "anyOf": [
             {
@@ -333,29 +389,19 @@
               "type": "null"
             }
           ]
-        }
-      },
-      "required": ["messages", "model"],
-      "type": "object"
-    },
-    "CodeInterpreterTool": {
-      "additionalProperties": false,
-      "properties": {
-        "tool_configuration": {
+        },
+        "top_prompt_logprobs": {
           "anyOf": [
             {
-              "$ref": "#/$defs/ToolConfiguration"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ]
-        },
-        "type": {
-          "enum": ["code_interpreter"],
-          "type": "string"
         }
       },
+      "required": ["messages", "model"],
       "type": "object"
     },
     "ContentChunk": {
@@ -380,6 +426,12 @@
         },
         {
           "$ref": "#/$defs/AudioChunk"
+        },
+        {
+          "$ref": "#/$defs/ResourceChunk"
+        },
+        {
+          "$ref": "#/$defs/ResourceLinkChunk"
         }
       ]
     },
@@ -987,6 +1039,70 @@
       "enum": ["auto", "standard_only"],
       "type": "string"
     },
+    "ResourceChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextChunk"
+            },
+            {
+              "$ref": "#/$defs/ImageURLChunk"
+            }
+          ]
+        },
+        "type": {
+          "const": "resource",
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": ["uri", "content"],
+      "type": "object"
+    },
+    "ResourceLinkChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "resource_link",
+          "type": "string"
+        },
+        "uri": {
+          "type": "string"
+        }
+      },
+      "required": ["uri"],
+      "type": "object"
+    },
     "ResponseFormat": {
       "additionalProperties": false,
       "properties": {
@@ -1322,46 +1438,6 @@
         }
       },
       "required": ["content"],
-      "type": "object"
-    },
-    "WebSearchPremiumTool": {
-      "additionalProperties": false,
-      "properties": {
-        "tool_configuration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ToolConfiguration"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "type": {
-          "enum": ["web_search_premium"],
-          "type": "string"
-        }
-      },
-      "type": "object"
-    },
-    "WebSearchTool": {
-      "additionalProperties": false,
-      "properties": {
-        "tool_configuration": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ToolConfiguration"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "type": {
-          "enum": ["web_search"],
-          "type": "string"
-        }
-      },
       "type": "object"
     }
   },

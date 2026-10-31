@@ -1,7 +1,12 @@
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
+
+import {
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 // The API process boundary needs the raw executable. This list only shrinks.
 export const GITHUB_COMMAND_OWNERS = {
@@ -218,63 +223,59 @@ export const rawGithubCommands = (file: string, source: string): number[] => {
     return [...lines];
   }
 
-  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const ast = parseSource(file, source);
   const lines = new Set<number>();
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
+  const stringValue = (node: Node | null | undefined): string | undefined => {
+    if (node?.type === "Literal" && typeof node.value === "string") {
+      return node.value;
+    }
+    if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+      return node.quasis.at(0)?.value.cooked ?? undefined;
+    }
+    return undefined;
+  };
+  const stringLiteral = (node: Node | null | undefined): string | undefined =>
+    node?.type === "Literal" && typeof node.value === "string"
+      ? node.value
+      : undefined;
+  const rawCommand = (node: Node | null | undefined) =>
+    !node ||
+    node.type === "SpreadElement" ||
+    node.type === "Identifier" ||
+    ["api", "run", "release"].includes(stringLiteral(node) ?? "");
+  walk(ast.program, (node) => {
+    if (node.type === "CallExpression") {
       const argument = node.arguments.at(0);
       const options = node.arguments.at(1);
       if (
-        argument &&
-        ts.isStringLiteral(argument) &&
-        /(?:^|[/\\])gh(?:\.exe)?$/u.test(argument.text) &&
-        options &&
-        ts.isArrayLiteralExpression(options)
+        /(?:^|[/\\])gh(?:\.exe)?$/u.test(stringLiteral(argument) ?? "") &&
+        options?.type === "ArrayExpression" &&
+        rawCommand(options.elements.at(0))
       ) {
-        const command = options.elements.at(0);
-        if (
-          !command ||
-          ts.isSpreadElement(command) ||
-          ts.isIdentifier(command) ||
-          (ts.isStringLiteral(command) &&
-            ["api", "run", "release"].includes(command.text))
-        ) {
-          lines.add(
-            ast.getLineAndCharacterOfPosition(node.getStart()).line + 1,
-          );
-        }
+        lines.add(ast.locate(node.start).line);
       }
-      if (
-        argument &&
-        (ts.isStringLiteral(argument) ||
-          ts.isNoSubstitutionTemplateLiteral(argument)) &&
-        RAW_COMMAND.test(argument.text)
-      ) {
-        lines.add(ast.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+      const argumentText = stringValue(argument);
+      if (argumentText !== undefined && RAW_COMMAND.test(argumentText)) {
+        lines.add(ast.locate(node.start).line);
       }
     }
-    if (ts.isTemplateExpression(node) && RAW_COMMAND.test(node.head.text)) {
-      lines.add(ast.getLineAndCharacterOfPosition(node.getStart()).line + 1);
+    if (
+      node.type === "TemplateLiteral" &&
+      node.expressions.length > 0 &&
+      RAW_COMMAND.test(node.quasis.at(0)?.value.cooked ?? "")
+    ) {
+      lines.add(ast.locate(node.start).line);
     }
-    if (ts.isArrayLiteralExpression(node)) {
-      const executable = node.elements.at(0);
-      const command = node.elements.at(1);
-      if (
-        executable &&
-        ts.isStringLiteral(executable) &&
-        /(?:^|[/\\])gh(?:\.exe)?$/u.test(executable.text) &&
-        (!command ||
-          ts.isSpreadElement(command) ||
-          ts.isIdentifier(command) ||
-          (ts.isStringLiteral(command) &&
-            ["api", "run", "release"].includes(command.text)))
-      ) {
-        lines.add(ast.getLineAndCharacterOfPosition(node.getStart()).line + 1);
-      }
+    if (
+      node.type === "ArrayExpression" &&
+      /(?:^|[/\\])gh(?:\.exe)?$/u.test(
+        stringLiteral(node.elements.at(0)) ?? "",
+      ) &&
+      rawCommand(node.elements.at(1))
+    ) {
+      lines.add(ast.locate(node.start).line);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(ast);
+  });
   return [...lines];
 };
 

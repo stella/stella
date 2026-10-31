@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 
 import {
-  DECISION_TEXT_FIELD_KEYS,
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
   DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
   inspectDecisionTextAbsence,
   TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
@@ -72,7 +72,7 @@ for (const { key } of listSourceRegistrations()) {
     expect(splitStoredDecisionTextMetadata(stored).textFields).toEqual(
       decision.textFields,
     );
-    const normalized = sanitizeResult(decision);
+    const normalized = sanitizeResult(decision).unwrap();
     // Legacy rows stored only non-default reasons. Provenance changes must
     // neither alter the document payload nor require a source refresh.
     const legacyEntries = absence.entries.filter(
@@ -98,8 +98,8 @@ for (const { key } of listSourceRegistrations()) {
       caseLawCanonicalPayload({
         ...normalized,
         metadata: toPlainTextMetadataObject(legacyMetadata).unwrap(),
-      }),
-    ).toEqual(caseLawCanonicalPayload(normalized));
+      }).unwrap(),
+    ).toEqual(caseLawCanonicalPayload(normalized).unwrap());
     expect(
       shouldSkipRefresh({
         existingMetadata: legacyMetadata,

@@ -95,6 +95,9 @@ export const runCustomLintTestCommands = async (
 export const runCustomLintTests = async (
   commands: readonly (readonly string[])[],
   coveragePath?: string,
+  // The workers' environment; a caller running deliberately failing fixtures
+  // passes one without GITHUB_ACTIONS so they emit no CI annotations.
+  env: Record<string, string | undefined> = process.env,
 ) => {
   const coverageDirectory =
     coveragePath === undefined
@@ -108,9 +111,9 @@ export const runCustomLintTests = async (
           cwd: repoRoot,
           env:
             coverageDirectory === undefined
-              ? process.env
+              ? env
               : {
-                  ...process.env,
+                  ...env,
                   OXLINT_RULE_COVERAGE_PATH: path.join(
                     coverageDirectory,
                     `${worker}.jsonl`,

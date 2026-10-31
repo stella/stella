@@ -1,55 +1,67 @@
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   BILINGUAL_GLOSSARY_ORIGINS,
   BILINGUAL_LIMITS,
   BILINGUAL_ROW_DISPOSITIONS,
 } from "@/api/lib/bilingual/contract";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 
 /** IETF-style language tag; also the cloned style suffix folio used. */
 const LANGUAGE_TAG_PATTERN = "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$";
 
-const languageTagSchema = t.String({
-  minLength: 2,
-  maxLength: 16,
-  pattern: LANGUAGE_TAG_PATTERN,
-});
+const languageTagSchema = v.pipe(
+  v.string(),
+  v.minLength(2),
+  v.maxLength(16),
+  v.regex(new RegExp(LANGUAGE_TAG_PATTERN, "u")),
+);
 
-const termSchema = t.String({
-  minLength: 1,
-  maxLength: BILINGUAL_LIMITS.termMax,
-});
+const termSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(BILINGUAL_LIMITS.termMax),
+);
 
-const glossaryEntrySchema = t.Object({
+const glossaryEntrySchema = v.object({
   source: termSchema,
   target: termSchema,
-  sourceForms: t.Array(termSchema, { maxItems: BILINGUAL_LIMITS.formsMax }),
-  targetForms: t.Array(termSchema, { maxItems: BILINGUAL_LIMITS.formsMax }),
-  origin: t.UnionEnum(BILINGUAL_GLOSSARY_ORIGINS),
+  sourceForms: v.pipe(
+    v.array(termSchema),
+    v.maxLength(BILINGUAL_LIMITS.formsMax),
+  ),
+  targetForms: v.pipe(
+    v.array(termSchema),
+    v.maxLength(BILINGUAL_LIMITS.formsMax),
+  ),
+  origin: v.picklist(BILINGUAL_GLOSSARY_ORIGINS),
 });
 
-export const prepareBilingualTranslationBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
+export const prepareBilingualTranslationBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
   sourceLang: languageTagSchema,
   targetLang: languageTagSchema,
 });
 
-export const createBilingualRunBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
-  entityVersionId: tSafeId("entityVersion"),
+export const createBilingualRunBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
+  entityVersionId: resourceIdSchema("entityVersion"),
   sourceLang: languageTagSchema,
   targetLang: languageTagSchema,
-  glossary: t.Array(glossaryEntrySchema, {
-    maxItems: BILINGUAL_LIMITS.glossaryMax,
-  }),
-  rows: t.Array(
-    t.Object({
-      rowId: t.String({ minLength: 1, maxLength: 64 }),
-      disposition: t.UnionEnum(BILINGUAL_ROW_DISPOSITIONS),
-    }),
-    { minItems: 1, maxItems: BILINGUAL_LIMITS.rowsMax },
+  glossary: v.pipe(
+    v.array(glossaryEntrySchema),
+    v.maxLength(BILINGUAL_LIMITS.glossaryMax),
+  ),
+  rows: v.pipe(
+    v.array(
+      v.object({
+        rowId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+        disposition: v.picklist(BILINGUAL_ROW_DISPOSITIONS),
+      }),
+    ),
+    v.minLength(1),
+    v.maxLength(BILINGUAL_LIMITS.rowsMax),
   ),
 });

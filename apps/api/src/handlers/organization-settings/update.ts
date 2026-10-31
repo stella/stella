@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
   parsePlainDate,
   parseTimeZoneId,
@@ -12,14 +12,13 @@ import {
 } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
-  DOCUMENT_PROCESSING_MODE,
   DEFAULT_DOCUMENT_PROCESSING_MODE,
   DEFAULT_TIME_EDIT_WINDOW_DAYS,
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
+  DOCUMENT_PROCESSING_MODE,
   documentProcessingRuns,
   organizationSettings,
 } from "@/api/db/schema";
@@ -32,7 +31,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
-import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { validatePattern } from "@/api/lib/matter-reference";
@@ -45,16 +43,18 @@ import { pickDefined } from "@/api/lib/pick-defined";
 
 import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
 
-const documentProcessingModeSchema = t.Union([
-  t.Literal(DOCUMENT_PROCESSING_MODE.OFF),
-  t.Literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
+const documentProcessingModeSchema = v.union([
+  v.literal(DOCUMENT_PROCESSING_MODE.OFF),
+  v.literal(DOCUMENT_PROCESSING_MODE.SEARCHABLE_TEXT),
 ]);
 
 // The literal list mirrors MANAGED_AI_RESIDENCIES: a member on one side only
 // fails to compile here.
-const managedAIResidencySchema = t.Union([t.Literal("eu"), t.Literal("us")]);
+const managedAIResidencySchema = v.picklist(["eu", "us"]);
 type ManagedAIResidencyValue = (typeof MANAGED_AI_RESIDENCIES)[number];
-type ManagedAIResidencySchemaValue = Static<typeof managedAIResidencySchema>;
+type ManagedAIResidencySchemaValue = v.InferOutput<
+  typeof managedAIResidencySchema
+>;
 type MissingManagedAIResidencySchemaValue = Exclude<
   ManagedAIResidencyValue,
   ManagedAIResidencySchemaValue
@@ -71,52 +71,52 @@ true satisfies UnexpectedManagedAIResidencySchemaValue extends never
   ? true
   : never;
 
-const updateOrganizationSettingsBodySchema = t.Object({
-  documentProcessingMode: t.Optional(documentProcessingModeSchema),
-  matterNumberPattern: t.Optional(
-    t.String({
-      minLength: LIMITS.matterNumberPatternMinLength,
-      maxLength: LIMITS.matterNumberPatternMaxLength,
-    }),
+const updateOrganizationSettingsBodySchema = v.object({
+  documentProcessingMode: v.optional(documentProcessingModeSchema),
+  matterNumberPattern: v.optional(
+    v.pipe(
+      v.string(),
+      v.minLength(LIMITS.matterNumberPatternMinLength),
+      v.maxLength(LIMITS.matterNumberPatternMaxLength),
+    ),
   ),
-  matterNumberPadding: t.Optional(
-    t.Integer({
-      minimum: LIMITS.matterNumberPaddingMin,
-      maximum: LIMITS.matterNumberPaddingMax,
-    }),
+  matterNumberPadding: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(LIMITS.matterNumberPaddingMin),
+      v.maxValue(LIMITS.matterNumberPaddingMax),
+    ),
   ),
-  matterNumberingEnabled: t.Optional(t.Boolean()),
-  promptCachingEnabled: t.Optional(t.Boolean()),
-  aiInstructions: t.Optional(
-    t.String({
-      maxLength: ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH,
-      description:
-        "Instructions for every organization chat, taking priority over personal preferences. Send an empty string to clear them.",
-    }),
+  matterNumberingEnabled: v.optional(v.boolean()),
+  promptCachingEnabled: v.optional(v.boolean()),
+  managedAIResidency: v.optional(managedAIResidencySchema),
+  memoryExtractionEnabled: v.optional(v.boolean()),
+  timeMinimumUnitMinutes: v.optional(
+    v.pipe(
+      v.number(),
+      v.integer(),
+      v.minValue(LIMITS.timeMinimumUnitMinutesMin),
+      v.maxValue(LIMITS.timeMinimumUnitMinutesMax),
+    ),
   ),
-  managedAIResidency: t.Optional(managedAIResidencySchema),
-  memoryExtractionEnabled: t.Optional(t.Boolean()),
-  timeMinimumUnitMinutes: t.Optional(
-    t.Integer({
-      minimum: LIMITS.timeMinimumUnitMinutesMin,
-      maximum: LIMITS.timeMinimumUnitMinutesMax,
-    }),
+  timeEditWindowDays: v.optional(
+    v.pipe(v.number(), v.integer(), v.minValue(LIMITS.timeEditWindowDaysMin)),
   ),
-  timeEditWindowDays: t.Optional(
-    t.Integer({ minimum: LIMITS.timeEditWindowDaysMin }),
-  ),
-  timeLockedThroughMonth: t.Optional(t.Nullable(t.String({ format: "date" }))),
-  timeNarrativeRequired: t.Optional(t.Boolean()),
-  timeZone: t.Optional(
-    t.Nullable(
-      t.String({
-        minLength: 1,
-        maxLength: TIME_ZONE_ID_MAX_LENGTH,
-        description:
+  timeLockedThroughMonth: v.optional(v.nullable(apiDateSchema)),
+  timeNarrativeRequired: v.optional(v.boolean()),
+  timeZone: v.optional(
+    v.nullable(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(TIME_ZONE_ID_MAX_LENGTH),
+        v.description(
           "IANA time zone whose calendar decides the organization's day " +
-          "(e.g. Europe/Prague), or null to derive it from the primary " +
-          "practice jurisdiction again",
-      }),
+            "(e.g. Europe/Prague), or null to derive it from the primary " +
+            "practice jurisdiction again",
+        ),
+      ),
     ),
   ),
 });
@@ -125,7 +125,7 @@ const config = {
   contract: "patch",
   description:
     "Change the organization's general settings: document processing mode, " +
-    "matter-number pattern, padding, whether titles show that number, prompt caching, organization AI instructions, memory " +
+    "matter-number pattern, padding, whether titles show that number, prompt caching, memory " +
     "extraction, time policy, and time zone. Only the fields you pass are written and the matter-number " +
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
@@ -141,7 +141,7 @@ export type UpdateOrganizationSettingsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateOrganizationSettingsBodySchema>;
+  body: v.InferOutput<typeof updateOrganizationSettingsBodySchema>;
   /** The instant the lock-month check reads the organization's day at. */
   now?: Temporal.Instant;
 };
@@ -226,7 +226,6 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     InferSelectModel<typeof organizationSettings>,
     | "managedAIResidency"
     | "promptCachingEnabled"
-    | "aiInstructions"
     | "documentProcessingMode"
     | "memoryExtractionEnabled"
     | "timeZone"
@@ -241,24 +240,6 @@ const timeZoneAuditChanges = (
   body.timeZone !== undefined && body.timeZone !== (existing?.timeZone ?? null)
     ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
     : {};
-
-const organizationAIInstructionsAuditChanges = (
-  body: NormalizedUpdateBody,
-  existing: ExistingGeneralSettings | undefined,
-) => ({
-  ...(body.aiInstructions !== undefined &&
-  body.aiInstructions !== (existing?.aiInstructions ?? "")
-    ? {
-        // Audit the change without copying potentially sensitive prompt content.
-        aiInstructions: {
-          old: {
-            characterCount: Array.from(existing?.aiInstructions ?? "").length,
-          },
-          new: { characterCount: Array.from(body.aiInstructions).length },
-        },
-      }
-    : {}),
-});
 
 /** `{ old, new }` when the request sets a value that differs from the stored one. */
 const settingChange = <V>(requested: V | undefined, current: V) =>
@@ -318,7 +299,6 @@ const organizationSettingsAuditChanges = (
       }
     : {}),
   ...generalSettingAuditChanges(body, existing),
-  ...organizationAIInstructionsAuditChanges(body, existing),
   ...timePolicyAuditChanges(body, existing),
   ...timeZoneAuditChanges(body, existing),
 });
@@ -468,22 +448,19 @@ export const updateOrganizationSettingsHandler = async function* ({
       const wantsManagedAIResidencyUpdate =
         body.managedAIResidency !== undefined;
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
-      const wantsAIInstructionsUpdate = body.aiInstructions !== undefined;
       const wantsDocumentProcessingUpdate =
         body.documentProcessingMode !== undefined;
       const wantsMemoryExtractionUpdate =
         body.memoryExtractionEnabled !== undefined;
       const wantsTimeZoneUpdate = body.timeZone !== undefined;
-      const needsSerializedSettingsRead = [
-        wantsManagedAIResidencyUpdate,
-        wantsPromptCachingUpdate,
-        wantsAIInstructionsUpdate,
-        wantsDocumentProcessingUpdate,
-        wantsMemoryExtractionUpdate,
+      const needsSerializedSettingsRead =
+        wantsManagedAIResidencyUpdate ||
+        wantsPromptCachingUpdate ||
+        wantsDocumentProcessingUpdate ||
+        wantsMemoryExtractionUpdate ||
+        wantsTimeZoneUpdate ||
         Object.keys({ ...timePolicyUpdate, ...matterNumberingUpdate }).length >
-          0,
-        wantsTimeZoneUpdate,
-      ].some(Boolean);
+          0;
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -509,38 +486,28 @@ export const updateOrganizationSettingsHandler = async function* ({
           });
       }
       const existingRows = needsSerializedSettingsRead
-        ? (
-            await withAggregateRowQuery({
-              tx,
-              aggregate: "organizationSettings",
-              id: organizationId,
-              mode: "update",
-              select: (queryTx) =>
-                queryTx
-                  .select({
-                    organizationId: organizationSettings.organizationId,
-                    documentProcessingMode:
-                      organizationSettings.documentProcessingMode,
-                    memoryExtractionEnabled:
-                      organizationSettings.memoryExtractionEnabled,
-                    matterNumberingEnabled:
-                      organizationSettings.matterNumberingEnabled,
-                    promptCachingEnabled:
-                      organizationSettings.promptCachingEnabled,
-                    aiInstructions: organizationSettings.aiInstructions,
-                    managedAIResidency: organizationSettings.managedAIResidency,
-                    timeMinimumUnitMinutes:
-                      organizationSettings.timeMinimumUnitMinutes,
-                    timeEditWindowDays: organizationSettings.timeEditWindowDays,
-                    timeLockedThroughMonth:
-                      organizationSettings.timeLockedThroughMonth,
-                    timeNarrativeRequired:
-                      organizationSettings.timeNarrativeRequired,
-                    ...organizationTimeZoneColumns,
-                  })
-                  .from(organizationSettings),
+        ? await tx
+            .select({
+              documentProcessingMode:
+                organizationSettings.documentProcessingMode,
+              memoryExtractionEnabled:
+                organizationSettings.memoryExtractionEnabled,
+              promptCachingEnabled: organizationSettings.promptCachingEnabled,
+              managedAIResidency: organizationSettings.managedAIResidency,
+              timeMinimumUnitMinutes:
+                organizationSettings.timeMinimumUnitMinutes,
+              timeEditWindowDays: organizationSettings.timeEditWindowDays,
+              timeLockedThroughMonth:
+                organizationSettings.timeLockedThroughMonth,
+              timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
+              matterNumberingEnabled:
+                organizationSettings.matterNumberingEnabled,
+              ...organizationTimeZoneColumns,
             })
-          ).rows
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId))
+            .limit(1)
+            .for("update")
         : [];
       const existing = existingRows.at(0);
       if (
@@ -600,9 +567,6 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsManagedAIResidencyUpdate
             ? { managedAIResidency: body.managedAIResidency }
             : {}),
-          ...(wantsAIInstructionsUpdate
-            ? { aiInstructions: body.aiInstructions }
-            : {}),
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
@@ -632,9 +596,6 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsManagedAIResidencyUpdate
               ? { managedAIResidency: body.managedAIResidency }
-              : {}),
-            ...(wantsAIInstructionsUpdate
-              ? { aiInstructions: body.aiInstructions }
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
@@ -697,9 +658,6 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.managedAIResidency !== undefined
       ? { managedAIResidency: body.managedAIResidency }
-      : {}),
-    ...(body.aiInstructions !== undefined
-      ? { aiInstructions: body.aiInstructions }
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }

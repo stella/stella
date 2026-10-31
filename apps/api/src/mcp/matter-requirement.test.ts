@@ -73,7 +73,7 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("keeps creating a matter and the organization library matter-free", () => {
+  test("keeps organization-scoped writes matter-free", () => {
     for (const name of [
       "save_matter",
       "save_playbook",
@@ -83,6 +83,7 @@ describe("write tool scope classification", () => {
       "configure_template_fields",
       "save_contact",
       "set_practice_jurisdictions",
+      "mint_web_handoff",
     ] as const) {
       expect(writeCallNeedsMatter(name, {}), name).toBe(false);
     }

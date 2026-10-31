@@ -51,6 +51,7 @@ const citation = ({
   citationId,
   citationText,
   textWithheldReason,
+  extractionWarnings: [],
   polarity,
   doctrine: null,
   decision: decision
@@ -69,6 +70,19 @@ const citation = ({
 });
 
 describe("citation graph model", () => {
+  test("preserves the applied filters", () => {
+    const page = {
+      ...citationPage(),
+      doctrine: "distinguishes",
+      polarity: "supportive",
+    } satisfies CitationPage;
+
+    expect(createGraph(page)).toMatchObject({
+      doctrine: "distinguishes",
+      polarity: "supportive",
+    });
+  });
+
   test("preserves resolved and unresolved citations and every polarity", () => {
     const citations = GRAPH_TEST_CITATION_TREATMENTS.map((polarity, index) =>
       citation({

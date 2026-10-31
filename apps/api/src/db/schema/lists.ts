@@ -1,5 +1,10 @@
 import { panic } from "better-result";
 
+import {
+  REVIEW_DECISION,
+  type ReviewDecision,
+} from "@stll/api-contract/review-decision";
+
 import { timestamptz } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
@@ -17,8 +22,8 @@ import {
   entityFeatureWorkspaceGateColumns,
 } from "../entity-feature-gate-columns";
 import {
-  LIST_ITEM_TYPES,
   jsonb,
+  LIST_ITEM_TYPES,
   p,
   pUuid,
   safeUuid,
@@ -104,6 +109,9 @@ const LEGAL_LIST_SOURCE_VERIFICATION_STATUS_SQL_VALUES =
   LEGAL_LIST_SOURCE_VERIFICATION_STATUSES.map((status) =>
     sql.raw(`'${status}'`),
   );
+const REVIEW_DECISION_SQL_VALUES = REVIEW_DECISION.map((decision) =>
+  sql.raw(`'${decision}'`),
+);
 
 const LEGAL_LIST_GENERATION_STATUS_SQL_VALUES =
   LEGAL_LIST_GENERATION_STATUSES.map((status) => sql.raw(`'${status}'`));
@@ -533,6 +541,91 @@ export const legalListItemSources = p.pgTable(
     p
       .index("legal_list_item_sources_ef_source_entity_id_idx")
       .on(table.workspaceId, table.sourceEntityId),
+  ],
+);
+
+/** Immutable history of human verification decisions for a list source. */
+export const legalListItemSourceDecisions = p.pgTable(
+  "legal_list_item_source_decisions",
+  {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureWorkspaceGateColumns(),
+    id: pUuid<"legalListItemSourceDecision">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id").notNull(),
+    sourceId: safeUuid<"legalListItemSource">("source_id").notNull(),
+    decision: p.text("decision").$type<ReviewDecision | null>(),
+    reason: p.text("reason"),
+    actorId: p
+      .text("actor_id")
+      .references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamptz("created_at")
+      .notNull()
+      .default(sql`clock_timestamp()`),
+  },
+  (table) => [
+    ...entityFeatureGateChecks(table),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [
+          table.sourceId,
+          { kind: "owned-by-parent", parent: legalListItemSources },
+        ],
+      ]),
+    ),
+    p
+      .foreignKey({
+        name: "legal_list_item_source_decisions_source_fk",
+        columns: [table.sourceId],
+        foreignColumns: [legalListItemSources.id],
+      })
+      .onDelete("cascade"),
+    p
+      .index("legal_list_item_source_decisions_source_created_idx")
+      .on(table.sourceId, table.createdAt),
+    p.check(
+      "legal_list_item_source_decisions_decision_check",
+      sql`${table.decision} IN (${sql.join(REVIEW_DECISION_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "legal_list_item_source_decisions_reason_length_check",
+      sql`char_length(${table.reason}) <= 2000`,
+    ),
+    p.pgPolicy("workspace_select", {
+      for: "select",
+      to: stella,
+      using: workspaceCheck,
+    }),
+    p.pgPolicy("workspace_insert", {
+      for: "insert",
+      to: stella,
+      // The foreign key checks only the source's id: the source must also be
+      // in the event's workspace, or one workspace could write another's
+      // history. Outer columns are named by table, since both have them.
+      withCheck: sql`(${workspaceCheck}) AND EXISTS (
+        SELECT 1 FROM public.legal_list_item_sources decided_source
+        WHERE decided_source.id = legal_list_item_source_decisions.source_id
+          AND decided_source.workspace_id = legal_list_item_source_decisions.workspace_id
+      )`,
+    }),
+    p.pgPolicy("legal_list_item_source_decisions_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_item_source_decisions'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_list_item_source_decisions'::regclass)`,
+    }),
+    p.pgPolicy("legal_list_item_source_decisions_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: stella,
+      using: sql`false`,
+    }),
+    p.pgPolicy("legal_list_item_source_decisions_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: stella,
+      using: sql`false`,
+    }),
   ],
 );
 

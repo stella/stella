@@ -1,16 +1,17 @@
 import { panic, Result, TaggedError } from "better-result";
 import { Buffer } from "node:buffer";
 
+import { declareFingerprintFields } from "@stll/errors";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { splitIngestRequests } from "@/api/lib/corpus-index/core";
 import {
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
-  CorpusIndexError,
-  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexClient,
+  corpusIndexCommittedIngestTimeoutMs,
   type CorpusIndexDeleteTask,
+  CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { LIMITS } from "@/api/lib/limits";
@@ -88,7 +89,11 @@ export class CorpusProjectionAppendError extends TaggedError(
   unattemptedRevisions: ProjectionRevision[];
   unknownOutcomeObservedAt: Date | null;
   cause?: CorpusIndexError | undefined;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["stage"]);
+  }
+}
 
 const invalidAppend = (
   code: Exclude<CorpusProjectionAppendError["code"], "append_unknown">,

@@ -1,0 +1,1 @@
+{"h-[calc(var(--cli-editor-width)/0.869_+_var(--mac-titlebar-height))]":{"valid":true,"declarations":[["","height","calc(var(--cli-editor-width) / 0.869 + var(--mac-titlebar-height))"]],"values":{"calc(var(--cli-editor-width) / 0.869 + var(--mac-titlebar-height))":{"p":["--cli-editor-width","--mac-titlebar-height"],"f":[],"u":false}}}}

@@ -420,11 +420,15 @@ const collectParagraphs = (
       case "blockSdt":
       case "blockCustomXml":
         return collectParagraphs(block.content, tableHeader);
-      // Hold no paragraph: opaque preserved markup and bookmark markers carry
-      // no runs, so this scorer has nothing to read in them.
+      // Hold no paragraph: opaque preserved markup, bookmark markers and move
+      // range markers carry no runs, so this scorer has nothing to read in them.
       case "preservedBlock":
       case "bookmarkStart":
       case "bookmarkEnd":
+      case "moveFromRangeStart":
+      case "moveFromRangeEnd":
+      case "moveToRangeStart":
+      case "moveToRangeEnd":
         return [];
       default:
         block satisfies never;
@@ -657,6 +661,7 @@ const resolveModels = async (
     modelIds.map(async (id) => ({
       id,
       model: await resolveTanStackTextModel({
+        userId: null,
         modelId: id,
         orgAIConfig: null,
         dataClass: "customer",

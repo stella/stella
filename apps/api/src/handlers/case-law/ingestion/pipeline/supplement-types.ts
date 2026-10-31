@@ -1,18 +1,18 @@
 import type { ScopedDb } from "@/api/db/safe-db";
-import type {
-  DecisionSupplement,
-  SourceAdapter,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import type {
-  PROCESS_DECISION_STATUS,
   PROCESS_DECISION_RETRY_REASON,
+  PROCESS_DECISION_STATUS,
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  DecisionSupplement,
+  SourceAdapter,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 
 /** Emitted when a supplement's judgment could not be rebuilt to compose it. */
 export const SUPPLEMENT_JUDGMENT_UNREADABLE =

@@ -1,14 +1,14 @@
-import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import {
-  NO_AUDIT,
   createTestHandlerContext,
+  NO_AUDIT,
 } from "@/api/tests/helpers/handler-context";
 import {
   createScopedDbMock,
@@ -24,9 +24,9 @@ test("ordinary inputs and creation identities do not require existing resource r
       scopedDb: database.scopedDb,
       inputs: [
         {
-          schema: Type.Object({
-            name: Type.String(),
-            target: tSafeId("entity", { usage: "creation" }),
+          schema: v.object({
+            name: v.string(),
+            target: resourceIdSchema("entity", { usage: "creation" }),
           }),
           value: { name: "Ordinary task", target: "new-target" },
         },
@@ -38,11 +38,11 @@ test("ordinary inputs and creation identities do not require existing resource r
 
 for (const kind of ["entity", "entityVersion", "field"] as const) {
   test(`${kind} references in nested unions and arrays require visible rows`, async () => {
-    const schema = Type.Object({
-      entries: Type.Array(
-        Type.Union([
-          Type.Object({ id: tSafeId(kind) }),
-          Type.Object({ name: Type.String() }),
+    const schema = v.object({
+      entries: v.array(
+        v.union([
+          v.object({ id: resourceIdSchema(kind) }),
+          v.object({ name: v.string() }),
         ]),
       ),
     });
@@ -81,7 +81,7 @@ test("generic handlers return the same missing response before resource details"
       accountAccess: ACCOUNT_ACCESS.sandbox,
       permissions: { workspace: ["read"] },
       mcp: { type: "internal", reason: "ui_navigation_state" },
-      params: Type.Object({ entityId: tSafeId("entity") }),
+      params: v.object({ entityId: resourceIdSchema("entity") }),
     },
     async function* () {
       lookups += 1;

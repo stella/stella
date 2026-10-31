@@ -319,6 +319,8 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
         throw new Error("temporary preview failure");
       }
       const preview = {
+        country: "CZE",
+        url: "https://example.test/law/cze/statutes/40-1964-sb#s1",
         documentId: toSafeId<"legislationDocument">(
           "00000000-0000-4000-8000-000000000003",
         ),
@@ -362,4 +364,66 @@ test("a resolved provision fetches wording on focus and retries into a valid sta
     "/law/cze/statutes/40-1964-sb",
   );
   expect(statuteLink.getAttribute("href")).toContain("#s1");
+});
+
+test("EU provisions open EUR-Lex without resolving hosted text", async () => {
+  let requests = 0;
+  globalThis.fetch = Object.assign(
+    async () => {
+      requests += 1;
+      return Response.json([]);
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  mount([
+    provision({
+      jurisdiction: "EU",
+      workCollection: "EU",
+      workIdentifier: "32016R0679",
+      workEli: "http://data.europa.eu/eli/reg/2016/679/oj",
+      workNumber: 679,
+      workYear: 2016,
+      anchor: "art_6-par_1-pt_a",
+      unit: "article",
+      section: 6,
+      sectionSuffix: null,
+      subsection: "1",
+      letter: "a",
+      sentenceText: "Article 6(1)(a) of Regulation (EU) 2016/679 applies.",
+    }),
+  ]);
+  screen.getByRole("button", { name: /6.*1.*a/u }).focus();
+  const link = await screen.findByRole("link", {
+    name: messages.chat.webSearch.openSource.replace("{source}", "EUR-Lex"),
+  });
+  expect(link.getAttribute("href")).toBe(
+    "https://eur-lex.europa.eu/legal-content/AUTO/?uri=CELEX:32016R0679#art_6",
+  );
+  expect(link.getAttribute("target")).toBe("_blank");
+  expect(requests).toBe(0);
+});
+
+test("invalid EU identities keep the cited reference visible without a source link", async () => {
+  for (const workIdentifier of ["32016R0000", "39999R0679"]) {
+    const view = mount([
+      provision({
+        jurisdiction: "EU",
+        workCollection: "EU",
+        workIdentifier,
+        workEli: null,
+        anchor: "art_6",
+        unit: "article",
+        section: 6,
+        sectionSuffix: null,
+        subsection: null,
+        sentenceText: "Article 6 applies.",
+      }),
+    ]);
+    const reference = screen.getByRole("button", { name: "Art. 6" });
+    expect(reference.textContent).toContain("6");
+    reference.focus();
+    await screen.findByText("Article 6 applies.");
+    expect(screen.queryByRole("link")).toBeNull();
+    view.unmount();
+  }
 });

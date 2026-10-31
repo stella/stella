@@ -6,6 +6,7 @@ import { afterAll, expect, test } from "bun:test";
 import { sleep } from "@stll/concurrency/sleep";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/frame" });
@@ -106,6 +107,7 @@ test("frame replacement completes cleanup after a delayed route update", async (
   const protectedRoute = router.createRoute({
     getParentRoute: () => rootRoute,
     id: "_protected",
+    staticData: { appFrame: APP_FRAME_SCOPE.member },
     beforeLoad: async () => {
       if (delayContext) {
         contextStarted.resolve(undefined);

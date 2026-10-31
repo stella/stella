@@ -2,10 +2,12 @@ import { expect, test } from "bun:test";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { DESKTOP_WINDOWS_DRY_RUN_INPUTS } from "./ci-plan-scope";
 import {
   configureWindowsSigning,
   desktopArtifacts,
   resignWindowsArtifacts,
+  stampCargoPackageVersion,
   stampDesktopRelease,
 } from "./desktop-release-step";
 
@@ -107,24 +109,17 @@ const releaseToolingViolations = (workflowSource: string): string[] => {
       ) {
         violations.push(`${jobName}: script does not use preserved tooling`);
       }
-      if (
-        uses.includes("desktop-windows-build") &&
-        uses !== "./.release-tooling/desktop-windows-build"
-      ) {
-        violations.push(`${jobName}: action does not use restored tooling`);
-      }
       if (uses.includes("desktop-windows-build")) {
+        const destination = uses.slice(2);
         const actionRestored = steps
           .slice(releaseCheckoutIndex + 1, index)
           .some(
             (candidate) =>
               record(candidate) &&
               typeof candidate["run"] === "string" &&
+              candidate["run"].includes(`rm -rf ${destination}`) &&
               candidate["run"].includes(
-                "$RELEASE_TOOLING/actions/desktop-windows-build",
-              ) &&
-              candidate["run"].includes(
-                ".release-tooling/desktop-windows-build",
+                `cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" ${destination}`,
               ),
           );
         if (!actionRestored) {
@@ -194,13 +189,22 @@ test("release jobs preserve workflow tooling before checking out release source"
       "bun scripts/desktop-release-step.ts stamp",
     )
     .replace(
-      "uses: ./.release-tooling/desktop-windows-build",
-      "uses: ./.github/actions/desktop-windows-build",
+      'cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build',
+      "echo action restore omitted",
     );
   expect(releaseToolingViolations(brokenWorkflow)).toEqual([
     "build: script does not use preserved tooling",
-    "build: action does not use restored tooling",
+    "build: action is not restored after checkout",
   ]);
+
+  expect(
+    releaseToolingViolations(
+      releaseWorkflow.replace(
+        "rm -rf .github/actions/desktop-windows-build",
+        "echo cleanup omitted",
+      ),
+    ),
+  ).toEqual(["build: action is not restored after checkout"]);
 });
 
 test("the preserved release script imports only Node built-ins", () => {
@@ -248,7 +252,11 @@ test("stamps the version into both files and pins the channel endpoint", () => {
   );
   writeFileSync(
     path.join(root, "apps/desktop/src-tauri/Cargo.toml"),
-    'version = "0.1.0"\n',
+    '[package]\nname = "stella-desktop"\nversion = "0.1.0"\n',
+  );
+  writeFileSync(
+    path.join(root, "apps/desktop/src-tauri/Cargo.lock"),
+    '[[package]]\nname = "stella-desktop"\nversion = "0.1.0"\n',
   );
   stampDesktopRelease(root, "2.3.4", "beta");
   expect(
@@ -266,6 +274,75 @@ test("stamps the version into both files and pins the channel endpoint", () => {
   expect(
     readFileSync(path.join(root, "apps/desktop/src-tauri/Cargo.toml"), "utf-8"),
   ).toContain('version = "2.3.4"');
+  expect(
+    readFileSync(path.join(root, "apps/desktop/src-tauri/Cargo.lock"), "utf-8"),
+  ).toBe('[[package]]\nname = "stella-desktop"\nversion = "2.3.4"\n');
+});
+
+const desktopCrate = new URL("../apps/desktop/src-tauri/", import.meta.url);
+
+const changedLines = (before: string, after: string): string[] => {
+  const beforeLines = before.split("\n");
+  const afterLines = after.split("\n");
+  expect(afterLines).toHaveLength(beforeLines.length);
+  return afterLines.filter((line, index) => line !== beforeLines[index]);
+};
+
+test("stamping the committed crate changes only its own version in the manifest and lockfile", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  const manifest = readFileSync(new URL("Cargo.toml", desktopCrate), "utf-8");
+  const lock = readFileSync(new URL("Cargo.lock", desktopCrate), "utf-8");
+  writeFileSync(path.join(crate, "Cargo.toml"), manifest);
+  writeFileSync(path.join(crate, "Cargo.lock"), lock);
+
+  stampCargoPackageVersion(crate, "0.0.0-dry.1");
+
+  const stampedLock = readFileSync(path.join(crate, "Cargo.lock"), "utf-8");
+  expect(
+    changedLines(
+      manifest,
+      readFileSync(path.join(crate, "Cargo.toml"), "utf-8"),
+    ),
+  ).toEqual(['version = "0.0.0-dry.1"']);
+  expect(changedLines(lock, stampedLock)).toEqual(['version = "0.0.0-dry.1"']);
+  expect(stampedLock).toContain(
+    '[[package]]\nname = "stella-desktop"\nversion = "0.0.0-dry.1"\n',
+  );
+});
+
+test("stamping keeps CRLF checkouts consistent", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  writeFileSync(
+    path.join(crate, "Cargo.toml"),
+    '[package]\r\nname = "app"\r\nversion = "0.1.0"\r\n',
+  );
+  writeFileSync(
+    path.join(crate, "Cargo.lock"),
+    '[[package]]\r\nname = "app"\r\nversion = "0.1.0"\r\n\r\n[[package]]\r\nname = "app-dep"\r\nversion = "0.1.0"\r\n',
+  );
+  stampCargoPackageVersion(crate, "1.2.3");
+  expect(readFileSync(path.join(crate, "Cargo.toml"), "utf-8")).toBe(
+    '[package]\r\nname = "app"\r\nversion = "1.2.3"\r\n',
+  );
+  expect(readFileSync(path.join(crate, "Cargo.lock"), "utf-8")).toBe(
+    '[[package]]\r\nname = "app"\r\nversion = "1.2.3"\r\n\r\n[[package]]\r\nname = "app-dep"\r\nversion = "0.1.0"\r\n',
+  );
+});
+
+test("stamping writes nothing when the lockfile lacks the package entry", () => {
+  const crate = temporary();
+  mkdirSync(crate, { recursive: true });
+  const manifest = '[package]\nname = "app"\nversion = "0.1.0"\n';
+  const lock = '[[package]]\nname = "app"\nversion = "0.0.9"\n';
+  writeFileSync(path.join(crate, "Cargo.toml"), manifest);
+  writeFileSync(path.join(crate, "Cargo.lock"), lock);
+  expect(() => stampCargoPackageVersion(crate, "1.2.3")).toThrow(
+    "Expected exactly one Cargo.lock entry for app 0.1.0, found 0",
+  );
+  expect(readFileSync(path.join(crate, "Cargo.toml"), "utf-8")).toBe(manifest);
+  expect(readFileSync(path.join(crate, "Cargo.lock"), "utf-8")).toBe(lock);
 });
 
 test("resigning skips an absent updater zip", () => {
@@ -273,18 +350,42 @@ test("resigning skips an absent updater zip", () => {
   mkdirSync(path.join(bundle, "nsis"), { recursive: true });
   writeFileSync(path.join(bundle, "nsis/Stella-setup.exe"), "installer");
   const signed: string[] = [];
-  resignWindowsArtifacts(bundle, (_cwd, file) => {
-    signed.push(file);
+  resignWindowsArtifacts({
+    bundleDir: bundle,
+    appVersion: "1.2.3",
+    run: ({ file }) => {
+      signed.push(file);
+    },
   });
   expect(signed).toEqual(["Stella-setup.exe"]);
+});
+
+test("resigning binds every updater signature to the stamped version", () => {
+  const bundle = temporary();
+  mkdirSync(path.join(bundle, "nsis"), { recursive: true });
+  writeFileSync(path.join(bundle, "nsis/Stella-setup.exe"), "installer");
+  writeFileSync(path.join(bundle, "nsis/Stella-setup.exe.zip"), "update");
+  const versions: string[] = [];
+  resignWindowsArtifacts({
+    bundleDir: bundle,
+    appVersion: "1.2.3",
+    run: ({ appVersion }) => {
+      versions.push(appVersion);
+    },
+  });
+  expect(versions).toEqual(["1.2.3", "1.2.3"]);
 });
 
 test("resigning rejects an empty artifact directory", () => {
   const bundle = temporary();
   mkdirSync(bundle, { recursive: true });
-  expect(() => resignWindowsArtifacts(bundle, () => undefined)).toThrow(
-    "No Windows installers found",
-  );
+  expect(() =>
+    resignWindowsArtifacts({
+      bundleDir: bundle,
+      appVersion: "1.2.3",
+      run: () => undefined,
+    }),
+  ).toThrow("No Windows installers found");
 });
 
 test("configure-windows rejects unknown modes", () => {
@@ -326,15 +427,7 @@ test("the CI dry-run selector covers every script the release build runs", () =>
     ),
   ].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
   expect(references.length).toBeGreaterThan(0);
-  const ciWorkflow = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-    "utf-8",
-  );
-  const selector = ciWorkflow
-    .split("\n")
-    .find((line) => line.trim().startsWith("apps/desktop/*|scripts/"));
-  expect(selector).toBeDefined();
-  const patterns = (selector ?? "").trim().replace(/\)$/u, "").split("|");
+  const patterns = [...DESKTOP_WINDOWS_DRY_RUN_INPUTS];
   expect(patterns).not.toContain("scripts/*");
   for (const reference of new Set(references)) {
     expect(

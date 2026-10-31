@@ -7,11 +7,7 @@ import type { Capability } from "@/lib/organization/feature-access/action-capabi
 type CommandActionGroup = "create" | "navigate" | "view" | "workspace";
 
 type CommandActionId =
-  | "new-matter"
-  | "new-chat"
-  | "upload-document"
-  | "new-task"
-  | "log-time";
+  "new-matter" | "new-chat" | "upload-document" | "new-task" | "log-time";
 
 /**
  * No-argument TranslationKeys usable as command action labels, narrowed like
@@ -44,7 +40,6 @@ export type CommandAction = {
   id: CommandActionId;
   group: CommandActionGroup;
   titleKey: CommandActionTextKey;
-  keywords?: readonly CommandActionTextKey[];
   icon: LucideIcon;
   shortcutId?: ShortcutId;
   isAvailable: (ctx: CommandActionContext) => boolean;

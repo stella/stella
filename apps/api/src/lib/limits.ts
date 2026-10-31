@@ -18,19 +18,17 @@ import {
 } from "@stll/api-contract";
 import {
   CASE_LAW_RESULT_DEPTH_MAX,
-  SEARCH_QUERY_MAX_LENGTH,
-  SEARCH_HISTORY_TITLE_MAX_LENGTH,
-  SEARCH_HISTORY_IMPORT_MAX,
   READER_PAGE_MAX_CHARS,
-  READER_PROVISION_ANCHOR_MIN_CHARS,
   READER_PROVISION_ANCHOR_MAX_CHARS,
+  READER_PROVISION_ANCHOR_MIN_CHARS,
+  SEARCH_HISTORY_IMPORT_MAX,
+  SEARCH_HISTORY_TITLE_MAX_LENGTH,
+  SEARCH_QUERY_MAX_LENGTH,
+  TIME_ENTRIES_APPROVAL_BATCH_MAX,
 } from "@stll/api-contract/limits";
 import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import {
-  CHAT_CONTEXT_FILE_MAX_BYTES,
-  CHAT_CONTEXT_FILE_MAX_MEGABYTES,
-} from "@stll/chat-limits";
+import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
@@ -46,9 +44,8 @@ export {
   API_RATE_LIMITS,
 } from "@/api/lib/rate-limit/budget-config";
 
-/** Hoisted so `versionFieldsScanLimit` can derive from it inside the same
- *  object literal instead of restating the page size. */
 const VERSIONS_PAGE_SIZE_DEFAULT = 50;
+const SITEMAP_PROTOCOL_URL_LIMIT = 50_000;
 
 export const LIMITS = {
   matterNumberPatternMinLength: 1,
@@ -133,11 +130,6 @@ export const LIMITS = {
    *  the `before` cursor, so a heavily-revised entity never loses access to
    *  older versions. */
   versionsPageSizeDefault: VERSIONS_PAGE_SIZE_DEFAULT,
-  /** Worst-case file fields scanned for one page of an entity's version
-   *  history (versionsPageSizeDefault * propertiesCount). The reader pages
-   *  versions, so the scan follows the page size, not versionsPerEntity. */
-  versionFieldsScanLimit:
-    VERSIONS_PAGE_SIZE_DEFAULT * PROPERTIES_PER_WORKSPACE_MAX,
   calendarTasksMax: 200,
   /** Default page size for the signed-in user's assigned tasks. */
   myTasksPageSizeDefault: 50,
@@ -309,6 +301,10 @@ export const LIMITS = {
    *  after 60 s without a byte, so the interval leaves room for three writes
    *  inside one of their windows. */
   sseHeartbeatMs: 15_000,
+  /** How long an event stream may outlive the credential that opened it: the
+   *  interval of the sweep that ends every stream whose session or other
+   *  credential no longer holds. */
+  sseCredentialRecheckMs: 15_000,
   clauseVariantsPerClause: 10,
   clauseVersionsPerClause: 50,
   /** OOXML numbering levels are zero-based and bounded to nine levels. */
@@ -333,7 +329,9 @@ export const LIMITS = {
   internalTimeEntriesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
-  timeEntriesApprovalBatchMax: 200,
+  timeEntriesApprovalBatchMax: TIME_ENTRIES_APPROVAL_BATCH_MAX,
+  /** Ceiling of the approval queue's pending count; the badge shows more as "999+". */
+  timeApprovalPendingCountMax: 1000,
   timeEntryReturnCommentMaxLength: 2000,
   expensesPerWorkspace: 10_000,
   expensesPageSizeDefault: 100,
@@ -357,16 +355,25 @@ export const LIMITS = {
   timeSuggestionTailMinutes: 5,
   /** Per-source cap on activity rows read for one day of suggestions. */
   timeSuggestionSignalsPerSourceMax: 1000,
+  /** Longest span of work dates one personal time read covers: a week. */
+  timeRangeDaysMax: 7,
   invoicesPerWorkspace: 10_000,
+  clientInvoiceMatters: 50,
+  invoiceSourceItemsPerKind: 500,
   invoicesPageSizeDefault: 50,
   invoicesPageSizeMax: 100,
   // An invoice read returns every line, so the count stays bounded.
   invoiceLinesPerInvoice: 1000,
+  // An invoice read returns every payment, voided ones included.
+  invoicePaymentsPerInvoice: 200,
   exportRowLimit: 10_000,
   /** One reader's highlights and comments on one decision or statute
    *  version, read whole when the reader opens the document. */
   readerAnnotationsPageSizeDefault: 100,
   readerAnnotationsPageSizeMax: 100,
+  /** Mark rows a downloaded copy of a matter document's PDF carries, read in
+   *  one query; far above what readers leave on one document. */
+  markedPdfMarkRowsMax: 10_000,
   decisionReaderPageMaxChars: READER_PAGE_MAX_CHARS,
   decisionReaderPageContentChars: 50_000,
   decisionReaderOpenTextChars: 8000,
@@ -431,6 +438,11 @@ export const LIMITS = {
   searchPreviewResponseCharacterLimit: 16_000,
   /** Messages surrounding the best match in a global-search chat preview. */
   searchChatPreviewMessageLimit: 6,
+  searchChatCandidateThreadsMax: 100,
+  searchChatCandidateBatchesMax: 16,
+  searchChatCandidateSourceMessagesMax: 500,
+  searchChatCandidateSourceBytesMax: 256 * 1024,
+  searchChatCandidateBytesMax: 8 * 1024 * 1024,
   savedSearchesPerUser: 100,
   savedSearchesPageSizeDefault: 50,
   savedSearchesPageSizeMax: 100,
@@ -529,6 +541,9 @@ export const LIMITS = {
    *  folio conversion of a single document. Mirrors `extractionTimeoutMs`'s
    *  budget for the same class of work (one document-sized file). */
   docxMarkdownConversionTimeoutMs: 30_000,
+  /** Bounded process-local Markdown and session-redacted window sources. */
+  mcpWindowTextCacheMaxBytes: 64 * 1024 * 1024,
+  mcpWindowAnonymizationCacheMaxBytes: 64 * 1024 * 1024,
   /** Wall-clock ceiling for writing one generated chat export to object storage. */
   chatExportObjectIoTimeoutMs: 30_000,
   clauseExportLimit: 500,
@@ -570,6 +585,8 @@ export const LIMITS = {
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
   caseLawDecisionCitationPageSize: 50,
+  /** Documents in a case file, after language-version deduplication. */
+  caseLawCaseFilePageSize: 50,
   /**
    * Judges one decision may name. A bench and its dissenters are a handful of
    * people; a decision listing more of them is a parser defect, and the read
@@ -620,6 +637,7 @@ export const LIMITS = {
    * caller should search instead of choosing.
    */
   caseLawLookupCandidatesMax: 5,
+  caseLawLookupSubjectMaxChars: 400,
   /**
    * Publisher document fetches one batch read may trigger. A decision whose
    * document nobody has fetched yet costs a crawl, so a batch reads the
@@ -635,9 +653,11 @@ export const LIMITS = {
    *  malformed/over-merged group key cannot load an unbounded set. */
   caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
-  caseLawSitemapUrlLimit: 50_000,
-  /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
-  caseLawSitemapShardUrlLimit: 5000,
+  caseLawSitemapUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** URL ceiling; XML serialization separately enforces the byte ceiling. */
+  caseLawSitemapShardUrlLimit: SITEMAP_PROTOCOL_URL_LIMIT,
+  /** Hreflang groups reserve room for their language alternates. */
+  caseLawSitemapMultilingualShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
   caseLawSitemapIndexEntryLimit: 50_000,
   caseLawSourceFacetCountCap: 1000,
@@ -685,6 +705,8 @@ export const LIMITS = {
     documentType: 128 * 4,
     status: 32 * 4,
     effectiveDate: 32,
+    versionValidFrom: 10,
+    versionValidTo: 10,
     sourceUrl: 2048 * 4,
     headline: 4096,
   },
@@ -728,6 +750,9 @@ export const LIMITS = {
    * rather than one request per item.
    */
   legislationProvisionReadConcurrency: 6,
+  /** Estimated heap retained for parsed decisions and compact section references. */
+  caseLawDecisionAstCacheMaxHeapBytes: 96 * 1024 * 1024,
+  caseLawDecisionSectionCacheMaxHeapBytes: 16 * 1024 * 1024,
   /**
    * Estimated heap the process keeps for parsed consolidation ASTs between
    * requests. A large code's consolidation parses to roughly 10 MiB, so this
@@ -825,6 +850,10 @@ export const LIMITS = {
    * message. Keeps one generated media payload valid while bounding JSONB
    * row size and repeated history transfer cost. */
   chatRichPartsTotalMaxBytes: 5 * 1024 * 1024,
+  /** Blocks one chat turn may send of the open Word document it edits. */
+  chatDocxSnapshotBlocksMax: 20_000,
+  /** Characters of one such block; a paragraph, not a document. */
+  chatDocxSnapshotBlockTextMaxChars: 100_000,
   /** Max text or base64 payload stored for one sandboxed MCP App resource. */
   chatUiResourceContentMaxChars:
     CHAT_RICH_PART_LIMITS.uiResourceContentMaxChars,
@@ -856,6 +885,11 @@ export const LIMITS = {
    *  retryable. The wait comes before the upload is claimed, so it never
    *  counts against the claim timeout. */
   uploadFinalizeAdmissionWaitMs: 20_000,
+  workPoolHeavySidecarSlots: 1,
+  workPoolHeavySidecarBytes: 150 * 1024 * 1024,
+  workPoolHeavySidecarMaxWaiters: 0,
+  workPoolHeavySidecarMaxWaitMs: 0,
+  workPoolHeavySidecarDeadlineMs: 120_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
@@ -870,28 +904,11 @@ export const LIMITS = {
   newDeviceLoginSessionScanLimit: 10,
 } as const;
 
-/**
- * File upload size limits.
- * Values use Elysia's human-readable format (e.g. "50m" = 50 MB).
- */
-export const FILE_SIZE_LIMITS = {
-  /** General document uploads (entities, templates). */
-  document: "50m",
-  /** Structured data imports (clause JSON). */
-  dataImport: "10m",
-  /** Agent skill packs (`SKILL.md` or a ZIP folder). */
-  skillPack: "2m",
-  /** Chat context file attachments. */
-  chatContextFile: `${CHAT_CONTEXT_FILE_MAX_MEGABYTES}m`,
-} as const;
-
-/**
- * File upload size limits in bytes for code paths that need to
- * validate before a framework-level t.File() parser runs.
- */
 export const FILE_SIZE_LIMIT_BYTES = {
   /** General document uploads (entities, templates). */
   document: 50 * 1024 * 1024,
+  /** Structured data imports (clause JSON, contact sheets). */
+  dataImport: 10 * 1024 * 1024,
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */
@@ -1025,10 +1042,11 @@ export const getPublicCorpusLimits = (
         global: aggregateGlobal,
       },
       sitemap: {
-        address: addressBudget({
-          configuredMax: 10,
-          globalMax: sitemapGlobal.max,
-        }),
+        // Shared crawler origins keep an address quota independent of fleet capacity.
+        address: {
+          duration: 60_000,
+          max: Math.min(600, sitemapGlobal.max - 1),
+        },
         global: sitemapGlobal,
       },
       browse: { address: API_RATE_LIMITS.api },

@@ -1,7 +1,7 @@
 import { toServerSentEventsResponse } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
 
@@ -22,10 +22,13 @@ import type {
   HandlerConfig,
   SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
-import { createChatRunLogReplay } from "@/api/lib/chat/run-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  ChatRunLogOffsetBeyondTailError,
+  createChatRunLogReplay,
+} from "@/api/lib/chat/run-log";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withSseHeartbeat } from "@/api/lib/sse";
+import { memberSessionStreamBinding, withSseHeartbeat } from "@/api/lib/sse";
 
 const config = {
   contract: "patch",
@@ -40,15 +43,19 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",
   mcp: { type: "internal", reason: "realtime_stream" },
-  params: t.Object({
-    threadId: tSafeId("chatThread"),
-    turnId: tSafeId("chatTurn"),
+  params: v.object({
+    threadId: resourceIdSchema("chatThread"),
+    turnId: resourceIdSchema("chatTurn"),
   }),
-  query: t.Object({
-    workspaceId: t.Optional(tSafeId("workspace")),
-    runId: t.Optional(t.String({ maxLength: 128 })),
-    lastEventId: t.Optional(
-      t.String({ maxLength: 19, pattern: "^(-1|now|[1-9][0-9]{0,18})$" }),
+  query: v.object({
+    workspaceId: v.optional(resourceIdSchema("workspace")),
+    runId: v.optional(v.pipe(v.string(), v.maxLength(128))),
+    lastEventId: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(19),
+        v.regex(/^(-1|now|[1-9][0-9]{0,18})$/u),
+      ),
     ),
   }),
 } satisfies HandlerConfig;
@@ -178,8 +185,8 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
       );
     }
     const replay = yield* Result.await(
-      Result.tryPromise(
-        async () =>
+      Result.tryPromise({
+        try: async () =>
           await createChatRunLogReplay({
             db: scopedDb,
             organizationId: session.activeOrganizationId,
@@ -187,7 +194,13 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
             resumeOffset,
             waitForStart: true,
           }),
-      ),
+        // A cursor this run never issued is a request error, like a
+        // malformed one; anything else stays an unhandled failure.
+        catch: (cause) =>
+          ChatRunLogOffsetBeyondTailError.is(cause)
+            ? new HandlerError({ status: 400, message: cause.message })
+            : new UnhandledException({ cause }),
+      }),
     );
     if (replay === null) {
       return Result.ok({
@@ -204,6 +217,7 @@ const createResumeHandler = (delivery: "probe" | "stream") => {
           durability: { adapter: replay },
           abortController: new AbortController(),
         }),
+        memberSessionStreamBinding({ session, user }),
       ),
     );
   };

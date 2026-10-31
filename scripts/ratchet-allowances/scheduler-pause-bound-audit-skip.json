@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "boundSchedulerPauses (apps/api/src/lib/scheduler/jobs.ts) rewrites scheduler_jobs.paused_until at boot to end pauses written before the 72-hour bound. It is scheduler system state with no organization or user, the same as the declared-job upsert beside it; each bounded job is logged as scheduler.job.pause_bounded."
+}

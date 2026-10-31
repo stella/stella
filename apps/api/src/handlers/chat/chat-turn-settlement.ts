@@ -1,8 +1,10 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import {
   cancelPendingChatToolCalls,
+  continueStoredChatPart,
   getAwaitingUserInteractions,
+  isApprovedClientCallAwaitingResult,
   isChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { AwaitingUserInteraction } from "@/api/handlers/chat/chat-message-parts";
@@ -12,6 +14,7 @@ import type {
   ChatTurnOutcome,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 export type ToolCallState = ToolCallPart["state"];
@@ -36,9 +39,10 @@ type SettlementToolCall = Extract<SettlementPart, { type: "tool-call" }>;
 /**
  * Tool-call states a client can still answer from a reloaded thread: an
  * approval prompt, or a client-executed call whose input is complete and whose
- * result the client posts back.
+ * result the client posts back. An approved client-executed call still owed
+ * its result is answerable too (`isClientAnswerableToolCall`).
  */
-export const CLIENT_ANSWERABLE_TOOL_CALL_STATE = {
+const CLIENT_ANSWERABLE_TOOL_CALL_STATE = {
   "approval-requested": true,
   "approval-responded": false,
   "awaiting-input": false,
@@ -48,37 +52,35 @@ export const CLIENT_ANSWERABLE_TOOL_CALL_STATE = {
   "input-streaming": false,
 } as const satisfies Record<ToolCallState, boolean>;
 
+export const isClientAnswerableToolCall = (part: SettlementToolCall): boolean =>
+  CLIENT_ANSWERABLE_TOOL_CALL_STATE[part.state] ||
+  isApprovedClientCallAwaitingResult(part);
+
+const STOPPED_OPEN_TOOL_CALL_STATE = {
+  "approval-requested": true,
+  "approval-responded": false,
+  "awaiting-input": true,
+  complete: false,
+  error: false,
+  "input-complete": true,
+  "input-streaming": true,
+} as const satisfies Record<ToolCallState, boolean>;
+
 /**
- * Which open tool-call states a run may leave on its message once its turn
- * ends that way. A completed turn leaves none. A turn awaiting the user leaves
+ * Which open tool calls a run may leave on its message once its turn ends
+ * that way. A completed turn leaves none. A turn awaiting the user leaves
  * what the user can answer. A turn that stopped early may leave calls whose
  * input or answer never arrived, but never an approved call without its
  * result: that call ran, or runs again on the next turn. What the stored
  * message keeps is `findUnsettledStoredToolCalls`.
  */
-const OPEN_STATE_ALLOWED = {
-  none: {
-    "approval-requested": false,
-    "approval-responded": false,
-    "awaiting-input": false,
-    complete: false,
-    error: false,
-    "input-complete": false,
-    "input-streaming": false,
-  },
-  "client-answerable": CLIENT_ANSWERABLE_TOOL_CALL_STATE,
-  stopped: {
-    "approval-requested": true,
-    "approval-responded": false,
-    "awaiting-input": true,
-    complete: false,
-    error: false,
-    "input-complete": true,
-    "input-streaming": true,
-  },
-} as const satisfies Record<string, Record<ToolCallState, boolean>>;
+const OPEN_CALL_ALLOWED = {
+  none: () => false,
+  "client-answerable": isClientAnswerableToolCall,
+  stopped: (part) => STOPPED_OPEN_TOOL_CALL_STATE[part.state],
+} as const satisfies Record<string, (part: SettlementToolCall) => boolean>;
 
-type OpenCallPolicy = keyof typeof OPEN_STATE_ALLOWED;
+type OpenCallPolicy = keyof typeof OPEN_CALL_ALLOWED;
 
 const OUTCOME_POLICY = {
   "awaiting-user": "client-answerable",
@@ -149,7 +151,7 @@ const findUnsettled = (
   parts.flatMap((part) =>
     part.type === "tool-call" &&
     !isSettledToolCall(part) &&
-    !OPEN_STATE_ALLOWED[policy][part.state]
+    !OPEN_CALL_ALLOWED[policy](part)
       ? [{ state: part.state, toolCallId: part.id }]
       : [],
   );
@@ -314,7 +316,7 @@ export const settleOpenToolCallsForOutcome = ({
   return parts.flatMap((part): ChatPart[] =>
     part.type === "tool-call" && isApprovedWithoutResult(part, parts)
       ? [
-          unfinishedCall(part),
+          continueStoredChatPart(part, unfinishedCall(part)),
           errorToolResult(part.id, UNFINISHED_APPROVED_CALL_ERROR),
         ]
       : [part],
@@ -359,6 +361,27 @@ export const findHandedOutInteraction = ({
     interruptToolCallIds.has(toolCallId),
   ) ?? null;
 
+/** What the engine is handed as the arguments of a call whose input never
+ *  completed: no input at all. */
+const NO_INPUT_ARGUMENTS = "{}";
+
+const isJsonObjectText = (text: string): boolean => {
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return Result.isOk(parsed) && isRecord(parsed.value);
+};
+
+/**
+ * A call as the engine is handed it: a complete call's arguments are its
+ * input, a JSON object. A call cut off while its input streamed keeps the
+ * text that had arrived (nothing, or the start of an object), which no
+ * provider takes as a call's arguments, so the engine is handed it with no
+ * input; its closing result says it never ran.
+ */
+const withEngineArguments = (part: ChatPart): ChatPart =>
+  part.type === "tool-call" && !isJsonObjectText(part.arguments)
+    ? { ...part, arguments: NO_INPUT_ARGUMENTS }
+    : part;
+
 /**
  * The history a run hands the engine. Only the message a continuation resumes
  * may hold open calls for this run to execute or the client to answer; an
@@ -382,7 +405,7 @@ export const settleHistoryForRun = ({
         outcome: "interrupted",
         parts: message.parts,
       }),
-    );
+    ).map(withEngineArguments);
     const settled =
       parts.length !== message.parts.length ||
       parts.some((part, index) => part !== message.parts[index]);

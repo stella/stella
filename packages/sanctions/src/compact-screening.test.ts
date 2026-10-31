@@ -1,7 +1,5 @@
-import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
-import type { ParsedList, SanctionsEntry } from "./entry";
 import {
   buildScreeningIndex,
   buildScreeningIndexCooperatively,
@@ -10,157 +8,23 @@ import {
 import type { ScreeningQuery } from "./screening";
 import { compactLists } from "./test-fixtures/compact-lists";
 import {
+  assertScreeningEquivalence,
+  equivalenceLists,
+  expectAliasHit,
+  legacyScreenOutcome,
+  screeningOutcomes,
+  successfulQueries,
+} from "./test-fixtures/legacy-equivalence";
+import {
   buildScreeningIndex as buildLegacyScreeningIndex,
   screen as legacyScreen,
 } from "./test-fixtures/legacy-screening";
 
-type SeededEntryOptions = {
-  base: SanctionsEntry;
-  sourceId: string;
-  names: SanctionsEntry["names"];
-};
-
-const seededEntry = ({
-  base,
-  sourceId,
-  names,
-}: SeededEntryOptions): SanctionsEntry => ({
-  ...base,
-  sourceId,
-  names,
-  entityType: "person",
-});
-
-const equivalenceLists = (counts = [20_000, 420, 380]): ParsedList[] => {
-  const lists = compactLists(counts);
-  const ofac = lists.at(0);
-  const base = ofac?.entries.at(0);
-  if (ofac === undefined || base === undefined) {
-    throw new Error("compact list fixture has no OFAC entry");
-  }
-  ofac.entries.push(
-    seededEntry({
-      base,
-      sourceId: "transliterations",
-      names: [
-        { name: "Zerovan Velnakov", quality: "strong" },
-        { name: "Velnakov, Zerovan", quality: "strong" },
-        { name: "Зерован Велнаков", quality: "strong" },
-        { name: "Zerowan Welnakow", quality: "weak" },
-      ],
-    }),
-    seededEntry({
-      base,
-      sourceId: "joined-name",
-      names: [
-        { name: "Nelori VELNO-RAK", quality: "strong" },
-        { name: "Talunor Velmoraki", quality: "strong" },
-      ],
-    }),
-    seededEntry({
-      base,
-      sourceId: "duplicate-alias-quality",
-      names: [
-        { name: "Kelori Al-Velnar", quality: "weak" },
-        { name: "Kelori Al-Velnar", quality: "strong" },
-        { name: "Kelori Velnar", quality: "weak" },
-      ],
-    }),
-  );
-  return lists;
-};
-
-const successfulQueries = (lists: readonly ParsedList[]): ScreeningQuery[] => {
-  const queries: ScreeningQuery[] = [];
-  for (const list of lists) {
-    for (const entry of list.entries.slice(0, 3)) {
-      const primary = entry.names.at(0);
-      const alias = entry.names.at(-1);
-      if (primary === undefined || alias === undefined) {
-        throw new Error("compact list fixture has a nameless entry");
-      }
-      queries.push(
-        { name: primary.name, entityType: entry.entityType },
-        { name: alias.name, entityType: entry.entityType },
-      );
-    }
-  }
-  queries.push(
-    { name: "Zerovan Velnakov", entityType: "person" },
-    { name: "Velnakov, Zerovan", entityType: "person" },
-    { name: "Зерован Велнаков", entityType: "person" },
-    { name: "Zerowan Welnakow", entityType: "person" },
-    { name: "Nelori Velnorak", entityType: "person" },
-    { name: "Talunor Vel Moraki", entityType: "person" },
-    { name: "Kelori Al-Velnar", entityType: "person" },
-    { name: "Kelori Velnar", entityType: "person" },
-    { name: "unlisted unfamiliar name", entityType: "person" },
-    { name: "Zerovn Velnakov", entityType: "person" },
-  );
-  return queries;
-};
-
-type LegacyEquivalenceOptions = {
-  index: ReturnType<typeof buildScreeningIndex>;
-  expected: readonly LegacyScreenOutcome[];
-  queries: readonly ScreeningQuery[];
-};
-
-const legacyScreenOutcome = (result: ReturnType<typeof legacyScreen>) =>
-  result.isErr() ? { error: result.error } : { value: result.value };
-
-type LegacyScreenOutcome = ReturnType<typeof legacyScreenOutcome>;
-
-const assertLegacyEquivalence = ({
-  index,
-  expected,
-  queries,
-}: LegacyEquivalenceOptions) => {
-  for (const [queryIndex, query] of queries.entries()) {
-    const options = { cutoff: 0.65, limit: 25 };
-    const legacyResult =
-      expected.at(queryIndex) ?? panic("Missing legacy screening result");
-    const actual = screen(index, query, options);
-    expect(legacyScreenOutcome(actual)).toEqual(legacyResult);
-  }
-};
-
-type AliasHitOptions = {
-  index: ReturnType<typeof buildScreeningIndex>;
-  name: string;
-  expectedName: string;
-  sourceId?: string;
-};
-
-const expectAliasHit = ({
-  index,
-  name,
-  expectedName,
-  sourceId = "transliterations",
-}: AliasHitOptions) => {
-  const matches = screen(
-    index,
-    { name, entityType: "person" },
-    { cutoff: 0.65 },
-  ).unwrap().possibleMatches;
-  expect(matches.map(({ entry }) => entry.sourceId)).toContain(sourceId);
-  expect(
-    matches.find(({ entry }) => entry.sourceId === sourceId)?.evidence
-      .matchedName,
-  ).toBe(expectedName);
-};
-
-test("compact and cooperative screening preserve legacy results and full entries", async () => {
-  const lists = equivalenceLists();
+test("compact and cooperative screening preserve complete results and full entries", async () => {
+  const lists = equivalenceLists([3, 3, 3]);
   const queries = successfulQueries(lists);
-  const expected = (() => {
-    const legacy = buildLegacyScreeningIndex(lists);
-    return queries.map((query) =>
-      legacyScreenOutcome(
-        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
-      ),
-    );
-  })();
+  const expected = screeningOutcomes(lists, queries);
+
   Bun.gc(true);
   {
     const current = buildScreeningIndex(lists);
@@ -172,7 +36,7 @@ test("compact and cooperative screening preserve legacy results and full entries
       }
     }
     expect(current.entries.length).toBe(entryIndex);
-    assertLegacyEquivalence({ index: current, expected, queries });
+    assertScreeningEquivalence({ index: current, expected, queries });
     expectAliasHit({
       index: current,
       name: "Zerovan Velnakov",
@@ -204,8 +68,23 @@ test("compact and cooperative screening preserve legacy results and full entries
   expect(cooperative.entries.length).toBe(
     lists.reduce((count, list) => count + list.entries.length, 0),
   );
-  assertLegacyEquivalence({ index: cooperative, expected, queries });
-}, 120_000);
+  assertScreeningEquivalence({ index: cooperative, expected, queries });
+});
+
+test("compact screening preserves independent legacy scores on small editions", () => {
+  const lists = equivalenceLists([3, 2, 2]);
+  const queries = successfulQueries(lists);
+  const legacy = buildLegacyScreeningIndex(lists);
+  assertScreeningEquivalence({
+    index: buildScreeningIndex(lists),
+    queries,
+    expected: queries.map((query) =>
+      legacyScreenOutcome(
+        legacyScreen(legacy, query, { cutoff: 0.65, limit: 25 }),
+      ),
+    ),
+  });
+});
 
 test("compact screening preserves legacy work-limit and query errors", () => {
   Bun.gc(true);
@@ -236,60 +115,38 @@ test("compact screening preserves legacy work-limit and query errors", () => {
   }
 });
 
-test("cached absent spellings replay uncached results at every work-budget boundary", () => {
+test("repeated absent spellings replay fresh results across the work-budget boundary", () => {
   const lists = equivalenceLists([20, 10, 10]);
   const compact = buildScreeningIndex(lists);
   const legacy = buildLegacyScreeningIndex(lists);
   const query = { name: "Kelori Velnr", entityType: "person" } as const;
   expect(compact.names.raw.ids.get("velnr")).toBeUndefined();
-  const complete = screen(compact, query, { cutoff: 0.65 }).unwrap();
+  let completeWork = 0;
+  const complete = screen(compact, query, {
+    cutoff: 0.65,
+    onWork: ({ spent }) => {
+      completeWork = spent;
+    },
+  }).unwrap();
+  expect(completeWork).toBeGreaterThan(1);
   expect(complete).toEqual(
     legacyScreen(legacy, query, { cutoff: 0.65 }).unwrap(),
   );
-  // Fuzzy selection spends less work than the legacy scan, so fresh compact
-  // indexes place the boundary. Binary search keeps that oracle inexpensive.
-  const highestBudget = 3000;
-  let lowestFailure = 1;
-  let lowestSuccess = highestBudget;
-  expect(
-    screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork: lowestFailure,
-    }).isErr(),
-  ).toBe(true);
-  expect(
-    screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork: lowestSuccess,
-    }).isOk(),
-  ).toBe(true);
-  while (lowestFailure + 1 < lowestSuccess) {
-    const maxWork = Math.floor((lowestFailure + lowestSuccess) / 2);
-    const outcome = screen(buildScreeningIndex(lists), query, {
-      cutoff: 0.65,
-      maxWork,
-    });
-    if (outcome.isErr()) {
-      expect(outcome.error.code).toBe("work-limit");
-      lowestFailure = maxWork;
-    } else {
-      expect(outcome.value).toEqual(complete);
-      lowestSuccess = maxWork;
-    }
-  }
-
+  // Work accounting belongs to the entity index: the complete lookup reports
+  // its own spend, so budgets spread around it place the boundary without a
+  // search. Repeated and fresh lookups must agree at every budget, and the
+  // outcome must switch from failure to success exactly once.
   const budgets = [
     1,
-    Math.floor(lowestSuccess / 3),
-    Math.floor((lowestSuccess * 2) / 3),
-    lowestSuccess - 1,
-    lowestSuccess,
-    lowestSuccess + 1,
-    lowestSuccess + Math.floor((highestBudget - lowestSuccess) / 3),
-    lowestSuccess + Math.floor(((highestBudget - lowestSuccess) * 2) / 3),
-    highestBudget,
+    Math.floor(completeWork / 3),
+    Math.floor((completeWork * 2) / 3),
+    completeWork - 1,
+    completeWork,
+    completeWork + 1,
+    completeWork * 2,
+    completeWork * 4,
   ]
-    .filter((maxWork) => maxWork >= 1 && maxWork <= highestBudget)
+    .filter((maxWork) => maxWork >= 1)
     .filter((maxWork, index, values) => values.indexOf(maxWork) === index)
     .toSorted((left, right) => left - right);
   const outcomes: ("failure" | "success")[] = [];

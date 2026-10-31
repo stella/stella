@@ -3,6 +3,8 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -76,12 +78,20 @@ const POLICIES = [
   expected: string;
 }[];
 const COUNTRIES = ["CZE", "SVK", "POL", "DEU"] as const;
+const admittedIn = (countries: readonly string[], country: string) =>
+  countries.includes(country);
+// Decisions and statutes each follow their own domain's public admission.
 const fixtures = COUNTRIES.flatMap((country) =>
   POLICIES.map((policy) => ({
     name: `${policy.name}-${country}`,
     country,
     descriptor: policy.descriptor,
-    expected: country === "CZE" ? policy.expected : ("absent" as const),
+    decisionExpected: admittedIn(PUBLIC_CASE_LAW_COUNTRIES, country)
+      ? policy.expected
+      : ("absent" as const),
+    statuteExpected: admittedIn(PUBLIC_LEGISLATION_COUNTRIES, country)
+      ? policy.expected
+      : ("absent" as const),
     decisionId: createSafeId<"caseLawDecision">(),
     caseSourceId: createSafeId<"caseLawSource">(),
     statuteId: createSafeId<"legislationDocument">(),
@@ -238,11 +248,11 @@ test.each(fixtures)(
   "active corpus prompts enforce $name source policy",
   async (fixture) => {
     const organizationId =
-      fixture.expected === "available"
+      fixture.decisionExpected === "available"
         ? undefined
         : toSafeId<"organization">("org-corpus-policy");
     const userId =
-      fixture.expected === "available"
+      fixture.decisionExpected === "available"
         ? undefined
         : toSafeId<"user">("user-corpus-policy");
     const decision = await buildActiveDecisionSection({
@@ -266,10 +276,12 @@ test.each(fixtures)(
       purpose: "derived-ai",
     });
     expect(fallbackAst).toEqual(
-      fixture.expected === "available" ? EMPTY_AST : null,
+      fixture.statuteExpected === "available" ? EMPTY_AST : null,
     );
-    const expected = fixture.expected;
-    for (const prompt of [decision.unwrap().prompt, statute.unwrap()]) {
+    for (const [prompt, expected] of [
+      [decision.unwrap().prompt, fixture.decisionExpected],
+      [statute.unwrap(), fixture.statuteExpected],
+    ] as const) {
       switch (expected) {
         case "available":
           expect(prompt).toContain(WORDING);
@@ -325,7 +337,7 @@ test("court paragraph numbers load in one gated batch, only for decisions the pu
   expect(numbers).toEqual(
     new Map(
       czech
-        .filter((fixture) => fixture.expected !== "absent")
+        .filter((fixture) => fixture.decisionExpected !== "absent")
         .map((fixture) => [fixture.decisionId, new Map([["p-3", 7]])]),
     ),
   );

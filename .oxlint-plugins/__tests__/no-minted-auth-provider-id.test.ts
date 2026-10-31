@@ -37,3 +37,29 @@ test("does not infer a minted value from a name also bound to stored data", asyn
     ),
   ).toEqual([]);
 });
+
+test("branding spellings remain literal around punctuation and Unicode", async () => {
+  expect(
+    await lintSingleRule(
+      "no-minted-auth-provider-id",
+      [
+        'const note = "⚖️ [toSafeId] — éx";',
+        'toSafeId<"user">(Bun.randomUUIDv7());',
+        "brandPersistedOrganizationId(crypto.randomUUID());",
+      ].join("\n"),
+    ),
+  ).toEqual([2, 3]);
+});
+
+test("case variants and empty source do not report branded UUIDs", async () => {
+  expect(
+    await lintSingleRule(
+      "no-minted-auth-provider-id",
+      [
+        "",
+        'const note = "TOSAFEID, brandPersistedUserIDX, ΩtoSafeIdΩ";',
+        'toSafeID<"user">(Bun.randomUUIDv7());',
+      ].join("\n"),
+    ),
+  ).toEqual([]);
+});

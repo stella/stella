@@ -56,9 +56,7 @@ const waitForReconnect = async (
   });
 
 type ChatLoadedTurn =
-  | { type: "active" }
-  | { type: "parked"; runId: string }
-  | { type: "settled" };
+  { type: "active" } | { type: "parked"; runId: string } | { type: "settled" };
 
 const loadedTurnNeedsRefresh = (
   loaded: ChatLoadedTurn,

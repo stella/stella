@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/analytics/posthog-client.ts",
+  "delta": 1,
+  "reason": "observeFailure captures defects through the analytics client, so the PostHog client sits below it and cannot observe its own failures without a dependency cycle. It logs a failed delivery once, as a warning, and never captures it: a captured failure would be queued behind the batch that just failed."
+}

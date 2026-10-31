@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/scripts/backfill-document-extraction-sources.ts",
+  "delta": 2,
+  "reason": "The cross-organization backfill uses one keyset page read and one bounded owner insert per page so progress remains memory-bounded."
+}

@@ -2,7 +2,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { PUBLIC_CASE_LAW_PAGE_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
-import { publishedCaseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type {
   CaseLawPublicReadDb,
@@ -64,8 +64,9 @@ export const readPublicDecisionLanguageAlternatesQuery =
   definePublicLawSharedQuery(
     PUBLIC_LAW_SHARED_QUERY.caseLawLanguageAlternates,
     async (
-      tx: CaseLawPublicReadTransaction,
+      tx: Pick<CaseLawPublicReadTransaction, "select">,
       languageGroupKeys: readonly string[],
+      countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
     ): Promise<PublicDecisionLanguageAlternateRow[]> => {
       const versions = tx
         .select({
@@ -92,9 +93,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
             inArray(publishedCaseLawDecisions.languageGroupKey, [
               ...languageGroupKeys,
             ]),
-            inArray(publishedCaseLawDecisions.country, [
-              ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-            ]),
+            inArray(publishedCaseLawDecisions.country, [...countries]),
             redistributableCaseLawSource,
             sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
           ),
@@ -220,8 +219,9 @@ export const readPublicDecisionLanguageAlternatesForGroupKeys = async (
  * page as selected (nulls and repeats included), one read for all of them.
  */
 export const readPublicDecisionLanguageAlternatesInTx = async (
-  tx: CaseLawPublicReadTransaction,
+  tx: Pick<CaseLawPublicReadTransaction, "select">,
   languageGroupKeys: readonly (string | null)[],
+  countries: readonly string[] = PUBLIC_CASE_LAW_PAGE_COUNTRIES,
 ): Promise<PublicDecisionLanguageAlternatesByGroup> => {
   const keys = [
     ...new Set(languageGroupKeys.filter((key): key is string => key !== null)),
@@ -229,7 +229,7 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
   return groupPublicDecisionLanguageAlternates(
     keys.length === 0
       ? []
-      : await readPublicDecisionLanguageAlternatesQuery(tx, keys),
+      : await readPublicDecisionLanguageAlternatesQuery(tx, keys, countries),
   );
 };
 
@@ -237,9 +237,11 @@ export const readPublicDecisionLanguageAlternatesInTx = async (
 export const listPublicDecisionLanguageAlternates = async ({
   tx,
   languageGroupKey,
+  countries,
 }: {
   tx: CaseLawPublicReadTransaction;
   languageGroupKey: string | null;
+  countries: readonly string[];
 }): Promise<
   readonly (PublicDecisionLanguageAlternate & { hasDocument: boolean })[]
 > => {
@@ -273,9 +275,7 @@ export const listPublicDecisionLanguageAlternates = async ({
     .where(
       and(
         eq(publishedCaseLawDecisions.languageGroupKey, languageGroupKey),
-        inArray(publishedCaseLawDecisions.country, [
-          ...PUBLIC_CASE_LAW_PAGE_COUNTRIES,
-        ]),
+        inArray(publishedCaseLawDecisions.country, [...countries]),
         redistributableCaseLawSource,
         sql`${normalizedLanguageSql} ~ ${ROUTE_LANGUAGE_PATTERN}`,
       ),

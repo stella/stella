@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "provider": "mistral",
+  "scenario": "length",
+  "variant": "reasoning-only",
+  "source": "synthetic",
+  "basis": "Mistral chat completions streaming reference: data-only chat.completion.chunk SSE events, usage on the finishing chunk, then data: [DONE]; thinking content parts spend max_tokens before any text",
+  "model": "mistral-medium-latest",
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/chat/completions",
+        "shape": {
+          "headers": {
+            "content-type": "application/json"
+          },
+          "body": {
+            "model": "mistral-medium-latest",
+            "temperature": 0,
+            "tools": [
+              {
+                "type": "function",
+                "function": {
+                  "name": "mcp__external__delete",
+                  "description": "Delete a draft by name.",
+                  "parameters": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": ["string", "null"],
+                        "minLength": 1
+                      }
+                    },
+                    "required": ["name", "note"],
+                    "additionalProperties": false
+                  },
+                  "strict": true
+                }
+              }
+            ],
+            "messages": [
+              {
+                "role": "user",
+                "content": "[prompt]"
+              }
+            ],
+            "stream": true,
+            "stream_options": {
+              "include_usage": true
+            },
+            "max_tokens": 16
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "text/event-stream; charset=utf-8"
+        },
+        "body": {
+          "encoding": "text",
+          "text": "data: {\"id\":\"4b2d7e9a1c3f4a6b8d0e2f4a6c8e0b1d\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"4b2d7e9a1c3f4a6b8d0e2f4a6c8e0b1d\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":[{\"type\":\"thinking\",\"thinking\":[{\"type\":\"text\",\"text\":\"Counting in words needs\"}]}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"4b2d7e9a1c3f4a6b8d0e2f4a6c8e0b1d\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":[{\"type\":\"thinking\",\"thinking\":[{\"type\":\"text\",\"text\":\" every number up to five hundred\"}]}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"4b2d7e9a1c3f4a6b8d0e2f4a6c8e0b1d\",\"object\":\"chat.completion.chunk\",\"created\":1790107367,\"model\":\"mistral-medium-latest\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"\"},\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":19,\"total_tokens\":35,\"completion_tokens\":16}}\n\ndata: [DONE]\n\n"
+        }
+      }
+    }
+  ],
+  "expect": {
+    "outcome": "finished",
+    "finishReason": "length",
+    "text": "",
+    "usage": {
+      "promptTokens": 19,
+      "completionTokens": 16,
+      "totalTokens": 35
+    }
+  }
+}

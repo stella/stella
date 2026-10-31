@@ -29,14 +29,6 @@ import { and, asc, eq, gt, isNotNull, or, sql } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  StoredRawReader,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   CZ_US_RECORD_CARD_METADATA_KEY,
   CZ_US_RECORD_CARD_STATE,
   czUsAdapter,
@@ -46,12 +38,18 @@ import {
 import type { NalusSession } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
-import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
-import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { applyStoredDecisionBackfill } from "@/api/handlers/case-law/ingestion/pipeline/stored-decision-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  StoredRawReader,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 /** The decision type the court gives the rulings a dissent is filed against. */
@@ -383,27 +381,14 @@ export const runCzUsJudgesBackfill = async ({
       return;
     }
 
-    await sourceLease.beforeDatabaseMark();
-    await processDecision({
-      input: {
-        ...reparsed.result,
-        // The crawl's own hash covers the abstract and the judges, which the
-        // re-parse's identity hash does not. Keeping the stored one leaves
-        // the crawl's dedup exactly where it was, so this run does not make
-        // the next cycle re-fetch what it has just written.
-        rawHash: row.sourceHash ?? reparsed.result.rawHash,
-      },
+    await applyStoredDecisionBackfill({
+      row,
+      result: reparsed.result,
       sourceId,
       scopedDb,
-      observedAt: new Date(),
-      observationOrder: await allocateSourceObservationOrder({
-        leaseToken: sourceLease.leaseToken,
-        scopedDb,
-        sourceId,
-      }),
-      refresh: DECISION_REFRESH.ALWAYS,
+      sourceLease,
+      report,
     });
-    report.applied += 1;
   };
 
   const applyRow = async (row: BackfillRow): Promise<void> => {

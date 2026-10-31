@@ -3,18 +3,23 @@
  * because the same rules answer three questions at once: what the loader
  * fetches, what the canonical link says, and what "clear filters" clears.
  *
- * The orders themselves come from the search contract rather than a list of
- * their own: a URL that offered an order the endpoint does not serve, or
- * defaulted to a different one, would be a silent disagreement with the
- * answer. Relevance is first there, and being the default is why it is absent
- * from the URL: a link says what the reader chose, not what they accepted.
+ * The orders themselves come from the contract through `decision-order.logic`
+ * rather than a list of their own: a URL that offered an order the endpoint
+ * does not serve, or defaulted to a different one, would be a silent
+ * disagreement with the answer. A default order is absent from the URL: a
+ * link says what the reader chose, not what they accepted.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
-import { DEFAULT_SEARCH_SORT } from "@stll/api-contract/search";
-import type { SearchSort } from "@stll/api-contract/search";
+import { CASE_LAW_SCOPED_FILTER_FIELDS } from "@stll/api-contract/case-law-filter-scope";
+import type { DecisionSort } from "@stll/api-contract/search";
 import { Temporal } from "@stll/time";
+
+import {
+  decisionSortParam,
+  sortKeptAcrossQueryEdit,
+} from "@/features/case-law/decision-order.logic";
 
 /** What the case-law results URL accepts. Every field is single-select. */
 export type CaseLawIndexSearch = {
@@ -29,7 +34,19 @@ export type CaseLawIndexSearch = {
    * part of the result set, so the canonical address leaves it out.
    */
   questions?: string[] | undefined;
-  sort?: SearchSort | undefined;
+  /**
+   * The reader went back to their own words after the page rewrote them: the
+   * page does not rewrite this query again. Dropped by the next query edit.
+   */
+  rewrite?: "off" | undefined;
+  /**
+   * The words the reader searched before the page rewrote them, while `q`
+   * holds the rewrite. Not part of the result set, so the canonical address
+   * leaves it out.
+   */
+  rewrittenFrom?: string | undefined;
+  /** The search's order with a query, the listing's without; see `decisionOrder`. */
+  sort?: DecisionSort | undefined;
   sourceId?: string | undefined;
   /**
    * Require every word the query carries, as a link beside the results asks
@@ -49,12 +66,7 @@ export type CaseLawIndexSearch = {
 };
 
 /** The single-select facet fields, so clearing cannot miss one added later. */
-export const CASE_LAW_FILTER_KEYS = [
-  "court",
-  "lang",
-  "sourceId",
-  "type",
-] as const;
+export const CASE_LAW_FILTER_KEYS = CASE_LAW_SCOPED_FILTER_FIELDS;
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
 
@@ -164,17 +176,45 @@ const hasDecisionDateRange = (search: CaseLawIndexSearch): boolean => {
   return range.from !== undefined || range.to !== undefined;
 };
 
-/** Every filter unset, for a country switch and for "clear filters". */
-export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
-  Record<"from" | "to" | "year", undefined> => ({
-  court: undefined,
-  from: undefined,
-  lang: undefined,
-  sourceId: undefined,
-  to: undefined,
-  type: undefined,
-  year: undefined,
-});
+/** Remove named filters from the full search; all other keys retain their types. */
+export const dropCaseLawFilters = <
+  TSearch extends CaseLawIndexSearch,
+  TField extends CaseLawFilterKey | "from" | "to" | "year",
+>(
+  search: TSearch,
+  fields: readonly TField[],
+): Omit<TSearch, TField> & Pick<CaseLawIndexSearch, TField> => {
+  const next = { ...search };
+  for (const field of fields) {
+    switch (field) {
+      case "court":
+        delete next.court;
+        break;
+      case "lang":
+        delete next.lang;
+        break;
+      case "sourceId":
+        delete next.sourceId;
+        break;
+      case "type":
+        delete next.type;
+        break;
+      case "from":
+        delete next.from;
+        break;
+      case "to":
+        delete next.to;
+        break;
+      case "year":
+        delete next.year;
+        break;
+      default:
+        field satisfies never;
+        panic(`Unhandled case-law filter removal: ${String(field)}`);
+    }
+  }
+  return next;
+};
 
 /**
  * The URL a query edit lands on, with `strict` and `questions` dropped.
@@ -187,7 +227,9 @@ export const clearedCaseLawFilters = (): Record<CaseLawFilterKey, undefined> &
  * new query is a new search and starts without them, while a filter, sort,
  * page or strict change narrows the same topic and keeps them. So the drop
  * belongs to the transition rather than to each caller: no place that writes
- * `q` can forget it.
+ * `q` can forget it. The order is kept only where the result set the edit
+ * lands on serves it: adding words to an oldest-first listing makes a search,
+ * which has no oldest-first order.
  */
 export const withQuery = (
   previous: CaseLawIndexSearch,
@@ -197,7 +239,15 @@ export const withQuery = (
   if (q === previous.q) {
     return previous;
   }
-  const next = { ...previous, q, strict: undefined, questions: undefined };
+  const next = {
+    ...previous,
+    q,
+    sort: sortKeptAcrossQueryEdit(previous.sort, q),
+    strict: undefined,
+    questions: undefined,
+    rewrite: undefined,
+    rewrittenFrom: undefined,
+  };
   if (q !== undefined) {
     return next;
   }
@@ -240,17 +290,30 @@ export const hasActiveCaseLawFilter = (search: CaseLawIndexSearch): boolean =>
   activeCaseLawFilterCount(search) > 0;
 
 /**
- * The sort as the URL carries it: absent while it is the default, so the same
- * result set has one canonical address rather than two.
+ * The URL a rewrite the page ran by itself lands on: the rewrite, and the
+ * reader's own words to go back to.
  */
-export const decisionSortParam = (
-  sort: SearchSort | undefined,
-): SearchSort | undefined =>
-  sort === undefined || sort === DEFAULT_SEARCH_SORT ? undefined : sort;
+export const withAutoRewrite = (
+  previous: CaseLawIndexSearch,
+  rewritten: string,
+  original: string,
+): CaseLawIndexSearch => ({
+  ...withQuery(previous, rewritten),
+  rewrittenFrom: original,
+});
 
-/** The sort a search runs under, whatever the URL left out. */
-export const decisionSortOrder = (sort: SearchSort | undefined): SearchSort =>
-  sort ?? DEFAULT_SEARCH_SORT;
+/** Back to the words the reader typed, which the page leaves alone now. */
+export const withOriginalWords = (
+  previous: CaseLawIndexSearch,
+): CaseLawIndexSearch =>
+  previous.rewrittenFrom === undefined
+    ? previous
+    : {
+        ...withQuery(previous, previous.rewrittenFrom),
+        rewrite: "off",
+        // `withQuery` keeps everything when the query is already the original.
+        rewrittenFrom: undefined,
+      };
 
 export const createCaseLawIndexPath = (
   search: CaseLawIndexSearch,
@@ -289,7 +352,7 @@ export const createCaseLawIndexPath = (
   if (isStrictSearch(strict)) {
     params.set("strict", STRICT_SEARCH_VALUE);
   }
-  const sortParam = decisionSortParam(sort);
+  const sortParam = decisionSortParam(sort, q);
   if (sortParam !== undefined) {
     params.set("sort", sortParam);
   }

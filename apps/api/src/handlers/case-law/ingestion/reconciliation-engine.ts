@@ -27,8 +27,8 @@ import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import {
   and,
+  asc,
   eq,
-  or,
   gte,
   inArray,
   isNotNull,
@@ -36,8 +36,8 @@ import {
   lt,
   min,
   notInArray,
+  or,
   sql,
-  asc,
 } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -48,11 +48,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCoverageSlices,
-  caseLawDecisionSupplements,
   caseLawDecisions,
+  caseLawDecisionSupplements,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/abortable-sleep";
 import {
   recordSliceCoverage,
   recordSliceWalkFailure,
@@ -74,17 +75,19 @@ import type {
   SliceWalkReason,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
+  floorSliceWalk,
+  partitionShortSliceCandidates,
   RECONCILIATION_FAILED_SLICE_RETRY_MS,
   RECONCILIATION_SETTLED_RECHECK_MS,
   RECONCILIATION_SLICE_STALE_MS,
-  floorSliceWalk,
-  partitionShortSliceCandidates,
   selectReconciliationWorkUnit,
   tipWindowSlices,
 } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {
   listReconciliationSlice,
   MAX_SLICE_PAGES,
+  SLICE_LISTING_PASSES,
+  SLICE_LISTING_PROOF,
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
@@ -118,11 +121,11 @@ import {
   countTerminalReconciliationItemsBySlice,
   parkReconciliationItem,
   pruneUnlistedReconciliationItems,
+  refreshTrackedReconciliationItems,
   resolveReconciliationItem,
   resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -202,14 +205,18 @@ const ITEM_FETCH_TIMEOUT_MS = 5 * 60_000;
  */
 export const RECONCILIATION_INGEST_BUDGET_MS = 30 * 60_000;
 /**
- * The longest a lawful listing can take: every page may spend its timeout, and
- * the politeness pause separates them. Exported because the caller's hard
+ * The longest a lawful listing can take: both passes of the identity proof,
+ * every page of each spending its timeout, the politeness pause separating
+ * pages and the two passes. Exported because the caller's hard
  * deadline has to clear it -- a backstop for a wedged await must sit above
  * everything a healthy unit can do, and a complete listing of a large slice is
  * the slowest of those things.
  */
 export const RECONCILIATION_LISTING_WORST_CASE_MS =
-  MAX_SLICE_PAGES * (LIST_DELAY_MS + LIST_TIMEOUT_MS);
+  SLICE_LISTING_PASSES.identities *
+    MAX_SLICE_PAGES *
+    (LIST_DELAY_MS + LIST_TIMEOUT_MS) +
+  LIST_DELAY_MS;
 /**
  * Headroom on top of the phases above: the request already in flight when the
  * ingest budget runs out, plus the ledger writes that close the unit.
@@ -273,6 +280,7 @@ export type ReconciliationUnitOutcome =
   | { type: "worked"; summary: ReconciliationUnitSummary }
   | { type: "idle" }
   | { type: "leased" }
+  | { type: "aborted" }
   /**
    * The source states something no unit can act on — today, a sweep floor
    * that is no slice of this source. Nothing was walked, and nothing will be
@@ -339,7 +347,11 @@ export type ReconciliationWorkUnitOptions = {
   sliceRetries: SliceRetrySchedule;
   /** Stored-raw reader; injectable for bounded repair work. */
   readStoredRaw?: StoredRawResultReader | undefined;
+  signal?: AbortSignal | undefined;
 };
+
+const isSignalAborted = (signal: AbortSignal | undefined): boolean =>
+  signal?.aborted === true;
 
 type KeyedListingItem = ReconciliationListingItem & {
   identityKey: string;
@@ -1197,7 +1209,8 @@ const writeInOrder = async (
     return panic("writeInOrder needs a row to write");
   }
   const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+  return processed.isErr() ||
+    processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
     rest.length === 0
     ? processed
     : await writeInOrder(rest, write);
@@ -1217,6 +1230,32 @@ type IngestItemOptions = {
   sourceId: SafeId<"caseLawSource">;
   summary: ReconciliationUnitSummary;
   failureDisposition?: "park" | "hold";
+  signal?: AbortSignal | undefined;
+};
+
+type WriteListedDecisionOptions = Pick<
+  IngestItemOptions,
+  "lease" | "scopedDb" | "sourceId" | "now" | "resolveSourceContract"
+> & { input: IngestionResult };
+
+const writeListedDecision = async ({
+  input,
+  lease,
+  scopedDb,
+  sourceId,
+  now,
+  resolveSourceContract,
+}: WriteListedDecisionOptions): Promise<Processed> => {
+  await lease.beforeDatabaseMark();
+  const observationOrder = await allocateSourceObservationOrder({
+    leaseToken: lease.leaseToken,
+    scopedDb,
+    sourceId,
+  });
+  return await processDecision(
+    { input, sourceId, scopedDb, observedAt: now, observationOrder },
+    resolveSourceContract,
+  );
 };
 
 /**
@@ -1241,6 +1280,7 @@ const ingestListedItem = async ({
   sourceId,
   summary,
   failureDisposition = "park",
+  signal,
 }: IngestItemOptions): Promise<void> => {
   const park = async (tag: string): Promise<void> => {
     if (failureDisposition === "hold") {
@@ -1269,10 +1309,47 @@ const ingestListedItem = async ({
     }
   };
 
+  const failed = async (error: unknown) => {
+    if (signal?.aborted === true) {
+      throw error;
+    }
+    summary.failed += 1;
+    logger.warn("case_law.reconciliation.item_failed", {
+      adapterKey,
+      slice,
+      identityKey: item.identityKey,
+      // The park below keeps only the tag, which cannot separate a publisher
+      // refusing one document from the corpus refusing to store it. These
+      // carry that distinction as fixed vocabulary (driver and system codes,
+      // the SQLSTATE, the schema identifiers Postgres names) rather than as
+      // message text, which quotes the statement and can quote the row that
+      // failed; the logger's sanitizer is a key denylist, so text this sink
+      // emitted would reach telemetry verbatim.
+      //
+      // `errorFingerprint` is first so the two below keep the last word on
+      // every key they state. It adds what the vocabulary above cannot
+      // supply for a throw that carries no code at all — a bare `TypeError`
+      // from a helper reports its tag and nothing else, which names the
+      // class of defect but not the site. `error.frame` is the top stack
+      // frame as `file:line:col`: code identity, not row data, and so inside
+      // the same policy as the codes.
+      ...errorFingerprint(error),
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+    });
+    if (failureDisposition === "hold") {
+      return;
+    }
+    await park(errorTag(error));
+  };
+
   try {
+    const timeoutSignal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
     const built = await buildDecision(
       item.payload,
-      AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS),
+      signal === undefined
+        ? timeoutSignal
+        : AbortSignal.any([signal, timeoutSignal]),
     );
     switch (built.type) {
       case "unkeyable": {
@@ -1309,24 +1386,15 @@ const ingestListedItem = async ({
         return;
       }
       case "built": {
-        const write = async (input: IngestionResult): Promise<Processed> => {
-          await lease.beforeDatabaseMark();
-          const observationOrder = await allocateSourceObservationOrder({
-            leaseToken: lease.leaseToken,
+        const write = async (input: IngestionResult) =>
+          await writeListedDecision({
+            input,
+            lease,
             scopedDb,
             sourceId,
-          });
-          return await processDecision(
-            {
-              input,
-              sourceId,
-              scopedDb,
-              observedAt: now,
-              observationOrder,
-            },
+            now,
             resolveSourceContract,
-          );
-        };
+          });
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
@@ -1336,8 +1404,12 @@ const ingestListedItem = async ({
             : [built.decision, ...built.companions],
           write,
         );
-        if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${processed.reason}`);
+        if (processed.isErr()) {
+          await failed(processed.error);
+          return;
+        }
+        if (processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${processed.value.reason}`);
           return;
         }
         summary.written += 1;
@@ -1376,8 +1448,12 @@ const ingestListedItem = async ({
           },
           resolveSourceContract,
         );
-        if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${placed.reason}`);
+        if (placed.isErr()) {
+          await failed(placed.error);
+          return;
+        }
+        if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${placed.value.reason}`);
           return;
         }
         // A judgment can be unreadable and return COMPLETE without writing
@@ -1414,34 +1490,7 @@ const ingestListedItem = async ({
       }
     }
   } catch (error) {
-    summary.failed += 1;
-    logger.warn("case_law.reconciliation.item_failed", {
-      adapterKey,
-      slice,
-      identityKey: item.identityKey,
-      // The park below keeps only the tag, which cannot separate a publisher
-      // refusing one document from the corpus refusing to store it. These
-      // carry that distinction as fixed vocabulary (driver and system codes,
-      // the SQLSTATE, the schema identifiers Postgres names) rather than as
-      // message text, which quotes the statement and can quote the row that
-      // failed; the logger's sanitizer is a key denylist, so text this sink
-      // emitted would reach telemetry verbatim.
-      //
-      // `errorFingerprint` is first so the two below keep the last word on
-      // every key they state. It adds what the vocabulary above cannot
-      // supply for a throw that carries no code at all — a bare `TypeError`
-      // from a helper reports its tag and nothing else, which names the
-      // class of defect but not the site. `error.frame` is the top stack
-      // frame as `file:line:col`: code identity, not row data, and so inside
-      // the same policy as the codes.
-      ...errorFingerprint(error),
-      ...errorSystemFields(error),
-      ...pgErrorFields(error),
-    });
-    if (failureDisposition === "hold") {
-      return;
-    }
-    await park(errorTag(error));
+    await failed(error);
   }
 };
 
@@ -1459,6 +1508,7 @@ type WalkSliceOptions = {
   slice: string;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -1483,6 +1533,7 @@ const walkSlice = async ({
   slice,
   sleep,
   sourceId,
+  signal,
 }: WalkSliceOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("slice");
   summary.reason = reason;
@@ -1492,11 +1543,13 @@ const walkSlice = async ({
   // the failure surfaces in the loop's tally.
   const listing = await listReconciliationSlice({
     adapterKey,
+    proof: SLICE_LISTING_PROOF.IDENTITIES,
     listSlicePage: reconciliation.listSlicePage,
     pageDelayMs: LIST_DELAY_MS,
     pageTimeoutMs: LIST_TIMEOUT_MS,
     slice,
     sleep,
+    signal,
   });
   if (Result.isError(listing)) {
     // A walk fails by throwing: the unit's caller records it on the ledger as
@@ -1555,8 +1608,9 @@ const walkSlice = async ({
   const fillable = untracked.slice(0, ingestBudget);
   summary.deferred = untracked.length - fillable.length;
   for (const [index, item] of fillable.entries()) {
+    signal?.throwIfAborted();
     if (index > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     // After the pause, not before it: the pause can itself carry the unit past
     // the budget, and what has to stay inside it is the request, not the
@@ -1581,6 +1635,7 @@ const walkSlice = async ({
       slice,
       sourceId,
       summary,
+      signal,
     });
   }
 
@@ -1640,6 +1695,7 @@ type RecheckTextlessHeldOptions = {
   resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 const recheckTextlessHeldRows = async ({
@@ -1654,6 +1710,7 @@ const recheckTextlessHeldRows = async ({
   resolveSourceContract,
   sleep,
   sourceId,
+  signal,
 }: RecheckTextlessHeldOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("textless-detail-rechecks");
   const recheck = reconciliation.textlessHeldRecheck;
@@ -1682,8 +1739,9 @@ const recheckTextlessHeldRows = async ({
   const rows = candidates.filter(({ id }) => claimed.has(id));
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   for (const [index, row] of rows.entries()) {
+    signal?.throwIfAborted();
     if (index > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     const attemptedAt = now();
     if (attemptedAt.getTime() >= ingestEndsAtMs) {
@@ -1768,9 +1826,10 @@ const recheckTextlessHeldRows = async ({
       slice: item.slice,
       sourceId,
       summary,
-      buildDecision: async (_payload, signal) =>
-        await recheck.buildDecisionFromStored(stored, signal),
+      buildDecision: async (_payload, buildSignal) =>
+        await recheck.buildDecisionFromStored(stored, buildSignal),
       failureDisposition: "hold",
+      signal,
     });
   }
   return summary;
@@ -1787,6 +1846,7 @@ type RetryParkedOptions = {
   resolveSourceContract: SourceContractResolver;
   sleep: (ms: number) => Promise<void>;
   sourceId: SafeId<"caseLawSource">;
+  signal?: AbortSignal | undefined;
 };
 
 /**
@@ -1806,6 +1866,7 @@ const retryParkedItems = async ({
   resolveSourceContract,
   sleep,
   sourceId,
+  signal,
 }: RetryParkedOptions): Promise<ReconciliationUnitSummary> => {
   const summary = emptySummary("parked-retries");
   const due = await selectDueReconciliationItems(scopedDb, {
@@ -1860,8 +1921,9 @@ const retryParkedItems = async ({
   >();
   let fetched = 0;
   for (const [index, item] of outstanding.entries()) {
+    signal?.throwIfAborted();
     if (fetched > 0) {
-      await sleep(fetchDelayMs);
+      await abortableSleep(sleep, fetchDelayMs, signal);
     }
     // After the pause, for the reason given in `walkSlice`. Their backoff
     // already decides when each is asked again, so the ones this unit did not
@@ -1892,6 +1954,7 @@ const retryParkedItems = async ({
       slice: item.slice,
       sourceId,
       summary,
+      signal,
     });
   }
   return summary;
@@ -1906,6 +1969,7 @@ type ExecuteReconciliationUnitOptions = Pick<
   | "scopedDb"
   | "sleep"
   | "sourceId"
+  | "signal"
 > & {
   readStoredRaw: StoredRawResultReader;
   reconciliation: SourceReconciliation;
@@ -1927,6 +1991,7 @@ const executeReconciliationUnit = async ({
   sleep,
   sourceId,
   unit,
+  signal,
 }: ExecuteReconciliationUnitOptions): Promise<ReconciliationUnitOutcome> => {
   if (unit.type === "idle") {
     return { type: "idle" };
@@ -1956,6 +2021,7 @@ const executeReconciliationUnit = async ({
             resolveSourceContract,
             sleep,
             sourceId,
+            signal,
           }),
         };
       case "textless-detail-rechecks":
@@ -1973,6 +2039,7 @@ const executeReconciliationUnit = async ({
             resolveSourceContract,
             sleep,
             sourceId,
+            signal,
           }),
         };
       case "slice":
@@ -1992,7 +2059,11 @@ const executeReconciliationUnit = async ({
             slice: unit.slice,
             sleep,
             sourceId,
+            signal,
           }).catch(async (error: unknown) => {
+            if (signal?.aborted === true) {
+              throw error;
+            }
             // The walk is all-or-nothing by design: a listing that failed part
             // way through writes no counts, so the slice is owed exactly as
             // much as before. Recorded as failed, so the sweep's frontier and
@@ -2061,7 +2132,11 @@ export const runReconciliationWorkUnit = async ({
   sliceIngestBudget = DEFAULT_SLICE_INGEST_BUDGET,
   sliceRetries,
   sourceId,
+  signal,
 }: ReconciliationWorkUnitOptions): Promise<ReconciliationUnitOutcome> => {
+  if (isSignalAborted(signal)) {
+    return { type: "aborted" };
+  }
   if (
     !Number.isInteger(sliceIngestBudget) ||
     sliceIngestBudget < 1 ||
@@ -2159,6 +2234,9 @@ export const runReconciliationWorkUnit = async ({
           recheck: reconciliation.textlessHeldRecheck,
         }),
   ]);
+  if (isSignalAborted(signal)) {
+    return { type: "aborted" };
+  }
 
   const terminalBySlice = await countTerminalReconciliationItemsBySlice(
     scopedDb,
@@ -2222,18 +2300,31 @@ export const runReconciliationWorkUnit = async ({
     return { type: "idle" };
   }
 
-  return await executeReconciliationUnit({
-    adapterKey,
-    fetchDelayMs,
-    now,
-    reparseStoredRaw,
-    readStoredRaw,
-    reconciliation,
-    scopedDb,
-    sliceIngestBudget,
-    sliceRetries,
-    sleep,
-    sourceId,
-    unit,
+  const executed = await Result.tryPromise({
+    try: async () =>
+      await executeReconciliationUnit({
+        adapterKey,
+        fetchDelayMs,
+        now,
+        reparseStoredRaw,
+        readStoredRaw,
+        reconciliation,
+        scopedDb,
+        signal,
+        sliceIngestBudget,
+        sliceRetries,
+        sleep,
+        sourceId,
+        unit,
+      }),
+    catch: (error) => error,
   });
+  if (Result.isError(executed)) {
+    if (isSignalAborted(signal)) {
+      return { type: "aborted" };
+    }
+    await Promise.reject.bind(Promise, executed.error)();
+    return panic("Promise rejection unexpectedly resolved");
+  }
+  return executed.value;
 };

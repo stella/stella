@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 import { slugify } from "@stll/text-normalize";
 
+const DOCUMENT_TYPE_KEY_MAX_LENGTH = 120;
+
 // Derive the stable slug `key` from a label. `key` is what playbook scopes
 // reference, so it is generated once on create and never changes on rename.
 // The column takes 120 characters, and a label with no slug-able characters
@@ -10,7 +12,7 @@ export const slugifyDocumentTypeKey = (label: string): string =>
   slugify(label, {
     charset: "ascii",
     separator: "-",
-    maxLength: 120,
+    maxLength: DOCUMENT_TYPE_KEY_MAX_LENGTH,
     fallback: "type",
   });
 
@@ -25,7 +27,11 @@ export const uniqueDocumentTypeKey = (
     return base;
   }
   for (let suffix = 2; suffix <= taken.size + 2; suffix++) {
-    const candidate = `${base}-${String(suffix)}`;
+    const suffixText = `-${String(suffix)}`;
+    const candidate = `${base.slice(
+      0,
+      DOCUMENT_TYPE_KEY_MAX_LENGTH - suffixText.length,
+    )}${suffixText}`;
     if (!taken.has(candidate)) {
       return candidate;
     }

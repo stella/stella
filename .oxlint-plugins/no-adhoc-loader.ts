@@ -1,9 +1,10 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-// One loading indicator: `Loader` / `LoaderState` from `@stll/ui/loader`
-// (the Stella mark breathing), or a `Skeleton` where the content's shape is
-// known. Everything else — a lucide spinner, a `animate-spin`/`animate-pulse`
-// utility on an arbitrary element, a hand-rolled `role="progressbar"` — is a
-// second loading vocabulary the product does not have.
+// One loading vocabulary from `@stll/ui/loader`: `Loader` (a plain spinner for
+// a busy control or row) and `LoaderState` (the Stella mark breathing over an
+// empty region), or a `Skeleton` where the content's shape is known. The
+// spinner is drawn only inside `Loader` itself; everywhere else a lucide
+// spinner, a `animate-spin`/`animate-pulse` utility on an arbitrary element or
+// a hand-rolled `role="progressbar"` is a second vocabulary.
 //
 // Flags:
 //   <LoaderIcon className="animate-spin" />
@@ -16,7 +17,10 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 //   <Loader label={t("common.loading")} />
 //   <Skeleton className="h-4 w-1/3" />
 
-import { isAstNode, isStringLiteral } from "./utils.ts";
+import { filenameForContext, isAstNode, isStringLiteral } from "./utils.ts";
+
+// The one module allowed to draw the spinner.
+const LOADER_OWNER = "packages/ui/src/components/loader.tsx";
 
 const LOADER_ICON_NAMES = new Set([
   "LoaderIcon",
@@ -120,14 +124,24 @@ export default eslintCompatPlugin({
         schema: [],
       },
       createOnce(context) {
+        // Read per file: `context.filename` is not available while the rule
+        // is being registered.
+        const isLoaderOwner = () =>
+          filenameForContext(context).endsWith(LOADER_OWNER);
         return {
           JSXOpeningElement(node) {
+            if (isLoaderOwner()) {
+              return;
+            }
             const name = jsxElementName(node.name);
             if (name !== null && LOADER_ICON_NAMES.has(name)) {
               context.report({ node, messageId: "loaderIcon", data: { name } });
             }
           },
           JSXAttribute(node) {
+            if (isLoaderOwner()) {
+              return;
+            }
             const name = jsxAttributeName(node);
             if (name === "role") {
               const parts: string[] = [];

@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { fileChatThreads } from "@/api/db/schema";
 import {
-  lockFileChatThreadMapping,
   type FileThreadLookupInput,
+  lockFileChatThreadMapping,
 } from "@/api/handlers/chat/file-thread-mapping";
 import {
   createFileChatThread,
@@ -15,22 +15,14 @@ import {
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
-const resolveFileThreadBodySchema = t.Object({
-  entityId: tSafeId("entity"),
-  fieldId: tSafeId("field"),
-  // Client-generated draft thread id, supplied when the overlay already
-  // mounted its chat runtime on a draft (see `fileChatThreadOptions` on the
-  // web side) and materializes on first send. Using it for the insert keeps
-  // the draft id and the persisted id identical, so the runtime never has to
-  // rebind mid-send. Same trust model as `send-message`'s draft-thread
-  // creation, which also persists a client-generated thread id; a collision
-  // with any existing thread fails the primary-key insert and lands in the
-  // unique-violation recovery below, never in an overwrite.
-  threadId: t.Optional(tSafeId("chatThread")),
+const resolveFileThreadBodySchema = v.object({
+  entityId: resourceIdSchema("entity"),
+  fieldId: resourceIdSchema("field"),
+  threadId: v.optional(resourceIdSchema("chatThread")),
 });
 
 const config = {

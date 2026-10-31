@@ -10,15 +10,15 @@
  * requires the key unless local development access is open, so this
  * fallback only fires in local development and tests.
  */
-
 import { Result } from "better-result";
-import { createHmac, hkdf } from "node:crypto";
+import { hkdf } from "node:crypto";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 
 const AES_KEY_BYTES = 32;
 const IV_BYTES = 12;
@@ -152,6 +152,7 @@ const decryptScopedContent = async (
     new Uint8Array(ciphertext),
   );
 
+  recordReadWork("decryptedBytes", decrypted.byteLength);
   return new TextDecoder().decode(decrypted);
 };
 
@@ -190,7 +191,7 @@ export const contentLookupKey = async (
     masterKey,
     `${LOOKUP_KEY_SCOPE}${organizationId}`,
   );
-  return createHmac("sha256", scopeKey).update(value).digest("hex");
+  return new Bun.CryptoHasher("sha256", scopeKey).update(value).digest("hex");
 };
 
 /** Keyed identifiers never fall back to a guessable plaintext digest. */

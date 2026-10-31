@@ -31,6 +31,11 @@ export default {
         reason:
           "Removes the ledger and preserves artifact keys for durable erasure cleanup.",
       },
+      {
+        path: "apps/api/src/db/entity-feature-gate-repair.ts",
+        reason:
+          "Reads each table's declared RLS policy metadata to cut over the entity-feature gate; never reads or writes ledger rows.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

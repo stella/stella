@@ -4,11 +4,13 @@
 // removing a dependency cannot silently drift from the documentation MCP.
 //
 // A no-llms-txt classification is evidence about mutable upstream state, not
-// a permanent exemption. Its quarantine expires within 31 days and the
-// scheduled lint run forces another check.
+// a permanent exemption. Its quarantine must expire within 31 days of its
+// check. The rule never reads the clock: scripts/dated-waivers.ts owns the
+// expiry, failing only changes that touch this policy, and the scheduled
+// dated-waiver-healing run rechecks it before the date.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -40,7 +42,6 @@ const EXACT_UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 type DocumentationSourcePolicyOptions = {
   dependencies: ReadonlySet<string>;
   exclusions: readonly NoLlmsTxtExclusion[];
-  now: Date;
   sources: Readonly<Record<string, DocSource>>;
 };
 
@@ -113,7 +114,6 @@ const addClassification = (
 export const checkDocumentationSourcePolicy = ({
   dependencies,
   exclusions,
-  now,
   sources,
 }: DocumentationSourcePolicyOptions): string[] => {
   const failures: string[] = [];
@@ -166,11 +166,6 @@ export const checkDocumentationSourcePolicy = ({
     if (expiresAt - checkedAt > MAX_QUARANTINE_MILLISECONDS) {
       failures.push(
         `${exclusion.dependency} has a no-llms-txt quarantine longer than 31 days.`,
-      );
-    }
-    if (now.getTime() >= expiresAt) {
-      failures.push(
-        `${exclusion.dependency} has an expired no-llms-txt quarantine (${exclusion.expiresAt}); recheck its canonical documentation.`,
       );
     }
   }
@@ -300,10 +295,9 @@ const fixturePolicy = (
     return null;
   }
   const dependencies = staticStrings(value.dependencies);
-  const { exclusions: exclusionEntries, now, sources: sourceEntries } = value;
+  const { exclusions: exclusionEntries, sources: sourceEntries } = value;
   if (
     dependencies === null ||
-    typeof now !== "string" ||
     !isStaticRecord(sourceEntries) ||
     !Array.isArray(exclusionEntries)
   ) {
@@ -328,7 +322,6 @@ const fixturePolicy = (
   return {
     dependencies: new Set(dependencies),
     exclusions,
-    now: new Date(now),
     sources,
   };
 };
@@ -349,7 +342,7 @@ export default eslintCompatPlugin({
         type: "problem",
         messages: {
           fixtureCase:
-            "A documentation-source policy fixture case must be one literal policy with dependencies, sources, exclusions and now.",
+            "A documentation-source policy fixture case must be one literal policy with dependencies, sources and exclusions.",
           policyFailure: "{{failure}}",
         },
         schema: [],
@@ -395,7 +388,6 @@ export default eslintCompatPlugin({
             const failures = checkDocumentationSourcePolicy({
               dependencies: readFirstLevelDependencies(root),
               exclusions: DOC_SOURCE_EXCLUSIONS,
-              now: new Date(),
               sources: DOC_SOURCES,
             });
             for (const failure of failures) {

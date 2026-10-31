@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/legal-search/case-law-serving-flip.ts",
+  "delta": 1,
+  "reason": "The purge schedules each decision's erasure in ascending id order, one at a time, so every row lock is taken in the same canonical order as the other projection writers; a batched write would take them in one statement in an order the planner chooses."
+}

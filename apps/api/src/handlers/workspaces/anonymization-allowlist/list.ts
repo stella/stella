@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, asc, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import {
@@ -9,7 +9,7 @@ import {
 } from "@/api/lib/anonymization-allowlist";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { boundedAll } from "@/api/lib/db/bounded-all";
 
 /**
@@ -49,9 +49,7 @@ const config = {
     consumesServices: false,
   },
   access: "read",
-  query: t.Object({
-    entityId: t.Optional(tSafeId("entity")),
-  }),
+  query: v.object({ entityId: v.optional(resourceIdSchema("entity")) }),
 } satisfies WorkspaceHandlerConfig;
 
 const readWorkspaceAnonymizationAllowlist = createSafeHandler(

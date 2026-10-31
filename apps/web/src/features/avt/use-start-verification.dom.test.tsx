@@ -115,7 +115,7 @@ for (const { locale, messages } of [
     });
   }
 }
-test("a failed transport shows the start failure and clears the pending document", async () => {
+test("a network failure shows the translated transport message", async () => {
   answer(() => {
     throw new TypeError("Network unavailable");
   });
@@ -123,8 +123,19 @@ test("a failed transport shows the start failure and clears the pending document
   const { result, opened } = mountStart();
   await act(async () => await result.current.start(target));
   expect(toast).toHaveBeenCalledWith(
-    expect.objectContaining({ title: english.avt.runs.startFailed }),
+    expect.objectContaining({ title: english.common.networkError }),
   );
+  expect(opened).toEqual([]);
+  expect(result.current.startingFor).toBeNull();
+});
+test("an aborted request stays silent", async () => {
+  answer(() => {
+    throw new DOMException("Request cancelled", "AbortError");
+  });
+  const toast = watchToast();
+  const { result, opened } = mountStart();
+  await act(async () => await result.current.start(target));
+  expect(toast).not.toHaveBeenCalled();
   expect(opened).toEqual([]);
   expect(result.current.startingFor).toBeNull();
 });

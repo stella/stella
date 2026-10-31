@@ -3,12 +3,22 @@ import { expect, jest, test } from "bun:test";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createQueryPerfDeadline } from "./deadline";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
+import { SERVER_STATEMENT_TIMEOUT_MS } from "./plan-analyzer";
+
+test("every measured owner deadline is within the server statement bound", () => {
+  for (const deadlineMs of Object.values(QUERY_PERF_OWNER_DEADLINES)) {
+    if (deadlineMs !== undefined) {
+      expect(deadlineMs).toBeLessThanOrEqual(SERVER_STATEMENT_TIMEOUT_MS);
+    }
+  }
+});
 
 test("profile phases share a deadline and expired phases never start", async () => {
   let now = 0;
   const deadline = createQueryPerfDeadline({
     profileId: "small",
-    timeoutMs: 100,
+    timeoutMs: 100, // timeout under test
     now: () => now,
   });
   expect(
@@ -42,7 +52,7 @@ test("a stalled phase rejects at the remaining profile deadline", async () => {
     let now = 0;
     const deadline = createQueryPerfDeadline({
       profileId: "growth",
-      timeoutMs: 100,
+      timeoutMs: 100, // timeout under test
       now: () => now,
     });
     await deadline.run("seed", async () => {

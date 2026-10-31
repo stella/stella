@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 18,
+  "reason": "test-only oracle copy of the previous pl-tk reader for the differential generated-page test"
+}

@@ -10,7 +10,7 @@ import { panic } from "better-result";
  * Runs in the nightly Postgres job; skipped elsewhere.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { inArray, eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
@@ -70,7 +70,8 @@ if (!databaseUrl || !runPostgresTests) {
     };
 
     const readState = async (id: SafeId<"caseLawDecision">) => {
-      const subject =
+      // The subject is bound to the read transaction, so it is read inside it.
+      const decision =
         (await withRedistributableSubject(
           caseLawPublicReadDb,
           "pages",
@@ -78,9 +79,8 @@ if (!databaseUrl || !runPostgresTests) {
             kind: "id",
             id,
           },
-          async (gated) => gated,
+          async (subject) => await readDecisionHandler({ subject }),
         )) ?? panic("expected a redistributable subject");
-      const decision = await readDecisionHandler({ subject });
       if (!("documentPending" in decision)) {
         throw new Error("expected a readable decision");
       }
@@ -290,7 +290,11 @@ if (!databaseUrl || !runPostgresTests) {
       ]);
       const detail = await caseLawPublicReadDb(
         async (tx) =>
-          await listPublicDecisionLanguageAlternates({ tx, languageGroupKey }),
+          await listPublicDecisionLanguageAlternates({
+            tx,
+            languageGroupKey,
+            countries: ["CZE"],
+          }),
       );
       expect(
         detail.map(({ id, language, hasDocument }) => ({

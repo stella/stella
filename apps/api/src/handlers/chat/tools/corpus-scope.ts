@@ -1,19 +1,23 @@
 import { Result } from "better-result";
 
-import type { ChatCorpus, ChatCorpusScope } from "@stll/api-contract";
+import type { ChatCorpus, ChatSourceScope } from "@stll/api-contract";
 
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { toRegistryChatToolError } from "@/api/handlers/chat/tools/registry-adapter/registry-tool-error";
-import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import {
+  CORPUS_LABELS,
+  describeSourceScopes,
+} from "@/api/handlers/chat/tools/source-scope-description";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Per-turn corpus scope. A corpus chip in the latest user message
  * ("@Case law · Czechia") pins that turn's public-corpus reads to the corpora
- * and countries the chips name. The server enforces it here rather than in
- * the prompt, and it only ever narrows: tenant and workspace tools are left
- * alone, since the same message may also mention a matter.
+ * and countries the chips name. A turn whose chips name only registries or
+ * connectors names no corpus, so it reads none. The server enforces it here
+ * rather than in the prompt, and it only ever narrows: tenant and workspace
+ * tools are left alone, since the same message may also mention a matter.
  */
 
 /**
@@ -127,20 +131,22 @@ const isPublicSourceName = (
 
 /** Whether a scoped turn keeps this public source. */
 const scopeAdmitsPublicSource = (
-  scopes: readonly ChatCorpusScope[],
+  scopes: readonly ChatSourceScope[],
   name: keyof typeof PUBLIC_SOURCE_JURISDICTIONS,
 ): boolean => {
   const source: { corpus: ChatCorpus; country: string } =
     PUBLIC_SOURCE_JURISDICTIONS[name];
   return scopes.some(
-    ({ corpus, country }) =>
-      corpus === source.corpus && country === source.country,
+    (scope) =>
+      scope.kind === "corpus" &&
+      scope.corpus === source.corpus &&
+      scope.country === source.country,
   );
 };
 
 /** The public sources a scoped turn drops. Empty for an unscoped turn. */
 export const corpusScopeDroppedTools = (
-  scopes: readonly ChatCorpusScope[],
+  scopes: readonly ChatSourceScope[],
 ): string[] =>
   scopes.length === 0
     ? []
@@ -152,54 +158,27 @@ export const corpusScopeDroppedTools = (
 const isCorpusReadToolName = (name: string): name is CorpusReadToolName =>
   Object.hasOwn(CORPUS_READ_TOOLS, name);
 
-const CORPUS_LABELS = {
-  case_law: "case law",
-  legislation: "legislation",
-} as const satisfies Record<ChatCorpus, string>;
-
-const describeScopes = (scopes: readonly ChatCorpusScope[]): string =>
-  scopes
-    .map(({ corpus, country }) => `${CORPUS_LABELS[corpus]} (${country})`)
-    .join(", ");
-
 const scopedCountries = (
-  scopes: readonly ChatCorpusScope[],
+  scopes: readonly ChatSourceScope[],
   corpus: ChatCorpus,
 ): string[] => [
   ...new Set(
-    scopes.filter((scope) => scope.corpus === corpus).map((s) => s.country),
+    scopes.flatMap((scope) =>
+      scope.kind === "corpus" && scope.corpus === corpus ? [scope.country] : [],
+    ),
   ),
 ];
 
-const outOfScopeError = (scopes: readonly ChatCorpusScope[]): ChatToolError =>
+const outOfScopeError = (scopes: readonly ChatSourceScope[]): ChatToolError =>
   new ChatToolError({
     kind: "unavailable",
     message:
-      `The user limited this turn to ${describeScopes(scopes)}; this tool ` +
-      "reads another corpus and is not available until they remove the scope.",
+      `The user limited this turn to ${describeSourceScopes(scopes)}; this tool ` +
+      "reads another source and is not available until they remove the scope.",
   });
 
-/** Drop the direct tools a scoped turn cannot use. Unscoped turns pass through. */
-export const restrictChatToolsToCorpusScope = (
-  tools: ChatToolMap,
-  scopes: readonly ChatCorpusScope[],
-): ChatToolMap => {
-  if (scopes.length === 0) {
-    return tools;
-  }
-  const dropped = new Set(corpusScopeDroppedTools(scopes));
-  return Object.fromEntries(
-    Object.entries(tools).filter(([name]) => !dropped.has(name)),
-  );
-};
-
-/** Why a dropped direct tool is missing, for a script that tries to call it. */
-export const corpusScopeUnavailableReason = (
-  scopes: readonly ChatCorpusScope[],
-): string => `the user limited this turn to ${describeScopes(scopes)}`;
-
 type ScopeCorpusReadProps = {
-  scopes: readonly ChatCorpusScope[];
+  scopes: readonly ChatSourceScope[];
   toolName: RegistryReadToolName;
   /** The read's arguments after boundary normalization (canonical alpha-3). */
   args: Record<string, unknown>;

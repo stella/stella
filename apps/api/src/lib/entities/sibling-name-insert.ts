@@ -4,12 +4,12 @@ import type { Transaction } from "@/api/db/root";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  resolveSiblingName,
   type ResolvedSiblingName,
+  resolveSiblingName,
 } from "@/api/lib/entities/sibling-name";
 import {
-  sanitizeFilename,
   type SanitizedFileName,
+  sanitizeFilename,
 } from "@/api/lib/sanitize-filename";
 
 export type ResolvedSiblingNames = {
@@ -32,8 +32,7 @@ type SiblingScope = {
 
 type ReadSiblingNamesOptions = Omit<SiblingScope, "parentId"> & {
   scope:
-    | { type: "parent"; parentId: SafeId<"entity"> | null }
-    | { type: "matter" };
+    { type: "parent"; parentId: SafeId<"entity"> | null } | { type: "matter" };
 };
 
 /** The workspace cap bounds this complete internal sibling set. */

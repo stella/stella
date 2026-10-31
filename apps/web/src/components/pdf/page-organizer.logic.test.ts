@@ -1,12 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import type { CleanScanPageReview } from "@stll/scan-engine/review";
+
+import type { CleanScanGeometry } from "@/lib/pdf/page-editor/clean-scan-run";
+
 import {
   createPageOrganizerState,
+  DEFAULT_CLEAN_SCAN_OPTIONS,
   getPageMoveDestination,
   isPageOrganizerDirty,
-  reducePageOrganizer,
   type OrganizerPage,
   type PageOrganizerState,
+  reducePageOrganizer,
+  transformPagePlanEntries,
 } from "./page-organizer.logic";
 
 const pages = (count: number): OrganizerPage[] =>
@@ -30,6 +36,14 @@ const expectInvariant = (state: PageOrganizerState) => {
   expect(state.ui.selectedPageIds.every((id) => pageIds.includes(id))).toBe(
     true,
   );
+  const retainedScans = new Set(
+    [state.history.present, ...state.history.past, ...state.history.future]
+      .flatMap(({ pages: retainedPages }) => retainedPages)
+      .flatMap(({ cleanScanId }) =>
+        cleanScanId === undefined ? [] : [cleanScanId],
+      ),
+  );
+  expect(new Set(state.cleanScans.keys())).toEqual(retainedScans);
 };
 
 describe("page organizer state transitions", () => {
@@ -253,4 +267,304 @@ test("identical per-page crops do not create an undo entry", () => {
     crops: new Map([["page-1", crop]]),
   });
   expect(repeated.history.past).toHaveLength(1);
+});
+
+describe("clean scan review", () => {
+  const RUN = "9a0f3c2e-5d1b-4c7a-8e6f-1b2c3d4e5f60";
+  const geometry = {
+    pageSize: { widthPoints: 612, heightPoints: 792 },
+    dpi: 150,
+  } satisfies CleanScanGeometry;
+  const cleaned = (pageId: string) =>
+    ({
+      type: "preview",
+      pageId,
+      scan: {
+        type: "cleaned",
+        image: {
+          pixels: new Uint8Array(4 * 6).fill(255),
+          width: 4,
+          height: 6,
+          format: "grayscale",
+        },
+        appliedQuad: null,
+        skewDegrees: 0,
+        contentBox: { x: 0, y: 0, width: 4, height: 6 },
+      },
+    }) satisfies CleanScanPageReview;
+
+  const reviewing = (pageIds: readonly string[]) =>
+    reducePageOrganizer(stateWith(), {
+      type: "startCleanScan",
+      runId: RUN,
+      pageIds,
+      options: DEFAULT_CLEAN_SCAN_OPTIONS,
+    });
+
+  const reviewed = (state: PageOrganizerState, pageId: string) =>
+    reducePageOrganizer(state, {
+      type: "cleanScanPageReviewed",
+      runId: RUN,
+      review: cleaned(pageId),
+      geometry,
+    });
+
+  const reviewTypes = (state: PageOrganizerState) =>
+    state.cleanScan?.review.pages.map((page) => page.type);
+
+  const commitScan = ({
+    state,
+    runId,
+    pageId = "page-1",
+  }: {
+    state: PageOrganizerState;
+    runId: string;
+    pageId?: string;
+  }) => {
+    const started = reducePageOrganizer(state, {
+      type: "startCleanScan",
+      runId,
+      pageIds: [pageId],
+      options: DEFAULT_CLEAN_SCAN_OPTIONS,
+    });
+    const previewed = reducePageOrganizer(started, {
+      type: "cleanScanPageReviewed",
+      runId,
+      review: cleaned(pageId),
+      geometry,
+    });
+    const applied = reducePageOrganizer(previewed, {
+      type: "applyAllCleanScanPages",
+    });
+    const committed = reducePageOrganizer(applied, { type: "commitCleanScan" });
+    expectInvariant(committed);
+    return committed;
+  };
+
+  test("discarding a redo branch releases its cleaned pixels", () => {
+    const cleanedState = commitScan({ state: stateWith(), runId: "scan-a" });
+    const undone = reducePageOrganizer(cleanedState, { type: "undo" });
+    expect(undone.cleanScans.has("scan-a:page-1")).toBe(true);
+    const selected = reducePageOrganizer(undone, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    const branched = reducePageOrganizer(selected, {
+      type: "rotateSelected",
+      degrees: 90,
+    });
+    expect(branched.history.future).toHaveLength(0);
+    expect(branched.cleanScans.size).toBe(0);
+    expect(cleanedState.cleanScans.size).toBe(1);
+    expectInvariant(branched);
+  });
+
+  test("replacing a cleaned page releases scans evicted from bounded history", () => {
+    let state = stateWith();
+    for (let index = 0; index < 125; index += 1) {
+      state = commitScan({ state, runId: `scan-${index}` });
+    }
+    expect(state.history.past).toHaveLength(100);
+    expect(state.cleanScans.size).toBe(state.history.past.length + 1);
+    expect(state.cleanScans.has("scan-0:page-1")).toBe(false);
+    expect(state.cleanScans.has("scan-124:page-1")).toBe(true);
+    expectInvariant(state);
+  });
+
+  test("undo and redo keep the exact historical pixel buffers", () => {
+    const first = commitScan({ state: stateWith(), runId: "scan-a" });
+    const scanA = transformPagePlanEntries(first).at(0)?.scan;
+    expect(scanA?.image.pixels).toBeInstanceOf(Uint8Array);
+    const second = commitScan({ state: first, runId: "scan-b" });
+    const scanB = transformPagePlanEntries(second).at(0)?.scan;
+    expect(scanB?.image.pixels).toBeInstanceOf(Uint8Array);
+    expect(scanB?.image.pixels).not.toBe(scanA?.image.pixels);
+    const undone = reducePageOrganizer(second, { type: "undo" });
+    expect(transformPagePlanEntries(undone).at(0)?.scan).toBe(scanA);
+    const redone = reducePageOrganizer(undone, { type: "redo" });
+    expect(transformPagePlanEntries(redone).at(0)?.scan).toBe(scanB);
+    expectInvariant(undone);
+    expectInvariant(redone);
+  });
+
+  test("committing a review of a deleted page retains no orphan raster", () => {
+    const previewed = reviewed(reviewing(["page-1"]), "page-1");
+    const applied = reducePageOrganizer(previewed, {
+      type: "applyAllCleanScanPages",
+    });
+    const selected = reducePageOrganizer(applied, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    const deleted = reducePageOrganizer(selected, { type: "deleteSelected" });
+    const committed = reducePageOrganizer(deleted, { type: "commitCleanScan" });
+    expect(committed.cleanScan).toBeNull();
+    expect(committed.cleanScans.size).toBe(0);
+    expectInvariant(committed);
+  });
+
+  test("selection and preview changes preserve committed raster storage identity", () => {
+    const state = commitScan({ state: stateWith(), runId: "scan-a" });
+    const selected = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-2"],
+    });
+    const previewing = reducePageOrganizer(selected, {
+      type: "startCleanScan",
+      runId: "scan-b",
+      pageIds: ["page-2"],
+      options: DEFAULT_CLEAN_SCAN_OPTIONS,
+    });
+    const cancelled = reducePageOrganizer(previewing, {
+      type: "cancelCleanScan",
+    });
+    expect(selected.cleanScans).toBe(state.cleanScans);
+    expect(previewing.cleanScans).toBe(state.cleanScans);
+    expect(cancelled.cleanScans).toBe(state.cleanScans);
+    expectInvariant(cancelled);
+  });
+
+  test("defaults to grayscale with crop and deskew on", () => {
+    expect(DEFAULT_CLEAN_SCAN_OPTIONS).toEqual({
+      output: "grayscale",
+      contentCrop: "on",
+      deskew: "on",
+    });
+  });
+
+  test("a result from an abandoned run never reaches the current review", () => {
+    const state = reviewing(["page-1"]);
+    const stale = reducePageOrganizer(state, {
+      type: "cleanScanPageReviewed",
+      runId: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+      review: cleaned("page-1"),
+      geometry,
+    });
+    const staleFailure = reducePageOrganizer(state, {
+      type: "cleanScanPageFailed",
+      runId: "0b1c2d3e-4f50-4617-8293-a4b5c6d7e8f9",
+      failure: {
+        pageId: "page-1",
+        reason: "engine-timeout",
+        message: "The scan engine request timed out",
+      },
+    });
+
+    expect(stale).toBe(state);
+    expect(staleFailure).toBe(state);
+  });
+
+  test("an engine failure is kept for its page, which stays pending and untouched", () => {
+    const failure = {
+      pageId: "page-2",
+      reason: "engine-timeout",
+      message: "The scan engine request timed out",
+    } as const;
+    const state = reducePageOrganizer(reviewing(["page-1", "page-2"]), {
+      type: "cleanScanPageFailed",
+      runId: RUN,
+      failure,
+    });
+    const committed = reducePageOrganizer(
+      reducePageOrganizer(reviewed(state, "page-1"), {
+        type: "applyAllCleanScanPages",
+      }),
+      { type: "commitCleanScan" },
+    );
+
+    expect(state.cleanScan?.failures).toEqual([failure]);
+    expect(reviewTypes(state)).toEqual(["pending", "pending"]);
+    expect(
+      committed.history.present.pages.map((page) => page.cleanScanId),
+    ).toEqual([`${RUN}:page-1`, undefined, undefined, undefined]);
+  });
+
+  test("undo reverts the user's decisions but never returns a finished page to pending", () => {
+    let state = reviewed(reviewing(["page-1", "page-2"]), "page-1");
+    state = reducePageOrganizer(state, {
+      type: "applyCleanScanPage",
+      pageId: "page-1",
+    });
+    // page-2 finishes after the user already applied page-1.
+    state = reviewed(state, "page-2");
+    state = reducePageOrganizer(state, {
+      type: "rejectCleanScanPage",
+      pageId: "page-2",
+    });
+    expect(reviewTypes(state)).toEqual(["applied", "rejected"]);
+
+    state = reducePageOrganizer(state, { type: "undoCleanScanReview" });
+    expect(reviewTypes(state)).toEqual(["applied", "preview"]);
+    state = reducePageOrganizer(state, { type: "undoCleanScanReview" });
+    expect(reviewTypes(state)).toEqual(["preview", "preview"]);
+    expect(reducePageOrganizer(state, { type: "undoCleanScanReview" })).toEqual(
+      state,
+    );
+  });
+
+  test("committing applies only accepted pages as one undoable plan edit", () => {
+    let state = reviewed(
+      reviewed(reviewing(["page-1", "page-3"]), "page-1"),
+      "page-3",
+    );
+    state = reducePageOrganizer(state, {
+      type: "applyCleanScanPage",
+      pageId: "page-3",
+    });
+    const committed = reducePageOrganizer(state, { type: "commitCleanScan" });
+
+    expect(committed.cleanScan).toBeNull();
+    expect(isPageOrganizerDirty(committed)).toBe(true);
+    expect(committed.history.past).toHaveLength(1);
+    expect(
+      committed.history.present.pages.map((page) => page.cleanScanId),
+    ).toEqual([undefined, undefined, `${RUN}:page-3`, undefined]);
+
+    const undone = reducePageOrganizer(committed, { type: "undo" });
+    expect(isPageOrganizerDirty(undone)).toBe(false);
+    const redone = reducePageOrganizer(undone, { type: "redo" });
+    expect(transformPagePlanEntries(redone).at(2)).toEqual({
+      id: "page-3",
+      sourceId: "source-a",
+      sourcePageIndex: 2,
+      rotation: 0,
+      scan: { ...geometry, image: cleaned("page-3").scan.image },
+    });
+  });
+
+  test("cancelling discards the review without touching the plan", () => {
+    const state = reducePageOrganizer(
+      reviewed(reviewing(["page-1"]), "page-1"),
+      { type: "applyAllCleanScanPages" },
+    );
+    const cancelled = reducePageOrganizer(state, { type: "cancelCleanScan" });
+
+    expect(cancelled.cleanScan).toBeNull();
+    expect(cancelled.history).toBe(state.history);
+    expect(isPageOrganizerDirty(cancelled)).toBe(false);
+  });
+
+  test("a cleaned page keeps its scan through rotation and duplication", () => {
+    let state = reducePageOrganizer(
+      reducePageOrganizer(reviewed(reviewing(["page-1"]), "page-1"), {
+        type: "applyAllCleanScanPages",
+      }),
+      { type: "commitCleanScan" },
+    );
+    state = reducePageOrganizer(state, {
+      type: "replaceSelection",
+      pageIds: ["page-1"],
+    });
+    state = reducePageOrganizer(state, { type: "rotateSelected", degrees: 90 });
+    state = reducePageOrganizer(state, {
+      type: "duplicateSelected",
+      newPageIds: ["page-1-copy"],
+    });
+
+    const [first, copy] = transformPagePlanEntries(state);
+    expect(first?.rotation).toBe(90);
+    expect(copy?.rotation).toBe(90);
+    expect(first?.scan).toBeDefined();
+    expect(copy?.scan).toBe(first?.scan);
+  });
 });

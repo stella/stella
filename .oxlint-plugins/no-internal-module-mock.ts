@@ -143,8 +143,7 @@ const ledgerFileFor = (filename: string): LedgerFile | null => {
 };
 
 type MockBinding =
-  | { kind: "direct"; local: string }
-  | { kind: "namespace"; local: string };
+  { kind: "direct"; local: string } | { kind: "namespace"; local: string };
 
 // Every binding of `bun:test`'s `mock` this import declaration introduces:
 // the plain and aliased named imports, and the namespace import. All of them

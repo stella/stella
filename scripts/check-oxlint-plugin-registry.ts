@@ -1,11 +1,18 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { panic } from "better-result";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript";
 
 import oxlintConfig from "../oxlint.config.ts";
+import { parseSource, walk } from "../packages/scripts/src/syntax-tree";
+import { GENERATORS } from "./generated-files";
+import {
+  GUARD_ROLLOUT_DIRECTORY,
+  GUARD_ROLLOUTS,
+  type GuardRollout,
+} from "./guard-rollout-policy.ts";
 import { readScopes } from "./oxlint-config-scopes.ts";
 import { severityOf } from "./oxlint-effective-config.ts";
-import { parseSource } from "./parse-memo.ts";
 
 const PLUGIN_DIRECTORY = ".oxlint-plugins";
 const FIXTURE_DIRECTORY = path.join(PLUGIN_DIRECTORY, "__fixtures__");
@@ -15,14 +22,17 @@ export const NON_PLUGIN_MODULES: ReadonlySet<string> = new Set([
   "aggregate-lock-sites.ts",
   "budget-ledger.ts",
   "database-access.ts",
+  "api-client-chain.ts",
+  "icon-ownership.ts",
   "module-id.ts",
+  "network-call.ts",
+  "no-native-ui-registry.ts",
   "physical-properties.ts",
   "public-law-decision-surface-modules.ts",
+  "public-read-io-provenance.ts",
   "restricted-import.ts",
   "utils.ts",
 ]);
-const TYPEBOX_UNSAFE_RULE_ID =
-  "no-unreviewed-typebox-unsafe/no-unreviewed-typebox-unsafe";
 
 const pluginFiles = readdirSync(PLUGIN_DIRECTORY)
   .filter((file) => file.endsWith(".ts") && !NON_PLUGIN_MODULES.has(file))
@@ -42,110 +52,68 @@ const readme = readFileSync(README_PATH, "utf-8");
 const errors: string[] = [];
 let ruleCount = 0;
 
-export const approvedAdapterPaths = (lintConfig: unknown): string[] => {
-  const paths: string[] = [];
-  if (typeof lintConfig !== "object" || lintConfig === null) {
-    return paths;
-  }
-  const overrides = Reflect.get(lintConfig, "overrides");
-  const ruleOwners = [
-    lintConfig,
-    ...(Array.isArray(overrides) ? overrides : []),
-  ];
-  for (const ruleOwner of ruleOwners) {
-    if (typeof ruleOwner !== "object" || ruleOwner === null) {
-      continue;
-    }
-    const rules = Reflect.get(ruleOwner, "rules");
-    if (typeof rules !== "object" || rules === null) {
-      continue;
-    }
-    const rule = Reflect.get(rules, TYPEBOX_UNSAFE_RULE_ID);
-    if (!Array.isArray(rule)) {
-      continue;
-    }
-    const options = rule.at(1);
-    if (typeof options !== "object" || options === null) {
-      continue;
-    }
-    const adapters = Reflect.get(options, "approvedAdapters");
-    if (!Array.isArray(adapters)) {
-      continue;
-    }
-    for (const adapter of adapters) {
-      if (typeof adapter !== "object" || adapter === null) {
-        continue;
-      }
-      const adapterPath = Reflect.get(adapter, "path");
-      if (typeof adapterPath === "string") {
-        paths.push(adapterPath);
-      }
-    }
-  }
-  return [...new Set(paths)];
-};
-
-const isFile = (file: string): boolean =>
-  statSync(file, { throwIfNoEntry: false })?.isFile() ?? false;
-
-export const approvedAdapterPathErrors = (
-  lintConfig: unknown,
-  pathIsFile = isFile,
-): string[] =>
-  approvedAdapterPaths(lintConfig)
-    .filter((approvedAdapterPath) => !pathIsFile(approvedAdapterPath))
-    .map(
-      (approvedAdapterPath) =>
-        `${CONFIG_PATH}: approved TypeBox adapter path does not exist: ${approvedAdapterPath}`,
-    );
-
 export const ruleNamesFromSource = (source: string): string[] => {
-  const tree = parseSource({ fileName: "plugin.ts", text: source });
+  const tree = parseSource("plugin.ts", source).program;
   const constants = new Map<string, string>();
-  for (const statement of tree.statements) {
-    if (!ts.isVariableStatement(statement)) {
+  for (const entry of tree.body) {
+    const statement =
+      entry.type === "ExportNamedDeclaration" && entry.declaration
+        ? entry.declaration
+        : entry;
+    if (statement.type !== "VariableDeclaration") {
       continue;
     }
-    for (const declaration of statement.declarationList.declarations) {
+    for (const declaration of statement.declarations) {
       if (
-        ts.isIdentifier(declaration.name) &&
-        declaration.initializer !== undefined &&
-        ts.isStringLiteral(declaration.initializer)
+        declaration.id.type === "Identifier" &&
+        declaration.init?.type === "Literal" &&
+        typeof declaration.init.value === "string"
       ) {
-        constants.set(declaration.name.text, declaration.initializer.text);
+        constants.set(declaration.id.name, declaration.init.value);
       }
     }
   }
   const names = new Set<string>();
-  const visit = (node: ts.Node) => {
+  walk(tree, (node) => {
     if (
-      ts.isPropertyAssignment(node) &&
-      (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
-      node.name.text === "rules" &&
-      ts.isObjectLiteralExpression(node.initializer)
+      node.type !== "Property" ||
+      node.computed ||
+      node.method ||
+      node.shorthand ||
+      node.kind !== "init" ||
+      !(
+        (node.key.type === "Identifier" && node.key.name === "rules") ||
+        (node.key.type === "Literal" && node.key.value === "rules")
+      ) ||
+      node.value.type !== "ObjectExpression"
     ) {
-      for (const property of node.initializer.properties) {
-        if (!ts.isPropertyAssignment(property)) {
-          continue;
+      return;
+    }
+    for (const property of node.value.properties) {
+      if (
+        property.type !== "Property" ||
+        property.method ||
+        property.shorthand ||
+        property.kind !== "init"
+      ) {
+        continue;
+      }
+      const name = property.key;
+      let ruleName: string | undefined;
+      if (property.computed) {
+        if (name.type === "Identifier") {
+          ruleName = constants.get(name.name);
         }
-        const name = property.name;
-        let ruleName: string | undefined;
-        if (ts.isStringLiteral(name) || ts.isIdentifier(name)) {
-          ruleName = name.text;
-        } else if (
-          ts.isComputedPropertyName(name) &&
-          ts.isIdentifier(name.expression)
-        ) {
-          ruleName = constants.get(name.expression.text);
-        }
-        if (ruleName !== undefined) {
-          names.add(ruleName);
-        }
+      } else if (name.type === "Identifier") {
+        ruleName = name.name;
+      } else if (name.type === "Literal" && typeof name.value === "string") {
+        ruleName = name.value;
+      }
+      if (ruleName !== undefined) {
+        names.add(ruleName);
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(tree);
+  });
   return [...names];
 };
 
@@ -232,6 +200,75 @@ export const redeclaredSharedHelpers = (
 const helperNames = sharedHelperNames(
   readFileSync(path.join(PLUGIN_DIRECTORY, "utils.ts"), "utf-8"),
 );
+
+type NewGuardRolloutOptions = {
+  rules: readonly string[];
+  rollouts: readonly GuardRollout[];
+  now?: Date;
+};
+
+export const newGuardRolloutErrors = ({
+  rules,
+  rollouts,
+  now = new Date(),
+}: NewGuardRolloutOptions): string[] =>
+  rules.flatMap((rule) => {
+    const rollout = rollouts.find((entry) => entry.rules?.includes(rule));
+    if (
+      rollout?.type === "changed-lines" &&
+      Date.parse(rollout.expiresAt) > now.getTime() &&
+      Date.parse(rollout.expiresAt) <= now.getTime() + 7 * 86_400_000
+    ) {
+      return [];
+    }
+    if (
+      rollout?.type === "autofix" &&
+      GENERATORS.some(({ id, autofix }) => id === rollout.generator && autofix)
+    ) {
+      return [];
+    }
+    return [
+      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.ts`,
+    ];
+  });
+
+const checkNewGuardRollouts = (): string[] => {
+  const base = execFileSync("git", ["merge-base", "origin/main", "HEAD"], {
+    encoding: "utf-8",
+    maxBuffer: 2 ** 30,
+  }).trim();
+  const changed = new Set(
+    execFileSync("git", ["diff", "--name-only", base, "--", PLUGIN_DIRECTORY], {
+      encoding: "utf-8",
+      maxBuffer: 2 ** 30,
+    })
+      .trim()
+      .split("\n"),
+  );
+  const addedRules: string[] = [];
+  for (const file of pluginFiles) {
+    const filename = `${PLUGIN_DIRECTORY}/${file}`;
+    if (!changed.has(filename)) {
+      continue;
+    }
+    const previous = spawnSync("git", ["show", `${base}:${filename}`], {
+      encoding: "utf-8",
+      maxBuffer: 2 ** 30,
+    });
+    if (previous.status !== 0 && previous.status !== 128) {
+      panic(`Cannot read guard baseline: ${filename}`);
+    }
+    const oldRules = new Set(
+      ruleNamesFromSource(previous.status === 0 ? previous.stdout : ""),
+    );
+    for (const rule of ruleNamesFromSource(readFileSync(filename, "utf-8"))) {
+      if (!oldRules.has(rule)) {
+        addedRules.push(`${path.basename(file, ".ts")}/${rule}`);
+      }
+    }
+  }
+  return newGuardRolloutErrors({ rules: addedRules, rollouts: GUARD_ROLLOUTS });
+};
 
 // A case the rule must accept, checked line by line by
 // scripts/check-oxlint-fixture-counts.ts.
@@ -325,8 +362,6 @@ for (const file of pluginFiles) {
   }
 }
 
-errors.push(...approvedAdapterPathErrors(oxlintConfig));
-
 for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
   const file = match.groups?.["file"];
   if (file !== undefined && !existsSync(path.join(PLUGIN_DIRECTORY, file))) {
@@ -335,6 +370,7 @@ for (const match of readme.matchAll(/\]\(\.\/(?<file>[a-z0-9-]+\.ts)\)/gu)) {
 }
 
 if (import.meta.main) {
+  errors.push(...checkNewGuardRollouts());
   if (errors.length > 0) {
     console.error("Oxlint plugin registry check failed:");
     for (const error of errors) {
