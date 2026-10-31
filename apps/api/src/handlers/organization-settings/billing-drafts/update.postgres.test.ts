@@ -143,15 +143,26 @@ if (!databaseUrl || !runPostgres) {
           .from(organizationSettings)
           .where(eq(organizationSettings.organizationId, organizationId));
         expect(settings.map(({ mode }) => mode)).toEqual(["enabled"]);
-        expect(
-          await db
-            .select({
-              resourceId: billingGuidelineFiles.resourceId,
-              clientId: billingGuidelineFiles.clientId,
-            })
-            .from(billingGuidelineFiles)
-            .where(eq(billingGuidelineFiles.organizationId, organizationId)),
-        ).toEqual([{ resourceId, clientId: null }]);
+        // Guideline bindings force row security for every role, the owner
+        // included, so they are read back as the member.
+        const guidelineBindings = async () =>
+          (
+            await safeDb(
+              async (tx) =>
+                await tx
+                  .select({
+                    resourceId: billingGuidelineFiles.resourceId,
+                    clientId: billingGuidelineFiles.clientId,
+                  })
+                  .from(billingGuidelineFiles)
+                  .where(
+                    eq(billingGuidelineFiles.organizationId, organizationId),
+                  ),
+            )
+          ).unwrap();
+        expect(await guidelineBindings()).toEqual([
+          { resourceId, clientId: null },
+        ]);
 
         // A second write updates the existing settings row under the same fence.
         const savedAt =
@@ -165,6 +176,10 @@ if (!databaseUrl || !runPostgres) {
             .from(organizationSettings)
             .where(eq(organizationSettings.organizationId, organizationId)),
         ).toEqual([{ mode: "disabled" }]);
+        // Turning drafts off keeps the firm guideline for a later re-enable.
+        expect(await guidelineBindings()).toEqual([
+          { resourceId, clientId: null },
+        ]);
       } finally {
         await db
           .delete(organization)
