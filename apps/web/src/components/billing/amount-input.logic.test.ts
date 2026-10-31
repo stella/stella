@@ -68,7 +68,7 @@ test("a rate that is not overridden keeps the one rate resolution supplied", () 
 });
 
 test("a draft the currency cannot express falls back rather than storing nothing", () => {
-  for (const draft of ["", "abc", "99999999999999999"].map(localeInputText)) {
+  for (const draft of ["", "abc", "99999999999999999"].map(typed)) {
     expect(
       submittedRateCents({
         draft,
