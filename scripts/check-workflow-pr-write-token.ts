@@ -493,8 +493,23 @@ const stepRunsDirectory = ({
   const rawWorkingDirectory =
     step["working-directory"] ?? inheritedWorkingDirectory;
   const workingDirectory = checkoutDirectory(rawWorkingDirectory);
+  // A remote action reads the paths its inputs name (a build context, a
+  // Dockerfile) and may run what it finds there; a checkout only writes one.
+  const actionInputs =
+    uses === "" || uses.startsWith("./") || uses.startsWith("actions/checkout@")
+      ? []
+      : stringsOf(step["with"]);
   if (directory === ".") {
-    return command !== "" || uses.startsWith("./");
+    return (
+      command !== "" ||
+      uses.startsWith("./") ||
+      actionInputs.some(
+        (input) =>
+          input === "." ||
+          input.startsWith("./") ||
+          /github\.workspace|GITHUB_WORKSPACE/u.test(input),
+      )
+    );
   }
   if (
     command !== "" &&
@@ -510,7 +525,9 @@ const stepRunsDirectory = ({
     `(?:^|[\\s'"=/])\\.?/?${escaped}(?:/|$|[\\s'";&|)])`,
     "u",
   );
-  return repositoryPath.test(command) || repositoryPath.test(uses);
+  return [command, uses, ...actionInputs].some((value) =>
+    repositoryPath.test(value),
+  );
 };
 
 const runDefaultDirectory = (owner: Record<string, unknown>): unknown => {

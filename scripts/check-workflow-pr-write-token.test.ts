@@ -95,6 +95,17 @@ describe("privileged workflow policy", () => {
       expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
     }
   });
+  test("refuses remote actions whose inputs name a head checkout", () => {
+    const head = `      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}`;
+    for (const body of [
+      `    steps:\n${head}\n          path: untrusted\n      - uses: docker/build-push-action@pin\n        with:\n          context: untrusted`,
+      `    steps:\n${head}\n      - uses: docker/build-push-action@pin\n        with:\n          context: .`,
+    ]) {
+      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    }
+    const unrelated = `    steps:\n${head}\n      - uses: actions/upload-artifact@pin\n        with:\n          name: report`;
+    expect(check(workflow("pull_request_target", unrelated))).toHaveLength(0);
+  });
   test("treats an expression working directory as any checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: \${{ env.DIR }}\n        run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
