@@ -1036,7 +1036,7 @@ const volumeCreateArrayFailures = (
   } else if (
     command?.kind === "run" &&
     // A scalar argv value cannot inject options; a spread can add arbitrary words.
-    (array.elements.some(ts.isSpreadElement) ||
+    (array.elements.some((element) => element?.type === "SpreadElement") ||
       !hasResolvedRunOptions(command.args, "scalar"))
   ) {
     failures.push(RUN_OPTIONS_MESSAGE);
