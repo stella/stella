@@ -314,6 +314,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.LEGAL_HOLD]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.LEGAL_LIST]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
