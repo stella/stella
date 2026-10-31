@@ -576,27 +576,51 @@ const applyRemediationProposal = async (
   }
 };
 
+const EXCLUDES_KEY = "minimumReleaseAgeExcludes";
+
+// The text after `[` on the key's line: `]` closes an empty inline array, and
+// only whitespace or a comment may follow either bracket.
+const commentOnly = (text: string) => {
+  const rest = text.trim();
+  return rest === "" || rest.startsWith("#");
+};
+
 export const addQuarantineExclusion = (
   bunfig: string,
   entry: string,
 ): string => {
-  const empty = /^(\s*minimumReleaseAgeExcludes\s*=\s*)\[\s*\](\s*(?:#.*)?)$/mu;
-  if (empty.test(bunfig)) {
-    return bunfig.replace(
-      empty,
-      (_, prefix: string, comment: string) =>
-        `${prefix}[\n${entry}\n]${comment}`,
-    );
+  const lines = bunfig.split("\n");
+  const index = lines.findIndex((line) => {
+    const [key, value] = line.split("=", 2);
+    return key?.trim() === EXCLUDES_KEY && value?.trim().startsWith("[");
+  });
+  const line = lines[index];
+  if (line === undefined) {
+    return panic(`bunfig.toml has no ${EXCLUDES_KEY} array`);
   }
-  // Entries carry trailing comments, so they can only go into a multi-line
-  // array; any other form is refused rather than rewritten into invalid TOML.
-  const multiline = /^(\s*minimumReleaseAgeExcludes\s*=\s*\[)[ \t]*(?:#.*)?$/mu;
-  if (!multiline.test(bunfig)) {
+  const open = line.indexOf("[");
+  const afterOpen = line.slice(open + 1);
+  const closing = afterOpen.trimStart();
+  // Entries carry trailing comments, so they can only go into an empty or a
+  // multi-line array; any other form is refused rather than rewritten into
+  // invalid TOML.
+  if (closing.startsWith("]") && commentOnly(closing.slice(1))) {
+    lines.splice(
+      index,
+      1,
+      `${line.slice(0, open)}[`,
+      entry,
+      `]${closing.slice(1)}`,
+    );
+    return lines.join("\n");
+  }
+  if (!commentOnly(afterOpen)) {
     return panic(
-      "bunfig.toml minimumReleaseAgeExcludes must be an empty or multi-line array to add a quarantine exclusion",
+      `bunfig.toml ${EXCLUDES_KEY} must be an empty or multi-line array to add a quarantine exclusion`,
     );
   }
-  return bunfig.replace(multiline, (line: string) => `${line}\n${entry}`);
+  lines.splice(index + 1, 0, entry);
+  return lines.join("\n");
 };
 
 const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
