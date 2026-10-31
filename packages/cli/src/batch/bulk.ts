@@ -17,7 +17,7 @@ const isUnknownArray = (value: unknown): value is unknown[] =>
   Array.isArray(value);
 
 /** Lookups use the active tree, so deployment and scope omissions stay effective. */
-export const findCapability = (
+const findCapability = (
   tree: RouteNode,
   capabilityId: string,
 ): CapabilityLeafSpec | undefined => {
@@ -41,7 +41,7 @@ export const findCapability = (
 };
 
 /** Read the endpoint-owned ceiling rather than duplicating it in a CLI map. */
-export const collectionMaximum = (
+const collectionMaximum = (
   spec: CapabilityLeafSpec,
   property: string,
 ): number => {
