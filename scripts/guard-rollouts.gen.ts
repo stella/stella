@@ -7,6 +7,7 @@ import noDynamicKeyInOperator from "./guard-rollouts/no-dynamic-key-in-operator.
 import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-library-screen.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
+import noPlanScanNodeLiterals from "./guard-rollouts/no-plan-scan-node-literals.ts";
 import noRealTimersInTests from "./guard-rollouts/no-real-timers-in-tests.ts";
 import noWallclockAssertionsInTests from "./guard-rollouts/no-wallclock-assertions-in-tests.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
@@ -25,6 +26,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-global-testing-library-screen": noGlobalTestingLibraryScreen,
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
+  "no-plan-scan-node-literals": noPlanScanNodeLiterals,
   "no-real-timers-in-tests": noRealTimersInTests,
   "no-wallclock-assertions-in-tests": noWallclockAssertionsInTests,
   "portable-path": portablePath,
