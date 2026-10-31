@@ -23,7 +23,7 @@ export const FILE_CHAT_DRAFT_DELIVERY = {
   draft: "draft",
   send: "send",
 } as const;
-export type FileChatDraftDelivery =
+type FileChatDraftDelivery =
   (typeof FILE_CHAT_DRAFT_DELIVERY)[keyof typeof FILE_CHAT_DRAFT_DELIVERY];
 
 /**
