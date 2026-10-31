@@ -917,6 +917,9 @@ const applyTableLifecycle = ({
   position,
 }: ApplyTableLifecycleOptions) => {
   const verb = tokens[position]?.value;
+  if (verb === undefined) {
+    return;
+  }
   let cursor = position + 1;
   if (
     verb === "create" &&
@@ -1020,7 +1023,7 @@ const catalogIndexOperation = (
       return;
     default:
       operation satisfies never;
-      return panic("Unknown migration index catalog operation");
+      panic("Unknown migration index catalog operation");
   }
 };
 

@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
+import { compareCodeUnit } from "@stll/collation";
+
 import { readMigrationLockSources } from "./check-migration-locks";
 import { generateMigrationLockManifest } from "./generate-migration-lock-manifest";
 import {
@@ -34,12 +36,15 @@ const targetsFor = (source: string, history = [initial]) => {
         return "*";
       }
       const relation: unknown = JSON.parse(target);
-      if (!Array.isArray(relation) || typeof relation.at(1) !== "string") {
+      const name: unknown = Array.isArray(relation)
+        ? relation.at(1)
+        : undefined;
+      if (typeof name !== "string") {
         throw new TypeError("Census returned an invalid relation key");
       }
-      return relation.at(1);
+      return name;
     })
-    .toSorted();
+    .toSorted(compareCodeUnit);
 };
 
 test.each([
@@ -131,7 +136,7 @@ test.each([
 ])(
   "relation lease targets resolve to owning tables: $sql",
   ({ sql, expected }) => {
-    expect(targetsFor(sql)).toEqual(expected);
+    expect(targetsFor(sql)).toEqual([...expected]);
   },
 );
 

@@ -125,7 +125,7 @@ test("unresolved dependency locks remain explicit and conservative in real migra
 test("the generated public table names equal committed migration history", () => {
   const expected = generateSchemaTableNames(readMigrationLockSources());
   expect(expected.length).toBeGreaterThan(0);
-  expect(SCHEMA_TABLE_NAMES).toEqual(expected);
+  expect(expected).toEqual([...SCHEMA_TABLE_NAMES]);
   expect(new Set(SCHEMA_TABLE_NAMES).size).toBe(SCHEMA_TABLE_NAMES.length);
 });
 
