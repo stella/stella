@@ -473,6 +473,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
             panic(`No measurement for ${jobId}`);
+          if (measurement.type !== "corpus") {
+            panic(`${jobId} requires a writing-job measurement`);
+          }
           const release =
             scenario.type === "case-law"
               ? await measurement.prepare?.({
@@ -552,6 +555,28 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             continue;
           }
           measured.add(budgetId);
+          if (measurement.type === "writing") {
+            // db-await-in-loop: every writing job measures its fixed batch at both independently seeded history sizes.
+            const runs = await deadline.run(
+              `measure ${jobId}`,
+              async () => await measurement.measure(openClient),
+            );
+            for (const run of runs) {
+              log({ event: "read_budget_job_run", jobId, ...run });
+              note(budgetProblem(budgetId, run.metrics));
+            }
+            const small =
+              runs.at(0) ?? panic("Missing small writing-job measurement");
+            const large =
+              runs.at(1) ?? panic("Missing large writing-job measurement");
+            for (const violation of scaleViolations({
+              size: small.metrics.sharedBlocks,
+              double: large.metrics.sharedBlocks,
+            })) {
+              note(`${jobId}: ${violation}`);
+            }
+            continue;
+          }
           for (const scenario of measurement.scenarios) {
             const label = describeScheduledScenario(scenario.size);
             // db-await-in-loop: scenarios move the served generations, so they run one at a time.
@@ -589,6 +614,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const coverageMeasurement =
           SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
           panic("The coverage refresh has no measurement");
+        if (coverageMeasurement.type !== "corpus") {
+          panic("The coverage refresh requires a corpus measurement");
+        }
         const measureCoverageInPlace = async (
           admission: Verdict = QUERY_PERF_ADMISSION,
         ) => {

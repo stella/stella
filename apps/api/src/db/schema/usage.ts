@@ -1137,4 +1137,70 @@ export const hostedUsageWebhookEvents = p.pgTable(
   ],
 );
 
+export const HOSTED_CUSTOMER_ERASURE_STATUS = {
+  pending: "pending",
+  erased: "erased",
+  failed: "failed",
+} as const;
+export const HOSTED_CUSTOMER_ERASURE_STATUSES = [
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.erased,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+] as const;
+const HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES =
+  HOSTED_CUSTOMER_ERASURE_STATUSES.map((status) => sql.raw(`'${status}'`));
+
+export const HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS = 5;
+const HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES = [
+  HOSTED_CUSTOMER_ERASURE_STATUS.pending,
+  HOSTED_CUSTOMER_ERASURE_STATUS.failed,
+].map((status) => sql.raw(`'${status}'`));
+
+/** Shared by the due index and its claim so terminal history is never scanned. */
+export const hostedCustomerErasureRetryable = sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_RETRYABLE_SQL_VALUES, sql`, `)}) AND attempts < ${sql.raw(String(HOSTED_CUSTOMER_ERASURE_MAX_ATTEMPTS))}`;
+
+/** Reference-free provider deletion intents which survive the organization cascade. */
+export const hostedCustomerErasures = p.pgTable(
+  "hosted_customer_erasures",
+  {
+    id: p.uuid().primaryKey().defaultRandom(),
+    externalCustomerRef: p.text("external_customer_ref").notNull().unique(),
+    status: p
+      .text({ enum: HOSTED_CUSTOMER_ERASURE_STATUSES })
+      .notNull()
+      .default(HOSTED_CUSTOMER_ERASURE_STATUS.pending),
+    attempts: p.integer().notNull().default(0),
+    nextAttemptAt: timestamptz("next_attempt_at").notNull().defaultNow(),
+    lastErrorCode: p.varchar("last_error_code", { length: 64 }),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("hosted_customer_erasures_due_idx")
+      .on(table.nextAttemptAt)
+      .where(hostedCustomerErasureRetryable),
+    p.check(
+      "hosted_customer_erasures_status_domain",
+      sql`status IN (${sql.join(HOSTED_CUSTOMER_ERASURE_STATUS_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "hosted_customer_erasures_attempts_nonnegative",
+      sql`attempts >= 0`,
+    ),
+    p.pgPolicy("hosted_customer_erasures_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.hosted_customer_erasures'::regclass)`,
+    }),
+    p.pgPolicy("hosted_customer_erasures_no_stella_access", {
+      for: "all",
+      to: stella,
+      using: sql`false`,
+      withCheck: sql`false`,
+    }),
+  ],
+);
+
 // -- Relations --

@@ -6171,6 +6171,26 @@
   },
   {
     "schema": "public",
+    "table": "hosted_customer_erasures",
+    "policy": "hosted_customer_erasures_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "hosted_customer_erasures",
+    "policy": "hosted_customer_erasures_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_customer_erasures'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('hosted_customer_erasures'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "infosoud_tracked_cases",
     "policy": "workspace_delete",
     "command": "DELETE",

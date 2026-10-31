@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { type SQL, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 
@@ -22,6 +23,27 @@ import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { analyzePlan } from "./plan-analyzer";
 import { measureJobStatements } from "./statement-measurement";
 
+export type CapturedStatement = { text: string; params: readonly unknown[] };
+
+/** A captured statement as a Drizzle query with the same bound parameters. */
+export const capturedStatementQuery = ({
+  text,
+  params,
+}: CapturedStatement): SQL => {
+  const parts = text.split(/\$(\d+)/u);
+  const chunks = parts.map((part, index) => {
+    if (index % 2 === 0) {
+      return sql.raw(part);
+    }
+    const position = Number(part) - 1;
+    if (position < 0 || position >= params.length) {
+      return panic(`Captured statement names missing parameter $${part}`);
+    }
+    // One bound value each, as captured: an array stays one array parameter.
+    return sql.param(params[position]);
+  });
+  return sql.join(chunks, sql.raw(""));
+};
 /** Lend fixture transactions through the aggregate savepoint owner. */
 export const scheduledMeasurementDatabase = (
   tx: Pick<Transaction, "execute" | "transaction">,

@@ -12,6 +12,7 @@ import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { ERASE_HOSTED_CUSTOMERS_TASK } from "@/api/lib/scheduler/tasks/hosted-customer-erasure";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -27,6 +28,7 @@ import {
   seedSitemapReadBudget,
   sitemapRefreshRetiredChanges,
 } from "./corpus-seed";
+import { measureHostedErasureHistory } from "./hosted-erasure-run";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import type { RequestReceiptScenario } from "./request-receipt-seed";
 import type { seedQueryPerf } from "./seed";
@@ -102,20 +104,27 @@ export const corpusStatementRegistry = (seed: CorpusReadBudgetSeed) =>
 export type ScheduledJobScenario =
   { type: "case-law"; served: ServedCaseLaw } | RequestReceiptScenario;
 
-type ScheduledJobMeasurement = {
-  prepare?: typeof seedSitemapReadBudget;
-  /**
-   * Whether the run did the job's work, read before `prepare` restores the
-   * fixture. A governed job the load governor held issues only its bookkeeping,
-   * and its statements would pass a budget without measuring the work.
-   */
-  executed?: (database: GatedTestDb) => Promise<boolean>;
-  task: string;
-  scenarios: readonly {
-    size: ScheduledJobScenario;
-    double?: ScheduledJobScenario;
-  }[];
-};
+type ScheduledJobMeasurement =
+  | {
+      type: "corpus";
+      prepare?: typeof seedSitemapReadBudget;
+      /**
+       * Whether the run did the job's work, read before `prepare` restores the
+       * fixture. A governed job the load governor held issues only its bookkeeping,
+       * and its statements would pass a budget without measuring the work.
+       */
+      executed?: (database: GatedTestDb) => Promise<boolean>;
+      task: string;
+      scenarios: readonly {
+        size: ScheduledJobScenario;
+        double?: ScheduledJobScenario;
+      }[];
+    }
+  | {
+      type: "writing";
+      task: string;
+      measure: typeof measureHostedErasureHistory;
+    };
 
 /**
  * How each budgeted scheduled job is measured, keyed by the job's id: the
@@ -128,7 +137,13 @@ type ScheduledJobMeasurement = {
 export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
   Record<string, ScheduledJobMeasurement>
 > = {
+  "usage.eraseHostedCustomers.minute": {
+    type: "writing",
+    task: ERASE_HOSTED_CUSTOMERS_TASK,
+    measure: measureHostedErasureHistory,
+  },
   [SCHEDULER_BACKFILL_IDS.coverage]: {
+    type: "corpus",
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
     prepare: prepareCoverageRefreshMeasurement,
     executed: coverageRefreshWroteSummary,
@@ -140,6 +155,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     ],
   },
   "caseLaw.refreshSitemapShards.hourly": {
+    type: "corpus",
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
     executed: sitemapRefreshRetiredChanges,
@@ -148,6 +164,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     ],
   },
   "requests.sweepReceipts.hourly": {
+    type: "corpus",
     task: SWEEP_REQUEST_RECEIPTS_TASK,
     scenarios: (["expired", "quiet", "mixed"] as const).map((cohort) => ({
       size: { type: "request-receipts", rows: 60_000, cohort },
@@ -155,6 +172,7 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
     })),
   },
   "caseLaw.reportFreshness.fiveMinute": {
+    type: "corpus",
     // Imported, not spelled: the gate's CI scope follows this module's imports.
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
     scenarios: Object.values(CASE_LAW_SCENARIOS).map((scenario) => ({
@@ -210,6 +228,7 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.usage.eraseHostedCustomers": "corpus",
   "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",
