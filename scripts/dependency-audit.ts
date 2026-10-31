@@ -476,10 +476,15 @@ export const addQuarantineExclusion = (
         `${prefix}[\n${entry}\n]${comment}`,
     );
   }
-  return bunfig.replace(
-    "minimumReleaseAgeExcludes = [",
-    () => `minimumReleaseAgeExcludes = [\n${entry}`,
-  );
+  // Entries carry trailing comments, so they can only go into a multi-line
+  // array; any other form is refused rather than rewritten into invalid TOML.
+  const multiline = /^(\s*minimumReleaseAgeExcludes\s*=\s*\[)[ \t]*(?:#.*)?$/mu;
+  if (!multiline.test(bunfig)) {
+    return panic(
+      "bunfig.toml minimumReleaseAgeExcludes must be an empty or multi-line array to add a quarantine exclusion",
+    );
+  }
+  return bunfig.replace(multiline, (line: string) => `${line}\n${entry}`);
 };
 
 const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {

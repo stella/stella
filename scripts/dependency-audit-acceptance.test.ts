@@ -673,6 +673,28 @@ test("adding the first quarantine exclusion keeps the array end outside its comm
 `);
 });
 
+test("a quarantine exclusion goes onto its own line of a multi-line array", () => {
+  expect(
+    addQuarantineExclusion(
+      'minimumReleaseAgeExcludes = [\n  "existing",\n]\n',
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toBe(`minimumReleaseAgeExcludes = [
+  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z
+  "existing",
+]
+`);
+});
+
+test("a non-empty inline exclusion array is refused instead of rewritten", () => {
+  expect(() =>
+    addQuarantineExclusion(
+      'minimumReleaseAgeExcludes = ["existing"]\n',
+      '  "example", # quarantine-expires: 2026-11-01T00:00:00.000Z',
+    ),
+  ).toThrow("must be an empty or multi-line array");
+});
+
 test("package-wide pins preserve differently named scoped packages", () => {
   expect(
     updatedResolutionEntries(
