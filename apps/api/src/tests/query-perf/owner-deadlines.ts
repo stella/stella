@@ -1,29 +1,9 @@
-import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
-import { PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS } from "@/api/lib/case-law/provision-state-backfill/backfill";
-import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
-import { REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS } from "@/api/lib/idempotency/request-receipts";
-import { SCHEDULER_BACKFILL_CONFIG } from "@/api/lib/scheduler/backfill-config";
-import { CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import type { ReadBudgetId } from "@/api/lib/db/read-budgets";
+
+import deadlines from "./deadline-entries/registry.gen";
 
 /** The deadline each measured runtime owner applies, or no owner deadline. */
-export const QUERY_PERF_OWNER_DEADLINES = {
-  "scheduled.caseLaw.backfillProvisionState":
-    PROVISION_BACKFILL_STATEMENT_TIMEOUT_MS,
-  "scheduled.legislation.backfillExpressionIds":
-    SCHEDULER_BACKFILL_CONFIG.batchStatementTimeoutMs,
-  "scheduled.caseLaw.refreshCoverage":
-    CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
-  "statement.caseLaw.globalSearchHits": undefined,
-  "scheduled.caseLaw.reportFreshness": undefined,
-  "scheduled.requests.sweepReceipts":
-    REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS,
-  "scheduled.caseLaw.refreshSitemapShards":
-    READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs,
-  "statement.caseLaw.coverageSources":
-    CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
-  "statement.caseLaw.euCompletionPage":
-    READ_BUDGETS["statement.caseLaw.euCompletionPage"].statementDeadlineMs,
-  "statement.legislation.candidateRows":
-    PUBLIC_READ_STATEMENT_TIMEOUT_MS.search,
-  "statement.documents.searchHits": undefined,
-} as const satisfies Record<ReadBudgetId, number | undefined>;
+export const QUERY_PERF_OWNER_DEADLINES = deadlines satisfies Record<
+  ReadBudgetId,
+  number | undefined
+>;
