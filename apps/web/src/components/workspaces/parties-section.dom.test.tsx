@@ -397,7 +397,7 @@ test("creating a client from a personal matter sends a replay key and no contact
   await waitFor(() => expect(workspaceUpdates).toHaveLength(1));
   expect(workspaceUpdates).toEqual([
     {
-      body: { clientId: createRequest.body["id"], expectedClientId: null },
+      body: { clientId: contactId, expectedClientId: null },
       replayKey: null,
     },
   ]);
