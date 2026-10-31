@@ -349,6 +349,55 @@ describe("parseUsDecisionHtml", () => {
       expect(holdingTexts.some((t) => t.includes("porušeno právo"))).toBe(true);
       expect(holdingTexts.some((t) => t.includes("zrušuje"))).toBe(true);
     });
+
+    const sbnuRuling = (tail: string[]) =>
+      parseUsDecisionHtml(
+        baseInput(`
+        <html><body>
+          <span id="lblDecisionForm">NÁLEZ</span>
+          <input id="docContentHidden" value="${[
+            "\\pard Nález Ústavního soudu ze dne 3. března 2005 ve věci ústavní stížnosti stěžovatele J. K. proti rozsudku Městského soudu v Praze",
+            "\\par",
+            "Ústavní stížnost se zamítá.",
+            ...tail,
+          ].join("\n")}" />
+          <input id="docIdHidden" value="99999" />
+        </body></html>
+      `),
+      ).documentAst.blocks;
+
+    test("opens the ruling at the SbNU nález caption, which prints no takto:", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "Odůvodnění:",
+        "\\par",
+        "1. Stěžovatel se domáhal zrušení rozsudku.",
+      ]);
+
+      expect(findByRole(blocks, "intro")?.plainText).toStartWith(
+        "Nález Ústavního soudu",
+      );
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
+    });
+
+    test("closes the ruling at the signatures and the instruction", () => {
+      const blocks = sbnuRuling([
+        "\\par",
+        "V Brně dne 3. března 2005",
+        "\\par",
+        "JUDr. Tomáš Lichovník v. r.",
+        "\\par",
+        "předseda senátu",
+        "\\par",
+        "Poučení: Proti tomuto nálezu se nelze odvolat.",
+      ]);
+
+      expect(findAllByRole(blocks, "holding").map((b) => b.plainText)).toEqual([
+        "Ústavní stížnost se zamítá.",
+      ]);
+    });
   });
 
   describe("Odůvodnění zone", () => {

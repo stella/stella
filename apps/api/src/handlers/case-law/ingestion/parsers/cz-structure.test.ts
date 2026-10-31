@@ -7,6 +7,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import { readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -273,4 +275,49 @@ describe("the operative part of a plenary nález", () => {
       "Ustanovení § 4 odst. 3 zákona č. 586/1992 Sb., o daních z příjmů, ve znění pozdějších předpisů, se ruší dnem vyhlášení tohoto nálezu ve Sbírce zákonů.",
     ]);
   });
+});
+
+describe("the operative part of a Constitutional Court decision", () => {
+  const FIXTURE_FILE_RE = /^cz-(?:us|plenary)-(?<name>.+)\.html\.gz$/u;
+  const fixtures = readdirSync(fileURLToPath(FIXTURES)).flatMap((file) => {
+    const name = FIXTURE_FILE_RE.exec(file)?.groups?.["name"];
+    return name === undefined ? [] : [{ file, name }];
+  });
+
+  const isHolding = (block: Block): boolean =>
+    block.type === "paragraph" && block.role === "holding";
+
+  const endsRuling = (block: Block): boolean =>
+    block.type === "paragraph" &&
+    (block.role === "closing" ||
+      block.role === "signature" ||
+      /^Poučení/u.test(block.plainText));
+
+  test("every fixture is read", () => {
+    expect(fixtures.length).toBeGreaterThan(0);
+  });
+
+  test.each(fixtures)(
+    "$file: no holding follows a signature or the instruction",
+    async ({ file, name }) => {
+      const { blocks } = parseUsDecisionHtml({
+        html: await gunzipText(file),
+        caseNumber: name,
+        ecli: undefined,
+        court: "Ústavní soud",
+        decisionDate: undefined,
+        decisionType: "nález",
+      }).documentAst;
+      // A signature-like line may sit in the preamble: only one after the
+      // ruling opened bounds it.
+      const bound = blocks.findIndex(
+        (block, index) =>
+          endsRuling(block) && blocks.slice(0, index).some(isHolding),
+      );
+      if (bound === -1) {
+        return;
+      }
+      expect(blocks.slice(bound).filter(isHolding).map(textOf)).toEqual([]);
+    },
+  );
 });
