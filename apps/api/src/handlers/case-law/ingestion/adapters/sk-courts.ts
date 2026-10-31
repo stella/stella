@@ -2148,11 +2148,11 @@ const reparseStoredRaw = async (
     };
   }
   const document = parsed.value;
-  if (document === undefined) {
+  if (document === undefined || document.documentAst.blocks.length === 0) {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
-      detail: "Stored PDF parsed without document text",
+      detail: "Stored PDF parsed without document layout",
     };
   }
   return {

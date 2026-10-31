@@ -171,6 +171,9 @@ describe("SK courts stored document replay", () => {
     page.drawText("Second paragraph of", { x: 72, y: 668, size: 12 });
     page.drawText("the judgment.", { x: 72, y: 654, size: 12 });
     const bytes = await pdf.save();
+    const emptyPdf = PDF.create();
+    emptyPdf.addPage({ size: "letter" });
+    const emptyBytes = await emptyPdf.save();
     const parts =
       decodeSourceRawEnvelope(decision.sourceRaw ?? "") ??
       panic("Fixture envelope missing");
@@ -182,7 +185,12 @@ describe("SK courts stored document replay", () => {
       "SK courts never advances the document parser without captured layout",
       fc.asyncProperty(
         fc.boolean(),
-        fc.constantFrom("captured", "missing-object", "uncaptured"),
+        fc.constantFrom(
+          "captured",
+          "missing-object",
+          "uncaptured",
+          "empty-document",
+        ),
         async (useLegacy, captureState) => {
           const raw = useLegacy ? legacy : (decision.sourceRaw ?? "");
           const memory = memorySkDocumentRawStorage();
@@ -194,7 +202,7 @@ describe("SK courts stored document replay", () => {
               storedKey: null,
               storedContentType: null,
               inlineRaw: raw,
-              bytes,
+              bytes: captureState === "empty-document" ? emptyBytes : bytes,
               signal: new AbortController().signal,
               storage: memory.storage,
               beforeRemoteEffect: async <T>(effect: () => Promise<T>) =>
@@ -216,11 +224,19 @@ describe("SK courts stored document replay", () => {
                 : SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
             readObject: async (key: string) =>
               Result.ok(
-                captureState === "captured"
+                captureState === "captured" || captureState === "empty-document"
                   ? (memory.objects.get(key) ?? null)
                   : null,
               ),
           });
+          if (captureState === "empty-document") {
+            expect(outcome).toMatchObject({
+              type: "rejected",
+              rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
+            });
+            expect(outcome).not.toHaveProperty("result");
+            return;
+          }
           if (captureState !== "captured") {
             expect(outcome).toMatchObject({
               type: "rejected",

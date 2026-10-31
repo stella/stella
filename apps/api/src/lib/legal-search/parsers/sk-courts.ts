@@ -132,11 +132,11 @@ export const parseSkDecisionPdf = async (
   const lines = await extractLines(input.pdfBytes);
   const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
 
-  // Synthesize decision title if none detected
+  // Metadata may title extracted content, but cannot manufacture a document.
   const hasTitle = blocks.some(
     (b) => b.type === "heading" && b.role === "decision-title",
   );
-  if (!hasTitle && input.decisionType) {
+  if (blocks.length > 0 && !hasTitle && input.decisionType) {
     const title =
       input.decisionType.charAt(0).toUpperCase() + input.decisionType.slice(1);
     blocks.unshift({
