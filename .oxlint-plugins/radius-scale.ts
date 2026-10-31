@@ -52,7 +52,7 @@ const BARE_RADII = new Set([
   ...SIDES.map((side) => `rounded-${side}`),
 ]);
 
-const LITERAL_LENGTH = /^(?:\d+|\d*\.\d+)(?:px|rem|em)$/;
+const LITERAL_LENGTH = /^[+-]?(?:\d+|\d*\.\d+)(?:e[+-]?\d+)?[a-z]+$/iu;
 
 const isOffScaleRadius = (utility: string): boolean => {
   if (!utility.startsWith("rounded") || !utility.endsWith("]")) {
