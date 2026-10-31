@@ -322,12 +322,28 @@ const repositoryResolutions = (
   );
 };
 
-const governingRepositoryResolution = (
-  resolutions: ReadonlyMap<string, string>,
-  copyPath: string,
-  packageName: string,
-): string | undefined =>
-  resolutions.get(copyPath) ?? resolutions.get(packageName);
+type GoverningResolutionOptions = {
+  resolutions: ReadonlyMap<string, string>;
+  copyPath: string;
+  packageName: string;
+  parentNames: readonly string[];
+};
+
+// A hoisted copy keeps its lockfile key (`joi`) even when a `parent/joi`
+// resolution governs it, so the owning parents' paths are checked too.
+const governingRepositoryResolution = ({
+  resolutions,
+  copyPath,
+  packageName,
+  parentNames,
+}: GoverningResolutionOptions): string | undefined =>
+  [
+    copyPath,
+    ...parentNames.map((parent) => `${parent}/${packageName}`),
+    packageName,
+  ]
+    .map((location) => resolutions.get(location))
+    .find((resolution) => resolution !== undefined);
 
 const dependencyResolutionPaths = ({
   packageName,
@@ -338,12 +354,30 @@ const dependencyResolutionPaths = ({
 }: ResolutionPathsOptions): AdvisoryAssessment["resolutionPaths"] =>
   packages
     .filter(({ name }) => name === packageName)
-    .flatMap((node) =>
-      governingRepositoryResolution(
-        resolutionsByPath,
-        node.key,
+    .flatMap((node) => {
+      const parentNames = owners.flatMap((parent) =>
+        parent.fields.some((field) => {
+          const dependencies = parent.details[field];
+          return (
+            record(dependencies) &&
+            typeof dependencies[packageName] === "string" &&
+            resolvedKey({
+              parent: parent.key,
+              dependency: packageName,
+              keys,
+            }) === node.key
+          );
+        })
+          ? [packages.find(({ key }) => key === parent.key)?.name ?? parent.key]
+          : [],
+      );
+      const governing = governingRepositoryResolution({
+        resolutions: resolutionsByPath,
+        copyPath: node.key,
         packageName,
-      ) === undefined
+        parentNames,
+      });
+      return governing === undefined
         ? owners.flatMap((parent) => {
             for (const field of parent.fields) {
               const dependencies = parent.details[field];
@@ -375,17 +409,12 @@ const dependencyResolutionPaths = ({
         : [
             {
               copyPath: node.key,
-              resolution:
-                governingRepositoryResolution(
-                  resolutionsByPath,
-                  node.key,
-                  packageName,
-                ) ?? panic("Missing movable resolution"),
+              resolution: governing,
               requirement: "*",
               repositoryResolution: true,
             },
-          ],
-    );
+          ];
+    });
 
 type ManifestPinsOptions = {
   sources: readonly ManifestSource[];
@@ -532,11 +561,11 @@ export const assessAdvisories = ({
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
       let selectableForNode = nodePatches;
-      const nodeResolution = governingRepositoryResolution(
-        resolutions,
-        node.key,
-        advisory.package,
-      );
+      const nodeResolution = resolutionPaths.find(
+        (resolutionPath) =>
+          resolutionPath.copyPath === node.key &&
+          resolutionPath.repositoryResolution === true,
+      )?.resolution;
       for (const pin of manifestPins({
         sources,
         packageName: advisory.package,

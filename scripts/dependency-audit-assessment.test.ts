@@ -252,6 +252,32 @@ test("a repository resolution can move a copy past an exact parent pin", () => {
   ).toEqual(new Map([["mailauth/joi", "18.3.1"]]));
 });
 
+test("a parent-qualified resolution governs its hoisted copy", () => {
+  const advisory = { ...sdk, package: "joi", vulnerableVersions: "<18.3.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@7.1.1", "", { dependencies: { joi: "18.2.9" } }],
+        joi: ["joi@18.2.9", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "mailauth/joi": "18.2.9" } },
+    versions: new Map([["joi", ["18.2.9", "18.3.1"]]]),
+  });
+
+  expect(result?.disposition.status).toBe("fix_available");
+  expect(result?.resolutionPaths).toEqual([
+    {
+      copyPath: "joi",
+      resolution: "mailauth/joi",
+      requirement: "*",
+      repositoryResolution: true,
+    },
+  ]);
+});
+
 test("safe releases below the affected range never count as patched upgrades", () => {
   const advisory = {
     ...sdk,
