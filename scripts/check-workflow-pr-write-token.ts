@@ -105,15 +105,52 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const text = (value: unknown): string => JSON.stringify(value ?? "");
-const hasSecret = (value: unknown): boolean => {
-  const serialized = text(value);
-  if (/toJSON\(\s*secrets\s*\)/u.test(serialized)) {
-    return true;
+const stringsOf = (value: unknown): string[] => {
+  if (typeof value === "string") {
+    return [value];
   }
-  return [
-    ...serialized.matchAll(/secrets(?:\.|\[\\?["'])([A-Za-z0-9_]+)/gu),
-  ].some((match) => match[1] !== "GITHUB_TOKEN");
+  if (Array.isArray(value)) {
+    return value.flatMap(stringsOf);
+  }
+  return record(value) ? Object.values(value).flatMap(stringsOf) : [];
 };
+// Actions evaluates only `${{ … }}` bodies. A `}}` inside a single-quoted
+// literal does not close one (`''` escapes a quote, so toggling suffices),
+// and an unclosed body runs to the end of the value.
+const expressionBodies = (value: string): string[] => {
+  const bodies: string[] = [];
+  let start = value.indexOf("${{");
+  while (start !== -1) {
+    let index = start + 3;
+    let quoted = false;
+    while (index < value.length && (quoted || !value.startsWith("}}", index))) {
+      if (value.charAt(index) === "'") {
+        quoted = !quoted;
+      }
+      index += 1;
+    }
+    bodies.push(value.slice(start + 3, index));
+    start = value.indexOf("${{", index);
+  }
+  return bodies;
+};
+const SECRETS_CONTEXT = /(?<![A-Za-z0-9_.-])secrets(?![A-Za-z0-9_-])/giu;
+// Actions skips whitespace between tokens and matches names
+// case-insensitively; only the workflow token itself is not a repository
+// secret, so a computed key or the whole context counts as one.
+const WORKFLOW_TOKEN_ACCESS =
+  /^\s*(?:\.\s*github_token|\[\s*'github_token'\s*\])(?![A-Za-z0-9_-])/iu;
+const hasSecret = (value: unknown): boolean =>
+  stringsOf(value).some((item) =>
+    expressionBodies(item).some((body) =>
+      [...body.matchAll(SECRETS_CONTEXT)].some(
+        (match) =>
+          !WORKFLOW_TOKEN_ACCESS.test(
+            body.slice(match.index + match[0].length),
+          ),
+      ),
+    ),
+  );
 const hasWrite = (permissions: unknown, defaultIsWrite = false): boolean => {
   if (
     permissions === "write-all" ||

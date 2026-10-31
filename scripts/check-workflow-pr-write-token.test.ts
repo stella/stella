@@ -168,7 +168,17 @@ jobs:
     expect(check(source).some((item) => item.class === "class 2")).toBeTrue();
   });
   test("refuses bracket-notation secrets in pull_request branch scripts", () => {
-    for (const secret of ["secrets['KEY']", 'secrets["KEY"]']) {
+    for (const secret of [
+      "secrets['KEY']",
+      'secrets["KEY"]',
+      "secrets[ 'KEY' ]",
+      "secrets . KEY",
+      "SECRETS.KEY",
+      "secrets[matrix.secret]",
+      "secrets[format('{0}', 'KEY')]",
+      "fromJSON(toJSON(secrets)).KEY",
+      "secrets.GITHUB_TOKEN_EXTRA",
+    ]) {
       const body = `    steps:\n      - uses: actions/checkout@pin\n      - env:\n          KEY: \${{ ${secret} }}\n        run: bash scripts/x.sh`;
       expect(
         check(workflow("pull_request", body, "contents: read")).some(
@@ -210,6 +220,18 @@ jobs:
       `    if: github.actor != 'dependabot[bot]'\n    env:\n      TOKEN: \${{ secrets.GITHUB_TOKEN }}\n    steps:\n      - uses: actions/checkout@pin\n      - run: bash scripts/x.sh`,
     );
     expect(check(source)).toHaveLength(0);
+  });
+  test("treats every spelling of the workflow token as the token", () => {
+    for (const token of [
+      "secrets[ 'GITHUB_TOKEN' ]",
+      "secrets . github_token",
+      "secrets.GITHUB_TOKEN }} and ${{ github.sha",
+    ]) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n      - env:\n          TOKEN: \${{ ${token} }}\n        run: bash scripts/x.sh`;
+      expect(check(workflow("pull_request", body, "contents: read"))).toEqual(
+        [],
+      );
+    }
   });
   test("refuses Dependabot secrets unless Dependabot is excluded", () => {
     const body = `    env:\n      KEY: \${{ secrets.DEPENDABOT_KEY }}\n    steps:\n      - uses: actions/checkout@pin\n      - run: bash scripts/x.sh`;
