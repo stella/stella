@@ -678,6 +678,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@stll/api-contract": "workspace:*",
+        "@stll/errors": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",

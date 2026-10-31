@@ -16,6 +16,7 @@ export const FAILURE_TAGS = [
   "AnalysisInputVersionChangedError",
   "AnonymizedFieldBoundaryError",
   "ApiAccessTokenError",
+  "AppServerRequestError",
   "AppleSignInConfigError",
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",

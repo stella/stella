@@ -1394,6 +1394,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
+      "packages/api-contract/src/mcp-tool-names.gen.ts",
     ],
     inputs: [
       "apps/api/src/mcp/**",
