@@ -19,11 +19,14 @@ import type {
 } from "@stll/legal-ast/document-ast";
 
 import {
-  parsePlUodoDecisionXml,
+  parsePlUodoDecisionXml as uncheckedParsePlUodoDecisionXml,
   plUodoSourceTexts,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import type { ParsePlUodoDecisionOutput } from "@/api/handlers/case-law/ingestion/parsers/pl-uodo";
 import { toPlainCorpusText } from "@/api/mcp/tool-utils";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlUodoDecisionXml = guardParser(uncheckedParsePlUodoDecisionXml);
 
 const SHORT_DECISION = new URL(
   "__fixtures__/pl-uodo-zsoss-440-82-2019.xml",

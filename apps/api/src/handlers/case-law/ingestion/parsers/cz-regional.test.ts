@@ -2,8 +2,11 @@ import { describe, expect, test } from "bun:test";
 
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
-import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { parseRegionalDecision as uncheckedParseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parseRegionalDecision = guardParser(uncheckedParseRegionalDecision);
 
 // ── Helpers ─────────────────────────────────────────────────
 

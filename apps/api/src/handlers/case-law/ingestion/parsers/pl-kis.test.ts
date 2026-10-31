@@ -9,7 +9,14 @@ import * as cheerio from "cheerio";
 import { hasInlineChildren } from "@stll/legal-ast/document-ast";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
-import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import {
+  parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml,
+  parsePlKisDocumentPdf as uncheckedParsePlKisDocumentPdf,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
+const parsePlKisDocumentPdf = guardParser(uncheckedParsePlKisDocumentPdf);
 
 const ADAPTER_FIXTURES = new URL("../adapters/__fixtures__/", import.meta.url);
 
@@ -206,4 +213,22 @@ describe("ordered lists", () => {
       }
     },
   );
+});
+
+test("the recorded PDF rendition satisfies the reader contract", async () => {
+  const parsed = await parsePlKisDocumentPdf({
+    pdfBytes: await Bun.file(
+      new URL("pl-kis-document-05-objas.pdf", ADAPTER_FIXTURES),
+    ).bytes(),
+    caseNumber: "recorded-pdf",
+    court: "Minister Finansow",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: "https://eureka.mf.gov.pl/informacje/podglad/1",
+    documentUrl: "https://eureka.mf.gov.pl/informacje/podglad/1",
+    documentId: "1",
+    keywords: [],
+    statutes: [],
+  });
+  expect(parsed.fulltext).toContain("waloryzacji");
 });

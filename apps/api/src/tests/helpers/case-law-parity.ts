@@ -17,6 +17,10 @@ import {
   ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import type { EnrolledAdapterFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import {
+  assertReaderAcceptsAst,
+  guardParser,
+} from "@/api/tests/helpers/parser-reader-guard";
 
 const INGESTION_ROOT = new URL(
   "../../handlers/case-law/ingestion/",
@@ -39,6 +43,7 @@ const parityOutputOf = ({
       "Parser parity requires a parsed document, not a listing-only outcome",
     );
   }
+  assertReaderAcceptsAst(documentAst);
   return { fulltext, sections, documentAst, parserVersion };
 };
 
@@ -57,7 +62,7 @@ const PARITY_FIXTURES = {
 export const buildCaseLawFixture = async (fixture: EnrolledAdapterFixture) => {
   const originalFetch = globalThis.fetch;
   try {
-    return await fixture.buildDecision();
+    return await guardParser(fixture.buildDecision)();
   } finally {
     globalThis.fetch = originalFetch;
   }

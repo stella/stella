@@ -9,7 +9,10 @@ import {
   PL_KIO_HTML_BUDGET,
   PlKioHtmlBudgetError,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
-import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { parsePlDecisionContent as uncheckedParsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlDecisionContent = guardParser(uncheckedParsePlDecisionContent);
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -92,8 +95,8 @@ describe("parsePlDecisionContent", () => {
     ]);
     expect(blocks.at(8)).toMatchObject({ role: "holding" });
     expect(blocks.slice(9).map(roleOfBlock)).toEqual([
-      "apparatus",
-      "apparatus",
+      "publisher-note",
+      "publisher-note",
       "signature",
     ]);
   });
@@ -279,7 +282,9 @@ describe("parsePlDecisionContent", () => {
         ),
       );
       expect(documentAst.blocks.at(1)).toMatchObject({ role: "holding" });
-      expect(documentAst.blocks.at(-1)).toMatchObject({ role: "apparatus" });
+      expect(documentAst.blocks.at(-1)).toMatchObject({
+        role: "publisher-note",
+      });
     },
   );
 

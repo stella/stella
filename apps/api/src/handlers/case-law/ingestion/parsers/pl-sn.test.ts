@@ -9,13 +9,16 @@ import {
   assemblePlSnParagraphs,
   extractPlPdfSeparatedContent,
   extractPlSnLines,
-  parsePlSnDecisionPdf,
+  parsePlSnDecisionPdf as uncheckedParsePlSnDecisionPdf,
   PL_PDF_PARAGRAPH_START,
   plSnParagraphsToHtml,
   withoutRaisedReferenceMarkers,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import type { PlSnLine } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { inlinesToPlainText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
+
+const parsePlSnDecisionPdf = guardParser(uncheckedParsePlSnDecisionPdf);
 
 type PlSnTextLine = Extract<PlSnLine, { type: "text" }>;
 

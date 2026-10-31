@@ -40,12 +40,7 @@
 import { SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
-import {
-  classifyLineWrap,
-  LINE_JOIN,
-  lineJoinOf,
-  splitsDate,
-} from "@stll/legal-ast/line-wrap";
+import { LINE_JOIN, splitsDate } from "@stll/legal-ast/line-wrap";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -58,6 +53,12 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
+import { createBlockAnchorAllocator } from "@/api/lib/legal-search/parsers/block-anchors";
+import {
+  PDF_LINE_KIND,
+  type PdfPrintedLine,
+  readPdfLineJoins,
+} from "@/api/lib/legal-search/parsers/hard-wrapped-lines";
 import {
   buildBoldRanges,
   isBoldFont,
@@ -89,7 +90,7 @@ type ParseSkDecisionOutput = {
   fulltext: string;
 };
 
-type PdfLine = {
+type PdfLine = Omit<PdfPrintedLine, "kind"> & {
   text: string;
   segments: PdfSegment[];
   /** True when the PRIMARY (first) span is bold. Used for
@@ -226,6 +227,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
         bold,
         fontSize,
         pageIndex: pageIdx,
+        layout: { ...line.bbox, pageIndex: pageIdx },
         position: { y: line.bbox.y, height: line.bbox.height },
       });
     }
@@ -426,22 +428,32 @@ function isStructuralStart(line: PdfLine, section: Section): boolean {
  * shared line-wrap reader decides: the line above was full, ended by the
  * layout inside a sentence, as in `dňa 22.` / `10. 2003` or `exekútora` /
  * `JUDr. A. B.`. Whether such a line still opens a point or a signature is
- * `continuesPastStart`'s call. Bold lines (section markers, headings) and
+ * `continuesPastStart`'s call. Section markers and
  * the title are not running prose, so they neither count toward the page's
- * line width nor continue anything.
+ * line width nor continue anything. Ordinary bold emphasis remains prose.
  */
-const sentenceContinuations = (lines: readonly PdfLine[]): boolean[] => {
-  const prose = lines.map(({ text, bold, fontSize }) =>
-    bold || fontSize > TITLE_FONT_SIZE ? null : text,
+const sentenceContinuations = (lines: readonly PdfLine[]) =>
+  readPdfLineJoins(
+    lines.map((line, index) => {
+      if (
+        line.fontSize > TITLE_FONT_SIZE ||
+        isSkHoldingMarker(line.text) ||
+        isSkReasoningMarker(line.text) ||
+        isSkInstructionMarker(line.text)
+      ) {
+        return null;
+      }
+      const above = index > 0 ? (lines.at(index - 1)?.text ?? "") : "";
+      return {
+        ...line,
+        kind:
+          STARTS_NEW_PARAGRAPH_RE.test(line.text) &&
+          !splitsDate(above, line.text)
+            ? PDF_LINE_KIND.PARAGRAPH_START
+            : PDF_LINE_KIND.BODY,
+      };
+    }),
   );
-  const classification = classifyLineWrap(prose);
-  return prose.map(
-    (text, index) =>
-      index > 0 &&
-      lineJoinOf(classification, prose[index - 1] ?? null, text) !==
-        LINE_JOIN.BREAK,
-  );
-};
 
 /**
  * Whether a structural-looking line the line-wrap reader continues opens
@@ -512,12 +524,11 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       section = "closing";
     }
     const prev = merged.at(-1);
-    const paragraphGap =
-      index > 0 &&
-      hasParagraphGap({
-        previous: lines.at(index - 1),
-        current: line,
-      });
+    // `lines[-1]` is undefined, so the first line never opens on a gap.
+    const paragraphGap = hasParagraphGap({
+      previous: lines[index - 1],
+      current: line,
+    });
 
     // Start a new paragraph if:
     // - first line
@@ -534,7 +545,7 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     const structuralStart =
       isStructuralStart(line, section) &&
       !(
-        continuations[index] === true &&
+        continuations[index] !== LINE_JOIN.BREAK &&
         continuesPastStart(lines[index - 1]?.text ?? "", line, inSignatures)
       );
 
@@ -553,7 +564,8 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       fontSizeChanged ||
       paragraphGap ||
       structuralStart ||
-      prev.bold;
+      prev.bold ||
+      continuations[index] === LINE_JOIN.BREAK;
 
     if (startNew) {
       merged.push({
@@ -676,17 +688,6 @@ const appendDecisionTitle = ({
   });
 };
 
-const createSectionAnchorGenerator = (blocks: readonly Block[]) => {
-  const seen = new Set<string>();
-  return (anchor: string): string => {
-    if (seen.has(anchor)) {
-      return `${anchor}-${blocks.length + 1}`;
-    }
-    seen.add(anchor);
-    return anchor;
-  };
-};
-
 /**
  * Classify extracted PDF lines into AST blocks.
  *
@@ -697,7 +698,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
   const makeId = createIdGenerator();
   let blockCount = 0;
   const blocks: Block[] = [];
-  const makeAnchor = createSectionAnchorGenerator(blocks);
+  const makeAnchor = createBlockAnchorAllocator();
   let section: Section = "preamble";
 
   for (const line of lines) {
@@ -759,7 +760,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
         // (common in SK ÚS PDFs). Emit as paragraph.
         blocks.push({
           id: makeId(),
-          anchorId: `p${++blockCount}`,
+          anchorId: makeAnchor(`p${++blockCount}`),
           type: "paragraph",
           inlines: segmentsToInlines(line.segments),
           plainText: text,
@@ -776,7 +777,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
       section = "closing";
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "closing",
         inlines: segmentsToInlines(line.segments),
@@ -789,7 +790,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (section === "closing") {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "signature",
         inlines: segmentsToInlines(line.segments),
@@ -801,7 +802,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (section === "instruction" && SK_JUDGE_TITLE_RE.test(text)) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "paragraph",
         role: "signature",
         inlines: segmentsToInlines(line.segments),
@@ -814,7 +815,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     if (sectionHeading !== null) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "heading",
         level: sectionHeading.level,
         inlines: segmentsToInlines(line.segments),
@@ -836,7 +837,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
     ) {
       blocks.push({
         id: makeId(),
-        anchorId: `p${++blockCount}`,
+        anchorId: makeAnchor(`p${++blockCount}`),
         type: "heading",
         level: 3,
         inlines: segmentsToInlines(line.segments),
@@ -850,7 +851,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
 
     const block: Block = {
       id: makeId(),
-      anchorId: `p${++blockCount}`,
+      anchorId: makeAnchor(`p${++blockCount}`),
       type: "paragraph",
       inlines,
       plainText: text,

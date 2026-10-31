@@ -29,7 +29,7 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
-import { parsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
+import { parsePlKisDocumentHtml as uncheckedParsePlKisDocumentHtml } from "@/api/handlers/case-law/ingestion/parsers/pl-kis";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   decodeSourceRawEnvelope,
@@ -51,9 +51,12 @@ import type {
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
+
+const parsePlKisDocumentHtml = guardParser(uncheckedParsePlKisDocumentHtml);
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

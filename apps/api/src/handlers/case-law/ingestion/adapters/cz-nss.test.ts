@@ -41,7 +41,7 @@ import {
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { parseNssDecisionHtml as uncheckedParseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
@@ -66,9 +66,12 @@ import {
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const parseNssDecisionHtml = guardParser(uncheckedParseNssDecisionHtml);
 
 const reconciliation = requireReconciliation(czNssAdapter);
 

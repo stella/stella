@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NCOURT",
   "key": "pl-ncourt",
-  "parserVersion": 20,
+  "parserVersion": 21,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Re-read portal statute links against their anchor text: links whose provisions the anchor does not print lose them, links naming another act or a bare paragraph become plain text, and the metadata lists what was dropped. Also revalidates publisher head-matter ordering across the complete document AST; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
   }
 }

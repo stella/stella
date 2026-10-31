@@ -9,13 +9,13 @@ import {
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
 import {
-  buildCzUohsDecision,
+  buildCzUohsDecision as uncheckedBuildCzUohsDecision,
   czUohsAdapter,
   czUohsCollectionOf,
   czUohsDecisionIdentifiers,
   czUohsLetterheadDate,
   encodeCzUohsCursor,
-  parseCzUohsDocumentPdf,
+  parseCzUohsDocumentPdf as uncheckedParseCzUohsDocumentPdf,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
 import {
@@ -25,7 +25,11 @@ import {
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
+import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const buildCzUohsDecision = guardParser(uncheckedBuildCzUohsDecision);
+const parseCzUohsDocumentPdf = guardParser(uncheckedParseCzUohsDocumentPdf);
 
 const originalFetch = globalThis.fetch;
 

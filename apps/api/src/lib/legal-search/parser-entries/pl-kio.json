@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_KIO",
   "key": "pl-kio",
-  "parserVersion": 13,
+  "parserVersion": 14,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters; A clerk's closing mark printed after the decision is read as a publisher note rather than head matter; paragraph roles have no feature storage of their own."
   }
 }
