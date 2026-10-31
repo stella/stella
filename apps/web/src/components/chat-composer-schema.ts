@@ -20,12 +20,11 @@ export const createChatComposerSchemaExtensions = () => [
   Paragraph,
   Text,
   Bold,
-  // Shift+Enter inserts a hard break (newline) instead of splitting the
-  // paragraph; matches expected chat-input behaviour everywhere — Slack,
-  // Discord, ChatGPT, etc. Chained with `scrollIntoView()` so adding a new
-  // line at the bottom of an overflowed input keeps the cursor in view
-  // (ProseMirror's auto-scroll only fires on selection changes that already
-  // include the flag — `setHardBreak` alone doesn't).
+  // Enter sends the message; Shift+Enter adds a line break (a hard break)
+  // instead of splitting the paragraph. Chained with `scrollIntoView()` so
+  // adding a new line at the bottom of an overflowed input keeps the cursor
+  // in view (ProseMirror's auto-scroll only fires on selection changes that
+  // already include the flag — `setHardBreak` alone doesn't).
   HardBreak.extend({
     addKeyboardShortcuts() {
       return {
