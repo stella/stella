@@ -5,7 +5,7 @@
   "check": [
     "bun",
     "test",
-    "./scripts/ci-service-workflows.test.ts",
+    "./scripts/hosted-buildx-cleanup.test.ts",
     "-t",
     "every hosted Buildx"
   ]
