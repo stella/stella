@@ -80,6 +80,10 @@ import {
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
@@ -120,6 +124,7 @@ import type {
 import {
   CLIENT_INVOICE_UNIQUE_INDEXES,
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  IMPORT_PROVENANCE_UNIQUE_INDEXES,
   LEGISLATION_UNIQUE_INDEXES,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -143,6 +148,10 @@ import {
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINTS,
 } from "./time-entry-submitted-constraint-validation";
+import {
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINTS,
+} from "./usage-action-type-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -766,6 +775,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:
@@ -961,11 +971,18 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  // Not behind one migration: the OAuth resource set is derived from the MCP
+  // audiences in application code, so it is the code that moves and the rows
+  // that follow. Its completion is the startup census, so the deploy that
+  // widens the audience set is the one that reconciles them, without an
+  // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
@@ -997,7 +1014,9 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+    ...USAGE_ACTION_TYPE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {
