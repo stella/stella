@@ -4550,7 +4550,8 @@
       "flowRunFailed": "Przepływ pracy <bdi>{flowName}</bdi> nie powiódł się",
       "mention": "<bdi>{actorName}</bdi> wspomniał o Tobie w komentarzu",
       "reportExportFailed": "Eksport raportu nie powiódł się",
-      "reportExportSucceeded": "Twój raport jest gotowy"
+      "reportExportSucceeded": "Twój raport jest gotowy",
+      "taskAssigned": "<bdi>{actorName}</bdi> przypisał Ci zadanie"
     },
     "loadOlder": "Wczytaj starsze",
     "markAllRead": "Oznacz wszystkie jako przeczytane",

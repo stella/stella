@@ -4550,7 +4550,8 @@
       "flowRunFailed": "Darbo eiga <bdi>{flowName}</bdi> nepavyko",
       "mention": "<bdi>{actorName}</bdi> paminėjo jus komentare",
       "reportExportFailed": "Nepavyko eksportuoti ataskaitos",
-      "reportExportSucceeded": "Jūsų ataskaita paruošta"
+      "reportExportSucceeded": "Jūsų ataskaita paruošta",
+      "taskAssigned": "<bdi>{actorName}</bdi> jums priskyrė užduotį"
     },
     "loadOlder": "Įkelti senesnius",
     "markAllRead": "Žymėti visus kaip skaitytus",

@@ -4550,7 +4550,8 @@
       "flowRunFailed": "Pracovní postup <bdi>{flowName}</bdi> selhal",
       "mention": "<bdi>{actorName}</bdi> vás zmínil v komentáři",
       "reportExportFailed": "Export vaší zprávy se nezdařil",
-      "reportExportSucceeded": "Vaše zpráva je připravena"
+      "reportExportSucceeded": "Vaše zpráva je připravena",
+      "taskAssigned": "<bdi>{actorName}</bdi> vám přiřadil úkol"
     },
     "loadOlder": "Načíst starší",
     "markAllRead": "Označit vše jako přečtené",

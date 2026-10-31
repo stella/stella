@@ -4550,7 +4550,8 @@
       "flowRunFailed": "Darbplūsma <bdi>{flowName}</bdi> neizdevās",
       "mention": "<bdi>{actorName}</bdi> pieminēja jūs komentārā",
       "reportExportFailed": "Neizdevās eksportēt pārskatu",
-      "reportExportSucceeded": "Jūsu pārskats ir gatavs"
+      "reportExportSucceeded": "Jūsu pārskats ir gatavs",
+      "taskAssigned": "<bdi>{actorName}</bdi> jums piešķīra uzdevumu"
     },
     "loadOlder": "Ielādēt vecākos",
     "markAllRead": "Atzīmēt visus kā izlasītus",

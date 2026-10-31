@@ -40,6 +40,7 @@ type Messages = {
     "flowRunCompleted": "A workflow finished";
     "flowRunFailed": "A workflow failed";
     "mention": "You were mentioned in a comment";
+    "taskAssigned": "A task was assigned to you";
   };
   "reportExportStatus": {
     "action": "Open stella";
