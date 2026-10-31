@@ -68,6 +68,7 @@ const decisions = decisionIdentities.map(([id, caseNumber]): Decision => ({
   court: "Městský soud v Praze",
   decisionDate: "2026-01-14",
   decisionType: "rozsudek",
+  decisionTypeKind: null,
   ecli: null,
   headnote: { type: "absent", reason: "not_published" },
   language: "cs",
