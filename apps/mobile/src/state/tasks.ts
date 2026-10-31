@@ -70,7 +70,7 @@ export const createTask = async ({
   name,
   source,
 }: {
-  readonly assigneeIds?: readonly string[];
+  readonly assigneeIds?: readonly string[] | undefined;
   readonly dueDate: string | null;
   readonly fetch: Fetch;
   readonly matterId: string;
