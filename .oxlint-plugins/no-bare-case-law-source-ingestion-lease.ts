@@ -55,13 +55,27 @@ export const createCaseLawSourceIngestionLeasePlugin = (
             before() {
               return !isFileIn(context, [OWNER]);
             },
+            // Any member named like the acquisition, whatever object holds
+            // it: a namespace import, or a module loaded on demand.
+            MemberExpression(node) {
+              if (
+                !node.computed &&
+                isIdentifier(node.property) &&
+                node.property.name === ACQUIRE &&
+                enforces(node)
+              ) {
+                context.report({ node, messageId: "bareAcquisition" });
+              }
+            },
             CallExpression(node) {
+              if (!isIdentifier(node.callee)) {
+                return;
+              }
               const imported = resolveImportedExpressionForEnforcement(
                 context,
                 node.callee,
               );
-              const isDirectGlobal =
-                isIdentifier(node.callee) && node.callee.name === ACQUIRE;
+              const isDirectGlobal = node.callee.name === ACQUIRE;
               if (
                 enforces(node) &&
                 (isDirectGlobal || imported?.imported === ACQUIRE)

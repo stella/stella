@@ -19,7 +19,7 @@ import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
-import { withCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
@@ -407,29 +407,10 @@ if (apply) {
   await refreshCorpusS3();
 }
 
-let finishSourceLease!: () => void;
-const sourceLeaseFinished = new Promise<void>((resolve) => {
-  finishSourceLease = resolve;
-});
-let markSourceLeaseStarted!: (lease: CaseLawSourceIngestionLease) => void;
-const sourceLeaseStarted = new Promise<CaseLawSourceIngestionLease>(
-  (resolve) => {
-    markSourceLeaseStarted = resolve;
-  },
-);
-const sourceLeaseRun = apply
-  ? withCaseLawSourceIngestionLease(
-      { scopedDb: ingestionDb, sourceId },
-      async (acquired) => {
-        markSourceLeaseStarted(acquired);
-        await sourceLeaseFinished;
-      },
-    )
+const heldSourceLease = apply
+  ? await holdCaseLawSourceIngestionLease({ scopedDb: ingestionDb, sourceId })
   : null;
-const sourceLease =
-  sourceLeaseRun === null
-    ? null
-    : await Promise.race([sourceLeaseRun.then(() => null), sourceLeaseStarted]);
+const sourceLease = heldSourceLease?.lease ?? null;
 if (apply && sourceLease === null) {
   console.error(
     "Source cz-regional is being ingested right now (lease held). Retry later.",
@@ -633,8 +614,7 @@ try {
     }
   }
 } finally {
-  finishSourceLease();
-  await sourceLeaseRun;
+  await heldSourceLease?.release();
 }
 
 if (suppliedItems === null) {

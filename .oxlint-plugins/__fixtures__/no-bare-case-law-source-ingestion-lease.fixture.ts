@@ -24,5 +24,9 @@ await localClaim(options);
 // oxlint-disable-next-line no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease -- fixture: namespace members must be rejected
 await leases.acquireCaseLawSourceIngestionLease(options);
 
+const runtime = await import("./case-law-source-ingestion-lease");
+// oxlint-disable-next-line no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease -- fixture: members of a module loaded on demand must be rejected
+await runtime.acquireCaseLawSourceIngestionLease(options);
+
 // expect-clean: no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease
 await withCaseLawSourceIngestionLease(options, work);

@@ -21,7 +21,6 @@ import {
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
@@ -190,7 +189,7 @@ const loadRuntime = async () => {
     { createEuCompletionStore },
     { runEuCompletionTick },
     { createEuCompletionRunner },
-    { withCaseLawSourceIngestionLease },
+    { holdCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -209,7 +208,7 @@ const loadRuntime = async () => {
     createEuCompletionStore,
     runEuCompletionTick,
     createEuCompletionRunner,
-    withCaseLawSourceIngestionLease,
+    holdCaseLawSourceIngestionLease,
     caseLawSources,
   };
 };
@@ -299,14 +298,11 @@ const createCompletionFence = async ({
       if (lease !== null) {
         return;
       }
-      const held = await holdCaseLawSourceIngestionLease(
-        {
-          scopedDb: handles.ingestionDb,
-          sourceId,
-          releaseDb: cleanup.ingestionDb,
-        },
-        runtime.withCaseLawSourceIngestionLease,
-      );
+      const held = await runtime.holdCaseLawSourceIngestionLease({
+        scopedDb: handles.ingestionDb,
+        sourceId,
+        releaseDb: cleanup.ingestionDb,
+      });
       if (held === null) {
         throw new EuCompletionStop({
           message: "Completion source lease is held",
@@ -319,11 +315,16 @@ const createCompletionFence = async ({
       };
     },
     releaseDocument: async () => {
-      finishLease?.();
-      await leaseRun;
-      lease = null;
-      finishLease = null;
-      leaseRun = null;
+      // A failed release still ends this document's lease; the next document
+      // acquires a fresh one instead of reusing a released handle.
+      try {
+        finishLease?.();
+        await leaseRun;
+      } finally {
+        lease = null;
+        finishLease = null;
+        leaseRun = null;
+      }
     },
     close: async () => {
       try {

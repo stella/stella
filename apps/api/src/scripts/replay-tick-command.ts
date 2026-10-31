@@ -36,10 +36,9 @@ import {
   createCaseLawMaintenanceCleanupHandles,
   enterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
-import {
-  type CaseLawSourceIngestionLease,
+import type {
+  CaseLawSourceIngestionLease,
   holdCaseLawSourceIngestionLease,
-  type withCaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   ADAPTER_KEYS,
@@ -150,7 +149,7 @@ const loadReplayTickRuntime = async () => {
     { runBackgroundReplayTick },
     { createBackgroundReplayRunner },
     { createBackgroundReplayStore },
-    { withCaseLawSourceIngestionLease },
+    { holdCaseLawSourceIngestionLease },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/backfill-runtime"),
@@ -167,7 +166,7 @@ const loadReplayTickRuntime = async () => {
     runBackgroundReplayTick,
     createBackgroundReplayRunner,
     createBackgroundReplayStore,
-    withCaseLawSourceIngestionLease,
+    holdCaseLawSourceIngestionLease,
   };
 };
 
@@ -270,22 +269,23 @@ export const createReplayPreflightGate = ({
 };
 
 type ReplayLeaseOwnerOptions = {
-  runWithLease: typeof withCaseLawSourceIngestionLease;
+  holdLease: typeof holdCaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
 };
 
 const createReplayLeaseOwner = ({
-  runWithLease,
+  holdLease,
   scopedDb,
 }: ReplayLeaseOwnerOptions) => {
   let lease: CaseLawSourceIngestionLease | null = null;
   return {
     getLease: () => lease,
     acquireLease: async (source: BackgroundReplaySource) => {
-      const held = await holdCaseLawSourceIngestionLease(
-        { scopedDb, sourceId: source.id, releaseDb: releaseReplayDb },
-        runWithLease,
-      );
+      const held = await holdLease({
+        scopedDb,
+        sourceId: source.id,
+        releaseDb: releaseReplayDb,
+      });
       if (held === null) {
         return null;
       }
@@ -408,7 +408,7 @@ const runReplayOnSlotSession = async ({
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({
-    runWithLease: runtime.withCaseLawSourceIngestionLease,
+    holdLease: runtime.holdCaseLawSourceIngestionLease,
     scopedDb: ingestionDb,
   });
   const cleanupStore = await createReplayCleanupStore();

@@ -282,7 +282,7 @@ const runCaseLawSourceReplay = async (): Promise<void> => {
   }
   if (acquisition !== null && acquisition.waitedMs > 0) {
     console.log(
-      `lease acquired:      after ${String(acquisition.waitedMs / 1000)} s of waiting`,
+      `lease wait:          ${String(acquisition.waitedMs / 1000)} s before the replay ran`,
     );
   }
   const replayed =

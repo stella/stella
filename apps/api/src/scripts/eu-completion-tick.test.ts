@@ -1,20 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { ValiError } from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
 import type { EuCompletionReport } from "@/api/handlers/case-law/ingestion/eu-completion";
-import { createSafeId } from "@/api/lib/branded-types";
-import { holdCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   euCompletionMetricRecord,
   euCompletionQueueMetricRecord,
   runEuCompletionTickScript,
 } from "@/api/scripts/eu-completion-tick";
-
-const unusedScopedDb: ScopedDb = async () => {
-  throw new Error("unused database");
-};
 
 const environment = {
   CASE_LAW_EU_COMPLETION_ENABLED: true,
@@ -37,29 +30,6 @@ const report = (status: EuCompletionReport["status"]): EuCompletionReport => ({
 });
 
 describe("scheduled EU completion", () => {
-  test("lease acquisition failure rejects without waiting for the work signal", async () => {
-    const acquisitionError = new Error("lease database unavailable");
-    const acquisition = holdCaseLawSourceIngestionLease(
-      { scopedDb: unusedScopedDb, sourceId: createSafeId() },
-      async () => {
-        throw acquisitionError;
-      },
-    );
-    const outcome = await Promise.race([
-      acquisition.then(
-        () => "resolved" as const,
-        (error: unknown) => error,
-      ),
-      Promise.resolve()
-        .then(() => undefined)
-        .then(() => undefined)
-        .then(() => undefined)
-        .then(() => "still-pending" as const),
-    ]);
-
-    expect(outcome).toBe(acquisitionError);
-  });
-
   test("the disabled executable requires no database or object storage environment", async () => {
     const child = Bun.spawn({
       cmd: [

@@ -180,7 +180,12 @@ export type HeldCaseLawSourceIngestionLease = {
   release: () => Promise<void>;
 };
 
-/** Acquire a lease whose lifetime is controlled by the returned handle. */
+/**
+ * The owner's form for work that cannot be one callback (a per-document tick,
+ * a script whose work spans top-level statements). The lease still runs inside
+ * withCaseLawSourceIngestionLease, so its release stays in the owner's
+ * `finally`; `release` only ends that work and waits for it.
+ */
 export const holdCaseLawSourceIngestionLease = async (
   options: AcquireCaseLawSourceIngestionLeaseOptions,
   runWithLease: typeof withCaseLawSourceIngestionLease = withCaseLawSourceIngestionLease,
