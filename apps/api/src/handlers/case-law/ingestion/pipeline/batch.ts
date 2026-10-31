@@ -13,7 +13,6 @@ import {
 } from "@/api/db/online-unique-indexes";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,
@@ -55,6 +54,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";

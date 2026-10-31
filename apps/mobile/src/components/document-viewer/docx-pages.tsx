@@ -22,6 +22,8 @@ import type { UiLocale } from "@stll/locales";
 
 import "@stll/folio-react/editor.css";
 
+import { bundledFontUrl } from "@/components/dom-theme";
+
 import { FOLIO_FONT_FACES } from "./folio-fonts.gen";
 
 /** folio's own words in every language the app ships. */
@@ -41,22 +43,6 @@ const FOLIO_CATALOGS = {
   sk,
 } as const satisfies Record<UiLocale, typeof en>;
 
-/** Where Metro serves a bundled font file from, in a web bundle. */
-const fontUrl = (source: unknown): string | null => {
-  if (typeof source === "string") {
-    return source;
-  }
-  if (
-    typeof source === "object" &&
-    source !== null &&
-    "uri" in source &&
-    typeof source.uri === "string"
-  ) {
-    return source.uri;
-  }
-  return null;
-};
-
 /**
  * Declares folio's faces from the bundled font files. Metro drops the
  * `url()` sources of the @font-face rules in folio's stylesheet, so without
@@ -70,7 +56,7 @@ const declareFolioFonts = () => {
   }
   fontsDeclared = true;
   const rules = FOLIO_FONT_FACES.flatMap((face) => {
-    const url = fontUrl(face.source);
+    const url = bundledFontUrl(face.source);
     return url === null
       ? []
       : [
