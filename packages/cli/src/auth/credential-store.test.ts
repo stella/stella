@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { unlinkSync } from "node:fs";
 import {
   chmod,
   mkdtemp,
@@ -27,6 +28,7 @@ import {
   writeCredentialFile,
 } from "./credential-store.js";
 import type { AtomicWriteOps, StoredCredential } from "./credential-store.js";
+import { credentialLockPath } from "./refresh-lock.js";
 
 const buildCredential = (
   overrides: Partial<StoredCredential> = {},
@@ -398,6 +400,34 @@ test("credential mutation failures return typed errors and release the store loc
     expect(recovered.isOk()).toBe(true);
     if (recovered.isOk()) {
       expect(recovered.value).toBe("persisted");
+    }
+    expect((await readCredentialFile(configDir)).credentials).toEqual([
+      buildCredential(),
+    ]);
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
+});
+
+test("a lock-release failure reports that the credential update was saved", async () => {
+  const configDir = await mkdtemp(
+    path.join(os.tmpdir(), "stella-store-release-"),
+  );
+  try {
+    const updated = await updateCredentialFile(configDir, (file) => {
+      // Removing the lock under its owner makes the release itself fail.
+      unlinkSync(credentialLockPath(configDir));
+      return {
+        status: "updated",
+        file: upsertCredential(file, buildCredential()),
+        value: "persisted",
+      };
+    });
+    expect(updated.isErr()).toBe(true);
+    if (updated.isErr()) {
+      expect(updated.error.message).toStartWith(
+        `The credential store ${credentialsFilePath(configDir)} was updated. Could not remove the credential store lock`,
+      );
     }
     expect((await readCredentialFile(configDir)).credentials).toEqual([
       buildCredential(),

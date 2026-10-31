@@ -33,6 +33,7 @@ import {
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
+import { timingEnd } from "./timing.js";
 import { commandUnavailableMessage } from "./unavailable-command.js";
 
 type LeafFlags = Record<string, unknown>;
@@ -153,14 +154,17 @@ export const runCapabilityCommand = async ({
 
   const format = readOutputFormat(flags, context);
   const renderCall = (result: CallToolResult) => {
+    const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       result,
       textPath: undefined,
       writers,
     });
+    timingEnd("output", started);
   };
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
   const paginationPart = spec.paginationPart;
@@ -220,6 +224,7 @@ export const runCapabilityCommand = async ({
   if (allActive && paginationPart !== undefined) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: undefined,

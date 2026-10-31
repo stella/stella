@@ -1149,18 +1149,16 @@ describe("toolErrorLines", () => {
 
   test("an unknown tool stays distinct from disabled features and version incompatibility", () => {
     expect(
-      toolErrorLines({
-        code: "unknown_tool",
-        message: "Unknown tool: invoke_capability",
-        hint: undefined,
-        issues: [],
-      }),
-    ).toEqual([
-      commandUnavailableMessage({
-        type: "unknown-to-server",
-        command: "Unknown tool: invoke_capability",
-      }),
-    ]);
+      toolErrorLines(
+        {
+          code: "unknown_tool",
+          message: "Unknown tool: invoke_capability",
+          hint: undefined,
+          issues: [],
+        },
+        { command: "matter archive" },
+      ),
+    ).toEqual(["Command 'matter archive' is unknown to this server."]);
   });
 
   test("a lone issue repeating the summary folds into one line naming the flag", () => {
@@ -1178,7 +1176,7 @@ describe("toolErrorLines", () => {
             },
           ],
         },
-        FLAGS,
+        { command: "task list", flagPaths: FLAGS },
       ),
     ).toEqual([
       "error: Provide matter_id to list tasks, or task_id to read one task (--matter-id)",
@@ -1198,7 +1196,7 @@ describe("toolErrorLines", () => {
             { path: "", message: "Body too large" },
           ],
         },
-        FLAGS,
+        { command: "task list", flagPaths: FLAGS },
       ),
     ).toEqual([
       "error: Invalid input",
@@ -1231,7 +1229,7 @@ test("verification limit envelopes retain recovery metadata and select their exi
         requestId: undefined,
       });
       expect(classifyToolError(payload)).toBe(expectedExits[code]);
-      expect(toolErrorLines(error)).toEqual([
+      expect(toolErrorLines(error, { command: "verification run" })).toEqual([
         `error: ${error.message}`,
         `hint: ${error.hint}`,
       ]);
@@ -1289,6 +1287,7 @@ for (const format of ["jsonl", "json"] as const) {
     try {
       await streamOrRenderAllPages({
         context: tty.context,
+        command: "matter list",
         writers: {
           stdout: (text) => {
             output.push(text);

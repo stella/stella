@@ -1,6 +1,13 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  truncate,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -21,6 +28,7 @@ import {
 import {
   PROJECTION_TTL_MS,
   projectionCachePath,
+  readProjectionCache,
   writeProjectionCache,
 } from "./registry-projection-cache.js";
 import {
@@ -28,7 +36,10 @@ import {
   refreshRegistryCache,
   resolveCommandTree,
 } from "./registry-refresh.js";
-import { validateFetchedToolsList } from "./registry-trust.js";
+import {
+  MAX_LISTING_BYTES,
+  validateFetchedToolsList,
+} from "./registry-trust.js";
 import type { RegistryToolListing, RouteNode } from "./route-types.js";
 
 const capabilityCatalog = loadBakedCapabilityCatalog();
@@ -940,6 +951,17 @@ describe("trusted projections survive separate invocations", () => {
     );
     await refreshRegistryCache(options);
     expect(fetches).toBe(4);
+  });
+
+  test("an oversized projection cache is rejected by size", async () => {
+    const env = await makeCacheEnv();
+    const filePath = path.join(env.XDG_CACHE_HOME, "oversized.json");
+    // A sparse file reports its size without occupying it.
+    await writeFile(filePath, "");
+    await truncate(filePath, MAX_LISTING_BYTES + 128 * 1024);
+    expect(await readProjectionCache(filePath, 1_800_000_000_000)).toEqual({
+      status: "invalid",
+    });
   });
 
   test("credentials, server URLs and CLI versions never share caller projections", async () => {

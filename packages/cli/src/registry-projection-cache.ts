@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -66,6 +66,14 @@ export const readProjectionCache = async (
   filePath: string,
   now: number,
 ): Promise<ProjectionCacheRead> => {
+  // Size first: an oversized file is rejected without loading it.
+  const size = await Result.tryPromise(async () => (await stat(filePath)).size);
+  if (size.isErr()) {
+    return { status: "unreadable", cause: size.error };
+  }
+  if (size.value > MAX_CACHE_BYTES) {
+    return { status: "invalid" };
+  }
   const read = await Result.tryPromise(
     async () => await readFile(filePath, "utf-8"),
   );

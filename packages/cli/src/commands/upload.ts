@@ -84,7 +84,13 @@ const renderNestedFailure = ({
     return;
   }
   if (failure.type === "tool") {
-    renderToolError({ context, result: failure.result, writers, format });
+    renderToolError({
+      context,
+      command: "upload",
+      result: failure.result,
+      writers,
+      format,
+    });
     return;
   }
   if (failure.type === "put" && failure.admission !== undefined) {

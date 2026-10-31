@@ -944,6 +944,7 @@ const followAll = async ({
  */
 export const streamOrRenderAllPages = async ({
   context,
+  command,
   writers,
   format,
   textPath,
@@ -958,6 +959,8 @@ export const streamOrRenderAllPages = async ({
   reportOutputDuration = (durationMs) => timingDuration("output", durationMs),
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   writers: Writers;
   format: OutputFormat;
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
@@ -1017,6 +1020,7 @@ export const streamOrRenderAllPages = async ({
           measureOutput(() =>
             renderToolError({
               context,
+              command,
               result: failure.result,
               writers,
               format,
@@ -1089,15 +1093,17 @@ export const toolErrorLines = (
     hint: string | undefined;
     issues: readonly { path: string; message: string }[];
   },
-  flagPaths?: ReadonlySet<string>,
+  {
+    command,
+    flagPaths,
+  }: {
+    /** The command the caller ran; the server's text names only its tool. */
+    command: string;
+    flagPaths?: ReadonlySet<string> | undefined;
+  },
 ): string[] => {
   if (envelope.code === "unknown_tool") {
-    return [
-      commandUnavailableMessage({
-        type: "unknown-to-server",
-        command: envelope.message,
-      }),
-    ];
+    return [commandUnavailableMessage({ type: "unknown-to-server", command })];
   }
   const admission = readCliActionAdmissionRefusal(envelope);
   if (admission !== undefined) {
@@ -1136,12 +1142,15 @@ export const toolErrorLines = (
  */
 export const renderToolError = ({
   context,
+  command,
   result,
   writers,
   flagPaths,
   format,
 }: {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format?: OutputFormat | undefined;
   result: CallToolResult;
   writers: Writers;
@@ -1164,7 +1173,7 @@ export const renderToolError = ({
     return;
   }
   if (envelope !== null) {
-    for (const line of toolErrorLines(envelope, flagPaths)) {
+    for (const line of toolErrorLines(envelope, { command, flagPaths })) {
       writers.stderr(`${line}\n`);
     }
     if (envelope.requestId !== undefined) {
@@ -1180,6 +1189,8 @@ export const renderToolError = ({
 
 type RenderCommandResultOptions = {
   context: Context;
+  /** The command as the caller typed it, without the `stella` prefix. */
+  command: string;
   format: OutputFormat;
   itemsKey: string | undefined;
   /** See `LeafCommandSpec.composite`. */
@@ -1194,6 +1205,7 @@ type RenderCommandResultOptions = {
 
 export const renderCommandResult = ({
   context,
+  command,
   format,
   itemsKey,
   composite,
@@ -1203,7 +1215,7 @@ export const renderCommandResult = ({
   flagPaths,
 }: RenderCommandResultOptions): void => {
   if (result.isError) {
-    renderToolError({ context, result, writers, flagPaths, format });
+    renderToolError({ context, command, result, writers, flagPaths, format });
     return;
   }
   const payload = parsePayload(result);
@@ -1388,6 +1400,7 @@ export const runLeafCommand = async ({
     const started = performance.now();
     renderCommandResult({
       context,
+      command: spec.commandPath.join(" "),
       format,
       itemsKey: spec.itemsKey,
       composite: spec.composite,
@@ -1420,6 +1433,7 @@ export const runLeafCommand = async ({
   if (allActive) {
     await streamOrRenderAllPages({
       context,
+      command: spec.commandPath.join(" "),
       writers,
       format,
       textPath: spec.textPath,

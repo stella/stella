@@ -369,9 +369,13 @@ export const updateCredentialFile = async <T extends CredentialUpdate<unknown>>(
   });
   const released = await Result.tryPromise(lock.value);
   if (Result.isError(released)) {
+    // The update outcome stands on its own; the retained lock is a second fact.
+    const updateState = Result.isError(outcome)
+      ? `Could not update the credential store ${credentialsFilePath(configDir)} (${outcome.error.message}).`
+      : `The credential store ${credentialsFilePath(configDir)} was updated.`;
     return Result.err(
       new TokenRefreshError({
-        message: `${Result.isError(outcome) ? `${outcome.error.message} ` : ""}Could not remove the credential store lock ${credentialLockPath(configDir)}. Confirm no command is updating credentials, then remove this lock before retrying.`,
+        message: `${updateState} Could not remove the credential store lock ${credentialLockPath(configDir)}; credential commands wait for it and then time out. Confirm no command is updating credentials, then remove this lock.`,
         cause: Result.isError(outcome) ? outcome.error : released.error,
       }),
     );
