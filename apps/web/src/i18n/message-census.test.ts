@@ -175,7 +175,7 @@ const analyzeMessage = (message: string): Analysis => {
 const pluralRulesByLocale = new Map<string, Intl.PluralRules>();
 
 const pluralRules = (locale: string, type: PluralElement["pluralType"]) => {
-  const cacheKey = `${locale}\0${type}`;
+  const cacheKey = JSON.stringify([locale, type ?? "cardinal"]);
   const cached = pluralRulesByLocale.get(cacheKey);
   if (cached !== undefined) {
     return cached;
