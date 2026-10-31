@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { affectedPackages, readSelectionGraph } from "./ci-affected-selection";
 import { requiresDesktopBrowser } from "./ci-package-scope";
 import { lexShell } from "./install-free-ci";
+import { parseLockfile, workspaceClosure } from "./landing-deploy-scope";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -122,8 +122,30 @@ export const requiresCiBrowser = ({
 export const requiresUiBrowser = ({
   changed,
   root = ROOT,
-}: ScopeOptions): boolean =>
-  affectedPackages(changed, readSelectionGraph(root)).has("@stll/ui");
+}: ScopeOptions): boolean => {
+  try {
+    const lock = parseLockfile(
+      Bun.JSONC.parse(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    );
+    if (lock === undefined) {
+      return true;
+    }
+    const closure = workspaceClosure(lock, "@stll/ui");
+    if (closure === undefined) {
+      return true;
+    }
+    const workspaceDirectories = Object.keys(lock.workspaces);
+    return changed.some((file) => {
+      const owner = workspaceDirectories.find(
+        (directory) => file === directory || file.startsWith(`${directory}/`),
+      );
+      return owner === undefined || closure.workspaceDirectories.has(owner);
+    });
+  } catch (error) {
+    console.error("UI browser scope unavailable; retaining UI browsers", error);
+    return true;
+  }
+};
 
 if (import.meta.main) {
   console.log(String(requiresCiBrowser({ changed: process.argv.slice(2) })));

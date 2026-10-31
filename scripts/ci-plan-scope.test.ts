@@ -1045,3 +1045,41 @@ test("a change to the planner or a module it imports plans every wide check", ()
     );
   }
 });
+
+test("the install-free planner import closure has no package imports", () => {
+  const root = nodePath.resolve(import.meta.dir, "..");
+  const violations: string[] = [];
+  const parserLoader = (extension: string) => {
+    switch (extension) {
+      case ".tsx":
+        return "tsx";
+      case ".jsx":
+        return "jsx";
+      case ".js":
+      case ".mjs":
+        return "js";
+      default:
+        return "ts";
+    }
+  };
+  for (const file of sourceImportClosure(["scripts/ci-plan-scope.ts"], root)) {
+    const absolute = nodePath.join(root, file);
+    if (!existsSync(absolute) || !/\.[cm]?[jt]sx?$/u.test(file)) {
+      continue;
+    }
+    const extension = nodePath.extname(file);
+    const parser = new Bun.Transpiler({ loader: parserLoader(extension) });
+    for (const imported of parser.scanImports(
+      readFileSync(absolute, "utf-8").replace(/^#![^\n]*/u, ""),
+    )) {
+      if (
+        !imported.path.startsWith(".") &&
+        !imported.path.startsWith("node:") &&
+        !imported.path.startsWith("bun:")
+      ) {
+        violations.push(`${file} imports ${imported.path}`);
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+});
