@@ -14,9 +14,11 @@ import {
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_DETAILS_ACCESS,
+  ACTIVITY_NARRATIVE_ASSISTS,
   ACTIVITY_RECORDING_STATUSES,
   ACTIVITY_RETENTIONS,
   isActivityDaySnapshot,
+  isActivitySettingsSnapshot,
   MAX_ACTIVITY_METADATA_BYTES,
 } from "../src/activity/activity-types";
 
@@ -39,6 +41,7 @@ describe("activity contract", () => {
       ...ACTIVITY_RECORDING_STATUSES,
     ]);
     expect(contract.detailsAccess).toEqual([...ACTIVITY_DETAILS_ACCESS]);
+    expect(contract.narrativeAssists).toEqual([...ACTIVITY_NARRATIVE_ASSISTS]);
     expect(contract.maxMetadataBytes).toBe(MAX_ACTIVITY_METADATA_BYTES);
     expect(contract.changedEvent).toBe(ACTIVITY_CHANGED_EVENT);
   });
@@ -50,7 +53,6 @@ describe("activity contract", () => {
       deletionStatus: "available",
       manualAssignments: [],
       draftedEntries: [],
-      timeBillingEnabled: false,
       earliestDate: "2026-02-09",
       latestDate: "2026-03-10",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],
@@ -62,6 +64,7 @@ describe("activity contract", () => {
       sourceAppVisuals: [],
       browserTitleApps: [],
       detailsAccess: "disabled",
+      narrativeAssist: "ask",
       persistence: "encrypted",
       recordingStatus: "recording",
       retention: "month",
@@ -74,6 +77,16 @@ describe("activity contract", () => {
       false,
     );
     expect(isActivityDaySnapshot({ ...snapshot, latestDate: 123 })).toBe(false);
+    for (const narrativeAssist of ["always", "ask"]) {
+      expect(isActivityDaySnapshot({ ...snapshot, narrativeAssist })).toBe(
+        true,
+      );
+    }
+    for (const narrativeAssist of [undefined, true, "never"]) {
+      expect(isActivityDaySnapshot({ ...snapshot, narrativeAssist })).toBe(
+        false,
+      );
+    }
     for (const deletionStatus of Object.keys(contract.deletionStatuses)) {
       expect(isActivityDaySnapshot({ ...snapshot, deletionStatus })).toBe(true);
     }
@@ -175,6 +188,42 @@ describe("activity contract", () => {
     );
     expect(
       isActivityDaySnapshot({ ...snapshot, segments: [{ appName: "x" }] }),
+    ).toBe(false);
+  });
+
+  test("a settings snapshot is validated before use", () => {
+    const settings = {
+      date: "2026-03-10",
+      today: "2026-03-10",
+      earliestDate: "2026-02-09",
+      latestDate: "2026-03-10",
+      deletionStatus: "available",
+      persistence: "encrypted",
+      retention: "month",
+      excludedApps: [],
+      otherAccountHistoryDays: 0,
+      captureDetails: false,
+      detectCalls: true,
+      appNameOnlyApps: [],
+      detailsAccess: "disabled",
+      browserApps: [],
+      browserTitleApps: [],
+      narrativeAssist: "always",
+      apps: [{ identifier: "com.example.app", name: "App" }],
+      sourceAppVisuals: [],
+    };
+    expect(isActivitySettingsSnapshot(settings)).toBe(true);
+    expect(
+      isActivitySettingsSnapshot({ ...settings, narrativeAssist: undefined }),
+    ).toBe(false);
+    expect(isActivitySettingsSnapshot({ ...settings, apps: undefined })).toBe(
+      false,
+    );
+    expect(
+      isActivitySettingsSnapshot({ ...settings, apps: [{ name: "App" }] }),
+    ).toBe(false);
+    expect(
+      isActivitySettingsSnapshot({ ...settings, deletionStatus: "gone" }),
     ).toBe(false);
   });
 });

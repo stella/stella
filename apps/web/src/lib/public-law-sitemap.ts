@@ -181,7 +181,7 @@ export const fetchPublicSitemapShards = async ({
 }: FetchSitemapShardsOptions = {}): Promise<SitemapShard[]> => {
   const response = await fetchImpl(apiUrl("/case/sitemap/shards"), { signal });
   if (!response.ok) {
-    throw response.status === 429
+    throw response.status === 429 || response.status === 503
       ? createSitemapUpstreamBusyError({
           action: "fetchPublicCaseLawSitemapShards",
           response,
@@ -225,7 +225,7 @@ export const fetchPublicSitemapDecisions = async ({
       ? null
       : await fetchImpl(url, { signal });
   if (response === null || !response.ok) {
-    throw response?.status === 429
+    throw response?.status === 429 || response?.status === 503
       ? createSitemapUpstreamBusyError({
           action: "fetchPublicCaseLawSitemap",
           response,
@@ -277,7 +277,8 @@ export const createPublicLawSitemapIndexXml = (
     ? [
         {
           loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
-          lastmod: publicShards.at(0)?.lastmod ?? null,
+          // Corpus updates do not change the static /law sitemap's URLs.
+          lastmod: null,
         },
         ...publicShards.map((shard) => ({
           loc: createPublicLawCanonicalUrl(createCaseLawShardPath(shard)),

@@ -12,7 +12,7 @@
 import { panic } from "better-result";
 import type { SQL as BunSql } from "bun";
 import { describe, expect, test } from "bun:test";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
@@ -260,6 +260,31 @@ if (!databaseUrl || !runPostgresTests) {
       expect(await listedMonths("1905")).toEqual(["1905/01:1", "1905/03:1"]);
     });
 
+    test("a language-only update queues the document's sitemap month", async () => {
+      const [id] = await insertDecisions("1906-01-15", 1);
+      if (!id) {
+        panic("Expected the language fixture decision");
+      }
+      await refreshUntilDone();
+      expect(await loggedMonths("1906")).toEqual([]);
+      const [before] = await db
+        .select({ updatedAt: caseLawDecisions.updatedAt })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id));
+      await db.execute(
+        sql`UPDATE case_law_decisions SET language = 'en' WHERE id = ${id}::uuid`,
+      );
+      const [after] = await db
+        .select({ updatedAt: caseLawDecisions.updatedAt })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id));
+      expect(after?.updatedAt).toEqual(before?.updatedAt);
+      expect(await loggedMonths("1906")).toEqual(["1906/01"]);
+      await refreshUntilDone();
+      expect(await loggedMonths("1906")).toEqual([]);
+      expect(await listedMonths("1906")).toEqual(["1906/01:1"]);
+    });
+
     test("a change still uncommitted through a whole run waits for the run after its commit", async () => {
       const moved =
         (await insertDecisions("1902-01-15", 2)).at(0) ??
@@ -361,7 +386,7 @@ if (!databaseUrl || !runPostgresTests) {
                             if (
                               !state.paused &&
                               rendered.sql.includes("count(*)::int AS total") &&
-                              rendered.params.includes("1904")
+                              rendered.params.includes("1904-01-01")
                             ) {
                               state.paused = true;
                               await pause();

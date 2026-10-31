@@ -29,7 +29,8 @@
     ".": "./src/index.ts",
     "./benchmark-frontier": "./src/benchmark-frontier.ts",
     "./benchmarks": "./src/benchmarks.ts",
-    "./model-defaults-ledger": "./src/model-defaults-ledger.ts"
+    "./model-defaults-ledger": "./src/model-defaults-ledger.ts",
+    "./transcription": "./src/transcription.ts"
   },
   "publishConfig": {
     "access": "public"

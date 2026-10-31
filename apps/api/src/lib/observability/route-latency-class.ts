@@ -7,6 +7,7 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 // MCP transports execute search and other multi-step tools under the search
 // latency SLO. Stream setup does not measure the duration of the stream.
 export const ROUTE_LATENCY_CLASSES = {
+  "POST /v1/dictation/transcribe": "ai",
   "DELETE /mcp": "search",
   "DELETE /v1/contacts": "batch",
   "DELETE /mcp-anonymized": "search",
@@ -38,6 +39,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/mcp/connections/:connectionId": "crud",
   "DELETE /v1/mcp/connectors/:slug": "crud",
   "DELETE /v1/me/oauth-connections/:consentId": "crud",
+  "DELETE /v1/me/push-devices/:token": "crud",
   "DELETE /v1/memories/:memoryId": "crud",
   "DELETE /v1/organization-settings/ai-config": "crud",
   "DELETE /v1/organization-settings/business-registry-credentials": "crud",
@@ -133,6 +135,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/case/decisions/:decisionId/summary": "crud",
   "GET /v1/case/decisions/by-slug/:slug": "crud",
   "GET /v1/case/decisions/facets": "crud",
+  "GET /v1/case/decisions/filter-validation": "crud",
   "GET /v1/case/decisions/latest": "crud",
   "GET /v1/case/decisions/status": "crud",
   "GET /v1/case/judges/:judgeId/portrait": "crud",
@@ -212,6 +215,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/files/:workspaceId/document-properties/:fieldId": "crud",
   "GET /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId": "crud",
   "GET /v1/files/:workspaceId/email-html/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/marked/:fieldId": "crud",
   "GET /v1/files/:workspaceId/ocr-export/:fieldId": "crud",
   "GET /v1/files/:workspaceId/office-citation/:entityId/:fieldId/:blockId":
     "crud",
@@ -565,6 +569,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/desktop-registry/renew": "crud",
   "POST /v1/desktop-registry/request": "crud",
   "POST /v1/desktop/presence": "crud",
+  "POST /v1/desktop/time-entries/narrative": "ai",
   "POST /v1/dev/clean": "crud",
   "POST /v1/dev/clear-cache": "crud",
   "POST /v1/dev/public-law-connection": "crud",
@@ -835,6 +840,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/invoices/:workspaceId": "crud",
   "PUT /v1/lists/:workspaceId": "crud",
   "PUT /v1/lists/:workspaceId/item-fact-details": "crud",
+  "PUT /v1/me/push-devices": "crud",
   "PUT /v1/organization-settings/anonymization-blacklist": "crud",
   "PUT /v1/organization-settings/feature-enrolments/:featureId": "crud",
   "PUT /v1/playbooks/:playbookId": "crud",
