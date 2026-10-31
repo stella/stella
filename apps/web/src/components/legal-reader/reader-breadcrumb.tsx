@@ -104,12 +104,10 @@ const ReaderContentsList = ({
     className?: string;
   }) => (
     <Button
+      layout="wrap"
       aria-current={anchorId === activeAnchorId ? "location" : undefined}
       aria-label={label}
-      className={cn(
-        "min-h-11 min-w-0 flex-1 justify-start text-start whitespace-normal",
-        className,
-      )}
+      className={cn("min-w-0 flex-1", className)}
       data-contents-anchor={anchorId}
       onClick={() => onSelect(anchorId)}
       // The row shows its title; a tooltip of its accessible name would open
@@ -202,6 +200,40 @@ const ReaderContentsList = ({
   );
 };
 
+const ReaderHiddenEntries = ({
+  hidden,
+  nameOf,
+  onJump,
+  onClose,
+}: {
+  hidden: ReaderTrail["segments"];
+  nameOf: (title: string) => string;
+  onJump: (anchorId: string) => void;
+  onClose: () => void;
+}) => (
+  <ol>
+    {hidden.map(({ anchorId, title }) => (
+      <li key={anchorId}>
+        <Button
+          layout="wrap"
+          aria-label={nameOf(title)}
+          className="w-full"
+          // As in Contents: the row shows its title, and a tooltip would
+          // take the list's Escape.
+          tooltip={false}
+          onClick={() => {
+            onJump(anchorId);
+            onClose();
+          }}
+          variant="ghost"
+        >
+          <bdi>{title}</bdi>
+        </Button>
+      </li>
+    ))}
+  </ol>
+);
+
 export const ReaderBreadcrumb = ({
   trail,
   rows,
@@ -284,28 +316,6 @@ export const ReaderBreadcrumb = ({
     update();
     return () => observer.disconnect();
   };
-  const hiddenEntries = (close: () => void) => (
-    <ol>
-      {hidden.map(({ anchorId, title }) => (
-        <li key={anchorId}>
-          <Button
-            aria-label={nameOf(title)}
-            className="min-h-11 w-full justify-start text-start whitespace-normal"
-            // As in Contents: the row shows its title, and a tooltip would
-            // take the list's Escape.
-            tooltip={false}
-            onClick={() => {
-              onJump(anchorId);
-              close();
-            }}
-            variant="ghost"
-          >
-            <bdi>{title}</bdi>
-          </Button>
-        </li>
-      ))}
-    </ol>
-  );
   const contentsControl = ({
     label,
     title,
@@ -446,7 +456,12 @@ export const ReaderBreadcrumb = ({
                         padding="sm"
                       >
                         <ScrollArea axis="vertical" className="max-h-72">
-                          {hiddenEntries(() => setMiddle(MIDDLE_STATE.closed))}
+                          <ReaderHiddenEntries
+                            hidden={hidden}
+                            nameOf={nameOf}
+                            onJump={onJump}
+                            onClose={() => setMiddle(MIDDLE_STATE.closed)}
+                          />
                         </ScrollArea>
                       </PopoverPopup>
                     </Popover>

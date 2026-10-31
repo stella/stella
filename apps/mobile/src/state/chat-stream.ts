@@ -12,6 +12,8 @@ import {
   withAccessToken,
 } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { attachmentParts } from "@/state/chat-attachments";
+import type { ReadyFile } from "@/state/chat-attachments";
 import type { ChatEntry } from "@/state/chat-messages";
 
 /** One server-sent event: the id it carried, if any, and its data lines joined. */
@@ -178,6 +180,7 @@ export const answerEntry = (
     .filter((segment) => segment !== "")
     .join("\n\n"),
   tools: answer.tools,
+  files: [],
 });
 
 /**
@@ -186,10 +189,12 @@ export const answerEntry = (
  * `messages`; the server refuses an envelope whose copies disagree. The
  * phone redacts nothing itself, so the text goes as written; a thread that
  * has sent anonymized text asks the server to anonymize this message too,
- * so continuing it from the phone does not undo its protection.
+ * so continuing it from the phone does not undo its protection. Attached
+ * files ride in the message after its text, as the web sends them.
  */
 export const chatSendBody = ({
   anonymized,
+  files = [],
   matterId,
   messageId,
   runId,
@@ -198,6 +203,7 @@ export const chatSendBody = ({
 }: {
   /** The thread has sent anonymized text before. */
   readonly anonymized: boolean;
+  readonly files?: readonly ReadyFile[];
   /** The thread's matter; the server refuses a matter's thread sent to as global. */
   readonly matterId: string | undefined;
   readonly messageId: string;
@@ -213,7 +219,10 @@ export const chatSendBody = ({
     message: {
       id: messageId,
       role: "user",
-      parts: [{ type: "text", content: text }],
+      parts: [
+        ...(text === "" ? [] : [{ type: "text", content: text }]),
+        ...attachmentParts(files),
+      ],
     },
   };
   return {
@@ -267,6 +276,26 @@ export type StreamBreak = StreamEnd & { readonly error: ApiError };
 const STREAM_CONNECT_TIMEOUT_MS = 20_000;
 
 /**
+ * The slowest upload a send still waits for, in bytes per millisecond
+ * (about 400 kbit/s), and the longest it waits at all: as long as a signed
+ * storage upload lives.
+ */
+const SLOW_UPLOAD_BYTES_PER_MS = 50;
+const STREAM_UPLOAD_TIMEOUT_MS = 5 * 60_000;
+
+/**
+ * How long a request waits for the run to answer. A message with files
+ * carries them in its body, which must go up first; it gets the time a slow
+ * phone network takes to send it, on top of the usual wait.
+ */
+export const streamConnectTimeout = (bodyLength: number): number =>
+  Math.min(
+    STREAM_CONNECT_TIMEOUT_MS +
+      Math.ceil(bodyLength / SLOW_UPLOAD_BYTES_PER_MS),
+    STREAM_UPLOAD_TIMEOUT_MS,
+  );
+
+/**
  * Opens one SSE request and hands each answer event to `onEvent` as it
  * arrives. The turn id the server names in its response reaches `onTurn`
  * before any event. Aborting `signal` ends the read without an error.
@@ -302,7 +331,10 @@ const readChatStream = async ({
       controller.abort();
     };
     signal.addEventListener("abort", abort);
-    const connectTimer = setTimeout(abort, STREAM_CONNECT_TIMEOUT_MS);
+    const connectTimer = setTimeout(
+      abort,
+      streamConnectTimeout(body?.length ?? 0),
+    );
     const read = await Result.tryPromise({
       try: async () => {
         const response = await fetch(url, {
@@ -379,10 +411,11 @@ const turnPath = (threadId: string, turnId: string) =>
 const scopeQuery = (matterId: string | undefined) =>
   matterId === undefined ? "" : `?workspaceId=${encodeURIComponent(matterId)}`;
 
-/** Sends one message and streams the answer to it. */
+/** Sends one message, with any files attached to it, and streams the answer to it. */
 export const sendChatMessage = async ({
   anonymized,
   fetch,
+  files = [],
   matterId,
   messageId,
   onEvent,
@@ -395,6 +428,7 @@ export const sendChatMessage = async ({
 }: {
   readonly anonymized: boolean;
   readonly fetch: StreamFetch;
+  readonly files?: readonly ReadyFile[];
   readonly matterId: string | undefined;
   readonly messageId: string;
   readonly onEvent: (event: ChatEvent) => void;
@@ -407,7 +441,15 @@ export const sendChatMessage = async ({
 }): Promise<Result<StreamEnd, StreamBreak>> =>
   await readChatStream({
     body: JSON.stringify(
-      chatSendBody({ anonymized, matterId, messageId, runId, text, threadId }),
+      chatSendBody({
+        anonymized,
+        files,
+        matterId,
+        messageId,
+        runId,
+        text,
+        threadId,
+      }),
     ),
     fetch,
     method: "POST",
