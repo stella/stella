@@ -53,6 +53,7 @@ import {
   isPrivilegedJob,
   ReviewRequiredError,
 } from "../../../scripts/ci-job-classification/review";
+import { writeClassificationFixtureInputs } from "../../../scripts/ci-job-classification/test-fixtures";
 import {
   AdmissionError,
   CLASSIFICATION_EXCLUSIONS,
@@ -2028,6 +2029,7 @@ for (const review of ["missing", "stale"] as const) {
 
 test("the CLI emits a sensitive annotation and machine output until review is updated", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-review-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflowPath = path.join(root, ".github/workflows/ci.yml");
@@ -2156,6 +2158,7 @@ test("a reached document is privileged when only one of its jobs is", () => {
 
 test("a reviewed publish change in a reachable composite action stays sensitive", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-closure-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     mkdirSync(path.join(root, ".github/actions/local"), { recursive: true });
@@ -2245,6 +2248,7 @@ test("a reviewed publish change in a reachable composite action stays sensitive"
 
 test("the CLI defaults its root and base when invoked without arguments", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-defaults-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflow = "jobs: {check: {steps: []}}";
@@ -2341,6 +2345,7 @@ for (const scenario of [
     scenario.name,
     () => {
       const root = mkdtempSync(path.join(tmpdir(), "classification-base-"));
+      writeClassificationFixtureInputs(root);
       try {
         mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
         const workflow = path.join(root, ".github/workflows/ci.yml");
@@ -2432,6 +2437,7 @@ for (const scenario of [
 
 test("downgrading a priority decision with an unchanged digest is a sensitive change", () => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-kind-"));
+  writeClassificationFixtureInputs(root);
   try {
     mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
     const workflow = "jobs: {check: {steps: []}}";

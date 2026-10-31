@@ -7,6 +7,7 @@ import { checkJobClassification } from "../check-ci-job-classification";
 import { writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
+import { writeClassificationFixtureInputs } from "./test-fixtures";
 
 const git = (directory: string, ...args: string[]) => {
   const result = Bun.spawnSync(["git", "-C", directory, ...args], {
@@ -41,6 +42,7 @@ const classifiedFixture = (
   }
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   mkdirSync(path.join(root, ".github/ci-job-classification-decisions"));
+  writeClassificationFixtureInputs(root);
   writeFileSync(
     path.join(root, ".github/workflows/fixture.yml"),
     workflow(job),

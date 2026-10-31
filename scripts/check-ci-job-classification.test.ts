@@ -24,6 +24,7 @@ import {
   decisionPathForKey,
   isClassificationInput,
 } from "./ci-job-classification/inputs";
+import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
@@ -156,6 +157,7 @@ const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
 const repository = (base: Fixture, head: Fixture, commit = false) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-refresh-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
@@ -202,11 +204,6 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       message,
     );
   };
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
-  writeFileSync(path.join(root, ".github/global-rule-inputs.json"), "{}");
   write(base);
   git("init", "--quiet");
   commitAll("base");
