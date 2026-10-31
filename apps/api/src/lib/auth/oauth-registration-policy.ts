@@ -462,7 +462,7 @@ const createOAuthPolicyMiddleware = ({
 const createFirstPartyRedirectMiddleware = (
   verifiedOrigins: readonly string[],
 ) =>
-  createAuthMiddleware((ctx) => {
+  createAuthMiddleware(async (ctx) => {
     const parameters: unknown = readsAuthorizationBody(ctx)
       ? ctx.body
       : ctx.query;
@@ -474,17 +474,16 @@ const createFirstPartyRedirectMiddleware = (
         redirectUri: parameters["redirect_uri"],
         verifiedOrigins,
       });
-    return Promise.resolve(
-      refused
-        ? Response.json(
-            {
-              error: "invalid_redirect",
-              error_description: "invalid redirect uri",
-            },
-            { status: 400 },
-          )
-        : UNCHANGED,
-    );
+    await Promise.resolve();
+    return refused
+      ? Response.json(
+          {
+            error: "invalid_redirect",
+            error_description: "invalid redirect uri",
+          },
+          { status: 400 },
+        )
+      : UNCHANGED;
   });
 
 const withScopePolicy = (
