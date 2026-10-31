@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from "node:fs";
 
 /** Names and forms in a step's script, env or inputs that carry a base. */
 const STEP_BASE =
-  /\b(?:BASE_REF|BASE_SHA|RATCHET_BASE_REF|CHECK_BASE_REF|TURBO_SCM_BASE|GITHUB_BASE_REF|base_ref|base_sha|target_base_sha|base-ref|base-sha)\b|\.\.\.HEAD|--changed-files|merge-base|github\.event\.before|pull_request\.base\.sha/u;
+  /\b(?:BASE_REF|BASE_SHA|RATCHET_BASE_REF|CHECK_BASE_REF|TURBO_SCM_BASE|GITHUB_BASE_REF|base_ref|base_sha|target_base_sha|base-ref|base-sha)\b|\.\.\.HEAD|--changed-files|merge-base|github\.event\.before|pull_request\.base\.sha|--base\s+["']?(?:HEAD\b|origin\/|[0-9a-f]{40}\b)/u;
 /** A script reading a base from the environment, or defaulting to main. */
 const SCRIPT_BASE =
   /process\.env(?:\.|\[\s*["'])\w*BASE\w*|\$\{?\w*BASE_(?:REF|SHA)\b|["'`]origin\/main["'`]/u;
@@ -204,6 +204,10 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-generated#Load merge base measurement": operational(
     "Loads the type-cost measurement of the merge base.",
   ),
+  "ci.yml:fix-tests-on-base#Changed tests fail on the base source":
+    diffComplete(
+      "A fix's changed tests must fail on the source before the fix; the rule is about the change itself.",
+    ),
   "ci.yml:ci-checks-policy#Compute affected flag": operational(
     "Exports the Turbo comparison base.",
   ),

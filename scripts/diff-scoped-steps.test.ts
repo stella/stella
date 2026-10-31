@@ -58,6 +58,21 @@ test("a base reaches the census through the script, env, inputs or a script it r
   expect(
     readsBaseRevision({ run: "bash scripts/check-bridge-version.sh" }),
   ).toBe(true);
+  // A literal revision passed as the base.
+  expect(readsBaseRevision({ run: "bun check.ts --base HEAD^1" })).toBe(true);
+  expect(readsBaseRevision({ run: "bun check.ts --base 'origin/main'" })).toBe(
+    true,
+  );
+  expect(
+    readsBaseRevision({
+      run: "bun check.ts --base 0123456789abcdef0123456789abcdef01234567",
+    }),
+  ).toBe(true);
+  // A pull request's target branch or a baseline file is not a revision.
+  expect(readsBaseRevision({ run: "gh pr create --base main" })).toBe(false);
+  expect(
+    readsBaseRevision({ run: 'bun durations.ts --base "$RUNNER_TEMP/d.json"' }),
+  ).toBe(false);
   // A classification label is prose, not a base.
   expect(
     readsBaseRevision({
