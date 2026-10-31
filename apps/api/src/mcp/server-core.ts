@@ -865,21 +865,73 @@ const boundMcpToolResult = async ({
   return omittedWriteToolResult();
 };
 
+type AuthenticateMcpStreamOptions = {
+  authenticateMcpRequest: McpServerDependencies["authenticateMcpRequest"];
+  session: McpSession;
+  token: string;
+  mode: McpMode;
+};
+
+const authenticatedMcpStream = ({
+  authenticateMcpRequest,
+  session,
+  token,
+  mode,
+}: AuthenticateMcpStreamOptions): McpAuthenticated => ({
+  session,
+  stream: {
+    kind: "credential",
+    revalidate: async () => {
+      const again = await authenticateMcpRequest(token, {
+        mode,
+        resolveApiKeySession: revalidateMachineApiKeySession,
+      });
+      if (Result.isOk(again)) {
+        return true;
+      }
+      return again.error instanceof McpAuthenticationError
+        ? false
+        : await Promise.reject(again.error);
+    },
+  },
+});
+
+type ReportLegacyTransportErrorOptions = {
+  captureError: McpServerDependencies["captureError"];
+  mode: McpMode;
+  operation:
+    "close_transport" | "close_server" | "cancel_stream" | "read_stream";
+};
+
+const reportLegacyTransportError = (
+  error: unknown,
+  { captureError, mode, operation }: ReportLegacyTransportErrorOptions,
+): void => {
+  captureError(
+    error,
+    handlerErrorContext(`mcp.legacyTransport.${operation}`, {
+      mode,
+      operation,
+      phase: "transport",
+      source: "mcp",
+    }),
+  );
+};
+
 type MonitorLegacyStreamOptions = {
   body: ReadableStream<Uint8Array>;
   request: Request;
   teardown: () => Promise<void>;
-  reportTransportError: (
-    error: unknown,
-    operation: "cancel_stream" | "read_stream",
-  ) => void;
+  captureError: McpServerDependencies["captureError"];
+  mode: McpMode;
 };
 
 const monitorLegacyStream = ({
   body,
   request,
   teardown,
-  reportTransportError,
+  captureError,
+  mode,
 }: MonitorLegacyStreamOptions): ReadableStream<Uint8Array> => {
   const reader = takeStreamReaderOwnership(body);
   let readerReleased = false;
@@ -897,7 +949,11 @@ const monitorLegacyStream = ({
         try {
           await reader.cancel(request.signal.reason);
         } catch (error) {
-          reportTransportError(error, "cancel_stream");
+          reportLegacyTransportError(error, {
+            captureError,
+            mode,
+            operation: "cancel_stream",
+          });
         } finally {
           await completeExchange();
         }
@@ -909,30 +965,16 @@ const monitorLegacyStream = ({
     once: true,
   });
 
-  // A pull is suspended across the upstream read and the teardown that
-  // follows it, and the consumer can cancel `monitoredBody` during either
-  // await. Cancelling closes the controller, so the close/enqueue that
-  // resumes afterwards throws, and the catch below would report that as a
-  // failed transport read. A cancelled body is a normal end of the
-  // exchange, so absorb the closed-controller throw here, the way the SSE
-  // connection registries do, and leave the catch for real read failures.
+  // Consumer cancellation closes the controller while a pull may still be
+  // awaiting its upstream read or teardown. Track ownership before those
+  // awaits so the resumed pull never writes to the cancelled controller.
+  let bodyState: "open" | "closed" = "open";
   const closeMonitoredBody = (
     controller: ReadableStreamDefaultController<Uint8Array>,
   ): void => {
-    try {
+    if (bodyState === "open") {
+      bodyState = "closed";
       controller.close();
-    } catch {
-      // Already closed by a concurrent cancel.
-    }
-  };
-  const enqueueMonitoredChunk = (
-    controller: ReadableStreamDefaultController<Uint8Array>,
-    chunk: Uint8Array,
-  ): void => {
-    try {
-      controller.enqueue(chunk);
-    } catch {
-      // Already closed by a concurrent cancel.
     }
   };
 
@@ -952,18 +994,29 @@ const monitorLegacyStream = ({
           closeMonitoredBody(controller);
           return;
         }
-        enqueueMonitoredChunk(controller, readResult.value);
+        if (bodyState === "open") {
+          controller.enqueue(readResult.value);
+        }
       } catch (error) {
-        reportTransportError(error, "read_stream");
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "read_stream",
+        });
         await completeExchange();
         controller.error(error);
       }
     },
     cancel: async (reason) => {
+      bodyState = "closed";
       try {
         await reader.cancel(reason);
       } catch (error) {
-        reportTransportError(error, "cancel_stream");
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "cancel_stream",
+        });
       } finally {
         await completeExchange();
       }
@@ -1429,21 +1482,6 @@ export const createMcpHttpRequestHandler = ({
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);
-    const reportTransportError = (
-      error: unknown,
-      operation:
-        "close_transport" | "close_server" | "cancel_stream" | "read_stream",
-    ) => {
-      captureError(
-        error,
-        handlerErrorContext(`mcp.legacyTransport.${operation}`, {
-          mode,
-          operation,
-          phase: "transport",
-          source: "mcp",
-        }),
-      );
-    };
 
     let toreDown = false;
     let unregisterFreshness: (() => void) | undefined;
@@ -1459,10 +1497,18 @@ export const createMcpHttpRequestHandler = ({
         server.close(),
       ]);
       if (transportResult.status === "rejected") {
-        reportTransportError(transportResult.reason, "close_transport");
+        reportLegacyTransportError(transportResult.reason, {
+          captureError,
+          mode,
+          operation: "close_transport",
+        });
       }
       if (serverResult.status === "rejected") {
-        reportTransportError(serverResult.reason, "close_server");
+        reportLegacyTransportError(serverResult.reason, {
+          captureError,
+          mode,
+          operation: "close_server",
+        });
       }
     };
 
@@ -1496,7 +1542,8 @@ export const createMcpHttpRequestHandler = ({
         body: response.body,
         request,
         teardown,
-        reportTransportError,
+        captureError,
+        mode,
       });
 
       return new Response(monitoredBody, {
@@ -1645,24 +1692,12 @@ export const createMcpHttpRequestHandler = ({
               // An event-stream answer holds while this token still authenticates:
               // a genuine rejection ends it, a verification outage leaves it to
               // the next sweep.
-              const accepted: McpAuthenticated = {
+              const accepted = authenticatedMcpStream({
+                authenticateMcpRequest,
                 session,
-                stream: {
-                  kind: "credential",
-                  revalidate: async () => {
-                    const again = await authenticateMcpRequest(token, {
-                      mode,
-                      resolveApiKeySession: revalidateMachineApiKeySession,
-                    });
-                    if (Result.isOk(again)) {
-                      return true;
-                    }
-                    return again.error instanceof McpAuthenticationError
-                      ? false
-                      : await Promise.reject(again.error);
-                  },
-                },
-              };
+                token,
+                mode,
+              });
 
               // Refuse session termination only after the token is accepted, so an
               // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
