@@ -479,6 +479,20 @@ fn probe_outcomes_become_runner_reports() {
   assert_eq!(
     harness_report(
       Harness::ClaudeCode,
+      &ProbeOutcome::LimitUntil {
+        version: "2.1.309".to_owned(),
+        resets_at: "2026-10-28T14:00:00Z".to_owned(),
+      }
+    ),
+    HarnessReport::LimitUntil(LimitedHarness {
+      id: Harness::ClaudeCode,
+      version: "2.1.309".to_owned(),
+      resets_at: "2026-10-28T14:00:00Z".to_owned(),
+    })
+  );
+  assert_eq!(
+    harness_report(
+      Harness::ClaudeCode,
       &ProbeOutcome::Failed {
         reason: ProbeFailure::Unsupported,
         message: "no adapter".to_owned(),

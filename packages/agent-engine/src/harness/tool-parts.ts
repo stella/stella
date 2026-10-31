@@ -65,7 +65,9 @@ const harnessToolName = <const TName extends string>(
 /**
  * Harness-native actions, persisted as tool calls the web chat shows as
  * generic activity. `web_search` is a stella chat tool with its own result
- * schema, so the harness's search is named apart from it.
+ * schema, so the harness's search is named apart from it. `nativeTool` is
+ * any other built-in harness tool (reading a file, listing a directory),
+ * with the harness's own tool name in its input.
  */
 export const HARNESS_TOOL_NAMES = {
   commandExecution: harnessToolName("command_execution"),
@@ -73,6 +75,7 @@ export const HARNESS_TOOL_NAMES = {
   webSearch: harnessToolName("harness_web_search"),
   question: harnessToolName(HARNESS_QUESTION_TOOL),
   permissions: harnessToolName("request_permissions"),
+  nativeTool: harnessToolName("harness_native_tool"),
   unsupportedItem: harnessToolName("harness_unsupported_item"),
 } as const;
 

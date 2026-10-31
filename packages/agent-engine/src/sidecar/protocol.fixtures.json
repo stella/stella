@@ -154,6 +154,16 @@
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "harness": "claude-code",
         "outcome": {
+          "type": "limit_until",
+          "version": "2.1.309",
+          "resetsAt": "2026-10-28T14:00:00Z"
+        }
+      },
+      {
+        "type": "harness.probed",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "opencode",
+        "outcome": {
           "type": "failed",
           "reason": "unsupported",
           "message": "This harness has no local adapter yet."

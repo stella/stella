@@ -158,6 +158,8 @@ pub(crate) enum ProbeOutcome {
   },
   #[serde(rename = "needs_login")]
   NeedsLogin { version: String },
+  #[serde(rename = "limit_until", rename_all = "camelCase")]
+  LimitUntil { version: String, resets_at: String },
   /// A version the compatibility policy refuses for this desktop release.
   #[serde(rename = "unsupported", rename_all = "camelCase")]
   Unsupported {

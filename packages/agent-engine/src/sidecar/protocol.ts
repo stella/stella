@@ -225,6 +225,12 @@ const probeOutcomeSchema = v.variant("type", [
     ),
   }),
   v.object({ type: v.literal("needs_login"), version: desktopVersionSchema }),
+  /** Signed in, with the plan's usage limit exhausted until `resetsAt`. */
+  v.object({
+    type: v.literal("limit_until"),
+    version: desktopVersionSchema,
+    resetsAt: instantSchema,
+  }),
   /** A version the compatibility policy refuses for this desktop release. */
   v.object({
     type: v.literal("unsupported"),
