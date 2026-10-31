@@ -27,6 +27,7 @@ import {
 const PURE_AUTOFIX = {
   // Converts the static manifest schema and shared version policy; no DB imports.
   "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
+  "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":

@@ -1448,6 +1448,14 @@
     "attachedImage": "Imagen adjunta",
     "attachment": "Adjunto",
     "audioContent": "Audio generado",
+    "browserExtension": {
+      "connect": "Conectar extensión",
+      "connectDescription": "En esta pestaña, haz clic en el icono de la extensión stella en la barra del navegador. Si se solicita, permite el acceso a los sitios web y conecta esta pestaña.",
+      "connected": "Extensión conectada",
+      "description": "stella puede abrir y leer sitios web en otra pestaña cuando se lo pidas.",
+      "install": "Instalar extensión",
+      "installDescription": "La extensión de stella permite abrir y leer sitios web en otra pestaña cuando se lo pidas. Se instala desde Chrome Web Store."
+    },
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
