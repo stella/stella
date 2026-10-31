@@ -446,11 +446,6 @@ export const caseLawSources = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    // Per-source state is written with jsonb_set, which fails on a scalar.
-    p.check(
-      "case_law_sources_config_object",
-      sql`jsonb_typeof(${t.config}) = 'object'`,
-    ),
     p.check(
       "case_law_sources_checkpoint_observation_order_monotonic",
       sql`${t.checkpointObservationOrder} <= ${t.observationOrder}`,

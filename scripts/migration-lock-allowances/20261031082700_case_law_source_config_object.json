@@ -1,3 +1,0 @@
-{
-  "add-constraint": "The CHECK constraint is added NOT VALID, so ACCESS EXCLUSIVE is held only for the catalog update and no existing row is scanned, under 1s lock_timeout and 5s statement_timeout. The online repair validates it later under SHARE UPDATE EXCLUSIVE."
-}

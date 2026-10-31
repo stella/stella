@@ -47,10 +47,7 @@ import {
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
-import {
-  CASE_LAW_SOURCE_CONFIG_OBJECT_CONSTRAINT,
-  CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
-} from "./case-law-source-config-object-repair";
+import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -1016,7 +1013,6 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...IMPORT_PROVENANCE_CONSTRAINTS,
-    CASE_LAW_SOURCE_CONFIG_OBJECT_CONSTRAINT,
   ];
 
 type PresentIndexState = {

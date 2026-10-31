@@ -1,9 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { caseLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -25,26 +22,8 @@ afterAll(async () => {
   await client.close();
 });
 
-const insertSource = async (config: SQL) =>
-  await db.insert(caseLawSources).values({
-    id: createSafeId<"caseLawSource">(),
-    adapterKey: `config-shape-${createSafeId<"caseLawSource">()}`,
-    name: "config shape fixture",
-    config,
-  });
-
 describe("case_law_sources.config", () => {
-  test("refuses a JSON string where the object belongs", async () => {
-    const rejection = await rejectionOf(insertSource(sql`'"{}"'::jsonb`));
-    // The driver error carries the constraint name on its cause.
-    expect(rejection).toMatchObject({
-      cause: {
-        message: expect.stringContaining("case_law_sources_config_object"),
-      },
-    });
-  });
-
-  test("accepts an object, and the ingestion role records per-source state into it", async () => {
+  test("the ingestion role records per-source state into the config object", async () => {
     const id = createSafeId<"caseLawSource">();
     await db.insert(caseLawSources).values({
       id,
