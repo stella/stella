@@ -281,6 +281,7 @@ const installFixtureNetwork = () => {
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies NonNullable<
     Awaited<ReturnType<(typeof api)["organization-settings"]["get"]>>["data"]
