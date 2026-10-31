@@ -66,8 +66,9 @@
 //   exists may still be empty or partial: reading it right after an
 //   existence wait races the writer.
 //   Flagged: a `waitForExternalState` read (from
-//     "@stll/property-testing/external-state") that returns
-//     `existsSync(path)` from "node:fs" or "fs".
+//     "@stll/property-testing/external-state"), inline or a function of the
+//     same file, that returns `existsSync(path)` from "node:fs" or "fs",
+//     also through `&&`, `||`, `??` or `?:`.
 //   Allowed: `waitForFileContent`, whose `parse` accepts only complete
 //     content (`() => true` states that existence is the whole
 //     announcement, as for an empty marker).
@@ -945,6 +946,30 @@ const returnedExpressions = (fn: AstNode): unknown[] => {
     .map((node) => node.argument);
 };
 
+// The values an expression can evaluate to through `&&`, `||`, `??` and `?:`:
+// `existsSync(a) && existsSync(b)` and `existsSync(p) || undefined` still end
+// the wait on existence alone. A negation (waiting for a file to go away) is
+// its own value.
+const valueBranches = (node: unknown): unknown[] => {
+  const expression = unwrapExpression(node);
+  if (!isAstNode(expression)) {
+    return [];
+  }
+  if (expression.type === "LogicalExpression") {
+    return [
+      ...valueBranches(expression.left),
+      ...valueBranches(expression.right),
+    ];
+  }
+  if (expression.type === "ConditionalExpression") {
+    return [
+      ...valueBranches(expression.consequent),
+      ...valueBranches(expression.alternate),
+    ];
+  }
+  return [expression];
+};
+
 // Whether a `waitForExternalState({ read })` call's read returns `existsSync`.
 const isFileExistenceWait = (context: ScopeContext, call: AstNode): boolean => {
   if (
@@ -975,15 +1000,17 @@ const isFileExistenceWait = (context: ScopeContext, call: AstNode): boolean => {
       !(
         (isIdentifier(property.key) && property.key.name === "read") ||
         (property.key.type === "Literal" && property.key.value === "read")
-      ) ||
-      !isFunctionNode(property.value)
+      )
     ) {
       continue;
     }
+    // An inline callback, or a reference to a function of this file.
+    const read = localFunction(context, property.value);
     if (
-      returnedExpressions(property.value).some((returned) =>
-        isExistsSyncCall(context, returned),
-      )
+      read !== null &&
+      returnedExpressions(read)
+        .flatMap(valueBranches)
+        .some((returned) => isExistsSyncCall(context, returned))
     ) {
       return true;
     }

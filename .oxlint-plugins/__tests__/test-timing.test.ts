@@ -410,9 +410,31 @@ describe("no-file-existence-wait", () => {
           '    return existsSync("x");',
           "  },",
           "});",
+          'await waitFor({ description: "d", "read": () => existsSync("x") });',
         ].join("\n"),
       ),
-    ).toEqual([4, 5, 6]);
+    ).toEqual([4, 5, 6, 12]);
+  });
+
+  test("follows logical and conditional values and local read functions", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'const markerExists = () => existsSync("x");',
+          "function bothExist() {",
+          '  return existsSync("a") && existsSync("b");',
+          "}",
+          'await waitFor({ description: "a", read: () => existsSync("a") && existsSync("b") });',
+          'await waitFor({ description: "b", read: () => existsSync("x") || undefined });',
+          'await waitFor({ description: "c", read: () => (ready ? existsSync("x") : undefined) });',
+          'await waitFor({ description: "d", read: markerExists });',
+          'await waitFor({ description: "e", read: bothExist });',
+          'const read = () => existsSync("x") ?? false;',
+          'await waitFor({ description: "f", read });',
+        ].join("\n"),
+      ),
+    ).toEqual([8, 9, 10, 11, 12, 14]);
   });
 
   test("accepts content waits, other predicates and unrelated helpers", async () => {
@@ -430,6 +452,9 @@ describe("no-file-existence-wait", () => {
           'await waitFor({ description: "d", read: () => () => existsSync("x") });',
           'waitForExternalState({ read: () => existsSync("x") });',
           'await waitForFileContent({ description: "e", path: "x", parse: () => true });',
+          'await waitFor({ description: "f", read: existsSync });',
+          'await waitFor({ description: "g", ["read"]: () => existsSync("x") });',
+          'await waitFor({ description: "h", read: () => (existsSync("x") ? readFileSync("x", "utf-8") : undefined) });',
         ].join("\n"),
       ),
     ).toEqual([]);

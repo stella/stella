@@ -103,18 +103,17 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
             "snapshot builder announces itself, its descendant and the leaf",
           path: marker,
           // The builder ends its announcement with a newline; without it the
-          // content may stop inside a pid.
-          parse: (content) => {
-            if (!content.endsWith("\n")) {
-              return undefined;
-            }
-            const announcedPids = content.trim().split(" ").map(Number);
-            return announcedPids.length === 3 &&
-              announcedPids.every((pid) => Number.isSafeInteger(pid) && pid > 1)
-              ? announcedPids
-              : undefined;
-          },
+          // content may stop inside a pid. Once complete, the assertions below
+          // judge it, so a malformed announcement fails at once.
+          parse: (content) =>
+            content.endsWith("\n")
+              ? content.trim().split(" ").map(Number)
+              : undefined,
         });
+        expect(announced).toHaveLength(3);
+        expect(
+          announced.every((pid) => Number.isSafeInteger(pid) && pid > 1),
+        ).toBe(true);
         pids.push(...announced);
         expect(
           pids.every((pid) => Result.try(() => process.kill(pid, 0)).isOk()),
