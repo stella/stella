@@ -144,14 +144,24 @@ export const reportColumns = (
   return [...columns];
 };
 
+type PivotRow = {
+  row: TimeEntryReportRow;
+  cells: Map<string, number>;
+  total: number;
+};
+
+/**
+ * Hours per row and column, in display order: each top-level row is followed
+ * by its own expanded rows, both levels ordered by `order`. The API returns
+ * every top-level row before any matter row, so arrival order would put a
+ * member's matters after all other members.
+ */
 export const buildPivot = (
   rows: readonly TimeEntryReportRow[],
   columns: readonly string[],
+  order: (a: TimeEntryReportRow, b: TimeEntryReportRow) => number,
 ) => {
-  const byId = new Map<
-    string,
-    { row: TimeEntryReportRow; cells: Map<string, number>; total: number }
-  >();
+  const byId = new Map<string, PivotRow>();
   const totals = new Map(columns.map((column) => [column, 0]));
   let total = 0;
   for (const row of rows) {
@@ -172,7 +182,29 @@ export const buildPivot = (
       total += row.minutes;
     }
   }
-  return { rows: [...byId.values()], totals, total };
+  const childrenOf = new Map<string, PivotRow[]>();
+  const parents: PivotRow[] = [];
+  for (const pivot of byId.values()) {
+    const { parentId } = pivot.row;
+    if (parentId === null) {
+      parents.push(pivot);
+    } else {
+      childrenOf.set(parentId, [...(childrenOf.get(parentId) ?? []), pivot]);
+    }
+  }
+  const byOrder = (a: PivotRow, b: PivotRow) => order(a.row, b.row);
+  return {
+    rows: parents
+      .toSorted(byOrder)
+      .flatMap((parent) => [
+        parent,
+        ...(childrenOf.get(parent.row.rowId) ?? []).toSorted(byOrder),
+      ]),
+    byId,
+    parentIds: new Set(childrenOf.keys()),
+    totals,
+    total,
+  };
 };
 
 /** Time recorded without a matter, on any grouping. */
@@ -242,7 +274,7 @@ export const reportCsvRows = ({
 }): string[][] => {
   const detailed = visible.some(({ row }) => row.parentId !== null);
   const parentLabel = (parentId: string) => {
-    const parent = pivot.rows.find(({ row }) => row.rowId === parentId);
+    const parent = pivot.byId.get(parentId);
     return parent === undefined ? "" : text.label(parent.row);
   };
   const leading = (row: TimeEntryReportRow | null) => {

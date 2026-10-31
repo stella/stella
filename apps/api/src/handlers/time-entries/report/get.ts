@@ -6,6 +6,7 @@ import {
   TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
   TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
   TIME_ENTRY_REPORT_QUERY_SCHEMA,
+  TIME_ENTRY_REPORT_TOO_LARGE_CODE,
   type TimeEntryReport,
   type TimeEntryReportMetrics,
 } from "@stll/api-contract/time-entry-report";
@@ -250,6 +251,7 @@ const getTimeReport = createSafeRootHandler(
       return Result.err(
         new HandlerError({
           status: 422,
+          code: TIME_ENTRY_REPORT_TOO_LARGE_CODE,
           message: "Report has too many buckets; select a shorter range",
         }),
       );

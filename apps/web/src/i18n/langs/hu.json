@@ -904,6 +904,7 @@
       "period": "Időszak",
       "privacy": "Ez a jelentés csak a rögzített időbejegyzéseket használja. Az asztali tevékenység minden eszközön helyben marad.",
       "title": "Csapatmunkaidő-jelentés",
+      "tooLargeToLoad": "A jelentés túl nagy a betöltéshez. Rövidítse le az időszakot, vagy jelenítsen meg heteket vagy hónapokat oszlopként.",
       "tooManyCells": "A jelentés túl nagy ahhoz, hogy itt megjelenjen. Rövidítse le az időszakot, jelenítsen meg heteket vagy hónapokat oszlopként, vagy exportálja CSV-be.",
       "total": "Összesen",
       "unbilledValue": "Ki nem számlázott számlázható érték"

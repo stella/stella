@@ -25,6 +25,7 @@ export const REPORT_LABELS = {
   privacy: "billing.timeReport.privacy",
   empty: "billing.timeReport.empty",
   tooManyCells: "billing.timeReport.tooManyCells",
+  tooLargeToLoad: "billing.timeReport.tooLargeToLoad",
   unassigned: "common.unassigned",
   internal: "billing.timeReport.internal",
   exportCsv: "workspaces.views.exportCsv",

@@ -11,6 +11,12 @@ export const TIME_ENTRY_REPORT_BUCKETS = ["day", "week", "month"] as const;
 export const TIME_ENTRY_REPORT_INTERNAL_ROW_ID = "internal";
 /** Row id of matter time whose matter has no client, on the client grouping. */
 export const TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID = "no-client";
+/**
+ * Error code of a report the API refuses to read because its rows exceed the
+ * bound; input validation answers with the same status, so clients tell the
+ * two apart by this code.
+ */
+export const TIME_ENTRY_REPORT_TOO_LARGE_CODE = "time_report_too_large";
 
 export const TIME_ENTRY_REPORT_QUERY_SCHEMA = v.object({
   from: apiDateSchema,

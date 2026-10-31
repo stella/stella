@@ -904,6 +904,7 @@
       "period": "Période",
       "privacy": "Ce rapport utilise uniquement les saisies de temps enregistrées. L’activité sur ordinateur reste sur chaque appareil.",
       "title": "Rapport de temps de l’équipe",
+      "tooLargeToLoad": "Ce rapport est trop volumineux pour être chargé. Raccourcissez la période ou affichez les semaines ou les mois en colonnes.",
       "tooManyCells": "Ce rapport est trop volumineux pour être affiché ici. Raccourcissez la période, affichez les semaines ou les mois en colonnes, ou exportez-le en CSV.",
       "total": "Total général",
       "unbilledValue": "Valeur facturable non facturée"

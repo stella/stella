@@ -6,6 +6,7 @@ import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
   TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
   TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
+  TIME_ENTRY_REPORT_TOO_LARGE_CODE,
   type TimeEntryReportQuery,
 } from "@stll/api-contract/time-entry-report";
 
@@ -578,7 +579,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                   query: { ...year, groupBy, bucket: "day" },
                 }),
               );
-            expect(await respond("member")).toMatchObject({ code: 422 });
+            expect(await respond("member")).toMatchObject({
+              code: 422,
+              response: { code: TIME_ENTRY_REPORT_TOO_LARGE_CODE },
+            });
             expect(
               (await read(fixture, { ...year, groupBy: "matter" })).rows,
             ).toHaveLength(366);

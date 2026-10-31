@@ -904,6 +904,7 @@
       "period": "Período",
       "privacy": "Este relatório usa somente lançamentos de horas registrados. A atividade no computador permanece em cada dispositivo.",
       "title": "Relatório de horas da equipe",
+      "tooLargeToLoad": "Este relatório é grande demais para ser carregado. Encurte o período ou mostre semanas ou meses como colunas.",
       "tooManyCells": "Este relatório é grande demais para ser exibido aqui. Encurte o período, mostre semanas ou meses como colunas ou exporte-o como CSV.",
       "total": "Total geral",
       "unbilledValue": "Valor faturável não faturado"

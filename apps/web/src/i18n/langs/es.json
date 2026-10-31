@@ -904,6 +904,7 @@
       "period": "Periodo",
       "privacy": "Este informe solo utiliza registros de tiempo guardados. La actividad del escritorio permanece en cada dispositivo.",
       "title": "Informe de tiempo del equipo",
+      "tooLargeToLoad": "Este informe es demasiado grande para cargarlo. Acorta el intervalo o muestra semanas o meses como columnas.",
       "tooManyCells": "Este informe es demasiado grande para mostrarlo aquí. Acorta el intervalo, muestra semanas o meses como columnas o expórtalo como CSV.",
       "total": "Total general",
       "unbilledValue": "Valor facturable sin facturar"

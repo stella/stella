@@ -904,6 +904,7 @@
       "period": "Okres",
       "privacy": "Ten raport obejmuje tylko zarejestrowane wpisy czasu. Aktywność na komputerze pozostaje na każdym urządzeniu.",
       "title": "Raport czasu zespołu",
+      "tooLargeToLoad": "Ten raport jest zbyt duży, aby go wczytać. Skróć zakres albo pokaż tygodnie lub miesiące jako kolumny.",
       "tooManyCells": "Ten raport jest zbyt duży, aby go tu wyświetlić. Skróć zakres, pokaż tygodnie lub miesiące jako kolumny albo wyeksportuj go do CSV.",
       "total": "Razem",
       "unbilledValue": "Nierozliczona wartość godzin podlegających rozliczeniu"

@@ -6,6 +6,7 @@ import {
   TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
   type TimeEntryReportRow,
 } from "@stll/api-contract/time-entry-report";
+import { compareByLocale, compareCodeUnit } from "@stll/collation";
 
 import { reportSearchSchema } from "./report-search";
 import {
@@ -118,6 +119,12 @@ const row = (
   ...overrides,
 });
 
+const compareNames = compareByLocale("en");
+/** Rows by name, then id, as the table orders them. */
+const byName = (a: TimeEntryReportRow, b: TimeEntryReportRow) =>
+  compareNames(a.rowName ?? "", b.rowName ?? "") ||
+  compareCodeUnit(a.rowId, b.rowId);
+
 describe("report pivot", () => {
   test("computes totals without counting expanded matter hours twice", () => {
     const pivot = buildPivot(
@@ -133,6 +140,7 @@ describe("report pivot", () => {
         row({ rowId: "member-b", memberId: "b", minutes: 120 }),
       ],
       ["2026-10-26", "2026-10-27"],
+      byName,
     );
     expect(pivot.total).toBe(210);
     expect([...pivot.totals.values()]).toEqual([180, 30]);
@@ -222,20 +230,59 @@ describe("report pivot", () => {
     ).toBe(false);
     expect(isInternalReportRow(row({ rowName: null }))).toBe(false);
   });
-  test("marks expanded matter rows in the CSV so its rows add up to the total", () => {
-    const columns = ["2026-10-26"];
+  test("places each member's matter rows right after that member, by name", () => {
+    // The API sends every member row before any matter row, members unsorted.
     const pivot = buildPivot(
       [
+        row({ rowId: "member-z", rowName: "Zoe", memberId: "z" }),
         row(),
+        row({
+          rowId: "z:matter-b",
+          rowName: "Merger",
+          parentId: "member-z",
+          matterId: "matter-b",
+        }),
+        row({
+          rowId: "a:matter-c",
+          rowName: "Probate",
+          parentId: "member-a",
+          matterId: "matter-c",
+        }),
         row({
           rowId: "a:matter-a",
           rowName: "Lease",
           parentId: "member-a",
           matterId: "matter-a",
         }),
+      ],
+      ["2026-10-26"],
+      byName,
+    );
+    expect(pivot.rows.map(({ row: entry }) => entry.rowId)).toEqual([
+      "member-a",
+      "a:matter-a",
+      "a:matter-c",
+      "member-z",
+      "z:matter-b",
+    ]);
+    expect([...pivot.parentIds].toSorted()).toEqual(["member-a", "member-z"]);
+    expect(pivot.byId.get("a:matter-a")?.row.rowName).toBe("Lease");
+  });
+  test("marks expanded matter rows in the CSV so its rows add up to the total", () => {
+    const columns = ["2026-10-26"];
+    const pivot = buildPivot(
+      [
+        row(),
         row({ rowId: "member-b", rowName: "Ben", memberId: "b", minutes: 30 }),
+        row({
+          rowId: "a:matter-a",
+          rowName: "Lease",
+          parentId: "member-a",
+          matterId: "matter-a",
+        }),
       ],
       columns,
+      byName,
     );
     const text = {
       group: "Member",

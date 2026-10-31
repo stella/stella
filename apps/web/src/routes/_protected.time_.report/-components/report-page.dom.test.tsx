@@ -76,9 +76,13 @@ const WEEK = {
 } satisfies ReportFilter;
 const mount = async (
   locale: "en" | "ar" = "en",
-  value: TimeEntryReport = data,
+  value: TimeEntryReport | "too-large" = data,
   filter: ReportFilter = WEEK,
 ) => {
+  const result =
+    value === "too-large"
+      ? ({ type: "too-large" } as const)
+      : ({ type: "report", report: value } as const);
   const root = createRootRoute();
   const route = createRoute({
     getParentRoute: () => root,
@@ -94,7 +98,7 @@ const mount = async (
           timeZone="UTC"
         >
           <ReportLayout
-            data={value}
+            data={result}
             filter={filter}
             period="week"
             onChange={() => undefined}
@@ -231,5 +235,60 @@ test("offers the CSV instead of a grid too large to render", async () => {
   expect(within(table).queryByRole("row", { name: /Member 1/u })).toBeNull();
   expect(
     screen.getByRole("button", { name: messages.workspaces.views.exportCsv }),
+  ).toBeTruthy();
+});
+
+test("lists an expanded member's matters right under that member", async () => {
+  const member = (id: string, name: string) => ({
+    rowId: id,
+    rowName: name,
+    memberId: id,
+    matterId: null,
+    parentId: null,
+    bucket: "2026-10-26",
+    minutes: 60,
+  });
+  const matter = (parent: string, name: string, matterId: string) => ({
+    rowId: `${parent}:${matterId}`,
+    rowName: name,
+    memberId: parent,
+    matterId,
+    parentId: parent,
+    bucket: "2026-10-26",
+    minutes: 60,
+  });
+  // The API sends every member row before any matter row.
+  await mount("en", {
+    ...data,
+    rows: [
+      member("ben", "Ben"),
+      member("anna", "Anna"),
+      matter("ben", "Merger", "00000000-0000-4000-8000-000000000002"),
+      matter("anna", "Harbour lease", "00000000-0000-4000-8000-000000000001"),
+    ],
+  });
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Expand Anna" })),
+  );
+  await act(async () =>
+    fireEvent.click(screen.getByRole("button", { name: "Expand Ben" })),
+  );
+  const names = within(screen.getByRole("table"))
+    .getAllByRole("row")
+    .slice(1, -1)
+    .map((row) => row.textContent ?? "");
+  expect(
+    names.map((text) => text.match(/Anna|Harbour lease|Ben|Merger/u)?.[0]),
+  ).toEqual(["Anna", "Harbour lease", "Ben", "Merger"]);
+});
+
+test("explains a range too large to load instead of failing the page", async () => {
+  await mount("en", "too-large");
+  expect(screen.getByRole("status").textContent).toBe(
+    messages.billing.timeReport.tooLargeToLoad,
+  );
+  expect(screen.queryByRole("table")).toBeNull();
+  expect(
+    screen.getByRole("heading", { name: "Team time report" }),
   ).toBeTruthy();
 });

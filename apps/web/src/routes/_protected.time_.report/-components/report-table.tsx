@@ -7,6 +7,7 @@ import type {
   TimeEntryReport,
   TimeEntryReportRow,
 } from "@stll/api-contract/time-entry-report";
+import { compareByLocale, compareCodeUnit } from "@stll/collation";
 import { Button } from "@stll/ui/button";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -24,6 +25,7 @@ import {
   SHORT_DATE,
 } from "@/components/billing/format-plain-date";
 import { useFormatter } from "@/i18n/formatting-context";
+import { useMessageLocale } from "@/i18n/message-locale";
 import { downloadFile } from "@/lib/utils";
 
 import { REPORT_LABELS } from "./report-labels";
@@ -46,16 +48,10 @@ export const ReportTable = ({
   filter: ReportFilter;
 }) => {
   const t = useTranslations();
+  const locale = useMessageLocale();
   const format = useFormatter();
   const [expanded, setExpanded] = useState(new Set<string>());
   const columns = reportColumns(filter, filter.bucket);
-  // While loading the pivot has no rows; the skeleton rows stand in.
-  const pivot = buildPivot(data === undefined ? [] : data.rows, columns);
-  const visible = pivot.rows.filter(
-    ({ row }) => row.parentId === null || expanded.has(row.parentId),
-  );
-  const hours = (minutes: number) =>
-    format.number(minutes / 60, { maximumFractionDigits: 2 });
   const label = (row: TimeEntryReportRow) =>
     row.rowName ??
     t(
@@ -63,6 +59,19 @@ export const ReportTable = ({
         ? REPORT_LABELS.internal
         : REPORT_LABELS.unassigned,
     );
+  const compareNames = compareByLocale(locale);
+  // While loading the pivot has no rows; the skeleton rows stand in.
+  const pivot = buildPivot(
+    data === undefined ? [] : data.rows,
+    columns,
+    (a, b) =>
+      compareNames(label(a), label(b)) || compareCodeUnit(a.rowId, b.rowId),
+  );
+  const visible = pivot.rows.filter(
+    ({ row }) => row.parentId === null || expanded.has(row.parentId),
+  );
+  const hours = (minutes: number) =>
+    format.number(minutes / 60, { maximumFractionDigits: 2 });
   const columnLabels = columns.map((column) =>
     format.dateTime(plainDateEpoch(column), SHORT_DATE),
   );
@@ -135,9 +144,7 @@ export const ReportTable = ({
             <TableRow key={row.rowId}>
               <TableCell>
                 <div className="flex min-w-0 items-center gap-2">
-                  {pivot.rows.some(
-                    (child) => child.row.parentId === row.rowId,
-                  ) && (
+                  {pivot.parentIds.has(row.rowId) && (
                     <Button
                       aria-expanded={expanded.has(row.rowId)}
                       aria-label={t(

@@ -259,9 +259,9 @@ export const MyWeek = ({
                 {tCommon("logTime")}
               </Button>
             )}
+            {canReadTime && <Link to="/time/report">{tReport("title")}</Link>}
             {/* Members approve what is assigned to them, so the link follows
                 the queue, not the role; it shows nothing while none waits. */}
-            {canReadTime && <Link to="/time/report">{tReport("title")}</Link>}
             <PendingApprovalsLink
               organizationId={organizationId}
               userId={userId}

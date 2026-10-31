@@ -24,7 +24,11 @@ import { Tabs, TabsList, TabsTrigger } from "@stll/ui/tabs";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 
 import { REPORT_LABELS } from "./report-labels";
-import { type ReportFilter, timeReportOptions } from "./report-query";
+import {
+  type ReportFilter,
+  timeReportOptions,
+  type TimeReportResult,
+} from "./report-query";
 import { ReportSummary } from "./report-summary";
 import { ReportTable } from "./report-table";
 import {
@@ -60,7 +64,7 @@ export const ReportPage = ({
 };
 
 type ReportLayoutProps = {
-  data: Parameters<typeof ReportSummary>[0]["data"];
+  data: TimeReportResult | undefined;
   filter: ReportFilter;
   period: ReportPeriod;
   onChange: (filter: ReportFilter, period: ReportPeriod) => void;
@@ -200,8 +204,16 @@ export const ReportLayout = ({
             </Select>
           </div>
         </div>
-        <ReportSummary data={data} />
-        <ReportTable data={data} filter={filter} />
+        {data?.type === "too-large" ? (
+          <p className="text-sm" role="status">
+            {t(REPORT_LABELS.tooLargeToLoad)}
+          </p>
+        ) : (
+          <>
+            <ReportSummary data={data?.report} />
+            <ReportTable data={data?.report} filter={filter} />
+          </>
+        )}
         <p className="text-muted-foreground text-xs">
           {t(REPORT_LABELS.privacy)}
         </p>

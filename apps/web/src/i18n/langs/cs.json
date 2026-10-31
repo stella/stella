@@ -904,6 +904,7 @@
       "period": "Období",
       "privacy": "Tento přehled zahrnuje pouze zaznamenané časové záznamy. Aktivita na počítači zůstává v zařízení.",
       "title": "Přehled času týmu",
+      "tooLargeToLoad": "Přehled je příliš velký na načtení. Zkraťte období nebo zobrazte ve sloupcích týdny či měsíce.",
       "tooManyCells": "Přehled je příliš velký, aby se zde zobrazil. Zkraťte období, zobrazte ve sloupcích týdny nebo měsíce, nebo jej exportujte do CSV.",
       "total": "Celkem",
       "unbilledValue": "Nevyfakturovaná fakturovatelná částka"
