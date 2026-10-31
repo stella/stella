@@ -99,6 +99,22 @@ const SOURCE_LOCATION_KEYS = new Set<PropertyKey>([
   "stack",
 ]);
 
+// Bun attaches these only when it resolves a source position for the throw
+// site, so their presence varies between runs; they carry runtime numbers,
+// never stored data, and assertSourceLocations checks their values.
+const RUNTIME_POSITION_KEYS = new Set<PropertyKey>([
+  "column",
+  "line",
+  "originalColumn",
+  "originalLine",
+]);
+
+/** An error's own keys without the optional runtime position keys. */
+const domainKeys = (error: Error): PropertyKey[] =>
+  Reflect.ownKeys(error)
+    .filter((key) => !RUNTIME_POSITION_KEYS.has(key))
+    .toSorted(compareKeys);
+
 const errorPayload = (error: Error): Record<string, unknown> =>
   Object.fromEntries(
     Reflect.ownKeys(error)
@@ -261,23 +277,19 @@ const assertReturnedAllowlist = (returned: unknown): void => {
   if (returned instanceof Error) {
     assertSourceLocations(returned);
     if ("code" in returned) {
-      expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
+      expect(domainKeys(returned)).toEqual(
         [
           "_tag",
           "claim",
           "clause",
           "code",
-          "column",
           "confirmation",
           "contactUrl",
           "error",
           "hint",
           "issues",
-          "line",
           "message",
           "name",
-          "originalColumn",
-          "originalLine",
           "requiredFields",
           "retryAfterMs",
           "retryable",
@@ -295,19 +307,10 @@ const assertReturnedAllowlist = (returned: unknown): void => {
       );
       return;
     }
-    expect(Reflect.ownKeys(returned).toSorted(compareKeys)).toEqual(
-      [
-        "_tag",
-        "column",
-        "line",
-        "message",
-        "name",
-        "originalColumn",
-        "originalLine",
-        "reason",
-        "sourceURL",
-        "stack",
-      ].toSorted(compareKeys),
+    expect(domainKeys(returned)).toEqual(
+      ["_tag", "message", "name", "reason", "sourceURL", "stack"].toSorted(
+        compareKeys,
+      ),
     );
     expect(errorPayload(returned)).toStrictEqual({
       _tag: "OrgAIConfigReadError",
