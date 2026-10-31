@@ -184,6 +184,7 @@
     "headnote": "Právní věta",
     "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
     "openSource": "Otevřít originál",
+    "openFailed": "Odkaz se nepodařilo otevřít.",
     "loadFailed": "Judikaturu se nepodařilo načíst.",
     "share": "Sdílet"
   },

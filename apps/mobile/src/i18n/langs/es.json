@@ -184,6 +184,7 @@
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
     "openSource": "Abrir fuente original",
+    "openFailed": "No se pudo abrir el enlace.",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
   },

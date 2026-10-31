@@ -184,6 +184,7 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
+    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },

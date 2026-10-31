@@ -184,6 +184,7 @@
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
     "openSource": "Originalquelle öffnen",
+    "openFailed": "Der Link konnte nicht geöffnet werden.",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
   },

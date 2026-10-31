@@ -184,6 +184,7 @@
     "headnote": "Headnote",
     "textUnavailable": "No text is available for this decision",
     "openSource": "Open original source",
+    "openFailed": "The link could not be opened.",
     "loadFailed": "Case law could not be loaded.",
     "share": "Share"
   },

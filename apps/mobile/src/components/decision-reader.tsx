@@ -3,6 +3,7 @@ import { use } from "react";
 import { Result } from "better-result";
 import { Stack } from "expo-router";
 import {
+  Alert,
   Linking,
   Platform,
   Share,
@@ -67,7 +68,14 @@ export const DecisionReader = ({
         dom={{ style: screenStyles.screen }}
         onLink={(href) => {
           if (isWebUrl(href)) {
-            void Linking.openURL(href);
+            void (async () => {
+              const opened = await Result.tryPromise(
+                async () => await Linking.openURL(href),
+              );
+              if (Result.isError(opened)) {
+                Alert.alert(t("openFailed"));
+              }
+            })();
           }
         }}
         page={decisionPage({

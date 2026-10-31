@@ -184,6 +184,7 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
+    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },

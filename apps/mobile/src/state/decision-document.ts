@@ -74,6 +74,7 @@ const WEB_HOST = /^https?:\/\/([^/?#\\@\s]+)(?=[/?#]|$)/iu;
 const hostOf = (url: string): string | null => {
   const host = WEB_HOST.exec(url.trim())?.[1]
     ?.replace(/:\d*$/u, "")
+    .replace(/\.$/u, "")
     .toLowerCase();
   return host === undefined || host === "" ? null : host;
 };
@@ -255,7 +256,11 @@ function inlineRuns(
           inline.children ?? [],
           {
             ...marks,
-            href: marks.href ?? publisherHref(inline.href, publisherHost),
+            // A nested reference goes where its own address does.
+            href:
+              inline.href === undefined
+                ? marks.href
+                : publisherHref(inline.href, publisherHost),
           },
           publisherHost,
         );

@@ -184,6 +184,7 @@
     "headnote": "Jogi tétel",
     "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
     "openSource": "Eredeti forrás megnyitása",
+    "openFailed": "A hivatkozást nem sikerült megnyitni.",
     "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
     "share": "Megosztás"
   },

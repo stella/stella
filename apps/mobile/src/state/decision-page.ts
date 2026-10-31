@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import type { Decision } from "@/state/case-law";
 import { plainTextBlocks, readerBlocks } from "@/state/decision-document";
 import type { ReaderBlock } from "@/state/decision-document";
@@ -28,10 +30,15 @@ type DecisionPageLabels = {
   readonly openSource: string;
 };
 
-const WEB_URL = /^https?:\/\//iu;
-
 /** Whether an address opens in a browser, the only kind the reader follows. */
-export const isWebUrl = (url: string): boolean => WEB_URL.test(url.trim());
+export const isWebUrl = (url: string): boolean => {
+  const parsed = Result.try(() => new URL(url.trim()));
+  return (
+    Result.isOk(parsed) &&
+    (parsed.value.protocol === "http:" || parsed.value.protocol === "https:") &&
+    parsed.value.host !== ""
+  );
+};
 
 export const decisionPage = ({
   decision,

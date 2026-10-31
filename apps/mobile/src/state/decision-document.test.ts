@@ -90,6 +90,38 @@ describe("readerRuns", () => {
     ]);
   });
 
+  test("follows a nested reference's own address, and a host's final dot", () => {
+    expect(
+      readerRuns(
+        [
+          {
+            type: "link",
+            href: "https://usoud.cz./rozhodnuti",
+            children: [
+              text("viz "),
+              {
+                type: "citation",
+                cite: "§ 2 OZ",
+                href: "https://www.example-database.cz/zakon/89-2012#p2",
+                children: [text("§ 2")],
+              },
+            ],
+          },
+        ],
+        "usoud.cz",
+      ),
+    ).toEqual([
+      {
+        id: "0",
+        text: "viz ",
+        strong: false,
+        emphasis: false,
+        href: "https://usoud.cz./rozhodnuti",
+      },
+      { id: "1", text: "§ 2", strong: false, emphasis: false, href: null },
+    ]);
+  });
+
   test("keeps no address without a publisher", () => {
     expect(
       readerRuns([
