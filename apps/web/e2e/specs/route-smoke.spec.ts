@@ -134,8 +134,12 @@ const timeBillingRedirectDestination = ({
   if (template.startsWith("/admin/")) {
     return "/admin/members";
   }
-  // My week and its approval queue leave for the matters list.
-  if (template === "/time" || template === "/time_/approvals") {
+  // My week, its approval queue and the team report leave for the matters list.
+  if (
+    template === "/time" ||
+    template === "/time_/approvals" ||
+    template === "/time_/report"
+  ) {
     return "/workspaces";
   }
   throw new Error(`No unenrolled redirect expectation for ${template}`);
