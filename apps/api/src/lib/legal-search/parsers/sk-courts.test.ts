@@ -186,6 +186,74 @@ describe("PDF source line retention", () => {
 });
 
 describe("publisher paragraph layout", () => {
+  const positionedLines = (texts: readonly string[], leading: number) =>
+    texts.map((text, index) => ({
+      text,
+      segments: [{ text }],
+      bold: false,
+      fontSize: 12,
+      pageIndex: 0,
+      position: { y: 720 - index * leading, height: 9 },
+    }));
+
+  test("two single-line paragraphs cannot train their gap into ordinary leading", async () => {
+    const pdf = PDF.create();
+    const page = pdf.addPage({ size: "letter" });
+    page.drawText("Prvý krátky odsek.", { x: 72, y: 720, size: 12 });
+    page.drawText("Druhý krátky odsek.", { x: 72, y: 696, size: 12 });
+    const parsed = await parseSkDecisionPdf({
+      pdfBytes: await pdf.save(),
+      caseNumber: "1/2026",
+      court: "Court",
+      ecli: undefined,
+      decisionDate: undefined,
+      decisionType: undefined,
+    });
+    expect(parsed.documentAst.blocks.map((block) => block.plainText)).toEqual([
+      "Prvý krátky odsek.",
+      "Druhý krátky odsek.",
+    ]);
+    expect(
+      parsed.documentAst.blocks.every((block) => block.type === "paragraph"),
+    ).toBe(true);
+  });
+
+  test("ordinary leading keeps a long wrapped paragraph together", () => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: positionedLines(
+        [
+          "Dlhý odsek pokračuje",
+          "cez viacero riadkov",
+          "bez zmeny odseku",
+          "až po poslednú vetu.",
+        ],
+        18,
+      ),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Dlhý odsek pokračuje cez viacero riadkov bez zmeny odseku až po poslednú vetu.",
+    ]);
+  });
+
+  test("a document of only short paragraphs retains every paragraph boundary", () => {
+    const blocks = buildSkDecisionPdfBlocks({
+      lines: positionedLines(
+        [
+          "Prvý krátky odsek.",
+          "Druhý krátky odsek.",
+          "Tretí krátky odsek.",
+          "Štvrtý krátky odsek.",
+          "Piaty krátky odsek.",
+        ],
+        24,
+      ),
+      metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+    });
+    expect(blocks).toHaveLength(5);
+    expect(blocks.every((block) => block.type === "paragraph")).toBe(true);
+  });
+
   test("keeps appeal paragraphs and every lettered point across a page turn", () => {
     const blocks = buildSkDecisionPdfBlocks({
       lines: appealLines.map((line) => ({
