@@ -7,7 +7,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import { mintContactId } from "./contact-id";
 import { createContactBodySchema } from "./create";
-import { contactIdCollisionCondition, importContactRowSchema } from "./import";
+import {
+  contactIdCollisionCondition,
+  importContactRowSchema,
+} from "./import-contacts";
 
 const callerId = "00000000-0000-0000-0000-000000000000";
 

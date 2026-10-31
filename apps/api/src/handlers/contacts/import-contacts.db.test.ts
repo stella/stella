@@ -84,7 +84,6 @@ const person = (
   displayName: string,
   external?: { source: string; id: string },
 ): ImportRow => ({
-  id: createSafeId<"contact">(),
   type: "person",
   displayName,
   ...(external === undefined ? {} : { external }),
@@ -111,7 +110,7 @@ beforeAll(async () => {
 afterAll(releaseTestDb);
 
 describe("contact import by external ref", () => {
-  test("identical candidates with distinct ids are skipped as in-file duplicates", async () => {
+  test("identical candidates are skipped as in-file duplicates", async () => {
     const tenant = await createTenant("In-file duplicate");
     const first = {
       ...person("Imported contact"),
@@ -119,11 +118,9 @@ describe("contact import by external ref", () => {
         { type: "work", address: "shared@example.test", isPrimary: true },
       ],
     } satisfies ImportRow;
-    const second = { ...first, id: createSafeId<"contact">() };
-    expect(second.id).not.toBe(first.id);
-    const results = await runImport(tenant, [first, second], "none");
+    const results = await runImport(tenant, [first, { ...first }], "none");
     expect(results).toEqual([
-      { index: 0, status: "created", contactId: first.id },
+      { index: 0, status: "created", contactId: expect.any(String) },
       { index: 1, status: "skipped", reason: "in_file_duplicate" },
     ]);
     expect(await storedContacts(tenant.organizationId)).toHaveLength(1);
@@ -251,40 +248,6 @@ describe("contact import by external ref", () => {
     expect(Result.isOk(crossRead) && crossRead.value.size).toBe(0);
   });
 
-  test("a new ref whose id another organization holds is skipped, not the batch", async () => {
-    const first = await createTenant("Id holder");
-    const second = await createTenant("Id reuser");
-    const [held] = await runImport(first, [person("Held contact")]);
-    if (held?.status !== "created") {
-      panic("The first organization must create its contact");
-    }
-
-    const results = await runImport(second, [
-      {
-        ...person("Reused id", { source: "address-book", id: "X-1" }),
-        id: held.contactId,
-      },
-      person("Valid new row", { source: "address-book", id: "X-2" }),
-    ]);
-    expect(results.at(0)).toMatchObject({
-      status: "skipped",
-      reason: "duplicate_contact_id",
-    });
-    expect(results.at(1)?.status).toBe("created");
-
-    const stored = await storedContacts(second.organizationId);
-    expect(stored.map(({ displayName }) => displayName)).toEqual([
-      "Valid new row",
-    ]);
-    const [firstStored] = await storedContacts(first.organizationId);
-    expect(firstStored).toMatchObject({
-      id: held.contactId,
-      displayName: "Held contact",
-      externalSource: null,
-      externalId: null,
-    });
-  });
-
   test("a ref repeated within one batch is written once", async () => {
     const tenant = await createTenant("Batch duplicate");
     const ref = { source: "address-book", id: "D-1" };
@@ -297,7 +260,7 @@ describe("contact import by external ref", () => {
     expect(await storedContacts(tenant.organizationId)).toHaveLength(1);
   });
 
-  test("a re-imported ref updates its own contact whatever id the row carries", async () => {
+  test("a re-imported ref updates its own contact", async () => {
     const tenant = await createTenant("Ref with another id");
     const ref = { source: "address-book", id: "R-1" };
     const [byRef, plain] = await runImport(tenant, [
@@ -309,7 +272,7 @@ describe("contact import by external ref", () => {
     }
 
     const results = await runImport(tenant, [
-      { ...person("By ref, renamed", ref), id: plain.contactId },
+      person("By ref, renamed", ref),
       person("New"),
     ]);
     expect(results.map(({ status }) => status)).toEqual(["updated", "created"]);
