@@ -49,8 +49,12 @@ type SessionWriteOutcome =
   | { readonly type: "committed"; readonly generation: SessionGeneration }
   | { readonly type: "stale" };
 
+/**
+ * A sign-in or sign-out in progress. It retires the current generation only when its
+ * credentials change commits, so an abandoned or failed transition leaves the current
+ * session usable; a later transition supersedes an earlier one.
+ */
 type SessionTransition = {
-  readonly generation: SessionGeneration;
   readonly write: (session: StoredSession) => Promise<SessionWriteOutcome>;
   readonly clear: () => Promise<SessionWriteOutcome>;
 };
@@ -82,6 +86,7 @@ export const createSessionStore = (
   persistence: SessionPersistence,
 ): SessionStore => {
   let generation: SessionGeneration = { [sessionGenerationBrand]: true };
+  let latestTransition = 0;
   let mutations = Promise.resolve();
 
   const advance = (): SessionGeneration => {
@@ -119,11 +124,40 @@ export const createSessionStore = (
     generation: () => generation,
     advance,
     begin: () => {
-      const captured = advance();
+      latestTransition += 1;
+      const ticket = latestTransition;
+      const latest = () => ticket === latestTransition;
       return {
-        generation: captured,
-        write: async (session) => await store.write(session, captured),
-        clear: async () => await store.clear(captured),
+        write: async (session) =>
+          await enqueue(async () => {
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            await persistence.write(session);
+            return latest()
+              ? { type: "committed", generation: advance() }
+              : { type: "stale" };
+          }),
+        clear: async () =>
+          await enqueue(async () => {
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            await persistence.prepareClear();
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            const current = await persistence.read();
+            if (!latest()) {
+              return { type: "stale" };
+            }
+            if (current === null) {
+              await persistence.clear();
+            }
+            return latest()
+              ? { type: "committed", generation: advance() }
+              : { type: "stale" };
+          }),
       };
     },
     isCurrent: (captured) => captured === generation,

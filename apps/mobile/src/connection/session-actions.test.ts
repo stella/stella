@@ -79,8 +79,10 @@ for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
     resume.resolve(undefined);
     expect((await signingOut).isOk()).toBeTrue();
     const kept = await keeping;
-    expect(kept.type).toBe("committed");
-    store.commit(signingIn.generation, () => {
+    if (kept.type !== "committed") {
+      throw new Error("expected the replacement sign-in to commit");
+    }
+    store.commit(kept.generation, () => {
       published = replacement;
     });
     const pendingUpdate = updates.at(0);
@@ -104,14 +106,14 @@ test("deferred state updates belong to the generation that scheduled them", () =
     prepareClear: async () => {},
     clear: async () => {},
   });
-  const previous = store.begin();
-  const current = store.begin();
+  const previous = store.advance();
+  const current = store.advance();
   let published = "current";
-  store.commit(previous.generation, () => {
+  store.commit(previous, () => {
     published = "previous";
   });
   expect(published).toBe("current");
-  store.commit(current.generation, () => {
+  store.commit(current, () => {
     published = "replacement";
   });
   expect(published).toBe("replacement");

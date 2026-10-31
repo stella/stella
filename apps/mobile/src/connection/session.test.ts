@@ -615,6 +615,60 @@ describe("access tokens", () => {
     expect(memory.stored()).toBeUndefined();
   });
 
+  test("an unfinished sign-in leaves the current session usable", async () => {
+    const memory = memoryStore(SESSION);
+    const current = memory.store.generation();
+
+    memory.store.begin();
+
+    expect(memory.store.isCurrent(current)).toBeTrue();
+    expect(await memory.store.read(current)).toEqual(SESSION);
+  });
+
+  test("a sign-in whose credentials cannot be kept leaves the current session usable", async () => {
+    const store = createSessionStore({
+      read: async () => SESSION,
+      write: async () => {
+        throw new Error("The keychain refused the session");
+      },
+      prepareClear: async () => {},
+      clear: async () => {},
+    });
+    const current = store.generation();
+    const replacement = {
+      ...SESSION,
+      signInId: "sign-in-2",
+      refreshToken: "refresh-2",
+    };
+
+    expect(await rejectionOf(store.begin().write(replacement))).toHaveProperty(
+      "message",
+      "The keychain refused the session",
+    );
+
+    expect(store.isCurrent(current)).toBeTrue();
+    expect(await store.read(current)).toEqual(SESSION);
+  });
+
+  test("a committed sign-in retires the session it replaces", async () => {
+    const memory = memoryStore(SESSION);
+    const previous = memory.store.generation();
+    const replacement = {
+      ...SESSION,
+      signInId: "sign-in-2",
+      refreshToken: "refresh-2",
+    };
+
+    const outcome = await memory.store.begin().write(replacement);
+
+    if (outcome.type !== "committed") {
+      throw new Error("expected the sign-in to commit");
+    }
+    expect(memory.store.isCurrent(previous)).toBeFalse();
+    expect(memory.store.isCurrent(outcome.generation)).toBeTrue();
+    expect(memory.stored()).toEqual(replacement);
+  });
+
   test("credentials follow session generations across event interleavings", async () => {
     type Event = "sign-in" | "sign-out" | "resolve";
     const event = fc.constantFrom<Event>("sign-in", "sign-out", "resolve");
