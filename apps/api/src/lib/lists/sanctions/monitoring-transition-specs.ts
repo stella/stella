@@ -24,6 +24,7 @@ const tables = {
 } satisfies Record<MonitoringTableName, PgTable>;
 
 export const CONTACT_MONITORING_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "contacts_pkey" },
   ...SANCTIONS_MONITORING_TRANSITION_IDENTITIES.CONTACT_MONITORING_TRANSITIONS,
   table:
     tables[
@@ -35,6 +36,7 @@ export const CONTACT_MONITORING_TRANSITIONS = defineScopedTransitions({
 });
 
 export const FIRM_MONITORING_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "organization_settings_organization_id_key" },
   ...SANCTIONS_MONITORING_TRANSITION_IDENTITIES.FIRM_MONITORING_TRANSITIONS,
   table:
     tables[
@@ -47,6 +49,7 @@ export const FIRM_MONITORING_TRANSITIONS = defineScopedTransitions({
 });
 
 export const MATCH_MEMBERSHIP_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "sanctions_contact_matches_pkey" },
   ...SANCTIONS_MONITORING_TRANSITION_IDENTITIES.MATCH_MEMBERSHIP_TRANSITIONS,
   table:
     tables[
@@ -59,6 +62,7 @@ export const MATCH_MEMBERSHIP_TRANSITIONS = defineScopedTransitions({
 });
 
 export const MATCH_REVIEW_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "sanctions_contact_matches_pkey" },
   ...SANCTIONS_MONITORING_TRANSITION_IDENTITIES.MATCH_REVIEW_TRANSITIONS,
   table:
     tables[
@@ -75,6 +79,7 @@ export const MATCH_REVIEW_TRANSITIONS = defineScopedTransitions({
 });
 
 export const SCREENING_COVERAGE_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "sanctions_contact_screenings_pkey" },
   ...SANCTIONS_MONITORING_TRANSITION_IDENTITIES.SCREENING_COVERAGE_TRANSITIONS,
   table:
     tables[

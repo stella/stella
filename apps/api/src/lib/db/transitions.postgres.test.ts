@@ -85,6 +85,9 @@ if (!databaseUrl || !enabled) {
             sql`INSERT INTO transition_count_rows VALUES ('first', 'one', 'active'), ('first', 'two', 'active'), ('other', 'one', 'active')`,
           );
           const spec = defineScopedTransitions({
+            arbiter: {
+              constraint: "transition_count_rows_organization_id_id_pk",
+            },
             table: countRows,
             key: "id",
             scope: ["organizationId"],
@@ -154,6 +157,7 @@ if (!databaseUrl || !enabled) {
             sql`CREATE TEMPORARY TABLE transition_test_audit_events (status text NOT NULL) ON COMMIT DROP`,
           );
           const spec = defineScopedTransitions({
+            arbiter: { constraint: "transition_fenced_jobs_pkey" },
             table: fencedJobs,
             key: "id",
             scope: [],

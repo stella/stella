@@ -2,6 +2,7 @@ import { requestIdempotencyReceipts } from "@/api/db/schema";
 import { defineScopedTransitions } from "@/api/lib/db/transitions";
 
 export const REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS = defineScopedTransitions({
+  arbiter: { constraint: "request_idempotency_receipts_pkey" },
   table: requestIdempotencyReceipts,
   key: "id",
   scope: [],
