@@ -192,6 +192,7 @@ type HandlerErrorBaseProps<
   issues?: HandlerErrorValidationIssue[] | undefined;
   /** Only matters the authenticated caller already reaches. */
   affectedMatters?: MatterStewardHandoverMatter[] | undefined;
+  workspaceId?: string | undefined;
   retryable?: boolean | undefined;
   retryAfterMs?: number | undefined;
 };
@@ -228,6 +229,7 @@ export class HandlerError<
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
   declare affectedMatters?: HandlerErrorProps["affectedMatters"];
+  declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -246,6 +248,7 @@ export class HandlerError<
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
     this.affectedMatters = props.affectedMatters;
+    this.workspaceId = props.workspaceId;
   }
 }
 
