@@ -5,6 +5,7 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import {
+  canSendWithoutQueueing,
   createInitialSendQueueState,
   describeQueuedMessage,
   type QueuedChatEntry,
@@ -203,6 +204,8 @@ describe("reduceSendQueue", () => {
   test("conversation switch clears the queue and the generating flags", () => {
     const state: SendQueueState = {
       conversationId: CONVERSATION_ID,
+      drainHeld: true,
+      editingMessageIds: ["edited"],
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
       wasGenerating: true,
@@ -215,6 +218,8 @@ describe("reduceSendQueue", () => {
 
     expect(result.state).toEqual({
       conversationId: "conversation-2",
+      drainHeld: false,
+      editingMessageIds: [],
       isGenerating: false,
       queue: [],
       wasGenerating: false,
@@ -374,6 +379,89 @@ describe("queued-message-promoted", () => {
     });
     expect(sent.dispatchedEntry?.id).toBe("b");
     expect(sent.state.isGenerating).toBe(true);
+  });
+});
+
+describe("an open message edit holds the queue", () => {
+  const opened = (state: SendQueueState, messageId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-opened", messageId }).state;
+  const closed = (state: SendQueueState, messageId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-closed", messageId });
+  const enqueued = (state: SendQueueState, id: string) =>
+    reduceSendQueue(state, { type: "message-enqueued", entry: makeEntry(id) })
+      .state;
+
+  test("a turn that ends while the form is open drains only once it closes", () => {
+    const streaming = applyRenderTick(
+      createInitialSendQueueState(CONVERSATION_ID),
+      true,
+      "streaming",
+    ).state;
+    const held = opened(enqueued(streaming, "a"));
+
+    const ended = applyRenderTick(held, false, "ready");
+    expect(ended.dispatchedEntry).toBeNull();
+    expect(canSendWithoutQueueing(ended.state)).toBe(false);
+
+    const released = closed(ended.state);
+    expect(released.dispatchedEntry?.id).toBe("a");
+    expect(released.state.queue).toEqual([]);
+    expect(released.state.editingMessageIds).toEqual([]);
+  });
+
+  test("a prompt sent while an idle queue is held goes once the form closes", () => {
+    const held = opened(createInitialSendQueueState(CONVERSATION_ID));
+    expect(canSendWithoutQueueing(held)).toBe(false);
+    const waiting = enqueued(held, "a");
+    expect(
+      reduceSendQueue(waiting, { type: "oldest-dispatch-started" })
+        .dispatchedEntry,
+    ).toBeNull();
+
+    expect(closed(waiting).dispatchedEntry?.id).toBe("a");
+  });
+
+  test("an accepted edit's turn runs first; the queue drains when it ends", () => {
+    const waiting = enqueued(
+      opened(createInitialSendQueueState(CONVERSATION_ID)),
+      "a",
+    );
+    const accepted = reduceSendQueue(waiting, {
+      type: "message-edit-accepted",
+      messageId: "edited",
+    });
+    expect(accepted.dispatchedEntry).toBeNull();
+    expect(accepted.state.isGenerating).toBe(true);
+    // The form unmounts after its edit was accepted: nothing is sent into
+    // the edit's turn.
+    const unmounted = closed(accepted.state);
+    expect(unmounted.dispatchedEntry).toBeNull();
+
+    const streaming = applyRenderTick(unmounted.state, true, "streaming");
+    expect(
+      applyRenderTick(streaming.state, false, "ready").dispatchedEntry?.id,
+    ).toBe("a");
+  });
+
+  test("the queue stays held while another edit form is open", () => {
+    const waiting = enqueued(
+      opened(
+        opened(createInitialSendQueueState(CONVERSATION_ID), "one"),
+        "two",
+      ),
+      "a",
+    );
+
+    const firstClosed = closed(waiting, "one");
+    expect(firstClosed.dispatchedEntry).toBeNull();
+    expect(closed(firstClosed.state, "two").dispatchedEntry?.id).toBe("a");
+  });
+
+  test("closing a form the queue does not know changes nothing", () => {
+    const state = createInitialSendQueueState(CONVERSATION_ID);
+    const result = closed(state, "unknown");
+    expect(result.state).toBe(state);
+    expect(result.dispatchedEntry).toBeNull();
   });
 });
 
