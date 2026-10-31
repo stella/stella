@@ -35,14 +35,14 @@ import type { Sha256Hasher } from "@stll/sha256/types";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  PUBLISHER_REQUEST,
-  type PublisherRequest,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  PUBLISHER_REQUEST,
+  type PublisherRequest,
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 // ── The pinned snapshot ──────────────────────────────────

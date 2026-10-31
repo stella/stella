@@ -8,7 +8,6 @@ import {
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { DAY_IN_MS } from "@stll/time";
 
-import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   createNalusFetch,
   NALUS_REQUEST_INTERVAL_MS,
@@ -20,6 +19,7 @@ import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type GateTrace = {

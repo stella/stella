@@ -8,12 +8,12 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
