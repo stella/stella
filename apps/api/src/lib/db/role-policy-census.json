@@ -1562,31 +1562,11 @@
   {
     "schema": "public",
     "table": "case_law_decisions",
-    "policy": "case_law_reader_access",
-    "command": "SELECT",
-    "roles": ["stella_caselaw_reader"],
-    "permissive": "PERMISSIVE",
-    "using": "true",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "case_law_decisions",
     "policy": "corpus_sample_reader_read",
     "command": "SELECT",
     "roles": ["stella_corpus_sample_reader"],
     "permissive": "PERMISSIVE",
     "using": "(redacted_at IS NULL)",
-    "withCheck": null
-  },
-  {
-    "schema": "public",
-    "table": "case_law_decisions",
-    "policy": "public_law_reader_access",
-    "command": "SELECT",
-    "roles": ["stella_public_law_reader"],
-    "permissive": "PERMISSIVE",
-    "using": "true",
     "withCheck": null
   },
   {
