@@ -6,6 +6,10 @@ export const DAY_CALENDAR_GRANULARITIES = [15, 30, 60] as const;
 export type DayCalendarGranularity =
   (typeof DAY_CALENDAR_GRANULARITIES)[number];
 
+/** Below this height a block cannot hold one line of its label, so it draws
+ * its surface only; its accessible label and tooltip still carry it. */
+export const DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX = 16;
+
 /**
  * Height of one grid slot. Coarser grids get taller slots, but not
  * proportionally: an hour stays tall enough for a two-line block.

@@ -89,7 +89,14 @@
     "statusFailed": "Úkol se nepodařilo změnit. Zkuste to znovu.",
     "pickTitle": "Vyberte úkol",
     "pickDescription": "Vyberte úkol ze seznamu a zobrazí se zde.",
-    "openMatter": "Otevřít spis"
+    "openMatter": "Otevřít spis",
+    "assignedTo": "Řešitel",
+    "nobody": "Nepřiřazeno",
+    "assign": "Přiřadit",
+    "doneAssigning": "Hotovo",
+    "someone": "Někdo",
+    "membersFailed": "Členy spisu se nepodařilo načíst.",
+    "assignFailed": "Úkol se nepodařilo přidělit. Zkuste to znovu."
   },
   "matters": {
     "emptyTitle": "Zatím žádné spisy",
@@ -197,6 +204,7 @@
     "headnote": "Právní věta",
     "textUnavailable": "K tomuto rozhodnutí není k dispozici text",
     "openSource": "Otevřít originál",
+    "openFailed": "Odkaz se nepodařilo otevřít.",
     "loadFailed": "Judikaturu se nepodařilo načíst.",
     "share": "Sdílet"
   },

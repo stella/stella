@@ -157,7 +157,7 @@ export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
         ) : null}
 
         <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
-          {t("activityConsentNote")}
+          {t("activityConsentNote")} {t("activityAiNote")}
         </p>
       </div>
     </ScrollArea>

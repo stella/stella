@@ -1,0 +1,18 @@
+{
+  "id": "require-truncated-text",
+  "rules": ["require-truncated-text/require-truncated-text"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-truncated-text/require-truncated-text",
+    "."
+  ]
+}
