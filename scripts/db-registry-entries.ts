@@ -15,14 +15,20 @@ export const DB_REGISTRY_DIRECTORIES = [
   "apps/api/src/tests/query-perf/corpus-statement-entries",
 ] as const;
 
-export const registryEntryNames = (directory: string) =>
-  readdirSync(directory)
+export const registryEntryNames = (
+  directory: string,
+  files: readonly string[] = readdirSync(directory),
+) =>
+  files
     .filter((name) => name.endsWith(".ts") && !name.endsWith(".gen.ts"))
     .map((name) => name.slice(0, -3))
     .toSorted();
 
-export const renderRegistryIndex = (directory: string) => {
-  const names = registryEntryNames(directory);
+export const renderRegistryIndex = (
+  directory: string,
+  files?: readonly string[],
+) => {
+  const names = registryEntryNames(directory, files);
   for (const name of names) {
     assert.match(
       name,

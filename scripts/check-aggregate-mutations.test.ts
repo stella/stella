@@ -1,20 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   aggregateMutationBaseline,
   checkAggregateMutationCoverage,
   verifyAggregateDeclarations,
 } from "./check-aggregate-mutations";
+import { renderRegistryIndex } from "./db-registry-entries";
+
+const registryDirectory = "apps/api/src/lib/db/aggregate-lock-entries";
+const renderFixtureRegistry = (sources: Map<string, string>) =>
+  renderRegistryIndex(
+    registryDirectory,
+    [...sources.keys()]
+      .filter((file) => path.posix.dirname(file) === registryDirectory)
+      .map((file) => path.posix.basename(file)),
+  );
 
 const routes = "apps/api/src/handlers/example/routes.ts";
 const owner = "apps/api/src/lib/db/aggregate-mutation-declaration.ts";
 const fixture = () =>
   new Map([
-    [
-      "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
-      'export { default as "workspace" } from "./workspace";',
-    ],
     [
       "apps/api/src/lib/db/aggregate-lock-entries/workspace.ts",
       'export default {rank: 1, kind: "row"} as const;',
@@ -28,11 +35,16 @@ const fixture = () =>
     ],
   ]);
 /** Verifies every declaration site in the fixture; returns how many it found. */
-const verify = (sources: Map<string, string>) =>
-  verifyAggregateDeclarations({
+const verify = (sources: Map<string, string>) => {
+  sources.set(
+    `${registryDirectory}/registry.gen.ts`,
+    renderFixtureRegistry(sources),
+  );
+  return verifyAggregateDeclarations({
     files: [...sources.keys()],
     load: (file) => sources.get(file),
   });
+};
 const legacy = (undeclared: readonly string[]) =>
   aggregateMutationBaseline(undeclared).map((entry) => ({
     ...entry,
@@ -226,6 +238,39 @@ describe("aggregate declaration sites", () => {
       `import { declareAggregateMutation as own } from "@/api/lib/db/aggregate-mutation-declaration"; import { withAggregateLock } from "@/api/lib/db/aggregate-lock"; own(async () => {}, {type: "aggregate", aggregates: ["workspace"]});`,
     );
     expect(() => verify(sources)).toThrow("must await withAggregateLock");
+  });
+
+  test("generated indexes and identity files do not become aggregate entries", () => {
+    const sources = fixture();
+    sources.set(
+      `${registryDirectory}/identities.gen.ts`,
+      "export type AggregateIdentities = {};",
+    );
+    sources.set(routes, `${imports} export const route = ${locked};`);
+    expect(renderFixtureRegistry(sources)).toContain(
+      'import entry0 from "./workspace";',
+    );
+    expect(verify(sources)).toBe(1);
+    for (const name of ["registry.gen", "identities.gen"]) {
+      sources.set(
+        routes,
+        `${imports} export const route = ${locked.replaceAll('"workspace"', () => JSON.stringify(name))};`,
+      );
+      expect(() => verify(sources)).toThrow("Unknown aggregate registry name");
+    }
+  });
+
+  test("an unreadable discovered entry fails explicitly", () => {
+    const sources = fixture();
+    expect(() =>
+      verifyAggregateDeclarations({
+        files: [...sources.keys()],
+        load: (file) =>
+          file === `${registryDirectory}/workspace.ts`
+            ? undefined
+            : sources.get(file),
+      }),
+    ).toThrow("Missing aggregate registry entry");
   });
 
   test("an unknown aggregate cannot satisfy a declaration", () => {
@@ -870,10 +915,6 @@ describe("declared handler locks", () => {
 
     test("direct and followed locks combine to cover the declaration", () => {
       const sources = setup();
-      sources.set(
-        "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
-        'export { default as "workspace" } from "./workspace"; export { default as "entity" } from "./entity";',
-      );
       sources.set(
         "apps/api/src/lib/db/aggregate-lock-entries/entity.ts",
         'export default {rank: 2, kind: "row"} as const;',
