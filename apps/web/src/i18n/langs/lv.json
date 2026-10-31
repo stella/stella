@@ -1529,7 +1529,7 @@
     "deleteThread": "Dzēst sarunu",
     "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMessage": "Rediģēt ziņu",
-    "editMessageAiUnavailable": "Nav pieejams neviens MI modelis, tāpēc labojums netika nosūtīts. Pārbaudiet organizācijas MI iestatījumus.",
+    "editMessageAiUnavailable": "Nav pieejams neviens AI modelis, tāpēc labojums netika nosūtīts. Pārbaudiet organizācijas AI iestatījumus.",
     "editMessageInput": "Rediģētā ziņa",
     "editMessageNotice": "Nosūtot tiks aizstāta šī ziņa un visas tai sekojošās ziņas.",
     "editMessageRefused": "Ziņu neizdevās rediģēt. Tērzēšanā tagad redzams saglabātais stāvoklis; mēģiniet vēlreiz, kad neviena atbilde vairs netiek veidota.",

@@ -74,6 +74,11 @@ export const CHAT_USER_ACTIONS = {
   "edit-message": { handler: "editUserMessage", via: "session" },
   export: { via: "page" },
   fork: { via: "request" },
+  /** An open message editor holds queued prompts until it closes. */
+  "hold-queue-for-message-edit": {
+    handler: "holdQueueForMessageEdit",
+    via: "session",
+  },
   "improve-prompt": { via: "page" },
   "load-older": { handler: "loadOlder", via: "session" },
   "move-to-side": { via: "page" },

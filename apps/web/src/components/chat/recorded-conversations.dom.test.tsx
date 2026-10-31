@@ -1185,6 +1185,9 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   fork: notRecorded(
     "A fork opens another thread; the conversation property test covers it (ForkFrom).",
   ),
+  "hold-queue-for-message-edit": notRecorded(
+    "The recorder drives the chat runtime, not the session queue an open message editor holds.",
+  ),
   "improve-prompt": OUTSIDE_THE_CONVERSATION,
   "load-older": OUTSIDE_THE_CONVERSATION,
   "move-to-side": OUTSIDE_THE_CONVERSATION,
