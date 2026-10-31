@@ -25,6 +25,7 @@ export type {
   HarnessRunPolicy,
   HarnessTurn,
   HarnessTurnInput,
+  HarnessUsageLimit,
 } from "./harness/adapter";
 export {
   HarnessProbeError,
@@ -57,6 +58,11 @@ export {
   preferNewerManifest,
   resolveHarnessCompatibility,
 } from "./harness/compatibility";
+export type { ClaudeCodeHarnessAdapterOptions } from "./harness/claude-code/adapter";
+export {
+  claudeCodeLaunch,
+  createClaudeCodeHarnessAdapter,
+} from "./harness/claude-code/adapter";
 export type { CodexHarnessAdapterOptions } from "./harness/codex/adapter";
 export {
   codexAppServerLaunch,

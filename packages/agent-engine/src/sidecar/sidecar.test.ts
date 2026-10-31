@@ -13,6 +13,10 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  FAKE_CLAUDE_VERSION,
+  type FakeScenarioName,
+} from "../../scripts/fake-claude-code-cli";
+import {
   FAKE_OUTDATED_VERSION,
   FAKE_THREAD_ID,
   type FakeScenario,
@@ -26,14 +30,18 @@ import {
 
 /**
  * The sidecar as the desktop runs it: a child process speaking the protocol
- * on stdio, starting `fake-codex-app-server.ts` where the managed Codex CLI
- * would be. Nothing reaches a model provider.
+ * on stdio, starting `fake-codex-app-server.ts` or `fake-claude-code-cli.ts`
+ * where the managed CLI would be. Nothing reaches a model provider.
  */
 
 const MAIN = path.join(import.meta.dir, "main.ts");
 const FAKE_SERVER = path.join(
   import.meta.dir,
   "../../scripts/fake-codex-app-server.ts",
+);
+const FAKE_CLAUDE = path.join(
+  import.meta.dir,
+  "../../scripts/fake-claude-code-cli.ts",
 );
 const API_ORIGIN = "https://api.example.test";
 const RUN_TOKEN = "run-token-1";
@@ -52,7 +60,14 @@ type Sidecar = {
   exited: Promise<number>;
   stderr: () => Promise<string>;
   root: string;
-  received: () => { method?: string; params?: unknown; result?: unknown }[];
+  /** What either fake harness received; Claude's messages carry a `type`. */
+  received: () => {
+    method?: string;
+    params?: unknown;
+    result?: unknown;
+    type?: string;
+    request?: { subtype?: string; servers?: unknown };
+  }[];
 };
 
 const cleanups: (() => void)[] = [];
@@ -69,7 +84,11 @@ const spawnSidecar = (): Sidecar => {
     stdin: "pipe",
     stdout: "pipe",
     stderr: "pipe",
-    env: { PATH: process.env["PATH"] ?? "", FAKE_CODEX_LOG: logPath },
+    env: {
+      PATH: process.env["PATH"] ?? "",
+      FAKE_CODEX_LOG: logPath,
+      FAKE_CLAUDE_LOG: logPath,
+    },
   });
   cleanups.push(() => {
     child.kill();
@@ -154,6 +173,17 @@ const fakeCodex = (root: string, scenario: FakeScenario) => {
   return executable;
 };
 
+/** The managed Claude Code CLI's place, the same way. */
+const fakeClaude = (root: string, scenario: FakeScenarioName) => {
+  const executable = path.join(root, `claude-${scenario}`);
+  writeFileSync(
+    executable,
+    `#!/bin/sh\nexec "${process.execPath}" "${FAKE_CLAUDE}" "${scenario}" "$@"\n`,
+  );
+  chmodSync(executable, 0o755);
+  return executable;
+};
+
 const is =
   <K extends SidecarMessage["type"]>(type: K, runId?: string) =>
   (message: SidecarMessage): message is Extract<SidecarMessage, { type: K }> =>
@@ -170,13 +200,19 @@ const hello = async (sidecar: Sidecar) => {
   return sidecar.waitFor(is("hello"));
 };
 
-const runStart = (
+type RunLaunch = {
+  harness: "codex" | "claude-code";
+  executable: string;
+  model: string;
+};
+
+const startRun = (
   sidecar: Sidecar,
-  scenario: FakeScenario,
+  launch: RunLaunch,
   overrides: object = {},
 ) => {
   const runId = crypto.randomUUID();
-  const configDir = path.join(sidecar.root, "codex-home");
+  const configDir = path.join(sidecar.root, `${launch.harness}-home`);
   const workspaceDir = path.join(sidecar.root, "workspace");
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
@@ -184,11 +220,9 @@ const runStart = (
     type: "run.start",
     runId,
     threadId: "thread-1",
-    harness: "codex",
-    executable: fakeCodex(sidecar.root, scenario),
+    ...launch,
     configDir,
     workspaceDir,
-    model: "gpt-test",
     instructions: "Use the stella MCP server.",
     messages: [{ role: "user", content: "Find the lease decision." }],
     harnessSessionId: null,
@@ -203,6 +237,28 @@ const runStart = (
   });
   return runId;
 };
+
+const runStart = (
+  sidecar: Sidecar,
+  scenario: FakeScenario,
+  overrides: object = {},
+) =>
+  startRun(
+    sidecar,
+    {
+      harness: "codex",
+      executable: fakeCodex(sidecar.root, scenario),
+      model: "gpt-test",
+    },
+    overrides,
+  );
+
+const claudeRunStart = (sidecar: Sidecar, scenario: FakeScenarioName) =>
+  startRun(sidecar, {
+    harness: "claude-code",
+    executable: fakeClaude(sidecar.root, scenario),
+    model: "sonnet",
+  });
 
 const chunksOf = (sidecar: Sidecar, runId: string) =>
   sidecar.messages.flatMap((message) =>
@@ -333,12 +389,12 @@ describe("harness sidecar over stdio", () => {
       executable: fakeCodex(sidecar.root, "signed_out"),
       configDir,
     });
-    const claude = crypto.randomUUID();
+    const opencode = crypto.randomUUID();
     sidecar.send({
       type: "harness.probe",
-      requestId: claude,
-      harness: "claude-code",
-      executable: "/nonexistent/claude",
+      requestId: opencode,
+      harness: "opencode",
+      executable: "/nonexistent/opencode",
       configDir,
     });
     const probed = async (requestId: string) =>
@@ -352,10 +408,107 @@ describe("harness sidecar over stdio", () => {
       type: "needs_login",
       version: "0.165.0",
     });
-    expect((await probed(claude)).outcome).toMatchObject({
+    expect((await probed(opencode)).outcome).toMatchObject({
       type: "failed",
       reason: "unsupported",
     });
+  });
+
+  test("reports Claude Code's exhausted plan limit, and a missing CLI as unavailable", async () => {
+    const sidecar = spawnSidecar();
+    await hello(sidecar);
+    const configDir = path.join(sidecar.root, "claude-code-home");
+    mkdirSync(configDir);
+    const limited = crypto.randomUUID();
+    sidecar.send({
+      type: "harness.probe",
+      requestId: limited,
+      harness: "claude-code",
+      executable: fakeClaude(sidecar.root, "probe"),
+      configDir,
+    });
+    const missing = crypto.randomUUID();
+    sidecar.send({
+      type: "harness.probe",
+      requestId: missing,
+      harness: "claude-code",
+      executable: "/nonexistent/claude",
+      configDir,
+    });
+    const probed = async (requestId: string) =>
+      sidecar.waitFor(
+        (
+          message,
+        ): message is Extract<SidecarMessage, { type: "harness.probed" }> =>
+          message.type === "harness.probed" && message.requestId === requestId,
+      );
+    expect((await probed(limited)).outcome).toEqual({
+      type: "limit_until",
+      version: FAKE_CLAUDE_VERSION,
+      resetsAt: "2026-10-28T14:00:00Z",
+    });
+    expect((await probed(missing)).outcome).toMatchObject({
+      type: "failed",
+      reason: "harness_unavailable",
+    });
+  });
+
+  test("runs Claude Code on the loopback proxy and a run secret, never the run token", async () => {
+    const sidecar = spawnSidecar();
+    await hello(sidecar);
+    const runId = claudeRunStart(sidecar, "stella_tools");
+    const finished = await sidecar.waitFor(is("run.finished", runId));
+    expect(finished).toMatchObject({ outcome: "completed" });
+    expect(finished.harnessSessionId).toMatch(/^[0-9a-f-]{36}$/u);
+    expect(chunksOf(sidecar, runId)).toContainEqual(
+      expect.objectContaining({
+        type: "TOOL_CALL_START",
+        toolCallName: "search_case_law",
+      }),
+    );
+    const registered = sidecar
+      .received()
+      .find(({ request }) => request?.subtype === "mcp_set_servers");
+    const server = v.parse(
+      v.object({
+        stella: v.object({
+          url: v.string(),
+          headers: v.object({ Authorization: v.string() }),
+        }),
+      }),
+      registered?.request?.servers,
+    ).stella;
+    expect(server.url).toMatch(
+      new RegExp(`^http://127\\.0\\.0\\.1:\\d+/mcp/${runId}$`, "u"),
+    );
+    expect(server.headers.Authorization).toMatch(/^Bearer \S{43,}$/u);
+    expect(JSON.stringify(sidecar.received())).not.toContain(RUN_TOKEN);
+  });
+
+  test("a Claude Code run finishes as interrupted or cancelled", async () => {
+    for (const [type, outcome] of [
+      ["run.interrupt", "interrupted"],
+      ["run.cancel", "cancelled"],
+    ] as const) {
+      const sidecar = spawnSidecar();
+      await hello(sidecar);
+      const runId = claudeRunStart(sidecar, "interrupt");
+      await sidecar.waitFor(
+        (message): message is SidecarMessage =>
+          message.type === "run.event" &&
+          message.runId === runId &&
+          message.chunk.type === "TOOL_CALL_START",
+      );
+      sidecar.send({ type, runId });
+      expect(await sidecar.waitFor(is("run.finished", runId))).toMatchObject({
+        outcome,
+      });
+      expect(
+        sidecar
+          .received()
+          .filter(({ request }) => request?.subtype === "interrupt"),
+      ).toHaveLength(1);
+    }
   });
 
   test("streams a run's chunks and finishes with the native session", async () => {
