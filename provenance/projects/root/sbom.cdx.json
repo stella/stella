@@ -37771,9 +37771,6 @@
             "location": "scripts/generate-cloud-setup.ts#1"
           },
           {
-            "location": "scripts/generate-guard-rollouts.ts#6"
-          },
-          {
             "location": "scripts/generate-harness-releases.ts#26"
           },
           {

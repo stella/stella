@@ -66,6 +66,7 @@ import {
   PromptBarPlaceholderContent,
 } from "@/components/chat/docked-composer";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import {
   boundLegalDocumentLabel,
   chatContextLabel,
@@ -292,6 +293,9 @@ export const ChatTabPanel = ({
     secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
+    startUserMessageEdit,
+    holdQueueForMessageEdit,
+    editUserMessage,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
@@ -311,6 +315,14 @@ export const ChatTabPanel = ({
     playbookPane: "on-request",
     threadRef,
     workspaceId: tabWorkspaceId,
+  });
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage,
+    ensureAIAvailable,
+    holdQueueForMessageEdit,
+    messages,
+    startUserMessageEdit,
+    threadRef,
   });
   const handlePromptSubmit = useLatestCallback(
     async ({
@@ -720,6 +732,7 @@ export const ChatTabPanel = ({
                   queuedMessages={queuedMessages}
                   showThinkingIndicator
                   streamdownComponents={streamdownComponents}
+                  userMessageEdit={userMessageEdit}
                   workspaceId={tabWorkspaceId}
                 />
               )}
