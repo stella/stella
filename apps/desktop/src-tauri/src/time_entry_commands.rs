@@ -181,7 +181,8 @@ pub async fn activity_generate_narrative(
     matter_name,
     approval,
   } = request;
-  let request = time_entry_submit::NarrativeRequest::bounded(titles, locale, matter_name)?;
+  let request =
+    time_entry_submit::NarrativeRequest::bounded(titles, locale, matter_name)?;
   let account = linked_account(&caller, &gates, &accounts).await?;
   if approval == NarrativeApproval::Always {
     {

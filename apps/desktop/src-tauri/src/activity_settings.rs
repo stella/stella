@@ -12,7 +12,8 @@ use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDeletionError,
     ActivityDeletionRecovery, ActivityHistoryDisposition, ActivityNarrativeAssist,
-    ActivityOtherHistoryRecovery, ActivityRecordingStatus, ActivityRetention, ActivitySettingsSnapshot,
+    ActivityOtherHistoryRecovery, ActivityRecordingStatus, ActivityRetention,
+    ActivitySettingsSnapshot,
   },
   activity_commands::{lock_error, update},
   activity_details,
