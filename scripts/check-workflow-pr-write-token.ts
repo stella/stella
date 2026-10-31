@@ -305,7 +305,8 @@ const conditionTruth = (
     if (left === undefined || right === undefined) {
       return "unknown";
     }
-    const equal = left === right;
+    // Actions compares strings case-insensitively.
+    const equal = left.toLowerCase() === right.toLowerCase();
     return (operator === "==") === equal ? "true" : "false";
   };
   const parsePrimary = (): Truth => {
@@ -387,7 +388,11 @@ const stepRunsDirectory = (
     return true;
   }
   const escaped = directory.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-  const repositoryPath = new RegExp(`(?:^|[\\s'"=])\\.?/?${escaped}/`, "u");
+  // Any mention of the directory counts, including `cd untrusted && ...`.
+  const repositoryPath = new RegExp(
+    `(?:^|[\\s'"=])\\.?/?${escaped}(?:/|$|[\\s'";&|)])`,
+    "u",
+  );
   return repositoryPath.test(command) || repositoryPath.test(uses);
 };
 

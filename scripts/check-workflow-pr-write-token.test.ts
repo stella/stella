@@ -80,6 +80,14 @@ describe("privileged workflow policy", () => {
       expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
     }
   });
+  test("compares event names case-insensitively, as Actions does", () => {
+    const body = `    if: github.event_name == 'PULL_REQUEST_TARGET'\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
+  test("refuses a head checkout entered with cd before execution", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: cd untrusted && bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
   test("trusts the comparison base only from the repository resolver", () => {
     const checkout = `      - uses: actions/checkout@pin\n        with:\n          ref: \${{ steps.target-base.outputs.base_sha }}\n      - run: bash scripts/x.sh`;
     const impostor = `    steps:\n      - id: target-base\n        run: echo "base_sha=\${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"\n${checkout}`;
