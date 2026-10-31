@@ -10,11 +10,6 @@
     "reason": "not app-code dead: default expression pulls the PostgreSQL session var and the column only appears inside the RLS policy predicate built alongside the table in schema/entities.ts, which this check excludes as the definitions. Allowlisted rather than a scanner fix -- picking it up would require reading inside the excluded schema files, defeating the point of the exclusion."
   },
   {
-    "table": "corpus_index_projection_revisions",
-    "column": "transactionId",
-    "reason": "not app-code dead: populated only by migration-owned triggers (apps/api/drizzle/20260901060000_concurrent_corpus_projection_revision_fence/migration.sql) for ON CONFLICT dedup; app code only ever selects `revision`. Migrations are excluded by design, so this column is invisible to the check even though it is live."
-  },
-  {
     "table": "case_law_corpus_jurisdictions",
     "column": "firstObservedAt",
     "reason": "not app-code dead: append-only audit timestamp written by a migration-owned trigger (see schema/case-law.ts comment). Migrations are excluded by design."
@@ -30,11 +25,6 @@
     "reason": "dormant feature: see case_law_citation_resolution_census_runs.keysScanned -- same not-yet-landed census feature."
   },
   {
-    "table": "case_law_provision_extraction_revisions",
-    "column": "desiredRevision",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
     "table": "case_law_provision_extraction_revisions_registry",
     "column": "engineInputDigest",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
@@ -46,26 +36,6 @@
   },
   {
     "table": "case_law_provision_extractions",
-    "column": "enqueueReason",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "transientAttempts",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "blockedInputDigest",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
-    "column": "terminalReason",
-    "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "case_law_provision_extractions",
     "column": "rowsDigest",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
   },
@@ -73,11 +43,6 @@
     "table": "case_law_provision_extractions",
     "column": "unresolvedCounts",
     "reason": "not app-code dead: per-decision provision-citation state, written by the migration-owned functions in apps/api/drizzle/20260926160000_case_law_provision_extraction_state/migration.sql and by the provision extraction writer. Migrations are excluded by design."
-  },
-  {
-    "table": "usage_policies",
-    "column": "storageBytesPerAssignment",
-    "reason": "not app-code dead: read by the migration-owned organization_storage_capacity function in apps/api/drizzle/20261005090300_organization_effective_policy/migration.sql, which every storage reservation calls. Migrations are excluded by design."
   },
   {
     "table": "expenses",

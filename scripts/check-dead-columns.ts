@@ -11,6 +11,7 @@
 
 import { panic } from "better-result";
 import { getColumns, getTableName, is } from "drizzle-orm";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { PgTable } from "drizzle-orm/pg-core";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
@@ -18,6 +19,7 @@ import path from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import * as schema from "../apps/api/src/db/schema";
+import { currentMigrationFunctionCorpus } from "./migration-function-corpus";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const ALLOWLIST_PATH = path.join(
@@ -215,7 +217,12 @@ const loadAllowlist = (): AllowlistEntry[] => {
 const main = (): void => {
   const columns = collectColumns();
   const files = collectSourceFiles();
-  const corpus = buildCorpus(files);
+  const functions = currentMigrationFunctionCorpus(
+    readMigrationFiles({
+      migrationsFolder: path.join(REPO_ROOT, "apps/api/drizzle"),
+    }).map(({ sql }) => sql.join("\n")),
+  );
+  const corpus = `${buildCorpus(files)}\n${functions}`;
 
   const deadColumns = columns.filter(
     (column) =>
