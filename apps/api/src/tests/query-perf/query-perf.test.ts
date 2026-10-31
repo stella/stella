@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
+import type { Verdict } from "@stll/db-load-gate/health";
+
 import * as schema from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
@@ -11,7 +13,9 @@ import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
 import {
   CASE_LAW_SEARCH_FETCH_LIMIT,
@@ -23,7 +27,9 @@ import {
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
+  coverageRefreshWroteSummary,
   describeServed,
+  readCoverageRefreshState,
   seedCorpusReadBudgets,
   serveCaseLaw,
 } from "./corpus-seed";
@@ -33,8 +39,10 @@ import {
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
+  OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -46,7 +54,7 @@ import {
   type ScheduledJobScenario,
 } from "./registry";
 import { seedRequestReceiptScenario } from "./request-receipt-seed";
-import { measureScheduledJobRun } from "./scheduled-run";
+import { measureScheduledJobRun, QUERY_PERF_ADMISSION } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
 import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
@@ -100,19 +108,28 @@ test("every measurement execution guard applies even when pages fit or carry an 
   }
 });
 
-test("corpus page markers still reflect pages within the execution guard", () => {
+test("over-budget markers use hysteresis while unmarked budgets retain their edge", () => {
   const id = "statement.legislation.candidateRows";
+  const budget = READ_BUDGETS[id].pages;
+  expect(OVER_BUDGET_REMOVAL_BAND).toBe(0.15);
+  const removalLine = budget * 0.85;
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages,
+      sharedBlocks: removalLine,
       executionTimeMs: 10_000,
     }),
   ).toContain("remove its overBudget marker");
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages + 1,
+      sharedBlocks: removalLine + 1,
       executionTimeMs: 10_000,
     }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget, executionTimeMs: 10_000 }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget + 1, executionTimeMs: 10_000 }),
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
@@ -284,6 +301,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(
+              sharedBlockSampleProblem(budgetId, good.samples),
+            ).toBeUndefined();
             expect(good.planViolations.map(({ message }) => message)).toEqual(
               [],
             );
@@ -395,6 +415,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             budgetId,
             plan: result.plan.Plan,
           });
+          note(sharedBlockSampleProblem(budgetId, result.samples));
           note(
             result.plan.Plan["Actual Rows"] === entry.expectedRows
               ? undefined
@@ -403,6 +424,39 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           note(budgetProblem(budgetId, result.metrics));
           for (const violation of result.planViolations) {
             note(violation.message);
+          }
+          if (budgetId === "statement.caseLaw.euCompletionPage") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) =>
+                relation === "case_law_decisions" ||
+                relation === "eu_completion_receipts" ||
+                relation === "case_law_index_jobs",
+            );
+            note(
+              scans.length > 0 &&
+                scans.every(({ nodeType }) => nodeType.includes("Index"))
+                ? undefined
+                : `${budgetId}: completion relations must use index scans`,
+            );
+            for (const index of [
+              "case_law_decisions_source_id_page_idx",
+              "case_law_index_jobs_decision_idx",
+            ]) {
+              note(
+                scans.some((scan) => scan.index === index)
+                  ? undefined
+                  : `${budgetId}: missing ${index}`,
+              );
+            }
+            const rows = await db.transaction(
+              async (tx) => await entry.read(tx),
+            );
+            note(
+              rows.length === entry.expectedRows &&
+                rows.every((row) => !row.eligible)
+                ? undefined
+                : `${budgetId}: expected 100 ineligible rows`,
+            );
           }
         }
 
@@ -471,6 +525,14 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             for (const violation of run.planViolations) {
               note(violation.message);
             }
+            if (
+              measurement.executed !== undefined &&
+              !(await measurement.executed(db))
+            ) {
+              note(
+                `${jobId} on ${generation} left no proof of its work; the budget measured only its bookkeeping`,
+              );
+            }
             return run.metrics;
           } finally {
             await release?.();
@@ -517,6 +579,66 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             }
           }
         }
+
+        // The coverage refresh writes. Measured twice in place, it must leave
+        // the fixture exactly as found and take the same path both times.
+        const coverageJob =
+          DECLARED_SCHEDULER_JOBS.find(
+            ({ id }) => id === SCHEDULER_BACKFILL_IDS.coverage,
+          ) ?? panic("The coverage refresh is not declared");
+        const coverageMeasurement =
+          SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
+          panic("The coverage refresh has no measurement");
+        const measureCoverageInPlace = async (
+          admission: Verdict = QUERY_PERF_ADMISSION,
+        ) => {
+          const served = CASE_LAW_SCENARIOS.quiet.size;
+          await serveCaseLaw(db, served);
+          const release = await coverageMeasurement.prepare?.({
+            database: db,
+            served,
+            openClient,
+          });
+          try {
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId: coverageJob.id,
+              task: coverageMeasurement.task,
+              admission,
+            });
+            return {
+              ...run,
+              computed: await coverageRefreshWroteSummary(db),
+            };
+          } finally {
+            await release?.();
+          }
+        };
+        const coverageShape = (
+          run: Awaited<ReturnType<typeof measureCoverageInPlace>>,
+        ) =>
+          run.statements.map(({ statement, planViolations }) => ({
+            statement,
+            violations: planViolations.map(({ kind }) => kind),
+          }));
+        await deadline.run("measure the coverage refresh twice", async () => {
+          const found = await readCoverageRefreshState(db);
+          const first = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          const second = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          expect(first.computed).toBe(true);
+          expect(second.computed).toBe(true);
+          expect(coverageShape(first).length).toBeGreaterThan(0);
+          expect(coverageShape(second)).toEqual(coverageShape(first));
+          // The check above is what a busy-window hold would fail.
+          const held = await measureCoverageInPlace({
+            kind: "stop",
+            signals: [],
+          });
+          expect(held.computed).toBe(false);
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+        });
 
         // The gate must refuse what it exists to refuse. The freshness
         // report's former reads go over its budget on this fixture, and the
