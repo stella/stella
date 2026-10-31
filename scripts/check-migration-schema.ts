@@ -13,49 +13,12 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
+import { readDrizzleSchemaConfig } from "./drizzle-config";
+
 const MISSING_MIGRATION_MESSAGE =
   "ERROR: Database schema changed without a migration file in apps/api/drizzle/.";
-
-const readDrizzleConfig = (root: string) =>
-  readFileSync(path.join(root, "apps/api/drizzle.config.ts"), "utf-8");
-
-// drizzle-kit generates migrations only for the configured schemas, so the
-// snapshots compare exactly those; without the key drizzle-kit uses public.
-const DRIZZLE_DEFAULT_SCHEMA_FILTER = ["public"];
-
-const readSchemaFilter = (root: string) => {
-  const filterSource = /schemaFilter\s*:\s*\[([^\]]*)\]/mu
-    .exec(readDrizzleConfig(root))
-    ?.at(1);
-  if (filterSource === undefined) {
-    return DRIZZLE_DEFAULT_SCHEMA_FILTER;
-  }
-  const schemas = [...filterSource.matchAll(/["'`]([^"'`]+)["'`]/gu)].map(
-    (match) => match.at(1) ?? panic("Schema filter capture was empty."),
-  );
-  if (schemas.length === 0) {
-    panic("apps/api/drizzle.config.ts schemaFilter names no schema.");
-  }
-  return schemas;
-};
-
-const readSchemaInputs = (root: string) => {
-  const config = readDrizzleConfig(root);
-  const schemaMatch = /schema\s*:\s*\[([\s\S]*?)\]/mu.exec(config);
-  const schemaSource = schemaMatch?.at(1);
-  if (!schemaSource) {
-    panic("Could not find schema inputs in apps/api/drizzle.config.ts.");
-  }
-  return [...schemaSource.matchAll(/["'`]([^"'`]+\.ts)["'`]/gu)].map(
-    (match) => {
-      const schemaPath = match.at(1);
-      if (!schemaPath) {
-        panic("Schema input capture was empty.");
-      }
-      return path.resolve(root, "apps/api", schemaPath);
-    },
-  );
-};
 
 const canonicalJson = (value: unknown): string => {
   if (Array.isArray(value)) {
@@ -75,8 +38,10 @@ const canonicalJson = (value: unknown): string => {
 };
 
 const generateSchemaSnapshot = async (root: string) => {
+  const { schemaFiles, schemaFilter } = readDrizzleSchemaConfig(root);
   const schemaEntries = await Promise.all(
-    readSchemaInputs(root).map(async (input, inputIndex) => {
+    schemaFiles.map(async (file, inputIndex) => {
+      const input = path.join(root, file);
       const exports = await import(`${input}?snapshot=${crypto.randomUUID()}`);
       return Object.entries(exports).map(
         ([name, value]) => [`${inputIndex}:${name}`, value] as const,
@@ -84,11 +49,9 @@ const generateSchemaSnapshot = async (root: string) => {
     }),
   );
   const schema = Object.fromEntries(schemaEntries.flat());
-  const { ddl } = await generateDrizzleJson(
-    schema,
-    undefined,
-    readSchemaFilter(root),
-  );
+  const { ddl } = await generateDrizzleJson(schema, undefined, [
+    ...schemaFilter,
+  ]);
   // Entity order follows schema input order, which a table move changes; each
   // entity is self-contained, so sorting them keeps only semantic differences.
   // Arrays inside an entity (column lists) stay ordered: their order is DDL.
@@ -159,17 +122,20 @@ const workspacePackages = (root: string) => {
   return packages;
 };
 
-const linkBaseDependencies = (headRoot: string, baseRoot: string) => {
-  const headModules = path.join(headRoot, "node_modules");
-  const baseModules = path.join(baseRoot, "node_modules");
-  if (!existsSync(headModules)) {
-    panic(
-      `Cannot build the baseline node_modules: ${headModules} does not exist.`,
-    );
-  }
-  mkdirSync(baseModules);
+type LinkModulesOptions = {
+  headModules: string;
+  baseModules: string;
+  workspaces: ReadonlyMap<string, string>;
+};
 
-  const workspaces = workspacePackages(baseRoot);
+// Third-party packages come from the head install; workspace packages never
+// do, so the base tree's imports resolve to its own sources.
+const linkThirdPartyModules = ({
+  headModules,
+  baseModules,
+  workspaces,
+}: LinkModulesOptions) => {
+  mkdirSync(baseModules);
   const workspaceScopes = new Set(
     [...workspaces.keys()]
       .filter((name) => name.startsWith("@"))
@@ -195,6 +161,38 @@ const linkBaseDependencies = (headRoot: string, baseRoot: string) => {
     }
     symlinkSync(headEntry, path.join(baseModules, entry));
   }
+};
+
+const linkBaseDependencies = (headRoot: string, baseRoot: string) => {
+  const headModules = path.join(headRoot, "node_modules");
+  if (!existsSync(headModules)) {
+    panic(
+      `Cannot build the baseline node_modules: ${headModules} does not exist.`,
+    );
+  }
+  const workspaces = workspacePackages(baseRoot);
+  linkThirdPartyModules({
+    headModules,
+    baseModules: path.join(baseRoot, "node_modules"),
+    workspaces,
+  });
+  // A workspace keeps the dependency versions the root cannot hoist in its
+  // own node_modules; without them the base tree would resolve other ones.
+  for (const packageRoot of workspaces.values()) {
+    const headPackageModules = path.join(
+      headRoot,
+      repoRelativePath(baseRoot, packageRoot),
+      "node_modules",
+    );
+    if (existsSync(headPackageModules)) {
+      linkThirdPartyModules({
+        headModules: headPackageModules,
+        baseModules: path.join(packageRoot, "node_modules"),
+        workspaces,
+      });
+    }
+  }
+  const baseModules = path.join(baseRoot, "node_modules");
   for (const [name, packageRoot] of workspaces) {
     const destination = path.join(baseModules, name);
     mkdirSync(path.dirname(destination), { recursive: true });
@@ -211,30 +209,37 @@ export const checkMigrationRequirement = async (
 ) => {
   // Both the changed-file list and the baseline schema come from the merge
   // base: a base branch that moved on must not judge this branch's schema.
-  const mergeBase = runGit(root, ["merge-base", baseRef, "HEAD"]).trim();
-  // Only an added or modified migration provides one; a deleted migration
-  // must not satisfy the check.
+  const mergeBase = runGit(root, [
+    "merge-base",
+    "--end-of-options",
+    baseRef,
+    "HEAD",
+  ]).trim();
+  // Only an added or modified, non-empty migration provides one; a deleted
+  // or empty migration must not satisfy the check.
   const changedFiles = runGit(root, [
     "diff",
     "--name-only",
+    "-z",
+    "--no-renames",
     "--diff-filter=AM",
     `${mergeBase}..HEAD`,
   ])
-    .trim()
-    .split("\n");
+    .split("\0")
+    .filter((file) => file.length > 0);
   if (
-    changedFiles.some((file) =>
-      /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u.test(file),
+    changedFiles.some(
+      (file) =>
+        /^apps\/api\/drizzle\/[^/]+\/migration\.sql$/u.test(file) &&
+        readFileSync(path.join(root, file), "utf-8").trim().length > 0,
     )
   ) {
     return { status: "migration-present" } as const;
   }
 
   const baseRoot = mkdtempSync(path.join(tmpdir(), "migration-schema-base-"));
-  let worktreeAdded = false;
   try {
     runGit(root, ["worktree", "add", "--detach", baseRoot, mergeBase]);
-    worktreeAdded = true;
     linkBaseDependencies(root, baseRoot);
     const [baseSnapshot, headSnapshot] = await Promise.all([
       generateSchemaSnapshot(baseRoot),
@@ -248,10 +253,10 @@ export const checkMigrationRequirement = async (
       message: MISSING_MIGRATION_MESSAGE,
     } as const;
   } finally {
-    if (worktreeAdded) {
-      runGit(root, ["worktree", "remove", "--force", baseRoot]);
-    }
+    // Removing the directory and pruning also cleans up after a failed add,
+    // which leaves an administrative entry but no usable worktree.
     rmSync(baseRoot, { recursive: true, force: true });
+    runGit(root, ["worktree", "prune"]);
   }
 };
 

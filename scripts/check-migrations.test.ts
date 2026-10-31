@@ -118,6 +118,24 @@ test("a column change with a migration folder passes", () => {
   expect(runGuard(root).exitCode).toBe(0);
 });
 
+test("an empty migration file does not count as providing one", () => {
+  const { root, git } = createFixture();
+  writeFileSync(
+    path.join(root, "apps/api/src/db/schema/one.ts"),
+    table("integer"),
+  );
+  mkdirSync(path.join(root, "apps/api/drizzle/20261030000000_change"), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(root, "apps/api/drizzle/20261030000000_change/migration.sql"),
+    "\n",
+  );
+  git("add", ".");
+  git("commit", "-m", "change table");
+  expect(runGuard(root).exitCode).toBe(1);
+});
+
 test("deleting an existing migration does not count as providing one", () => {
   const { root, git } = createFixture();
   mkdirSync(path.join(root, "apps/api/drizzle/20261029000000_existing"), {
