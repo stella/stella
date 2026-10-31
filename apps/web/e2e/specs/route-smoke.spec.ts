@@ -49,6 +49,7 @@ import {
 import { createBrowserErrorCollector } from "../helpers/test";
 import { listTimeBillingRoutes } from "../helpers/time-billing-routes";
 import { declareVisualSandboxSmoke } from "../helpers/visual-sandbox-smoke";
+import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
   deleteTestWorkspace,
@@ -641,7 +642,7 @@ const renderSmokeRoute = async ({
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
   await expect(page.locator("main").first(), route.template).toBeVisible({
-    timeout: 30_000,
+    timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
   });
 };
 
@@ -706,7 +707,7 @@ const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
 
   await expect(page, `${route.template} reached redirect target`).toHaveURL(
     (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
-    { timeout: 30_000 },
+    { timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS },
   );
 };
 
