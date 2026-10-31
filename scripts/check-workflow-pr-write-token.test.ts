@@ -39,7 +39,7 @@ describe("privileged workflow policy", () => {
       ),
     ).not.toHaveLength(0);
   });
-  test("accepts base tooling in its own trusted path", () => {
+  test("refuses event-derived base tooling despite its trusted path", () => {
     expect(
       check(
         workflow(
@@ -47,7 +47,7 @@ describe("privileged workflow policy", () => {
           `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.base.sha }}\n          path: .trusted\n      - run: .trusted/scripts/x.sh`,
         ),
       ),
-    ).toHaveLength(0);
+    ).not.toHaveLength(0);
   });
   test("refuses pull_request_target head tooling checked out to an explicit path", () => {
     expect(
@@ -62,10 +62,14 @@ describe("privileged workflow policy", () => {
       check(
         workflow(
           "pull_request_target",
-          `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.base.sha }}\n          path: trusted\n      - run: bash trusted/scripts/x.sh`,
+          `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: release-v1\n          path: trusted\n      - run: bash trusted/scripts/x.sh`,
         ),
       ),
     ).toHaveLength(0);
+  });
+  test("refuses env-indirected tooling under pull_request_target", () => {
+    const body = `    env:\n      PR_HEAD: \${{ github.event.pull_request.head.sha }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ env.PR_HEAD }}\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
   });
   test("refuses workflow_run artifacts executed with a secret", () => {
     const source = workflow(
@@ -82,6 +86,28 @@ describe("privileged workflow policy", () => {
       "contents: read",
     );
     expect(check(source).some((item) => item.class === "class 2")).toBeTrue();
+  });
+  test("refuses bracket-notation secrets in pull_request branch scripts", () => {
+    for (const secret of ["secrets['KEY']", 'secrets["KEY"]']) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n      - env:\n          KEY: \${{ ${secret} }}\n        run: bash scripts/x.sh`;
+      expect(
+        check(workflow("pull_request", body, "contents: read")).some(
+          (item) => item.class === "class 2",
+        ),
+      ).toBeTrue();
+    }
+  });
+  test("refuses secrets used directly in with and run", () => {
+    for (const body of [
+      `    steps:\n      - uses: actions/checkout@pin\n      - run: echo \${{ toJSON(secrets) }}`,
+      `    steps:\n      - uses: actions/checkout@pin\n      - uses: ./action\n        with:\n          token: \${{ secrets['KEY'] }}`,
+    ]) {
+      expect(
+        check(workflow("pull_request", body, "contents: read")).some(
+          (item) => item.class === "class 2",
+        ),
+      ).toBeTrue();
+    }
   });
   test("refuses pull_request branch scripts with a workflow-level secret", () => {
     const source = `
@@ -125,6 +151,30 @@ jobs:
   test("accepts tooling pinned to the trusted workflow revision", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
     expect(check(workflow("pull_request", body))).toHaveLength(0);
+  });
+  test("accepts literal refs and the comparison-base resolver output", () => {
+    for (const ref of [
+      "main",
+      "v1.2.3",
+      "steps.target-base.outputs.base_sha",
+    ]) {
+      const checkoutRef = ref.startsWith("steps.") ? `\${{ ${ref} }}` : ref;
+      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ${checkoutRef}\n      - run: bash scripts/x.sh`;
+      expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    }
+  });
+  test("accepts github.sha only when the event makes it the base", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.sha }}\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    expect(check(workflow("pull_request", body))).not.toHaveLength(0);
+  });
+  test("refuses repositories outside the expression allowlist", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          repository: \${{ inputs.repository }}\n          ref: main\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
+  test("accepts the current repository expression", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          repository: \${{ github.repository }}\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
   });
   test("does not accept a substring event exclusion inside an always-true disjunction", () => {
     const body = `    if: github.event_name != 'pull_request' || true

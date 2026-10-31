@@ -17,6 +17,72 @@ type Finding = {
 };
 
 export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
+  ".github/workflows/ci.yml:api-image-smoke":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-browser":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-checks-generated":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-checks-policy":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-checks-rest":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-plan":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-tests":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:code-quality-api":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:code-quality-web-rest":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:dependency-malware":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:desktop-rust-lint":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:desktop-rust-tests":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:desktop-windows-dry-run":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:e2e-landing":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:e2e-production-shard":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:e2e-report":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:e2e-vite-canary":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:generated-sources":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:landing-build":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:legal-atlas-image":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:migration-upgrade-rehearsal":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:mobile-build":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:postgres-service-suites":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:release-typecheck":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:route-smoke":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:scan-engine-wasm-drift":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:service-suites":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:stack-redaction-browsers":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:web-build":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:web-image-smoke":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:windows-scripts":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/release-desktop.yml:build":
+    "the workflow_run release reference is resolved and admitted from the trusted release workflow",
+  ".github/workflows/release-desktop.yml:manifest":
+    "the workflow_run release reference is resolved and admitted from the trusted release workflow",
   ".github/workflows/ci.yml:database-migrations-check":
     "ci-plan trusted is false for Dependabot pull requests",
   ".github/workflows/ci.yml:database-migrations-apply-fresh":
@@ -35,8 +101,15 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const text = (value: unknown): string => JSON.stringify(value ?? "");
-const hasSecret = (value: unknown): boolean =>
-  /secrets\.(?!GITHUB_TOKEN\b)[A-Za-z0-9_]+/u.test(text(value));
+const hasSecret = (value: unknown): boolean => {
+  const serialized = text(value);
+  if (/toJSON\(\s*secrets\s*\)/u.test(serialized)) {
+    return true;
+  }
+  return [
+    ...serialized.matchAll(/secrets(?:\.|\[\\?["'])([A-Za-z0-9_]+)/gu),
+  ].some((match) => match[1] !== "GITHUB_TOKEN");
+};
 const hasWrite = (permissions: unknown, defaultIsWrite = false): boolean => {
   if (
     permissions === "write-all" ||
@@ -55,13 +128,36 @@ const triggersOf = (on: unknown): string[] => {
   }
   return record(on) ? Object.keys(on) : [];
 };
-const controlledRef = (value: unknown, reachable: boolean): boolean => {
-  if (typeof value !== "string") {
-    return reachable;
+const checkoutExpressionOf = (value: string): string | undefined => {
+  const match = /^\s*\$\{\{\s*([^{}]+?)\s*\}\}\s*$/u.exec(value);
+  return match?.[1];
+};
+
+const trustedCheckoutValue = (
+  value: unknown,
+  trigger: string,
+  field: "ref" | "repository",
+): boolean => {
+  if (value === undefined) {
+    return field === "repository" || trigger !== "pull_request";
   }
-  return /pull_request\.head|github\.head_ref|workflow_run\.head_(?:sha|branch)|refs\/pull\/|github\.sha/u.test(
-    value,
-  );
+  if (typeof value !== "string") {
+    return false;
+  }
+  const checkoutExpression = checkoutExpressionOf(value);
+  if (checkoutExpression === undefined) {
+    return true;
+  }
+  if (checkoutExpression === "github.workflow_sha") {
+    return true;
+  }
+  if (field === "repository" && checkoutExpression === "github.repository") {
+    return true;
+  }
+  if (checkoutExpression === "github.sha" && trigger !== "pull_request") {
+    return true;
+  }
+  return checkoutExpression === "steps.target-base.outputs.base_sha";
 };
 
 type Truth = "false" | "true" | "unknown";
@@ -339,14 +435,19 @@ export const checkWorkflowPrivilegeSource = (
     const secret =
       hasSecret(parsed["env"]) ||
       hasSecret(rawJob["env"]) ||
+      hasSecret(rawJob["with"]) ||
+      hasSecret(rawJob["run"]) ||
       steps.some(
         (step) =>
-          record(step) && (hasSecret(step["env"]) || hasSecret(step["with"])),
+          record(step) &&
+          (hasSecret(step["env"]) ||
+            hasSecret(step["with"]) ||
+            hasSecret(step["run"])),
       ) ||
       rawJob["secrets"] === "inherit";
     const condition = stringField(rawJob["if"]);
     const excludesDependabot = excludesActor(condition, "dependabot[bot]");
-    const controlledDirectories = new Map<string, boolean>();
+    const controlledDirectories = new Map<string, Set<string>>();
     for (const rawStep of steps) {
       if (!record(rawStep)) {
         continue;
@@ -354,25 +455,35 @@ export const checkWorkflowPrivilegeSource = (
       const uses = typeof rawStep["uses"] === "string" ? rawStep["uses"] : "";
       const withValue = record(rawStep["with"]) ? rawStep["with"] : {};
       if (uses.startsWith("actions/checkout@")) {
-        const ref = withValue["ref"];
-        const base =
-          typeof ref === "string" && /pull_request\.base\.sha/u.test(ref);
         controlledDirectories.set(
           checkoutDirectory(withValue["path"]),
-          !base && controlledRef(ref, true),
+          new Set(
+            prTriggers.filter(
+              (trigger) =>
+                !trustedCheckoutValue(withValue["ref"], trigger, "ref") ||
+                !trustedCheckoutValue(
+                  withValue["repository"],
+                  trigger,
+                  "repository",
+                ),
+            ),
+          ),
         );
       }
       const artifact =
         uses.startsWith("actions/download-artifact@") &&
         (withValue["run-id"] !== undefined ||
           withValue["github-token"] !== undefined);
-      const runsControlled =
-        artifact ||
-        [...controlledDirectories].some(
-          ([directory, controlled]) =>
-            controlled && stepRunsDirectory(rawStep, directory),
-        );
-      if (!runsControlled) {
+      const controlledTriggers = artifact
+        ? prTriggers
+        : prTriggers.filter((trigger) =>
+            [...controlledDirectories].some(
+              ([directory, controlled]) =>
+                controlled.has(trigger) &&
+                stepRunsDirectory(rawStep, directory),
+            ),
+          );
+      if (controlledTriggers.length === 0) {
         continue;
       }
       const step =
@@ -384,7 +495,7 @@ export const checkWorkflowPrivilegeSource = (
           file,
           job: jobName,
           permissions,
-          prTriggers,
+          prTriggers: controlledTriggers,
           rawJob,
           secret,
           step,
