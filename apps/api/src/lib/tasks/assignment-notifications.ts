@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 
@@ -31,9 +31,11 @@ export type FileTaskAssignedNotifications = (
  * this matter and its organization by `writeTaskAssignments` in the same
  * transaction, so the row cannot reach somebody who cannot open the task.
  *
- * The idempotency key names the assignment row, which a repeat of the same
- * assignment keeps: a retried request files nothing new, while removing the
- * assignee and assigning them again is a new assignment and is announced.
+ * The idempotency key names the assignment row and this write's transaction.
+ * A repeat of the same assignment changes no row, so `written` holds nothing
+ * and nothing is filed; each move into the assignee role is its own write, so
+ * assignee, then reviewer, then assignee again is announced twice, as is
+ * removing someone and assigning them again.
  */
 export const taskAssignedNotifications = async (
   tx: Transaction,
@@ -58,11 +60,13 @@ export const taskAssignedNotifications = async (
 
   // The organization comes from the matter row, not the request, and the
   // actor's name through their membership of that same organization. The
-  // actor just wrote to this matter, so a miss is a broken invariant.
+  // actor just wrote to this matter, so a miss is a broken invariant. The
+  // 64-bit transaction id never repeats, so it tells one write from another.
   const actorRows = await tx
     .select({
       actorName: user.name,
       organizationId: workspaces.organizationId,
+      transactionId: sql<string>`pg_current_xact_id()::text`,
     })
     .from(workspaces)
     .innerJoin(
@@ -86,7 +90,7 @@ export const taskAssignedNotifications = async (
     workspaceId,
     organizationId: actor.organizationId,
     userId: brandPersistedUserId(assignment.userId),
-    idempotencyKey: `task_assigned:${assignment.entityId}:${assignment.userId}:${assignment.id}`,
+    idempotencyKey: `task_assigned:${assignment.entityId}:${assignment.userId}:${assignment.id}:${actor.transactionId}`,
   }));
 };
 

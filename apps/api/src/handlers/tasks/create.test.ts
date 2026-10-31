@@ -326,7 +326,11 @@ describe("createTaskHandler validation", () => {
         from: (table: unknown) =>
           table === workspaces
             ? createSelectQueryMock([
-                { organizationId: "org_test123", actorName: "Ada Lovelace" },
+                {
+                  organizationId: "org_test123",
+                  actorName: "Ada Lovelace",
+                  transactionId: "7",
+                },
               ]).from()
             : createSelectQueryMock(
                 table === workspaceMembers || table === member
@@ -383,7 +387,7 @@ describe("createTaskHandler validation", () => {
         workspaceId,
         organizationId: "org_test123",
         userId: colleagueId,
-        idempotencyKey: `task_assigned:${entityId}:${colleagueId}:${assignmentId}`,
+        idempotencyKey: `task_assigned:${entityId}:${colleagueId}:${assignmentId}:7`,
       },
     ]);
   });

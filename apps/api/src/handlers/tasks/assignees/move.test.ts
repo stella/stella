@@ -67,7 +67,11 @@ const createMock = ({
             innerJoin: () => ({
               where: () => ({
                 limit: async () => [
-                  { actorName: "Ada Lovelace", organizationId },
+                  {
+                    actorName: "Ada Lovelace",
+                    organizationId,
+                    transactionId: "7",
+                  },
                 ],
               }),
             }),
@@ -407,7 +411,7 @@ describe("moveAssigneeHandler", () => {
           workspaceId,
           organizationId,
           userId: toUserId,
-          idempotencyKey: `task_assigned:${taskId}:${toUserId}:${assignmentId}`,
+          idempotencyKey: `task_assigned:${taskId}:${toUserId}:${assignmentId}:7`,
         },
       ],
     ]);
