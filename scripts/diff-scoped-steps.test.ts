@@ -1,12 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
-import {
-  DIFF_SCOPE_MARKER,
-  DIFF_SCOPED_STEPS,
-  type DiffScope,
-  GAP_CEILING,
-} from "./diff-scoped-steps";
+import { DIFF_SCOPED_STEPS, readsBaseRevision } from "./diff-scoped-steps";
 import { workflowJobSteps } from "./workflow-steps";
 
 const WORKFLOWS = ".github/workflows";
@@ -14,8 +9,8 @@ const WORKFLOWS = ".github/workflows";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-// Every step that runs a script mentioning a base, pooled checks included.
-const diffScopedSteps = () => {
+// Every leaf step of every workflow job, pooled checks included.
+const liveDiffScopedSteps = () => {
   const keys: string[] = [];
   for (const file of readdirSync(WORKFLOWS)
     .filter((name) => name.endsWith(".yml"))
@@ -31,15 +26,8 @@ const diffScopedSteps = () => {
         continue;
       }
       for (const step of workflowJobSteps(workflow, job)) {
-        const run = step["run"];
-        if (typeof run !== "string") {
-          continue;
-        }
-        if (
-          DIFF_SCOPE_MARKER.test(run) ||
-          DIFF_SCOPE_MARKER.test(JSON.stringify(step["env"] ?? {}))
-        ) {
-          keys.push(`${file}:${job}#${String(step["name"])}`);
+        if (readsBaseRevision(step)) {
+          keys.push(`${file}:${job}#${String(step["name"] ?? step["uses"])}`);
         }
       }
     }
@@ -48,24 +36,33 @@ const diffScopedSteps = () => {
 };
 
 test("every step that reads a base revision carries a scope decision", () => {
-  const live = diffScopedSteps();
+  const live = liveDiffScopedSteps();
   expect(new Set(live).size).toBe(live.length);
   expect(live.toSorted()).toEqual(Object.keys(DIFF_SCOPED_STEPS).toSorted());
-});
-
-test("known scope gaps can only shrink", () => {
-  const decisions: readonly DiffScope[] = Object.values(DIFF_SCOPED_STEPS);
-  const gaps = decisions.filter(({ type }) => type === "gap");
-  // Equality, not a bound: fixing a gap must lower the ceiling with it.
-  expect(gaps).toHaveLength(GAP_CEILING);
-  for (const decision of decisions) {
+  for (const decision of Object.values(DIFF_SCOPED_STEPS)) {
     expect(decision.reason.length).toBeGreaterThan(15);
   }
 });
 
-test("the census sees a new step that compares against the base", () => {
-  expect(DIFF_SCOPE_MARKER.test('bun check.ts --base "origin/$BASE_REF"')).toBe(
-    true,
-  );
-  expect(DIFF_SCOPE_MARKER.test("bun check.ts --all")).toBe(false);
+test("a base reaches the census through the script, env, inputs or a script it runs", () => {
+  expect(
+    readsBaseRevision({ run: 'bun check.ts --base "origin/$BASE_REF"' }),
+  ).toBe(true);
+  expect(
+    readsBaseRevision({ run: "bun check.ts", env: { BASE_SHA: "x" } }),
+  ).toBe(true);
+  expect(
+    readsBaseRevision({ uses: "./action", with: { "base-sha": "x" } }),
+  ).toBe(true);
+  // check-bridge-version.sh reads GITHUB_BASE_REF itself.
+  expect(
+    readsBaseRevision({ run: "bash scripts/check-bridge-version.sh" }),
+  ).toBe(true);
+  // A classification label is prose, not a base.
+  expect(
+    readsBaseRevision({
+      run: "bun check.ts --all",
+      env: { CI_CHECK_CONTEXT: "Uses the merge-base." },
+    }),
+  ).toBe(false);
 });

@@ -56,6 +56,10 @@ test("importers of a changed module are found transitively, whatever the import 
     'import { gone } from "./not-there";\nexport const m = gone;\n',
   );
   writeFileSync(
+    path.join(root, "src/uses-missing.ts"),
+    'import { m } from "./missing";\nexport const n = m;\n',
+  );
+  writeFileSync(
     path.join(root, "src/unrelated.ts"),
     "export const other = 2;\n",
   );
@@ -70,6 +74,7 @@ test("importers of a changed module are found transitively, whatever the import 
       "reexport.ts",
       "lazy.ts",
       "missing.ts",
+      "uses-missing.ts",
       "unrelated.ts",
     ].map(at),
     changed: [at("changed.ts")],
@@ -81,6 +86,7 @@ test("importers of a changed module are found transitively, whatever the import 
       "missing.ts",
       "reexport.ts",
       "types.ts",
+      "uses-missing.ts",
       "wrapper.ts",
     ].map(at),
   );

@@ -1010,6 +1010,12 @@ const countCodeMatches = ({
     ? countMatches(stripComments({ content, file }), pattern)
     : 0;
 
+// A known scope gap is one `gap(` decision in the diff-scoped step census.
+const DIFF_SCOPE_GAP = /\bgap\(\s*"/gu;
+
+const countDiffScopeGaps: FileCounter = (content) =>
+  countMatches(content, DIFF_SCOPE_GAP);
+
 const LEGACY_REALTIME_INVALIDATION_PRODUCER =
   /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcast(?:QueryInvalidationTo(?:Organization|TargetWorkspace)|Invalidation)\s*\()/gu;
 
@@ -3261,6 +3267,14 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countSuperLinearRegexes,
+  },
+  {
+    scope: "file",
+    id: "diff-scope-gaps",
+    description:
+      "CI steps that read a base revision with a known scope gap (scripts/diff-scoped-steps.ts); fixing one removes its decision",
+    include: ["scripts/diff-scoped-steps.ts"],
+    count: countDiffScopeGaps,
   },
   {
     scope: "file",

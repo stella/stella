@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 
@@ -18,7 +19,7 @@ type ImportDependentsOptions = {
 
 /**
  * The candidates that import a changed module, directly or through other
- * candidates.
+ * candidates, in the form the caller passed them.
  *
  * Types flow through inference: when a changed function starts returning a
  * Result, an unchanged wrapper that returns its value does too, so the
@@ -26,16 +27,23 @@ type ImportDependentsOptions = {
  * closure is therefore transitive over every import, type-only included.
  *
  * A repository specifier (relative or a path alias) that does not resolve
- * counts its importer as dependent: the edge cannot be ruled out, and the
- * check it feeds must not skip a module on a resolution miss.
+ * makes its importer dependent, and that importer's own importers with it:
+ * the edge cannot be ruled out, and the check this feeds must not skip a
+ * module on a resolution miss.
  */
 export const importDependents = ({
   repositoryRoot,
   candidates,
   changed,
 }: ImportDependentsOptions): Set<string> => {
+  // Resolution yields real paths, so every input is compared in that form; a
+  // root reached through a symlink would otherwise match nothing.
+  const root = realpathSync(repositoryRoot);
+  const callerPath = new Map(
+    candidates.map((file) => [realpathSync(file), file]),
+  );
   const importers = new Map<string, string[]>();
-  const unresolved = new Set<string>();
+  const seeds = changed.map((file) => realpathSync(file));
   const resolutions = new Map<string, string | undefined>();
 
   const resolve = (importer: string, specifier: string) => {
@@ -44,18 +52,15 @@ export const importDependents = ({
     if (resolutions.has(key)) {
       return resolutions.get(key);
     }
-    let target: string | undefined;
-    // Module resolution is a filesystem boundary.
-    try {
-      target = realpathSync(Bun.resolveSync(specifier, directory));
-    } catch {
-      target = undefined;
-    }
+    const resolved = Result.try(() =>
+      realpathSync(Bun.resolveSync(specifier, directory)),
+    );
+    const target = resolved.isOk() ? resolved.value : undefined;
     resolutions.set(key, target);
     return target;
   };
 
-  for (const importer of candidates) {
+  for (const importer of callerPath.keys()) {
     const source = parseSource(importer, readFileSync(importer, "utf-8"));
     const specifiers = [
       ...source.module.staticImports.map(
@@ -79,12 +84,12 @@ export const importDependents = ({
       const target = resolve(importer, specifier);
       if (target === undefined) {
         if (REPOSITORY_SPECIFIER.test(specifier)) {
-          unresolved.add(importer);
+          seeds.push(importer);
         }
         continue;
       }
       if (
-        !isPathInside(repositoryRoot, target) ||
+        !isPathInside(root, target) ||
         target.includes(`${path.sep}node_modules${path.sep}`)
       ) {
         continue;
@@ -95,21 +100,23 @@ export const importDependents = ({
     }
   }
 
-  const dependents = new Set<string>(unresolved);
-  const pending = [...changed];
-  const visited = new Set<string>(changed);
+  const changedSet = new Set(changed.map((file) => realpathSync(file)));
+  const reached = new Set(seeds);
+  const pending = [...seeds];
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     for (const importer of importers.get(next) ?? []) {
-      if (visited.has(importer)) {
-        continue;
+      if (!reached.has(importer)) {
+        reached.add(importer);
+        pending.push(importer);
       }
-      visited.add(importer);
-      dependents.add(importer);
-      pending.push(importer);
     }
   }
-  for (const file of changed) {
-    dependents.delete(file);
+  const dependents = new Set<string>();
+  for (const file of reached) {
+    const original = callerPath.get(file);
+    if (original !== undefined && !changedSet.has(file)) {
+      dependents.add(original);
+    }
   }
   return dependents;
 };
