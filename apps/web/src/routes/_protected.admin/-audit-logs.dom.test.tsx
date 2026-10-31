@@ -32,10 +32,11 @@ test("the truncated resource id exposes its full labelled value", () => {
   const accessibleId = view.getByText("Resource ID: resource_1234567890");
   expect(accessibleId.classList.contains("sr-only")).toBe(true);
   // Sighted users see the id truncated by CSS, so selecting and copying it
-  // yields the complete value; the tooltip shows it too.
+  // yields the complete value; the shared truncated text shows it in a
+  // tooltip when it overflows.
   const visibleId = view.getByText("resource_1234567890");
   expect(visibleId.getAttribute("aria-hidden")).toBe("true");
-  expect(visibleId.getAttribute("title")).toBe("resource_1234567890");
+  expect(visibleId.dataset.slot).toBe("truncated-text");
   expect(visibleId.textContent).toBe("resource_1234567890");
   expect(view.getByText(/^retired_record_kind/u)).not.toBeNull();
   expect(
