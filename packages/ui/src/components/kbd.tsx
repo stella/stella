@@ -49,8 +49,11 @@ type KbdNamedKey =
   | "left"
   | "right";
 
-// Any other key (a letter, a digit, a symbol) is shown as written.
-type KbdKey = KbdNamedKey | string;
+/**
+ * A named key (see `KbdNamedKey`) or any other key (a letter, a digit, a
+ * symbol), which is shown as written.
+ */
+type KbdKey = string;
 
 type KbdPlatform = "apple" | "other";
 
@@ -108,10 +111,13 @@ function formatKeys(keys: readonly KbdKey[], platform: KbdPlatform): string {
 
 const APPLE_PLATFORM_PATTERN = /mac|iphone|ipad|ipod/iu;
 
+/** What platform detection reads; `userAgentData` is not in every browser. */
+type KbdNavigator = Pick<Navigator, "platform"> & {
+  userAgentData?: { platform?: string | undefined } | undefined;
+};
+
 function detectKbdPlatform(): KbdPlatform {
-  const nav = navigator as Navigator & {
-    userAgentData?: { platform?: string };
-  };
+  const nav: KbdNavigator = navigator;
   const name = nav.userAgentData?.platform ?? nav.platform;
   return APPLE_PLATFORM_PATTERN.test(name) ? "apple" : "other";
 }
