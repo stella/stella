@@ -133,10 +133,33 @@ export const caseLawProvisionFilterOf = ({
 };
 
 /**
- * The link rows that cite the provision or one under it. The jurisdiction,
- * the work and the anchor range are the work-subtree index's whole key, so
- * every read of a provision's citing decisions seeks that provision's own
- * links; the named levels are compared within them.
+ * The jurisdiction, the work and the anchor range: the work-subtree index's
+ * whole key. `ordered` selects the byte-ordered range form that an index scan
+ * in anchor order can stop within.
+ */
+const provisionBaseConditions = (
+  scope: ProvisionScopeOptions,
+  access?: "ordered",
+): SQL[] => {
+  const link = caseLawProvisionCitations;
+  const linkJurisdiction = linkJurisdictionOf(scope);
+  return [
+    sql`${link.jurisdiction} = ${linkJurisdiction}`,
+    sql`${link.workIdentifier} = ${scope.provision.work}`,
+    (access === "ordered"
+      ? orderedProvisionAnchorSubtreeSql
+      : provisionAnchorSubtreeSql)(link.anchor, {
+      jurisdiction: linkJurisdiction,
+      anchor: scope.provision.anchor,
+    }),
+  ];
+};
+
+/**
+ * The link rows that cite the provision or one under it. The base conditions
+ * are the work-subtree index's whole key, so every read of a provision's
+ * citing decisions seeks that provision's own links; the named levels are
+ * compared within them.
  */
 const provisionLinkConditions = (
   scope: ProvisionScopeOptions,
@@ -144,17 +167,7 @@ const provisionLinkConditions = (
 ): SQL[] => {
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
-  const linkJurisdiction = linkJurisdictionOf(scope);
-  const conditions: SQL[] = [
-    sql`${link.jurisdiction} = ${linkJurisdiction}`,
-    sql`${link.workIdentifier} = ${provision.work}`,
-    (access === "ordered"
-      ? orderedProvisionAnchorSubtreeSql
-      : provisionAnchorSubtreeSql)(link.anchor, {
-      jurisdiction: linkJurisdiction,
-      anchor: provision.anchor,
-    }),
-  ];
+  const conditions: SQL[] = provisionBaseConditions(scope, access);
   if (provision.subsection !== undefined) {
     conditions.push(
       sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
@@ -184,18 +197,8 @@ const provisionLinkConditions = (
   return conditions;
 };
 
-const provisionAnchorConditions = (scope: ProvisionScopeOptions): SQL[] => {
-  const link = caseLawProvisionCitations;
-  const linkJurisdiction = linkJurisdictionOf(scope);
-  return [
-    sql`${link.jurisdiction} = ${linkJurisdiction}`,
-    sql`${link.workIdentifier} = ${scope.provision.work}`,
-    orderedProvisionAnchorSubtreeSql(link.anchor, {
-      jurisdiction: linkJurisdiction,
-      anchor: scope.provision.anchor,
-    }),
-  ];
-};
+const provisionAnchorConditions = (scope: ProvisionScopeOptions): SQL[] =>
+  provisionBaseConditions(scope, "ordered");
 
 const linkMatchesProvision = (
   link: {
@@ -278,15 +281,9 @@ export const provisionLinkReadOutcomeSql = ({
 }): SQL<ProvisionLinkReadOutcome> => {
   const link = caseLawProvisionCitations;
   const { jurisdiction, provision } = scope;
-  const linkJurisdiction = linkJurisdictionOf(scope);
   const rangeConditions: SQL[] = [
     sql`${link.decisionId} = ${decisionId}`,
-    sql`${link.jurisdiction} = ${linkJurisdiction}`,
-    sql`${link.workIdentifier} = ${provision.work}`,
-    orderedProvisionAnchorSubtreeSql(link.anchor, {
-      jurisdiction: linkJurisdiction,
-      anchor: provision.anchor,
-    }),
+    ...provisionBaseConditions(scope, "ordered"),
   ];
   const hierarchyConditions: SQL[] = [];
   if (provision.subsection !== undefined) {
