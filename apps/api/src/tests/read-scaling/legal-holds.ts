@@ -110,6 +110,10 @@ export const seedLegalHoldScaling = async (db: GatedTestDb, size: number) => {
       body: { reason: "Evidence lifecycle" },
     },
     cleanup: async () => {
+      // Active holds refuse matter deletion; the fixture's holds go first.
+      await db
+        .delete(legalHolds)
+        .where(eq(legalHolds.organizationId, organizationId));
       await db.delete(organization).where(eq(organization.id, organizationId));
       await db.delete(user).where(eq(user.id, userId));
     },

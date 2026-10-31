@@ -32,6 +32,7 @@ import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/contact
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
@@ -387,9 +388,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               }),
           );
           expect(directHoldDelete.isErr()).toBe(true);
+          // Matter teardown runs in the owner transaction, as the deletion
+          // command runs it.
           const refused = await Result.tryPromise(
             async () =>
-              await scopedDb(
+              await withAggregateTransaction(
+                db,
                 async (tx) =>
                   await completeWorkspaceDeletion({
                     tx,
@@ -692,7 +696,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               ),
             ),
           );
-          await scopedDb(
+          await withAggregateTransaction(
+            db,
             async (tx) =>
               await completeWorkspaceDeletion({
                 tx,
@@ -711,8 +716,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             .delete(entityDeletionCleanupRequests)
             .where(eq(entityDeletionCleanupRequests.id, cleanupId));
           await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, organizationId));
+          await db
             .delete(organization)
             .where(eq(organization.id, organizationId));
+          await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, otherOrganizationId));
           await db
             .delete(organization)
             .where(eq(organization.id, otherOrganizationId));
@@ -824,6 +835,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               .where(eq(chatThreads.id, threadId)),
           ).toEqual([{ id: threadId }]);
         } finally {
+          await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, organizationId));
           await db
             .delete(organization)
             .where(eq(organization.id, organizationId));
@@ -1020,6 +1034,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           });
         } finally {
           await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, organizationId));
+          await db
             .delete(organization)
             .where(eq(organization.id, organizationId));
           await db.delete(user).where(eq(user.id, userId));
@@ -1162,7 +1179,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             },
           });
         } finally {
-          await db.delete(legalHolds).where(eq(legalHolds.id, holdId));
+          await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, organizationId));
           await db
             .delete(organization)
             .where(eq(organization.id, organizationId));

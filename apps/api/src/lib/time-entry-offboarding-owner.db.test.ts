@@ -199,8 +199,11 @@ describe.skipIf(!enabled)(
               .join("; "),
           );
           await client.unsafe(
-            `CREATE TABLE user_files (id uuid, thread_id uuid); ALTER TABLE user_files OWNER TO ${ownerRole}`,
+            `CREATE TABLE user_files (id uuid, thread_id uuid); ALTER TABLE user_files OWNER TO ${ownerRole};
+            CREATE TABLE organization (id text PRIMARY KEY); ALTER TABLE organization OWNER TO ${ownerRole};
+            CREATE TABLE legal_holds (LIKE public.legal_holds INCLUDING ALL); ALTER TABLE legal_holds OWNER TO ${ownerRole}`,
           );
+          await client`INSERT INTO organization (id) VALUES (${organizationId})`;
           await db.transaction(async (tx) => {
             await tx.execute(
               sql`SELECT set_config('role', ${ownerRole}, true)`,

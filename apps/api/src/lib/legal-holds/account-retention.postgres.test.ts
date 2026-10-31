@@ -221,6 +221,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db.delete(userFiles).where(eq(userFiles.userId, userId));
           await db.delete(chatThreads).where(eq(chatThreads.userId, userId));
           await db
+            .delete(legalHolds)
+            .where(eq(legalHolds.organizationId, organizationId));
+          await db
             .delete(organization)
             .where(eq(organization.id, organizationId));
           await db.delete(user).where(eq(user.id, userId));
