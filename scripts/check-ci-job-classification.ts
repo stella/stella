@@ -260,7 +260,9 @@ const contentAt = (root: string, revision: string, file: string) => {
 type MergeGroupCheckOptions = {
   root: string;
   base: string;
-  mergeGroup: MergeGroup;
+  // Read only after the exact check fails, so a queue read failure cannot
+  // fail a group that passes on its own digests.
+  readMergeGroup: () => MergeGroup;
 };
 
 // A queued tree may combine independently reviewed inputs. Each byte of every
@@ -269,12 +271,13 @@ type MergeGroupCheckOptions = {
 export const checkMergeGroupJobClassification = ({
   root,
   base,
-  mergeGroup,
+  readMergeGroup,
 }: MergeGroupCheckOptions) => {
   const exact = checkJobClassification(root, base);
   if (exact.isOk() || !(exact.error instanceof ReviewRequiredError)) {
     return exact;
   }
+  const mergeGroup = readMergeGroup();
   const headInputs = readClassificationInputs(root);
   const head = generateWithJobs(headInputs);
   const changedFiles = gitOutput(root, [
@@ -330,9 +333,11 @@ export const checkMergeGroupJobClassification = ({
     );
   });
   if (ordinaryComposable) {
+    // Composition waives the review of ordinary jobs only; privileged changes
+    // elsewhere in the group stay reported as sensitive.
     return Result.ok({
       workflowCount: head.workflowCount,
-      privilegedJobs: [] as string[],
+      privilegedJobs: exact.error.privilegedJobs,
     });
   }
   const later = mergeGroup.members.at(-1);
@@ -456,10 +461,10 @@ const decisionsFileChanged = (root: string) =>
     { stdout: "pipe", stderr: "ignore" },
   ).stdout.length > 0;
 
-const currentMergeGroup = (): MergeGroup | undefined => {
-  if (process.env["GITHUB_EVENT_NAME"] !== "merge_group") {
-    return undefined;
-  }
+const isMergeGroupEvent = () =>
+  process.env["GITHUB_EVENT_NAME"] === "merge_group";
+
+const currentMergeGroup = (): MergeGroup => {
   const ref = process.env["GITHUB_REF"] ?? "";
   const match = /\/pr-([0-9]+)-[a-f0-9]{40}$/u.exec(ref);
   const repository = process.env["GITHUB_REPOSITORY"];
@@ -513,9 +518,12 @@ const currentMergeGroup = (): MergeGroup | undefined => {
 };
 
 const runCheck = (root: string, base: string) => {
-  const mergeGroup = currentMergeGroup();
-  const result = mergeGroup
-    ? checkMergeGroupJobClassification({ root, base, mergeGroup })
+  const result = isMergeGroupEvent()
+    ? checkMergeGroupJobClassification({
+        root,
+        base,
+        readMergeGroup: currentMergeGroup,
+      })
     : checkJobClassification(root, base);
   let privilegedJobs: string[] = [];
   if (result.isErr() && result.error instanceof ReviewRequiredError) {

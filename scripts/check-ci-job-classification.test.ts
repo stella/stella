@@ -584,9 +584,20 @@ test("independent privileged approvals merge without conflict", () => {
   });
 });
 
-const compositionRepository = (kind = "ordinary") => {
-  const baseWorkflow =
-    "jobs: {check: {steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}";
+type CompositionOptions = {
+  kind?: string;
+  secondKind?: string;
+  jobPermissions?: string;
+};
+
+const compositionRepository = ({
+  kind = "ordinary",
+  secondKind = kind,
+  jobPermissions,
+}: CompositionOptions = {}) => {
+  const permissions =
+    jobPermissions === undefined ? "" : `permissions: ${jobPermissions}, `;
+  const baseWorkflow = `jobs: {check: {${permissions}steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}`;
   const workflowChange = baseWorkflow.replace(
     "0000000000000000000000000000000000000000",
     "2222222222222222222222222222222222222222",
@@ -673,14 +684,53 @@ const compositionRepository = (kind = "ordinary") => {
     path.join(root, ".github/actions/check/action.yml"),
     actionChange,
   );
+  if (secondKind !== kind) {
+    // A member that reclassified the job carries only approvals of its kind.
+    rmSync(
+      path.join(
+        root,
+        CLASSIFICATION_DECISIONS_PATH,
+        encodeURIComponent(keyOf("check")),
+      ),
+      { recursive: true, force: true },
+    );
+  }
   writeDecision(root, keyOf("check"), {
-    kind,
+    kind: secondKind,
     qualifier: "Reviewed checks",
     reviewedDigest: actualDigest(),
   });
   commit("action change");
   const second = gitOutput(root, "rev-parse", "HEAD");
   git("merge", "--no-edit", "workflow-change");
+  if (secondKind !== kind) {
+    // The merged tree keeps the reviewed kind and drops the member's approval
+    // recorded under the other kind; only the member's head differs.
+    const directory = path.join(
+      root,
+      CLASSIFICATION_DECISIONS_PATH,
+      encodeURIComponent(keyOf("check")),
+    );
+    for (const file of new Bun.Glob("*.json").scanSync({ cwd: directory })) {
+      const approval: unknown = JSON.parse(
+        readFileSync(path.join(directory, file), "utf-8"),
+      );
+      if (
+        file !== "decision.json" &&
+        typeof approval === "object" &&
+        approval !== null &&
+        "kind" in approval &&
+        approval.kind !== kind
+      ) {
+        rmSync(path.join(directory, file));
+      }
+    }
+    writeFileSync(
+      path.join(directory, "decision.json"),
+      `${JSON.stringify({ kind, qualifier: "Reviewed checks" }, null, 2)}\n`,
+    );
+    commit("restore the reviewed kind");
+  }
   return { root, base, first, second };
 };
 
@@ -698,12 +748,12 @@ test("ordinary job approvals compose across a merge group", () => {
   const result = checkMergeGroupJobClassification({
     root,
     base,
-    mergeGroup: {
+    readMergeGroup: () => ({
       members: [
         { number: 41, head: first },
         { number: 42, head: second },
       ],
-    },
+    }),
   });
   expect(result.isOk()).toBe(true);
 });
@@ -749,37 +799,93 @@ test("ordinary composition refuses content from no approving pull request", () =
   const result = checkMergeGroupJobClassification({
     root,
     base,
-    mergeGroup: {
+    readMergeGroup: () => ({
       members: [
         { number: 41, head: first },
         { number: 42, head: second },
       ],
-    },
+    }),
   });
-  expect(result.isErr()).toBe(true);
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
 });
 
 test("sensitive job composition names the later pull request for re-approval", () => {
-  const { root, base, first, second } = compositionRepository("priority");
+  const { root, base, first, second } = compositionRepository({
+    kind: "priority",
+  });
   const result = checkMergeGroupJobClassification({
     root,
     base,
-    mergeGroup: {
+    readMergeGroup: () => ({
       members: [
         { number: 41, head: first },
         { number: 42, head: second },
       ],
+    }),
+  });
+  if (!result.isErr() || !(result.error instanceof ReviewRequiredError)) {
+    throw new AdmissionError({ message: "expected a review refusal" });
+  }
+  expect(result.error.refusal).toBe(
+    "classification needs re-approval after #42",
+  );
+  expect(result.error.message).toContain(
+    "classification needs re-approval after #42",
+  );
+});
+
+const twoMemberGroup = (first: string, second: string) => () => ({
+  members: [
+    { number: 41, head: first },
+    { number: 42, head: second },
+  ],
+});
+
+test("a job privileged by its permissions never composes, whatever its kind", () => {
+  const { root, base, first, second } = compositionRepository({
+    jobPermissions: "{contents: write}",
+  });
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
+  });
+  if (!result.isErr() || !(result.error instanceof ReviewRequiredError)) {
+    throw new AdmissionError({ message: "expected a review refusal" });
+  }
+  expect(result.error.refusal).toBe(
+    "classification needs re-approval after #42",
+  );
+});
+
+test("a member whose decision has another kind is not an approver", () => {
+  const { root, base, first, second } = compositionRepository({
+    secondKind: "support",
+  });
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
+  });
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
+});
+
+test("a group that passes on its own digests never reads the queue", () => {
+  // A single member's own head carries the approval of its exact digest.
+  const { root, base, first } = compositionRepository();
+  gitOutput(root, "checkout", "--quiet", first);
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: () => {
+      throw new AdmissionError({ message: "queue read must not happen" });
     },
   });
-  expect(result.isErr()).toBe(true);
-  if (result.isErr() && result.error instanceof ReviewRequiredError) {
-    expect(result.error.refusal).toBe(
-      "classification needs re-approval after #42",
-    );
-    expect(result.error.message).toContain(
-      "classification needs re-approval after #42",
-    );
-  }
+  expect(result.isOk()).toBe(true);
 });
 
 test("conflicting modes are rejected", () => {
