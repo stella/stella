@@ -12,6 +12,7 @@ import {
   type MigrateOnlineWorkMode,
 } from "./migrate-online-work-mode";
 import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
+import { declaresOnlineBuild } from "./online-ddl";
 import type { OnlineMigrationPool } from "./online-migration-connection";
 import {
   ONLINE_MIGRATION_INDEXES,
@@ -156,12 +157,14 @@ describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
         });
         await connection.unsafe("BEGIN");
         try {
-          for (const { name, createSql } of PENDING_INDEXES) {
+          for (const index of PENDING_INDEXES) {
             const [present] = await connection<{ present: boolean }[]>`
-              SELECT to_regclass(${`public."${name}"`}) IS NOT NULL AS present`;
+              SELECT to_regclass(${`public."${index.name}"`}) IS NOT NULL AS present`;
             if (present?.present !== true) {
               const build = (
-                createSql ?? panic(`Pending index ${name} has no build`)
+                declaresOnlineBuild(index)
+                  ? index.createSql
+                  : panic(`Pending index ${index.name} has no build`)
               ).replace(/\bCONCURRENTLY\s+/u, "");
               await connection.unsafe(build);
             }
