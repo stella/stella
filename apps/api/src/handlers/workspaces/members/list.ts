@@ -8,6 +8,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 const readWorkspaceMembers = createSafeHandler(
   {
     contract: "patch",
+    description:
+      "List a matter's members, each with their user's id, name, email and " +
+      "image, as the people its tasks can be assigned to. Add one with " +
+      "matters.members.add.",
     access: "read",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
