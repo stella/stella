@@ -22,7 +22,8 @@
     "toolUsed": "Użyto: {tool}",
     "threadTitle": "Rozmowa",
     "threadLoadFailed": "Nie udało się wczytać tej rozmowy.",
-    "threadEmptyDescription": "Ta rozmowa nie ma jeszcze wiadomości.",
+    "greeting": "Nad czym chcesz pracować?",
+    "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "sections": {
       "today": "Dzisiaj",
       "yesterday": "Wczoraj",
@@ -127,6 +128,22 @@
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Nie udało się otworzyć tego dokumentu",
+    "failure": {
+      "offline": "Jesteś offline. Połącz się z internetem i spróbuj ponownie.",
+      "noFile": "Ten dokument nie ma jeszcze pliku.",
+      "failed": "Podczas otwierania coś poszło nie tak. Spróbuj ponownie za chwilę.",
+      "unsupported": "Zaktualizuj aplikację, aby otwierać dokumenty.",
+      "android": "W aplikacji na Androida nie można jeszcze otwierać dokumentów."
+    },
+    "retry": "Spróbuj ponownie",
+    "preview": "Otwórz podgląd",
+    "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
+    "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
+    "details": "Szczegóły"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Jasność w każdej sprawie.",
@@ -163,7 +180,6 @@
     "newest": "Najnowsze orzeczenia",
     "noResults": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie.",
     "noResultsHint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
-    "unavailable": "Wyszukiwanie jest tymczasowo niedostępne",
     "retry": "Spróbuj ponownie",
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
@@ -179,6 +195,14 @@
   "writes": {
     "consentNeeded": "Aby wprowadzać zmiany z aplikacji, stella potrzebuje Twojej zgody. Zaloguj się ponownie, aby jej udzielić.",
     "signInAgain": "Zaloguj się ponownie"
+  },
+  "loads": {
+    "offline": "stella nie może połączyć się z Twoim serwerem. Sprawdź połączenie i spróbuj ponownie.",
+    "outdated": "Serwer odpowiedział w formacie, którego ta wersja aplikacji nie rozumie. Zaktualizuj aplikację lub serwer, jeśli nim zarządzasz.",
+    "consent": "To logowanie nie pozwala aplikacji odczytać tych danych. Zaloguj się ponownie, aby przyznać dostęp.",
+    "session": "Twoja sesja wygasła. Zaloguj się ponownie.",
+    "server": "Na serwerze wystąpił problem (błąd {status}). Spróbuj ponownie za chwilę.",
+    "refused": "Serwer odrzucił żądanie (błąd {status})."
   },
   "timers": {
     "title": "Liczniki czasu",
@@ -213,7 +237,27 @@
     "matterTitle": "Sprawa",
     "uploadFailed": "Nie udało się przesłać skanu. Spróbuj ponownie.",
     "failedTitle": "Skanowanie nie powiodło się",
-    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie."
+    "failed": "Aparat nie zapisał skanu. Spróbuj ponownie.",
+    "save": "Zapisz",
+    "saveTitle": "Zapisz w sprawie",
+    "share": "Udostępnij",
+    "addPages": "Dodaj strony",
+    "page": "Strona {number}",
+    "rotatePage": "Obróć stronę {number}",
+    "removePage": "Usuń stronę {number}",
+    "deletePage": "Usuń",
+    "movePage": "Przenieś stronę {number}",
+    "moveUp": "Przesuń w górę",
+    "moveDown": "Przesuń w dół",
+    "noPages": "Nie zostały żadne strony. Zeskanuj kolejne przyciskiem Dodaj strony.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Nie udało się utworzyć pliku PDF. Spróbuj ponownie.",
+    "shareFailed": "Nie udało się udostępnić pliku PDF. Spróbuj ponownie.",
+    "discardTitle": "Odrzucić ten skan?",
+    "discardMessage": "Jego strony nie zostały zapisane w sprawie i zostaną usunięte z tego urządzenia.",
+    "discard": "Odrzuć",
+    "keepEditing": "Edytuj dalej"
   },
   "shortcuts": {
     "search": "Szukaj",

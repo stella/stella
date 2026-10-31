@@ -1,18 +1,14 @@
 import { useSyncExternalStore } from "react";
 
 import { createDesktopConnectionStore } from "@/features/desktop/desktop-connection-store.logic";
+import type { DesktopLinkApproval } from "@/features/desktop/desktop-connection-store.logic";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { externalApiOrigin } from "@/lib/api-origins";
 import { linkDesktopAccount } from "@/lib/desktop-bridge";
 
-const linkAccountToRunningDesktop = async () => {
-  const apiBaseUrl = externalApiOrigin();
-
-  return await linkDesktopAccount({ apiBaseUrl });
-};
-
 const store = createDesktopConnectionStore({
-  link: linkAccountToRunningDesktop,
+  link: async (options) =>
+    await linkDesktopAccount({ ...options, apiBaseUrl: externalApiOrigin() }),
   onError: (error) =>
     getAnalytics().captureError(error, {
       fingerprintKey: "use-desktop-account-connection:failure",
@@ -31,7 +27,8 @@ export const useDesktopAccountConnection = () => {
   );
 
   return {
-    connect: async () => await store.connect(),
+    connect: async (approval: DesktopLinkApproval) =>
+      await store.connect(approval),
     state,
   };
 };

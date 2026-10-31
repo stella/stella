@@ -87,3 +87,19 @@ Declarations are checked without a database by
 every MCP tool has a budget or an entry in the shrink-only ledger
 `apps/api/src/lib/db/read-budgets-unmeasured.json`, and a job outside the shared
 load governor stays under the per-run page ceiling.
+
+Registry declarations live in one file per entry: read budgets and MCP tool
+assignments under `src/lib/db/*-entries/`, and measurements, profiles, and owner
+deadlines beside this file in `*-entries/`. Each file default-exports its entry;
+its filename is the registry key. Add the corresponding profile and deadline
+when adding a budget so total type coverage remains enforced.
+
+Run `bun scripts/db-registry-entries.ts` from the repository root after adding or
+removing entries, and commit the generated indices. Editing an existing entry
+does not change an index. The indices contain only re-exports (and the aggregate
+identity type projection). Independent additions at separate positions merge
+normally. If adjacent exports conflict, retain both entry modules and regenerate
+the index; never resolve generated exports by hand. Freshness and layout checks
+reject inline declarations and stale indices. Measurement arrays sort by budget
+id; lock ordering comes from declared ranks and chains. Filesystem enumeration
+never determines execution order.
