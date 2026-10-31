@@ -6,6 +6,7 @@ import { readdir } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
+import { checkWorkflowPrivileges } from "./check-workflow-pr-write-token";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
 const WORKFLOW_DIRECTORY = ".github/workflows";
@@ -563,6 +564,13 @@ export const checkWorkflowYaml = async (
     artifactDownloads,
   );
   await validateNoRubyProcessSpawns(root);
+  const [privileged] = checkWorkflowPrivileges(root);
+  if (privileged !== undefined) {
+    throw new WorkflowYamlError({
+      message: `${privileged.file}: job ${privileged.job}, ${privileged.step}: privileged job runs pull-request-controlled code (${privileged.class}, ${privileged.trigger}); see scripts/check-workflow-pr-write-token.ts`,
+      file: privileged.file,
+    });
+  }
 };
 
 if (import.meta.main) {
