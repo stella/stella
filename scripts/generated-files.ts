@@ -33,6 +33,8 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Ignored, disposable paths that `write` may populate as execution caches. */
+  cacheOutputs?: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   /** Inputs read only while checking generated outputs, never while writing them. */
@@ -1394,6 +1396,14 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/src/generated/resources-snapshot.json",
       "packages/cli/skills/**",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
+    ],
+    cacheOutputs: [
+      ".turbo/**",
+      "apps/api/.turbo/**",
+      "packages/cli/.turbo/**",
+      ...CI_GENERATED_OUTPUTS.apiTypecheckProjects,
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+      ...CI_GENERATED_OUTPUTS.cliRuntime,
     ],
     inputs: [
       "apps/api/src/mcp/**",
