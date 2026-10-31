@@ -1032,6 +1032,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/migration-lock-census.ts",
       "scripts/migration-lock-allowances/*.json",
       "scripts/online-ddl-lock-census.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/db/online-ddl.ts",
       "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
       "apps/api/drizzle/**/*.sql",
@@ -2041,6 +2042,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
@@ -2094,6 +2096,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/env*.ts",
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",
