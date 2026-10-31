@@ -472,10 +472,10 @@
     {
       "name": "save_contact",
       "nameChars": 12,
-      "descriptionChars": 303,
-      "inputSchemaChars": 7864,
-      "totalChars": 8179,
-      "estimatedTokens": 3382
+      "descriptionChars": 172,
+      "inputSchemaChars": 7920,
+      "totalChars": 8104,
+      "estimatedTokens": 3362
     },
     {
       "name": "save_document",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 132974,
-    "estimatedTokens": 52836
+    "characters": 132899,
+    "estimatedTokens": 52816
   }
 }

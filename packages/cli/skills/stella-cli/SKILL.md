@@ -237,7 +237,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --prefix, --middle-name, --suffix, --color, --registration-number, --tax-id, --vat-id, --vat-payer, --default-hourly-rate, --currency, --payment-term-days, --invoice-language (ar|cs|de|en|es|et|fr|hu|lt|lv|pl|pt-BR|sk), --originating-attorney-id, --responsible-attorney-id, --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
+  - optional: --prefix, --middle-name, --suffix, --color, --registration-number, --tax-id, --vat-id, --vat-payer, --default-hourly-rate, --currency, --payment-term-days, --invoice-language (ar|cs|de|en|es|et|fr|hu|lt|lv|pl|pt-BR|sk), --originating-attorney-id, --responsible-attorney-id, --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes, --external.source, --external.id
   - via `--input` only: emails, phones, addresses, metadata, tags, bank_accounts, billing_address, date_of_birth
   - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`

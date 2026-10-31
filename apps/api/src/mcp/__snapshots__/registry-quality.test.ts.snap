@@ -3425,7 +3425,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -3972,7 +3972,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "contact_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to update; omit to create"
+          "description": "Update ID; omit to create"
         },
         "type": {
           "enum": [
@@ -3980,13 +3980,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "organization"
           ],
           "type": "string",
-          "description": "Contact kind; required when creating"
+          "description": "Create kind"
         },
         "display_name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Defaults to person or organization name"
         },
         "first_name": {
           "anyOf": [
@@ -3998,7 +3998,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "First name; pass null to clear"
+          "description": "Given name"
         },
         "last_name": {
           "anyOf": [
@@ -4010,7 +4010,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last name; pass null to clear"
+          "description": "Family name"
         },
         "organization_name": {
           "anyOf": [
@@ -4022,7 +4022,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Organization name; pass null to clear"
+          "description": "Organization"
         },
         "notes": {
           "anyOf": [
@@ -4033,7 +4033,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Free-text notes; pass null to clear"
+          "description": "Notes"
         },
         "date_of_birth": {
           "anyOf": [
@@ -4123,7 +4123,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+          "description": "Birth year, month or date"
         },
         "nationality_codes": {
           "type": "array",
@@ -4140,7 +4140,31 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             }
           },
           "maxItems": 250,
-          "description": "Nationality countries; pass [] to clear"
+          "description": "Countries; [] clears"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Source key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Source ID"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Create only; unique source/id."
         }
       }
     }
@@ -10618,7 +10642,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save contact can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save contact is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "annotations": {
       "title": "Save contact",
       "destructiveHint": true,
@@ -11165,7 +11189,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "contact_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to update; omit to create"
+          "description": "Update ID; omit to create"
         },
         "type": {
           "enum": [
@@ -11173,13 +11197,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "organization"
           ],
           "type": "string",
-          "description": "Contact kind; required when creating"
+          "description": "Create kind"
         },
         "display_name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Defaults to person or organization name"
         },
         "first_name": {
           "anyOf": [
@@ -11191,7 +11215,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "First name; pass null to clear"
+          "description": "Given name"
         },
         "last_name": {
           "anyOf": [
@@ -11203,7 +11227,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last name; pass null to clear"
+          "description": "Family name"
         },
         "organization_name": {
           "anyOf": [
@@ -11215,7 +11239,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Organization name; pass null to clear"
+          "description": "Organization"
         },
         "notes": {
           "anyOf": [
@@ -11226,7 +11250,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Free-text notes; pass null to clear"
+          "description": "Notes"
         },
         "date_of_birth": {
           "anyOf": [
@@ -11316,7 +11340,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+          "description": "Birth year, month or date"
         },
         "nationality_codes": {
           "type": "array",
@@ -11333,7 +11357,31 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             }
           },
           "maxItems": 250,
-          "description": "Nationality countries; pass [] to clear"
+          "description": "Countries; [] clears"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Source key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Source ID"
+            }
+          },
+          "required": [
+            "source",
+            "id"
+          ],
+          "additionalProperties": false,
+          "description": "Create only; unique source/id."
         }
       }
     }

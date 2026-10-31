@@ -2,18 +2,20 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-reader-annotations";
-import { assertProperty } from "@stll/property-testing";
-
 import {
   DETACHED_REASON,
   findWordsOnPage,
-  locateSelection,
   placeMark,
-  SELECTION_REFUSAL,
-} from "@/components/pdf/annotations/document-mark-anchor.logic";
+} from "@stll/api-contract/pdf-mark-placement";
 import type {
   MarkAnchor,
   MarkPageText,
+} from "@stll/api-contract/pdf-mark-placement";
+import { assertProperty } from "@stll/property-testing";
+
+import {
+  locateSelection,
+  SELECTION_REFUSAL,
 } from "@/components/pdf/annotations/document-mark-anchor.logic";
 
 const FIELD = "field-version-1";

@@ -26,6 +26,8 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   "save_contact.vat_id": "national VAT identifier stored as text",
   "save_contact.originating_attorney_id": "better-auth user id (text column)",
   "save_contact.responsible_attorney_id": "better-auth user id (text column)",
+  "save_contact.external.id":
+    "opaque source-system record identifier stored in a text column, not a stella uuid",
   // Auth-provider (better-auth) user ids are alphanumeric text, and the
   // columns that hold them are `text`/`varchar`, never `uuid`.
   "list_time_entries.user_id": "better-auth user id (text column)",
