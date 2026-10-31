@@ -123,16 +123,24 @@ test("quarantined remediation reports publisher provenance and maintainer contin
     ],
     acceptanceDrafts: [],
   };
-  const readDocument = async () => ({
-    time: {
-      "1.0.0": "2026-09-01T00:00:00.000Z",
-      "2.0.0": "2026-10-30T00:00:00.000Z",
+  // The shape `bun info <name>@<version> --json` returns: one version's
+  // manifest with the package-wide time map.
+  const time = {
+    created: "2026-08-01T00:00:00.000Z",
+    modified: "2026-10-30T00:00:00.000Z",
+    "1.0.0": "2026-09-01T00:00:00.000Z",
+    "2.0.0": "2026-10-30T00:00:00.000Z",
+  };
+  const manifests: Record<string, unknown> = {
+    "pkg@1.0.0": { version: "1.0.0", maintainers: [{ name: "alice" }], time },
+    "pkg@2.0.0": {
+      version: "2.0.0",
+      _npmUser: { name: "alice" },
+      versions: ["1.0.0", "2.0.0"],
+      time,
     },
-    versions: {
-      "1.0.0": { maintainers: [{ name: "alice" }] },
-      "2.0.0": { _npmUser: { name: "alice" } },
-    },
-  });
+  };
+  const readDocument = async (spec: string) => manifests[spec];
   const body = await quarantinedRemediationBody(plan, readDocument);
   expect(await remediationOutputs(plan, readDocument)).toEqual({
     quarantined: "true",

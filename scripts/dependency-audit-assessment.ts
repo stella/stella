@@ -842,8 +842,10 @@ const readBunInfo = async (
   return result.value;
 };
 
-export const readRegistryDocument = async (name: string): Promise<unknown> =>
-  readBunInfo(name);
+// `spec` is `<name>` or `<name>@<version>`; the latter returns that version's
+// manifest.
+export const readRegistryDocument = async (spec: string): Promise<unknown> =>
+  readBunInfo(spec);
 
 // Published versions Bun would install now, honouring the quarantine.
 export const readInstallableVersions = async (

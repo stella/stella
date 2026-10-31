@@ -101,46 +101,53 @@ const writeScalarOutput = (name: string, value: string): void => {
 const registryText = (value: unknown): string | undefined =>
   typeof value === "string" && value !== "" ? value : undefined;
 
+// `bun info <name>@<version> --json` returns that version's manifest: its
+// `_npmUser`, `maintainers` and the package-wide `time` map.
+const versionManifest = async (
+  readManifest: (spec: string) => Promise<unknown>,
+  spec: string,
+): Promise<Record<string, unknown>> => {
+  const manifest = await readManifest(spec);
+  if (!isRecord(manifest)) {
+    return panic(`Registry manifest for ${spec} is not an object`);
+  }
+  return manifest;
+};
+
 export const quarantinedRemediationBody = async (
   plan: DependencyAuditRemediationPlan,
-  readDocument: (name: string) => Promise<unknown> = readRegistryDocument,
+  readManifest: (spec: string) => Promise<unknown> = readRegistryDocument,
 ): Promise<string> => {
   if (plan.quarantineExclusions.length === 0) {
     return REMEDIATION_SUMMARY;
   }
   const rows = await Promise.all(
     plan.quarantineExclusions.map(async (exclusion) => {
-      const document = await readDocument(exclusion.package);
-      if (!isRecord(document)) {
-        panic(`Registry document for ${exclusion.package} is not an object`);
-      }
-      const versions = document["versions"];
-      const times = document["time"];
-      if (!isRecord(versions) || !isRecord(times)) {
-        panic(
-          `Registry document for ${exclusion.package} lacks versions or publish times`,
-        );
-      }
-      const pinned = versions[exclusion.version];
-      const published = registryText(times[exclusion.version]);
-      if (!isRecord(pinned) || published === undefined) {
-        panic(
-          `Registry document for ${exclusion.package}@${exclusion.version} lacks provenance`,
-        );
-      }
+      const spec = `${exclusion.package}@${exclusion.version}`;
+      const pinned = await versionManifest(readManifest, spec);
+      const times = pinned["time"];
       const npmUser = pinned["_npmUser"];
       const publisher = isRecord(npmUser)
         ? registryText(npmUser["name"])
         : undefined;
-      if (publisher === undefined) {
-        panic(
-          `Registry document for ${exclusion.package}@${exclusion.version} lacks _npmUser.name`,
+      const published = isRecord(times)
+        ? registryText(times[exclusion.version])
+        : undefined;
+      if (
+        !isRecord(times) ||
+        publisher === undefined ||
+        published === undefined
+      ) {
+        return panic(
+          `Registry manifest for ${spec} lacks _npmUser.name or its publish time`,
         );
       }
       const previousVersion = Object.entries(times)
         .flatMap(([version, time]) => {
           const timestamp = registryText(time);
-          return timestamp !== undefined &&
+          return version !== "created" &&
+            version !== "modified" &&
+            timestamp !== undefined &&
             Date.parse(timestamp) < Date.parse(published)
             ? [{ version, timestamp }]
             : [];
@@ -150,20 +157,22 @@ export const quarantinedRemediationBody = async (
             Date.parse(right.timestamp) - Date.parse(left.timestamp),
         )
         .at(0)?.version;
-      const previous =
-        previousVersion === undefined ? undefined : versions[previousVersion];
-      const maintainers = isRecord(previous)
-        ? previous["maintainers"]
-        : undefined;
       let known = "unknown";
-      if (Array.isArray(maintainers)) {
-        known = maintainers.some(
-          (maintainer) =>
-            isRecord(maintainer) &&
-            registryText(maintainer["name"]) === publisher,
-        )
-          ? "yes"
-          : "no";
+      if (previousVersion !== undefined) {
+        const previous = await versionManifest(
+          readManifest,
+          `${exclusion.package}@${previousVersion}`,
+        );
+        const maintainers = previous["maintainers"];
+        if (Array.isArray(maintainers)) {
+          known = maintainers.some(
+            (maintainer) =>
+              isRecord(maintainer) &&
+              registryText(maintainer["name"]) === publisher,
+          )
+            ? "yes"
+            : "no";
+        }
       }
       return `| ${exclusion.package} | ${exclusion.version} | ${published} | ${publisher} | ${known} |`;
     }),
@@ -173,14 +182,14 @@ export const quarantinedRemediationBody = async (
 
 export const remediationOutputs = async (
   plan: DependencyAuditRemediationPlan,
-  readDocument: (name: string) => Promise<unknown> = readRegistryDocument,
+  readManifest: (spec: string) => Promise<unknown> = readRegistryDocument,
 ): Promise<{ quarantined: "true" | "false"; prBody?: string }> => {
   if (plan.quarantineExclusions.length === 0) {
     return { quarantined: "false" };
   }
   return {
     quarantined: "true",
-    prBody: await quarantinedRemediationBody(plan, readDocument),
+    prBody: await quarantinedRemediationBody(plan, readManifest),
   };
 };
 
