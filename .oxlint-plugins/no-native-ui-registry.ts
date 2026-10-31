@@ -119,9 +119,16 @@ export const NO_NATIVE_UI_REGISTRY = {
     roles: ["button"],
     inputTypes: ["button", "image", "reset", "submit"],
   }),
-  calendar: owned(
+  "calendar-primitives": owned(
     DATE_INPUT_RULE,
     "the native date pickers are reported there",
+  ),
+  "resource-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "resource-calendar.logic": notComponent(
+    "resource calendar placement helpers",
   ),
   checkbox: native("Checkbox from @stll/ui/checkbox", {
     roles: ["checkbox"],
@@ -165,6 +172,13 @@ export const NO_NATIVE_UI_REGISTRY = {
     "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
     "hand-built range filters are reported there",
   ),
+  "day-calendar": owned(
+    DATE_INPUT_RULE,
+    "the native date pickers are reported there",
+  ),
+  "day-calendar.logic": notComponent(
+    "day calendar layout and snapping helpers",
+  ),
   "destructive-action-confirmation": owned(
     "eslint/no-alert",
     "the browser's confirm() dialog is reported there",
@@ -205,6 +219,9 @@ export const NO_NATIVE_UI_REGISTRY = {
   icons: owned(
     "no-direct-lucide-import/no-direct-lucide-import",
     "glyphs come from @stll/ui/icons, never the icon library directly",
+  ),
+  "identity-text": noNative(
+    "a clipped name that discloses its full text in a tooltip",
   ),
   "inline-drop-indicator": noNative("a drag-and-drop insertion marker"),
   "inline-rename": owned(
