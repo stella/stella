@@ -4,7 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 export const MIGRATION_LOCK_MANIFEST_FILE = "table-lock-manifest.json";
-export const MIGRATION_RELATION_LOCK_MODES = [
+const MIGRATION_RELATION_LOCK_MODES = [
   "ACCESS SHARE",
   "ROW SHARE",
   "ROW EXCLUSIVE",
@@ -31,7 +31,6 @@ const manifestSchema = v.strictObject({
   ),
 });
 
-export type MigrationRelationLock = v.InferOutput<typeof relationLockSchema>;
 export type MigrationLockManifest = v.InferOutput<typeof manifestSchema>;
 
 type BundledMigration = { name: string; hash: string };
