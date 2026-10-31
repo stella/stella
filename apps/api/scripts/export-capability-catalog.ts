@@ -484,6 +484,7 @@ type CapabilityEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
@@ -769,6 +770,7 @@ type BuildCatalogEntryOptions = {
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
+  idempotency: { type: "replay" } | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -804,6 +806,7 @@ const buildCatalogEntry = ({
   scope,
   additionalScopes,
   requestTimeoutMs,
+  idempotency,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -829,6 +832,7 @@ const buildCatalogEntry = ({
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
+  ...(idempotency === undefined ? {} : { idempotency }),
   ...(allowsArchivedWorkspace
     ? { allowsArchivedWorkspace: true as const }
     : {}),
@@ -1233,7 +1237,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
         `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
       );
     }
-    return { requestTimeoutMs, declaredAccess } as const;
+    const declaredIdempotency = endpoint.config["idempotency"];
+    const idempotency =
+      isRecord(declaredIdempotency) && declaredIdempotency["type"] === "replay"
+        ? { type: "replay" as const }
+        : undefined;
+    if (declaredIdempotency !== undefined && idempotency === undefined) {
+      errors.push(`capability "${id}" declares invalid idempotency policy`);
+      return undefined;
+    }
+    return { requestTimeoutMs, declaredAccess, idempotency } as const;
   };
 
   /** Compile one discovered handler into its catalog and dispatch projections. */
@@ -1297,7 +1310,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (metadata === undefined) {
       return;
     }
-    const { requestTimeoutMs, declaredAccess } = metadata;
+    const { requestTimeoutMs, declaredAccess, idempotency } = metadata;
     const verbs = extractVerbs(permissions);
     const inferredAccess = resolveAccess({
       id,
@@ -1529,6 +1542,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         scope,
         additionalScopes,
         requestTimeoutMs,
+        idempotency,
         hasPermissions,
         permissions,
         compactedInputSchema,
