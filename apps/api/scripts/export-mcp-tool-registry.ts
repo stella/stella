@@ -150,7 +150,7 @@ const projectChatGrantPolicy = (
         : "grantable";
     default:
       access satisfies never;
-      panic("Unhandled projected tool agent access");
+      return panic("Unhandled projected tool agent access");
   }
 };
 
