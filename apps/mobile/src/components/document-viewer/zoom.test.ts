@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  anchoredScroll,
   canvasScale,
   docxZoomTarget,
   FIT_ZOOM,
@@ -110,6 +111,40 @@ describe("scaledScroll", () => {
     expect(
       scaledScroll({ offset: 0, viewport: 800, ratio: 0.5, lead: 12 }),
     ).toBe(0);
+  });
+});
+
+describe("anchoredScroll", () => {
+  const pages = { lead: 12, gap: 12, viewport: 800 };
+
+  test("keeps the middle of the screen on the same spot of the same page", () => {
+    const before = [1000, 1000, 1000];
+    const after = [2000, 2000, 2000];
+    // The middle sits 400 px into the second page.
+    const offset = 12 + 1000 + 12 + 400 - 400;
+    const moved = anchoredScroll({ ...pages, offset, before, after });
+    expect(moved + 400).toBe(12 + 2000 + 12 + 800);
+  });
+
+  test("leaves the fixed gaps between pages out of the scaling", () => {
+    const before = Array.from({ length: 10 }, () => 500);
+    const after = before.map((height) => height / 2);
+    const offset = 12 + 9 * (500 + 12) + 250 - 400;
+    const moved = anchoredScroll({ ...pages, offset, before, after });
+    expect(moved + 400).toBe(12 + 9 * (250 + 12) + 125);
+  });
+
+  test("stays at the start, and holds the last page past the end", () => {
+    expect(
+      anchoredScroll({ ...pages, offset: 0, before: [100], after: [50] }),
+    ).toBe(0);
+    const moved = anchoredScroll({
+      ...pages,
+      offset: 5000,
+      before: [1000, 1000],
+      after: [500, 500],
+    });
+    expect(moved).toBe(12 + 500 + 12 + 500 - 400);
   });
 });
 

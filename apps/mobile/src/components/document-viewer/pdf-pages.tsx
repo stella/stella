@@ -20,7 +20,7 @@ import type {
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import { canvasScale, scaledScroll } from "./zoom";
+import { anchoredScroll, canvasScale, scaledScroll } from "./zoom";
 
 /** The canvas showing between pages and around them, as on the web. */
 const PAGE_GAP = 12;
@@ -152,29 +152,36 @@ export const PdfPages = ({
     };
   }, [pdf]);
 
-  // A new zoom keeps the point at the middle of the screen where it was.
+  // A new zoom keeps the point at the middle of the screen on the same spot
+  // of the same page. The offsets are read as the person scrolls, before a
+  // zoom out shortens the pages and the browser clamps them.
   const scrolling = useRef<HTMLDivElement | null>(null);
+  const scrolled = useRef({ top: 0, left: 0 });
   const shownZoom = useRef(zoom);
   useLayoutEffect(() => {
-    const ratio = zoom / shownZoom.current;
+    const previous = shownZoom.current;
     shownZoom.current = zoom;
     const box = scrolling.current;
-    if (box === null || ratio === 1) {
+    if (box === null || layout === null || zoom === previous) {
       return;
     }
-    box.scrollTop = scaledScroll({
-      offset: box.scrollTop,
+    const heights = (at: number) =>
+      layout.ratios.map((ratio) => ratio * layout.width * at);
+    box.scrollTop = anchoredScroll({
+      offset: scrolled.current.top,
       viewport: box.clientHeight,
-      ratio,
       lead: PAGE_GAP,
+      gap: PAGE_GAP,
+      before: heights(previous),
+      after: heights(zoom),
     });
     box.scrollLeft = scaledScroll({
-      offset: box.scrollLeft,
+      offset: scrolled.current.left,
       viewport: box.clientWidth,
-      ratio,
+      ratio: zoom / previous,
       lead: PAGE_GAP,
     });
-  }, [zoom]);
+  }, [layout, zoom]);
   const holdScroller = useCallback((node: HTMLDivElement | null) => {
     scrolling.current = node;
     setScroller(node);
@@ -185,6 +192,12 @@ export const PdfPages = ({
   }
   return (
     <div
+      onScroll={(event) => {
+        scrolled.current = {
+          top: event.currentTarget.scrollTop,
+          left: event.currentTarget.scrollLeft,
+        };
+      }}
       ref={holdScroller}
       style={{
         height: "100%",

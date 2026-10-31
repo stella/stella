@@ -100,6 +100,43 @@ export const canvasScale = ({
     : sharp * Math.sqrt(MAX_CANVAS_PIXELS / pixels);
 };
 
+/**
+ * Where a scroller of stacked pages moves when the pages change height from
+ * `before` to `after`, so the point at the middle of its `viewport` stays on
+ * the same spot of the same page. `lead`, the padding before the first page,
+ * and `gap`, the space after each page, do not scale.
+ */
+export const anchoredScroll = ({
+  offset,
+  viewport,
+  lead,
+  gap,
+  before,
+  after,
+}: {
+  offset: number;
+  viewport: number;
+  lead: number;
+  gap: number;
+  before: readonly number[];
+  after: readonly number[];
+}): number => {
+  const point = offset + viewport / 2;
+  let top = lead;
+  let movedTop = lead;
+  for (const [index, height] of before.entries()) {
+    const moved = after[index] ?? height;
+    if (point < top + height + gap || index === before.length - 1) {
+      const fraction =
+        height === 0 ? 0 : Math.min(Math.max(point - top, 0), height) / height;
+      return Math.max(0, movedTop + fraction * moved - viewport / 2);
+    }
+    top += height + gap;
+    movedTop += moved + gap;
+  }
+  return Math.max(0, offset);
+};
+
 /** The look the viewer is asked for: the app's, or always light or dark. */
 export type ViewerAppearance = "system" | "light" | "dark";
 
