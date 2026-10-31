@@ -3,7 +3,13 @@ import * as v from "valibot";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
+import {
+  CITATION_EVIDENCE_INCOMPLETE_REASONS,
+  CITATION_TEXT_INCOMPLETE_REASONS,
+  DECISION_TEXT_WITHHELD_REASON,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import type {
@@ -16,6 +22,7 @@ import {
   CITATION_TIMELINE_MAX_YEARS,
   LEADING_CITATIONS_PER_TREATMENT,
 } from "@/api/handlers/case-law/decisions/citation-graph";
+import type { CitationWithPassage } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readCaseLawCoverageHandler } from "@/api/handlers/case-law/decisions/coverage";
 import {
   CASE_LAW_COVERAGE_HEALTH,
@@ -36,7 +43,11 @@ import type {
   listSitemapShardsHandler,
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
-import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_POLARITY_SOURCES,
+  CITATION_TREATMENTS,
+  CITED_PARTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -193,9 +204,25 @@ const relatedDecision = v.object({
   keyof NonNullable<DecisionCitationRow["decision"]>,
   v.GenericSchema
 >);
-const citation = v.object({
+const polarityEvidence = v.object({
+  source: v.union([v.picklist(CITATION_POLARITY_SOURCES), v.null()]),
+  ruleId: v.union([resourceIdSchema("caseLawPolarityRule"), v.null()]),
+  classifierVersion: nullableBoundedString(256),
+  excerpt: nullableBoundedString(LIMITS.caseLawCitationPassageChars),
+});
+
+const citationFields = {
   id: resourceIdSchema("caseLawCitation"),
-  citationText: boundedString(16_384),
+  citationText: nullableBoundedString(16_384),
+  textWithheldReason: v.union([
+    v.literal(DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE),
+    v.null(),
+  ]),
+  extractionWarnings: extractionWarningsSchema,
+  textIncompleteReason: v.union([
+    v.picklist(CITATION_TEXT_INCOMPLETE_REASONS),
+    v.null(),
+  ]),
   sectionIndex: numberOrNull,
   treatment: v.picklist(CITATION_TREATMENTS),
   doctrine: v.union([
@@ -204,11 +231,26 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  // The printing version is internal: it locates a passage, and no response
-  // carries it.
-  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
+  keyof Omit<
+    CitationWithPassage,
+    "passage" | "evidenceIncompleteReason" | "polarityEvidence" | "citedPart"
+  >,
   v.GenericSchema
->);
+>;
+const citation = v.union([
+  v.object({
+    ...citationFields,
+    evidenceIncompleteReason: v.null(),
+    polarityEvidence,
+    citedPart: v.picklist(CITED_PARTS),
+  }),
+  v.object({
+    ...citationFields,
+    evidenceIncompleteReason: v.picklist(CITATION_EVIDENCE_INCOMPLETE_REASONS),
+    polarityEvidence: v.null(),
+    citedPart: v.null(),
+  }),
+]);
 // A leading citation always names a held decision; only the general list
 // carries unresolved rows.
 const leadingCitation = v.object({

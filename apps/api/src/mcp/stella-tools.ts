@@ -1262,18 +1262,17 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read citations with citing passages. `cited_by` reads citers; `cites` reads citations. " +
-      "Filters `doctrine` and `polarity` combine with AND. `polarity`: " +
-      "'unclassified' means unread; 'mixed' means mentions disagreed. " +
-      "`doctrine` is reviewed 'distinguishes' or 'limits'; rejected when unavailable. " +
-      "'not_stated' does not mean followed; 'unread' means none " +
-      "was read; null when `doctrineAvailability` is 'unavailable'. " +
-      "`passage.evidenceQuote` is the verbatim evidence when text is " +
-      `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
-      "characters, cut when `passage.truncated`; `passage.mention` is " +
-      "'sole', 'classified_section' (the mention polarity came from) or " +
-      "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
-      "`url` for the reader and `source_url` for the publisher.",
+      "Read citations with citing passages: cited_by=citers; cites=citations. AND " +
+      "filters: doctrine, polarity. Polarity is stance: unclassified=unread; " +
+      "mixed=disagreeing mentions. polarityEvidence attributes its exact excerpt; " +
+      "citedPart names opinion part; incomplete reasons explain missing " +
+      "text/evidence. doctrine filters reviewed distinguishes/limits, rejected if " +
+      "unavailable. doctrine is null when doctrineAvailability=unavailable; " +
+      "not_stated doesn't imply followed; unread means none read. " +
+      "passage.evidenceQuote is verbatim when text is available. passage.text max " +
+      `${LIMITS.caseLawCitationPassageChars} chars; cut if passage.truncated. passage.mention: sole, ` +
+      "classified_section (polarity's mention), latest_of_several (may not be). Pass " +
+      "nextCursor as cursor. url=reader; source_url=publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     permissions: openMcpRead("public case-law corpus"),
@@ -3957,6 +3956,10 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationId: item.id,
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
+        textIncompleteReason: item.textIncompleteReason,
+        evidenceIncompleteReason: item.evidenceIncompleteReason,
+        polarityEvidence: item.polarityEvidence,
+        citedPart: item.citedPart,
         polarity: item.treatment,
         doctrine: item.doctrine,
         decision:

@@ -2,7 +2,7 @@
   "type": "parser",
   "name": "UK_FCL",
   "key": "uk-fcl",
-  "parserVersion": 4,
+  "parserVersion": 5,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",

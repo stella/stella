@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_NSA",
   "key": "pl-nsa",
-  "parserVersion": 10,
+  "parserVersion": 11,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Classify the thesis heading as publisher head matter when rebuilding the stored dataset sections; AST roles have no separate feature storage."
+    "reason": "Re-derive stored citations with rule kinds, polarity evidence windows and cited parts; retain current canonical AST and publisher metadata."
   }
 }

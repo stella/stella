@@ -1,5 +1,7 @@
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
+
 /**
  * Extract citation context from decision sections.
  *
@@ -17,7 +19,8 @@ const WINDOW_CHARS = 200;
  * letters, so a publisher that serves "á" decomposed (U+0061 U+0301) would
  * silently match none of them: a combining mark is neither the letter nor
  * `\p{L}`. Nothing indexes into a window, so composing it costs no offset; the
- * citation is located in the section's own characters first.
+ * citation is located in the section's own characters first. Evidence offsets
+ * remain in the original text, before normalization.
  */
 export type CitationContexts = readonly [string, ...string[]];
 
@@ -51,8 +54,11 @@ export type CitationWindows = {
    * mention would spend its budget repeating itself.
    */
   contexts: CitationContexts;
+  /** Exact offsets for each mention in the original joined section text. */
+  evidenceWindows: CitationEvidenceWindows;
+  /** Exact offsets for each merged model context in the original text. */
+  contextEvidenceWindows: CitationEvidenceWindows;
 };
-
 type Span = { start: number; end: number };
 
 export const extractContexts = (
@@ -62,6 +68,12 @@ export const extractContexts = (
 ): CitationWindows | null => {
   const section = sectionIndex !== null ? sections[sectionIndex] : undefined;
   const text = section?.text ?? sections.map((s) => s.text).join("\n");
+  const sectionOffset =
+    section && sectionIndex !== null
+      ? sections
+          .slice(0, sectionIndex)
+          .reduce((offset, s) => offset + s.text.length + 1, 0)
+      : 0;
 
   const spans: Span[] = [];
   for (
@@ -98,5 +110,22 @@ export const extractContexts = (
   return {
     mentions: [window(first), ...rest.map(window)],
     contexts: [window(mergedFirst), ...mergedRest.map(window)],
+    evidenceWindows: [
+      { start: sectionOffset + first.start, end: sectionOffset + first.end },
+      ...rest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
+    contextEvidenceWindows: [
+      {
+        start: sectionOffset + mergedFirst.start,
+        end: sectionOffset + mergedFirst.end,
+      },
+      ...mergedRest.map(({ start, end }) => ({
+        start: sectionOffset + start,
+        end: sectionOffset + end,
+      })),
+    ],
   };
 };

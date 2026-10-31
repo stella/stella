@@ -72,6 +72,7 @@ if (!databaseUrl || !enabled) {
             const key = citationKeyOf(keyInput);
             const projected = citationRowOf(decisionId, {
               verdict: null,
+              citedPart: "not-stated",
               reference: {
                 index: 0,
                 printed,
@@ -90,7 +91,7 @@ if (!databaseUrl || !enabled) {
                   decisionDate: null,
                 },
                 sectionIndex: null,
-                polarityMentions: null,
+                polarityWindows: null,
               },
             });
             const fits =

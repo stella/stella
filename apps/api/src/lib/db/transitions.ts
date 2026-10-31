@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { typedColumnParam } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -227,9 +228,6 @@ type ScopedInsertKey<TTable extends ScopedStateTable> = Extract<
 const ignoreTransitionAudit = async (): Promise<void> => {
   await Promise.resolve();
 };
-
-const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
-  sql`${sql.param(value, column)}::${sql.raw(column.getSQLType())}`;
 
 const isScopedStateValue = <
   TTable extends ScopedStateTable,

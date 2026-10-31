@@ -5,8 +5,41 @@ import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
+  caseLawDecisions,
 } from "@/api/db/schema";
 import type { caseLawCitations } from "@/api/db/schema";
+import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
+
+type ReviewTextEligibility = {
+  origin: SQLWrapper;
+  citingDecisionId: SQLWrapper;
+  textRevisionSha256: SQLWrapper;
+};
+
+/** Only a review eligible for the current text can supply a label or claim precedence. */
+export const reviewTextEligibleSql = ({
+  origin,
+  citingDecisionId,
+  textRevisionSha256,
+}: ReviewTextEligibility): SQL =>
+  // sql-perf-allow: bounded by the indexed citing decision and citation key of the current page or input batch
+  sql`(${origin} = ${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}
+  OR (${textRevisionSha256} IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM ${caseLawDecisions} AS review_text_revision
+       WHERE review_text_revision.id = ${citingDecisionId}
+         AND ${textRevisionSha256} = ${citationTextRevisionFingerprintSql({
+           contentHash: sql`review_text_revision.content_hash`,
+           sections: sql`review_text_revision.sections`,
+         })}
+    )))`;
+
+const storedReviewTextEligibleSql = reviewTextEligibleSql({
+  origin: caseLawCitationReviews.origin,
+  citingDecisionId: caseLawCitationReviews.citingDecisionId,
+  textRevisionSha256: caseLawCitationReviews.textRevisionSha256,
+});
 
 type CitationInsert = typeof caseLawCitations.$inferInsert;
 
@@ -26,6 +59,7 @@ export const unreviewedCitationSql = ({
   SELECT 1 FROM ${caseLawCitationReviews}
    WHERE ${caseLawCitationReviews.citingDecisionId} = ${citingDecisionId}
      AND ${caseLawCitationReviews.citationKey} = ${citationKey}
+     AND ${storedReviewTextEligibleSql}
 )`;
 
 const identityOf = (citingDecisionId: string, citationKey: string): string =>
@@ -61,6 +95,7 @@ export const applyCitationReviews = async (
       and(
         inArray(caseLawCitationReviews.citingDecisionId, decisionIds),
         inArray(caseLawCitationReviews.citationKey, keys),
+        storedReviewTextEligibleSql,
       ),
     );
   if (reviews.length === 0) {
@@ -79,7 +114,15 @@ export const applyCitationReviews = async (
         : reviewed.get(identityOf(row.citingDecisionId, row.citationKey));
     return polarity === undefined
       ? row
-      : { ...row, polarity, polarityRuleId: null };
+      : {
+          ...row,
+          polarity,
+          polarityRuleId: null,
+          polaritySource: "review",
+          polarityClassifierVersion: null,
+          polarityEvidenceWindows: null,
+          polarityConfidence: null,
+        };
   });
 };
 
@@ -110,6 +153,11 @@ export const applyDoctrineReviews = async (
       and(
         inArray(caseLawCitationDoctrineReviews.citingDecisionId, decisionIds),
         inArray(caseLawCitationDoctrineReviews.citationKey, keys),
+        reviewTextEligibleSql({
+          origin: caseLawCitationDoctrineReviews.origin,
+          citingDecisionId: caseLawCitationDoctrineReviews.citingDecisionId,
+          textRevisionSha256: caseLawCitationDoctrineReviews.textRevisionSha256,
+        }),
       ),
     );
   const reviewed = new Map(

@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 import { describe, expect, expectTypeOf, test } from "bun:test";
+import { getTableName } from "drizzle-orm";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -49,6 +50,7 @@ import {
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
+import { caseLawPolarityRules } from "./schema/case-law";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
 const healthyIndexGate = {
@@ -157,6 +159,7 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+const POLARITY_RULE_TABLE = getTableName(caseLawPolarityRules);
 /** A pooled session's own timeout, not the role default. */
 const SESSION_STATEMENT_TIMEOUT = "30s";
 const RESTORED_SESSION_TIMEOUT = `SELECT set_config('statement_timeout', $1, false)\n-- params ${JSON.stringify([SESSION_STATEMENT_TIMEOUT])}`;
@@ -167,6 +170,18 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test.each(ONLINE_MIGRATION_REPAIRS)(
+    "the default harness reports $name complete",
+    async (repair) => {
+      const harness = createHarness();
+      const connection = await harness.pool.reserve();
+      expect(await repair.readCompletion(connection)).toEqual({
+        type: "complete",
+      });
+      connection.release();
+    },
+  );
+
   test("registers the identifier retry shape for bounded online validation", () => {
     expect(ONLINE_MIGRATION_REPAIRS).toContain(
       CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
@@ -2373,6 +2388,12 @@ const createHarness = ({
           // The contact VAT ID repair's movable-contact probe: none left, so
           // its completion holds and the phase skips it.
           if (query.startsWith('SELECT 1 FROM public."contacts"')) {
+            return [];
+          }
+          // No registered seed rules need their kind corrected in this fixture.
+          if (
+            query.startsWith(`SELECT 1 FROM public."${POLARITY_RULE_TABLE}"`)
+          ) {
             return [];
           }
           if (query.startsWith("SELECT 1 FROM public.chat_run_log_entries")) {

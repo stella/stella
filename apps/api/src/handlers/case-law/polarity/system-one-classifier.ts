@@ -10,9 +10,8 @@ import type {
 } from "@/api/lib/workflow/decisions/system-one";
 import { choice } from "@/api/lib/workflow/decisions/system-one";
 
-import type { ClassifiablePolarity } from "./consts";
-import { POLARITY_GUIDANCE } from "./guidance";
 import { polarityGeneration } from "./llm-classifier";
+import { MODEL_READING_GUIDANCE } from "./model-readings";
 
 /** Jev's polarity floor; other models use their own calibration. */
 export const SYSTEM_ONE_POLARITY_ACCEPT_CONFIDENCE = decisionConfidenceFloor(
@@ -45,7 +44,7 @@ export const POLARITY_QUESTION = choice(
       "`language` names the language of `excerpt`; the criteria quote phrases in Czech, Slovak and English.",
   },
   // The guidance is total over the vocabulary, so it is the criteria.
-  POLARITY_GUIDANCE,
+  MODEL_READING_GUIDANCE,
 );
 
 /**
@@ -60,7 +59,7 @@ export const classifyWithSystemOne = async ({
   abortSignal,
   generator,
 }: ClassifyWithSystemOneOptions): Promise<
-  Decision<ChoiceAnswer<ClassifiablePolarity>>
+  Decision<ChoiceAnswer<keyof typeof MODEL_READING_GUIDANCE>>
 > =>
   await decide({
     dataClass: "public_corpus",
