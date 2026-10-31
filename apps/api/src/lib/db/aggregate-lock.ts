@@ -3086,6 +3086,8 @@ export const readLockedLegalHolds = async ({
   mode: "share" | "update";
 }) => await tx.select().from(legalHolds).where(predicate).for(mode);
 
+const legalHoldOrganizationRowSchema = v.object({ id: v.string() });
+
 /** Account erasure locks every affected organization in one stable order. */
 export const lockLegalHoldOrganizations = async ({
   tx,
@@ -3096,28 +3098,16 @@ export const lockLegalHoldOrganizations = async ({
   predicate: SQL;
   mode?: RowLockMode;
 }) => {
-  const rows = await tx
-    .select({ id: organization.id })
-    .from(organization)
-    .where(predicate);
-  if (rows.length === 0) {
-    return rows;
-  }
-  // One statement takes every fence in organization ID order.
-  const ordered = sql.join(
-    rows
-      .map(({ id }) => id)
-      .toSorted(compareCodeUnit)
-      .map((id) => sql`${id}`),
-    sql`, `,
-  );
   const fence =
     mode === "share"
-      ? sql`pg_advisory_xact_lock_shared(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(fence.id))`
-      : sql`pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(fence.id))`;
-  await tx.execute(
-    sql`SELECT ${fence} FROM (SELECT id, position FROM unnest(ARRAY[${ordered}]::text[]) WITH ORDINALITY AS fences(id, position) ORDER BY position) fence ORDER BY fence.position`,
-  );
+      ? sql`pg_advisory_xact_lock_shared(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`
+      : sql`pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(ordered.id))`;
+  // One statement reads the organizations and takes their fences in ID order.
+  const rows = executedRows(
+    await tx.execute(
+      sql`SELECT ordered.id FROM (SELECT ${organization.id} AS id FROM ${organization} WHERE ${predicate} ORDER BY ${organization.id} COLLATE "C") ordered CROSS JOIN LATERAL (SELECT ${fence}) fence`,
+    ),
+  ).map((row) => v.parse(legalHoldOrganizationRowSchema, row));
   return rows;
 };
 
