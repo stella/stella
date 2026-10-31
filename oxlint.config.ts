@@ -480,6 +480,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
+  fixtureRuleOverride("searchable-long-select.fixture.tsx", [
+    "searchable-long-select/searchable-long-select",
+  ]),
   fixtureRuleOverride("no-ad-hoc-chat-link.fixture.tsx", [
     "no-ad-hoc-chat-link/no-ad-hoc-chat-link",
   ]),
@@ -1904,6 +1907,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-custom-account-modal.ts",
     "./.oxlint-plugins/no-raw-file-input.ts",
     "./.oxlint-plugins/no-person-select.ts",
+    "./.oxlint-plugins/searchable-long-select.ts",
     "./.oxlint-plugins/no-ad-hoc-text-mark.ts",
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
@@ -3867,6 +3871,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-person-select/no-person-select": "error",
+      },
+    },
+    {
+      // Long option lists need typing-based search through the shared combobox.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/searchable-long-select.fixture.tsx",
+      ],
+      rules: {
+        "searchable-long-select/searchable-long-select": "error",
       },
     },
     {
