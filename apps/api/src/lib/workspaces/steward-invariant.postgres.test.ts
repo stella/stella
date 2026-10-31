@@ -256,6 +256,11 @@ if (!databaseUrl || !runPostgresTests) {
             slug: `steward-invariant-${suffix}`,
             createdAt: new Date(),
           });
+          await db.insert(organizationAccessStates).values({
+            organizationId,
+            state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+            origin: ORGANIZATION_ACCESS_STATE_ORIGIN.creation,
+          });
           await db.insert(user).values([
             {
               id: leadUserId,
