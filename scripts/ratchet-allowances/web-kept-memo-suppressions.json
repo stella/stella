@@ -1,5 +1,5 @@
 {
   "metric": "lint-suppression-directives",
-  "delta": 74,
-  "reason": "no-manual-memo rejects manual memoization in compiled web files. The 74 reasoned suppressions retain compiler-required boundaries, stable effect dependencies, and a conditional whose inlining exceeds the complexity limit."
+  "delta": 75,
+  "reason": "no-manual-memo rejects manual memoization in compiled web files. The 75 reasoned suppressions retain compiler-required boundaries, library identity contracts, stable effect dependencies, and a conditional whose inlining exceeds the complexity limit."
 }
