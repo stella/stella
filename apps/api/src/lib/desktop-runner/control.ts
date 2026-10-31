@@ -8,18 +8,16 @@ import {
   DESKTOP_RUNNER_MAX_FRAME_BYTES,
   DESKTOP_RUNNER_MAX_TOKEN_LENGTH,
   DESKTOP_RUNNER_SERVER_MESSAGE,
+  DESKTOP_RUNNER_TIMING,
   type DesktopRunnerHarnessReport,
   type DesktopRunnerLimits,
   type DesktopRunnerServerMessage,
   desktopRunnerServerMessageSchema,
+  type DesktopRunnerTiming,
 } from "@stll/api-contract/desktop-runner";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopRunnerDoorbell } from "@/api/lib/desktop-runner/doorbell";
-import {
-  DESKTOP_RUNNER_TIMING,
-  type DesktopRunnerTiming,
-} from "@/api/lib/desktop-runner/protocol";
 import {
   type DesktopRunnerDb,
   type DesktopRunnerRunView,

@@ -9,7 +9,8 @@ export default {
     "apps/desktop/src-tauri/src/runner_protocol.rs",
   ],
   summary:
-    "The valibot schemas define every message, closed value, the protocol version and the frame limit. " +
+    "The valibot schemas define every message, closed value, the protocol version and the frame limit; " +
+    "the same module holds the socket path, the installation header, the close codes and the timings both sides use. " +
     "The shared fixture file holds valid and rejected examples; the API schema and the desktop's serde " +
     "types each check every example and every closed value list against it, so neither side drifts alone.",
   enforcement: { kind: "none" },

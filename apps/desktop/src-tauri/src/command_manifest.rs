@@ -106,6 +106,7 @@ macro_rules! with_stella_commands {
       chatgpt_auth_commands::chatgpt_auth_complete => "chatgpt_auth_complete",
       chatgpt_auth_commands::chatgpt_auth_disconnect => "chatgpt_auth_disconnect",
       chatgpt_auth_commands::chatgpt_auth_open_usage => "chatgpt_auth_open_usage",
+      desktop_runner::desktop_runner_get_state => "desktop_runner_get_state",
     }
   };
 }

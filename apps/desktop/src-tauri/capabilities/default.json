@@ -35,6 +35,7 @@
     "allow-chatgpt-auth-cancel",
     "allow-chatgpt-auth-complete",
     "allow-chatgpt-auth-disconnect",
-    "allow-chatgpt-auth-open-usage"
+    "allow-chatgpt-auth-open-usage",
+    "allow-desktop-runner-get-state"
   ]
 }
