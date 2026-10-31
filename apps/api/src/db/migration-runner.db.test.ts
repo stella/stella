@@ -721,7 +721,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 durationMs: 60,
                 retriesSpent: 0,
                 outcome: "applied",
-                laneWaitMs: 10,
+                // The lane follows the preflight step and table admission.
+                laneWaitMs: 30,
                 appliedCount: 1,
               },
               {
@@ -775,7 +776,8 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 durationMs: 60,
                 retriesSpent: 0,
                 outcome: "applied",
-                laneWaitMs: 10,
+                // The lane follows the preflight step and table admission.
+                laneWaitMs: 30,
                 appliedCount: 0,
               },
               {
