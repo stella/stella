@@ -9,7 +9,7 @@ import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
-import { DueDatePicker } from "@/components/due-date-picker";
+import { CAN_PICK_DUE_DAY, DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { MemberList } from "@/components/task-assignees";
@@ -183,25 +183,27 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
                 selected={due === choice.key}
               />
             ))}
-            <DueChip
-              label={
-                due === "pick"
-                  ? format.dateTime(
-                      pickerDate(pickedOn, { timeZone, plainTime: "12:00" }),
-                      {
-                        day: "numeric",
-                        month: "short",
-                        timeZone,
-                        weekday: "short",
-                      },
-                    )
-                  : t("dueChoice.pick")
-              }
-              onPress={() => {
-                setDue("pick");
-              }}
-              selected={due === "pick"}
-            />
+            {CAN_PICK_DUE_DAY ? (
+              <DueChip
+                label={
+                  due === "pick"
+                    ? format.dateTime(
+                        pickerDate(pickedOn, { timeZone, plainTime: "12:00" }),
+                        {
+                          day: "numeric",
+                          month: "short",
+                          timeZone,
+                          weekday: "short",
+                        },
+                      )
+                    : t("dueChoice.pick")
+                }
+                onPress={() => {
+                  setDue("pick");
+                }}
+                selected={due === "pick"}
+              />
+            ) : null}
           </View>
           {due === "pick" ? (
             <DueDatePicker

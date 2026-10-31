@@ -10,6 +10,9 @@ export type DueDatePickerProps = {
   readonly onChange: (day: string) => void;
 };
 
+/** Whether this platform offers a calendar to pick a due day from. */
+export const CAN_PICK_DUE_DAY = true;
+
 /** Material's calendar, inline; iOS has its own in the `.ios` file. */
 export const DueDatePicker = ({
   day,
