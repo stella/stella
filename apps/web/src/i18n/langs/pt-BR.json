@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Excluir",
       "auditLogsActionDownload": "Baixar",
       "auditLogsActionExecute": "Executar",
+      "auditLogsActionLegalHoldPlaced": "Retenção legal aplicada",
+      "auditLogsActionLegalHoldReleased": "Retenção legal liberada",
       "auditLogsActionUpdate": "Atualizar",
       "auditLogsAllActions": "Todas as ações",
       "auditLogsChanges": "Alterações",

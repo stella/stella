@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Törlés",
       "auditLogsActionDownload": "Letöltés",
       "auditLogsActionExecute": "Futtatás",
+      "auditLogsActionLegalHoldPlaced": "Jogi megőrzés elrendelve",
+      "auditLogsActionLegalHoldReleased": "Jogi megőrzés feloldva",
       "auditLogsActionUpdate": "Frissítés",
       "auditLogsAllActions": "Minden művelet",
       "auditLogsChanges": "Változtatások",

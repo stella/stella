@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Vymazať",
       "auditLogsActionDownload": "Stiahnuť",
       "auditLogsActionExecute": "Spustiť",
+      "auditLogsActionLegalHoldPlaced": "Právne zadržanie nastavené",
+      "auditLogsActionLegalHoldReleased": "Právne zadržanie uvoľnené",
       "auditLogsActionUpdate": "Aktualizovať",
       "auditLogsAllActions": "Všetky akcie",
       "auditLogsChanges": "Zmeny",

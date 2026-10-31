@@ -12,6 +12,8 @@ export const AUDIT_ACTION = {
   CANCEL: "cancel",
   REVIEW: "review",
   SYNTHETIC_SESSION_MINTED: "synthetic.session_minted",
+  LEGAL_HOLD_PLACED: "legal_hold.placed",
+  LEGAL_HOLD_RELEASED: "legal_hold.released",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];

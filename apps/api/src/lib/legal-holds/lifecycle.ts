@@ -63,6 +63,9 @@ const scopeExists = async ({
         .limit(1);
       return matches.length > 0;
     }
+    default:
+      scope satisfies never;
+      return panic("Unknown legal hold scope");
   }
 };
 
@@ -94,7 +97,7 @@ export const placeLegalHold = async (options: HoldMutationOptions) => {
     })
     .returning();
   await recordAuditEvent(tx, {
-    action: AUDIT_ACTION.CREATE,
+    action: AUDIT_ACTION.LEGAL_HOLD_PLACED,
     resourceType: AUDIT_RESOURCE_TYPE.LEGAL_HOLD,
     resourceId: id,
     changes: {
@@ -158,7 +161,7 @@ export const releaseLegalHold = async (options: ReleaseHoldOptions) => {
     .returning({ id: legalHolds.id });
   if (changed.length > 0) {
     await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
+      action: AUDIT_ACTION.LEGAL_HOLD_RELEASED,
       resourceType: AUDIT_RESOURCE_TYPE.LEGAL_HOLD,
       resourceId: holdId,
       changes: {

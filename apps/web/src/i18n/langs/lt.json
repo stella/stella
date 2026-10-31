@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Ištrinti",
       "auditLogsActionDownload": "Atsisiųsti",
       "auditLogsActionExecute": "Vykdyti",
+      "auditLogsActionLegalHoldPlaced": "Teisinio saugojimo prievolė nustatyta",
+      "auditLogsActionLegalHoldReleased": "Teisinio saugojimo prievolė panaikinta",
       "auditLogsActionUpdate": "Atnaujinti",
       "auditLogsAllActions": "Visi veiksmai",
       "auditLogsChanges": "Pakeitimai",

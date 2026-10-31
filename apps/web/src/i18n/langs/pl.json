@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Usuń",
       "auditLogsActionDownload": "Pobierz",
       "auditLogsActionExecute": "Uruchom",
+      "auditLogsActionLegalHoldPlaced": "Nałożono obowiązek zachowania danych",
+      "auditLogsActionLegalHoldReleased": "Zwolniono obowiązek zachowania danych",
       "auditLogsActionUpdate": "Aktualizuj",
       "auditLogsAllActions": "Wszystkie akcje",
       "auditLogsChanges": "Zmiany",

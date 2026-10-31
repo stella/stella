@@ -25,11 +25,11 @@ export const legalHolds = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id").references(
       () => workspaces.id,
       {
-        onDelete: "cascade",
+        onDelete: "restrict",
       },
     ),
     entityId: safeUuid<"entity">("entity_id").references(() => entities.id, {
-      onDelete: "cascade",
+      onDelete: "restrict",
     }),
     reason: p.text("reason").notNull(),
     // Actor identities are durable audit evidence; account erasure must not cascade them.

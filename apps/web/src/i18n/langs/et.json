@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Kustuta",
       "auditLogsActionDownload": "Laadi alla",
       "auditLogsActionExecute": "Käivita",
+      "auditLogsActionLegalHoldPlaced": "Õiguslik säilitamiskohustus kehtestatud",
+      "auditLogsActionLegalHoldReleased": "Õiguslik säilitamiskohustus lõpetatud",
       "auditLogsActionUpdate": "Uuenda",
       "auditLogsAllActions": "Kõik toimingud",
       "auditLogsChanges": "Muudatused",

@@ -498,6 +498,12 @@ function AuditActionLabel({ action }: { action: string }) {
   if (action === "access") {
     return t("settings.organization.auditLogsActionAccess");
   }
+  if (action === "legal_hold.placed") {
+    return t("settings.organization.auditLogsActionLegalHoldPlaced");
+  }
+  if (action === "legal_hold.released") {
+    return t("settings.organization.auditLogsActionLegalHoldReleased");
+  }
 
   return <bdi>{action}</bdi>;
 }

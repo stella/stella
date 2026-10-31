@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Smazání",
       "auditLogsActionDownload": "Stažení",
       "auditLogsActionExecute": "Spuštění",
+      "auditLogsActionLegalHoldPlaced": "Právní pozastavení nastaveno",
+      "auditLogsActionLegalHoldReleased": "Právní pozastavení uvolněno",
       "auditLogsActionUpdate": "Úprava",
       "auditLogsAllActions": "Všechny akce",
       "auditLogsChanges": "Změny",

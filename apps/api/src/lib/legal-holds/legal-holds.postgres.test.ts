@@ -14,6 +14,7 @@ import {
   folioCollabRooms,
   legalHolds,
   properties,
+  workspaceContacts,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -48,13 +49,15 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         throw new TypeError("DATABASE_URL is required for Postgres tests");
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { db } = openClient();
+        const { db, sql: client } = openClient();
         const organizationId = mintAuthProviderId<"organization">();
         const otherOrganizationId = mintAuthProviderId<"organization">();
         const userId = mintAuthProviderId<"user">();
         const workspaceId = createSafeId<"workspace">();
         const folderId = createSafeId<"entity">();
         const entityId = createSafeId<"entity">();
+        const rawEntityId = createSafeId<"entity">();
+        const workspaceContactId = createSafeId<"workspaceContact">();
         const folderVersionId = createSafeId<"entityVersion">();
         const entityVersionId = createSafeId<"entityVersion">();
         const contactId = createSafeId<"contact">();
@@ -120,6 +123,13 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             workspaceId,
             userId,
           });
+          await db.insert(workspaceContacts).values({
+            id: workspaceContactId,
+            organizationId,
+            workspaceId,
+            contactId,
+            role: "other",
+          });
           await db.insert(entities).values([
             {
               id: folderId,
@@ -132,6 +142,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               workspaceId,
               parentId: folderId,
               name: "Evidence",
+            },
+            {
+              id: rawEntityId,
+              workspaceId,
+              name: "Raw deletion target",
             },
           ]);
           await db.insert(entityVersions).values([
@@ -313,6 +328,57 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             throw new TypeError("Expected placed hold");
           }
           const holdId = placedResult.value.id;
+          for (const deletion of [
+            async () =>
+              await client`DELETE FROM workspaces WHERE id = ${workspaceId}`,
+            async () =>
+              await client`DELETE FROM entities WHERE id = ${rawEntityId}`,
+            async () =>
+              await client`DELETE FROM workspace_contacts WHERE id = ${workspaceContactId}`,
+          ]) {
+            const outcome = await Result.tryPromise(deletion);
+            expect(outcome.isErr()).toBe(true);
+            if (outcome.isErr()) {
+              expect(outcome.error).toMatchObject({
+                cause: {
+                  message: expect.stringContaining("active legal hold"),
+                },
+              });
+            }
+          }
+          expect(
+            await db
+              .select({ id: workspaces.id })
+              .from(workspaces)
+              .where(eq(workspaces.id, workspaceId)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select({ id: entities.id })
+              .from(entities)
+              .where(eq(entities.id, rawEntityId)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select({ id: workspaceContacts.id })
+              .from(workspaceContacts)
+              .where(eq(workspaceContacts.id, workspaceContactId)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select({ id: legalHolds.id })
+              .from(legalHolds)
+              .where(eq(legalHolds.id, holdId)),
+          ).toHaveLength(1);
+          const directHoldDelete = await Result.tryPromise(
+            async () =>
+              await client.begin(async (tx) => {
+                await tx`SET LOCAL ROLE stella`;
+                await tx`SELECT set_config('app.organization_id', ${organizationId}, true)`;
+                await tx`DELETE FROM legal_holds WHERE id = ${holdId}`;
+              }),
+          );
+          expect(directHoldDelete.isErr()).toBe(true);
           const refused = await Result.tryPromise(
             async () =>
               await scopedDb(
@@ -463,6 +529,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               }),
           );
           expect(released.isOk()).toBe(true);
+          await client`DELETE FROM entities WHERE id = ${rawEntityId}`;
+          await client`DELETE FROM workspace_contacts WHERE id = ${workspaceContactId}`;
           const itemHold = await scopedDb(
             async (tx) =>
               await placeLegalHold({
@@ -553,10 +621,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             .where(eq(auditLogs.organizationId, organizationId))
             .orderBy(auditLogs.createdAt, auditLogs.id);
           expect(audit.map((event) => event.action)).toEqual([
-            "create",
-            "update",
-            "create",
-            "update",
+            "legal_hold.placed",
+            "legal_hold.released",
+            "legal_hold.placed",
+            "legal_hold.released",
           ]);
           expect(
             audit.every((event) => event.resourceType === "legal_hold"),
@@ -780,6 +848,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             },
           });
         } finally {
+          await db.delete(legalHolds).where(eq(legalHolds.id, holdId));
           await db
             .delete(organization)
             .where(eq(organization.id, organizationId));

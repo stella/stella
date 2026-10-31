@@ -51,8 +51,8 @@ export type HoldTarget =
   | { type: "organization" };
 
 // An empty active-hold set cannot be locked with FOR SHARE. The organization
-// row is the placement fence, including the first hold, and is always acquired
-// before any hold or resource row. Account erasure uses the same ordering.
+// row is the placement fence, including the first hold. Lock order is the
+// organization fence, then hold rows, then resource rows.
 export const lockLegalHoldOrganization = async ({
   tx,
   organizationId,

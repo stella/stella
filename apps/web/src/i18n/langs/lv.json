@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Dzēst",
       "auditLogsActionDownload": "Lejupielādēt",
       "auditLogsActionExecute": "Izpildīt",
+      "auditLogsActionLegalHoldPlaced": "Juridiskā saglabāšana noteikta",
+      "auditLogsActionLegalHoldReleased": "Juridiskā saglabāšana atcelta",
       "auditLogsActionUpdate": "Atjaunināt",
       "auditLogsAllActions": "Visas darbības",
       "auditLogsChanges": "Izmaiņas",

@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "Supprimer",
       "auditLogsActionDownload": "Télécharger",
       "auditLogsActionExecute": "Exécuter",
+      "auditLogsActionLegalHoldPlaced": "Conservation légale appliquée",
+      "auditLogsActionLegalHoldReleased": "Conservation légale levée",
       "auditLogsActionUpdate": "Mettre à jour",
       "auditLogsAllActions": "Toutes les actions",
       "auditLogsChanges": "Modifications",

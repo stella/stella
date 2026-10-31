@@ -5210,6 +5210,8 @@
       "auditLogsActionDelete": "حذف",
       "auditLogsActionDownload": "تنزيل",
       "auditLogsActionExecute": "تشغيل",
+      "auditLogsActionLegalHoldPlaced": "تم فرض الاحتفاظ القانوني",
+      "auditLogsActionLegalHoldReleased": "تم رفع الاحتفاظ القانوني",
       "auditLogsActionUpdate": "تحديث",
       "auditLogsAllActions": "كل الإجراءات",
       "auditLogsChanges": "التغييرات",
