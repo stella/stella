@@ -55,6 +55,7 @@ export * from "./schema/action-costs";
 export * from "./schema/workflow";
 export * from "./schema/signals";
 export * from "./schema/notifications";
+export * from "./schema/push-devices";
 export * from "./schema/correspondence";
 export * from "./schema/feedback";
 export * from "./schema/feature-enrolments";
