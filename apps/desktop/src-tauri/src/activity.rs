@@ -3336,7 +3336,7 @@ mod tests {
   #[test]
   fn settings_snapshot_names_the_days_apps_without_their_activity() {
     let mut manager = recording_manager();
-    assert!(manager.set_capture_details(true, at(0)).unwrap());
+    assert!(manager.capture_details());
     manager.observe(at(0), active_details("mail"));
     manager.observe(at(5), active_details("mail"));
     manager.observe(at(10), active_details("word"));
