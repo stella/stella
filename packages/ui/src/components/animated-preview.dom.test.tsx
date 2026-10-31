@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "../testing/dom-environment";
+
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
@@ -19,7 +21,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const preferReducedMotion = () => {
