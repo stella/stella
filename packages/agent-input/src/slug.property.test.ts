@@ -7,10 +7,13 @@ import { agentInputNormalizationMetadata, normalizeAgentInput } from "./schema";
 import { normalizeSlug } from "./slug";
 
 const slug = fc
-  .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz0123456789-"), {
-    minLength: 1,
-    maxLength: 100,
-  })
+  .array(
+    fc.constantFrom(...Array.from("abcdefghijklmnopqrstuvwxyz0123456789-")),
+    {
+      minLength: 1,
+      maxLength: 100,
+    },
+  )
   .map((characters) => characters.join(""));
 const whitespace = fc
   .array(fc.constantFrom(" ", "\t", "\n", "\r", "\u00a0", "\u2003"), {
