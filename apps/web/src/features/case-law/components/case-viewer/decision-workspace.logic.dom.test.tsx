@@ -54,8 +54,10 @@ const { AuthenticatedUserProvider } =
 const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
 const { decisionAnalysisOptions } =
   await import("@/features/case-law/queries/decision-analysis");
-const { clickOpensVisitorOffer, READER_ASIDE_RESIZE_SLOT } =
+const { clickOpensVisitorOffer } =
   await import("@/features/case-law/components/case-viewer/decision-workspace.logic");
+const { READER_ASIDE_RESIZE_SLOT } =
+  await import("@/features/case-law/components/case-viewer/reader-aside-slots");
 const { getCategoryVar } =
   await import("@/features/case-law/components/case-viewer/analysis/types");
 const { default: messages } = await import("@/i18n/langs/en.json");
@@ -103,13 +105,16 @@ const renderVisitorColumn = () =>
             },
             {
               author: { image: null, name: "Visitor" },
+              createdAt: "2026-09-01T10:00:00.000Z",
               id: "comment-1",
               kind: "comment",
               mine: true,
               onDelete: () => undefined,
               onToggleVisibility: () => undefined,
               startAnchorId: "p-2",
+              targetType: "decision",
               text: COMMENT_TEXT,
+              updatedAt: "2026-09-01T10:00:00.000Z",
               visibility: "private",
             },
             {
@@ -118,6 +123,7 @@ const renderVisitorColumn = () =>
               onCancel: () => undefined,
               onSubmit: () => undefined,
               startAnchorId: "p-3",
+              targetType: "decision",
             },
           ]}
           placement="inline"

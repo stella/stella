@@ -2,8 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { buttonVariants } from "@stll/ui/button";
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
+import { DirectionalIcon } from "@stll/ui/directional-icon";
+import { ArrowRightIcon } from "@stll/ui/icons";
 import {
   Popover,
   PopoverPanel,
@@ -12,40 +15,24 @@ import {
 } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
-import { CourtRowLabel } from "@/features/case-law/components/court-row-label";
-import { courtTierRowKey } from "@/features/case-law/court-tier-rows.logic";
+import { caseLawCoverageAnchor } from "@/features/case-law/case-law-jurisdiction";
+import { CaseLawHealthSignal } from "@/features/case-law/components/case-law-health-signal";
 import { caseLawCorpusStatusOptions } from "@/features/case-law/queries/decisions";
 import { useFormatter, useRelativeTime } from "@/i18n/formatting-context";
 import { caseLawCountryName } from "@/lib/case-law-route";
 import { parseDeterministicDate } from "@/lib/deterministic-date";
-import {
-  FULL_DATE_MEDIUM_TIME_FORMAT,
-  isWithinLast,
-} from "@/lib/relative-time";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { FULL_DATE_MEDIUM_TIME_FORMAT } from "@/lib/relative-time";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 /**
- * How recent the newest change may be for the corpus to count as current:
- * the courts publish daily and ingestion follows within the day, so a week
- * of silence is a stalled feed, not a quiet week.
- */
-const UP_TO_DATE_WINDOW_SECONDS = 7 * 24 * 60 * 60;
-
-type CorpusStatus = Awaited<
-  ReturnType<
-    NonNullable<ReturnType<typeof caseLawCorpusStatusOptions>["queryFn"]>
-  >
->;
-/** One line of the breakdown: a named court, or a whole tier of them. */
-type CourtRow = CorpusStatus["courts"][number];
-
-/**
- * The corpus's freshness, where the chat's status row keeps its meter: a
- * dot and one phrase. Pressing it opens the numbers the phrase stands for:
- * how much of this jurisdiction the corpus holds, when it last changed, and
- * which courts that is. They were a hover tooltip, which a touch reader never
- * sees. The dot is green only while the newest change is inside the window; a
- * stale corpus says when it last changed instead of claiming to be current.
+ * The corpus's freshness, where the chat's status row keeps its meter: the
+ * country's health as one word with its dot, the same word the coverage page
+ * gives the country, because the API derives both from the same sources.
+ * Pressing it opens the two numbers a reader checks before trusting a search
+ * (how much is searchable, when it last changed) and the way into the
+ * coverage page, which lands on this country's section; the court-by-court
+ * and source-by-source detail lives there, once.
  * Nothing is shown until the status is known; a dot that cannot say when
  * would be a decoration. Its box is held meanwhile: the badge is often the
  * row's only content, so an empty slot would collapse the row and push the
@@ -56,7 +43,7 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
   const format = useFormatter();
   const relativeTime = useRelativeTime();
   const statusQuery = useQuery(caseLawCorpusStatusOptions(country));
-  const statusView = useQueryView(statusQuery);
+  const statusView = queryView(statusQuery);
   useQueryViewError(statusView, "LawDatabaseStatus:query");
   const status = statusView.type === "items" ? statusView.items : undefined;
 
@@ -71,8 +58,8 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
       </span>
     );
   }
-  const upToDate = isWithinLast(updatedAt, UP_TO_DATE_WINDOW_SECONDS);
   const updatedAtDate = parseDeterministicDate(updatedAt);
+  const countryName = caseLawCountryName(format, country);
 
   return (
     <Popover>
@@ -81,144 +68,52 @@ export const LawDatabaseStatus = ({ country }: { country: string }) => {
           COMPOSER_PICKER_TRIGGER_CLASS,
           // The row's type is 11px, so the badge is half a touch target tall.
           // A coarse pointer gets the button's own 44px box, as `Button` does.
-          "relative gap-1.5 pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
+          "relative pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11",
         )}
       >
-        <span
-          aria-hidden="true"
-          className={cn(
-            "size-1.5 rounded-full",
-            upToDate ? "bg-success" : "bg-foreground-muted",
-          )}
-        />
-        {upToDate
-          ? t("caseLaw.coverage.healthCurrent")
-          : t("caseLaw.research.updated", {
-              date: relativeTime(updatedAt),
-            })}
+        <CaseLawHealthSignal health={status.health} />
       </PopoverTrigger>
       <PopoverPanel
         align="end"
         className="max-w-[min(28rem,90vw)]"
         side="bottom"
       >
-        <PopoverTitle className="text-sm font-medium">
-          {caseLawCountryName(format, country)}
-        </PopoverTitle>
+        <div className="flex items-center justify-between gap-4">
+          <PopoverTitle className="text-sm font-medium">
+            {countryName}
+          </PopoverTitle>
+          <CaseLawHealthSignal className="text-xs" health={status.health} />
+        </div>
         <DetailsGrid>
-          <DetailsItem label={t("common.decisions")}>
+          <DetailsItem label={t("caseLaw.coverage.searchable")}>
             <span className="tabular-nums">
               {format.number(status.decisions)}
             </span>
           </DetailsItem>
           <DetailsItem label={t("common.lastUpdated")}>
-            {updatedAtDate !== null &&
-              format.dateTime(updatedAtDate, FULL_DATE_MEDIUM_TIME_FORMAT)}
-            <span className="text-muted-foreground block">
-              {relativeTime(updatedAt)}
-            </span>
+            {relativeTime(updatedAt)}
+            {updatedAtDate !== null && (
+              <span className="text-muted-foreground block">
+                {format.dateTime(updatedAtDate, FULL_DATE_MEDIUM_TIME_FORMAT)}
+              </span>
+            )}
           </DetailsItem>
         </DetailsGrid>
-        {status.courts.length > 0 && <CourtBreakdown courts={status.courts} />}
-        {/* This panel answers for one jurisdiction; the coverage page answers
-            for the corpus, source by source, including the countries the
-            public search cannot reach yet. */}
+        {/* This panel answers whether to trust a search here; the coverage
+            page answers why, source by source and court by court, and opens
+            on this country. */}
         <Link
-          className="text-muted-foreground hover:text-foreground mt-3 block text-xs underline underline-offset-2"
+          className={cn(
+            buttonVariants({ size: "sm", variant: "outline" }),
+            "justify-between",
+          )}
+          hash={caseLawCoverageAnchor(country)}
           to="/law/coverage"
         >
           {t("caseLaw.coverage.title")}
+          <DirectionalIcon icon={ArrowRightIcon} />
         </Link>
       </PopoverPanel>
     </Popover>
-  );
-};
-
-/**
- * The same corpus court by court, grouped under the tier headings the facet
- * rail already uses, so the two read as one classification of the same courts.
- * Apex courts arrive by name; the API groups the wide tiers into one row each,
- * because a jurisdiction has dozens of regional and district courts and a list
- * of them is not what a reader came to the badge for.
- */
-const CourtBreakdown = ({ courts }: { courts: readonly CourtRow[] }) => {
-  const t = useTranslations();
-
-  return (
-    <div className="-mx-1 mt-3 overflow-x-auto">
-      <table className="w-full border-separate border-spacing-0 text-xs">
-        <thead>
-          <tr className="text-muted-foreground">
-            <th className="px-1 pb-1 text-start font-normal" scope="col">
-              {t("common.court")}
-            </th>
-            <th className="px-1 pb-1 text-end font-normal" scope="col">
-              {t("common.decisions")}
-            </th>
-            <th className="px-1 pb-1 text-end font-normal" scope="col">
-              {t("caseLaw.corpusStatus.newLast7Days")}
-            </th>
-            <th className="px-1 pb-1 text-end font-normal" scope="col">
-              {t("common.lastUpdated")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {courts.map((row) => (
-            <CourtRowCells key={courtTierRowKey(row)} row={row} />
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-const CourtRowCells = ({ row }: { row: CourtRow }) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const relativeTime = useRelativeTime();
-
-  // The row for the courts beyond the listed ones carries no activity: none
-  // was read for courts the facets do not name.
-  const activity = row.type === "other-courts" ? null : row;
-
-  return (
-    <tr>
-      <th className="max-w-56 px-1 py-0.5 text-start font-normal" scope="row">
-        <CourtRowLabel row={row} />
-      </th>
-      <td className="px-1 py-0.5 text-end tabular-nums">
-        {format.number(row.decisions)}
-      </td>
-      <td
-        className={cn(
-          "px-1 py-0.5 text-end tabular-nums",
-          // A quiet week is a fact, not an absence, so the zero stays on the
-          // row; it recedes instead of competing with the courts that moved.
-          (activity === null || activity.addedLastWeek === 0) &&
-            "text-muted-foreground",
-        )}
-      >
-        {/* Signed, so the column reads as a delta rather than a second
-            total; a quiet week shows a plain 0 rather than "+0". */}
-        {activity === null
-          ? "—"
-          : format.number(activity.addedLastWeek, {
-              signDisplay: "exceptZero",
-            })}
-        {activity !== null && activity.addedLastDay > 0 && (
-          <span className="text-muted-foreground block">
-            {t("caseLaw.corpusStatus.newLast24Hours", {
-              count: format.number(activity.addedLastDay),
-            })}
-          </span>
-        )}
-      </td>
-      <td className="text-muted-foreground px-1 py-0.5 text-end whitespace-nowrap">
-        {activity === null || activity.updatedAt === null
-          ? "—"
-          : relativeTime(activity.updatedAt)}
-      </td>
-    </tr>
   );
 };

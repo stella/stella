@@ -9,7 +9,10 @@
  * names several cited parts, the widest a paragraph's card draws.
  */
 
-import { ProvisionCardHeader } from "@stll/decision-reader/cited-provision";
+import {
+  PROVISION_OPEN_BUTTON,
+  ProvisionCardHeader,
+} from "@stll/decision-reader/cited-provision";
 
 import { WebReaderProvider } from "@/components/legal-reader/web-reader-provider";
 import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
@@ -44,6 +47,7 @@ export const ProvisionHeaderPlayground = () => (
         >
           <ProvisionCardHeader
             label={BENCH_LABEL}
+            openButton={PROVISION_OPEN_BUTTON.always}
             provision={BENCH_PROVISION}
           />
         </section>

@@ -8,6 +8,7 @@ import type {
   HandlerExceptionScope,
   RequestExceptionScope,
 } from "@stll/errors";
+import type { UiLocale } from "@stll/locales";
 
 import type { ClientAddress, ClientAddressSource } from "@/api/lib/client-ip";
 
@@ -76,6 +77,7 @@ type AmbientRequestState = {
    * inside fill/suggest helpers, MCP tools) need no extra threading.
    */
   isAiRequest: boolean;
+  uiLocale: UiLocale;
   /**
    * The address the request arrived from, resolved once while its edge
    * headers were still present. A stage that hands inner stages a derived
@@ -91,8 +93,14 @@ const requestStore = new AsyncLocalStorage<AmbientRequestState>();
  * calls this around the whole pipeline; {@link openRequestContext} fills it
  * in once the request's id exists.
  */
-export const runWithRequestIdScope = <TResult>(fn: () => TResult): TResult =>
-  requestStore.run({ context: undefined, isAiRequest: false }, fn);
+export const runWithRequestIdScope = <TResult>(
+  fn: () => TResult,
+  uiLocale: UiLocale = "en",
+): TResult =>
+  requestStore.run({ context: undefined, isAiRequest: false, uiLocale }, fn);
+
+export const getRequestUiLocale = (): UiLocale =>
+  requestStore.getStore()?.uiLocale ?? "en";
 
 /**
  * Tag the active request as AI-classed for the split latency SLO. Called
@@ -228,6 +236,7 @@ export const runWithRequestId = <TResult>(
     {
       context: { startTime: performance.now(), requestId },
       isAiRequest: false,
+      uiLocale: "en",
     },
     fn,
   );

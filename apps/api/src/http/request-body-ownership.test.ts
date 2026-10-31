@@ -12,7 +12,8 @@
 
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
-import ts from "typescript6";
+
+import { type Node, parseSource, walk } from "@stll/scripts/src/syntax-tree";
 
 const API_ROOT = path.resolve(import.meta.dir, "../..");
 /** The one module allowed to read an incoming request's body stream. */
@@ -25,61 +26,69 @@ const INCOMING_NAMES = new Set([
 ]);
 const STREAM_MEMBERS = new Set(["body", "clone"]);
 
-const isIncomingRequest = (node: ts.Node): boolean =>
-  (ts.isIdentifier(node) && INCOMING_NAMES.has(node.text)) ||
-  ((ts.isPropertyAccessExpression(node) || ts.isPropertyAccessChain(node)) &&
-    (node.name.text === "request" || node.name.text === "req"));
+/** A member access's name: `.body`, or a literal `["body"]`. */
+const memberName = (node: Node): string | undefined => {
+  if (node.type !== "MemberExpression") {
+    return undefined;
+  }
+  if (!node.computed) {
+    return node.property.type === "Identifier" ? node.property.name : undefined;
+  }
+  const { property } = node;
+  if (property.type === "Literal" && typeof property.value === "string") {
+    return property.value;
+  }
+  return property.type === "TemplateLiteral" &&
+    property.expressions.length === 0
+    ? (property.quasis.at(0)?.value.cooked ?? undefined)
+    : undefined;
+};
+
+const isIncomingRequest = (node: Node): boolean =>
+  (node.type === "Identifier" && INCOMING_NAMES.has(node.name)) ||
+  (node.type === "MemberExpression" &&
+    !node.computed &&
+    (memberName(node) === "request" || memberName(node) === "req"));
 
 type StreamRead = { member: string; line: number };
 
 const findStreamReads = (file: string, source: string): StreamRead[] => {
-  const sourceFile = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const { locate, program, sourceText } = parseSource(file, source);
   const reads: StreamRead[] = [];
-  const lineOf = (node: ts.Node): number =>
-    sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
-  const visit = (node: ts.Node): void => {
-    // `request.body`, `request?.body`, `ctx.request.clone()`.
+  const lineOf = (node: Node): number => locate(node.start).line;
+  walk(program, (node) => {
+    // `request.body`, `request?.body`, `ctx.request.clone()`, `request["body"]`.
+    const member = memberName(node);
     if (
-      ts.isPropertyAccessExpression(node) &&
-      STREAM_MEMBERS.has(node.name.text) &&
-      isIncomingRequest(node.expression)
+      node.type === "MemberExpression" &&
+      member !== undefined &&
+      STREAM_MEMBERS.has(member) &&
+      isIncomingRequest(node.object)
     ) {
-      reads.push({ member: node.name.text, line: lineOf(node) });
-    }
-    // `request["body"]`.
-    if (
-      ts.isElementAccessExpression(node) &&
-      ts.isStringLiteralLike(node.argumentExpression) &&
-      STREAM_MEMBERS.has(node.argumentExpression.text) &&
-      isIncomingRequest(node.expression)
-    ) {
-      reads.push({ member: node.argumentExpression.text, line: lineOf(node) });
+      reads.push({ member, line: lineOf(node) });
     }
     // `const { body } = request`.
     if (
-      ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
-      node.initializer !== undefined &&
-      isIncomingRequest(node.initializer)
+      node.type === "VariableDeclarator" &&
+      node.id.type === "ObjectPattern" &&
+      node.init !== null &&
+      isIncomingRequest(node.init)
     ) {
-      for (const element of node.name.elements) {
-        const member = (element.propertyName ?? element.name).getText(
-          sourceFile,
-        );
-        if (STREAM_MEMBERS.has(member)) {
-          reads.push({ member, line: lineOf(element) });
+      for (const element of node.id.properties) {
+        // The source text of the property name, or of a rest element's
+        // binding; a computed name never names a stream member.
+        if (element.type === "Property" && element.computed) {
+          continue;
+        }
+        const name =
+          element.type === "Property" ? element.key : element.argument;
+        const bound = sourceText.slice(name.start, name.end);
+        if (STREAM_MEMBERS.has(bound)) {
+          reads.push({ member: bound, line: lineOf(element) });
         }
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
+  });
   return reads;
 };
 

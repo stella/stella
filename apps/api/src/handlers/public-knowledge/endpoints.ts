@@ -81,7 +81,12 @@ const starterParams = v.object({
 
 const previewUnavailable = (cause: unknown) =>
   Result.err(
-    new HandlerError({ status: 503, message: "Preview unavailable", cause }),
+    new HandlerError({
+      status: 503,
+      code: "internal_error",
+      message: "Preview unavailable",
+      cause,
+    }),
   );
 
 const MAX_CACHED_PREVIEWS = 64;

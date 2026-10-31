@@ -14,6 +14,8 @@ import type { ChatThreadRoute } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
 import type { RecentFileWithIdentity } from "@/lib/search-recents";
 import { getFirstSearchHighlightText } from "@/lib/search.logic";
+import { resolveWorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
+import type { WorkspaceViewParams } from "@/lib/workspaces/view-params.logic";
 
 type CaseLawGlobalSearchHit = Extract<GlobalSearchHit, { type: "case-law" }>;
 type ChatGlobalSearchHit = Extract<GlobalSearchHit, { type: "chat" }>;
@@ -121,17 +123,19 @@ export const getCompanySearchQuery = ({
 export type EntityNavigationRoute =
   | {
       to: "/workspaces/$workspaceId/$viewId/document";
-      params: { workspaceId: string; viewId: "all" };
+      params: WorkspaceViewParams;
       search: { entity: string; field: string };
     }
   | {
       to: "/workspaces/$workspaceId/$viewId";
-      params: { workspaceId: string; viewId: "all" };
+      params: WorkspaceViewParams;
     };
 
 /** What a caller must know to open an entity: search hits satisfy it, and so
- *  does any other resolution of an entity to its current file field. */
+ *  does any other resolution of an entity to its current file field. The
+ *  view on screen, if any, is kept when the entity is in its matter. */
 type EntityDocumentRouteInput = {
+  currentView: WorkspaceViewParams | undefined;
   entityId: string;
   fileFieldId: string | null;
   workspaceId: string;
@@ -140,37 +144,38 @@ type EntityDocumentRouteInput = {
 /** Where an entity opens: its document view when a file field carries the
  *  document, otherwise the matter it lives in. */
 export const getEntityDocumentRoute = ({
+  currentView,
   entityId,
   fileFieldId,
   workspaceId,
 }: EntityDocumentRouteInput): EntityNavigationRoute => {
+  const params = resolveWorkspaceViewParams(workspaceId, currentView);
   if (fileFieldId === null) {
-    return {
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
-    };
+    return { to: "/workspaces/$workspaceId/$viewId", params };
   }
 
   return {
     to: "/workspaces/$workspaceId/$viewId/document",
-    params: { workspaceId, viewId: "all" },
+    params,
     search: { entity: entityId, field: fileFieldId },
   };
 };
 
 type ResolveEntityDocumentRouteOptions = {
+  currentView: WorkspaceViewParams | undefined;
   hit: Pick<EntityGlobalSearchHit, "entityId" | "fileFieldId" | "workspaceId">;
   resolveCurrentFileFieldId: () => Promise<string | null>;
 };
 
 export const resolveEntityDocumentRoute = async ({
+  currentView,
   hit,
   resolveCurrentFileFieldId,
 }: ResolveEntityDocumentRouteOptions) => {
   const fileFieldId = await resolveCurrentFileFieldId();
   return {
     fileFieldId,
-    route: getEntityDocumentRoute({ ...hit, fileFieldId }),
+    route: getEntityDocumentRoute({ ...hit, currentView, fileFieldId }),
   };
 };
 
@@ -239,14 +244,16 @@ export const getRecentFileLocation = ({
 });
 
 export const getRecentFileRoute = ({
+  currentView,
   entityId,
   fileFieldId,
   workspaceId,
 }: Pick<RecentFileWithIdentity, "entityId" | "workspaceId"> & {
+  currentView: WorkspaceViewParams | undefined;
   fileFieldId: string;
 }): EntityNavigationRoute => ({
   to: "/workspaces/$workspaceId/$viewId/document",
-  params: { workspaceId, viewId: "all" },
+  params: resolveWorkspaceViewParams(workspaceId, currentView),
   search: { entity: entityId, field: fileFieldId },
 });
 

@@ -15,9 +15,10 @@ export const createInspectorCommandSlice = (
   pendingDocxEditTabId: null,
   pendingFileChatDraft: null,
 
-  requestFileChatDraft: ({ fileFieldId, markdown }) =>
+  requestFileChatDraft: ({ delivery, fileFieldId, markdown }) =>
     set((state) => {
       state.pendingFileChatDraft = {
+        delivery,
         fileFieldId,
         markdown,
         sequence: (state.pendingFileChatDraft?.sequence ?? 0) + 1,

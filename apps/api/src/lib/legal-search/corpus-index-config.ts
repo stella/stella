@@ -563,7 +563,9 @@ const FAMILY_FIELDS: Record<CorpusFamily, CorpusIndexFieldMapping[]> = {
       stored: true,
       fast: false,
     },
-    // current | historical | repealed
+    // The stored status. `current` and `historical` are the ingest day's
+    // reading of the window, so search filters only the other values here
+    // (see `legislationStatusToday`).
     {
       name: "status",
       type: "text",

@@ -36,6 +36,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   EntityField,
@@ -44,7 +45,7 @@ import type {
   PropertyId,
   WorkspaceProperty,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   isPlaybookVerdictProperty,
   playbookVerdictByAskId,
@@ -191,7 +192,7 @@ const EntityMetadataContent = ({
   const versionsDataQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId: entity.entityId }),
   );
-  const versionsDataView = useQueryView(versionsDataQuery);
+  const versionsDataView = queryView(versionsDataQuery);
   useQueryViewError(versionsDataView, "EntityMetadataContent:query");
   const versionsData =
     versionsDataView.type === "items" ? versionsDataView.items : undefined;

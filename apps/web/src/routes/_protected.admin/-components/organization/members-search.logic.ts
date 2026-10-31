@@ -1,4 +1,4 @@
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 type SearchableMember = { user: { email: string; name: string } };
 type SearchableInvitation = { email: string };
@@ -24,21 +24,16 @@ export const filterOrganizationLists = <
     return { invitations, members };
   }
 
-  const normalizedQuery = query.toLowerCase();
   return {
-    invitations: invitations.filter((invitation) =>
-      containsSearchMatchKey(invitation.email.toLowerCase(), normalizedQuery),
-    ),
-    members: members.filter(
-      (member) =>
-        containsSearchMatchKey(
-          member.user.name.toLowerCase(),
-          normalizedQuery,
-        ) ||
-        containsSearchMatchKey(
-          member.user.email.toLowerCase(),
-          normalizedQuery,
-        ),
-    ),
+    invitations: filterBySearchQuery({
+      items: invitations,
+      query,
+      fields: ({ email }) => [email],
+    }),
+    members: filterBySearchQuery({
+      items: members,
+      query,
+      fields: ({ user }) => [user.name, user.email],
+    }),
   };
 };

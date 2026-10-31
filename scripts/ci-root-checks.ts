@@ -6,7 +6,6 @@ import * as v from "valibot";
 import {
   affectedPackages,
   readSelectionGraph,
-  requiresFullSelection,
   type SelectionGraph,
   withDerivedOutputs,
 } from "./ci-affected-selection";
@@ -139,15 +138,33 @@ export const selectRootChecks = ({
       }
     }
   }
-  if (pathChange === "structure" || requiresFullSelection(changed, graph)) {
+  if (
+    pathChange === "structure" ||
+    changed.some((file) =>
+      graph.globalInputs.some(
+        (input) => file === input || new Bun.Glob(input).match(file),
+      ),
+    )
+  ) {
     return [...inputs.keys()];
   }
-  // A package test that reads another package is not a source dependency of
-  // these CLI checks. Their source imports follow the workspace graph only.
-  const affected = affectedPackages(changed, { ...graph, inputs: new Map() });
   // CI restores derived outputs before these checks, so a path reader sees
   // the outputs of every changed generator input.
   const files = [...withDerivedOutputs(changed)];
+  // Unlike package tests, root checks declare their unowned repository inputs
+  // directly. Only workspace-owned files participate in package propagation.
+  const packageFiles = files.filter((file) =>
+    [...graph.packages.values()].some(({ directory }) =>
+      file.startsWith(`${directory}/`),
+    ),
+  );
+  // A package test that reads another package is not a source dependency of
+  // these CLI checks. Their source imports follow the workspace graph only.
+  const affected = affectedPackages(packageFiles, {
+    ...graph,
+    globalInputs: [],
+    inputs: new Map(),
+  });
   return [...inputs]
     .filter(([, paths]) =>
       paths.some((input) => {

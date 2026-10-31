@@ -12,7 +12,6 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
 import { fetchSkUsListing } from "@/api/handlers/case-law/ingestion/adapters/sk-us";
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import {
@@ -21,6 +20,7 @@ import {
 } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   RAW_SOURCE_FAMILY,

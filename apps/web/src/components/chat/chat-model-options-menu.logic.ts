@@ -5,7 +5,7 @@ import {
 import type { ModelDisplayMetadata } from "@stll/ai-catalog";
 import { classifyBenchmarkModelOptions } from "@stll/ai-catalog/benchmark-frontier";
 import type { ModelBenchmarkTradeoff } from "@stll/ai-catalog/benchmark-frontier";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { filterBySearchQuery } from "@stll/text-normalize/search-query-matcher";
 
 import { decodeModelSelection } from "@/components/ai-config-role-models.logic";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
@@ -173,9 +173,6 @@ const getModelRecommendations = ({
   );
 };
 
-const matchesQuery = (option: ModelPickerOption, query: string): boolean =>
-  containsSearchMatchKey(option.displayName.toLowerCase(), query);
-
 /**
  * Splits the picker into Recommended and everything else. Search always
  * covers every model. The current selection stays in Recommended even when
@@ -209,13 +206,14 @@ export const getModelPickerView = <TOption extends ModelPickerOption>({
     tradeoff: tradeoffs.get(option.value) ?? null,
   }));
 
-  const normalizedQuery = query.trim().toLowerCase();
-  if (normalizedQuery.length > 0) {
+  if (query.trim().length > 0) {
     return {
       type: "all",
-      entries: entries.filter(({ option }) =>
-        matchesQuery(option, normalizedQuery),
-      ),
+      entries: filterBySearchQuery({
+        items: entries,
+        query,
+        fields: ({ option }) => [option.displayName],
+      }),
     };
   }
 

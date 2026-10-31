@@ -23,6 +23,7 @@ import {
 import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  CASE_LAW_SEARCH_FACET_NAMES,
   DEFAULT_SEARCH_SORT,
   SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
@@ -34,11 +35,16 @@ import {
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
-import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { locateEuProvisionCitations } from "@stll/legal-atlas/eu-provision-citations";
+import {
+  euProvisionAnchor,
+  locateEuProvisionCitations,
+} from "@stll/legal-atlas/eu-provision-citations";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  renderProvisionAnchor,
+  resolveProvisionCitation,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import {
   CASE_LAW_RESULTS_RESOURCE_URI,
   CITATION_GRAPH_RESOURCE_URI,
@@ -80,12 +86,15 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { parseCachedDecisionAst } from "@/api/lib/case-law/decision-ast-normalization";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import {
   type CaseLawProvisionFilter,
+  caseLawProvisionFilterOf,
   type CaseLawProvisionScope,
   readCaseLawProvisionScope,
+  readProvisionWorkLinked,
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -121,10 +130,14 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { storedCorpusValidationFailure } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
 import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { recordReadWork } from "@/api/lib/observability/request-work";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -235,6 +248,10 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import {
+  docxWindowTextCache,
+  extractedWindowTextCache,
+} from "@/api/mcp/window-read-cache";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { openMcpRead } from "@/api/mcp/write-tool-authority";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -729,6 +746,14 @@ const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
 
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
+    facets: v.optional(
+      v.pipe(
+        v.array(v.picklist(CASE_LAW_SEARCH_FACET_NAMES)),
+        v.maxLength(CASE_LAW_SEARCH_FACET_NAMES.length),
+        v.description("Opt-in facet names; first phrasing, page one only."),
+      ),
+      [],
+    ),
     queries: v.optional(
       v.pipe(
         v.array(
@@ -839,7 +864,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
       v.pipe(
         v.picklist(SEARCH_SORTS),
         v.description(
-          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date and returns only dated decisions. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
+          `Result order; defaults to '${DEFAULT_SEARCH_SORT}'. 'relevance' blends text match with citation authority and court rank; 'newest' orders by decision date, undated decisions last. A query naming a decision outright (docket number, ECLI) is answered by identity lookup, which ignores this option.`,
         ),
       ),
     ),
@@ -1779,6 +1804,20 @@ const loadCurrentVersionDocxMarkdown = async ({
     return { kind: "not-docx" };
   }
 
+  // Access and the current version were resolved above on every request.
+  const cacheKey = JSON.stringify([
+    context.organizationId,
+    document.workspaceId,
+    file.id,
+    document.currentVersion.id,
+    "markdown",
+  ]);
+  const cached = docxWindowTextCache.get(cacheKey);
+  if (cached !== undefined) {
+    recordReadWork("cacheHits");
+    return { kind: "markdown", text: cached };
+  }
+
   const markdownResult = await Result.tryPromise({
     try: async () =>
       await (context.testDependencies?.withTimeout ?? withTimeout)(
@@ -1803,9 +1842,46 @@ const loadCurrentVersionDocxMarkdown = async ({
     catch: (cause) => cause,
   });
 
-  return Result.isError(markdownResult)
-    ? { kind: "unavailable" }
-    : { kind: "markdown", text: markdownResult.value };
+  if (Result.isError(markdownResult)) {
+    return { kind: "unavailable" };
+  }
+  docxWindowTextCache.set(cacheKey, markdownResult.value);
+  return { kind: "markdown", text: markdownResult.value };
+};
+
+type ReadCachedExtractedWindowOptions = {
+  context: AuthorizedMcpRequestContext;
+  document: CurrentDocument;
+  entityId: SafeId<"entity">;
+  key: string;
+};
+
+const readCachedExtractedWindow = async ({
+  context,
+  document,
+  entityId,
+  key,
+}: ReadCachedExtractedWindowOptions) => {
+  const cached = extractedWindowTextCache.get(key);
+  if (cached === undefined) {
+    return undefined;
+  }
+  const sourceVersion = document.extractedContent?.sourceEntityVersionId;
+  if (sourceVersion !== null && sourceVersion !== undefined) {
+    return cached;
+  }
+  // A newer tombstone invalidates a legacy extraction's cached provenance.
+  const latest = await context.scopedDb((tx) =>
+    tx.query.entityVersions.findFirst({
+      where: {
+        entityId: { eq: entityId },
+        workspaceId: { eq: document.workspaceId },
+      },
+      columns: { id: true },
+      orderBy: { versionNumber: "desc", id: "desc" },
+    }),
+  );
+  return latest?.id === document.currentVersion.id ? cached : undefined;
 };
 
 const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
@@ -1836,6 +1912,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
       with: {
         extractedContent: {
           columns: {
+            extractedAt: true,
             sourceEntityVersionId: true,
             sourceFieldId: true,
             sourceFileId: true,
@@ -1881,8 +1958,29 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
+  const extractedCacheKey = JSON.stringify([
+    context.organizationId,
+    currentDocument.workspaceId,
+    entityId,
+    currentDocument.currentVersion.id,
+    currentDocument.extractedContent,
+    "plaintext",
+  ]);
+  const cachedPlaintext =
+    docxOutcome.kind === "not-docx"
+      ? await readCachedExtractedWindow({
+          context,
+          document: currentDocument,
+          entityId,
+          key: extractedCacheKey,
+        })
+      : undefined;
+  if (cachedPlaintext !== undefined) {
+    recordReadWork("cacheHits");
+  }
+
   const currentExtracted =
-    docxOutcome.kind === "markdown"
+    docxOutcome.kind === "markdown" || cachedPlaintext !== undefined
       ? null
       : (
           await context.scopedDb(async (tx) => {
@@ -1907,6 +2005,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     currentExtracted.currentVersionId !== currentDocument.currentVersion.id;
   if (
     docxOutcome.kind !== "markdown" &&
+    cachedPlaintext === undefined &&
     (!currentExtracted || versionChanged)
   ) {
     return structuredErrorResult({
@@ -1917,7 +2016,10 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
     });
   }
 
-  const plaintext = currentExtracted?.text ?? "";
+  const plaintext = cachedPlaintext ?? currentExtracted?.text ?? "";
+  if (docxOutcome.kind === "not-docx" && cachedPlaintext === undefined) {
+    extractedWindowTextCache.set(extractedCacheKey, plaintext);
+  }
 
   // Prefer the live DOCX-to-Markdown conversion (headings, tables, lists
   // preserved) whenever the current version holds a DOCX file; every other
@@ -1971,6 +2073,7 @@ const handleReadContentAcrossMattersTool: TypedMcpToolHandler<
       payload,
     ),
     window: {
+      surface: "mcp-content",
       cursor,
       maxChars: MCP_CONTENT_MAX_CHARS,
       read: () => payload.text,
@@ -2242,23 +2345,16 @@ const resolveSearchProvision = (
         'Pass one complete EU provision per search, for example "Article 6(1)(a) GDPR"; search enumerated provisions separately.',
       );
     }
-    const reference = euCitation.reference;
+    const { reference } = euCitation;
     return {
       type: "resolved",
-      provision: {
+      provision: caseLawProvisionFilterOf({
         jurisdiction: "EU",
         work: euCitation.act.celex,
-        unit: reference.unit,
-        section: reference.section,
-        ...(reference.sectionSuffix === null
-          ? {}
-          : { sectionSuffix: reference.sectionSuffix }),
-        ...(reference.subsection === null
-          ? {}
-          : { subsection: reference.subsection }),
-        ...(reference.letter === null ? {} : { letter: reference.letter }),
-        ...(reference.point === null ? {} : { point: reference.point }),
-      },
+        path: reference,
+        anchorOf: (named) =>
+          euProvisionAnchor({ ...named, openEnded: false, sentence: null }),
+      }),
     };
   }
   const profile = provisionCitationProfileFor(country);
@@ -2277,17 +2373,11 @@ const resolveSearchProvision = (
     case "resolved":
       return {
         type: "resolved",
-        provision: {
+        provision: caseLawProvisionFilterOf({
           work: read.workIdentifier,
-          unit: read.unit,
-          section: read.section,
-          ...(read.sectionSuffix === null
-            ? {}
-            : { sectionSuffix: read.sectionSuffix }),
-          ...(read.subsection === null ? {} : { subsection: read.subsection }),
-          ...(read.letter === null ? {} : { letter: read.letter }),
-          ...(read.point === null ? {} : { point: read.point }),
-        },
+          path: read,
+          anchorOf: (path) => renderProvisionAnchor(profile, path),
+        }),
       };
     case "no_provision":
       return provisionRefusal(
@@ -2509,9 +2599,11 @@ const caseLawSearchResult = ({
     decisionId: hit.decisionId,
     resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
     decisionType: hit.decisionType,
+    decisionTypeKind: hit.decisionTypeKind,
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    textAvailability: hit.textAvailability,
     match,
     ...(hit.textWithheldReason === null
       ? {
@@ -2587,6 +2679,24 @@ const readSearchProvision = async ({
     return resolved;
   }
   const { provision } = resolved;
+  // An act no recorded link names would read as an exact 0 ("nothing cites
+  // it") when its citations were never extracted; the caller is told so and
+  // sent to the text search, which reads the decisions themselves.
+  const readWorkLinked =
+    context.testDependencies?.readProvisionWorkLinked ??
+    (async (scope) =>
+      await caseLawPublicReadDb(
+        async (tx) => await readProvisionWorkLinked(tx, scope),
+      ));
+  if (!(await readWorkLinked({ jurisdiction: country, provision }))) {
+    return {
+      type: "refused",
+      result: notFoundResult(
+        `The case-law corpus records no provision links to ${provision.work} yet, so it cannot list the decisions citing ${text}`,
+        `Search for the provision as text instead: omit provision and pass queries, for example ${JSON.stringify([text])}.`,
+      ),
+    };
+  }
   // A provision-only list is complete by construction: no set to read.
   if (args.queries === undefined) {
     return { type: "read", body: { provision }, warnings: [] };
@@ -2663,6 +2773,7 @@ const listSearchCaseLawProvision = async ({
       body: {
         // The list ranks no text; the provision as written is what it reads.
         query: provisionText,
+        facets: args.facets,
         sentenceAlignedExcerpt: true,
         headnotePresentation: "expanded",
         limit: normalizePage(args.limit ?? DEFAULT_SEARCH_LIMIT),
@@ -2839,6 +2950,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      facets: index === 0 ? parsed.output.facets : [],
       sentenceAlignedExcerpt: true,
       headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
@@ -2873,6 +2985,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           body,
           caseLawDb: caseLawPublicReadDb,
           observer,
+          signal: context.request?.signal,
         }),
       };
     },
@@ -3001,6 +3114,18 @@ const decisionNotFoundItem = (decisionId: string): DecisionItemResult => ({
   message:
     "No decision the public may read has this id. Find one with search_case_law and pass its decisionId.",
   status: DECISION_READ_STATUS.notFound,
+});
+
+const DECISION_BATCH_ENTRY_FAILURE = failureSink({
+  event: "case_law.decision.batch_entry_failed",
+  expected: [],
+});
+
+const decisionReadFailedItem = (decisionId: string): DecisionItemResult => ({
+  decisionId,
+  message:
+    "This decision could not be read on the server; the other entries are unaffected. Read it again on its own later; if it fails again, report it with prepare_feedback and use search_case_law for another decision on the point.",
+  status: DECISION_READ_STATUS.readFailed,
 });
 
 /**
@@ -3339,7 +3464,7 @@ const decisionItemResult = ({
   // model, which is exactly this tool's context.
   const aiTextAllowed = read.source.allowsDerivedAi;
   const parsedBlocks = aiTextAllowed
-    ? (parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null)
+    ? (parseCachedDecisionAst(read.documentAst)?.blocks ?? null)
     : null;
   const astText =
     parsedBlocks === null
@@ -3391,6 +3516,7 @@ const decisionItemResult = ({
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
     status: DECISION_READ_STATUS.found,
     decision: {
+      extractionWarnings: read.extractionWarnings,
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
@@ -3457,7 +3583,7 @@ const readableDecisionTextLength = (
   ) {
     return 0;
   }
-  const blocks = parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
+  const blocks = parseCachedDecisionAst(read.documentAst)?.blocks ?? null;
   const astText =
     blocks === null ? null : toPlainCorpusText({ blocks, fulltext: null });
   const text = astText !== null && astText.length > 0 ? astText : read.fulltext;
@@ -3585,6 +3711,29 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     readsSharedPublicLawCorpus
   )();
 
+  // A read that fails on the server fails its own entry, never the call: each
+  // id is answered on its own, so the entry answers `read_failed` and the
+  // others still read. The failure is reported for the row's repair.
+  const failedIds = new Set<string>();
+  const isolated = async <T>(
+    decisionId: string,
+    step: string,
+    attempt: () => Promise<T>,
+  ): Promise<{ type: "read"; value: T } | { type: "failed" }> => {
+    const outcome = await Result.tryPromise(attempt);
+    if (Result.isOk(outcome)) {
+      return { type: "read", value: outcome.value };
+    }
+    if (storedCorpusValidationFailure(outcome.error) === null) {
+      observeFailure(outcome.error, {
+        sink: DECISION_BATCH_ENTRY_FAILURE,
+        ctx: { decisionId, step },
+      });
+    }
+    failedIds.add(decisionId);
+    return { type: "failed" };
+  };
+
   // One read per distinct id: a batch naming the same decision twice reads it
   // once and answers both of its positions.
   const uniqueIds = [...new Set(decisionIds)];
@@ -3592,11 +3741,18 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: uniqueIds,
       limit: LIMITS.caseLawCitationPassageConcurrency,
-      operation: async (decisionId) =>
-        [
+      operation: async (decisionId) => {
+        const stored = await isolated(
           decisionId,
-          await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
-        ] as const,
+          "readCaseLawDecision.storedRead",
+          async () =>
+            await readDecision(decisionId, STORED_ONLY_DOCUMENT_HYDRATION),
+        );
+        return [
+          decisionId,
+          stored.type === "read" ? stored.value : null,
+        ] as const;
+      },
     }),
   );
 
@@ -3643,12 +3799,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: fetchedIds,
       limit: LIMITS.caseLawDecisionBatchHydrationsMax,
-      operation: async (decisionId) => await readDecision(decisionId, onDemand),
+      operation: async (decisionId) =>
+        await isolated(
+          decisionId,
+          "readCaseLawDecision.hydratedRead",
+          async () => await readDecision(decisionId, onDemand),
+        ),
     })
   ).entries()) {
     const decisionId =
       fetchedIds[index] ?? panic("Lost a hydrated case-law decision id");
-    reads.set(decisionId, hydrated);
+    reads.set(decisionId, hydrated.type === "read" ? hydrated.value : null);
   }
 
   // Citation data requires search admission even when the decision itself
@@ -3671,15 +3832,22 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     await mapWithConcurrency({
       items: digestIds,
       limit: LIMITS.caseLawCitationPassageConcurrency,
-      operation: async (decisionId) =>
-        [
+      operation: async (decisionId) => {
+        const digest = await isolated(
           decisionId,
-          await readDigest({
-            caseLawDb: caseLawPublicReadDb,
-            decisionId: brandPersistedCaseLawDecisionId(decisionId),
-            surface: "search",
-          }),
-        ] as const,
+          "readCaseLawDecision.citationDigest",
+          async () =>
+            await readDigest({
+              caseLawDb: caseLawPublicReadDb,
+              decisionId: brandPersistedCaseLawDecisionId(decisionId),
+              surface: "search",
+            }),
+        );
+        return [
+          decisionId,
+          digest.type === "read" ? digest.value : undefined,
+        ] as const;
+      },
     }),
   );
 
@@ -3698,18 +3866,20 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
       items: decisionIds.map((decisionId, index) =>
-        decisionItemResult({
-          decisionId,
-          windowChars: Math.max(1, windowChars[index] ?? 0),
-          outline: decisionIds.length === 1 ? "include" : "omit",
-          read: readOf(decisionId),
-          digest: digests.get(decisionId),
-          readsSharedCorpus,
-          documentHydration: onDemand.type,
-          position,
-          includedFields,
-          seenTextVersion,
-        }),
+        failedIds.has(decisionId)
+          ? decisionReadFailedItem(decisionId)
+          : decisionItemResult({
+              decisionId,
+              windowChars: Math.max(1, windowChars[index] ?? 0),
+              outline: decisionIds.length === 1 ? "include" : "omit",
+              read: readOf(decisionId),
+              digest: digests.get(decisionId),
+              readsSharedCorpus,
+              documentHydration: onDemand.type,
+              position,
+              includedFields,
+              seenTextVersion,
+            }),
       ),
     }),
   );
@@ -3822,6 +3992,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
                   }),
                 ),
               },
+        extractionWarnings: item.extractionWarnings,
         passage: item.passage,
       })),
     }),
@@ -3969,6 +4140,7 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
   }
   return toolDataResult({
     asOf: coverage.generatedAt,
+    freshness: coverage.freshness,
     countries: countries.map((entry) => {
       switch (entry.availability) {
         case "in-preparation":

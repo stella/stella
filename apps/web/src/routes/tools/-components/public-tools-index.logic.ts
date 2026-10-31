@@ -1,5 +1,4 @@
-import { foldSearchMatchText } from "@stll/text-normalize";
-import { containsSearchMatchKey } from "@stll/text-normalize/search-match-key";
+import { createSearchQueryMatcher } from "@stll/text-normalize/search-query-matcher";
 
 import {
   filterToolEntries,
@@ -53,22 +52,17 @@ const matchesSearchQuery = (
   entry: PublicToolBrowseEntry,
   query: string,
 ): boolean => {
-  const terms = foldSearchMatchText(query).trim().split(/\s+/u).filter(Boolean);
-  if (terms.length === 0) {
-    return true;
-  }
-
-  const haystack = foldSearchMatchText(
-    [
-      entry.displayName,
-      entry.description,
-      entry.author ?? "",
-      entry.slug,
-      ...entry.tags,
-      ...entry.jurisdictions,
-    ].join(" "),
-  );
-  return terms.every((term) => containsSearchMatchKey(haystack, term));
+  const haystack = [
+    entry.displayName,
+    entry.description,
+    entry.author ?? "",
+    entry.slug,
+    ...entry.tags,
+    ...entry.jurisdictions,
+  ].join(" ");
+  return query
+    .split(/\s+/u)
+    .every((term) => createSearchQueryMatcher(term)(haystack));
 };
 
 export const filterPublicToolEntries = <T extends PublicToolBrowseEntry>(
