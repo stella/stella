@@ -1,0 +1,5 @@
+{
+  "add-constraint": "Both feature gate CHECKs are added only when absent, to the source table created by the previous migration, which no application code writes before this release; acquisition is bounded by 2s lock_timeout.",
+  "create-policy": "The feature gate policies are catalog-only additions to the new source table, under 2s lock_timeout.",
+  "create-trigger": "The gate write and repair triggers on the new source table are catalog-only creations that read no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 2s lock_timeout."
+}

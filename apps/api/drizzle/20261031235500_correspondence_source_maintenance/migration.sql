@@ -1,4 +1,4 @@
--- requires: 20261031235300_data_box_source_gates
+-- requires: 20261031235300_entity_feature_gate_registry
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 
@@ -80,7 +80,7 @@ REVOKE ALL ON FUNCTION public.next_correspondence_source(public.correspondence_s
 -- stella-migration-safety: reviewed security-definer - returns one boolean for a source the caller can see in an active authorized workspace of its own organization (NULL when not admitted), never ids, counts or content; fixed search_path, row security on, session settings restored, PUBLIC revoked and EXECUTE only to stella; rollback: drop the function with the migration
 CREATE FUNCTION public.correspondence_has_other_sources(p_workspace_id uuid, p_entity_id uuid)
 RETURNS boolean LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $$
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
 DECLARE
   caller_organization text := nullif(current_setting('app.organization_id', true), '');
   caller_user text := nullif(current_setting('app.user_id', true), '');
@@ -137,7 +137,7 @@ REVOKE ALL ON FUNCTION public.correspondence_has_other_sources(uuid, uuid) FROM 
 -- stella-migration-safety: reviewed security-definer - Private non-bypass role, fixed search path and forced row security; scope comes only from the deleted source row and is restored before returning.
 CREATE OR REPLACE FUNCTION public.remove_correspondence_source() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $$
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
 DECLARE
   next_source uuid;
   previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
@@ -177,7 +177,7 @@ REVOKE ALL ON FUNCTION public.remove_correspondence_source() FROM PUBLIC;--> sta
 -- stella-migration-safety: reviewed security-definer - The private role can only select/delete rows linked to the exact OLD entity and matter; nested record maintenance saves and restores this scope.
 CREATE OR REPLACE FUNCTION public.remove_entity_correspondence_sources() RETURNS trigger
 LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog SET row_security = on AS $$
+SET search_path = pg_catalog, pg_temp SET row_security = on AS $$
 DECLARE
   previous_organization_id text := current_setting('app.correspondence_source_organization_id', true);
   previous_workspace_id text := current_setting('app.correspondence_source_workspace_id', true);
