@@ -87,8 +87,9 @@ export const fitWidth = (fit: ReaderCrumbFit | undefined): number =>
  * Spend the width on what a reader navigates by. Titles give way before
  * labels and outer levels before the current one: the outer titles go first,
  * outermost first, then the current title down to a readable minimum, then
- * outer levels fold into the menu, outermost first, and only then does the
- * current heading lose its title and, last of all, cut its own label.
+ * outer levels fold into the menu, outermost first, then the current heading
+ * loses its title, then the menu leaves the bar (the contents control still
+ * reaches every level), and only last of all does the current label get cut.
  */
 export const fitReaderPath = ({
   available,
@@ -112,8 +113,9 @@ export const fitReaderPath = ({
       ? { type: "full", width: crumb.full }
       : { type: "label", width: labelWidth(index, crumb) },
   );
+  let menuOnBar = true;
   const showMenu = () =>
-    hiddenCount > 0 || fits.some((fit) => fit.type === "folded");
+    menuOnBar && (hiddenCount > 0 || fits.some((fit) => fit.type === "folded"));
   const excess = () => {
     const shown = fits.filter((fit) => fit.type !== "folded").length;
     const items = shown + (showMenu() ? 1 : 0);
@@ -160,6 +162,9 @@ export const fitReaderPath = ({
   }
   if (current !== undefined && excess() > 0) {
     shrinkTitle(lastIndex, 0);
+  }
+  if (excess() > 0) {
+    menuOnBar = false;
   }
   const last = fits[lastIndex];
   if (last !== undefined && last.type !== "folded" && excess() > 0) {

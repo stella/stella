@@ -85,7 +85,7 @@ const fit = (available: number, hiddenCount = 0) =>
     maximumAncestorLabelWidth: 160,
   });
 
-test("reader breadcrumb gives way in order: outer titles, current title, outer levels, current label", () => {
+test("reader breadcrumb gives way in order: outer titles, current title, outer levels, menu, current label", () => {
   expect(fit(2000)).toEqual({
     fits: [
       { type: "full", width: 300 },
@@ -116,14 +116,30 @@ test("reader breadcrumb gives way in order: outer titles, current title, outer l
     showMenu: true,
   });
   // Too narrow for any title: the current label alone.
-  expect(fit(120).fits.at(-1)).toEqual({ type: "label", width: 30 });
+  expect(fit(120)).toEqual({
+    fits: [
+      { type: "folded" },
+      { type: "folded" },
+      { type: "label", width: 30 },
+    ],
+    showMenu: true,
+  });
+  // Too narrow for the menu beside the label: the menu leaves first.
+  expect(fit(70)).toEqual({
+    fits: [
+      { type: "folded" },
+      { type: "folded" },
+      { type: "label", width: 30 },
+    ],
+    showMenu: false,
+  });
   // Narrower still: the current label itself is cut.
-  expect(fit(70).fits.at(-1)).toEqual({ type: "label", width: 10 });
+  expect(fit(20).fits.at(-1)).toEqual({ type: "label", width: 20 });
 });
 
 test("reader breadcrumb never overflows and keeps the current heading longest", () => {
   for (const hiddenCount of [0, 2]) {
-    for (let available = 60; available <= 2100; available += 1) {
+    for (let available = 1; available <= 2100; available += 1) {
       const { fits, showMenu } = fit(available, hiddenCount);
       const shown = fits.filter((entry) => entry.type !== "folded").length;
       const items = shown + (showMenu ? 1 : 0);
@@ -145,7 +161,16 @@ test("reader breadcrumb never overflows and keeps the current heading longest", 
       if (fits.slice(0, -1).some((entry) => entry.type === "full")) {
         expect(current?.type).toBe("full");
       }
-      expect(showMenu).toBe(hiddenCount > 0 || folded.some(Boolean));
+      // The menu lists the levels off the bar, and leaves only so the current
+      // label is not cut.
+      const levelsOffBar = hiddenCount > 0 || folded.some(Boolean);
+      expect(showMenu).toBe(
+        levelsOffBar &&
+          !(current?.type === "label" && 30 + 44 + 16 > available),
+      );
+      if (current?.type === "label" && current.width < 30) {
+        expect(showMenu).toBe(false);
+      }
     }
   }
 });
