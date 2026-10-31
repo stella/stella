@@ -20,6 +20,7 @@
 //
 // The pool runs even when dependency installation failed (install-free checks
 // still run), so it imports no packages.
+import { Buffer } from "node:buffer";
 import {
   appendFileSync,
   closeSync,
@@ -386,6 +387,7 @@ const POOL_ENV = [
   "CI_CHECK_POOL_TOKEN",
 ];
 const active = new Set<number>();
+
 const killGroup = (pid: number) => {
   try {
     process.kill(-pid, "SIGKILL");

@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import path from "node:path";
+import nodePath from "node:path";
 import { fileURLToPath } from "node:url";
 import { Script } from "node:vm";
 
@@ -17,6 +17,41 @@ import {
   usesDefaultCacheScope,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
+import { workflowJobSteps } from "./workflow-steps";
+
+test("the trusted producer emits true for approved PR and full-run events", () => {
+  const workflow: unknown = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const run = workflowJobSteps(workflow, "ci-plan").find(
+    (step) => step["id"] === "check",
+  )?.["run"];
+  expect(typeof run).toBe("string");
+  if (typeof run !== "string") {
+    throw new TypeError("Missing trust producer");
+  }
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "trust-output-"));
+  try {
+    for (const event of [
+      "pull_request",
+      "workflow_dispatch",
+      "schedule",
+      "push",
+    ]) {
+      const output = nodePath.join(directory, event);
+      const result = Bun.spawnSync(["bash", "-e", "-c", run], {
+        env: { ...process.env, EVENT_NAME: event, GITHUB_OUTPUT: output },
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe("trusted=true\n");
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 // A workflow_run workflow runs in the default branch's context, with its
 // secrets and cache scope, for any completed run of a workflow with the
@@ -1072,9 +1107,11 @@ describe("publication follows the production job receipt", () => {
     conclusion: "failure",
   };
   const check = (upstream: typeof run, conclusion: string) => {
-    const work = mkdtempSync(path.join(tmpdir(), "stella-publication-source-"));
+    const work = mkdtempSync(
+      nodePath.join(tmpdir(), "stella-publication-source-"),
+    );
     try {
-      const stub = path.join(work, "gh-retry.sh");
+      const stub = nodePath.join(work, "gh-retry.sh");
       writeFileSync(
         stub,
         `case "$*" in
@@ -1086,7 +1123,7 @@ esac
       return Bun.spawnSync(
         [
           "bash",
-          path.join(import.meta.dir, "check-release-publication-source.sh"),
+          nodePath.join(import.meta.dir, "check-release-publication-source.sh"),
           "123",
           "v1.2.3",
           sha,
@@ -1181,15 +1218,15 @@ describe("desktop recovery", () => {
     git("config", "user.email", "desktop@example.test");
     git("config", "commit.gpgsign", "false");
     git("config", "tag.gpgsign", "false");
-    writeFileSync(path.join(root, "VERSION"), "1.2.2\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "1.2.2\n");
     git("add", ".");
     git("commit", "-qm", "previous desktop release");
     git("tag", previous);
-    writeFileSync(path.join(root, "VERSION"), "1.2.3\n");
+    writeFileSync(nodePath.join(root, "VERSION"), "1.2.3\n");
     git("add", "VERSION");
     git("commit", "-qm", "API release without desktop changes");
     git("tag", current);
-    mkdirSync(path.join(root, "scripts"));
+    mkdirSync(nodePath.join(root, "scripts"));
     for (const source of [
       "detect-desktop-release-changes.sh",
       "release-channel.sh",
@@ -1197,19 +1234,19 @@ describe("desktop recovery", () => {
       "check-desktop-release-policy.sh",
     ]) {
       writeFileSync(
-        path.join(root, "scripts", source),
+        nodePath.join(root, "scripts", source),
         readFileSync(new URL(source, import.meta.url), "utf-8"),
       );
     }
-    const bin = path.join(root, "bin");
+    const bin = nodePath.join(root, "bin");
     mkdirSync(bin);
-    writeFileSync(path.join(root, "latest"), previous);
+    writeFileSync(nodePath.join(root, "latest"), previous);
     writeFileSync(
-      path.join(root, "latest.json"),
+      nodePath.join(root, "latest.json"),
       JSON.stringify({ version: current.slice(1) }),
     );
     writeFileSync(
-      path.join(root, "gh.sh"),
+      nodePath.join(root, "gh.sh"),
       `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$TEST_ROOT/gh-calls"
@@ -1234,12 +1271,12 @@ esac
 `,
     );
     writeFileSync(
-      path.join(bin, "curl"),
+      nodePath.join(bin, "curl"),
       '#!/usr/bin/env bash\nprintf "%s\\n" "$*" >> "$TEST_ROOT/download-checks"\n',
       { mode: 0o755 },
     );
     writeFileSync(
-      path.join(bin, "aws"),
+      nodePath.join(bin, "aws"),
       `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$TEST_ROOT/cdn-calls"
@@ -1258,8 +1295,8 @@ if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
           RELEASE_REF: current,
           GH_REPO: "stella/stella",
           GH_TOKEN: "fixture-token",
-          GH_RETRY_SCRIPT: path.join(root, "gh.sh"),
-          GITHUB_OUTPUT: path.join(root, "output"),
+          GH_RETRY_SCRIPT: nodePath.join(root, "gh.sh"),
+          GITHUB_OUTPUT: nodePath.join(root, "output"),
           BUCKET: "fixture-downloads",
           DIST_ID: "fixture-distribution",
           CHANNEL: "prod",
@@ -1270,9 +1307,10 @@ if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
           ...env,
         },
       });
-    const read = (file: string) => readFileSync(path.join(root, file), "utf-8");
+    const read = (file: string) =>
+      readFileSync(nodePath.join(root, file), "utf-8");
     const decide = (event: string) => {
-      writeFileSync(path.join(root, "output"), "");
+      writeFileSync(nodePath.join(root, "output"), "");
       const result = run(
         stepRun("resolve", "Decide whether desktop changed since previous tag"),
         { EVENT_NAME: event },
@@ -1290,7 +1328,9 @@ if [[ "$1 $2" == 's3 cp' ]]; then cp latest.json "$TEST_ROOT/updater"; fi
   const withFixture = (
     check: (fixture: ReturnType<typeof createFixture>) => void,
   ) => {
-    const root = mkdtempSync(path.join(tmpdir(), "stella-desktop-recovery-"));
+    const root = mkdtempSync(
+      nodePath.join(tmpdir(), "stella-desktop-recovery-"),
+    );
     try {
       check(createFixture(root));
     } finally {

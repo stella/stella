@@ -25,6 +25,8 @@ export const AUTOFIX_PROTECTED_PATHS = [
   "scripts/swallowed-item-error-ledger.json",
   "scripts/test-timing-ledger.json",
   "scripts/suppression-waivers.json",
+  "scripts/test-gate-disabled.json",
+  "scripts/test-gate-non-gating.json",
   "scripts/guard-rollout-policy.ts",
   "scripts/guard-rollouts/**",
   "scripts/migration-baseline.txt",

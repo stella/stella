@@ -16,6 +16,7 @@ import {
   classifiedChecks,
   downloadReceipt,
   passedStaticChecks,
+  publishStaticReuse,
   resolveStaticReuse,
   reusableStaticReceipt,
   runStaticReceiptBoundary,
@@ -405,6 +406,45 @@ test("identical green receipts reuse only static checks on main after the queue 
     ].map((receipt) => ({ ...reuse, receipt })),
   ]) {
     expect(reusableStaticReceipt(changed)).toBe(false);
+  }
+});
+
+test("the receipt producer emits true only for identical proven task inputs", () => {
+  for (const job of jobs) {
+    const ids = classifiedChecks(workflow, job)
+      .filter(
+        (step) =>
+          record(step["env"]) && step["env"]["CI_CHECK_KIND"] === "STATIC",
+      )
+      .map((step) => String(step["id"]));
+    const keys = Object.fromEntries(ids.map((id) => [id, `key-${id}`]));
+    const tasks = Object.fromEntries(
+      ids.map((id) => [id, { status: "passed", key: keys[id], runId: 42 }]),
+    );
+    const emitted: string[] = [];
+    const options = {
+      event: "workflow_dispatch",
+      ref: "refs/heads/main",
+      keys,
+      bundleKey: "bundle",
+      download: () => ({ runId: 42, raw: { bundleKey: "bundle", tasks } }),
+      writeOutput: (contents: string) => emitted.push(contents),
+    };
+    publishStaticReuse(options);
+    expect(emitted.join("").split("\n").filter(Boolean)).toEqual(
+      ids.map((id) => `reuse_${id}=true`),
+    );
+    for (const event of ["pull_request", "merge_group"]) {
+      emitted.length = 0;
+      publishStaticReuse({ ...options, event });
+      expect(emitted.join("")).toBe("");
+    }
+    emitted.length = 0;
+    publishStaticReuse({
+      ...options,
+      keys: Object.fromEntries(ids.map((id) => [id, `changed-${id}`])),
+    });
+    expect(emitted.join("")).toBe("");
   }
 });
 

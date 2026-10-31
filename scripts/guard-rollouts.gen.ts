@@ -12,6 +12,7 @@ import noWaitForUnderFakeTimers from "./guard-rollouts/no-wait-for-under-fake-ti
 import portablePath from "./guard-rollouts/portable-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import testBaseRevision from "./guard-rollouts/test-base-revision.ts";
+import testGate from "./guard-rollouts/test-gate.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
 import workerDatabaseLoginPosture from "./guard-rollouts/worker-database-login-posture.ts";
 
@@ -30,6 +31,7 @@ export const GUARD_ROLLOUT_FILES = {
   "portable-path": portablePath,
   "semantic-controls": semanticControls,
   "test-base-revision": testBaseRevision,
+  "test-gate": testGate,
   "tracked-symlinks": trackedSymlinks,
   "worker-database-login-posture": workerDatabaseLoginPosture,
 };

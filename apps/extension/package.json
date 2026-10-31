@@ -14,7 +14,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/extension",
     "postinstall": "wxt prepare",
     "test": "bun run test:unit",
-    "test:e2e": "bun run build && wxt build -b chrome --mode e2e && bun scripts/assert-manifest.ts e2e && playwright test -c playwright.config.ts",
+    "test:e2e": "bun run build || exit 1; wxt build -b chrome --mode e2e || exit 1; bun scripts/assert-manifest.ts e2e || exit 1; playwright test -c playwright.config.ts",
     "test:unit": "bun test src scripts",
     "typecheck": "wxt prepare && bun check --no-pretty --all --project=tsconfig.json",
     "zip": "wxt zip -b chrome && bun scripts/assert-manifest.ts"

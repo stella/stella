@@ -2,7 +2,8 @@ import { defineConfig } from "@playwright/test";
 import path from "node:path";
 
 import { playwrightEnv } from "./env";
-import marketingConfig, { MARKETING_REPO_ROOT } from "./marketing-config";
+import marketingConfig from "./marketing-config";
+import { MARKETING_REPO_ROOT } from "./marketing-paths";
 
 export default defineConfig(marketingConfig, {
   retries: 0,

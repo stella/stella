@@ -4,14 +4,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { createSha256 } from "@stll/sha256/node";
-
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import {
   measuredShardBudget,
   shardBudgetViolation,
 } from "./e2e-shard-deadline";
+import { e2eProductionPlanFingerprint } from "./e2e-shard-plan-pin";
 import { allE2eMatrix, E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { evaluate } from "./github-expression";
 import { lexShell } from "./install-free-ci";
@@ -287,13 +286,7 @@ test("changing the measured shard split requires fresh wall-time evidence", () =
     v.string(),
     job.steps.find(({ name }) => name === "Run Playwright shard")?.run,
   );
-  const fingerprint = (command: string) => {
-    const hash = createSha256().update(command);
-    for (const file of configuredBudgets.e2eProductionShards.planFiles) {
-      hash.update(readFileSync(new URL(`../${file}`, import.meta.url)));
-    }
-    return hash.digest("hex");
-  };
+  const fingerprint = e2eProductionPlanFingerprint;
   expect(
     fingerprint(run),
     "Remeasure the current split before updating its fingerprint",

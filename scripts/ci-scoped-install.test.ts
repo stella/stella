@@ -5,6 +5,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -882,6 +883,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
     );
     for (const file of [
       "marketing-config.ts",
+      "marketing-paths.ts",
       "landing-marketing-config.ts",
       "devices.ts",
       "devices.gen.ts",
@@ -895,6 +897,29 @@ test("landing diagnostics follow the browser configuration output directory", ()
         ),
       );
     }
+    const packageDirectory = path.dirname(configDirectory);
+    writeFileSync(
+      path.join(packageDirectory, "package.json"),
+      readFileSync(
+        path.join(root, "packages/playwright-tools/package.json"),
+        "utf-8",
+      ),
+    );
+    mkdirSync(path.join(directory, "node_modules/@stll"), { recursive: true });
+    symlinkSync(
+      packageDirectory,
+      path.join(directory, "node_modules/@stll/playwright-tools"),
+      "dir",
+    );
+    const landingDirectory = path.join(directory, "apps/landing/e2e");
+    mkdirSync(landingDirectory, { recursive: true });
+    writeFileSync(
+      path.join(landingDirectory, "playwright.config.ts"),
+      readFileSync(
+        path.join(root, "apps/landing/e2e/playwright.config.ts"),
+        "utf-8",
+      ),
+    );
     const result = Bun.spawnSync(
       [
         process.execPath,
