@@ -170,10 +170,11 @@ jobs:
           bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
+      # A dispatched run checks every file, so only a scheduled one needs a base.
       - name: Select the last green PR-depth base
-        if: steps.selection.outputs.run == 'true'
+        if: steps.selection.outputs.run == 'true' && github.event_name == 'schedule'
         id: green-base
-        timeout-minutes: 5
+        timeout-minutes: 2
         working-directory: ${{ runner.temp }}/main-pr-depth-validation
         env:
           SHA: ${{ inputs.sha || github.sha }}
@@ -181,8 +182,9 @@ jobs:
           GH_RETRY: ${{ runner.temp }}/gh-retry.sh
           REPOSITORY: ${{ github.repository }}
         run: |
-          # Without a known green base the code check covers every file.
-          base=$(bash "$RUNNER_TEMP/main-pr-depth-green-base.sh") || base=""
+          # Without a known green base (none found, or the lookup failed or
+          # overran) the code check covers every file.
+          base=$(timeout 60 bash "$RUNNER_TEMP/main-pr-depth-green-base.sh") || base=""
           echo "sha=$base" >> "$GITHUB_OUTPUT"
 
   suites:
