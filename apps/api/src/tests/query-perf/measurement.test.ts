@@ -28,7 +28,12 @@ const insertPlan = (rows: number) => ({
   Operation: "Insert",
   "Actual Rows": 0,
   Plans: [
-    { "Node Type": "Values Scan", "Actual Rows": rows, "Actual Loops": 1 },
+    {
+      "Node Type": "Values Scan",
+      "Parent Relationship": "Outer",
+      "Actual Rows": rows,
+      "Actual Loops": 1,
+    },
   ],
 });
 

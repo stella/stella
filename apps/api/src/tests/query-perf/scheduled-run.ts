@@ -84,7 +84,29 @@ const modifyingNodes = (node: PlanNode): readonly PlanNode[] => [
 ];
 
 const writtenRowsFromNode = (node: PlanNode) => {
-  const input = childPlans(node).at(0);
+  if (node["Operation"] === "Insert" && "Conflict Resolution" in node) {
+    const inserted = node["Tuples Inserted"];
+    const conflicts = node["Conflicting Tuples"];
+    const filtered = node["Rows Removed by Conflict Filter"] ?? 0;
+    if (
+      typeof inserted !== "number" ||
+      typeof conflicts !== "number" ||
+      typeof filtered !== "number"
+    ) {
+      return panic("Conflict insert plan has no numeric row counters");
+    }
+    switch (node["Conflict Resolution"]) {
+      case "NOTHING":
+        return inserted;
+      case "UPDATE":
+        return inserted + conflicts - filtered;
+      default:
+        return panic("Conflict insert plan has an unknown resolution");
+    }
+  }
+  const input = childPlans(node).find(
+    (child) => child["Parent Relationship"] === "Outer",
+  );
   const rows = input?.["Actual Rows"];
   const loops = input?.["Actual Loops"] ?? 1;
   return typeof rows === "number" && typeof loops === "number"
