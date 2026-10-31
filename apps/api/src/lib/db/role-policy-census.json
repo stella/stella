@@ -1071,6 +1071,46 @@
   },
   {
     "schema": "public",
+    "table": "case_law_completeness_census",
+    "policy": "case_law_global_access",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "case_law_completeness_census",
+    "policy": "case_law_ingestion_access",
+    "command": "ALL",
+    "roles": ["stella_ingestion"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_completeness_census",
+    "policy": "census_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_completeness_census'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('case_law_completeness_census'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "case_law_completeness_census",
+    "policy": "public_law_reader_access",
+    "command": "SELECT",
+    "roles": ["stella_public_law_reader"],
+    "permissive": "PERMISSIVE",
+    "using": "(EXISTS ( SELECT 1\n   FROM case_law_sources census_source\n  WHERE ((census_source.id = case_law_completeness_census.source_id) AND ((census_source.descriptor IS NULL) OR ((census_source.descriptor ->> 'allowsRedistribution'::text) = 'true'::text)))))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "case_law_corpus_jurisdictions",
     "policy": "case_law_global_access",
     "command": "SELECT",
