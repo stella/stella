@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "editMessage": "Üzenet szerkesztése",
     "editMessageInput": "Szerkesztett üzenet",
-    "editMessageNotice": "A küldés lecseréli ezt az üzenetet és az utána következő összes választ.",
+    "editMessageNotice": "A küldés lecseréli ezt az üzenetet és az utána következő összes üzenetet.",
     "editMessageRefused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
     "editMessageRemoveAttachment": "{name} eltávolítása ebből az üzenetből",
     "editMode": {

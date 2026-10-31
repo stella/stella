@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Šo diagrammu neizdevās attēlot. Tās pirmkods ir redzams zemāk.",
     "editMessage": "Rediģēt ziņu",
     "editMessageInput": "Rediģētā ziņa",
-    "editMessageNotice": "Nosūtot tiks aizstāta šī ziņa un visas tai sekojošās atbildes.",
+    "editMessageNotice": "Nosūtot tiks aizstāta šī ziņa un visas tai sekojošās ziņas.",
     "editMessageRefused": "Ziņu neizdevās rediģēt. Tērzēšanā tagad redzams saglabātais stāvoklis; mēģiniet vēlreiz, kad neviena atbilde vairs netiek veidota.",
     "editMessageRemoveAttachment": "Noņemt {name} no šīs ziņas",
     "editMode": {

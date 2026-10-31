@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "editMessage": "Editar mensagem",
     "editMessageInput": "Mensagem editada",
-    "editMessageNotice": "Ao enviar, esta mensagem e todas as respostas depois dela serão substituídas.",
+    "editMessageNotice": "Ao enviar, esta mensagem e todas as mensagens depois dela serão substituídas.",
     "editMessageRefused": "Não foi possível editar a mensagem. O chat agora mostra o que está salvo; tente novamente quando nenhuma resposta estiver em andamento.",
     "editMessageRemoveAttachment": "Remover {name} desta mensagem",
     "editMode": {

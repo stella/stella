@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "This diagram could not be rendered. Its source is shown below.",
     "editMessage": "Edit message",
     "editMessageInput": "Edited message",
-    "editMessageNotice": "Sending replaces this message and every reply after it.",
+    "editMessageNotice": "Sending replaces this message and every message after it.",
     "editMessageRefused": "This message could not be edited. The chat now shows what is saved; try again once no reply is running.",
     "editMessageRemoveAttachment": "Remove {name} from this message",
     "editMode": {

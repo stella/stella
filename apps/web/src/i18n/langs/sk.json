@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Diagram sa nepodarilo vykresliť. Nižšie je jeho zdrojový kód.",
     "editMessage": "Upraviť správu",
     "editMessageInput": "Upravená správa",
-    "editMessageNotice": "Odoslaním nahradíte túto správu aj všetky odpovede po nej.",
+    "editMessageNotice": "Odoslaním nahradíte túto správu aj všetky správy po nej.",
     "editMessageRefused": "Správu sa nepodarilo upraviť. Chat teraz ukazuje uložený stav, skúste to znova, keď nebeží žiadna odpoveď.",
     "editMessageRemoveAttachment": "Odstrániť {name} z tejto správy",
     "editMode": {

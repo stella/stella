@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Šios diagramos nepavyko atvaizduoti. Jos šaltinio kodas pateiktas žemiau.",
     "editMessage": "Redaguoti žinutę",
     "editMessageInput": "Redaguota žinutė",
-    "editMessageNotice": "Išsiuntus bus pakeista ši žinutė ir visi po jos gauti atsakymai.",
+    "editMessageNotice": "Išsiuntus bus pakeista ši žinutė ir visos po jos esančios žinutės.",
     "editMessageRefused": "Žinutės redaguoti nepavyko. Pokalbyje dabar rodoma tai, kas išsaugota; bandykite dar kartą, kai nebebus rengiamas joks atsakymas.",
     "editMessageRemoveAttachment": "Pašalinti {name} iš šios žinutės",
     "editMode": {

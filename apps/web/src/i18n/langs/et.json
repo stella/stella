@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Seda diagrammi ei õnnestunud kuvada. Selle lähtekood on allpool.",
     "editMessage": "Muuda sõnumit",
     "editMessageInput": "Muudetud sõnum",
-    "editMessageNotice": "Saatmine asendab selle sõnumi ja kõik sellele järgnenud vastused.",
+    "editMessageNotice": "Saatmine asendab selle sõnumi ja kõik sellele järgnenud sõnumid.",
     "editMessageRefused": "Sõnumit ei õnnestunud muuta. Vestlus näitab nüüd salvestatud seisu; proovige uuesti, kui ükski vastus enam ei käi.",
     "editMessageRemoveAttachment": "Eemalda {name} sellest sõnumist",
     "editMode": {

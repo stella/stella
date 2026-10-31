@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Nie udało się wyświetlić tego diagramu. Poniżej znajduje się jego kod źródłowy.",
     "editMessage": "Edytuj wiadomość",
     "editMessageInput": "Edytowana wiadomość",
-    "editMessageNotice": "Wysłanie zastąpi tę wiadomość i wszystkie późniejsze odpowiedzi.",
+    "editMessageNotice": "Wysłanie zastąpi tę wiadomość i wszystkie późniejsze wiadomości.",
     "editMessageRefused": "Nie udało się edytować wiadomości. Czat pokazuje teraz zapisany stan; spróbuj ponownie, gdy nie będzie trwała żadna odpowiedź.",
     "editMessageRemoveAttachment": "Usuń {name} z tej wiadomości",
     "editMode": {

@@ -1530,7 +1530,7 @@
     "diagramUnavailable": "Dieses Diagramm konnte nicht dargestellt werden. Der Quelltext steht unten.",
     "editMessage": "Nachricht bearbeiten",
     "editMessageInput": "Bearbeitete Nachricht",
-    "editMessageNotice": "Beim Senden werden diese Nachricht und alle folgenden Antworten ersetzt.",
+    "editMessageNotice": "Beim Senden werden diese Nachricht und alle folgenden Nachrichten ersetzt.",
     "editMessageRefused": "Die Nachricht konnte nicht bearbeitet werden. Der Chat zeigt jetzt den gespeicherten Stand. Versuchen Sie es erneut, sobald keine Antwort mehr läuft.",
     "editMessageRemoveAttachment": "{name} aus dieser Nachricht entfernen",
     "editMode": {
