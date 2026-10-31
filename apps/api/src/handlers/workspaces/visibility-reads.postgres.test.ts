@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { createTestState } from "@stll/test-state";
@@ -166,6 +167,7 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
               ),
             );
           await db.insert(workspaceContacts).values({
+            id: createSafeId<"workspaceContact">(),
             organizationId,
             workspaceId,
             contactId: clientId,
@@ -361,9 +363,12 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
           expect(await remembered.json()).toEqual({
             lastActiveWorkspaceId: workspaceId,
           });
-          const definitions = executedRows(
-            await db.execute(
-              sql`SELECT proname, proconfig FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace AND prosecdef AND proname IN ('stella_authorized_workspace_ids', 'stella_create_workspace', 'stella_lock_matter_stewardship', 'enforce_member_role_keeps_matter_leads', 'enforce_workspace_keeps_matter_lead', 'enforce_inserted_workspace_keeps_matter_lead', 'enforce_assignment_keeps_matter_lead')`,
+          const definitions = v.parse(
+            v.array(v.object({ proconfig: v.array(v.string()) })),
+            executedRows(
+              await db.execute(
+                sql`SELECT proname, proconfig FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace AND prosecdef AND proname IN ('stella_authorized_workspace_ids', 'stella_create_workspace', 'stella_lock_matter_stewardship', 'enforce_member_role_keeps_matter_leads', 'enforce_workspace_keeps_matter_lead', 'enforce_inserted_workspace_keeps_matter_lead', 'enforce_assignment_keeps_matter_lead')`,
+              ),
             ),
           );
           expect(definitions).toHaveLength(8);

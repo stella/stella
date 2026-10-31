@@ -5,6 +5,10 @@ import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 
 import { isRecord } from "../lib/type-guards";
 import { createBackfillRuntime } from "./backfill-runtime";
+import {
+  setDedicatedLockTimeout,
+  setDedicatedStatementTimeout,
+} from "./dedicated-connection-timeouts";
 import { readMatterVisibilityCutoverSql } from "./matter-visibility-sql";
 import { readConstraintCompletion } from "./online-constraint-completion";
 import { validateOnlineConstraints } from "./online-ddl";
@@ -92,8 +96,14 @@ const backfill = async (
 const cutover = async (connection: OnlineMigrationConnection) => {
   await connection.execute("BEGIN");
   const result = await Result.tryPromise(async () => {
-    await connection.execute("SET LOCAL lock_timeout = '1s'");
-    await connection.execute("SET LOCAL statement_timeout = '1min'");
+    await setDedicatedLockTimeout(
+      (statement) => connection.execute(statement),
+      1000,
+    );
+    await setDedicatedStatementTimeout(
+      (statement) => connection.execute(statement),
+      60_000,
+    );
     for (const statement of readMatterVisibilityCutoverSql()) {
       await connection.execute(statement);
     }
@@ -123,6 +133,7 @@ export const createMatterVisibilityRepair = (
   options: RepairRuntimeOptions = {},
 ): OnlineRepair => ({
   name: REPAIR_NAME,
+  introducedBy: "20261031011514_matter_visibility",
   readCompletion,
   repair: async (connection, tables) => {
     if ((await readCompletion(connection)).type === "complete") {

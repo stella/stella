@@ -190,6 +190,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "apps/api/src/lib/workspaces/visibility.ts",
     "apps/api/src/lib/idempotency/*",
     "apps/api/src/agent-auth/credential-storage.ts",
     "apps/api/src/agent-auth/credentials.ts",
