@@ -6,7 +6,12 @@ import type {
   ChatPart,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { chatMessageEditRefusalCode } from "@/components/chat/chat-user-actions";
+import type { UserMessageEditFailure } from "@/components/chat/user-message-edit.logic";
+import { findChatRequestError } from "@/features/chat/chat-request-error";
+import { isChatMessageStartError } from "@/features/chat/chat-runtime";
 import type { ChatContinuationRequestBody } from "@/features/chat/chat-runtime";
+import { chatRefusal } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 /**
@@ -110,6 +115,38 @@ const planUserMessageReplay = (
       turnIntent: CHAT_TURN_INTENT.edit,
     },
   };
+};
+
+/**
+ * What an edit the server did not accept failed with, read from the error
+ * the request ended on: the server's refusal of the edit, its refusal of
+ * the request, or a request that never reached it.
+ */
+export const userMessageEditFailure = (
+  error: Error,
+): UserMessageEditFailure => {
+  const code = chatMessageEditRefusalCode(error);
+  if (code !== null) {
+    return { type: "edit-refused", code };
+  }
+  const refusal = chatRefusal(error);
+  if (refusal !== null && refusal.transportKind === undefined) {
+    return { type: "request-refused", status: refusal.status };
+  }
+  if (refusal?.transportKind === "timeout") {
+    return { type: "request-failed", kind: "timed_out" };
+  }
+  if (refusal !== null) {
+    return { type: "request-failed", kind: "connection_failed" };
+  }
+  const requestError = findChatRequestError(error);
+  if (requestError !== undefined) {
+    return { type: "request-failed", kind: requestError.kind };
+  }
+  if (isChatMessageStartError(error)) {
+    return { type: "request-failed", kind: "not_started" };
+  }
+  return { type: "failed" };
 };
 
 /**

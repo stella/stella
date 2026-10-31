@@ -144,6 +144,7 @@ import {
 } from "@/components/references/reference.logic";
 import { AssistantAnswerMetadata } from "@/features/chat/answer-edit/assistant-answer-metadata";
 import {
+  CHAT_REQUEST_ERROR_TRANSLATION_KEYS,
   type ChatRequestError,
   findChatRequestError,
 } from "@/features/chat/chat-request-error";
@@ -1097,13 +1098,6 @@ type ChatErrorTranslationKey =
   | "chat.sendErrorAnonymizationBlocked"
   | "chat.sendError"
   | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
-
-const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
-  preparation_failed: "chat.sendErrorPreparationFailed",
-  connection_failed: "chat.sendErrorConnectionFailed",
-  timed_out: "chat.sendErrorTimedOut",
-  not_started: "chat.sendErrorNotStarted",
-} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
   const requestError = findChatRequestError(error);

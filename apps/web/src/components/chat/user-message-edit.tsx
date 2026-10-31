@@ -29,13 +29,17 @@ import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   createUserMessageEditDraft,
   hasUserMessageEditContent,
+  userMessageEditNoticeKey,
 } from "@/components/chat/user-message-edit.logic";
 import type {
   UserMessageEdit,
   UserMessageEditAttachment,
   UserMessageEditDraft,
+  UserMessageEditFailure,
+  UserMessageEditOutcome,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { createUuid } from "@/lib/uuid";
@@ -44,8 +48,56 @@ import { createUuid } from "@/lib/uuid";
 export type UserMessageEditActions = {
   /** The editor opened; a running turn is stopped first. */
   onStart: () => void;
-  /** Replace the message with the edit and run the assistant again. */
-  onSubmit: (messageId: string, edit: UserMessageEdit) => Promise<void>;
+  /** An edit form of `messageId` is open: queued prompts wait. The release
+   *  it returns runs when the form closes, and the queue resumes. */
+  holdQueue: (messageId: string) => () => void;
+  /** Replace the message with the edit and run the assistant again; resolves
+   *  with how the server answered. */
+  onSubmit: (
+    messageId: string,
+    edit: UserMessageEdit,
+  ) => Promise<UserMessageEditOutcome>;
+};
+
+/**
+ * The edit actions a page hands its transcript, built from its chat session:
+ * one stable object, so the transcript's edit actions do not re-render while
+ * a turn streams. An edit is a send, so it passes the page's AI check first.
+ */
+export const useUserMessageEditActions = ({
+  editUserMessage,
+  ensureAIAvailable,
+  holdQueueForMessageEdit,
+  startUserMessageEdit,
+}: {
+  editUserMessage: UserMessageEditActions["onSubmit"];
+  ensureAIAvailable: () => Promise<boolean>;
+  holdQueueForMessageEdit: UserMessageEditActions["holdQueue"];
+  startUserMessageEdit: UserMessageEditActions["onStart"];
+}): UserMessageEditActions => {
+  const onStart = useLatestCallback(() => {
+    startUserMessageEdit();
+  });
+  const holdQueue = useLatestCallback((messageId: string) =>
+    holdQueueForMessageEdit(messageId),
+  );
+  const onSubmit = useLatestCallback(
+    async (
+      messageId: string,
+      edit: UserMessageEdit,
+    ): Promise<UserMessageEditOutcome> => {
+      if (!(await ensureAIAvailable())) {
+        return { type: "ai-unavailable" };
+      }
+      return await editUserMessage(messageId, edit);
+    },
+  );
+  const [actions] = useState<UserMessageEditActions>(() => ({
+    holdQueue,
+    onStart,
+    onSubmit,
+  }));
+  return actions;
 };
 
 const attachmentTitle = (
@@ -99,7 +151,10 @@ type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
   isGenerating: boolean;
   onCancel: () => void;
-  onSubmit: (edit: UserMessageEdit) => void;
+  /** Runs once the form is open; the release it returns runs when it
+   *  closes. */
+  onHold: () => () => void;
+  onSubmit: (edit: UserMessageEdit) => Promise<UserMessageEditOutcome>;
 };
 
 /**
@@ -111,19 +166,38 @@ const UserMessageEditForm = ({
   draft,
   isGenerating,
   onCancel,
+  onHold,
   onSubmit,
 }: UserMessageEditFormProps) => {
   const t = useTranslations();
   const [attachments, setAttachments] = useState(draft.attachments);
+  // Sending stays in this form until the server answers: an accepted edit
+  // closes it, any other outcome leaves the draft here with its notice.
+  const [sending, setSending] = useState(false);
+  const [failure, setFailure] = useState<UserMessageEditFailure | null>(null);
+  // While the form is open the session holds its queued prompts.
+  useMountEffect(onHold);
   // The editor outlives a render, so its handlers read the latest props.
   const sendFrom = useLatestCallback((current: Editor) => {
     const edit: UserMessageEdit = {
       attachments: attachments.map(({ part }) => part),
       html: chatComposerHtml(current),
     };
-    if (hasUserMessageEditContent(edit) && !isGenerating) {
-      onSubmit(edit);
+    if (!hasUserMessageEditContent(edit) || isGenerating || sending) {
+      return;
     }
+    setSending(true);
+    setFailure(null);
+    detached(
+      (async () => {
+        const outcome = await onSubmit(edit);
+        if (outcome.type !== "accepted") {
+          setSending(false);
+          setFailure(outcome);
+        }
+      })(),
+      "user-message-edit.submit",
+    );
   });
   // An edit is a sent message: it is held, as one from the composer is, when
   // its text looks like a credential.
@@ -182,7 +256,9 @@ const UserMessageEditForm = ({
     hasUserMessageEditContent({
       attachments: attachments.map(({ part }) => part),
       html,
-    }) && !isGenerating;
+    }) &&
+    !isGenerating &&
+    !sending;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2" data-chat-message-edit>
@@ -235,6 +311,11 @@ const UserMessageEditForm = ({
       <p className="text-muted-foreground text-xs">
         {t("chat.editMessageNotice")}
       </p>
+      {failure !== null && (
+        <p className="text-destructive text-xs" role="alert">
+          {t(userMessageEditNoticeKey(failure))}
+        </p>
+      )}
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel} size="sm" variant="ghost">
           {t("common.cancel")}
@@ -292,14 +373,16 @@ export const useUserMessageEdit = ({
           onCancel={() => {
             setDraft(null);
           }}
-          onSubmit={(edit) => {
-            // The sent copy takes this message's id and place, so the form
-            // closes now rather than staying open over it.
-            setDraft(null);
-            detached(
-              actions.onSubmit(message.id, edit),
-              "user-message-edit.submit",
-            );
+          onHold={() => actions.holdQueue(message.id)}
+          onSubmit={async (edit) => {
+            const outcome = await actions.onSubmit(message.id, edit);
+            // The sent copy takes this message's id and place once the
+            // server accepted it; until then, and after any refusal, the
+            // form stays open on the draft.
+            if (outcome.type === "accepted") {
+              setDraft(null);
+            }
+            return outcome;
           }}
         />
       ),

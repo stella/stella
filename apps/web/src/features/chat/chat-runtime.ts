@@ -174,6 +174,10 @@ export type ChatRuntime = ChatActivitySession & {
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Show the thread as the server stores it, after a request the server did
+   *  not accept: its messages replace the page's, and the request's error
+   *  leaves with the turn it described. */
+  showStoredMessages: (messages: PersistedChatMessage[]) => void;
   /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
@@ -208,6 +212,37 @@ export const sendThreadChatMessage = async (
   }
 
   await sendMessage(message, options);
+};
+
+/**
+ * What the server answered a sent message, as soon as it answered: it
+ * accepted the turn (whose answer then streams on), or the request failed
+ * before it did, with the failure it reported.
+ */
+export type ChatSendAcceptance =
+  { status: "accepted" } | { status: "failed"; error: Error };
+
+type ChatThreadSendUntilAccepted = (
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+) => Promise<ChatSendAcceptance>;
+
+const threadSendUntilAcceptedByRuntime = new WeakMap<
+  ChatRuntime,
+  ChatThreadSendUntilAccepted
+>();
+
+/** Send `message` and resolve once the server accepted or refused its turn,
+ *  without waiting for the answer to stream. */
+export const sendThreadChatMessageUntilAccepted = async (
+  chat: ChatRuntime,
+  message: ChatUserMessageInput,
+  options?: ChatSendMessageOptions,
+): Promise<ChatSendAcceptance> => {
+  const send =
+    threadSendUntilAcceptedByRuntime.get(chat) ??
+    panic("Missing thread send capability for chat runtime");
+  return await send(message, options);
 };
 
 const getChatApiPath = () => apiUrl("/chat");
@@ -403,6 +438,10 @@ export const createChatRuntime = ({
    *  a generic replay of the same failure stays quiet too; the next request
    *  clears it. */
   let settledTurnRefused = false;
+  /** A send that waits to hear whether the server accepted its turn; the
+   *  request the send posts answers it (see `turnObservingFetchClient`). */
+  let awaitedSendAcceptance:
+    PromiseWithResolvers<ChatSendAcceptance> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
@@ -535,7 +574,23 @@ export const createChatRuntime = ({
 
   const turnObservingFetchClient = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
-      const response = await chatFetchClient(input, init);
+      // A send waiting to hear whether its turn was accepted hears it from
+      // the next request the page posts; a rejoin replays with GET.
+      const acceptance =
+        init?.method === "GET" ? undefined : awaitedSendAcceptance;
+      if (acceptance !== undefined) {
+        awaitedSendAcceptance = undefined;
+      }
+      const received = await Result.tryPromise({
+        try: async () => await chatFetchClient(input, init),
+        catch: toError,
+      });
+      if (Result.isError(received)) {
+        acceptance?.resolve({ status: "failed", error: received.error });
+        return readQueryResult(received);
+      }
+      acceptance?.resolve({ status: "accepted" });
+      const response = received.value;
       const servedTurnId = response.headers.get(CHAT_TURN_ID_HEADER);
       if (servedTurnId !== null) {
         turnId = toSafeId<"chatTurn">(servedTurnId);
@@ -1118,6 +1173,42 @@ export const createChatRuntime = ({
     }
   };
 
+  const sendThreadMessageUntilAccepted: ChatThreadSendUntilAccepted = async (
+    message,
+    options,
+  ) => {
+    const acceptance = Promise.withResolvers<ChatSendAcceptance>();
+    awaitedSendAcceptance = acceptance;
+    const errorBeforeSend = snapshot.error;
+    // A send that ends before its request was answered (it never started, or
+    // failed while it was prepared) answers from how it ended.
+    const delivered = Result.tryPromise({
+      try: async () => {
+        await sendThreadMessage(message, options);
+      },
+      catch: toError,
+    }).then((outcome): ChatSendAcceptance => {
+      if (Result.isError(outcome)) {
+        return { status: "failed", error: outcome.error };
+      }
+      return snapshot.error !== undefined && snapshot.error !== errorBeforeSend
+        ? { status: "failed", error: snapshot.error }
+        : { status: "accepted" };
+    });
+    const answer = await Promise.race([acceptance.promise, delivered]);
+    if (awaitedSendAcceptance === acceptance) {
+      awaitedSendAcceptance = undefined;
+    }
+    return answer;
+  };
+
+  const showStoredMessages = (messages: PersistedChatMessage[]): void => {
+    showMessages(messages);
+    if (snapshot.error !== undefined) {
+      setSnapshot({ error: undefined });
+    }
+  };
+
   /**
    * Each approval's answer, by approval id. An approval is answered once: a
    * second answer to it (a click racing its card's automatic answer) joins
@@ -1341,6 +1432,7 @@ export const createChatRuntime = ({
       );
     },
     setMessages: showMessages,
+    showStoredMessages,
     startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
       if (started.status === "not_started") {
@@ -1417,6 +1509,7 @@ export const createChatRuntime = ({
   } satisfies ChatRuntime;
 
   threadSendMessageByRuntime.set(runtime, sendThreadMessage);
+  threadSendUntilAcceptedByRuntime.set(runtime, sendThreadMessageUntilAccepted);
 
   return runtime;
 };

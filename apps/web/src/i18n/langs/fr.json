@@ -1529,9 +1529,12 @@
     "deleteThread": "Supprimer la conversation",
     "diagramUnavailable": "Impossible d’afficher ce diagramme. Son code source figure ci-dessous.",
     "editMessage": "Modifier le message",
+    "editMessageAiUnavailable": "Aucun modèle d’IA n’est disponible : la modification n’a pas été envoyée. Vérifiez les paramètres d’IA de l’organisation.",
     "editMessageInput": "Message modifié",
     "editMessageNotice": "L’envoi remplace ce message et tous les messages qui le suivent.",
     "editMessageRefused": "Impossible de modifier ce message. La conversation affiche maintenant ce qui est enregistré ; réessayez lorsqu’aucune réponse n’est en cours.",
+    "editMessageRefusedHistoryChanged": "La conversation a changé pendant l’envoi de la modification. Elle affiche maintenant ce qui est enregistré ; renvoyez la modification.",
+    "editMessageRefusedTargetMissing": "Ce message ne figure plus dans la conversation et ne peut donc pas être modifié.",
     "editMessageRemoveAttachment": "Retirer {name} de ce message",
     "editMode": {
       "autoDirect": "Automatique · réécrire",

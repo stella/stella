@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 
+import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 
@@ -17,7 +18,8 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { stellaToast } = await import("@stll/ui/toast");
@@ -55,20 +57,30 @@ const message: EditableUserMessageProps["message"] = {
   role: "user",
 };
 
-/** Actions that record what the message asked for. */
+/** Actions that record what the message asked for; the server accepts
+ *  every edit. */
 const createActions = () => {
   const started: true[] = [];
   const submitted: Parameters<UserMessageEditActions["onSubmit"]>[] = [];
+  /** The messages whose edit form holds the queue now. */
+  const holding: string[] = [];
   const actions: UserMessageEditActions = {
+    holdQueue: (messageId) => {
+      holding.push(messageId);
+      return () => {
+        holding.splice(holding.indexOf(messageId), 1);
+      };
+    },
     onStart: () => {
       started.push(true);
     },
     onSubmit: async (...call) => {
       submitted.push(call);
       await Promise.resolve();
+      return { type: "accepted" };
     },
   };
-  return { actions, started, submitted };
+  return { actions, holding, started, submitted };
 };
 
 const renderMessage = ({
@@ -145,11 +157,12 @@ describe("editing a sent message", () => {
     expect(submitted).toEqual([]);
   });
 
-  test("send writes the composer's markup and the kept attachments", () => {
-    const { actions, submitted } = createActions();
+  test("send writes the composer's markup and the kept attachments", async () => {
+    const { actions, holding, submitted } = createActions();
     const view = renderMessage({ actions });
 
     openEditor(view);
+    expect(holding).toEqual([MESSAGE_ID]);
     fireEvent.click(view.getByRole("button", { name: REMOVE_NDA }));
     fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
 
@@ -162,10 +175,64 @@ describe("editing a sent message", () => {
         },
       ],
     ]);
-    // The form closes; the sent copy takes the message's place.
-    expect(
-      view.queryByRole("textbox", { name: en.chat.editMessageInput }),
-    ).toBeNull();
+    // Once the server accepted it, the form closes and releases the queue;
+    // the sent copy takes the message's place.
+    await waitFor(() => {
+      expect(
+        view.queryByRole("textbox", { name: en.chat.editMessageInput }),
+      ).toBeNull();
+    });
+    expect(holding).toEqual([]);
+  });
+
+  test("a refused edit keeps the form open on the draft and says why", async () => {
+    const { actions, submitted } = createActions();
+    const refusing: UserMessageEditActions = {
+      ...actions,
+      onSubmit: async (...call) => {
+        await actions.onSubmit(...call);
+        return {
+          type: "edit-refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged,
+        };
+      },
+    };
+    const view = renderMessage({ actions: refusing });
+
+    fireEvent.paste(openEditor(view), {
+      clipboardData: plainTextClipboard(" today"),
+    });
+    fireEvent.click(view.getByRole("button", { name: REMOVE_NDA }));
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+    expect((await view.findByRole("alert")).textContent).toBe(
+      en.chat.editMessageRefusedHistoryChanged,
+    );
+    const field = view.getByRole("textbox", { name: en.chat.editMessageInput });
+    expect(field.textContent).toBe("Review the draft NDA today");
+    expect(view.queryByRole("button", { name: REMOVE_NDA })).toBeNull();
+    // The same draft can be sent again.
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    expect(submitted.map(([, edit]) => edit)).toEqual([
+      {
+        attachments: [],
+        html: "<p>Review the <strong>draft</strong> NDA today</p>",
+      },
+      {
+        attachments: [],
+        html: "<p>Review the <strong>draft</strong> NDA today</p>",
+      },
+    ]);
+  });
+
+  test("an open form holds the queue until it closes", () => {
+    const { actions, holding } = createActions();
+    const view = renderMessage({ actions });
+
+    openEditor(view);
+    expect(holding).toEqual([MESSAGE_ID]);
+    fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
+    expect(holding).toEqual([]);
   });
 
   test("enter sends", () => {

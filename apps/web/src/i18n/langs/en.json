@@ -1529,9 +1529,12 @@
     "deleteThread": "Delete conversation",
     "diagramUnavailable": "This diagram could not be rendered. Its source is shown below.",
     "editMessage": "Edit message",
+    "editMessageAiUnavailable": "No AI model is available, so the edit was not sent. Check the organization's AI settings.",
     "editMessageInput": "Edited message",
     "editMessageNotice": "Sending replaces this message and every message after it.",
     "editMessageRefused": "This message could not be edited. The chat now shows what is saved; try again once no reply is running.",
+    "editMessageRefusedHistoryChanged": "The chat changed while the edit was being sent. It now shows what is saved; send the edit again.",
+    "editMessageRefusedTargetMissing": "This message is no longer in the chat, so it cannot be edited.",
     "editMessageRemoveAttachment": "Remove {name} from this message",
     "editMode": {
       "autoDirect": "Auto · rewrite",

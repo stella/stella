@@ -14,6 +14,7 @@ import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
+import { useUserMessageEditActions } from "@/components/chat/user-message-edit";
 import type { ChatRouteHandoffMessage } from "@/features/chat/chat-runtime";
 import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { chatToolGrantsOptions } from "@/features/chat/chat-tool-grants";
@@ -51,6 +52,8 @@ export const isThreadPageSuspended = (container: HTMLElement) =>
   within(container).queryByText(SUSPENDED) !== null;
 
 const CHAT_THREAD_CONTEXT = { allowMissingThread: true } as const;
+
+const aiAvailable = async () => await Promise.resolve(true);
 
 const threadRefOf = (threadId: string) =>
   ({ scope: "global", threadId: toChatThreadId(threadId) }) as const;
@@ -128,6 +131,13 @@ const ChatThreadDomPage = ({
     threadRef,
   });
   onSession(session);
+  // Wired as the thread page wires it, with its AI check always passing.
+  const userMessageEdit = useUserMessageEditActions({
+    editUserMessage: session.editUserMessage,
+    ensureAIAvailable: aiAvailable,
+    holdQueueForMessageEdit: session.holdQueueForMessageEdit,
+    startUserMessageEdit: session.startUserMessageEdit,
+  });
   return (
     <ChatMattersContext
       value={{
@@ -181,10 +191,7 @@ const ChatThreadDomPage = ({
             showThinkingIndicator
             streamdownComponents={session.streamdownComponents}
             threadRef={threadRef}
-            userMessageEdit={{
-              onStart: session.startUserMessageEdit,
-              onSubmit: session.editUserMessage,
-            }}
+            userMessageEdit={userMessageEdit}
           />
         </ChatEditorProvider>
       </ChatApprovalContext>

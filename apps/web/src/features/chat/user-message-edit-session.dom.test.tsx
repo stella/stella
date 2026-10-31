@@ -1,0 +1,444 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+
+import {
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
+  CHAT_TURN_ID_HEADER,
+  CHAT_TURN_INTENT,
+} from "@stll/api-contract";
+import { sleep } from "@stll/concurrency/sleep";
+
+import translations from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// Editing a sent message on the thread page, through the page's own wiring:
+// the session hook, the runtime registry, the chat runtime and the edit form,
+// over a fake server where the network is. Each refusal the server can send,
+// and a lost connection, must leave the form open on the user's draft over
+// the thread as the server stores it; an open form holds queued prompts.
+
+GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+
+const originalFetch = globalThis.fetch;
+let routeRequest:
+  | ((input: string | URL | Request, init?: RequestInit) => Promise<Response>)
+  | undefined;
+globalThis.fetch = Object.assign(
+  async (input: string | URL | Request, init?: RequestInit) => {
+    if (routeRequest === undefined) {
+      return Response.json({ message: "No server" }, { status: 503 });
+    }
+    return await routeRequest(input, init);
+  },
+  { preconnect: () => undefined },
+);
+
+const testing = await import("@testing-library/react");
+const { openChatThreadDomPage } =
+  await import("@/components/chat/chat-thread-dom-page");
+const { __resetChatRequestStateForTests } =
+  await import("@/features/chat/chat-runtime-registry");
+const { toSafeId } = await import("@/lib/safe-id");
+
+const actEnvironment: unknown = Reflect.get(
+  globalThis,
+  "IS_REACT_ACT_ENVIRONMENT",
+);
+beforeAll(() => {
+  // The server answers on its own schedule, not inside a test's `act()`.
+  Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", false);
+});
+
+afterAll(async () => {
+  Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
+  globalThis.fetch = originalFetch;
+  await unregisterDomEnvironment();
+});
+
+afterEach(() => {
+  testing.cleanup();
+  routeRequest = undefined;
+  __resetChatRequestStateForTests();
+});
+
+const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
+const API_ORIGIN = "http://localhost:3001";
+const THREAD_ID = "00000000-0000-7000-8000-00000000c0de";
+const TURN_ID = "00000000-0000-7000-8000-0000000000b1";
+const FIRST = "00000000-0000-7000-8000-0000000000a1";
+const SECOND = "00000000-0000-7000-8000-0000000000a2";
+const THIRD = "00000000-0000-7000-8000-0000000000a3";
+const QUEUED = "00000000-0000-7000-8000-0000000000a9";
+
+type StoredMessage = {
+  id: string;
+  role: "assistant" | "user";
+  text: string;
+};
+
+const turnOf = (id: string, question: string): StoredMessage[] => [
+  { id, role: "user", text: question },
+  {
+    id: `${id.slice(0, -2)}f${id.slice(-1)}`,
+    role: "assistant",
+    text: "Answer",
+  },
+];
+
+/** Two answered questions, as the server stores the thread. */
+const STORED: readonly StoredMessage[] = [
+  ...turnOf(FIRST, "First question"),
+  ...turnOf(SECOND, "Second question"),
+];
+
+const serialize = (messages: readonly StoredMessage[]) =>
+  messages.map(({ id, role, text }, index) => ({
+    createdAt: new Date(Date.UTC(2026, 9, 1, 12, 0, index)).toISOString(),
+    id,
+    parts: [{ content: text, type: "text" }],
+    role,
+  }));
+
+/** The thread once the server ran the edit of the second question. */
+const STORED_AFTER_EDIT: readonly StoredMessage[] = [
+  ...turnOf(FIRST, "First question"),
+  { id: SECOND, role: "user", text: "Second question again" },
+  { id: "reply", role: "assistant", text: "Edited answer" },
+];
+
+/** What the server answers a send: a refusal, a lost connection, or a
+ *  short accepted turn, which it then stores as `STORED_AFTER_EDIT`. */
+type SendAnswer =
+  | { type: "accepted" }
+  | { type: "refused"; code: string; status: number }
+  | { type: "connection-lost" };
+
+const acceptedTurn = (runId: string): Response => {
+  const events = [
+    { runId, threadId: THREAD_ID, type: "RUN_STARTED" },
+    { messageId: "reply", role: "assistant", type: "TEXT_MESSAGE_START" },
+    {
+      delta: "Edited answer",
+      messageId: "reply",
+      type: "TEXT_MESSAGE_CONTENT",
+    },
+    { messageId: "reply", type: "TEXT_MESSAGE_END" },
+    { finishReason: "stop", runId, threadId: THREAD_ID, type: "RUN_FINISHED" },
+  ];
+  return new Response(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+    {
+      headers: {
+        [CHAT_TURN_ID_HEADER]: TURN_ID,
+        "Content-Type": "text/event-stream",
+      },
+    },
+  );
+};
+
+/**
+ * The thread's server. `stored` is the thread as the server holds it; a
+ * refusal may change it first (`storedAfterRefusal`), as another turn would.
+ */
+const createServer = ({
+  answer,
+  storedAfterRefusal,
+}: {
+  answer: SendAnswer;
+  storedAfterRefusal?: readonly StoredMessage[] | undefined;
+}) => {
+  let stored = STORED;
+  const posted: Record<string, unknown>[] = [];
+  const unexpected: string[] = [];
+  const fetch = async (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ): Promise<Response> => {
+    await Promise.resolve();
+    const url = new URL(input instanceof Request ? input.url : input);
+    const method = init?.method ?? "GET";
+    if (url.origin === API_ORIGIN && url.pathname === "/v1/chat") {
+      const body: unknown = JSON.parse(
+        typeof init?.body === "string" ? init.body : "null",
+      );
+      if (typeof body !== "object" || body === null) {
+        return panic("Expected a JSON chat request");
+      }
+      posted.push(Object.fromEntries(Object.entries(body)));
+      switch (answer.type) {
+        case "accepted": {
+          stored = STORED_AFTER_EDIT;
+          const runId: unknown = Reflect.get(body, "runId");
+          return acceptedTurn(typeof runId === "string" ? runId : "run-edit");
+        }
+        case "refused":
+          stored = storedAfterRefusal ?? stored;
+          return Response.json(
+            { code: answer.code, message: "Refused" },
+            { status: answer.status },
+          );
+        case "connection-lost":
+          throw new TypeError("Failed to fetch");
+      }
+    }
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === `/v1/chat/threads/${THREAD_ID}/messages`
+    ) {
+      return Response.json({
+        activeSkill: null,
+        activeTurnId: null,
+        attachedFiles: { fileCount: 0, files: [] },
+        context: null,
+        contextMatterIds: [],
+        forkProvenance: { type: "none" },
+        lastActivityAt: null,
+        messages: serialize(stored),
+        model: null,
+        olderCursor: null,
+        reasoningEffort: null,
+        threadExists: true,
+        threadRevision: `revision-${String(stored.length)}`,
+        usedAnonymization: false,
+        webSearchAvailable: false,
+        webSearchEnabled: false,
+      });
+    }
+    unexpected.push(`${method} ${url.pathname}`);
+    return Response.json({ message: "Not served" }, { status: 404 });
+  };
+  return { fetch, posted, unexpected };
+};
+
+type Page = Awaited<ReturnType<typeof openChatThreadDomPage>>;
+
+const openPage = async (server: ReturnType<typeof createServer>) => {
+  routeRequest = server.fetch;
+  return await openChatThreadDomPage({
+    organizationId: ORGANIZATION_ID,
+    threadId: THREAD_ID,
+  });
+};
+
+/** The page's messages as id, role and text, in order. */
+const shownMessages = (page: Page): StoredMessage[] =>
+  page.session().messages.map(({ id, parts, role }) => ({
+    id,
+    role: role === "user" ? "user" : "assistant",
+    text: parts
+      .flatMap((part) => (part.type === "text" ? [part.content] : []))
+      .join(""),
+  }));
+
+const editField = (page: Page) =>
+  testing
+    .within(page.view.container)
+    .queryByRole("textbox", { name: translations.chat.editMessageInput });
+
+/** Opens the edit form of the second question and adds to its text. */
+const editSecondQuestion = async (page: Page) => {
+  const pencils = await testing
+    .within(page.view.container)
+    .findAllByRole("button", { name: translations.chat.editMessage });
+  const pencil = pencils.at(1) ?? panic("The second question's edit action");
+  testing.fireEvent.click(pencil);
+  const field = editField(page) ?? panic("The edit form");
+  testing.fireEvent.paste(field, {
+    clipboardData: {
+      getData: (type: string) => (type === "text/plain" ? " again" : ""),
+      items: [],
+      types: ["text/plain"],
+    },
+  });
+  expect(field.textContent).toBe("Second question again");
+};
+
+const sendEdit = (page: Page) => {
+  testing.fireEvent.click(
+    testing
+      .within(page.view.container)
+      .getByRole("button", { name: translations.chat.sendPrompt }),
+  );
+};
+
+const editNotice = async (page: Page) =>
+  await testing.waitFor(
+    () =>
+      page.view.container.querySelector("[data-chat-message-edit] [role=alert]")
+        ?.textContent ?? panic("No edit notice yet"),
+  );
+
+describe("an edit the server does not accept", () => {
+  const REFUSALS = [
+    {
+      code: CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning,
+      notice: translations.chat.editMessageRefused,
+      status: 409,
+    },
+    {
+      code: CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged,
+      notice: translations.chat.editMessageRefusedHistoryChanged,
+      status: 409,
+    },
+    {
+      code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+      notice: translations.chat.editMessageRefusedTargetMissing,
+      status: 404,
+    },
+    {
+      code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetNotUserMessage,
+      notice: translations.chat.editMessageRefusedTargetMissing,
+      status: 409,
+    },
+    {
+      code: "unauthorized",
+      notice: translations.errors.api.unauthorized,
+      status: 401,
+    },
+    {
+      code: "validation_failed",
+      notice: translations.errors.api.validation,
+      status: 422,
+    },
+  ] as const;
+
+  for (const { code, notice, status } of REFUSALS) {
+    test(`refused as ${code}: the form keeps the draft over the stored thread`, async () => {
+      // Another turn lands while the edit is refused: the page must show it.
+      const storedAfterRefusal = [...STORED, ...turnOf(THIRD, "Third")];
+      const server = createServer({
+        answer: { type: "refused", code, status },
+        storedAfterRefusal,
+      });
+      const page = await openPage(server);
+      await editSecondQuestion(page);
+
+      sendEdit(page);
+
+      expect(await editNotice(page)).toBe(notice);
+      await testing.waitFor(() => {
+        expect(shownMessages(page)).toEqual(storedAfterRefusal);
+      });
+      expect(editField(page)?.textContent).toBe("Second question again");
+      expect(page.session().error).toBeUndefined();
+      expect(server.posted).toHaveLength(1);
+      expect(server.posted.at(0)?.["forwardedProps"]).toMatchObject({
+        truncateAfterMessageId: SECOND,
+        turnIntent: CHAT_TURN_INTENT.edit,
+      });
+      expect(server.unexpected).toEqual([]);
+    });
+  }
+
+  test("a lost connection keeps the draft over the stored thread", async () => {
+    const server = createServer({ answer: { type: "connection-lost" } });
+    const page = await openPage(server);
+    await editSecondQuestion(page);
+
+    sendEdit(page);
+
+    expect(await editNotice(page)).toBe(
+      translations.chat.sendErrorConnectionFailed,
+    );
+    await testing.waitFor(() => {
+      expect(shownMessages(page)).toEqual(STORED);
+    });
+    expect(editField(page)?.textContent).toBe("Second question again");
+    expect(server.unexpected).toEqual([]);
+  });
+});
+
+describe("an accepted edit", () => {
+  test("replaces the message and every later turn, and closes the form", async () => {
+    const server = createServer({ answer: { type: "accepted" } });
+    const page = await openPage(server);
+    await editSecondQuestion(page);
+
+    sendEdit(page);
+
+    await testing.waitFor(() => {
+      expect(editField(page)).toBeNull();
+    });
+    await testing.waitFor(() => {
+      expect(shownMessages(page)).toEqual(STORED_AFTER_EDIT);
+    });
+    expect(server.posted.at(0)?.["forwardedProps"]).toMatchObject({
+      message: { id: SECOND, role: "user" },
+      truncateAfterMessageId: SECOND,
+      turnIntent: CHAT_TURN_INTENT.edit,
+    });
+    expect(server.unexpected).toEqual([]);
+  });
+});
+
+describe("queued prompts while an edit is open", () => {
+  const queuedPrompt = (page: Page) =>
+    page.session().sendMessage({
+      content: "A queued question",
+      id: toSafeId<"chatMessage">(QUEUED),
+    });
+
+  test("wait while the form is open and are sent once it closes", async () => {
+    const server = createServer({ answer: { type: "accepted" } });
+    const page = await openPage(server);
+    await editSecondQuestion(page);
+
+    await queuedPrompt(page);
+    // real-time: give a send that should not happen the time to start.
+    await sleep(50);
+    expect(server.posted).toEqual([]);
+    expect(page.session().queuedMessages.map(({ text }) => text)).toEqual([
+      "A queued question",
+    ]);
+
+    testing.fireEvent.click(
+      testing
+        .within(page.view.container)
+        .getByRole("button", { name: translations.common.cancel }),
+    );
+
+    await testing.waitFor(() => {
+      expect(server.posted).toHaveLength(1);
+    });
+    expect(server.posted.at(0)?.["forwardedProps"]).toMatchObject({
+      message: { id: QUEUED },
+    });
+    expect(server.posted.at(0)?.["forwardedProps"]).not.toHaveProperty(
+      "turnIntent",
+    );
+  });
+
+  test("wait for the accepted edit's turn, then follow it", async () => {
+    const server = createServer({ answer: { type: "accepted" } });
+    const page = await openPage(server);
+    await editSecondQuestion(page);
+    await queuedPrompt(page);
+
+    sendEdit(page);
+
+    await testing.waitFor(() => {
+      expect(server.posted).toHaveLength(2);
+    });
+    expect(
+      server.posted.map((body) => {
+        const forwarded: unknown = body["forwardedProps"];
+        const message: unknown =
+          typeof forwarded === "object" && forwarded !== null
+            ? Reflect.get(forwarded, "message")
+            : undefined;
+        return typeof message === "object" && message !== null
+          ? Reflect.get(message, "id")
+          : undefined;
+      }),
+    ).toEqual([SECOND, QUEUED]);
+  });
+});

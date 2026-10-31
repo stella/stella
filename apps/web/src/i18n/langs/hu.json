@@ -1529,9 +1529,12 @@
     "deleteThread": "Beszélgetés törlése",
     "diagramUnavailable": "Ezt a diagramot nem sikerült megjeleníteni. A forráskódja alább látható.",
     "editMessage": "Üzenet szerkesztése",
+    "editMessageAiUnavailable": "Nincs elérhető AI-modell, ezért a szerkesztés nem lett elküldve. Ellenőrizze a szervezet AI-beállításait.",
     "editMessageInput": "Szerkesztett üzenet",
     "editMessageNotice": "A küldés lecseréli ezt az üzenetet és az utána következő összes üzenetet.",
     "editMessageRefused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
+    "editMessageRefusedHistoryChanged": "A csevegés megváltozott a szerkesztés küldése közben. Most a mentett állapotot mutatja; küldje el újra a szerkesztést.",
+    "editMessageRefusedTargetMissing": "Ez az üzenet már nincs a csevegésben, ezért nem szerkeszthető.",
     "editMessageRemoveAttachment": "{name} eltávolítása ebből az üzenetből",
     "editMode": {
       "autoDirect": "Automatikus · átírás",

@@ -2,6 +2,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_MESSAGE_EDIT_ERROR_CODE,
 } from "@stll/api-contract";
+import type { ChatMessageEditErrorCode } from "@stll/api-contract";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { hasRunningToolCallInLatestAssistantMessage } from "@/components/chat/chat-ui-tools";
@@ -169,15 +170,22 @@ const isLatestAssistantMessage = ({
   return latest?.role === "assistant" && latest.id === messageId;
 };
 
-const CHAT_MESSAGE_EDIT_REFUSAL_CODES: readonly string[] = Object.values(
-  CHAT_MESSAGE_EDIT_ERROR_CODE,
-);
+/** Why the server refused to edit a message, or null when `error` is no
+ *  such refusal. */
+export const chatMessageEditRefusalCode = (
+  error: unknown,
+): ChatMessageEditErrorCode | null => {
+  const code = chatRefusal(error)?.code;
+  return (
+    Object.values(CHAT_MESSAGE_EDIT_ERROR_CODE).find(
+      (candidate) => candidate === code,
+    ) ?? null
+  );
+};
 
 /** The server refused to edit a message; the page reloads what it stores. */
-export const isChatMessageEditRefusal = (error: Error | undefined): boolean => {
-  const code = chatRefusal(error)?.code;
-  return code !== undefined && CHAT_MESSAGE_EDIT_REFUSAL_CODES.includes(code);
-};
+export const isChatMessageEditRefusal = (error: Error | undefined): boolean =>
+  chatMessageEditRefusalCode(error) !== null;
 
 /** Replaying a mismatched continuation cannot repair its server-owned state,
  *  and replaying a refused edit would answer the history it left in place. */

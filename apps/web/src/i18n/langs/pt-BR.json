@@ -1529,9 +1529,12 @@
     "deleteThread": "Excluir conversa",
     "diagramUnavailable": "Não foi possível exibir este diagrama. O código-fonte está abaixo.",
     "editMessage": "Editar mensagem",
+    "editMessageAiUnavailable": "Nenhum modelo de IA está disponível, então a edição não foi enviada. Verifique as configurações de IA da organização.",
     "editMessageInput": "Mensagem editada",
     "editMessageNotice": "Ao enviar, esta mensagem e todas as mensagens depois dela serão substituídas.",
     "editMessageRefused": "Não foi possível editar a mensagem. O chat agora mostra o que está salvo; tente novamente quando nenhuma resposta estiver em andamento.",
+    "editMessageRefusedHistoryChanged": "O chat mudou enquanto a edição era enviada. Ele agora mostra o que está salvo; envie a edição novamente.",
+    "editMessageRefusedTargetMissing": "Esta mensagem não está mais no chat, então não pode ser editada.",
     "editMessageRemoveAttachment": "Remover {name} desta mensagem",
     "editMode": {
       "autoDirect": "Automático · reescrever",

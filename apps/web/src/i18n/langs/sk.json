@@ -1529,9 +1529,12 @@
     "deleteThread": "Zmazať konverzáciu",
     "diagramUnavailable": "Diagram sa nepodarilo vykresliť. Nižšie je jeho zdrojový kód.",
     "editMessage": "Upraviť správu",
+    "editMessageAiUnavailable": "Nie je dostupný žiadny model AI, preto úprava nebola odoslaná. Skontrolujte nastavenia AI organizácie.",
     "editMessageInput": "Upravená správa",
     "editMessageNotice": "Odoslaním nahradíte túto správu aj všetky správy po nej.",
     "editMessageRefused": "Správu sa nepodarilo upraviť. Chat teraz ukazuje uložený stav, skúste to znova, keď nebeží žiadna odpoveď.",
+    "editMessageRefusedHistoryChanged": "Chat sa počas odosielania úpravy zmenil. Teraz ukazuje uložený stav, odošlite úpravu znova.",
+    "editMessageRefusedTargetMissing": "Táto správa už v chate nie je, preto ju nemožno upraviť.",
     "editMessageRemoveAttachment": "Odstrániť {name} z tejto správy",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",

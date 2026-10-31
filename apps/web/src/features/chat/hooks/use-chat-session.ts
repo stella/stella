@@ -14,6 +14,7 @@ import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 import type {
   ConnectConnectorDecision,
   ConnectConnectorOutput,
@@ -39,6 +40,7 @@ import type {
   ApprovalToolName,
   AskUserOutput,
   ChatUITools,
+  PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import {
   consumePlaybookSaveToolCalls,
@@ -83,7 +85,10 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
-import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
+import type {
+  UserMessageEdit,
+  UserMessageEditOutcome,
+} from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
@@ -96,7 +101,9 @@ import {
   type ChatUserMessageInput,
   isChatMessageStartError,
   sendThreadChatMessage,
+  sendThreadChatMessageUntilAccepted,
 } from "@/features/chat/chat-runtime";
+import { showStoredChatThread } from "@/features/chat/chat-runtime-registry";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -104,7 +111,10 @@ import {
   storeChatToolGrant,
 } from "@/features/chat/chat-tool-grants";
 import { LazyChatTableChart } from "@/features/chat/components/lazy-chat-table-chart";
-import { planTruncatedReplay } from "@/features/chat/hooks/edit-user-message";
+import {
+  planTruncatedReplay,
+  userMessageEditFailure,
+} from "@/features/chat/hooks/edit-user-message";
 import type { TruncatedReplayTarget } from "@/features/chat/hooks/edit-user-message";
 import {
   invalidateCreatedDocumentQueries,
@@ -122,6 +132,7 @@ import {
 import type { PlaybookPaneMode } from "@/features/chat/hooks/use-chat-session-playbook-save.logic";
 import { reconcileReaderAnnotationWriteToolCalls } from "@/features/chat/hooks/use-chat-session-reader-annotation-write.logic";
 import {
+  canSendWithoutQueueing,
   createInitialSendQueueState,
   describeQueuedMessage,
   type QueuedChatEntry,
@@ -814,7 +825,7 @@ export const useChatSession = ({
       }
 
       const requestOptions = withRequestSnapshots(options);
-      if (sendQueueRef.current.isGenerating) {
+      if (!canSendWithoutQueueing(sendQueueRef.current)) {
         enqueueMessage(message, requestOptions);
         return;
       }
@@ -1078,25 +1089,30 @@ export const useChatSession = ({
    * turn streams and the transcript's edit actions do not re-render.
    */
   const replayFromTruncation = useCallback(
-    async (
+    async <TReplayed>(
       target: TruncatedReplayTarget,
-      replay: (options: ChatSendMessageOptions | undefined) => Promise<void>,
-    ) => {
-      const plan = planTruncatedReplay(
-        projectCanonicalChatUIMessages(chat.getSnapshot().messages),
-        target,
+      replay: (
+        options: ChatSendMessageOptions | undefined,
+        /** The page's messages before the replay rewound them. */
+        rewoundFrom: PersistedChatMessage[],
+      ) => Promise<TReplayed>,
+    ): Promise<TReplayed | null> => {
+      const rewoundFrom = projectCanonicalChatUIMessages(
+        chat.getSnapshot().messages,
       );
+      const plan = planTruncatedReplay(rewoundFrom, target);
       if (plan === null) {
-        return;
+        return null;
       }
       setMessages(plan.messages);
-      await replay(
+      return await replay(
         snapshotChatRequestOptions({
           docxEditRepresentation: undefined,
           editApplyMode: undefined,
           options: { body: plan.body },
           sendMode: getSendMode?.(),
         }),
+        rewoundFrom,
       );
     },
     [chat, getSendMode, setMessages],
@@ -1137,23 +1153,68 @@ export const useChatSession = ({
   }, [stop]);
 
   /**
+   * An open edit form holds the queue: nothing queued is sent while it is
+   * open, since the edit would drop the turn such a prompt starts. The
+   * returned release runs when the form closes; the queue then resumes.
+   */
+  const holdQueueForMessageEdit = useCallback(
+    (messageId: string) => {
+      applySendQueueEvent({ type: "message-edit-opened", messageId });
+      return () => {
+        const dispatched = applySendQueueEvent({
+          type: "message-edit-closed",
+          messageId,
+        });
+        if (dispatched) {
+          detached(
+            dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError),
+            "use-chat-session.dispatch-after-message-edit",
+          );
+        }
+      };
+    },
+    [applySendQueueEvent, dispatchQueuedMessage],
+  );
+
+  /**
    * Replace one of the user's own messages and run the assistant again from
    * there: the message and every later turn leave the thread, and the edited
-   * message is sent under the same id.
+   * message is sent under the same id. Resolves once the server accepted the
+   * edit's turn or did not; when it did not, the page shows the thread as the
+   * server stores it again.
    */
   const editUserMessage = useCallback(
-    async (messageId: string, edit: UserMessageEdit) => {
-      await replayFromTruncation(
+    async (
+      messageId: string,
+      edit: UserMessageEdit,
+    ): Promise<UserMessageEditOutcome> => {
+      const replayed = await replayFromTruncation(
         { type: "user-message", messageId },
-        async (options) => {
-          await sendChatMessage(
+        async (options, rewoundFrom): Promise<UserMessageEditOutcome> => {
+          const acceptance = await sendThreadChatMessageUntilAccepted(
+            chat,
             buildEditedUserMessage({ edit, messageId }),
-            options,
+            { ...options, timingSurface },
           );
+          switch (acceptance.status) {
+            case "accepted":
+              applySendQueueEvent({ type: "message-edit-accepted", messageId });
+              return { type: "accepted" };
+            case "failed":
+              await showStoredChatThread(chat, rewoundFrom);
+              return userMessageEditFailure(acceptance.error);
+          }
         },
       );
+      // A message the page no longer holds cannot be edited from it.
+      return (
+        replayed ?? {
+          type: "edit-refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+        }
+      );
     },
-    [replayFromTruncation, sendChatMessage],
+    [applySendQueueEvent, chat, replayFromTruncation, timingSurface],
   );
 
   const createDocumentMattersView = queryView(
@@ -1786,6 +1847,7 @@ export const useChatSession = ({
     secretAvailabilityKey: conversationId,
     handleAskUserEditAndRerun,
     startUserMessageEdit,
+    holdQueueForMessageEdit,
     editUserMessage,
     handleAlwaysAllow,
     confirmStoredApprovalGrant,
