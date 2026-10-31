@@ -431,6 +431,7 @@ const CAPABILITY_AGENT_ACCESS = {
   "matters.justifications.list": OPEN_READ,
   "matters.list": OPEN_READ,
   "matters.members.add": APPROVE_GRANTS_ACCESS,
+  "matters.members.list": OPEN_READ,
   "matters.members.remove": APPROVE_REVOKES_ACCESS,
   "matters.search-preview.get": OPEN_READ,
   "matters.unarchive": OPEN_EDITS_CONTENT,
