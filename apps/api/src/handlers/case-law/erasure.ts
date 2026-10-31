@@ -58,6 +58,11 @@ import type {
   RemovalEvidence,
   RemovalSupersededReason,
 } from "@/api/lib/legal-search/removal-evidence";
+import type {
+  ClaimedErasureRecovery,
+  RemovalRetryItem,
+} from "@/api/lib/legal-search/removal-reconciliation-store";
+import { retainClaimedErasureTx } from "@/api/lib/legal-search/removal-reconciliation-store";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 /** Wall-clock bound on the raw listing, reads and deletes of an erasure. */
@@ -156,7 +161,22 @@ export const eraseCancelledIntentObjects = async ({
   return result;
 };
 
+const ACCEPTED_REDACTION: unique symbol = Symbol("accepted-case-law-redaction");
+
+/** Only the canonical owner issues this after committing the evidence fence. */
+export type CaseLawRedactionClaim = {
+  readonly recovery: ClaimedErasureRecovery;
+  readonly [ACCEPTED_REDACTION]: true;
+  readonly decisionId: SafeId<"caseLawDecision">;
+  readonly decisionIds: readonly SafeId<"caseLawDecision">[];
+  readonly scopedDb: ScopedDb;
+};
+
 type RedactInput = {
+  retryItem?: RemovalRetryItem | undefined;
+  prepareSupplementHolders?: (
+    claim: CaseLawRedactionClaim,
+  ) => Promise<Result<void, DatabaseError>>;
   evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
@@ -295,7 +315,9 @@ type RedactionFence =
   | {
       type: "fenced";
       canonicalId: SafeId<"caseLawDecision">;
+      claimDecisionId: SafeId<"caseLawDecision">;
       decisions: FencedDecision[];
+      recovery: ClaimedErasureRecovery;
     }
   /** No such row, or none the projection knows: nothing to redact. */
   | { type: "superseded"; reason: RemovalSupersededReason }
@@ -328,6 +350,8 @@ export const redactCaseLawDecision = async ({
   sweepRaw = sweepCaseLawRawDecision,
   lockSource = lockActiveCorpusProjectionSourceTx,
   evidence,
+  prepareSupplementHolders,
+  retryItem,
 }: RedactInput): Promise<
   Result<RedactCaseLawDecisionOutcome, DatabaseError>
 > => {
@@ -426,6 +450,33 @@ export const redactCaseLawDecision = async ({
           reason: REMOVAL_SUPERSEDED_REASON.CANONICAL_CHANGED,
         };
       }
+    }
+
+    const claimDecisionId = decisions.some(({ id }) => id === decisionId)
+      ? decisionId
+      : canonicalId;
+    let recovery: ClaimedErasureRecovery = { type: "external" };
+    if (prepareSupplementHolders !== undefined) {
+      const requested =
+        decisions.find(({ id }) => id === claimDecisionId) ??
+        panic("Claim omitted its canonical decision");
+      const now = new Date();
+      recovery = await retainClaimedErasureTx(tx, {
+        retryItem,
+        now,
+        decisionId: requested.id,
+        sourceId: requested.sourceId,
+        evidence: evidence ?? {
+          type: "existing-redaction",
+          decisionId: requested.id,
+          sourceId: requested.sourceId,
+          sourceDocumentId: requested.sourceDocumentId,
+          sourceObservedAt: requested.sourceObservedAt?.toISOString() ?? null,
+          sourceObservationOrder:
+            requested.sourceObservationOrder?.toString() ?? null,
+          observedAt: now.toISOString(),
+        },
+      });
     }
 
     const pendingFenceResults = [];
@@ -527,6 +578,8 @@ export const redactCaseLawDecision = async ({
     return {
       type: "fenced",
       canonicalId,
+      claimDecisionId,
+      recovery,
       decisions: await Promise.all(pendingFenceResults),
     };
   });
@@ -581,8 +634,51 @@ export const redactCaseLawDecision = async ({
     deleteCorpus,
     sweepRaw,
   });
-  return Result.ok(incompleteAlias ?? primaryOutcome);
+  if (prepareSupplementHolders !== undefined) {
+    const prepared = await prepareSupplementHolders({
+      [ACCEPTED_REDACTION]: true,
+      recovery: fenced.recovery,
+      decisionIds: fenced.decisions.map(({ decision }) => decision.id),
+      decisionId: fenced.claimDecisionId,
+      scopedDb,
+    });
+    if (prepared.isErr()) {
+      return prepared;
+    }
+  }
+  const completedAudits = [...aliasOutcomes, primaryOutcome].flatMap(
+    (outcome) => (outcome.type === "redacted" ? [outcome.audit] : []),
+  );
+  if (completedAudits.length > 0) {
+    await scopedDb((tx) =>
+      // audit: skip - the success record follows own cleanup and holder withdrawal.
+      tx.insert(caseLawIndexJobs).values(
+        completedAudits.map((audit): typeof caseLawIndexJobs.$inferInsert => ({
+          ...audit,
+          operation: "redact",
+          status: "succeeded",
+          contentHash: null,
+        })),
+      ),
+    );
+  }
+  const outcome = incompleteAlias ?? primaryOutcome;
+  return Result.ok(
+    outcome.type === "redacted"
+      ? {
+          type: outcome.type,
+          erasure: outcome.erasure,
+          legacyRaw: outcome.legacyRaw,
+        }
+      : outcome,
+  );
 };
+
+type FencedDecisionErasureOutcome =
+  | Extract<RedactCaseLawDecisionOutcome, { type: "corpus-objects-remain" }>
+  | (Extract<RedactCaseLawDecisionOutcome, { type: "redacted" }> & {
+      audit: { decisionId: SafeId<"caseLawDecision">; detail: string | null };
+    });
 
 type EraseFencedDecisionOptions = {
   fenced: FencedDecision;
@@ -596,9 +692,7 @@ const eraseFencedDecision = async ({
   scopedDb,
   deleteCorpus,
   sweepRaw,
-}: EraseFencedDecisionOptions): Promise<
-  Exclude<RedactCaseLawDecisionOutcome, { type: "not-found" | "superseded" }>
-> => {
+}: EraseFencedDecisionOptions): Promise<FencedDecisionErasureOutcome> => {
   const decisionId = decision.id;
 
   // 1. pg-fts projection.
@@ -793,19 +887,9 @@ const eraseFencedDecision = async ({
       .filter((part) => part !== null)
       .join("; ")
       .slice(0, 2048) || null;
-  await scopedDb((tx) =>
-    // audit: skip — this insert IS the append-only erasure audit row
-    tx.insert(caseLawIndexJobs).values({
-      decisionId,
-      operation: "redact",
-      status: "succeeded",
-      contentHash: null,
-      detail,
-    }),
-  );
-
   return {
     type: "redacted",
+    audit: { decisionId, detail },
     erasure: corpusErasure.type,
     legacyRaw: rawErasure.legacyRaw,
   };

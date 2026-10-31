@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] bounded Formex archive reads yield the same entries in the same order; only oversized archives are refused.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
@@ -6,7 +7,6 @@
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
 
 import {
   CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
@@ -26,6 +26,7 @@ import {
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
   fetchPublisher,
@@ -73,6 +74,7 @@ import {
   splitStoredDecisionTextMetadata,
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
+import { loadDocxArchive } from "@/api/lib/docx-archive";
 import {
   AdapterFetchError,
   TelemetryError,
@@ -1433,6 +1435,7 @@ const FORMEX_MANIFESTATION_TYPE = "fmx4";
 const FORMEX_MEDIA_TYPE = "application/xml;type=fmx4";
 
 const ZIP_MEDIA_TYPE = "application/zip";
+const FORMEX_ARCHIVE_MAX_ENTRIES = 4096;
 
 /**
  * The courts this source publishes for, by the corporate-body code the notice
@@ -2338,15 +2341,22 @@ const fetchFormex = async (
 export const readEcjFormexArchive = async (
   bytes: ArrayBuffer,
 ): Promise<string> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const archive = await JSZip.loadAsync(bytes);
-  const entries = await Promise.all(
-    Object.values(archive.files)
-      .filter((file) => !file.dir)
-      .map(
-        async (file) => [file.name, await file.async("uint8array")] as const,
-      ),
-  );
+  const archive = await loadDocxArchive(bytes, {
+    maxEntries: FORMEX_ARCHIVE_MAX_ENTRIES,
+    maxEntryBytes: PUBLISHER_BODY_MAX_BYTES,
+    maxTotalBytes: PUBLISHER_BODY_MAX_BYTES,
+  });
+  const entries: [string, Uint8Array][] = [];
+  for (const file of Object.values(archive.zip.files)) {
+    if (file.dir) {
+      continue;
+    }
+    const content = await archive.readEntryUint8(file.name);
+    if (content === null) {
+      return panic(`Formex archive entry disappeared: ${file.name}`);
+    }
+    entries.push([file.name, content]);
+  }
   return encodeEcjFormexArchive(entries);
 };
 

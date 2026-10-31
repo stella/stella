@@ -12,14 +12,19 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
+  caseLawDecisionAliases,
   caseLawDecisions,
   caseLawDecisionSupplements,
+  caseLawIndexJobs,
+  caseLawRemovalReconciliationItems,
+  caseLawSearchDocuments,
   caseLawSources,
   relations,
 } from "@/api/db/schema";
@@ -42,6 +47,7 @@ import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/su
 import { absorbStandaloneSupplementRow } from "@/api/handlers/case-law/ingestion/supplement-absorption";
 import { DOCUMENT_SUPPLEMENTS_METADATA_KEY } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
+import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ABSORBED_INTO_METADATA_KEY } from "@/api/lib/case-law/decision-absorption";
@@ -64,6 +70,14 @@ import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
 } from "@/api/lib/legal-search/raw-source-storage";
+import {
+  REMOVAL_PENDING_REASON,
+  REMOVAL_RETRY_KIND,
+} from "@/api/lib/legal-search/removal-reconciliation-state";
+import {
+  persistRemovalOutcomeTx,
+  selectDueRemovalRetries,
+} from "@/api/lib/legal-search/removal-reconciliation-store";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -94,8 +108,7 @@ const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
 
 const scopedDb: ScopedDb = async (callback) =>
   // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await callback(asTestRaw<Transaction>(db));
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -1090,6 +1103,20 @@ describe("the reasons' stored payload", () => {
       readStoredRaw,
       reparseStoredRaw,
       leaseWaitMs: 0,
+      redactDecision: async (options) =>
+        await redactCaseLawDecision({
+          ...options,
+          prepareSupplementHolders: async (claim) => {
+            const prepare =
+              options.prepareSupplementHolders ??
+              panic("Missing holder preparation");
+            const prepared = await prepare(claim);
+            expect(
+              (await decisionBy(fixture.sourceId, "339002")).fulltext,
+            ).toBeNull();
+            return prepared;
+          },
+        }),
     });
 
     expect(Result.isOk(erased) && erased.value.holders).toEqual([
@@ -1127,6 +1154,408 @@ describe("the reasons' stored payload", () => {
     expect(again.fulltext).not.toContain(REASONS_TEXT);
     expect(JSON.stringify(again.documentAst)).not.toContain(REASONS_TEXT);
     expect(await citationsOf(ruling.id)).toEqual([]);
+  });
+
+  test("do not record the primary erasure while a holder remains public", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const corpusBucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+    const ownCorpusKey = `legal-corpus/erasure/${absorbed.id}.txt`;
+    const ownRawKey = `${rawDocumentPrefix({ family: RAW_SOURCE_FAMILY.CASE_LAW, sourceId: fixture.sourceId, documentId: absorbed.id })}payloads/retained`;
+    fake.put(corpusBucket, ownCorpusKey, REASONS_TEXT);
+    fake.put(envBase.S3_BUCKET, ownRawKey, REASONS_TEXT);
+    await db
+      .update(caseLawDecisions)
+      .set({ textS3Key: ownCorpusKey, sourceRawS3Key: ownRawKey })
+      .where(eq(caseLawDecisions.id, absorbed.id));
+    await db
+      .insert(caseLawSearchDocuments)
+      .values({ decisionId: absorbed.id, searchableText: REASONS_TEXT });
+    let redactionStarted = false;
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+      withdrawDocument: async () =>
+        await Promise.resolve(
+          Result.ok({
+            type: "corpus-objects-remain" as const,
+            error: new Error("sentinel delete failure"),
+          }),
+        ),
+      redactDecision: async (options) => {
+        redactionStarted = true;
+        return await redactCaseLawDecision(options);
+      },
+    });
+
+    expect(fake.objects.has(`${corpusBucket}/${ownCorpusKey}`)).toBe(false);
+    expect(fake.objects.has(`${envBase.S3_BUCKET}/${ownRawKey}`)).toBe(false);
+    expect(
+      await db.$count(
+        caseLawSearchDocuments,
+        eq(caseLawSearchDocuments.decisionId, absorbed.id),
+      ),
+    ).toBe(0);
+    expect(Result.isError(erased)).toBe(true);
+    expect(redactionStarted).toBe(true);
+    expect(
+      (
+        await db
+          .select({ redactedAt: caseLawDecisions.redactedAt })
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.id, absorbed.id))
+          .limit(1)
+      ).at(0)?.redactedAt,
+    ).not.toBeNull();
+    expect(
+      await db
+        .select({ id: caseLawIndexJobs.id })
+        .from(caseLawIndexJobs)
+        .where(
+          and(
+            eq(caseLawIndexJobs.decisionId, absorbed.id),
+            eq(caseLawIndexJobs.operation, "redact"),
+            eq(caseLawIndexJobs.status, "succeeded"),
+          ),
+        ),
+    ).toEqual([]);
+    expect(
+      await db.$count(
+        caseLawRemovalReconciliationItems,
+        eq(caseLawRemovalReconciliationItems.decisionId, absorbed.id),
+      ),
+    ).toBe(1);
+  });
+
+  test("one accepted claim settles composed holders across canonical aliases", async () => {
+    const fixture = await newSource();
+    const aliasCaseNumber = "IV Ka 96/18";
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestSupplement(
+      fixture,
+      supplementOf(
+        saosRow({
+          id: 339_003,
+          judgmentType: "REASONS",
+          judgmentDate: "2018-04-19",
+          caseNumber: aliasCaseNumber,
+          body: REASONS_TEXT,
+        }),
+      ),
+    );
+    await ingestDecision(
+      fixture,
+      decisionOf(
+        saosRow({
+          id: 339_004,
+          judgmentType: "SENTENCE",
+          judgmentDate: "2018-04-19",
+          caseNumber: aliasCaseNumber,
+          body: RULING_TEXT,
+        }),
+      ),
+    );
+    await advanceSourceCounter(fixture.sourceId);
+    const canonicalReasons = await decisionBy(fixture.sourceId, "339001");
+    const aliasReasons = await decisionBy(fixture.sourceId, "339003");
+    const canonicalRuling = await decisionBy(fixture.sourceId, "339002");
+    const aliasRuling = await decisionBy(fixture.sourceId, "339004");
+    await db.insert(caseLawDecisionAliases).values({
+      retiredDecisionId: aliasReasons.id,
+      canonicalDecisionId: canonicalReasons.id,
+    });
+    const result = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: canonicalReasons.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+    });
+    expect(
+      result
+        .unwrap()
+        .holders.map(({ judgmentId }) => judgmentId)
+        .toSorted(),
+    ).toEqual([canonicalRuling.id, aliasRuling.id].toSorted());
+    for (const identity of ["339002", "339004"]) {
+      const rebuilt = await decisionBy(fixture.sourceId, identity);
+      expect(rebuilt.fulltext).toContain(RULING_TEXT);
+      expect(rebuilt.fulltext).not.toContain(REASONS_TEXT);
+      expect(
+        rebuilt.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY],
+      ).toBeUndefined();
+    }
+    expect(
+      await db.$count(
+        caseLawRemovalReconciliationItems,
+        eq(caseLawRemovalReconciliationItems.decisionId, canonicalReasons.id),
+      ),
+    ).toBe(0);
+  });
+
+  test("superseded removal evidence leaves composed holders unchanged", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    let withdrawals = 0;
+    const result = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+      evidence: {
+        type: "publisher-absence",
+        decisionId: absorbed.id,
+        sourceId: fixture.sourceId,
+        sourceDocumentId: "339001",
+        observedAt: "2026-10-30T00:00:00.000Z",
+        sourceObservedAt: "2026-09-23T10:00:00.000Z",
+        sourceObservationOrder: (
+          (await observationOrderOf(absorbed.id)) + 1n
+        ).toString(),
+        absence: "http-410",
+      },
+      withdrawDocument: async (options) => {
+        withdrawals++;
+        return await withdrawCaseLawDecisionDocument(options);
+      },
+    });
+    expect(result.unwrap()).toMatchObject({
+      redaction: { type: "superseded" },
+      holders: [],
+    });
+    expect(withdrawals).toBe(0);
+    expect(await decisionBy(fixture.sourceId, "339002")).toEqual(ruling);
+    expect(
+      await db.$count(
+        caseLawRemovalReconciliationItems,
+        eq(caseLawRemovalReconciliationItems.decisionId, absorbed.id),
+      ),
+    ).toBe(0);
+  });
+
+  test("a claimed erasure resumes from durable work and completed holders stay settled", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(RULING));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    await advanceSourceCounter(fixture.sourceId);
+    const priorRetryId = createSafeId<"caseLawRemovalReconciliationItem">();
+    const priorAttempts = 3;
+    await db.insert(caseLawRemovalReconciliationItems).values({
+      id: priorRetryId,
+      sourceId: fixture.sourceId,
+      decisionId: absorbed.id,
+      kind: REMOVAL_RETRY_KIND.PENDING,
+      attempts: priorAttempts,
+      payload: {
+        type: "pending",
+        operation: "probe",
+        decisionId: absorbed.id,
+        reason: REMOVAL_PENDING_REASON.PUBLISHER_UNAVAILABLE,
+      },
+      nextAttemptAt: new Date("2026-01-01T00:00:00.000Z"),
+      lastAttemptAt: new Date("2026-01-01T00:00:00.000Z"),
+      lastError: REMOVAL_PENDING_REASON.PUBLISHER_UNAVAILABLE,
+    });
+    const retryNow = new Date("2099-01-01T00:00:00.000Z");
+    const retryOptions = {
+      scopedDb,
+      sourceId: fixture.sourceId,
+      now: retryNow,
+      perKindLimit: 10,
+    };
+    const staleItem =
+      (await selectDueRemovalRetries(retryOptions)).at(0) ??
+      panic("Missing prior retry");
+    const interruption = await rejectionOf(
+      redactCaseLawDecisionWithSupplementHolders({
+        decisionId: absorbed.id,
+        scopedDb,
+        readStoredRaw,
+        reparseStoredRaw,
+        leaseWaitMs: 0,
+        redactDecision: async (options) =>
+          await redactCaseLawDecision({
+            ...options,
+            prepareSupplementHolders: async (claim) => {
+              expect(claim.decisionId).toBe(absorbed.id);
+              expect(
+                await db.$count(
+                  caseLawRemovalReconciliationItems,
+                  eq(caseLawRemovalReconciliationItems.decisionId, absorbed.id),
+                ),
+              ).toBe(1);
+              throw new TypeError("sentinel interruption after the claim");
+            },
+          }),
+      }),
+    );
+    expect(interruption).toBeInstanceOf(TypeError);
+    expect(interruption).toMatchObject({
+      message: "sentinel interruption after the claim",
+    });
+    expect(await decisionBy(fixture.sourceId, "339002")).toEqual(ruling);
+    expect(
+      await scopedDb(
+        async (tx) =>
+          await persistRemovalOutcomeTx(tx, {
+            sourceId: fixture.sourceId,
+            decisionId: absorbed.id,
+            outcome: { type: "settled" },
+            now: retryNow,
+            origin: { type: "retry", item: staleItem },
+          }),
+      ),
+    ).toBe(false);
+    const item =
+      (await selectDueRemovalRetries(retryOptions)).at(0) ??
+      panic("Missing durable erasure retry");
+    expect(item.id).toBe(priorRetryId);
+    expect(item.attempts).toBe(priorAttempts + 1);
+    if (item.payload.type !== "pending" || item.payload.operation !== "erase") {
+      return panic("The accepted erasure must retain its evidence");
+    }
+    let withdrawals = 0;
+    const resume = async () =>
+      await redactCaseLawDecisionWithSupplementHolders({
+        decisionId: absorbed.id,
+        scopedDb,
+        readStoredRaw,
+        reparseStoredRaw,
+        leaseWaitMs: 0,
+        retryItem: item,
+        evidence:
+          item.payload.type === "pending" && item.payload.operation === "erase"
+            ? item.payload.evidence
+            : panic("Lost erasure payload"),
+        withdrawDocument: async (options) => {
+          withdrawals++;
+          return await withdrawCaseLawDecisionDocument(options);
+        },
+      });
+    expect((await resume()).unwrap().holders).toEqual([
+      { type: "recomposed", judgmentId: ruling.id },
+    ]);
+    expect(withdrawals).toBeGreaterThan(0);
+    expect(
+      await scopedDb(
+        async (tx) =>
+          await persistRemovalOutcomeTx(tx, {
+            sourceId: fixture.sourceId,
+            decisionId: absorbed.id,
+            outcome: { type: "settled" },
+            now: retryNow,
+            origin: { type: "retry", item },
+          }),
+      ),
+    ).toBe(true);
+    const count = withdrawals;
+    expect((await resume()).unwrap().holders).toEqual([]);
+    expect(withdrawals).toBe(count);
+    expect(await selectDueRemovalRetries(retryOptions)).toEqual([]);
+  });
+
+  test("erased while their ruling composes them leave the ruling written in between", async () => {
+    const fixture = await newSource();
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const standalone = await decisionBy(fixture.sourceId, "339001");
+    let rulingId: SafeId<"caseLawDecision"> | undefined;
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: standalone.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+      redactDecision: async (options) => {
+        // The ruling arrives after the holders were read and before the
+        // reasons' row is tombstoned, and composes them.
+        await ingestDecision(fixture, decisionOf(RULING));
+        const ruling = await decisionBy(fixture.sourceId, "339002");
+        expect(ruling.fulltext).toContain(REASONS_TEXT);
+        rulingId = ruling.id;
+        await advanceSourceCounter(fixture.sourceId);
+        return await redactCaseLawDecision(options);
+      },
+    });
+
+    if (rulingId === undefined) {
+      return panic("the ruling was not written during the erasure");
+    }
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      { type: "recomposed", judgmentId: rulingId },
+    ]);
+    const rebuilt = await decisionBy(fixture.sourceId, "339002");
+    expect(rebuilt.fulltext).toContain(RULING_TEXT);
+    expect(rebuilt.fulltext).not.toContain(REASONS_TEXT);
+    expect(
+      rebuilt.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY],
+    ).toBeUndefined();
+    expect(await citationsOf(rulingId)).toEqual([]);
+    expect(await publishedIds(fixture.sourceId)).toEqual(["339002"]);
+    return undefined;
+  });
+
+  test("erased while their withheld ruling is republished withhold it again when it cannot be rebuilt", async () => {
+    const fixture = await newSource();
+    await ingestDecision(fixture, decisionOf(RULING));
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    await ingestStandaloneReasons(fixture);
+    const standaloneId = (await decisionBy(fixture.sourceId, "339001")).id;
+    let sourceLease:
+      | Awaited<ReturnType<typeof acquireCaseLawSourceIngestionLease>>
+      | undefined;
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: standaloneId,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+      redactDecision: async (options) => {
+        // The first pass withheld the ruling; ingestion republishes it with
+        // the reasons before their row is tombstoned, then keeps the lease.
+        await ingestDecision(fixture, decisionOf(RULING));
+        expect(
+          (await decisionBy(fixture.sourceId, "339002")).fulltext,
+        ).toContain(REASONS_TEXT);
+        sourceLease = await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId: fixture.sourceId,
+        });
+        return await redactCaseLawDecision(options);
+      },
+    });
+
+    if (sourceLease === undefined || sourceLease === null) {
+      return panic("the source lease was not held during the erasure");
+    }
+    await sourceLease.release();
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      {
+        type: "withheld",
+        judgmentId: ruling.id,
+        reason: "the source's ingestion lease is held",
+      },
+    ]);
+    const withheld = await decisionBy(fixture.sourceId, "339002");
+    expect(withheld.fulltext).toBeNull();
+    expect(await citationsOf(ruling.id)).toEqual([]);
+    expect(await publishedIds(fixture.sourceId)).not.toContain("339002");
+    return undefined;
   });
 
   test("supplement erasure persists the registered judgment URL spelling through the pipeline entry", async () => {

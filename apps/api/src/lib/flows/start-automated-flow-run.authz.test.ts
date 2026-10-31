@@ -10,7 +10,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -176,6 +176,62 @@ describe("startAutomatedFlowRun authorization gate", () => {
     await startForWorkspace(unauthorizedWorkspaceId);
 
     expect(await runsForWorkspace(unauthorizedWorkspaceId)).toHaveLength(0);
+    expect(enqueuedSteps).toHaveLength(enqueuedBefore);
+  });
+
+  test("skips the run after the author loses flow permission", async () => {
+    const runsBefore = await runsForWorkspace(authorizedWorkspaceId);
+    const enqueuedBefore = enqueuedSteps.length;
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, authorId),
+        ),
+      );
+
+    try {
+      await startForWorkspace(authorizedWorkspaceId);
+    } finally {
+      await testDb
+        .update(member)
+        .set({ role: "member" })
+        .where(
+          and(
+            eq(member.organizationId, organizationId),
+            eq(member.userId, authorId),
+          ),
+        );
+    }
+
+    expect(await runsForWorkspace(authorizedWorkspaceId)).toHaveLength(
+      runsBefore.length,
+    );
+    expect(enqueuedSteps).toHaveLength(enqueuedBefore);
+  });
+
+  test("skips the run after its matter is archived", async () => {
+    const runsBefore = await runsForWorkspace(authorizedWorkspaceId);
+    const enqueuedBefore = enqueuedSteps.length;
+    await testDb
+      .update(workspaces)
+      .set({ status: "archived" })
+      .where(eq(workspaces.id, authorizedWorkspaceId));
+
+    try {
+      await startForWorkspace(authorizedWorkspaceId);
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ status: "active" })
+        .where(eq(workspaces.id, authorizedWorkspaceId));
+    }
+
+    expect(await runsForWorkspace(authorizedWorkspaceId)).toHaveLength(
+      runsBefore.length,
+    );
     expect(enqueuedSteps).toHaveLength(enqueuedBefore);
   });
 });

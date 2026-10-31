@@ -26,6 +26,7 @@ import { createSha256 } from "@stll/sha256/bun";
 
 import { caseLawJudges } from "@/api/db/schema";
 import { createPublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { limitPublisherResponse } from "@/api/handlers/case-law/ingestion/adapters/publisher-response-limit";
 import {
   INGESTION_USER_AGENT,
   parseCeDate,
@@ -913,13 +914,15 @@ export const courtSiteFetch: RosterFetch = async (url, init) => {
     return panic(`roster request escaped the court's site: ${url}`);
   }
   await reserveCourtSiteSlot(init.signal);
-  return await fetchWithTimeout(target, {
-    headers: init.headers,
-    // A followed redirect would leave the origin this line just proved.
-    redirect: "error",
-    signal: init.signal,
-    timeoutMs: REQUEST_TIMEOUT_MS,
-  });
+  return limitPublisherResponse(
+    await fetchWithTimeout(target, {
+      headers: init.headers,
+      // A followed redirect would leave the origin this line just proved.
+      redirect: "error",
+      signal: init.signal,
+      timeoutMs: REQUEST_TIMEOUT_MS,
+    }),
+  );
 };
 
 /**

@@ -13,7 +13,7 @@ import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import { lockWorkspaceForEntityCreate } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
@@ -102,12 +102,23 @@ export const importInfoSoudAgendaItems = async ({
   // count and both insert, overshooting `LIMITS.entitiesCount`.
   // Locking the workspace row instead puts this on the same lock
   // manager and canonical order as every other entity-creating path
-  // (see `lockWorkspacesForEntityCap`), which closes that race. This
+  // (see `lockWorkspaceForEntityCreate`), which closes that race and
+  // rechecks active status under the lock after the InfoSoud request. This
   // insert never touches `document_counters` (agenda items are
   // `task`-kind entities, which don't get a doc stamp) or a parent
   // entity, so the workspace-row lock is the only one this path
   // needs.
-  await lockWorkspacesForEntityCap(tx, [workspaceId]);
+  const workspaceStatus = await lockWorkspaceForEntityCreate(tx, workspaceId);
+  if (workspaceStatus !== "active") {
+    return {
+      created: 0,
+      ok: false,
+      skipped: 0,
+      status: 400,
+      total: agendaItems.length,
+      message: "Workspace is no longer active",
+    };
+  }
 
   const externalIds = agendaItems.map((item) => item.externalId);
   const existingRows =

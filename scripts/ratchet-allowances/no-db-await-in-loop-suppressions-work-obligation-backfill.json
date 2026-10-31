@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+  "delta": 1,
+  "reason": "The work-obligation backfill takes each workspace's member locks in sorted workspace order, one workspace at a time, so concurrent assignment writers cannot deadlock against it; the rounds are bounded by the distinct workspaces of one entity page."
+}

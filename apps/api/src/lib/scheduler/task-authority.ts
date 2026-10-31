@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcileClaimedErasures": platform(
+    "case-law-publisher-removals.ts",
+    "Completes accepted erasures in the public legal corpus.",
+  ),
   "caseLaw.reconcilePublisherRemovals": platform(
     "case-law-publisher-removals.ts",
     "Reconciles publisher removals in the public legal corpus.",

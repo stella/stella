@@ -85,14 +85,18 @@ export const measureScheduledJobRun = async ({
   // too, instead of depending on what an earlier run left in the cache.
   resetPublicCaseLawConfigForTesting();
   resetLocalCaseLawConfigForTesting();
+  const persistedJob = await database.query.schedulerJobs.findFirst({
+    where: { id: { eq: job.id } },
+  });
   const measured = await measureJobStatements({
     database,
     run: async (db) =>
       await task(
         asTestRaw<SchedulerTaskContext>({
           db,
-          job: { id: job.id, task: job.task },
-          payload: "payload" in job ? job.payload : null,
+          job: persistedJob ?? { id: job.id, task: job.task },
+          payload:
+            persistedJob?.payload ?? ("payload" in job ? job.payload : null),
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),
           signal: new AbortController().signal,

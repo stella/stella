@@ -1,8 +1,9 @@
 import { Result } from "better-result";
-import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { resultTx } from "@/api/db/safe-db";
@@ -25,11 +26,17 @@ import { cents } from "@/api/lib/money";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 
+import {
+  lockLegacyRateEntryTable,
+  lockRateTableWorkspace,
+} from "../rate-table-lock";
+
 const createRateEntryBodySchema = v.object({
   activityCodeId: v.optional(v.nullable(resourceIdSchema("billingCode"))),
   userId: v.optional(v.nullable(userIdSchema)),
   // The canonical role tuple, so adding a role cannot silently omit it here.
   role: v.optional(v.nullable(v.picklist(ORGANIZATION_ROLE_NAMES))),
+  currency: currencyCodeSchema,
   hourlyRate: minorUnitAmountSchema(0),
   effectiveFrom: apiDateSchema,
   effectiveTo: v.optional(v.nullable(apiDateSchema)),
@@ -92,24 +99,6 @@ export const createRateEntryHandler = async function* ({
     }
   }
 
-  const table = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.rateTables.findFirst({
-        where: {
-          id: { eq: params.rateTableId },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { id: true },
-      }),
-    ),
-  );
-
-  if (!table) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Rate table not found" }),
-    );
-  }
-
   if (body.effectiveTo && body.effectiveTo < body.effectiveFrom) {
     return Result.err(
       new HandlerError({
@@ -149,9 +138,33 @@ export const createRateEntryHandler = async function* ({
 
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
-      );
+      await lockRateTableWorkspace(tx, workspaceId);
+      const table = await tx.query.rateTables.findFirst({
+        where: {
+          id: { eq: params.rateTableId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { currency: true },
+      });
+      if (!table) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            message: "Rate table not found",
+          }),
+        );
+      }
+      if (table.currency !== body.currency) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            code: "rate_table_currency_changed",
+            hint: "Call rates.list, then retry rates.entries.create with the table's current currency.",
+            message: "Rate table currency changed; reload and try again",
+          }),
+        );
+      }
+      await lockLegacyRateEntryTable(tx, params.rateTableId);
 
       if (selectedActivityCodeId !== null) {
         const activity = await tx.query.billingCodes.findFirst({
@@ -259,12 +272,12 @@ const createRateEntry = createSafeHandler(
     idempotency: { type: "replay" },
     description:
       "Add one rate line to a rate table: an hourly rate in integer minor " +
-      "currency units, effective from a date and optionally until another. " +
+      "currency units, naming the table currency those units use, effective from a date and optionally until another. " +
       "Pass userId for a person-specific rate, role for an organization-role rate, " +
       "or omit both for the table fallback. Set at most one person or role; " +
       "optionally pass activityCodeId for an activity-only or person/role plus activity rate. " +
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
-      "or when the table is at its line limit.",
+      "or when the table is at its line limit. A stale currency is refused; call rates.list and retry with the table's current currency.",
     permissions: { rate: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },

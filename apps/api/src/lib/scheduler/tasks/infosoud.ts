@@ -4,7 +4,7 @@ import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 import type { InfoSoudClient } from "@stll/infosoud";
 
 import type { Transaction } from "@/api/db/root";
-import { infoSoudTrackedCases } from "@/api/db/schema";
+import { infoSoudTrackedCases, workspaces } from "@/api/db/schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import {
@@ -21,6 +21,7 @@ import type {
 
 export const INFO_SOUD_SYNC_TRACKED_CASES_TASK =
   "infosoud.syncTrackedCases" as const;
+const ACTIVE_WORKSPACE_STATUS = "active" as const;
 
 export const INFO_SOUD_SYNC_FAILURE_REASONS = [
   "agenda-limit",
@@ -54,6 +55,7 @@ export const createSyncInfoSoudTrackedCasesTask =
     importAgendaItems = importInfoSoudAgendaItems,
   }: CreateSyncInfoSoudTrackedCasesTaskOptions = {}) =>
   async ({ db, dueAt, logger, signal }: SchedulerTaskContext) => {
+    const isAborted = () => signal.aborted;
     const syncStartedAt = dueAt.claimedAtDate();
     let synced = 0;
     let superseded = 0;
@@ -64,7 +66,7 @@ export const createSyncInfoSoudTrackedCasesTask =
       "case-failed": 0,
     } satisfies Record<InfoSoudSyncFailureReason, number>;
 
-    while (!signal.aborted) {
+    while (!isAborted()) {
       // db-await-in-loop: page loop: the page query skips cases this run already stamped, so the next page exists only after this one's attempts land
       const trackedCases = await loadNextTrackedCaseBatch(db, syncStartedAt);
       if (trackedCases.length === 0) {
@@ -74,8 +76,7 @@ export const createSyncInfoSoudTrackedCasesTask =
       total += trackedCases.length;
 
       for (const trackedCase of trackedCases) {
-        // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip between scheduler awaits.
-        if (signal.aborted) {
+        if (isAborted()) {
           break;
         }
 
@@ -90,8 +91,7 @@ export const createSyncInfoSoudTrackedCasesTask =
             lookupResult.hearings.udalosti,
           );
 
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- AbortSignal can flip while the external lookup is in flight.
-          if (signal.aborted) {
+          if (isAborted()) {
             break;
           }
 
@@ -176,8 +176,7 @@ export const createSyncInfoSoudTrackedCasesTask =
             synced += 1;
           }
         } catch (error: unknown) {
-          // oxlint-disable-next-line typescript/no-unnecessary-condition -- Avoid marking an intentionally aborted task as a failed tracked case.
-          if (signal.aborted) {
+          if (isAborted()) {
             break;
           }
 
@@ -197,7 +196,7 @@ export const createSyncInfoSoudTrackedCasesTask =
       }
     }
 
-    if (signal.aborted) {
+    if (isAborted()) {
       panic("SchedulerAborted");
     }
 
@@ -253,11 +252,19 @@ const awaitingSyncAttempt = (syncStartedAt: Date) =>
 
 const loadNextTrackedCaseBatch = async (db: SchedulerDb, syncStartedAt: Date) =>
   await db
-    .select()
+    .select({
+      courtCode: infoSoudTrackedCases.courtCode,
+      createdBy: infoSoudTrackedCases.createdBy,
+      id: infoSoudTrackedCases.id,
+      spisZn: infoSoudTrackedCases.spisZn,
+      workspaceId: infoSoudTrackedCases.workspaceId,
+    })
     .from(infoSoudTrackedCases)
+    .innerJoin(workspaces, eq(infoSoudTrackedCases.workspaceId, workspaces.id))
     .where(
       and(
         eq(infoSoudTrackedCases.enabled, true),
+        eq(workspaces.status, ACTIVE_WORKSPACE_STATUS),
         awaitingSyncAttempt(syncStartedAt),
       ),
     )

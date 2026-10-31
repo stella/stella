@@ -37,6 +37,7 @@ import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
+import { redactCaseLawDecisionWithSupplementHolders } from "@/api/handlers/case-law/ingestion/supplement-erasure";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -436,6 +437,22 @@ test("erasing a retired decision removes the canonical and retired copies", asyn
       { id: retiredId, fulltext: null },
     ]),
   );
+});
+
+test("a retired decision address acquires its canonical holder claim", async () => {
+  const { canonicalId, retiredId } = await seedLinkedPair();
+  await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, retiredId));
+  expect(await rowOf(retiredId)).toBeUndefined();
+  const result = await redactCaseLawDecisionWithSupplementHolders({
+    decisionId: retiredId,
+    scopedDb,
+    leaseWaitMs: 0,
+  });
+  expect(result.unwrap()).toMatchObject({
+    redaction: { type: "redacted" },
+    holders: [],
+  });
+  expect((await rowOf(canonicalId))?.redactedAt).not.toBeNull();
 });
 
 test("erasing through a retired id whose row is gone still erases its canonical group", async () => {
