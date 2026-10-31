@@ -156,6 +156,7 @@ export const readTermCoverage = async ({
           classifyFailure(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Search term coverage is incomplete",
               cause: new CorpusIndexError({
                 message: "Expected exact candidate term buckets",
@@ -179,6 +180,7 @@ export const readTermCoverage = async ({
             classifyFailure(
               new HandlerError({
                 status: 502,
+                code: "internal_error",
                 message: "Search term coverage is invalid",
                 cause: new CorpusIndexError({
                   message: "Unexpected candidate term bucket",

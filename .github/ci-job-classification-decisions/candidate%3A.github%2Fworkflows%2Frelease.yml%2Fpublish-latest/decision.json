@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Advances the latest image tags to the promoted release digests."
+}

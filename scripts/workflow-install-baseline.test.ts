@@ -157,7 +157,7 @@ const checkOut = (remote: string, sha: string, fetchDepth: number) => {
 
 test("every job that installs with lifecycle scripts checks out the hygiene baseline", async () => {
   const jobs = installingJobs();
-  expect(jobs.map(({ job }) => job)).toContain(
+  expect(jobs.map(({ job }) => job)).not.toContain(
     "release-pr.yml#refresh-release-version",
   );
   const { remote, staged } = releaseRemote();

@@ -1,9 +1,8 @@
 import { Result } from "better-result";
-import { deepEquals } from "bun";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
-import { writeDecision } from "./ci-job-classification/decisions";
+import { writeApproval } from "./ci-job-classification/decisions";
 import {
   generateClassification,
   readClassificationInputs,
@@ -54,11 +53,17 @@ const sensitiveChanges = ({
   [...new Set([...head.jobs.keys(), ...base.jobs.keys()])].flatMap((key) => {
     const current = head.jobs.get(key);
     const previous = base.jobs.get(key);
+    const headDecision = headDecisions[key];
     const previousDecision = baseDecisions[key];
     if (
       current !== undefined &&
-      previousDecision?.reviewedDigest === current.digest &&
-      deepEquals(previousDecision, headDecisions[key])
+      previous !== undefined &&
+      current.digest === previous.digest &&
+      headDecision?.approvedDigests.includes(current.digest) &&
+      previousDecision !== undefined &&
+      previousDecision.approvedDigests.includes(previous.digest) &&
+      previousDecision.kind === headDecision.kind &&
+      previousDecision.qualifier === headDecision.qualifier
     ) {
       return [];
     }
@@ -81,7 +86,7 @@ const mechanicalRefreshes = ({
     const previous = base.jobs.get(key);
     if (
       decision === undefined ||
-      decision.reviewedDigest === job.digest ||
+      decision.approvedDigests.includes(job.digest) ||
       previousDecision === undefined ||
       previous === undefined ||
       decision.kind !== previousDecision.kind ||
@@ -127,7 +132,7 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
               message: `Decision disappeared while refreshing: ${key}`,
             });
           }
-          writeDecision(root, key, { ...decision, reviewedDigest: digest });
+          writeApproval(root, key, digest, decision);
         }
       }
       return { refreshed: refreshes.map(({ key }) => key) };
@@ -141,11 +146,35 @@ export const refreshJobClassificationDigests = (root: string, base: string) =>
       }),
   });
 
+// A job that writes the repository publishes; only `priority` says so. Checked
+// on the head alone: the base keeps whatever it reviewed before this rule. A
+// decision whose digest is stale goes through review first, which shows the
+// sensitive change; the kind is judged once the reviewed digest is current.
+const misclassifiedWriters = (
+  jobs: ReadonlyMap<string, DerivedJob>,
+  decisions: ClassificationInputs["decisions"],
+) =>
+  [...jobs].flatMap(([key, job]) => {
+    const decision = decisions[key];
+    return job.writesRepository &&
+      decision !== undefined &&
+      decision.approvedDigests.includes(job.digest) &&
+      decision.kind !== "priority"
+      ? [key]
+      : [];
+  });
+
 export const checkJobClassification = (root: string, base?: string) =>
   Result.try({
     try: () => {
       const headInputs = readClassificationInputs(root);
       const head = generateWithJobs(headInputs);
+      const writers = misclassifiedWriters(head.jobs, headInputs.decisions);
+      if (writers.length > 0) {
+        throw new AdmissionError({
+          message: `Jobs that write the repository (contents write permission, an app token requesting it, or the signed-commit action) publish and must be classified priority. Set kind "priority" and describe what they publish in:\n${writers.map(decisionPathForKey).join("\n")}`,
+        });
+      }
       const privilegedJobs = base
         ? (() => {
             const baseRevision = generateBase(root, base);
@@ -277,14 +306,13 @@ const decisionsFileChanged = (root: string) =>
       "git",
       "-C",
       root,
-      "diff",
-      "--quiet",
-      "HEAD",
+      "status",
+      "--porcelain",
       "--",
       CLASSIFICATION_DECISIONS_PATH,
     ],
-    { stdout: "ignore", stderr: "ignore" },
-  ).exitCode !== 0;
+    { stdout: "pipe", stderr: "ignore" },
+  ).stdout.length > 0;
 
 const runCheck = (root: string, base: string) => {
   const result = checkJobClassification(root, base);

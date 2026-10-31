@@ -30,10 +30,11 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { queryView } from "@/lib/query-view.logic";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { emailSchema, schemaFormOptions, toFormErrors } from "@/lib/schema";
-import { useQueryView } from "@/lib/use-query-view";
 
+import type { SocialProvider } from "./access-reset.logic";
 import {
   LAST_USED_BADGE_PILL_CLASS_NAME,
   LAST_USED_BADGE_POSITION_CLASS_NAME,
@@ -69,15 +70,17 @@ type SignInPanelProps = {
   }) => void;
 };
 
-const formSchema = v.strictObject({
-  email: emailSchema(),
-});
+const formSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+  });
 
-const bootstrapFormSchema = v.strictObject({
-  email: emailSchema(),
-  password: v.string(),
-  bootstrapToken: v.pipe(v.string(), v.trim()),
-});
+const bootstrapFormSchema = (invalidEmail: string) =>
+  v.strictObject({
+    email: emailSchema(invalidEmail),
+    password: v.string(),
+    bootstrapToken: v.pipe(v.string(), v.trim()),
+  });
 
 const authErrorResponseSchema = v.object({
   message: v.optional(v.string()),
@@ -107,14 +110,15 @@ const SignInOptionsPanel = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const [socialLoading, setSocialLoading] = useState<
-    "google" | "microsoft" | null
-  >(null);
+  const [socialLoading, setSocialLoading] = useState<SocialProvider | null>(
+    null,
+  );
   const signInOptions = resolveSignInOptions({
     authCapabilities,
     socialProviderFlags: {
       google: env.VITE_AUTH_GOOGLE,
       microsoft: env.VITE_AUTH_MICROSOFT,
+      apple: env.VITE_AUTH_APPLE,
     },
   });
   const {
@@ -125,6 +129,7 @@ const SignInOptionsPanel = ({
     showReviewPasswordSignIn,
     showGoogle,
     showMicrosoft,
+    showApple,
     showSocialProviders,
     hasAboveEmailOptions,
   } = signInOptions;
@@ -145,7 +150,7 @@ const SignInOptionsPanel = ({
     });
   };
 
-  const handleSocialSignIn = async (provider: "google" | "microsoft") => {
+  const handleSocialSignIn = async (provider: SocialProvider) => {
     setSocialLoading(provider);
     const callbackURL = new URL("/auth/organization", window.location.origin);
     const errorCallbackURL = new URL("/auth/error", window.location.origin);
@@ -184,7 +189,7 @@ const SignInOptionsPanel = ({
 
   const form = useForm(
     schemaFormOptions({
-      schema: formSchema,
+      schema: formSchema(t("validation.invalidEmail")),
       defaultValues: { email: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -277,6 +282,31 @@ const SignInOptionsPanel = ({
                       scope: {
                         type: "handler",
                         handlerId: "SignInOptionsPanel:failure-2",
+                      },
+                    },
+                  );
+                });
+              }}
+            />
+          )}
+          {showApple && (
+            <SocialButton
+              disabled={socialLoading !== null}
+              icon={<AppleIcon />}
+              label={t("auth.continueWithApple")}
+              lastUsed={lastUsed}
+              method={SIGN_IN_METHOD.apple}
+              loading={socialLoading === "apple"}
+              onClick={() => {
+                handleSocialSignIn("apple").catch((error: unknown) => {
+                  setSocialLoading(null);
+                  analytics.captureError(
+                    error instanceof Error ? error : new Error(String(error)),
+                    {
+                      fingerprintKey: "SignInOptionsPanel:failure-3",
+                      scope: {
+                        type: "handler",
+                        handlerId: "SignInOptionsPanel:failure-3",
                       },
                     },
                   );
@@ -388,7 +418,7 @@ const BootstrapSignUpForm = ({
   const invalidateSession = useInvalidateSession();
   const form = useForm(
     schemaFormOptions({
-      schema: bootstrapFormSchema,
+      schema: bootstrapFormSchema(t("validation.invalidEmail")),
       defaultValues: { email: "", password: "", bootstrapToken: "" },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -663,9 +693,23 @@ const MicrosoftIcon = () => (
   </svg>
 );
 
+// Apple's logo in the button's own text colour, as Apple's sign-in button
+// guidelines require for a custom button.
+const AppleIcon = () => (
+  <svg
+    aria-hidden="true"
+    className="size-4"
+    fill="currentColor"
+    viewBox="0 0 24 24"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701" />
+  </svg>
+);
+
 export const SignInPanel = (props: SignInPanelProps) => {
   const capabilitiesQuery = useQuery(authCapabilitiesOptions);
-  const capabilitiesView = useQueryView(capabilitiesQuery);
+  const capabilitiesView = queryView(capabilitiesQuery);
   if (capabilitiesView.type !== "items") {
     return <QueryViewFeedback view={capabilitiesView} />;
   }

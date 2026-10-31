@@ -68,7 +68,7 @@ and external service SDKs (AI providers, email, analytics, storage).
    `provenance/` are regenerated alongside the SBOMs.
 
 9. **Dependency grouping.** Dependabot groups related packages
-   (e.g., TanStack, TipTap, Drizzle, Elysia) into single PRs,
+   (e.g., TanStack, TipTap, Drizzle, Tauri) into single PRs,
    reducing update noise while maintaining visibility.
 
 ### Ongoing monitoring

@@ -103,6 +103,7 @@ test("holding cites sorted source paragraphs inline with numbered and position l
           <AiHeadnotes
             analysis={analysis}
             blocks={blocks}
+            language="en"
             onAnchorClick={(startAnchorId, endAnchorId) => {
               jumps.push(startAnchorId);
               const start = blocks.findIndex(
@@ -172,6 +173,7 @@ test("paragraph references use the configured numbering system", () => {
           <AiHeadnotes
             analysis={analysis}
             blocks={blocks}
+            language="en"
             onAnchorClick={() => undefined}
           />
         </WebReaderPresentationProvider>
@@ -198,6 +200,7 @@ test("the abstract cites each claim, after its last word and before the space", 
           <AiHeadnotes
             analysis={analysis}
             blocks={blocks}
+            language="en"
             onAnchorClick={() => undefined}
           />
         </WebReaderPresentationProvider>
@@ -234,6 +237,7 @@ test("a range listed twice around another range from the same start shows once",
           <AiHeadnotes
             analysis={interleaved}
             blocks={blocks}
+            language="en"
             onAnchorClick={() => undefined}
           />
         </WebReaderPresentationProvider>

@@ -8,7 +8,7 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 
 ```text
 eu_completion_receipts.id                         text         not null          eu-completion.ts:45
-eu_completion_receipts.source_id                  safeUuid     not null          eu-completion.ts:46
+eu_completion_receipts.source_id                  safeUuid     fk,not null       eu-completion.ts:46
 eu_completion_receipts.decision_id                safeUuid     not null          eu-completion.ts:47
 eu_completion_receipts.mode                       text         not null          eu-completion.ts:48
 eu_completion_receipts.parser_version             integer      not null          eu-completion.ts:49
@@ -53,25 +53,25 @@ eu_completion_request_hours.requests  integer      not null  eu-completion.ts:19
 Approval is immutable per source/parser generation.
 
 ```text
-eu_completion_approvals.source_id              safeUuid     not null  eu-completion.ts:217
-eu_completion_approvals.parser_version         integer      not null  eu-completion.ts:218
-eu_completion_approvals.supervised_receipt_id  text         not null  eu-completion.ts:219
-eu_completion_approvals.evidence_ref           text         not null  eu-completion.ts:220
-eu_completion_approvals.supervised_by          text         not null  eu-completion.ts:221
-eu_completion_approvals.supervised_at          timestamptz  not null  eu-completion.ts:222
-eu_completion_approvals.approved_by            text         not null  eu-completion.ts:223
-eu_completion_approvals.approved_at            timestamptz  not null  eu-completion.ts:224
-eu_completion_approvals.proof_mode             text         not null  eu-completion.ts:225
-eu_completion_approvals.proof_status           text         not null  eu-completion.ts:226
-eu_completion_approvals.proof_completed_at     timestamptz  not null  eu-completion.ts:227
-eu_completion_approvals.reviewed_counts        jsonb        not null  eu-completion.ts:228
+eu_completion_approvals.source_id              safeUuid     fk,not null  eu-completion.ts:217
+eu_completion_approvals.parser_version         integer      fk,not null  eu-completion.ts:218
+eu_completion_approvals.supervised_receipt_id  text         fk,not null  eu-completion.ts:219
+eu_completion_approvals.evidence_ref           text         not null     eu-completion.ts:220
+eu_completion_approvals.supervised_by          text         not null     eu-completion.ts:221
+eu_completion_approvals.supervised_at          timestamptz  not null     eu-completion.ts:222
+eu_completion_approvals.approved_by            text         not null     eu-completion.ts:223
+eu_completion_approvals.approved_at            timestamptz  not null     eu-completion.ts:224
+eu_completion_approvals.proof_mode             text         fk,not null  eu-completion.ts:225
+eu_completion_approvals.proof_status           text         fk,not null  eu-completion.ts:226
+eu_completion_approvals.proof_completed_at     timestamptz  fk,not null  eu-completion.ts:227
+eu_completion_approvals.reviewed_counts        jsonb        not null     eu-completion.ts:228
 ```
 
 ## eu_completion_controls · `euCompletionControls` · eu-completion.ts:287 · rls
 
 ```text
 eu_completion_controls.key                     text         not null          eu-completion.ts:290
-eu_completion_controls.source_id               safeUuid     null              eu-completion.ts:291
+eu_completion_controls.source_id               safeUuid     fk,null           eu-completion.ts:291
 eu_completion_controls.state                   text         default,not null  eu-completion.ts:292
 eu_completion_controls.batch                   jsonb        null              eu-completion.ts:296
 eu_completion_controls.cursor                  safeUuid     null              eu-completion.ts:297

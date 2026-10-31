@@ -16,17 +16,17 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import type {
   DecisionSupplement,
   IngestionItem,
   IngestionResult,
   SyncPage,
   UnreadListedItem,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+} from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 

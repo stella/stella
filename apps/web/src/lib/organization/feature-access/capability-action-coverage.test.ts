@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import ts from "typescript6";
+
+import {
+  type JSXElement,
+  type JSXOpeningElement,
+  type Node,
+  type ObjectExpression,
+  type ObjectProperty,
+  type ParamPattern,
+  parseSource,
+  walk,
+} from "@stll/scripts/src/syntax-tree";
 
 const SOURCE_INVENTORY_TIMEOUT_MS = 30_000;
 
@@ -11,72 +21,86 @@ const actionElement =
   /^(MenuItem|ContextMenuItem|DropdownMenuItem|Button|IconButton|CommandItem|ResponsiveActionButton|ToolbarIconAction|BuiltInTemplateRow)$/u;
 const protectedFixture = (child: string) =>
   `<CapabilityAction action={{ capability: "ai" }}>{(capabilityProps) => (${child.replace(">Action", " {...capabilityProps}>Action")})}</CapabilityAction>`;
+/** `<Tag>…</Tag>`; oxc also wraps a self-closing `<Tag />` in a JSXElement. */
+const isPairedElement = (node: Node): node is JSXElement =>
+  node.type === "JSXElement" && node.closingElement !== null;
+/** An identifier parameter, optionally with a default value. */
+const parameterName = (parameter: ParamPattern | undefined) => {
+  const binding =
+    parameter?.type === "AssignmentPattern" ? parameter.left : parameter;
+  return binding?.type === "Identifier" ? binding.name : undefined;
+};
+const isNullLiteral = (node: Node) =>
+  node.type === "Literal" && node.raw === "null";
 const inspect = (source: string, fileName: string) => {
-  const file = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    fileName.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const parsed = parseSource(fileName, source);
+  const textOf = (node: Node) => source.slice(node.start, node.end);
+  const location = (node: Node) =>
+    `${fileName}:${parsed.locate(node.start).line}`;
+  const tagOf = (element: JSXOpeningElement) => textOf(element.name);
+  // `key: value` entries only, as TypeScript's PropertyAssignment: no
+  // shorthand, method or accessor. A computed key keeps its brackets.
+  const assignments = (object: ObjectExpression) =>
+    object.properties.flatMap((property) =>
+      property.type === "Property" &&
+      property.kind === "init" &&
+      !property.method &&
+      !property.shorthand
+        ? [property]
+        : [],
+    );
+  const keyOf = (property: ObjectProperty) =>
+    property.computed ? `[${textOf(property.key)}]` : textOf(property.key);
+  const declaresCapability = (object: ObjectExpression) =>
+    assignments(object).some(
+      (property) =>
+        keyOf(property) === "capability" && !isNullLiteral(property.value),
+    );
   const missing: string[] = [];
-  const visit = (node: ts.Node) => {
+  walk(parsed.program, (node, ancestors) => {
     if (
-      ts.isJsxElement(node) &&
-      node.openingElement.tagName.getText(file) === "CapabilityAction"
+      isPairedElement(node) &&
+      tagOf(node.openingElement) === "CapabilityAction"
     ) {
       const expression = node.children.find(
-        (child) => ts.isJsxExpression(child) && child.expression !== undefined,
+        (child) =>
+          child.type === "JSXExpressionContainer" &&
+          child.expression.type !== "JSXEmptyExpression",
       );
       let forwardsLast = false;
       if (
-        expression !== undefined &&
-        ts.isJsxExpression(expression) &&
-        expression.expression !== undefined &&
-        ts.isArrowFunction(expression.expression)
+        expression?.type === "JSXExpressionContainer" &&
+        expression.expression.type === "ArrowFunctionExpression"
       ) {
         const callback = expression.expression;
-        const parameter = callback.parameters.at(0);
+        const parameter = parameterName(callback.params.at(0));
         let body = callback.body;
-        while (ts.isParenthesizedExpression(body)) {
+        while (body.type === "ParenthesizedExpression") {
           body = body.expression;
         }
-        const opening = (() => {
-          if (ts.isJsxElement(body)) {
-            return body.openingElement;
-          }
-          if (ts.isJsxSelfClosingElement(body)) {
-            return body;
-          }
-          return undefined;
-        })();
-        const last = opening?.attributes.properties.at(-1);
+        const last =
+          body.type === "JSXElement"
+            ? body.openingElement.attributes.at(-1)
+            : undefined;
         forwardsLast =
           parameter !== undefined &&
-          ts.isIdentifier(parameter.name) &&
-          last !== undefined &&
-          ts.isJsxSpreadAttribute(last) &&
-          ts.isIdentifier(last.expression) &&
-          last.expression.text === parameter.name.text;
+          last?.type === "JSXSpreadAttribute" &&
+          last.argument.type === "Identifier" &&
+          last.argument.name === parameter;
       }
       if (!forwardsLast) {
-        missing.push(
-          `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-        );
+        missing.push(location(node));
       }
     }
-    if (
-      (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) &&
-      actionElement.test(node.tagName.getText(file))
-    ) {
-      const handlers = node.attributes.properties.filter(
+    if (node.type === "JSXOpeningElement" && actionElement.test(tagOf(node))) {
+      const handlers = node.attributes.filter(
         (attribute) =>
-          ts.isJsxAttribute(attribute) &&
-          /^(onClick|onSelect|onUse)$/u.test(attribute.name.getText(file)),
+          attribute.type === "JSXAttribute" &&
+          /^(onClick|onSelect|onUse)$/u.test(textOf(attribute.name)),
       );
       if (
         handlers.some((handler) => {
-          const text = handler.getText(file);
+          const text = textOf(handler);
           if (dependentFlow.test(text)) {
             return true;
           }
@@ -98,107 +122,74 @@ const inspect = (source: string, fileName: string) => {
           ) {
             return true;
           }
-          if (
+          return (
             fileName.endsWith("search-dialog-results.tsx") &&
-            /\bonClick\b/u.test(text)
-          ) {
-            let owner: ts.Node = node;
-            while (!ts.isSourceFile(owner)) {
-              if (
-                ts.isVariableDeclaration(owner) &&
-                owner.name.getText(file) === "SearchSummaryItem"
-              ) {
-                return true;
-              }
-              owner = owner.parent;
-            }
-          }
-          return false;
+            /\bonClick\b/u.test(text) &&
+            ancestors.some(
+              (owner) =>
+                owner.type === "VariableDeclarator" &&
+                owner.id.type === "Identifier" &&
+                owner.id.name === "SearchSummaryItem",
+            )
+          );
         })
       ) {
-        let parent = node.parent;
         let declared =
-          node.tagName.getText(file) === "BuiltInTemplateRow" &&
-          node.attributes.properties.some(
+          tagOf(node) === "BuiltInTemplateRow" &&
+          node.attributes.some(
             (attribute) =>
-              ts.isJsxAttribute(attribute) &&
-              attribute.name.getText(file) === "capability" &&
-              attribute.initializer !== undefined,
+              attribute.type === "JSXAttribute" &&
+              textOf(attribute.name) === "capability" &&
+              attribute.value !== null,
           );
-        while (!ts.isSourceFile(parent) && !declared) {
-          if (
-            ts.isJsxElement(parent) &&
-            parent.openingElement.tagName.getText(file) === "CapabilityAction"
-          ) {
-            declared = parent.openingElement.attributes.properties.some(
-              (attribute) => {
-                if (
-                  !ts.isJsxAttribute(attribute) ||
-                  attribute.name.getText(file) !== "action" ||
-                  attribute.initializer === undefined
-                ) {
-                  return false;
-                }
-                if (
-                  !ts.isJsxExpression(attribute.initializer) ||
-                  attribute.initializer.expression === undefined
-                ) {
-                  return false;
-                }
-                const expression = attribute.initializer.expression;
-                if (!ts.isObjectLiteralExpression(expression)) {
-                  return true;
-                }
-                return expression.properties.some(
-                  (property) =>
-                    ts.isPropertyAssignment(property) &&
-                    property.name.getText(file) === "capability" &&
-                    property.initializer.kind !== ts.SyntaxKind.NullKeyword,
-                );
-              },
-            );
+        for (const parent of ancestors.toReversed()) {
+          if (declared) {
             break;
           }
-          parent = parent.parent;
+          if (
+            isPairedElement(parent) &&
+            tagOf(parent.openingElement) === "CapabilityAction"
+          ) {
+            declared = parent.openingElement.attributes.some((attribute) => {
+              if (
+                attribute.type !== "JSXAttribute" ||
+                textOf(attribute.name) !== "action" ||
+                attribute.value?.type !== "JSXExpressionContainer" ||
+                attribute.value.expression.type === "JSXEmptyExpression"
+              ) {
+                return false;
+              }
+              const expression = attribute.value.expression;
+              return (
+                expression.type !== "ObjectExpression" ||
+                declaresCapability(expression)
+              );
+            });
+            break;
+          }
         }
         if (!declared) {
-          missing.push(
-            `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-          );
+          missing.push(location(node));
         }
       }
     }
-    if (ts.isObjectLiteralExpression(node)) {
-      const callbacks = node.properties.filter(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          /^(run|onClick|onSelect)$/u.test(property.name.getText(file)),
+    if (node.type === "ObjectExpression") {
+      const properties = assignments(node);
+      const callbacks = properties.filter((property) =>
+        /^(run|onClick|onSelect)$/u.test(keyOf(property)),
       );
-      const actionShape = node.properties.some(
-        (property) =>
-          ts.isPropertyAssignment(property) &&
-          /^(label|titleKey)$/u.test(property.name.getText(file)),
+      const actionShape = properties.some((property) =>
+        /^(label|titleKey)$/u.test(keyOf(property)),
       );
       if (
         actionShape &&
-        callbacks.some((callback) => dependentFlow.test(callback.getText(file)))
+        callbacks.some((callback) => dependentFlow.test(textOf(callback))) &&
+        !declaresCapability(node)
       ) {
-        const declared = node.properties.some(
-          (property) =>
-            ts.isPropertyAssignment(property) &&
-            property.name.getText(file) === "capability" &&
-            property.initializer.kind !== ts.SyntaxKind.NullKeyword,
-        );
-        if (!declared) {
-          missing.push(
-            `${fileName}:${file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1}`,
-          );
-        }
+        missing.push(location(node));
       }
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(file);
+  });
   return [...new Set(missing)];
 };
 describe("capability flow action declarations", () => {
@@ -293,6 +284,7 @@ describe("capability flow action declarations", () => {
         " {...capabilityProps} onClick={unrecognizedFlow}",
       ),
       good.replace(" {...capabilityProps}", " {...otherProps}"),
+      good.replace("(capabilityProps)", "(...capabilityProps)"),
     ]) {
       expect(inspect(bad, "fixture.tsx")).toEqual(["fixture.tsx:1"]);
     }

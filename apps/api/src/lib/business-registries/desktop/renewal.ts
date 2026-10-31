@@ -206,6 +206,7 @@ export const renewDesktopCredential = async ({
         ? cause
         : new HandlerError({
             status: 503,
+            code: "internal_error",
             message: "Desktop account renewal is unavailable",
             cause,
           }),
@@ -270,6 +271,7 @@ export const probeDesktopCredential = async ({
     catch: (cause) =>
       new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "Desktop account recovery is unavailable",
         cause,
       }),

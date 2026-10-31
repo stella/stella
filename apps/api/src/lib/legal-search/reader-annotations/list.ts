@@ -8,6 +8,7 @@ import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader
 
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
   paginationCursorSchema,
   paginationLimitSchema,
@@ -86,6 +87,10 @@ const UNPROJECTED_ANNOTATION_COLUMNS = [
   "workspaceId",
   "verificationRunId",
   "verificationClaimId",
+  // A matter document's mark is listed by the document's own route
+  // (`matter-document-list.ts`), never here.
+  "entityId",
+  "pageTextSha256",
 ] as const satisfies readonly (keyof AnnotationRow)[];
 
 type MissingProjectedAnnotationColumn = UnprojectedColumns<
@@ -117,7 +122,9 @@ type ListReaderAnnotationsProps = Omit<
     v.InferOutput<typeof listAnnotationsQuerySchema>,
     "targetType"
   > & {
-    targetType: ReaderAnnotationTargetType;
+    /** A matter document's marks span the document's versions, so they are
+     *  listed by `listMatterDocumentAnnotations` instead. */
+    targetType: Exclude<ReaderAnnotationTargetType, "matter-document">;
   };
   /**
    * The claim a `verification-claim` listing reads, from the matter route's
@@ -130,6 +137,7 @@ export const listReaderAnnotationsHandler = async function* ({
   organizationId,
   query,
   safeDb,
+  readCopies = readWithdrawnCopyProjection,
   userId,
   verificationClaim,
 }: ListReaderAnnotationsProps) {
@@ -212,9 +220,22 @@ export const listReaderAnnotationsHandler = async function* ({
       annotationCursor.encode(item.createdAtCursor, item.id),
   });
 
+  const projection = yield* Result.await(
+    Result.tryPromise(async () =>
+      readCopies({
+        values: [],
+        decisionIds: targetType === "decision" ? [query.targetId] : [],
+      }),
+    ),
+  );
   return Result.ok({
     ...page,
     limit,
-    items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+    items: page.items.map(({ createdAtCursor: _, ...item }) =>
+      projection.annotation(
+        item,
+        targetType === "decision" ? query.targetId : null,
+      ),
+    ),
   });
 };
