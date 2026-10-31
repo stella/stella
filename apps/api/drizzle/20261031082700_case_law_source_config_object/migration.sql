@@ -8,6 +8,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 -- rewrites the existing rows and validates the constraint.
 -- stella-migration-safety: reviewed drop-constraint - drops only the constraint the next statement re-adds, so a retried migration re-enters the same state; no data is touched and rollback is dropping it again.
 ALTER TABLE "case_law_sources"
+  -- squawk-ignore ban-drop-constraint
   DROP CONSTRAINT IF EXISTS "case_law_sources_config_object";--> statement-breakpoint
 ALTER TABLE "case_law_sources"
   ADD CONSTRAINT "case_law_sources_config_object"
