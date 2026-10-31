@@ -11,6 +11,7 @@ import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
@@ -453,11 +454,11 @@ const ProvisionVersionBar = ({
           versions={versions}
         />
       ) : (
-        <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+        <TruncatedText className="text-muted-foreground tabular-nums">
           {ineligibleLabel === null
             ? range
             : t("statutes.statedWindow", { range })}
-        </span>
+        </TruncatedText>
       )}
     </span>
   );
