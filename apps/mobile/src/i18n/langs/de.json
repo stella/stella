@@ -22,7 +22,8 @@
     "toolUsed": "Verwendet: {tool}",
     "threadTitle": "Unterhaltung",
     "threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
-    "threadEmptyDescription": "Diese Unterhaltung enthält noch keine Nachrichten.",
+    "greeting": "Woran möchten Sie arbeiten?",
+    "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "sections": {
       "today": "Heute",
       "yesterday": "Gestern",

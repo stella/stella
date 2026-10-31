@@ -22,7 +22,8 @@
     "toolUsed": "Usado: {tool}",
     "threadTitle": "Conversación",
     "threadLoadFailed": "No se pudo cargar esta conversación.",
-    "threadEmptyDescription": "Esta conversación aún no tiene mensajes.",
+    "greeting": "¿En qué le gustaría trabajar?",
+    "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "sections": {
       "today": "Hoy",
       "yesterday": "Ayer",

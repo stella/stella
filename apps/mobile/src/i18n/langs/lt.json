@@ -22,7 +22,8 @@
     "toolUsed": "Naudota: {tool}",
     "threadTitle": "Pokalbis",
     "threadLoadFailed": "Nepavyko įkelti šio pokalbio.",
-    "threadEmptyDescription": "Šiame pokalbyje dar nėra žinučių.",
+    "greeting": "Prie ko norėtumėte dirbti?",
+    "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "sections": {
       "today": "Šiandien",
       "yesterday": "Vakar",

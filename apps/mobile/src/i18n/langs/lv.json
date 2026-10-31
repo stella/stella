@@ -22,7 +22,8 @@
     "toolUsed": "Izmantots: {tool}",
     "threadTitle": "Saruna",
     "threadLoadFailed": "Šo sarunu neizdevās ielādēt.",
-    "threadEmptyDescription": "Šajā sarunā vēl nav ziņu.",
+    "greeting": "Pie kā vēlaties strādāt?",
+    "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "sections": {
       "today": "Šodien",
       "yesterday": "Vakar",

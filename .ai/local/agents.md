@@ -30,26 +30,11 @@ Autofix job, or enforces only lines changed against the merge base for its first
 week. Register the dated scope in `scripts/guard-rollouts/<id>.ts` so the existing
 dated-waiver inventory and healing checks enforce its seven-day deadline.
 
-- Comments explain a non-obvious invariant, trade-off, safety constraint, or why
-  the code exists. Do not narrate the next statement, add empty documentation
-  blocks, or label closing braces.
+- Dead-export checks (knip) enforce the no-placeholder rule where a package is
+  enrolled; enroll new packages.
 - Search before you write. Before adding a helper, module, schema, or validation
   step, check `docs/module-ownership.md` and `packages/*` for the capability.
   Extend the owner; if a second implementation is right, say why in the PR.
-- Make abstractions earn their keep. Avoid pass-through wrappers, single-use
-  helpers, and interfaces with one implementation unless they establish a real
-  ownership boundary, contract, or test seam.
-- Prefer deleting concepts, branches, and layers over moving complexity around.
-  Keep feature-specific behavior at its canonical owner; do not scatter flags and
-  special cases through shared flows.
-- Defensive code belongs at real trust and failure boundaries. Do not add null
-  checks, silent fallbacks, or catch-and-log blocks for states already excluded by
-  types, validation, or framework guarantees.
-- No forward-compatibility placeholders: never ship a flag, option, field, or
-  export that is accepted but has no effect "for later" (a `--keychain` that
-  always falls back, a `setDefault` helper nothing calls). Add it in the PR that
-  wires it end to end. Dead-export checks (knip) enforce this where a package is
-  enrolled; enroll new packages.
 
 ## Workspace Layout
 

@@ -84,9 +84,12 @@ export const ChatComposer = ({
   };
 
   // A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
-  // 36pt round controls sit centred on it.
-  const control = "mb-[3px]";
-  const sendButton = "bg-foreground size-9 shrink-0 rounded-full";
+  // 36pt round controls sit centred on it. With nothing to send, the button
+  // is drawn muted rather than dimmed, so it never reads as ready.
+  const round =
+    "mb-[3px] size-9 shrink-0 items-center justify-center rounded-full";
+  const ready = `${round} bg-foreground`;
+  const muted = `${round} bg-secondary`;
 
   return (
     <View className="bg-background gap-1 px-3 pt-1 pb-2">
@@ -133,24 +136,28 @@ export const ChatComposer = ({
               accessibilityLabel={t("stop")}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canStop }}
-              className={`items-center justify-center ${sendButton} ${control}`}
+              className={canStop ? ready : muted}
               disabled={!canStop}
               onPress={onStop}
-              style={{ opacity: canStop ? 1 : 0.64 }}
             >
-              <SquareIcon color={ui.background} size={16} />
+              <SquareIcon
+                color={canStop ? ui.background : ui.mutedForeground}
+                size={16}
+              />
             </Pressable>
           ) : (
             <Pressable
               accessibilityLabel={t("send")}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}
-              className={`items-center justify-center ${sendButton} ${control}`}
+              className={canSend ? ready : muted}
               disabled={!canSend}
               onPress={send}
-              style={{ opacity: canSend ? 1 : 0.64 }}
             >
-              <ArrowUpIcon color={ui.background} size={18} />
+              <ArrowUpIcon
+                color={canSend ? ui.background : ui.mutedForeground}
+                size={18}
+              />
             </Pressable>
           )}
         </View>
