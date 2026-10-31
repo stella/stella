@@ -241,7 +241,7 @@ jobs:
       dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
-      database_migrations_required: ${{ steps.changed-files.outputs.database_migrations_required }}
+      database_migrations_required: ${{ (steps.changed-files.outputs.database_migrations_required == 'true' || steps.schema-imports.outputs.changed == 'true') && 'true' || 'false' }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -1073,6 +1073,30 @@ jobs:
           log-file: "${{ runner.temp }}/bun-install/planner.log"
         env:
           NPM_TOKEN: ""
+
+      # Enum values and constraint vocabularies live outside the migration
+      # paths, so a change the schema imports also selects the migration jobs.
+      - name: Select schema import changes
+        id: schema-imports
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+          && steps.changed-files.outputs.database_migrations_required != 'true'
+        timeout-minutes: 2
+        env:
+          CHANGED_FILES: ${{ steps.changed-files.outputs.changed_files }}
+          PLANNER_DEPENDENCIES: ${{ steps.planner-deps.outcome }}
+        run: |
+          if [[ "$PLANNER_DEPENDENCIES" == success ]]; then
+            bun scripts/schema-import-changes.ts >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Without the import graph, any API or package source may reach the schema.
+          if jq -r '.[]' <<< "$CHANGED_FILES" | grep -Eq '^(apps/api|packages)/.*\.tsx?$'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Require planner dependencies for job derivation
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'

@@ -326,9 +326,8 @@ export const DIFF_SCOPED_STEPS = {
     operational(
       "Selects the baseline file the full recall is measured against.",
     ),
-  "ci.yml:database-migrations-check#Check migration coverage": gap(
-    "dependents",
-    "Treats only the schema entry files as schema changes; table definitions they re-export never mark the schema changed.",
+  "ci.yml:database-migrations-check#Check migration coverage": expands(
+    "The plan runs the migration jobs for every file the schema imports; their schema parity step compares the migrated database with the whole schema.",
   ),
   "ci.yml:route-smoke#Prepare merge-base network budget":
     fullTree(NETWORK_BUDGET),
