@@ -1,8 +1,14 @@
 import { panic } from "better-result";
 import { parseSync } from "oxc-parser";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { type Comment, walk } from "../packages/scripts/src/syntax-tree.ts";
 import type { DatedWaiver } from "./dated-waivers";
+
+/** A waiver's stable identity across runs: its kind, owner file and id. */
+export const waiverKey = (entry: DatedWaiver): string =>
+  sha256Hex(JSON.stringify([entry.kind, entry.source, entry.id])).slice(0, 24);
 
 export const DAY_MS = 86_400_000;
 export const TEST_ATTEMPTS = 20;

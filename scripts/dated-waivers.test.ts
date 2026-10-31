@@ -14,7 +14,7 @@ import path from "node:path";
 import { assertProperty } from "@stll/property-testing";
 
 import { DOC_SOURCE_EXCLUSIONS } from "../.claude/mcp/doc-sources";
-import { waiverKey } from "./dated-waiver-fix-task";
+import { waiverKey } from "./dated-waiver-core";
 import {
   changedWaiverKeys,
   collectWaivers,

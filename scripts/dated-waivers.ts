@@ -26,10 +26,10 @@ import {
   readTestQuarantines,
   TEST_ATTEMPTS,
   testProbeCommand,
+  waiverKey,
   ZERO_AGE_OVERRIDE,
 } from "./dated-waiver-core";
 import { waiverEntryFields } from "./dated-waiver-entry";
-import { waiverKey } from "./dated-waiver-fix-task";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
   parseRegistry,

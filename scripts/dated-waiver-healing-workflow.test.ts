@@ -452,10 +452,9 @@ test("CI expiry runs list the files their change touched", () => {
     expect(listed("push", { PUSH_BEFORE: before })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );
-    // A pushed-from commit outside the checkout lists every tracked file.
-    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe(
-      "readme.md\0unrelated.ts\0waivers.ts\0",
-    );
+    // A pushed-from commit outside the checkout lists nothing: the merge group
+    // already checked the change, and an expiry alone never fails main.
+    expect(listed("push", { PUSH_BEFORE: "0".repeat(40) })).toBe("");
     expect(listed("pull_request", { TARGET_REF: "main" })).toBe(
       "unrelated.ts\0waivers.ts\0",
     );

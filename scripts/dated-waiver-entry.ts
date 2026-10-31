@@ -21,7 +21,7 @@ import { readTestQuarantines } from "./dated-waiver-core";
 import {
   readAuditAcceptanceOwner,
   readDocumentationOwner,
-} from "./dated-waiver-probes";
+} from "./dated-waiver-owners";
 import type { DatedWaiver } from "./dated-waivers";
 import { parseRegistry } from "./flaky-test-quarantine";
 import { parseLedger } from "./suppression-waivers";
