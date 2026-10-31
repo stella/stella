@@ -142,6 +142,11 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/older-messages/list.ts",
   },
+  // A message goes up with the files attached to it, as the web sends them:
+  // each file rides in the message as a data URL part, and the handler scans
+  // and stores it (`uploadMessageFiles`) under the thread, matter and
+  // membership checks a browser session gets. Attaching opens no route of
+  // its own.
   "POST /v1/chat": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/send-message.ts",

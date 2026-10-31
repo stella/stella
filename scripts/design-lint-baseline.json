@@ -496,7 +496,6 @@
     "apps/api/src/dev/register-mock-ai.ts": 2,
     "apps/api/src/handlers/agent-auth/routes.ts": 1,
     "apps/api/src/handlers/billing-codes/update.ts": 1,
-    "apps/api/src/handlers/case-law/analysis/prompts/prompt-registry.ts": 1,
     "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 1,
     "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,
@@ -692,7 +691,6 @@
     "scripts/migration-catalog.ts": 2,
     "scripts/network-baseline-scope.ts": 1,
     "scripts/oxlint-rule-ids.ts": 1,
-    "scripts/prepare-maintenance-release.ts": 1,
     "scripts/publish-manifest.ts": 4,
     "scripts/ratchet.ts": 11,
     "scripts/rc-bailouts.ts": 1,
@@ -879,7 +877,7 @@
     "scripts/tanstack-drift.ts": 3
   },
   "no-native-ui/no-native-accordion": {
-    "apps/desktop/src/activity/ActivityApp.tsx": 4,
+    "apps/desktop/src/activity/ActivityApp.tsx": 2,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
     "apps/web/src/components/chat/tool-approval-card.tsx": 2,
     "apps/web/src/components/chat/tool-call-card.tsx": 2,

@@ -154,6 +154,7 @@ export const DOC_SOURCES = {
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
       "expo-font",
       "expo-notifications",
