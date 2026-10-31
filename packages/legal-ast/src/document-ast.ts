@@ -1,4 +1,4 @@
-// parser-output-unchanged: persisted readers and ingestion writers keep stored head-matter order and report late blocks; parser output and stored fields are unchanged.
+// parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.

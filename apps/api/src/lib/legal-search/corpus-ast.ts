@@ -6,7 +6,6 @@ import {
   headMatterOrderDegradations,
   isDocumentAstInAnyBlockOrder,
   persistedDocumentAstSchema,
-  persistedDocumentAstWriteSchema,
 } from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -25,11 +24,6 @@ import { isRecord } from "@/api/lib/type-guards";
 /** The wire contract corpus readers accept from any stored row. */
 export const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
-);
-
-/** What a payload writer may store: the reader contract plus block order. */
-const writtenCorpusAstSchema = v.nullable(
-  v.union([persistedDocumentAstWriteSchema, emptyAstSchema]),
 );
 
 class IngestedAstRejectedError extends TaggedError("IngestedAstRejectedError")<{
@@ -53,7 +47,7 @@ export const prepareCorpusAst = ({
   source,
   parserVersion,
 }: PrepareCorpusAstOptions) => {
-  const parsed = v.safeParse(writtenCorpusAstSchema, ast);
+  const parsed = v.safeParse(persistedCorpusAstSchema, ast);
   if (parsed.success) {
     // Keep a canonical AST as the parser produced it: the parsed output is a
     // rebuilt object (schema key order, undeclared fields dropped), and the

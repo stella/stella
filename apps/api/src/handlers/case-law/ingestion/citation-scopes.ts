@@ -1,13 +1,9 @@
 import { Result, TaggedError } from "better-result";
-import * as v from "valibot";
 // parser-output-unchanged: [us-courtlistener] stored citation scopes stop being refused when head matter follows the body; every row the previous version stored passed the order check, so its scopes and their hash are unchanged.
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import {
-  isDocumentAstInAnyBlockOrder,
-  persistedDocumentAstSchema,
-} from "@stll/legal-ast/document-ast";
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -79,21 +75,15 @@ export const citationScopeEnvelope = (
   opinions,
 });
 
-/** Metadata is persisted JSON and must be checked again before reuse. */
 /**
- * The blocks a writer computed scopes against: the stored blocks as written
- * whenever they meet the writer contract (head matter may follow the body),
- * since the persisted reader re-keys repeated identities. Only a legacy shape
- * the writer contract no longer describes falls back to the reader's blocks.
+ * The blocks a writer computed scopes against: the stored blocks as written,
+ * since the persisted reader re-keys repeated identities. Head matter may
+ * follow the body; any other break of the writer contract has no scopes.
  */
-const scopedBlocks = (ast: unknown): readonly Block[] | undefined => {
-  if (isDocumentAstInAnyBlockOrder(ast)) {
-    return ast.blocks;
-  }
-  const parsed = v.safeParse(persistedDocumentAstSchema, ast);
-  return parsed.success ? parsed.output.blocks : undefined;
-};
+const scopedBlocks = (ast: unknown): readonly Block[] | undefined =>
+  isDocumentAstInAnyBlockOrder(ast) ? ast.blocks : undefined;
 
+/** Metadata is persisted JSON and must be checked again before reuse. */
 export const validatedCitationScopes = (
   metadata: Record<string, unknown>,
   ast: unknown,

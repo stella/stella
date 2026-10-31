@@ -225,6 +225,25 @@ describe("persisted citation scopes", () => {
     expect(checked.unwrap()).toEqual(scopes);
   });
 
+  test("refuses scopes over a legacy-shaped AST the writer contract no longer describes", () => {
+    const { source: _source, ...legacy } = ast();
+    expect(v.safeParse(persistedDocumentAstSchema, legacy).success).toBe(true);
+    expect(isDocumentAst(legacy)).toBe(false);
+    const envelope = {
+      version: citationScopeEnvelope(ast(), opinions).version,
+      astHash: citationScopeAstHash(legacy),
+      opinions,
+    };
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      structuredClone(legacy),
+    );
+    if (!Result.isError(checked)) {
+      expect.unreachable("A legacy-shaped AST carries no scopes");
+    }
+    expect(checked.error.defect).toBe("invalid-envelope");
+  });
+
   test("rejects a stale hash even when the old scope names still exist", () => {
     const first = extract(ast());
     const annotated = first.documentAst ?? expect.unreachable();
