@@ -37,6 +37,9 @@ const DECISIONS = v.record(
 );
 // The decision shape the generator accepts, as readDecisions produces it.
 export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
+type ReadClassificationInputsOptions = {
+  observeRead?: (file: string) => void;
+};
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
@@ -54,9 +57,20 @@ const SNAPSHOTS = v.record(
     documents: v.record(v.string(), v.string()),
   }),
 );
-export const readClassificationInputs = (root: string) => {
-  const read = (file: string): unknown =>
-    JSON.parse(readFileSync(path.resolve(root, ".github", file), "utf-8"));
+export const readClassificationInputs = (
+  root: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
+) => {
+  const read = (file: string): unknown => {
+    const repositoryPath = `.github/${file}`;
+    observeRead?.(repositoryPath);
+    return JSON.parse(
+      readFileSync(path.resolve(root, repositoryPath), "utf-8"),
+    );
+  };
+  // This manifest generates conditions in ci.yml. Recording it here keeps a
+  // source edit in the same selection set as the workflow digests it changes.
+  read("global-rule-inputs.json");
   const snapshots = v.parse(
     SNAPSHOTS,
     read("ci-job-classification-sources.json"),
@@ -76,6 +90,7 @@ export const readClassificationInputs = (root: string) => {
         ) {
           throw new AdmissionError({ message: "unsafe metadata path" });
         }
+        observeRead?.(file);
         return readFileSync(path.resolve(root, file), "utf-8");
       }
       const text = snapshots[repository]?.documents[file];
@@ -90,7 +105,7 @@ export const readClassificationInputs = (root: string) => {
   return {
     decisions: v.parse(
       DECISIONS,
-      readDecisions({ type: "working-tree", root }),
+      readDecisions({ type: "working-tree", root }, { observeRead }),
     ),
     snapshots,
     reader,
@@ -126,15 +141,19 @@ const gitText = (root: string, args: string[]) => {
 export const readClassificationInputsAtRevision = (
   root: string,
   revision: string,
+  { observeRead }: ReadClassificationInputsOptions = {},
 ) => {
-  const readCandidate = (file: string) =>
-    gitText(root, ["show", `${revision}:${file}`]);
+  const readCandidate = (file: string) => {
+    observeRead?.(file);
+    return gitText(root, ["show", `${revision}:${file}`]);
+  };
   const readGithubJson = (file: string): unknown =>
     JSON.parse(readCandidate(`.github/${file}`));
   const snapshots = v.parse(
     SNAPSHOTS,
     readGithubJson("ci-job-classification-sources.json"),
   );
+  readGithubJson("global-rule-inputs.json");
   const reader: MetadataReader = {
     workflows: () =>
       gitText(root, [
@@ -169,7 +188,7 @@ export const readClassificationInputsAtRevision = (
   };
   const revisionDecisions = v.parse(
     REVISION_DECISIONS,
-    readDecisions({ type: "git-revision", root, revision }),
+    readDecisions({ type: "git-revision", root, revision }, { observeRead }),
   );
   return {
     decisions: v.parse(

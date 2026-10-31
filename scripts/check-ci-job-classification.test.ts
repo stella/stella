@@ -14,12 +14,67 @@ import {
   writeDecision,
 } from "./ci-job-classification/decisions";
 import {
+  generateClassification,
+  readClassificationInputs,
+} from "./ci-job-classification/generate";
+import {
   CLASSIFICATION_DECISIONS_PATH,
   CLASSIFICATION_INPUT_GLOBS,
+  CLASSIFICATION_INPUT_PATHS,
   decisionPathForKey,
+  isClassificationInput,
 } from "./ci-job-classification/inputs";
+import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
+
+const repositoryRoot = path.resolve(import.meta.dir, "..");
+
+const classificationReads = () => {
+  const reads = new Set<string>();
+  const inputs = readClassificationInputs(repositoryRoot, {
+    observeRead: (file) => {
+      reads.add(file);
+    },
+  });
+  generateClassification(inputs);
+  return reads;
+};
+
+const covers = (input: string, file: string) =>
+  file === input || file.startsWith(`${input}/`);
+
+test("every repository file read by classification is an input", () => {
+  const uncovered = [...classificationReads()].filter(
+    (file) => !isClassificationInput(file),
+  );
+  expect(uncovered).toEqual([]);
+});
+
+test("every classification input is read by the real program", async () => {
+  const runtimeReads = classificationReads();
+  const build = await Bun.build({
+    entrypoints: [path.join(import.meta.dir, "check-ci-job-classification.ts")],
+    target: "bun",
+    metafile: true,
+  });
+  expect(
+    build.success,
+    build.logs.map(({ message }) => message).join("\n"),
+  ).toBe(true);
+  const executableReads = new Set(
+    Object.values(build.metafile?.outputs ?? {}).flatMap((output) =>
+      Object.keys(output.inputs),
+    ),
+  );
+  const unread = CLASSIFICATION_INPUT_PATHS.filter(
+    (input) =>
+      ![...runtimeReads, ...executableReads].some((file) =>
+        covers(input, file),
+      ),
+  );
+  expect(unread).toEqual([]);
+});
 
 test("the classification generator reads and writes every input it owns", () => {
   const generator = GENERATORS.find(
@@ -102,6 +157,7 @@ const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
 const repository = (base: Fixture, head: Fixture, commit = false) => {
   const root = mkdtempSync(path.join(tmpdir(), "classification-refresh-"));
   roots.push(root);
+  writeClassificationFixtureInputs(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
   const write = ({ workflow, decisions }: Fixture) => {
     writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflow);
@@ -148,10 +204,6 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
       message,
     );
   };
-  writeFileSync(
-    path.join(root, ".github/ci-job-classification-sources.json"),
-    "{}",
-  );
   write(base);
   git("init", "--quiet");
   commitAll("base");
