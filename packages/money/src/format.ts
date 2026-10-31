@@ -121,6 +121,49 @@ const normalizeGroupedWhole = ({
   return groups.join("");
 };
 
+type NormalizeInputSeparatorsParams = {
+  unsigned: string;
+  decimal: string;
+  group: string | undefined;
+  primaryGroupSize: number;
+};
+
+const normalizeInputSeparators = ({
+  unsigned,
+  decimal,
+  group,
+  primaryGroupSize,
+}: NormalizeInputSeparatorsParams) => {
+  const alternateDecimal = decimal === "," ? "." : ",";
+  const alternateParts = unsigned.split(alternateDecimal);
+  const hasLocaleDecimal = unsigned.includes(decimal);
+  const hasSingleAlternate = alternateParts.length === 2;
+  const alternateFractionLength = alternateParts.at(1)?.length;
+  if (
+    !hasLocaleDecimal &&
+    hasSingleAlternate &&
+    alternateFractionLength === primaryGroupSize
+  ) {
+    return { status: "ambiguous" } as const;
+  }
+  if (
+    !hasLocaleDecimal &&
+    hasSingleAlternate &&
+    alternateFractionLength !== primaryGroupSize
+  ) {
+    return {
+      status: "normalized",
+      unsigned: unsigned.replace(alternateDecimal, () => decimal),
+      grouping: group,
+    } as const;
+  }
+  let grouping = group;
+  if (decimal === "," && unsigned.split(decimal).at(0)?.includes(".")) {
+    grouping = ".";
+  }
+  return { status: "normalized", unsigned, grouping } as const;
+};
+
 export type ParseLocaleDecimalParams = {
   amount: string;
   locale: string;
@@ -157,40 +200,38 @@ export const parseLocaleDecimal = ({
   const normalizedWhitespace = whitespaceGroup
     ? localizedDigits.replace(/[\u0020\u00a0\u202f]/gu, () => group)
     : localizedDigits;
-  const grouping =
-    decimal === "," && normalizedWhitespace.includes(".") ? "." : group;
   const sign = /^[+-]/u.exec(normalizedWhitespace)?.at(0) ?? "";
-  const unsigned = sign ? normalizedWhitespace.slice(1) : normalizedWhitespace;
+  const unsignedInput = sign
+    ? normalizedWhitespace.slice(1)
+    : normalizedWhitespace;
+  const normalizedSeparators = normalizeInputSeparators({
+    unsigned: unsignedInput,
+    decimal,
+    group,
+    primaryGroupSize,
+  });
+  if (normalizedSeparators.status === "ambiguous") {
+    return Result.err({
+      reason: "ambiguous",
+      message: "Amount has an ambiguous separator",
+    });
+  }
+  const { unsigned, grouping } = normalizedSeparators;
   const decimalParts = unsigned.split(decimal);
   if (
     decimalParts.length > 2 ||
-    decimalParts.some((part) => part.length === 0)
+    (decimalParts.length === 1 && decimalParts.at(0)?.length === 0) ||
+    (decimalParts.length === 2 && decimalParts.at(1)?.length === 0)
   ) {
     return Result.err({
       reason: "syntax",
       message: "Invalid amount format",
     });
   }
-  const whole = decimalParts.at(0) ?? "";
+  const whole = decimalParts.at(0) || "0";
   const fraction = decimalParts.at(1);
-  if (
-    maximumFractionDigits !== undefined &&
-    fraction !== undefined &&
-    fraction.length > maximumFractionDigits
-  ) {
-    return Result.err({
-      reason: "precision",
-      message: "Amount has too many fraction digits",
-    });
-  }
   let wholeDigits = whole;
   if (grouping !== undefined && whole.includes(grouping)) {
-    if (fraction === undefined && (grouping === "." || grouping === ",")) {
-      return Result.err({
-        reason: "ambiguous",
-        message: "Amount has an ambiguous separator",
-      });
-    }
     const normalizedWhole = normalizeGroupedWhole({
       whole,
       grouping,
@@ -212,6 +253,16 @@ export const parseLocaleDecimal = ({
     return Result.err({
       reason: "syntax",
       message: "Invalid amount format",
+    });
+  }
+  if (
+    maximumFractionDigits !== undefined &&
+    fraction !== undefined &&
+    fraction.length > maximumFractionDigits
+  ) {
+    return Result.err({
+      reason: "precision",
+      message: "Amount has too many fraction digits",
     });
   }
   return Result.ok(

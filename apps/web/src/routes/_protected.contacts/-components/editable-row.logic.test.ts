@@ -119,25 +119,16 @@ describe("contact text editable fields", () => {
 });
 
 describe("contact hourly rates", () => {
-  test("saves localized decimals with exact currency rounding", () => {
-    for (const locale of ["cs", "de", "fr"]) {
-      expect(
-        buildContactRatePayload({
-          trimmedInput: "150,50",
-          currency: "EUR",
-          locale,
-        }),
-      ).toEqual({
-        status: "valid",
-        payload: { defaultHourlyRate: cents(15_050) },
-      });
-      expect(
-        buildContactRatePayload({
-          trimmedInput: "150.50",
-          currency: "EUR",
-          locale,
-        }),
-      ).toEqual({ status: "invalid" });
+  test("saves localized decimals and unambiguous dots exactly", () => {
+    for (const locale of ["sk", "cs", "de", "pl"]) {
+      for (const trimmedInput of ["150,50", "150.50"]) {
+        expect(
+          buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
+        ).toEqual({
+          status: "valid",
+          payload: { defaultHourlyRate: cents(15_050) },
+        });
+      }
       expect(
         buildContactRatePayload({
           trimmedInput: "1,005",
@@ -179,7 +170,10 @@ describe("contact hourly rates", () => {
         currency: "EUR",
         locale: "en",
       }),
-    ).toEqual({ status: "invalid" });
+    ).toEqual({
+      status: "valid",
+      payload: { defaultHourlyRate: cents(15_050) },
+    });
   });
 
   test("accepts locale grouping but rejects ambiguous or mixed separators", () => {
@@ -201,14 +195,7 @@ describe("contact hourly rates", () => {
     }
 
     for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
-      for (const trimmedInput of [
-        "1.234.567",
-        "1,234,567",
-        "150,,50",
-        "150..50",
-        "1e3",
-        "-0,001",
-      ]) {
+      for (const trimmedInput of ["150,,50", "150..50", "1e3", "-0,001"]) {
         expect(
           buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
         ).toEqual({ status: "invalid" });

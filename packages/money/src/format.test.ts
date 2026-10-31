@@ -5,6 +5,7 @@ import {
   currencyMinorUnitDigits,
   formatLocaleMinorUnitsInput,
   formatMoneyCents,
+  type LocaleAmountParseError,
   parseLocaleDecimal,
   parseLocaleMinorUnits,
   toMajorUnits,
@@ -36,6 +37,36 @@ describe("parseLocaleMinorUnits", () => {
             locale,
           }).unwrap(),
         ).toBe(cents(amountCents));
+        const parts = formatter.formatToParts(
+          toMajorUnits({ amountCents, currency: "EUR" }),
+        );
+        const decimalPart = parts.find((part) => part.type === "decimal");
+        const fractionLength =
+          parts.find((part) => part.type === "fraction")?.value.length ?? 0;
+        const primaryGroupSize = new Intl.NumberFormat(locale)
+          .formatToParts(1_234_567_890_123)
+          .findLast((part) => part.type === "integer")?.value.length;
+        const swappedDecimal = decimalPart?.value === "," ? "." : ",";
+        const hasCollidingGroup = parts.some(
+          (part) => part.type === "group" && part.value === swappedDecimal,
+        );
+        if (
+          decimalPart !== undefined &&
+          fractionLength !== primaryGroupSize &&
+          !hasCollidingGroup
+        ) {
+          const swapped = rendered.replace(
+            decimalPart.value,
+            () => swappedDecimal,
+          );
+          expect(
+            parseLocaleMinorUnits({
+              amount: swapped,
+              currency: "EUR",
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
         if (/\s/u.test(rendered)) {
           for (const separator of [" ", "\u00a0", "\u202f"]) {
             expect(
@@ -81,6 +112,66 @@ describe("parseLocaleMinorUnits", () => {
         locale: "en-IN",
       }).unwrap(),
     ).toBe(cents(123_456_789));
+  });
+
+  const parseCases = [
+    ["sk", "150.50", 15_050],
+    ["sk", "150,50", 15_050],
+    ["sk", "1.234", "ambiguous"],
+    ["sk", "1,234", "precision"],
+    ["sk", "1.234,50", 123_450],
+    ["sk", "1,234.50", "syntax"],
+    ["sk", "1.2", 120],
+    ["sk", "0.5", 50],
+    ["sk", ".5", 50],
+    ["sk", "1.234.567", 123_456_700],
+    ["en", "150.50", 15_050],
+    ["en", "150,50", 15_050],
+    ["en", "1.234", "precision"],
+    ["en", "1,234", "ambiguous"],
+    ["en", "1.234,50", "syntax"],
+    ["en", "1,234.50", 123_450],
+    ["en", "1.2", 120],
+    ["en", "0.5", 50],
+    ["en", ".5", 50],
+    ["en", "1.234.567", "syntax"],
+    ["en-IN", "150.50", 15_050],
+    ["en-IN", "150,50", 15_050],
+    ["en-IN", "1.234", "precision"],
+    ["en-IN", "1,234", "ambiguous"],
+    ["en-IN", "1.234,50", "syntax"],
+    ["en-IN", "1,234.50", 123_450],
+    ["en-IN", "1.2", 120],
+    ["en-IN", "0.5", 50],
+    ["en-IN", ".5", 50],
+    ["en-IN", "1.234.567", "syntax"],
+  ] satisfies [string, string, number | LocaleAmountParseError["reason"]][];
+
+  test.each(parseCases)(
+    "parses %s input %s as %s",
+    (locale, amount, expected) => {
+      const parsed = parseLocaleMinorUnits({ amount, currency: "EUR", locale });
+      if (typeof expected === "number") {
+        expect(parsed.unwrap()).toBe(cents(expected));
+        return;
+      }
+      expect(parsed.isErr() && parsed.error.reason).toBe(expected);
+    },
+  );
+
+  test("applies separator ambiguity before currency precision", () => {
+    const precisionCases = [
+      { amount: "150.505", reason: "ambiguous" },
+      { amount: "150.5055", reason: "precision" },
+    ] satisfies { amount: string; reason: LocaleAmountParseError["reason"] }[];
+    for (const { amount, reason } of precisionCases) {
+      const parsed = parseLocaleMinorUnits({
+        amount,
+        currency: "EUR",
+        locale: "sk",
+      });
+      expect(parsed.isErr() && parsed.error.reason).toBe(reason);
+    }
   });
 
   test("redisplay text round-trips every currency exponent and locale", () => {
