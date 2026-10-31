@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { MatterRefLink } from "@/components/matter-ref-link";
@@ -532,13 +533,13 @@ export function AuditResourceLabel({
           })}
         </span>
         {/* CSS truncation keeps the full id selectable for copying. */}
-        <bdi
+        <TruncatedText
           aria-hidden="true"
-          className="inline-block max-w-[120px] truncate align-bottom"
-          title={resource.id}
+          className="inline-block max-w-[120px] align-bottom"
+          render={<bdi />}
         >
           {resource.id}
-        </bdi>
+        </TruncatedText>
       </div>
     </div>
   );

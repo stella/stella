@@ -2,6 +2,13 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionPanel,
+  AccordionTrigger,
+} from "@stll/ui/accordion";
+import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { TableCell } from "@stll/ui/table";
 
 import type { fetchAuditLogs } from "@/routes/_protected.admin/-queries/audit-logs";
@@ -38,33 +45,32 @@ export const AuditChangeDetails = ({
             "-"
           ) : (
             <div className="space-y-2">
-              <dl className="space-y-1">
+              <DetailsGrid>
                 {Object.entries(toChangeRecord(changes)).map(
                   ([field, change]) => {
                     const { before, after } = beforeAndAfter(change);
                     return (
-                      <div className="flex gap-2" key={field}>
-                        <dt className="min-w-24 font-medium">
-                          {fieldLabel(field)}
-                        </dt>
-                        <dd className="text-muted-foreground wrap-break-word">
-                          <bdi>{displayValue(before)}</bdi>
-                          <span aria-hidden="true"> → </span>
-                          <bdi>{displayValue(after)}</bdi>
-                        </dd>
-                      </div>
+                      <DetailsItem key={field} label={fieldLabel(field)}>
+                        <bdi>{displayValue(before)}</bdi>
+                        <span aria-hidden="true"> → </span>
+                        <bdi>{displayValue(after)}</bdi>
+                      </DetailsItem>
                     );
                   },
                 )}
-              </dl>
-              <details>
-                <summary className="cursor-pointer font-medium select-none">
-                  {t("common.details")}
-                </summary>
-                <pre className="mt-1 font-mono text-xs whitespace-pre-wrap">
-                  <bdi>{JSON.stringify(changes, null, 2)}</bdi>
-                </pre>
-              </details>
+              </DetailsGrid>
+              <Accordion>
+                <AccordionItem value="raw-changes">
+                  <AccordionTrigger size="compact">
+                    {t("common.details")}
+                  </AccordionTrigger>
+                  <AccordionPanel keepMounted size="compact">
+                    <pre className="font-mono text-xs whitespace-pre-wrap">
+                      <bdi>{JSON.stringify(changes, null, 2)}</bdi>
+                    </pre>
+                  </AccordionPanel>
+                </AccordionItem>
+              </Accordion>
             </div>
           )}
         </TableCell>

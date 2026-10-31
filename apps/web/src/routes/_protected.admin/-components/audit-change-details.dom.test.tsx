@@ -8,7 +8,7 @@ import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { AuditChangeDetails } = await import("./audit-change-details");
 
@@ -76,7 +76,15 @@ test("visible changes render old and new envelopes", () => {
   const view = mount({ changes, changesStatus: AUDIT_CHANGES_STATUS.visible });
   expect(view.getByRole("term").textContent).toBe("Amount");
   expect(view.getByRole("definition").textContent).toBe("100 → 200");
-  expect(view.getByText(messages.common.details)).not.toBeNull();
+  expect(
+    view.container.querySelector('[data-slot="details-grid"]'),
+  ).not.toBeNull();
+  const detailsTrigger = view.getByRole("button", {
+    name: messages.common.details,
+  });
+  expect(detailsTrigger.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(detailsTrigger);
+  expect(detailsTrigger.getAttribute("aria-expanded")).toBe("true");
   expect(view.container.querySelector("pre")?.textContent).toBe(
     JSON.stringify(changes, null, 2),
   );
