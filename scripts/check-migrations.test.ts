@@ -118,6 +118,26 @@ test("a column change with a migration folder passes", () => {
   expect(runGuard(root).exitCode).toBe(0);
 });
 
+test("a snapshot that cannot be built fails the check in either tree", () => {
+  for (const broken of ["base", "head"] as const) {
+    const { root, git } = createFixture();
+    const schema = path.join(root, "apps/api/src/db/schema/one.ts");
+    const unbuildable = 'throw new Error("unbuildable schema");\n';
+    if (broken === "base") {
+      writeFileSync(schema, unbuildable);
+      git("commit", "--quiet", "--amend", "--all", "--no-edit");
+      git("tag", "--force", "base");
+      writeFileSync(schema, table());
+    } else {
+      writeFileSync(schema, unbuildable);
+    }
+    git("commit", "--quiet", "--all", "-m", `break the ${broken} schema`);
+    const result = runGuard(root);
+    expect(result.exitCode, broken).not.toBe(0);
+    expect(result.stderr.toString(), broken).toContain("unbuildable schema");
+  }
+});
+
 test("an empty migration file does not count as providing one", () => {
   const { root, git } = createFixture();
   writeFileSync(
