@@ -114,6 +114,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
@@ -336,6 +337,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack Router reads the chat thread loader's redirect and its unchanged
+  // load failure only through rejection.
+  "apps/web/src/routes/_protected.chat/-thread-scope-redirect-boundary.ts",
   // TanStack's fetch and connection adapters consume Response/rejection;
   // this transport cannot return Result across the SDK callback boundary.
   "packages/chat/src/durable-transport.ts",
