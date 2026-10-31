@@ -12,6 +12,7 @@ import type { Identity as ChatStoredContentEgressIdentity } from "./chatStoredCo
 import type { Identity as ChatThreadIdentity } from "./chatThread";
 import type { Identity as ChatToolGrantsIdentity } from "./chatToolGrants";
 import type { Identity as ChatTurnIdentity } from "./chatTurn";
+import type { Identity as ContactIdentity } from "./contact";
 import type { Identity as ContactCapacityIdentity } from "./contactCapacity";
 import type { Identity as CurrentStepIdentity } from "./currentStep";
 import type { Identity as DefinitionIdentity } from "./definition";
@@ -66,6 +67,7 @@ export type AggregateIdentities = {
   "chatThread": ChatThreadIdentity;
   "chatToolGrants": ChatToolGrantsIdentity;
   "chatTurn": ChatTurnIdentity;
+  "contact": ContactIdentity;
   "contactCapacity": ContactCapacityIdentity;
   "currentStep": CurrentStepIdentity;
   "definition": DefinitionIdentity;

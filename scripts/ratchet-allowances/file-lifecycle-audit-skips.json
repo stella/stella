@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 11,
+  "reason": "File and document lifecycle bookkeeping: reservation and reconciliation counters, short-lived comparison claims, cleanup intent fences and leases, search projection rows, desktop session expiry and style-set cleanup receipts. Each is recorded by the audited operation that owns it, so a second audit row would be redundant or recursive."
+}

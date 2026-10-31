@@ -16,9 +16,8 @@ import {
 // `verifyAndDeleteUser` (delete-account.ts) never hard-deletes the `user`
 // row itself — it's a soft delete (anonymize + `deletedAt`). But every
 // *other* table that references `user` needs an explicit decision: either
-// the database cleans it up automatically (`onDelete: "cascade"` or
-// `"set null"`), or a step in `account-deletion-steps.ts` deletes /
-// reassigns / nulls the user's rows there, or the reference is
+// a step in `account-deletion-steps.ts` deletes / reassigns / nulls the
+// user's rows there, or the reference is
 // deliberately retained forever (documented in
 // `ACCOUNT_DELETION_KNOWN_GAPS` below).
 //
@@ -52,7 +51,7 @@ type KnownGap = {
 
 /**
  * Tables with a direct FK to `user` that intentionally have no deletion
- * step and are not DB-cascaded. Each entry must still reference `user`
+ * step. Each entry must still reference `user`
  * (checked below) so this list cannot silently accumulate stale rows for
  * tables that were fixed or renamed.
  *
@@ -131,12 +130,98 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
     onDelete: "restrict",
     note: "Billing/usage-metering event, needed for invoicing and audit history — comparable to account_deletion_requests. Likely intentional retention, unconfirmed.",
   },
+  ...(
+    [
+      ["action_cost_records", "user_id", "set null"],
+      ["agent_skill_comments", "author_id", "set null"],
+      ["agent_skill_comments", "resolved_by", "set null"],
+      ["agent_skill_proposals", "author_id", "set null"],
+      ["agent_skill_proposals", "reviewer_id", "set null"],
+      ["agent_skill_revisions", "created_by", "set null"],
+      ["anonymization_allowlist_entries", "created_by", "set null"],
+      ["anonymization_blacklist_entries", "created_by", "set null"],
+      ["anonymization_blacklist_entries", "updated_by", "set null"],
+      ["bilingual_translation_runs", "requested_by", "set null"],
+      ["case_law_research_columns", "created_by", "set null"],
+      ["cell_metadata", "created_by", "set null"],
+      ["cell_metadata", "updated_by", "set null"],
+      ["chat_message_revisions", "created_by", "set null"],
+      ["chat_messages", "user_id", "cascade"],
+      ["chat_secrets", "user_id", "cascade"],
+      ["chat_tool_grants", "user_id", "cascade"],
+      ["chat_turns", "user_id", "cascade"],
+      ["contact_extraction_uploads", "user_id", "cascade"],
+      ["contact_import_requests", "user_id", "cascade"],
+      ["desktop_presence", "user_id", "cascade"],
+      ["desktop_time_entry_batches", "user_id", "cascade"],
+      ["document_processing_runs", "requested_by", "set null"],
+      ["document_review_findings", "decided_by", "set null"],
+      ["document_review_findings", "applied_by", "set null"],
+      ["document_review_runs", "requested_by", "set null"],
+      ["document_translation_runs", "requested_by", "set null"],
+      ["docx_suggestions", "resolved_by_user_id", "set null"],
+      ["entities", "created_by", "set null"],
+      ["entities", "last_edited_by", "set null"],
+      ["entity_views", "user_id", "cascade"],
+      ["expenses", "user_id", "set null"],
+      ["extraction_runs", "requested_by", "set null"],
+      ["feature_enrolments", "user_id", "cascade"],
+      ["feedback_reports", "user_id", "set null"],
+      ["flow_definitions", "created_by_user_id", "set null"],
+      ["folio_collab_contributions", "user_id", "cascade"],
+      ["infosoud_tracked_cases", "created_by", "set null"],
+      ["legal_list_claim_review_events", "actor_id", "set null"],
+      ["legal_list_fact_details", "updated_by", "set null"],
+      ["legal_list_generation_runs", "requested_by", "set null"],
+      ["legal_list_item_comments", "author_id", "set null"],
+      ["legal_list_item_reviews", "reviewer_id", "set null"],
+      ["legal_list_item_sources", "verified_by", "set null"],
+      ["legal_list_item_sources", "created_by", "set null"],
+      ["legal_list_items", "added_by", "set null"],
+      ["legal_list_verification_read_receipts", "user_id", "cascade"],
+      ["legal_list_verification_runs", "requested_by", "set null"],
+      ["legal_lists", "created_by", "set null"],
+      ["legal_reader_annotations", "user_id", "cascade"],
+      ["matter_inbound_addresses", "created_by", "set null"],
+      ["matter_inbound_addresses", "revoked_by", "set null"],
+      ["notifications", "user_id", "cascade"],
+      [
+        "organization_professional_use_acceptances",
+        "accepted_by_user_id",
+        "set null",
+      ],
+      ["playbook_definitions", "approved_by", "set null"],
+      ["report_exports", "requested_by", "set null"],
+      ["sanctions_contact_matches", "reviewed_by", "set null"],
+      ["saved_searches", "user_id", "cascade"],
+      ["saved_time_narratives", "user_id", "cascade"],
+      ["signal_events", "actor_user_id", "set null"],
+      ["signals", "assignee_user_id", "set null"],
+      ["signals", "created_by_user_id", "set null"],
+      ["template_chat_threads", "user_id", "cascade"],
+      ["template_lookup_format_user_defaults", "user_id", "cascade"],
+      ["template_persistence_requests", "user_id", "cascade"],
+      ["time_entries", "user_id", "set null"],
+      ["time_entries", "approver_user_id", "set null"],
+      ["time_entry_suggestions", "user_id", "cascade"],
+      ["time_entry_timer_states", "user_id", "cascade"],
+      ["time_timer_confirmations", "user_id", "cascade"],
+      ["time_timers", "user_id", "cascade"],
+      ["usage_allocations", "allocated_by_user_id", "set null"],
+      ["usage_lane_counters", "user_id", "cascade"],
+      ["usage_seat_assignments", "assigned_by_user_id", "set null"],
+      ["user_professional_use_acceptances", "user_id", "cascade"],
+      ["work_obligation_events", "actor_user_id", "set null"],
+    ] as const
+  ).map(([table, column, onDelete]) => ({
+    table,
+    column,
+    onDelete,
+    note: "Account deletion soft-retains the user row, so this foreign-key action never runs. Its deletion, indirect cascade, or historical-retention disposition requires a separate verified decision.",
+  })),
 ];
 
 const gapKey = (table: string, column: string) => `${table}.${column}`;
-
-const isAutoCoveredByDb = (onDelete: string | undefined): boolean =>
-  onDelete === "cascade" || onDelete === "set null";
 
 // `is()` is drizzle-orm's own runtime type guard (checks the entity-kind
 // tag drizzle stamps on table instances), so this narrows `unknown` to
@@ -272,7 +357,7 @@ describe("account deletion FK coverage", () => {
     ).toBe(true);
   });
 
-  test("every direct FK to the user table is DB-cascaded, manually handled, or a tracked known gap", () => {
+  test("every direct FK to the soft-retained user table is handled or tracked", () => {
     const userForeignKeys = findUserForeignKeys();
     const manualTableNames = new Set(
       ACCOUNT_DELETION_MANUAL_TABLES.map((table) => getTableConfig(table).name),
@@ -282,13 +367,6 @@ describe("account deletion FK coverage", () => {
     );
 
     const uncovered = userForeignKeys.filter((fk) => {
-      // Auth-schema tables must be purged by an explicit step: their cascade
-      // to `user` never fires because the user row is soft-deleted, so DB
-      // cascade does not count as coverage for them.
-      const requiresManualPurge = authSchemaTableNames.has(fk.tableName);
-      if (!requiresManualPurge && isAutoCoveredByDb(fk.onDelete)) {
-        return false;
-      }
       if (manualTableNames.has(fk.tableName)) {
         return false;
       }
@@ -313,8 +391,8 @@ describe("account deletion FK coverage", () => {
         "For each: add a deletion step in apps/api/src/lib/account-deletion-steps.ts " +
         "(call it from verifyAndDeleteUser in apps/api/src/lib/delete-account.ts), and list the " +
         "table in that step's `*_TABLES` constant so it is picked up by ACCOUNT_DELETION_MANUAL_TABLES. " +
-        'If cascading/nulling the FK at the DB level is correct instead, change its onDelete to "cascade" ' +
-        'or "set null" in the schema. If the reference should be permanently retained (e.g. an audit or ' +
+        "A cascade or set-null action on the FK does not count because account deletion soft-retains the user row. " +
+        "If the reference should be permanently retained (e.g. an audit or " +
         "billing record), add it to ACCOUNT_DELETION_KNOWN_GAPS in account-deletion-coverage.test.ts with a " +
         "documented reason instead of leaving it unhandled.",
     );
@@ -374,7 +452,7 @@ describe("account deletion FK coverage", () => {
         (fk) =>
           fk.tableName === gap.table &&
           fk.columnName === gap.column &&
-          !isAutoCoveredByDb(fk.onDelete) &&
+          fk.onDelete === gap.onDelete &&
           !manualTableNames.has(fk.tableName),
       );
       return !stillUncovered;
@@ -389,7 +467,7 @@ describe("account deletion FK coverage", () => {
       .join(", ");
     throw new Error(
       `ACCOUNT_DELETION_KNOWN_GAPS lists FK(s) [${names}] that are no longer uncovered gaps ` +
-        "(the FK is now cascade/set-null, a manual step handles the table, or the FK no longer " +
+        "(a manual step handles the table, or the FK no longer " +
         "exists). Remove the stale entry from ACCOUNT_DELETION_KNOWN_GAPS in " +
         "account-deletion-coverage.test.ts.",
     );

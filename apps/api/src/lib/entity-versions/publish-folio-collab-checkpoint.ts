@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/buffer-intent-reconciliation";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { COLLABORATION_DOCUMENT_SOURCE } from "@/api/lib/document-source";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { WriteFileVersionResult } from "@/api/lib/entity-versions/write-file-version";
@@ -514,6 +515,8 @@ export const publishCheckpointInTransaction = async ({
   const fieldId = createSafeId<"field">();
   const nextCheckpointFileId = createSafeId<"userFile">();
   const versionWrite = await writeFileVersion({
+    // The publish request authorized the member before this transaction.
+    authority: CALLER_AUTHORIZED,
     afterWrite: async ({ versionNumber }) => {
       await recordRoomPublication({
         checkpointKey,

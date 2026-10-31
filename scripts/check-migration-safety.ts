@@ -30,6 +30,7 @@ import { createSha256 } from "@stll/sha256/node";
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 import { PENDING_CONTRACT_MIGRATIONS } from "../apps/api/src/lib/db/pending-contract-migrations/registry";
+import { guardEnforcesLine } from "./guard-rollouts";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
 import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
@@ -899,7 +900,7 @@ const ROUTINE_OPTION_KEYWORDS = new Set([
 ]);
 
 type SearchPathSetting =
-  | { type: "accepted" }
+  | { type: "accepted"; schemas: readonly string[] }
   | { type: "missing" }
   | { type: "repeated" }
   | { type: "non-canonical" }
@@ -994,7 +995,13 @@ const readSecurityDefinerSearchPath = (
   return {
     functionName,
     setting: CANONICAL_SEARCH_PATH_PATTERN.test(originalValue)
-      ? { type: "accepted" }
+      ? {
+          type: "accepted",
+          schemas: originalValue
+            .replace(/^\s*(?:=|TO)\s*/u, "")
+            .split(",")
+            .map((schema) => schema.trim()),
+        }
       : { type: "non-canonical" },
   };
 };
@@ -1021,7 +1028,26 @@ const securityDefinerSearchPathEndsWithPgTemp = (
   }
 };
 
+const TRUSTED_SEARCH_PATH_RULE = "security-definer-trusted-search-path";
+const TRUSTED_SECURITY_DEFINER_SCHEMAS = new Set(["pg_catalog", "pg_temp"]);
+
 const STATEMENT_INVARIANT_RULES = [
+  {
+    id: TRUSTED_SEARCH_PATH_RULE,
+    description: "uses an untrusted schema in a SECURITY DEFINER search path",
+    matches: (statement) => {
+      const result = readSecurityDefinerSearchPath(statement);
+      return (
+        !statement.deferred &&
+        result?.setting.type === "accepted" &&
+        result.setting.schemas.some(
+          (schema) => !TRUSTED_SECURITY_DEFINER_SCHEMAS.has(schema),
+        )
+      );
+    },
+    guidance:
+      "Use SET search_path = pg_catalog, pg_temp and qualify application relations explicitly.",
+  },
   {
     id: "security-definer-search-path",
     description: (statement) => {
@@ -2751,7 +2777,15 @@ const checkSource = (
 
   for (const statement of statements) {
     for (const rule of STATEMENT_INVARIANT_RULES) {
-      if (rule.matches(statement)) {
+      if (
+        rule.matches(statement) &&
+        (rule.id !== TRUSTED_SEARCH_PATH_RULE ||
+          guardEnforcesLine({
+            guard: TRUSTED_SEARCH_PATH_RULE,
+            file,
+            line: statement.line,
+          }))
+      ) {
         invariantFindings.push({
           file,
           line: statement.line,

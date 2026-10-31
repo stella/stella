@@ -43,6 +43,7 @@ import {
   fields,
   invoiceLines,
   invoices,
+  organizationFileUsage,
   organizationSettings,
   pdfSigningSessions,
   requestIdempotencyReceipts,
@@ -694,6 +695,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "contact"
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair";
@@ -712,6 +714,13 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "contact":
+      return byIdWithin(
+        "contacts",
+        options.id.id,
+        "organization_id",
+        options.id.organizationId,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -766,6 +775,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "contact":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":
@@ -2834,6 +2844,43 @@ export const lockMemberAccessRow = async ({
       .for(mode)
   ).at(0);
 
+type OrganizationFileCounterLockOptions = {
+  tx: Pick<Transaction, "select">;
+  organizationIds: readonly SafeId<"organization">[];
+};
+
+/**
+ * Lock file accounting counters before their organization rows.
+ *
+ * Rolling-deploy fence: the previous release serializes every file byte and
+ * object transition on these counter rows alone (FOR UPDATE, then a foreign
+ * key share of the organization), so the organization row lock does not
+ * exclude it. Taking the counters first, in that release's order, keeps both
+ * releases on one queue without a lock cycle. Retire this once no deployed
+ * build predates organization-row file accounting. Callers insert missing
+ * counter rows first where they need one; absent rows are not returned.
+ */
+export const lockOrganizationFileCounters = async ({
+  tx,
+  organizationIds,
+}: OrganizationFileCounterLockOptions) => {
+  const ids = [...new Set(organizationIds)];
+  if (ids.length === 0) {
+    return [];
+  }
+  return await tx
+    .select({
+      organizationId: organizationFileUsage.organizationId,
+      committedBytes: organizationFileUsage.committedBytes,
+      reservedBytes: organizationFileUsage.reservedBytes,
+    })
+    .from(organizationFileUsage)
+    .where(inArray(organizationFileUsage.organizationId, ids))
+    .orderBy(asc(organizationFileUsage.organizationId))
+    .limit(ids.length)
+    .for("update");
+};
+
 /**
  * Holds off organization settings writes until the transaction ends: a first
  * settings row's foreign key needs a key-share lock on the organization row,
@@ -2990,6 +3037,26 @@ export const lockTimerMatterAccessRows = async ({
     default:
       return panic("Invalid timer matter lock scope");
   }
+};
+
+/**
+ * The one-key organization object-intent lock that builds before the
+ * registered fence take alone. Holders of the registered fence take it next,
+ * in the same mode, so writers and teardown from either build exclude each
+ * other during a rolling deploy. Retire it once no running API build predates
+ * the registered fence.
+ */
+export const lockLegacyOrganizationObjectIntentKey = async (
+  tx: ExecuteTransaction,
+  organizationId: SafeId<"organization">,
+  mode: "shared" | "exclusive",
+): Promise<void> => {
+  const key = `buffer-object:${organizationId}`;
+  await tx.execute(
+    mode === "shared"
+      ? sql`SELECT pg_advisory_xact_lock_shared(hashtext(${key}))`
+      : sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`,
+  );
 };
 
 /** Fence snapshot writers before removal discards their inputs. */

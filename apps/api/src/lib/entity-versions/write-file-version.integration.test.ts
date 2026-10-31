@@ -24,6 +24,7 @@ import { updateDocumentProperties } from "@/api/handlers/files/update-document-p
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { CALLER_AUTHORIZED } from "@/api/lib/entities/buffer-write-authority";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
 import {
@@ -143,6 +144,7 @@ const writeTestFile = async (
   await safeDb(
     async (tx) =>
       await writeFileVersion({
+        authority: CALLER_AUTHORIZED,
         tx,
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,

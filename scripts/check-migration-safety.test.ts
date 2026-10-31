@@ -164,11 +164,20 @@ describe("check-migration-safety", () => {
       }
     });
 
+    it.each([
+      "SET search_path = public, pg_temp",
+      "SET search_path = pg_catalog, public, pg_temp",
+      "SET search_path = writable_owner, pg_temp",
+    ])("rejects untrusted SECURITY DEFINER search path %s", (options) => {
+      expectFinding(
+        runChecker(reviewedDefiner(options)),
+        "security-definer-trusted-search-path",
+      );
+    });
+
     it("accepts a canonical SECURITY DEFINER search path", () => {
       expectClean(
-        runChecker(
-          reviewedDefiner("SET search_path = pg_catalog, public, pg_temp"),
-        ),
+        runChecker(reviewedDefiner("SET search_path = pg_catalog, pg_temp")),
       );
     });
 

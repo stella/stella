@@ -76,6 +76,7 @@
       "function:public.fence_legacy_case_law_redaction():EXECUTE:GRANTABLE:false",
       "function:public.fence_redacted_case_law_search_projection():EXECUTE:GRANTABLE:false",
       "function:public.field_find_text(content jsonb):EXECUTE:GRANTABLE:false",
+      "function:public.file_comparison_outstanding_capacity():EXECUTE",
       "function:public.gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal):EXECUTE:GRANTABLE:false",
       "function:public.gin_extract_value_trgm(text, internal):EXECUTE:GRANTABLE:false",
       "function:public.gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal):EXECUTE:GRANTABLE:false",

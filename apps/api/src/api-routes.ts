@@ -48,7 +48,7 @@ import {
   feedbackRoute,
 } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
-import { filesRoute } from "@/api/handlers/files/routes";
+import { fileContentRoute, filesRoute } from "@/api/handlers/files/routes";
 import { flowsRoute } from "@/api/handlers/flows/routes";
 import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
@@ -218,6 +218,7 @@ export const apiRoutes = mount([
       flowRunsRoute,
       documentTypesRoute,
       propertiesRoute,
+      fileContentRoute,
       filesRoute,
       folioCollabRoute,
       desktopEditSessionsRoute,

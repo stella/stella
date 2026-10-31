@@ -18,9 +18,17 @@ export type UploadedMailJobData = {
   organizationId: string;
   workspaceId: string;
   entityId: string;
+  entityVersionId: string;
+  fieldId: string;
   sourceFileId: string;
+  sourceSha256Hex: string;
   storageMimeType: string;
-  mimeType: string;
+  extractionMimeType: string;
+  /**
+   * The extraction type under the name previous-release workers read. Remove
+   * it once no previous-release worker can consume this queue.
+   */
+  mimeType?: string;
 };
 
 type UploadedMailQueue = RequeueableQueue<UploadedMailJobData>;
@@ -37,9 +45,12 @@ const getQueue = createLazyBullMqQueue<UploadedMailJobData>({
 
 type EnqueueUploadedMailFilingOptions = {
   file: {
+    entityVersionId: SafeId<"entityVersion">;
+    fieldId: SafeId<"field">;
     sourceFileId: string;
+    sourceSha256Hex: string;
     storageMimeType: string;
-    mimeType: string;
+    extractionMimeType: string;
   };
   scope: {
     organizationId: SafeId<"organization">;
@@ -50,8 +61,9 @@ type EnqueueUploadedMailFilingOptions = {
 };
 
 /**
- * Hands a stored email file to the filing job. The job id names the file, so
- * a replayed extraction run collapses onto the one job.
+ * Hands a stored email file to the filing job. The job id names the admitted
+ * version and file, so a replayed extraction run collapses onto one job while
+ * a newer version cannot be mistaken for the queued source.
  */
 export const enqueueUploadedMailFiling = async ({
   file,
@@ -59,8 +71,13 @@ export const enqueueUploadedMailFiling = async ({
   queue,
 }: EnqueueUploadedMailFilingOptions): Promise<void> => {
   await requeueDeterministicJob({
-    data: { ...scope, ...file },
-    jobId: createBullMqJobId(JOB_NAME, scope.entityId, file.sourceFileId),
+    data: { ...scope, ...file, mimeType: file.extractionMimeType },
+    jobId: createBullMqJobId(
+      JOB_NAME,
+      scope.entityId,
+      file.entityVersionId,
+      file.sourceFileId,
+    ),
     name: JOB_NAME,
     // The queue connection opens only when an email file is extracted.
     queue: queue ?? getQueue(),

@@ -84,6 +84,17 @@ describe("tenant action size boundaries", () => {
     expect(Result.isError(await boundActionRequest(bounded, 4))).toBe(true);
   });
 
+  test("returns an unread request after metering the original body", async () => {
+    const request = requestWithBody("measured once", "0");
+    const first = await boundActionRequest(request, 64);
+    if (Result.isError(first)) {
+      panic("The first boundary must admit the body");
+    }
+    expect(request.bodyUsed).toBe(true);
+    expect(first.value.request.bodyUsed).toBe(false);
+    expect(await first.value.request.text()).toBe("measured once");
+  });
+
   test("bounds complete serialized JSON envelopes including escaping and multibyte text without emitting fragments", async () => {
     for (const text of ["é", "😀", 'line\nquote"slash\\', "\u0000", "plain"]) {
       const serialized = JSON.stringify({

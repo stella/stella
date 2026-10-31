@@ -24,6 +24,7 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { fileContentScalingScenario } from "./file-content";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
@@ -54,6 +55,7 @@ const measuredApiScenarios = [
   ...writeScalingScenarios,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
+  fileContentScalingScenario,
   decisionFilterValidationScalingScenario,
   accountExportDownloadScalingScenario,
   clientInvoicePrefillScalingScenario,

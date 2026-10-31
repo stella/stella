@@ -1,0 +1,4 @@
+{
+  "add-column": "Nullable claim identity and expiry columns require no data rewrite, with 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Status and claim-shape CHECKs are added NOT VALID in the same transaction as replacing the status CHECK; online validation follows outside the schema lock."
+}

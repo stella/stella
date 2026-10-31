@@ -1,5 +1,12 @@
 import { Result } from "better-result";
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -20,6 +27,8 @@ import {
   entityVersions,
   expenses,
   fields,
+  flowRuns,
+  flowRunSteps,
   folioCollabRooms,
   INVOICE_STATUS,
   invoiceLines,
@@ -79,6 +88,9 @@ type Fixture = {
 let testDb: TestDatabase;
 let fixture: Fixture;
 let writerSafeDb: SafeDb;
+
+// timeout: Matter deletion drives the real teardown across database and object store.
+setDefaultTimeout(30_000);
 
 const seedUser = async (name: string) => {
   const id = mintAuthProviderId<"user">();
@@ -497,6 +509,89 @@ afterAll(async () => {
 });
 
 describe("workspace deletion", () => {
+  test("keeps a matter while an AI flow may be past its durable start fence", async () => {
+    const workspaceId = createSafeId<"workspace">();
+    const runId = createSafeId<"flowRun">();
+    await testDb.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: fixture.organizationId,
+      name: "Active flow matter",
+      reference: "ACTIVE-FLOW-1",
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId,
+      userId: fixture.actorUserId,
+    });
+    await testDb.insert(flowRuns).values({
+      id: runId,
+      workspaceId,
+      definitionSnapshot: {
+        name: "Active generation",
+        steps: [
+          {
+            kind: "ai",
+            name: "Generate",
+            prompt: "Generate a summary",
+            includeDocuments: false,
+          },
+        ],
+      },
+      status: "running",
+      currentStepIndex: 0,
+      triggerSource: { type: "manual", userId: fixture.actorUserId },
+      inputEntityIds: [],
+    });
+    await testDb.insert(flowRunSteps).values({
+      id: createSafeId<"flowRunStep">(),
+      workspaceId,
+      runId,
+      index: 0,
+      kind: "ai",
+      status: "running",
+    });
+    const auditEvents: AuditEvent[] = [];
+
+    const result = await executeAuthorizedWorkspaceDeletion(
+      {
+        actorUserId: fixture.actorUserId,
+        organizationId: fixture.organizationId,
+        recordAuditEvent: async (_tx, event) => {
+          auditEvents.push(...(Array.isArray(event) ? event : [event]));
+        },
+        workspaceId,
+      },
+      {
+        database: {
+          transaction: async (callback) =>
+            await testDb.transaction(
+              async (tx) => await callback(asTestRaw<Transaction>(tx)),
+            ),
+        },
+        enqueueCleanup: async () => {},
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(result.value).toEqual({ status: "document-processing-running" });
+    }
+    expect(auditEvents).toEqual([]);
+    expect(
+      await testDb
+        .select({ status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId)),
+    ).toEqual([{ status: "active" }]);
+    expect(
+      await testDb
+        .select({ status: flowRuns.status })
+        .from(flowRuns)
+        .where(eq(flowRuns.id, runId)),
+    ).toEqual([{ status: "running" }]);
+  });
+
   test("atomically removes the complete target while preserving unrelated chats", async () => {
     const [compactionBefore, threadBefore] = await Promise.all([
       testDb

@@ -12,6 +12,7 @@ import type { SQL } from "drizzle-orm";
 
 import { DESKTOP_HANDOFF_FAILURE } from "@stll/api-contract/desktop-handoff";
 
+import { member } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
 import {
   entities,
@@ -26,6 +27,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { closePdfSigningSession } from "@/api/lib/files/pdf-signing/close-session";
+import { holdCurrentPdfSigningWriteAuthority } from "@/api/lib/files/pdf-signing/finalize";
 import {
   claimFinalizeAttempt,
   MAX_FINALIZE_ATTEMPTS,
@@ -421,6 +423,39 @@ describe("pdf signing session authorization", () => {
       tokenDb,
     );
     expect(authorized.status).toBe("permission-revoked");
+  });
+
+  test("holds current write authority again at signed-version commit", async () => {
+    const { handoffToken, sessionId } = await seedHandoff();
+    const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+      identity: { userId: ids.userA1, organizationId: ids.orgA },
+    });
+    const authorized = await authorizePdfSigningSession(
+      { sessionId, sessionToken: redeemed?.sessionToken ?? "" },
+      tokenDb,
+    );
+    expect(authorized.status).toBe("authorized");
+    if (authorized.status !== "authorized") {
+      return;
+    }
+
+    await testDb
+      .update(member)
+      .set({ role: "external" })
+      .where(eq(member.id, ids.memberA1org));
+    try {
+      expect(
+        await holdCurrentPdfSigningWriteAuthority(
+          asTestRaw<Transaction>(testDb),
+          authorized.value,
+        ),
+      ).toBe(false);
+    } finally {
+      await testDb
+        .update(member)
+        .set({ role: "member" })
+        .where(eq(member.id, ids.memberA1org));
+    }
   });
 
   test("refuses another tenant's session token for this session", async () => {
