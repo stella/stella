@@ -1,6 +1,6 @@
 {
   "name": "@stll/ui",
-  "version": "0.56.0",
+  "version": "0.59.1",
   "description": "Stella's design system: bidi-aware React primitives built on Base UI, the dockable inspector pane, and the Tailwind v4 theme they are styled with.",
   "keywords": [
     "base-ui",
@@ -64,6 +64,8 @@
     "./calendar-primitives": "./src/calendar/primitives.tsx",
     "./resource-calendar": "./src/calendar/resource-calendar.tsx",
     "./resource-calendar.logic": "./src/calendar/resource-calendar.logic.ts",
+    "./day-calendar": "./src/calendar/day-calendar.tsx",
+    "./day-calendar.logic": "./src/calendar/day-calendar.logic.ts",
     "./data-table": "./src/data-table/index.ts",
     "./date-picker-popover": "./src/components/date-picker-popover.tsx",
     "./details-grid": "./src/components/details-grid.tsx",
@@ -76,6 +78,7 @@
     "./frame": "./src/components/frame.tsx",
     "./hex-color-picker": "./src/components/hex-color-picker.tsx",
     "./icons": "./src/icons.ts",
+    "./identity-text": "./src/components/identity-text.tsx",
     "./input": {
       "react-native": "./src/components/input.native.tsx",
       "default": "./src/components/input.tsx"
@@ -147,7 +150,10 @@
     "./skeleton": "./src/components/skeleton.tsx",
     "./status-mark": "./src/components/status-mark.tsx",
     "./swap-text": "./src/components/swap-text.tsx",
-    "./stella-mark": "./src/components/stella-mark.tsx",
+    "./stella-mark": {
+      "react-native": "./src/components/stella-mark.native.tsx",
+      "default": "./src/components/stella-mark.tsx"
+    },
     "./stella-wordmark": {
       "react-native": "./src/components/stella-wordmark.native.tsx",
       "default": "./src/components/stella-wordmark.tsx"
@@ -268,7 +274,7 @@
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:unit",
-    "test:unit": "bun test src --path-ignore-patterns '**/*.playwright.spec.ts'",
+    "test:unit": "bun test --path-ignore-patterns '**/*.playwright.spec.ts'",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
     "test:browser": "playwright test --config playwright.config.ts",
     "pack:check": "cd ../.. && bun scripts/check-published-exports.ts packages/ui",
@@ -290,6 +296,8 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "catalog:",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@happy-dom/global-registrator": "21.0.4",
     "@playwright/test": "^1.63.0",
     "@stll/playwright-tools": "workspace:*",
@@ -313,6 +321,8 @@
     "@atlaskit/pragmatic-drag-and-drop": "^4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.1",
     "@base-ui/react": "^1.7.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@playwright/test": "^1.63.0",
     "@tanstack/react-virtual": "^3.14.13",
     "@types/react": ">=19",

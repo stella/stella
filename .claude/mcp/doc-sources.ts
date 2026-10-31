@@ -101,10 +101,6 @@ export const DOC_SOURCES = {
     dependencies: ["react", "react-dom", "@types/react", "@types/react-dom"],
     url: "https://react.dev/llms.txt",
   },
-  ReactEmail: {
-    dependencies: ["@react-email/components", "@react-email/render"],
-    url: "https://react.email/docs/llms.txt",
-  },
   BaseUI: {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
@@ -154,8 +150,10 @@ export const DOC_SOURCES = {
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
       "expo-font",
+      "expo-glass-effect",
       "expo-notifications",
       "expo-linking",
       "expo-router",
@@ -715,6 +713,17 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
+    (dependency) =>
+      ({
+        checkedAt: "2026-10-28T00:00:00.000Z",
+        dependency,
+        explanation:
+          "https://raw.githubusercontent.com/clauderic/dnd-kit/master/llms.txt returns 404; https://dndkit.com/llms.txt and https://docs.dndkit.com/llms.txt reject retrieval with 403. No retrievable index was found. Use the official legacy API reference at https://dndkit.com/legacy/ directly for the retained Kanban consumer contract.",
+        expiresAt: "2026-11-27T00:00:00.000Z",
+        reason: "no-llms-txt",
+      }) satisfies NoLlmsTxtExclusion,
+  ),
   ...[
     "prosemirror-commands",
     "prosemirror-dropcursor",
@@ -744,6 +753,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "The repository's https://raw.githubusercontent.com/paulmillr/noble-hashes/main/llms.txt returns 404. Use the official README and API declarations at https://github.com/paulmillr/noble-hashes directly; the shared SHA-256 owner uses create(), update() and digest() for bounded browser Blob hashing.",
     expiresAt: "2026-11-23T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-10-30T00:00:00.000Z",
+    dependency: "whatwg-fetch",
+    explanation:
+      "https://github.github.io/fetch/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/JakeChampion/fetch directly; the iOS app's request tests use only its Headers, Request and Response classes, which React Native installs as globals.",
+    expiresAt: "2026-11-27T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
