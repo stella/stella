@@ -32,6 +32,7 @@ export const statements = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: ["read", "create", "update", "delete"],
+  billing: ["read"],
   // todo: add better permissions for chat
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
@@ -78,6 +79,28 @@ type RequireAtLeastOne<T> = Partial<T> &
 
 export type PermissionInput = RequireAtLeastOne<PermissionMap>;
 
+/** Money visibility is independent of matter access and billing mutations. */
+export const BILLING_READ_PERMISSION = {
+  billing: ["read"],
+} as const satisfies PermissionInput;
+
+/** Reading monetary data also requires the matter read grant, including on attenuated credentials. */
+export const withBillingRead = <const T extends Partial<PermissionMap>>(
+  permissions: T,
+) => {
+  const { workspace, ...operationPermissions } = permissions;
+  return {
+    ...operationPermissions,
+    ...BILLING_READ_PERMISSION,
+    workspace:
+      workspace === undefined
+        ? ["read" as const]
+        : [...new Set(["read" as const, ...workspace])],
+  };
+};
+
+export const BILLING_MATTER_READ_PERMISSION = withBillingRead({});
+
 export const ac = createAccessControl(statements);
 
 const externalStellaGrants = {
@@ -97,6 +120,7 @@ const externalStellaGrants = {
   signal: ["create"],
   billingCode: [],
   rate: [],
+  billing: [],
   chat: [],
   organizationSettings: [],
   auditLog: [],
@@ -141,6 +165,7 @@ const memberStellaGrants = {
   signal: ["create", "resolve", "triage"],
   billingCode: ["create", "update", "delete"],
   rate: [],
+  billing: [],
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
@@ -159,6 +184,7 @@ const memberStellaGrants = {
 
 const managementStellaGrants = {
   ...memberStellaGrants,
+  billing: ["read"],
   timeEntry: ["read", "create", "update", "delete", "approve"],
   playbook: ["create", "update", "delete", "apply", "approve"],
   rate: ["read", "create", "update", "delete"],
@@ -252,4 +278,25 @@ export const assignableRoles = (
   return ORGANIZATION_ROLE_NAMES.filter(
     (role) => role !== "owner" || actorRole === "owner",
   );
+};
+
+type MemberPermissionsOptions = {
+  role: OrganizationRoleName;
+  billingAccess: boolean;
+  permissions: PermissionInput;
+};
+
+/** Role grants plus the one assignable member grant; credential attenuation follows this decision. */
+export const memberHasPermissions = ({
+  role,
+  billingAccess,
+  permissions,
+}: MemberPermissionsOptions): boolean => {
+  const granted = roles[role];
+  if (!billingAccess) {
+    return granted.authorize(permissions).success;
+  }
+  return ac
+    .newRole({ ...granted.statements, ...BILLING_READ_PERMISSION })
+    .authorize(permissions).success;
 };

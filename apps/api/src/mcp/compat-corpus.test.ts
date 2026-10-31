@@ -257,7 +257,12 @@ const run = async ({
     // The dispatch boundary forwards the context's anonymization seams to the
     // pipeline; this stands in for it so the suite exercises the same path.
     await finalizeToolEgress(
-      { context, mode, response },
+      {
+        outputSchema: undefined,
+        context,
+        mode,
+        response,
+      },
       {
         anonymizeTextFields: context.testDependencies?.anonymizeTextFields,
         loadAnonymizationAllowlistCanonicalsByWorkspace:

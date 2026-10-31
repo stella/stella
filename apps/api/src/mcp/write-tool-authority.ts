@@ -267,7 +267,13 @@ const mcpToolAuthorityDenial = (
   if (hasMcpToolAuthority(authority, definition)) {
     return null;
   }
-  return hasMcpToolAuthority({ memberRole: authority.memberRole }, definition)
+  return hasMcpToolAuthority(
+    {
+      memberRole: authority.memberRole,
+      billingAccess: authority.billingAccess === true,
+    },
+    definition,
+  )
     ? "credential"
     : "member-role";
 };
@@ -285,7 +291,10 @@ const mcpToolInputAuthorityDenial = (
     return null;
   }
   return hasMcpToolInputAuthority(
-    { memberRole: authority.memberRole },
+    {
+      memberRole: authority.memberRole,
+      billingAccess: authority.billingAccess === true,
+    },
     definition,
     input,
   )

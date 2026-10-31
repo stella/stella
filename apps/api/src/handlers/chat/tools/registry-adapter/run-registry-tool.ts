@@ -31,6 +31,7 @@ import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
@@ -375,6 +376,9 @@ export const runRegistryReadTool = async ({
           handler,
         });
   const finished = await finalizeToolEgress({
+    outputSchema:
+      getStaticMcpToolOutputContract(toolName)?.outputSchemaSource ??
+      panic("Registry tool output contract missing"),
     context: authorizedContext,
     mode: "default",
     response,

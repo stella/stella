@@ -75,6 +75,7 @@ describe("MCP account authorization", () => {
                   toSafeId<"organization">(organizationId),
                 );
                 return {
+                  billingAccess: false,
                   memberId: "member_one",
                   email: "limited@example.test",
                   role: "owner",
@@ -123,6 +124,7 @@ describe("MCP account authorization", () => {
       {
         request: new Request("https://example.test/mcp"),
         resolveAuthorization: async () => ({
+          billingAccess: false,
           memberId: "member_one",
           email: "standard@example.test",
           role: "owner",
@@ -201,6 +203,7 @@ describe("MCP account authorization", () => {
                 {
                   request: new Request("https://example.test/mcp"),
                   resolveAuthorization: async () => ({
+                    billingAccess: false,
                     memberId: "member_one",
                     email: "Review@Example.Test",
                     role: "owner",
@@ -256,6 +259,7 @@ describe("MCP account authorization", () => {
               {
                 request: new Request("https://example.test/mcp"),
                 resolveAuthorization: async () => ({
+                  billingAccess: false,
                   memberId: "member_one",
                   email,
                   role: "owner",

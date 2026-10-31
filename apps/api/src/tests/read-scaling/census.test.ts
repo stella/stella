@@ -28,6 +28,7 @@ import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
+import { memberBillingScalingScenario } from "./member-billing-access";
 import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
@@ -51,6 +52,7 @@ const measuredApiScenarios = [
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
+  memberBillingScalingScenario,
   exactIconScalingScenario,
   decisionSummaryScalingScenario,
   decisionFilterValidationScalingScenario,

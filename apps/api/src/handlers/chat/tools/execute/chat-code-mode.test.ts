@@ -219,6 +219,7 @@ describe("buildChatCodeMode", () => {
       resolveCurrentExecutionContext: async () =>
         await Promise.resolve(
           Result.ok({
+            billingAccess: false,
             accessibleWorkspaces: [],
             featureAccessSnapshot: createFeatureAccessSnapshot({
               organizationId: props.organizationId,

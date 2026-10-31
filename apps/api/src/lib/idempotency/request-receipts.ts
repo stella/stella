@@ -242,6 +242,7 @@ export const completeRequestReceipt = async ({
 
 type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
   authorize?: () => Promise<Result<void, HandlerError>>;
+  checkResponse?: (body: unknown) => Result<void, HandlerError>;
   run: (scopedDb: ScopedDb) => Promise<T>;
   responseStatus: () => number;
 };
@@ -254,6 +255,7 @@ export function runWithRequestReceipt<T>(
 ): Promise<Result<T, HandlerError>>;
 export async function runWithRequestReceipt<T>({
   authorize,
+  checkResponse,
   run,
   responseStatus,
   ...options
@@ -266,7 +268,11 @@ export async function runWithRequestReceipt<T>({
   }
   const claim = await claimRequestReceipt(options);
   switch (claim.type) {
-    case "replay":
+    case "replay": {
+      const checked = checkResponse?.(claim.body);
+      if (checked?.isErr()) {
+        return checked;
+      }
       return Result.ok(
         new Response(
           claim.status === 204 || claim.status === 205
@@ -281,6 +287,7 @@ export async function runWithRequestReceipt<T>({
           },
         ),
       );
+    }
     case "invalid_key":
       return Result.err(
         new HandlerError({
@@ -305,7 +312,7 @@ export async function runWithRequestReceipt<T>({
         }),
       );
     case "claimed": {
-      let refusal: { response: unknown } | undefined;
+      let refusal: Result<unknown, HandlerError> | undefined;
       let receiptState: "pending" | "completed" = "pending";
       try {
         const outcome = await Result.tryPromise(
@@ -350,7 +357,7 @@ export async function runWithRequestReceipt<T>({
                 body = body.response;
               }
               if (status < 200 || status >= 300) {
-                refusal = { response: result };
+                refusal = Result.ok(result);
                 return tx.rollback();
               }
               if (
@@ -361,6 +368,11 @@ export async function runWithRequestReceipt<T>({
                 ArrayBuffer.isView(body)
               ) {
                 panic("Idempotency replay requires a JSON handler");
+              }
+              const checked = checkResponse?.(body);
+              if (checked?.isErr()) {
+                refusal = checked;
+                return tx.rollback();
               }
               await completeRequestReceipt({
                 scopedDb: transactionalDb,
@@ -376,7 +388,7 @@ export async function runWithRequestReceipt<T>({
             refusal !== undefined &&
             outcome.error.cause instanceof TransactionRollbackError
           ) {
-            return Result.ok(refusal.response);
+            return refusal;
           }
           return abortTransaction(outcome.error.cause);
         }

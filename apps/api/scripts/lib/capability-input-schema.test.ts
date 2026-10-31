@@ -4,9 +4,14 @@ import * as v from "valibot";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs";
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import { toRouteJsonSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import type { AdvertisedSchemas } from "../../src/mcp/advertised-schema";
-import { buildInputSchema } from "./capability-input-schema";
+import {
+  buildInputSchema,
+  capabilityDeploymentFeature,
+  parseFeatureRequirement,
+} from "./capability-input-schema";
 import { compactSchemaDefs } from "./compact-schema-defs";
 
 const tableLayout = v.object({ type: v.literal("table") });
@@ -108,4 +113,32 @@ test("export refuses an input part that is not a schema instead of dropping its 
       buildInputSchema({ body: { invalid: true }, featureAccess }),
     ).toThrow("Capability input schemas must be valibot schemas");
   }
+});
+
+test("required capabilities inherit deployment flags while conditional feature inputs remain available", () => {
+  const registry = {
+    gated: {
+      enrolment: "self-serve",
+      deploymentFeature: "FEATURE_TIME_BILLING",
+    },
+    available: { enrolment: "general-availability" },
+  } as const satisfies FeatureRegistry;
+  const resolve = (value: unknown, declaredFeature?: string) =>
+    capabilityDeploymentFeature({
+      requirement: parseFeatureRequirement(value),
+      registry,
+      declaredFeature,
+    });
+  expect(resolve(undefined)).toBeUndefined();
+  expect(resolve({ featureId: "gated", type: "required" })).toBe(
+    "FEATURE_TIME_BILLING",
+  );
+  expect(resolve({ featureId: "gated", type: "conditional" })).toBeUndefined();
+  expect(resolve({ featureId: "available", type: "required" })).toBeUndefined();
+  expect(
+    resolve({ featureId: "gated", type: "required" }, "FEATURE_USAGE"),
+  ).toBe("FEATURE_USAGE");
+  expect(() => resolve({ featureId: "unknown", type: "required" })).toThrow(
+    "Capability names an unregistered feature",
+  );
 });

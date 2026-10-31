@@ -169,6 +169,7 @@ const chatWriteTools = (
           currentRole === null
             ? null
             : {
+                billingAccess: false,
                 accessibleWorkspaces: [],
                 featureAccessSnapshot,
                 pinServerValidatedWorkspaceId: () => false,

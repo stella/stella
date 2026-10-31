@@ -28,7 +28,10 @@ import { matterRequiredResult } from "@/api/mcp/matter-requirement";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { READER_ANNOTATION_TOOL_HANDLERS } from "@/api/mcp/reader-annotation-tools";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
-import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
+import {
+  getStaticMcpToolDefinition,
+  getStaticMcpToolOutputContract,
+} from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type {
@@ -385,6 +388,9 @@ export const runRegistryWriteTool = async (
     context: authorizedContext,
   });
   const finished = await finalizeToolEgress({
+    outputSchema:
+      getStaticMcpToolOutputContract(toolName)?.outputSchemaSource ??
+      panic("Registry tool output contract missing"),
     context: authorizedContext,
     mode: "default",
     response,

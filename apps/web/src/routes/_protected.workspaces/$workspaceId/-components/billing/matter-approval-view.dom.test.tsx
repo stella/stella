@@ -482,7 +482,13 @@ describe("matter approval view", () => {
     await mount("member", approvalPage, (client) => {
       client.setQueryData(
         timeEntriesOptions(WORKSPACE, USER, { status: "submitted" }).queryKey,
-        [{ ...draft, rateAtEntry: cents(draft.rateAtEntry) }],
+        [
+          {
+            ...draft,
+            rateAtEntry:
+              draft.rateAtEntry === null ? null : cents(draft.rateAtEntry),
+          },
+        ],
       );
       client.setQueryData(
         timeEntriesOptions(WORKSPACE, USER, { status: "approved" }).queryKey,

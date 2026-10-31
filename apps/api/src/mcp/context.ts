@@ -331,6 +331,7 @@ export type McpRequestContext = {
   loadWebSearchProvider?:
     (() => Promise<Result<McpWebSearchAvailability, SafeDbError>>) | undefined;
   memberRole: MemberRole;
+  billingAccess?: boolean;
   organizationId: SafeId<"organization">;
   /**
    * Build an operation-local database scope whose private pinned-ID list can
@@ -762,6 +763,7 @@ export const resolveMcpSessionContext = async (
     loadWebSearchProvider,
     grantedScopes: session.scopes,
     memberRole,
+    billingAccess: authorization.billingAccess,
     organizationId,
     request,
     recordAuditEvent: createAuditRecorder({

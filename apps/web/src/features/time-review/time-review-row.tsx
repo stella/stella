@@ -28,7 +28,7 @@ export type TimeReviewRowData = {
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
-  rateAtEntry: CentsAmount;
+  rateAtEntry: CentsAmount | null;
   currency: string;
   billable: boolean;
   noCharge: boolean;
@@ -47,6 +47,9 @@ type TimeReviewRowProps = {
 
 const Pricing = ({ row }: { row: TimeReviewRowData }) => {
   const t = useTranslations();
+  if (row.rateAtEntry === null) {
+    return null;
+  }
   if (row.currency === UNPRICED_TIME_ENTRY_CURRENCY) {
     return <span>{t("billing.rates.noRateFound")}</span>;
   }

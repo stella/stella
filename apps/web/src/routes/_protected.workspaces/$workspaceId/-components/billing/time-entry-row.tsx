@@ -29,7 +29,7 @@ type TimeEntry = {
   dateWorked: string;
   durationMinutes: number;
   billedMinutes: number;
-  rateAtEntry: CentsAmount;
+  rateAtEntry: CentsAmount | null;
   currency: string;
   narrative: string;
   invoiceNarrative: string | null;
@@ -56,6 +56,21 @@ const ReturnReason = ({
     <p className="text-xs" dir="auto">
       {t("timesheets.week.returned", { comment: entry.returnComment })}
     </p>
+  );
+};
+
+const TimeEntryBillingAmount = ({ entry }: { entry: TimeEntry }) => {
+  if (!entry.billable || entry.rateAtEntry === null) {
+    return null;
+  }
+  const amount = timeEntryAmount({ ...entry, rateAtEntry: entry.rateAtEntry });
+  if (amount <= 0) {
+    return null;
+  }
+  return (
+    <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+      {formatCurrencyAmount(amount, entry.currency)}
+    </span>
   );
 };
 
@@ -86,7 +101,6 @@ export const TimeEntryRow = ({
   const [splitOpen, setSplitOpen] = useState(false);
 
   const isActive = entry.timerStartedAt !== null;
-  const billedAmount = timeEntryAmount(entry);
 
   return (
     <>
@@ -141,12 +155,7 @@ export const TimeEntryRow = ({
           <ReturnReason entry={entry} />
         </div>
 
-        {/* Billing amount */}
-        {entry.billable && billedAmount > 0 && (
-          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {formatCurrencyAmount(billedAmount, entry.currency)}
-          </span>
-        )}
+        <TimeEntryBillingAmount entry={entry} />
 
         <span className="text-muted-foreground shrink-0 text-sm tabular-nums">
           {isActive ? (

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import type { GenericSchema } from "valibot";
 
+import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import { isValibotSchema } from "../../src/lib/json-schema/valibot-to-json-schema";
 import { isRecord } from "../../src/lib/type-guards";
 import { advertisedSchemas } from "../../src/mcp/advertised-schema";
@@ -17,6 +18,30 @@ export const parseFeatureRequirement = (value: unknown) => {
     return undefined;
   }
   return { featureId: value["featureId"], type } as const;
+};
+
+type CapabilityDeploymentFeatureOptions = {
+  requirement: ReturnType<typeof parseFeatureRequirement>;
+  registry: FeatureRegistry;
+  declaredFeature: string | undefined;
+};
+
+/** Conditional feature inputs do not gate the whole capability. */
+export const capabilityDeploymentFeature = ({
+  requirement,
+  registry,
+  declaredFeature,
+}: CapabilityDeploymentFeatureOptions) => {
+  if (requirement === undefined) {
+    return declaredFeature;
+  }
+  const feature =
+    registry[requirement.featureId] ??
+    panic("Capability names an unregistered feature");
+  return (
+    declaredFeature ??
+    (requirement.type === "required" ? feature.deploymentFeature : undefined)
+  );
 };
 
 type ConditionalSchemaRequirement = {

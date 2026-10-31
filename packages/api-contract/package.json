@@ -6,6 +6,7 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
+    "./billing-money": "./src/billing-money.ts",
     ".": "./src/index.ts",
     "./api-date": "./src/api-date.ts",
     "./contact-date": "./src/contact-date.ts",

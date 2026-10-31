@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import { BILLING_CAP_MINUTES_MAX } from "@stll/api-contract/billing";
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
+import { withBillingRead } from "@stll/permissions";
 
 import { billingArrangements } from "@/api/db/schema";
 import { rateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -14,6 +15,7 @@ import {
   recordBillingCapCrossings,
 } from "@/api/lib/billing/arrangements";
 import { exceedsBillingCaps } from "@/api/lib/billing/arrangements.logic";
+import { updatedArrangementMoneyResponse } from "@/api/lib/billing/response-schemas";
 import { minorUnitAmountSchema } from "@/api/lib/custom-schema";
 import { lockBillingArrangement } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +23,7 @@ import { cents } from "@/api/lib/money";
 
 const updateBillingArrangement = createSafeHandler(
   {
+    moneyResponse: updatedArrangementMoneyResponse,
     contract: "replace",
     precondition: {
       type: "deferred",
@@ -28,7 +31,7 @@ const updateBillingArrangement = createSafeHandler(
     },
     description:
       "Set the matter's current billing arrangement in integer minor currency units. Hourly supports optional positive amount and minute caps with an alert threshold in basis points; flat fee supplies one amount. Refused for mixed-currency existing charged work or a cap below reserved invoice time. Changes do not change invoice snapshots.",
-    permissions: { rate: ["update"] },
+    permissions: withBillingRead({ rate: ["update"] }),
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
     realtime: rateRealtimeUpdates,

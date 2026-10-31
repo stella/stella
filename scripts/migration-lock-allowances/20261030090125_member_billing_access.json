@@ -1,0 +1,3 @@
+{
+  "add-column": "member.billing_access is a boolean with a constant false default, a catalog-only addition without a row rewrite. The migration bounds the brief ACCESS EXCLUSIVE lock with a 1s lock_timeout and a 5s statement_timeout; existing memberships gain no additional billing grant."
+}

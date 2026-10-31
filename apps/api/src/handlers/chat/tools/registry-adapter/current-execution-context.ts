@@ -16,6 +16,7 @@ type CurrentChatExecutionContext = {
   featureAccessSnapshot: FeatureAccessSnapshot;
   pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   role: string;
+  billingAccess: boolean;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userEmail: string;
@@ -83,7 +84,11 @@ export const resolveCurrentChatRegistryContext = async ({
   return Result.ok({
     ...contextDeps,
     featureAccessSnapshot: current.featureAccessSnapshot,
-    memberRole: withCurrentMemberRole(contextDeps.memberRole, current.role),
+    memberRole: withCurrentMemberRole({
+      authority: contextDeps.memberRole,
+      role: current.role,
+      billingAccess: current.billingAccess,
+    }),
     pinServerValidatedWorkspaceId: current.pinServerValidatedWorkspaceId,
     safeDb: current.safeDb,
     scopedDb: current.scopedDb,

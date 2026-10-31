@@ -6,7 +6,9 @@ import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import type { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
 export type TimeEntryPricingSelection =
-  { type: "automatic" } | { type: "manual"; draft: string; currency: string };
+  | { type: "automatic" }
+  | { type: "manual"; draft: string; currency: string }
+  | { type: "hidden" };
 
 type RateResolution = Awaited<
   ReturnType<NonNullable<ReturnType<typeof resolvedRateOptions>["queryFn"]>>
@@ -36,6 +38,12 @@ export const deriveTimeEntryPricing = ({
         : "error";
   }
   switch (selection.type) {
+    case "hidden":
+      return {
+        status: "ready",
+        rateAtEntry: 0,
+        currency: DEFAULT_CURRENCY,
+      } as const;
     case "manual":
       return {
         status,

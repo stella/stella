@@ -22,6 +22,7 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
  */
 export type McpEffectiveAuthority = {
   memberRole: MemberRole;
+  billingAccess?: boolean;
   /** Absent means the credential is not attenuated beyond its role. */
   credentialPermissions?: PermissionInput | undefined;
 };
@@ -32,10 +33,12 @@ export type McpEffectiveAuthority = {
  */
 export const mcpMemberAuthority = ({
   memberRole,
+  billingAccess,
   credentialPermissions,
 }: McpEffectiveAuthority): AuthorizedMemberRole =>
   authorizedMemberRole({
     role: memberRole,
+    billingAccess: billingAccess === true,
     credential:
       credentialPermissions === undefined
         ? SESSION_CREDENTIAL

@@ -248,7 +248,7 @@ const resolvePresentedMachineApiKey = async (
   // as a session would.
   if (
     !hasMemberPermission(
-      sessionMemberRole(authorization.role),
+      sessionMemberRole(authorization.role, authorization.billingAccess),
       parsedPermissions.permissions,
     )
   ) {

@@ -437,6 +437,7 @@ describe("personal key persistence and receipts", () => {
             return null;
           }
           return {
+            billingAccess: false,
             memberId: membership.memberId,
             role: membership.role,
             email: membership.email,

@@ -178,6 +178,7 @@ describe("GET /current audience reach", () => {
       });
       const resolveAuthorization = mock();
       resolveAuthorization.mockResolvedValue({
+        billingAccess: false,
         memberId: "member-1",
         email: "member@example.test",
         role: "member",

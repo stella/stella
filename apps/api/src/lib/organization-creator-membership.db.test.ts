@@ -57,10 +57,16 @@ describe("organization creator membership", () => {
       }
       expect(
         await db
-          .select({ role: member.role, userId: member.userId })
+          .select({
+            role: member.role,
+            userId: member.userId,
+            billingAccess: member.billingAccess,
+          })
           .from(member)
           .where(eq(member.organizationId, org.id)),
-      ).toEqual([{ role: "owner", userId: browser.userId }]);
+      ).toEqual([
+        { role: "owner", userId: browser.userId, billingAccess: false },
+      ]);
     }
   }, 120_000);
 
@@ -82,10 +88,14 @@ describe("organization creator membership", () => {
     });
     expect(
       await db
-        .select({ role: member.role, userId: member.userId })
+        .select({
+          role: member.role,
+          userId: member.userId,
+          billingAccess: member.billingAccess,
+        })
         .from(member)
         .where(eq(member.organizationId, org.id)),
-    ).toEqual([{ role: "owner", userId }]);
+    ).toEqual([{ role: "owner", userId, billingAccess: false }]);
   }, 120_000);
 
   test("the human-session helper creates and activates one owner membership", async () => {
@@ -96,10 +106,16 @@ describe("organization creator membership", () => {
     });
     expect(
       await getDatabase()
-        .select({ role: member.role, userId: member.userId })
+        .select({
+          role: member.role,
+          userId: member.userId,
+          billingAccess: member.billingAccess,
+        })
         .from(member)
         .where(eq(member.organizationId, session.organizationId)),
-    ).toEqual([{ role: "owner", userId: session.userId }]);
+    ).toEqual([
+      { role: "owner", userId: session.userId, billingAccess: false },
+    ]);
     const active = await getAuth().api.getSession({
       headers: session.browser.headers(),
     });

@@ -107,6 +107,7 @@ import {
 } from "./lib/capability-catalog";
 import {
   buildInputSchema,
+  capabilityDeploymentFeature,
   parseFeatureRequirement,
 } from "./lib/capability-input-schema";
 import {
@@ -1503,12 +1504,20 @@ const buildCatalog = async (): Promise<BuildResult> => {
       return;
     }
     // Deployment feature gate: the covering tool's flag wins (mechanical
-    // inheritance), the reviewed domain table covers the rest.
+    // inheritance), then the domain or required feature registry supplies it.
     const coveringToolName = coveringToolOf(endpoint.exposure);
     const inheritedFeature =
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const featureAccess = parseFeatureRequirement(
+      endpoint.config["featureAccess"],
+    );
+    const deploymentFeature = capabilityDeploymentFeature({
+      requirement: featureAccess,
+      registry: FEATURE_REGISTRY,
+      declaredFeature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+    });
     const consumesServices = serviceConsumptionOf(
       endpoint.exposure,
       toolServicesByName,
@@ -1533,10 +1542,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
         permissions,
         compactedInputSchema,
         exposure: endpoint.exposure,
-        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
-        featureAccess: parseFeatureRequirement(
-          endpoint.config["featureAccess"],
-        ),
+        feature: deploymentFeature,
+        featureAccess,
         transport,
         allowsArchivedWorkspace:
           endpoint.config["workspaceStatus"] === "active-or-archived",
