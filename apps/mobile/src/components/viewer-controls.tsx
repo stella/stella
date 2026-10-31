@@ -20,6 +20,16 @@ import { useAppColors } from "@/theme";
 
 type GlyphName = ComponentProps<typeof LucideGlyphs>["name"];
 
+const BAR_HEIGHT = 44;
+const BAR_GAP = 12;
+
+/**
+ * How far the bar reaches up from the screen's bottom edge, given the
+ * safe area's bottom inset: what a document leaves free under its end.
+ */
+export const viewerBarClearance = (bottomInset: number): number =>
+  bottomInset + BAR_GAP + BAR_HEIGHT + BAR_GAP;
+
 /** The glyph that shows each appearance on its button. */
 const APPEARANCE_GLYPHS = {
   system: "sun-moon",
@@ -98,7 +108,7 @@ export const ViewerControls = ({
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.dock, { bottom: insets.bottom + 12 }]}
+      style={[styles.dock, { bottom: insets.bottom + BAR_GAP }]}
     >
       {glass ? (
         <GlassView
@@ -162,9 +172,9 @@ const styles = StyleSheet.create({
   },
   button: {
     alignItems: "center",
-    height: 44,
+    height: BAR_HEIGHT,
     justifyContent: "center",
-    width: 44,
+    width: BAR_HEIGHT,
   },
   disabled: {
     opacity: 0.35,

@@ -1,8 +1,9 @@
 /**
  * The viewer's zoom, as a factor of the page fitted to the screen's width:
- * 1 is the fit the viewer opens at, and − and + walk these steps.
+ * 1 is the fit the viewer opens at, and − and + walk these steps. They stay
+ * within folio's bounds for a phone's fit, so each step shows as labelled.
  */
-export const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3] as const;
+export const ZOOM_STEPS = [0.75, 1, 1.25, 1.5, 2] as const;
 
 export const FIT_ZOOM = 1;
 
@@ -30,8 +31,45 @@ export const folioZoom = (fitted: number, zoom: number): number =>
   Math.min(FOLIO_MAX_ZOOM, Math.max(FOLIO_MIN_ZOOM, fitted * zoom));
 
 /**
- * The most pixels one canvas holds. WebKit refuses to draw a larger one, and
- * a zoomed page on a 3× screen passes it.
+ * The zoom to set folio to, or null to leave it fitting the page itself.
+ * folio's fit grows with the screen's width, so `fitPerPixel` (its fit over
+ * the width it fitted) gives the fit at any `width`, as the screen turns.
+ * Until the person first zooms (`zoomed`), folio keeps its own fit.
+ */
+export const docxZoomTarget = ({
+  fitPerPixel,
+  width,
+  zoom,
+  zoomed,
+}: {
+  fitPerPixel: number | null;
+  width: number;
+  zoom: number;
+  zoomed: boolean;
+}): number | null =>
+  fitPerPixel === null || (zoom === FIT_ZOOM && !zoomed)
+    ? null
+    : folioZoom(fitPerPixel * width, zoom);
+
+/**
+ * Where a scroller's offset along one axis moves when its content scales by
+ * `ratio`, so the point at the middle of its `viewport` stays there.
+ */
+export const scaledScroll = ({
+  offset,
+  viewport,
+  ratio,
+}: {
+  offset: number;
+  viewport: number;
+  ratio: number;
+}): number => Math.max(0, (offset + viewport / 2) * ratio - viewport / 2);
+
+/**
+ * The most pixels one canvas holds. WebKit refuses to draw a larger one,
+ * which a page zoomed in on a wide 3× screen passes. Pages far from the
+ * screen give their canvases back (./pdf-pages.tsx), which keeps the total
+ * across canvases down as well.
  */
 export const MAX_CANVAS_PIXELS = 16_000_000;
 

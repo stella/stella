@@ -26,7 +26,7 @@ import "@stll/folio-react/editor.css";
 import { bundledFontUrl } from "@/components/dom-theme";
 
 import { FOLIO_FONT_FACES } from "./folio-fonts.gen";
-import { FIT_ZOOM, folioZoom } from "./zoom";
+import { docxZoomTarget } from "./zoom";
 
 /** folio's own words in every language the app ships. */
 const FOLIO_CATALOGS = {
@@ -93,23 +93,47 @@ export const DocxPages = ({
   const messages: AbstractIntlMessages = FOLIO_CATALOGS[uiLocale];
 
   const editor = useRef<DocxEditorRef>(null);
-  // folio's zoom for the fitted page, read once it first paints. Until the
-  // person zooms, folio keeps fitting the page itself as the screen turns.
-  const [fitted, setFitted] = useState<number | null>(null);
+  // folio's fit over the width it fitted, read once, at the first paint,
+  // before any zoom of the person's.
+  const [fitPerPixel, setFitPerPixel] = useState<number | null>(null);
+  const [width, setWidth] = useState(
+    () => document.documentElement.clientWidth,
+  );
   const zoomed = useRef(false);
 
   const painted = useEffectEvent(() => {
-    setFitted(editor.current?.getZoom() ?? null);
+    const fitted = editor.current?.getZoom();
+    if (fitted !== undefined) {
+      setFitPerPixel(
+        (current) => current ?? fitted / document.documentElement.clientWidth,
+      );
+    }
     onReady();
   });
 
   useEffect(() => {
-    if (fitted === null || (zoom === FIT_ZOOM && !zoomed.current)) {
+    const resized = () => {
+      setWidth(document.documentElement.clientWidth);
+    };
+    window.addEventListener("resize", resized);
+    return () => {
+      window.removeEventListener("resize", resized);
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = docxZoomTarget({
+      fitPerPixel,
+      width,
+      zoom,
+      zoomed: zoomed.current,
+    });
+    if (target === null) {
       return;
     }
     zoomed.current = true;
-    editor.current?.setZoom(folioZoom(fitted, zoom));
-  }, [fitted, zoom]);
+    editor.current?.setZoom(target);
+  }, [fitPerPixel, width, zoom]);
 
   useEffect(() => {
     declareFolioFonts();

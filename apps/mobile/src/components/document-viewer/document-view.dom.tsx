@@ -24,6 +24,8 @@ type DocumentViewProps = {
   appearance: DomAppearance;
   /** The pages' width as a factor of the screen's fit (see ./zoom.ts). */
   zoom: number;
+  /** Room under the document's end, in CSS pixels, for the app's bar. */
+  clearance: number;
   readChunk: (offset: number, length: number) => Promise<string>;
   /**
    * The first page is on screen. The app's handlers only set state, so the
@@ -65,6 +67,7 @@ const DocumentView = ({
   locale,
   appearance,
   zoom,
+  clearance,
   readChunk,
   onReady,
   onFailed,
@@ -122,19 +125,23 @@ const DocumentView = ({
       kind === "pdf" ? (
         <PdfPages
           bytes={bytes}
+          clearance={clearance}
           invert={appearance === "dark"}
           onFailed={failed}
           onReady={ready}
           zoom={zoom}
         />
       ) : (
-        <DocxPages
-          bytes={bytes}
-          locale={locale}
-          onFailed={failed}
-          onReady={ready}
-          zoom={zoom}
-        />
+        // folio scrolls within its own box, so the box ends above the bar.
+        <div style={{ height: `calc(100vh - ${String(clearance)}px)` }}>
+          <DocxPages
+            bytes={bytes}
+            locale={locale}
+            onFailed={failed}
+            onReady={ready}
+            zoom={zoom}
+          />
+        </div>
       );
   }
 

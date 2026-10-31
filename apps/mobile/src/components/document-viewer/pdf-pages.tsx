@@ -4,7 +4,13 @@
 // needs (`Map.prototype.getOrInsertComputed` and others the modern build
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Result } from "better-result";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -13,13 +19,10 @@ import type {
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import { canvasScale } from "./zoom";
+import { canvasScale, scaledScroll } from "./zoom";
 
 /** The canvas showing between pages and around them, as on the web. */
 const PAGE_GAP = 12;
-
-/** Room under the last page for the app's floating viewer bar. */
-const BAR_CLEARANCE = 72;
 
 /** The web's dark-mode page: inverted, with hues turned back. */
 const DARK_PAGE_FILTER = "invert(1) hue-rotate(180deg)";
@@ -39,12 +42,15 @@ const pageRatio = async (
  */
 export const PdfPages = ({
   bytes,
+  clearance,
   invert,
   zoom,
   onReady,
   onFailed,
 }: {
   bytes: Uint8Array;
+  /** Room under the last page, in CSS pixels, for what the app floats there. */
+  clearance: number;
   /** Draw the pages inverted, as the web does in dark mode. */
   invert: boolean;
   /** The pages' width as a factor of the screen's (see ./zoom.ts). */
@@ -145,17 +151,42 @@ export const PdfPages = ({
     };
   }, [pdf]);
 
+  // A new zoom keeps the point at the middle of the screen where it was.
+  const scrolling = useRef<HTMLDivElement | null>(null);
+  const shownZoom = useRef(zoom);
+  useLayoutEffect(() => {
+    const ratio = zoom / shownZoom.current;
+    shownZoom.current = zoom;
+    const box = scrolling.current;
+    if (box === null || ratio === 1) {
+      return;
+    }
+    box.scrollTop = scaledScroll({
+      offset: box.scrollTop,
+      viewport: box.clientHeight,
+      ratio,
+    });
+    box.scrollLeft = scaledScroll({
+      offset: box.scrollLeft,
+      viewport: box.clientWidth,
+      ratio,
+    });
+  }, [zoom]);
+
   if (pdf === null || layout === null) {
     return null;
   }
   return (
     <div
-      ref={setScroller}
+      ref={(node) => {
+        scrolling.current = node;
+        setScroller(node);
+      }}
       style={{
         height: "100%",
         overflow: "auto",
         padding: PAGE_GAP,
-        paddingBottom: PAGE_GAP + BAR_CLEARANCE,
+        paddingBottom: PAGE_GAP + clearance,
       }}
     >
       {layout.ratios.map((ratio, index) => (
