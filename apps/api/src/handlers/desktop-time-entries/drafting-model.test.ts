@@ -15,7 +15,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import type { BillingDraftGate } from "./billing-draft-mode";
 import {
-  DraftingAdmission,
+  admitDraftingWithGateReader,
   generateAdmittedObject,
   generateAdmittedText,
 } from "./drafting-model";
@@ -30,7 +30,7 @@ const consenting: BillingDraftGate = {
 /** An admission whose gate reads answer `gates` in turn, the last repeating. */
 const admitWith = async (gates: readonly BillingDraftGate[]) => {
   let reads = 0;
-  const admission = await DraftingAdmission.admit({
+  const admission = await admitDraftingWithGateReader({
     safeDb: async () => await Promise.resolve(panic("No database is read")),
     organizationId: toSafeId<"organization">("org_drafting_gate"),
     userId: toSafeId<"user">("user_drafting_gate"),
@@ -96,16 +96,11 @@ test("every provider request reads the gate again, retries and fallbacks include
     admission: admission.unwrap(),
     request: textRequest,
     // A first request, a retry after a provider delay, then a fallback model
-    // the member no longer consents to; the generation wraps what it sees.
+    // the member no longer consents to. The real generation runs its check
+    // the same way; tanstack-ai-generate.test.ts proves it for each step.
     generate: async ({ beforeEachDispatch }) => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
-        const checked = await Result.tryPromise({
-          try: async () => await runDispatchCheck(beforeEachDispatch),
-          catch: () => new Error("Generation failed"),
-        });
-        if (checked.isErr()) {
-          throw checked.error;
-        }
+        await runDispatchCheck(beforeEachDispatch);
         sent += 1;
       }
       return "never returned";

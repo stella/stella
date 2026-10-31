@@ -1,13 +1,18 @@
-import { Result } from "better-result";
+import { panic, Result, UnhandledException } from "better-result";
 import type * as v from "valibot";
 
 import type { DesktopBillingDraftMode } from "@stll/api-contract/desktop-billing-drafts";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  DatabaseError,
+  DatabaseRlsError,
+  HandlerError,
+} from "@/api/lib/errors/tagged-errors";
 import type { DispatchCheck } from "@/api/lib/tanstack-ai-generate";
 import {
+  DispatchRefusedError,
   generateTanStackObjectForTask,
   generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
@@ -33,48 +38,43 @@ type DraftingAccount = {
   userId: SafeId<"user">;
 };
 
-type AdmitDraftingOptions = DraftingAccount & {
-  /** Test seam for the gate read; production reads the database. */
-  loadGate?: typeof loadBillingDraftGate | undefined;
-};
+type GateReader = typeof loadBillingDraftGate;
+
+type GateFailure = HandlerError | SafeDbError;
+
+// Held only by this module: nothing else can construct an admission.
+const ADMISSION = Symbol("DraftingAdmission");
 
 /**
  * Proof that the organization allows AI drafting and the caller consents,
- * read for this request. Only {@link DraftingAdmission.admit} makes one, and
- * the model calls below take nothing else.
+ * read for this request. Only {@link DraftingAdmission.admit} makes one in
+ * production, and the model calls below take nothing else.
  */
 export class DraftingAdmission {
   private readonly account: DraftingAccount;
-  private readonly loadGate: typeof loadBillingDraftGate;
+  private readonly loadGate: GateReader;
   /** The gate as read when the request was admitted. */
   readonly gate: BillingDraftGate;
 
-  private constructor(
+  constructor(
+    token: typeof ADMISSION,
     account: DraftingAccount,
-    loadGate: typeof loadBillingDraftGate,
+    loadGate: GateReader,
     gate: BillingDraftGate,
   ) {
+    if (token !== ADMISSION) {
+      panic("A drafting admission is made only by reading the gate");
+    }
     this.account = account;
     this.loadGate = loadGate;
     this.gate = gate;
   }
 
   /** Reads the gate and refuses before any context or model work. */
-  static async admit({
-    loadGate = loadBillingDraftGate,
-    ...account
-  }: AdmitDraftingOptions): Promise<
-    Result<DraftingAdmission, HandlerError | SafeDbError>
-  > {
-    const gate = await loadGate(account);
-    if (gate.isErr()) {
-      return Result.err(gate.error);
-    }
-    const refusal = billingDraftGateRefusal(gate.value);
-    if (refusal) {
-      return Result.err(refusal);
-    }
-    return Result.ok(new DraftingAdmission(account, loadGate, gate.value));
+  static async admit(
+    account: DraftingAccount,
+  ): Promise<Result<DraftingAdmission, GateFailure>> {
+    return await admitThrough(account, loadBillingDraftGate);
   }
 
   /**
@@ -93,10 +93,43 @@ export class DraftingAdmission {
   }
 }
 
+const admitThrough = async (
+  account: DraftingAccount,
+  loadGate: GateReader,
+): Promise<Result<DraftingAdmission, GateFailure>> => {
+  const gate = await loadGate(account);
+  if (gate.isErr()) {
+    return Result.err(gate.error);
+  }
+  const refusal = billingDraftGateRefusal(gate.value);
+  if (refusal) {
+    return Result.err(refusal);
+  }
+  return Result.ok(
+    new DraftingAdmission(ADMISSION, account, loadGate, gate.value),
+  );
+};
+
+/**
+ * A test's admission, whose gate reads answer from `loadGate` instead of the
+ * database. `scripts/ownership/drafting-gate-reader.ts` confines it to tests;
+ * production admits only through {@link DraftingAdmission.admit}.
+ */
+export const admitDraftingWithGateReader = async ({
+  loadGate,
+  ...account
+}: DraftingAccount & { loadGate: GateReader }) =>
+  await admitThrough(account, loadGate);
+
+/** How an endpoint admits a request; tests pass a confined gate reader. */
+export type AdmitDrafting = (
+  account: DraftingAccount,
+) => Promise<Result<DraftingAdmission, GateFailure>>;
+
 /** Why a gated model call returned no answer. */
 export type GatedGenerationFailure =
   /** The gate refused right before a provider request; nothing was sent. */
-  | { type: "refused"; error: HandlerError | SafeDbError }
+  | { type: "refused"; error: GateFailure }
   /** The generation itself failed. */
   | { type: "failed"; cause: unknown };
 
@@ -104,34 +137,37 @@ export type GatedGenerationFailure =
 export type ObjectGeneration = typeof generateTanStackObjectForTask;
 export type TextGeneration = typeof generateTanStackTextForTask;
 
+const isGateFailure = (value: unknown): value is GateFailure =>
+  HandlerError.is(value) ||
+  DatabaseError.is(value) ||
+  DatabaseRlsError.is(value) ||
+  UnhandledException.is(value);
+
 const generateGated = async <T>(
   admission: DraftingAdmission,
   expectedMode: DesktopBillingDraftMode | undefined,
   run: (beforeEachDispatch: DispatchCheck) => Promise<T>,
 ): Promise<Result<T, GatedGenerationFailure>> => {
-  // Set from the dispatch check, which control-flow analysis cannot see; the
-  // generation may wrap the refusal it stops on, so it is kept here.
-  const dispatch: { refusal: HandlerError | SafeDbError | undefined } = {
-    refusal: undefined,
-  };
   const generated = await Result.tryPromise({
     try: async () =>
-      await run(async () => {
-        const current = await admission.recheck(expectedMode);
-        if (current.isErr()) {
-          dispatch.refusal = current.error;
-        }
-        return current;
-      }),
+      await run(async () => await admission.recheck(expectedMode)),
     catch: (cause: unknown) => cause,
   });
-  if (dispatch.refusal !== undefined) {
-    return Result.err({ type: "refused", error: dispatch.refusal });
+  if (generated.isOk()) {
+    return Result.ok(generated.value);
   }
-  if (generated.isErr()) {
-    return Result.err({ type: "failed", cause: generated.error });
+  // The generation surfaces the gate's refusal as its own typed error,
+  // never as a model failure.
+  const cause = generated.error;
+  if (cause instanceof DispatchRefusedError) {
+    return Result.err({
+      type: "refused",
+      error: isGateFailure(cause.refusal)
+        ? cause.refusal
+        : panic("A drafting dispatch check refused with a foreign error"),
+    });
   }
-  return Result.ok(generated.value);
+  return Result.err({ type: "failed", cause });
 };
 
 type GenerateAdmittedObjectOptions<TSchema extends v.GenericSchema> = {

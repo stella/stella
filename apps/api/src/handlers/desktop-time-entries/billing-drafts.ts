@@ -35,7 +35,6 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
-import type { loadBillingDraftGate } from "./billing-draft-mode";
 import {
   BILLING_DRAFT_CONTEXT_LIMITS,
   loadBillingDraftContext,
@@ -45,6 +44,7 @@ import {
   validatePlainBillingDraftResult,
 } from "./billing-drafts-validation";
 import {
+  type AdmitDrafting,
   DraftingAdmission,
   type GatedGenerationFailure,
   generateAdmittedObject,
@@ -70,7 +70,7 @@ Limits: return 1-${DESKTOP_BILLING_DRAFT_LIMITS.entries} drafts. All strings mus
 type BillingDraftEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadContext?: typeof loadBillingDraftContext;
-  loadGate?: typeof loadBillingDraftGate;
+  admitDrafting?: AdmitDrafting;
   generateObjectForTask?: ObjectGeneration;
   admit?: typeof withActionAdmission;
 };
@@ -592,7 +592,7 @@ const validateEntryDates = (entries: DesktopBillingDraftRequest["entries"]) =>
 export const createDesktopBillingDraftEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadContext = loadBillingDraftContext,
-  loadGate,
+  admitDrafting = async (account) => await DraftingAdmission.admit(account),
   generateObjectForTask,
   admit,
 }: BillingDraftEndpointOptions = {}) =>
@@ -626,9 +626,7 @@ export const createDesktopBillingDraftEndpoint = ({
         yield* validateEntryDates(body.entries);
         // The organization's switch and the caller's consent stop drafting
         // before any context is read; the model call reads them again.
-        const drafting = yield* Result.await(
-          DraftingAdmission.admit({ ...account, loadGate }),
-        );
+        const drafting = yield* Result.await(admitDrafting(account));
         const context = yield* Result.await(
           loadContext({
             ...account,

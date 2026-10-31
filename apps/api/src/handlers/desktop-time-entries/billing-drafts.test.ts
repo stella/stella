@@ -48,6 +48,7 @@ import {
   createDesktopBillingDraftEndpoint,
 } from "./billing-drafts";
 import type { loadBillingDraftContext } from "./billing-drafts-context";
+import { admitDraftingWithGateReader } from "./drafting-model";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
@@ -342,11 +343,17 @@ const exercise = async ({
         scopedDb,
       });
     },
-    loadGate: async () => {
-      const gate = gates.at(Math.min(gateReads, gates.length - 1));
-      gateReads += 1;
-      return Result.ok({ ...(gate ?? consenting), draftingMode: bindingMode });
-    },
+    admitDrafting: async (account) =>
+      await admitDraftingWithGateReader({
+        ...account,
+        loadGate: async () => {
+          const gate = gates.at(Math.min(gateReads, gates.length - 1));
+          gateReads += 1;
+          return await Promise.resolve(
+            Result.ok({ ...(gate ?? consenting), draftingMode: bindingMode }),
+          );
+        },
+      }),
     loadContext: asTestRaw<typeof loadBillingDraftContext>(
       async ({
         body: requestBody,

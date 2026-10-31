@@ -9,7 +9,7 @@ import {
   planModelCompaction,
 } from "@/api/handlers/chat/compaction";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { DraftingAdmission } from "@/api/handlers/desktop-time-entries/drafting-model";
+import { admitDraftingWithGateReader } from "@/api/handlers/desktop-time-entries/drafting-model";
 import {
   capNarrative,
   generateDesktopTimeEntryNarrative,
@@ -366,7 +366,7 @@ const desktopNarrativeDriver = textCallSiteDriver({
     );
     // The organization allows drafting and the member consents throughout.
     const drafting = (
-      await DraftingAdmission.admit({
+      await admitDraftingWithGateReader({
         safeDb: async () =>
           await Promise.resolve(panic("The replay reads no database")),
         organizationId,

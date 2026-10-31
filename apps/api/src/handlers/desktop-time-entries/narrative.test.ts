@@ -33,6 +33,7 @@ import { serveForTest } from "@/api/tests/helpers/test-server";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { BillingDraftGate } from "./billing-draft-mode";
+import { admitDraftingWithGateReader } from "./drafting-model";
 import { createDesktopTimeEntryNarrativeEndpoint } from "./narrative";
 import {
   type DesktopTimeEntryNarrativeRun,
@@ -160,11 +161,15 @@ const exercise = async ({
     });
   const endpoint = createDesktopTimeEntryNarrativeEndpoint({
     authorizeAccount,
-    loadGate: async () => {
-      const gate = gates.at(Math.min(gateReads, gates.length - 1));
-      gateReads += 1;
-      return Result.ok(gate ?? consenting);
-    },
+    admitDrafting: async (account) =>
+      await admitDraftingWithGateReader({
+        ...account,
+        loadGate: async () => {
+          const gate = gates.at(Math.min(gateReads, gates.length - 1));
+          gateReads += 1;
+          return await Promise.resolve(Result.ok(gate ?? consenting));
+        },
+      }),
     // The real generation calls the dispatch hook before each request.
     narrate: narrateWith(async (options) => {
       await runDispatchCheck(options.beforeEachDispatch);
