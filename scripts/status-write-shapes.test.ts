@@ -407,3 +407,37 @@ describe("immutable replay column plans", () => {
     ).toBe(0);
   });
 });
+
+describe("source-ordered replay conflict columns", () => {
+  const imports =
+    'import {replayWrite as plan} from "@/api/lib/case-law/replay-write"; import {euCompletionControls as rows} from "@/api/db/schema"; const write = plan(rows, {cursor:value});';
+  test("an overriding source cannot reuse an earlier plan's column proof", () => {
+    for (const options of [
+      "target:rows.id,...write,...{setWhere:value}",
+      "target:rows.id,...write,...{set:{cursor:value}}",
+      "target:rows.id,...write,...{...{setWhere:value}}",
+      "target:rows.id,...write,setWhere:value",
+      "target:rows.id,...write,set:{cursor:value}",
+      "target:rows.id,...write,...{where:value}",
+      "target:rows.id,...write,...{target:other}",
+      "target:rows.id,...write,...opaque",
+      "...opaque,target:rows.id,...write",
+    ]) {
+      const content = `${imports} db.insert(rows).values(input).onConflictDoUpdate({${options}});`;
+      expect({ options, count: measure(content) }).toEqual({
+        options,
+        count: 1,
+      });
+    }
+    expect(
+      measure(
+        `${imports} db.insert(rows).values(input).onConflictDoUpdate({target:rows.id,...write});`,
+      ),
+    ).toBe(0);
+    expect(
+      measure(
+        `${imports} db.insert(rows).values(input).onConflictDoUpdate({target:rows.id,set:write.set,setWhere:write.setWhere});`,
+      ),
+    ).toBe(0);
+  });
+});

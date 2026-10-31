@@ -61,6 +61,65 @@ describe.serial(RULE, () => {
       ),
     ).toEqual([3]);
   });
+  test("source-ordered conflict options cannot replace the plan through any later source", async () => {
+    await Promise.all(
+      [
+        "target:rows.id,...write,...{setWhere:sql`true`}",
+        "target:rows.id,...write,...{set:{other}}",
+        "target:rows.id,...write,setWhere:sql`true`",
+        "target:rows.id,...write,set:{other}",
+        "target:rows.id,...write,...{...{setWhere:sql`true`}}",
+        "target:rows.id,...write,...{where:sql`true`}",
+        "target:rows.id,...write,...{target:other}",
+        "target:rows.id,...write,target:other",
+        "target:rows.id,...write,...opaque",
+        "...opaque,target:rows.id,...write",
+        'target:rows.id,...write,...{["setWhere"]:sql`true`}',
+        "target:rows.id,...write,...second",
+        "target:rows.id,set:write.set,setWhere:write.setWhere,...{setWhere:sql`true`}",
+        "target:rows.id,set:write.set,setWhere:write.setWhere,...opaque",
+      ].map(async (options) => {
+        expect(
+          await lint(
+            `${imports}const write = plan(rows,{value}); const second = plan(rows,{other});\nawait tx.insert(rows).values(input).onConflictDoUpdate({${options}});`,
+          ),
+        ).toEqual([3]);
+      }),
+    );
+    expect(
+      await lint(
+        `${imports}const write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({...{target:rows.id},...write});`,
+      ),
+    ).toEqual([]);
+    expect(
+      await lint(
+        `${imports}const write = plan(rows,{value});\nawait tx.insert(rows).values(input).onConflictDoUpdate({target:rows.id,set:write.set,setWhere:and(write.setWhere,eq(rows.id,id))});`,
+      ),
+    ).toEqual([]);
+  });
+  test("the final WHERE and SET sinks must retain the same plan", async () => {
+    await Promise.all(
+      [
+        ".set(write.set).where(write.setWhere).where(sql`true`)",
+        ".set(write.set).where(write.setWhere).where(undefined)",
+        ".set(write.set).where(write.setWhere).set({other})",
+        ".set({...write.set}).where(write.setWhere)",
+        ".set({...write.set,...{value:other}}).where(write.setWhere)",
+        ".set(write.set).where({...write.setWhere,...opaque})",
+      ].map(async (sink) => {
+        expect(
+          await lint(
+            `${imports}const write = plan(rows,{value});\nawait tx.update(rows)${sink};`,
+          ),
+        ).toEqual([3]);
+      }),
+    );
+    expect(
+      await lint(
+        `${imports}const write = plan(rows,{value});\nawait tx.update(rows).set(write.set).where(sql\`true\`).where(write.setWhere);`,
+      ),
+    ).toEqual([]);
+  });
   test("a shadowed plan or an OR does not establish a changed-only write", async () => {
     expect(
       await lint(

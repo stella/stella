@@ -12,6 +12,7 @@ import {
   isAstNode,
   isIdentifierReference,
   memberPropertyName,
+  orderedReplayOptions,
   resolveImportedExpressionForEnforcement,
   resolveVariable,
   stableInitializer,
@@ -205,6 +206,7 @@ const updateHasGuard = (
   plan: NonNullable<PlanBinding>,
 ) => {
   let chain = node.parent;
+  let predicate: unknown;
   while (
     isAstNode(chain) &&
     !["ExpressionStatement", "VariableDeclaration", "ReturnStatement"].includes(
@@ -215,14 +217,20 @@ const updateHasGuard = (
       chain.type === "CallExpression" &&
       isAstNode(chain.callee) &&
       getPropertyName(chain.callee.property) === "where" &&
-      Array.isArray(chain.arguments) &&
-      hasGuardedPredicate(context, chain.arguments.at(0), plan)
+      Array.isArray(chain.arguments)
     ) {
-      return true;
+      predicate = chain.arguments.at(0);
+    }
+    if (
+      chain.type === "CallExpression" &&
+      isAstNode(chain.callee) &&
+      getPropertyName(chain.callee.property) === "set"
+    ) {
+      return false;
     }
     chain = chain.parent;
   }
-  return false;
+  return hasGuardedPredicate(context, predicate, plan);
 };
 
 type DrizzleUpdateOptions = {
@@ -279,33 +287,58 @@ const conflictUpdateHasGuard = (
   context: ReplayContext,
   properties: unknown[],
 ) => {
-  for (const property of properties) {
-    if (!isAstNode(property) || property.type !== "SpreadElement") {
-      continue;
-    }
-    const spread = unwrapExpression(property.argument);
-    const binding = planBinding(context, spread);
-    if (binding === null && !planOwnerCall(context, spread)) {
-      continue;
-    }
-    const overrides = properties.filter(
-      (candidate) =>
-        isAstNode(candidate) &&
-        candidate.type === "Property" &&
-        ["set", "setWhere"].includes(getPropertyName(candidate.key) ?? ""),
-    );
-    if (
-      overrides.every(
-        (candidate) =>
-          isAstNode(candidate) &&
-          getPropertyName(candidate.key) === "setWhere" &&
-          hasGuardedPredicate(context, candidate.value, binding),
-      )
-    ) {
-      return true;
-    }
+  const options = orderedReplayOptions({
+    properties,
+    describe: (property) => {
+      if (!isAstNode(property)) {
+        return { kind: "unresolved" };
+      }
+      if (property.type === "SpreadElement") {
+        const spread = unwrapExpression(property.argument);
+        if (
+          planBinding(context, spread) !== null ||
+          planOwnerCall(context, spread)
+        ) {
+          return { kind: "plan" };
+        }
+        return spread?.type === "ObjectExpression" &&
+          Array.isArray(spread.properties)
+          ? { kind: "spread", properties: spread.properties }
+          : { kind: "unresolved" };
+      }
+      const key = getPropertyName(property.key);
+      return property.type === "Property" &&
+        property.computed !== true &&
+        property.method !== true &&
+        property.kind === "init" &&
+        key !== null
+        ? { kind: "property", key }
+        : { kind: "unresolved" };
+    },
+  });
+  if (options.status === "unsafe") {
+    return false;
   }
-  return false;
+  if (options.entries.some((entry) => entry.kind === "plan")) {
+    return true;
+  }
+  const set = options.entries.find(
+    (entry) => entry.kind === "property" && entry.key === "set",
+  )?.node;
+  const where = options.entries.find(
+    (entry) => entry.kind === "property" && entry.key === "setWhere",
+  )?.node;
+  const value = isAstNode(set) ? unwrapExpression(set.value) : null;
+  return (
+    value?.type === "MemberExpression" &&
+    memberPropertyName(value) === "set" &&
+    isAstNode(where) &&
+    hasGuardedPredicate(
+      context,
+      where.value,
+      planBinding(context, value.object),
+    )
+  );
 };
 
 const handleCall = (

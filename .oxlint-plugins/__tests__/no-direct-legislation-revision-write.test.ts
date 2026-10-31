@@ -137,6 +137,28 @@ describe.serial("replay revision column plans", () => {
       }),
     );
   });
+  test("SET object spreads never inherit a plan's partial-owner proof", async () => {
+    await Promise.all(
+      [
+        "{...write.set}",
+        "{...write.set,...{fulltext:text}}",
+        "{...write.set,fulltext:text}",
+        "{...opaque,...write.set}",
+        "{...write.set,...opaque}",
+      ].map(async (set) => {
+        expect(
+          await lint(
+            [
+              declaration,
+              "const write = plan(versions,{projectionEpoch:value});",
+              `db.update(versions).set(${set}).where(write.setWhere);`,
+            ],
+            owner,
+          ),
+        ).toEqual([4]);
+      }),
+    );
+  });
   test("opaque, shadowed, escaped and mutated plans are rejected", async () => {
     await Promise.all(
       [

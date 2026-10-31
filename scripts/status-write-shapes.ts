@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { orderedReplayOptions } from "../.oxlint-plugins/utils.ts";
 import {
   type BindingPattern,
   type BindingRestElement,
@@ -559,6 +560,69 @@ const isReplayProjectionRead = (
   );
 };
 
+const replayConflictOrder = (
+  properties: ObjectExpression["properties"],
+  isPlan: (expression: Expression) => boolean,
+) =>
+  orderedReplayOptions({
+    properties,
+    describe: (property) => {
+      if (property.type === "SpreadElement") {
+        const value = unwrap(property.argument);
+        if (isPlan(value)) {
+          return { kind: "plan" };
+        }
+        return value.type === "ObjectExpression"
+          ? { kind: "spread", properties: value.properties }
+          : { kind: "unresolved" };
+      }
+      const key = propertyName(property.key);
+      return !property.computed &&
+        !property.method &&
+        property.kind === "init" &&
+        key !== undefined
+        ? { kind: "property", key }
+        : { kind: "unresolved" };
+    },
+  });
+
+const isReplayConflictUse = (
+  node: Node,
+  ancestors: readonly Node[],
+  isPlan: (expression: Expression) => boolean,
+) => {
+  const parent = ancestors.at(-1);
+  const grandparent = ancestors.at(-2);
+  const options =
+    parent?.type === "SpreadElement" ? grandparent : ancestors.at(-3);
+  const call =
+    parent?.type === "SpreadElement" ? ancestors.at(-3) : ancestors.at(-4);
+  if (
+    options?.type !== "ObjectExpression" ||
+    call?.type !== "CallExpression" ||
+    methodName(call.callee) !== "onConflictDoUpdate" ||
+    call.arguments.at(0) !== options
+  ) {
+    return false;
+  }
+  if (parent?.type === "MemberExpression") {
+    const name = methodName(parent);
+    if (
+      parent.object !== node ||
+      (name !== "set" && name !== "setWhere") ||
+      grandparent?.type !== "Property" ||
+      grandparent.computed ||
+      propertyName(grandparent.key) !== name ||
+      grandparent.value !== parent
+    ) {
+      return false;
+    }
+  } else if (parent?.type !== "SpreadElement") {
+    return false;
+  }
+  return replayConflictOrder(options.properties, isPlan).status === "resolved";
+};
+
 const replayPlansFor = (
   source: Program,
   inspector: ReturnType<typeof mutationsFor>,
@@ -691,17 +755,17 @@ const replayPlansFor = (
       return;
     }
     if (
-      parent?.type === "SpreadElement" &&
-      grandparent?.type === "ObjectExpression"
+      isReplayConflictUse(
+        node,
+        ancestors,
+        (expression) =>
+          expression.type === "Identifier" &&
+          plans.has(
+            bindingFor(expression.name, expression) ?? { type: "shadow" },
+          ),
+      )
     ) {
-      const call = ancestors.at(-3);
-      if (
-        call?.type === "CallExpression" &&
-        methodName(call.callee) === "onConflictDoUpdate" &&
-        call.arguments.at(0) === grandparent
-      ) {
-        return;
-      }
+      return;
     }
     if (
       parent?.type === "CallExpression" &&

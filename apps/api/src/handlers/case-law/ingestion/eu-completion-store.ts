@@ -1566,7 +1566,7 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
             .values({ hour: value, requests: 1 })
             .onConflictDoUpdate({
               target: euCompletionRequestHours.hour,
-              ...write,
+              set: write.set,
               setWhere: and(
                 write.setWhere,
                 sql`${euCompletionRequestHours.requests} < ${EU_COMPLETION_REQUESTS_PER_HOUR}`,
