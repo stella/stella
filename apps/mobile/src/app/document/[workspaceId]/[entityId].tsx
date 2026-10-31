@@ -8,6 +8,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useColorScheme,
   View,
 } from "react-native";
 import { useLocale, useTranslations } from "use-intl";
@@ -129,6 +130,7 @@ const OpenedDocument = ({
   onRetry: () => void;
 }) => {
   const colors = useAppColors();
+  const scheme = useColorScheme();
   const t = useTranslations("document");
   const locale = useLocale();
   const router = useRouter();
@@ -245,7 +247,7 @@ const OpenedDocument = ({
     return (
       <View style={screenStyles.screen}>
         <DocumentView
-          backdrop={colors.background}
+          appearance={scheme === "dark" ? "dark" : "light"}
           dom={{ style: { flex: 1 } }}
           kind={file.viewer}
           locale={locale}
