@@ -3074,7 +3074,7 @@
       "scope": "matters_write"
     },
     "name": "save_contact",
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3083,18 +3083,18 @@
         "contact_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID to update; omit to create"
+          "description": "Update ID; omit to create"
         },
         "type": {
           "enum": ["person", "organization"],
           "type": "string",
-          "description": "Contact kind; required when creating"
+          "description": "Create kind"
         },
         "display_name": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Defaults to person or organization name"
         },
         "first_name": {
           "anyOf": [
@@ -3106,7 +3106,7 @@
               "type": "null"
             }
           ],
-          "description": "First name; pass null to clear"
+          "description": "Given name"
         },
         "last_name": {
           "anyOf": [
@@ -3118,7 +3118,7 @@
               "type": "null"
             }
           ],
-          "description": "Last name; pass null to clear"
+          "description": "Family name"
         },
         "organization_name": {
           "anyOf": [
@@ -3130,7 +3130,7 @@
               "type": "null"
             }
           ],
-          "description": "Organization name; pass null to clear"
+          "description": "Organization"
         },
         "notes": {
           "anyOf": [
@@ -3141,7 +3141,7 @@
               "type": "null"
             }
           ],
-          "description": "Free-text notes; pass null to clear"
+          "description": "Notes"
         },
         "date_of_birth": {
           "anyOf": [
@@ -3213,7 +3213,7 @@
               "type": "null"
             }
           ],
-          "description": "Date of birth with known year, month, or day precision; pass null to clear"
+          "description": "Birth year, month or date"
         },
         "nationality_codes": {
           "type": "array",
@@ -3230,7 +3230,28 @@
             }
           },
           "maxItems": 250,
-          "description": "Nationality countries; pass [] to clear"
+          "description": "Countries; [] clears"
+        },
+        "external": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[a-z0-9][a-z0-9._-]*$",
+              "description": "Source key"
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "description": "Source ID"
+            }
+          },
+          "required": ["source", "id"],
+          "additionalProperties": false,
+          "description": "Create only; unique source/id."
         }
       }
     },

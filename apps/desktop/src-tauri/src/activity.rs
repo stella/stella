@@ -117,6 +117,8 @@ pub struct ActivitySettings {
   /// Calls are detected unless the user turned it off.
   #[serde(default)]
   pub ignore_calls: bool,
+  #[serde(default)]
+  pub narrative_assist: ActivityNarrativeAssist,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -131,6 +133,7 @@ impl Default for ActivitySettings {
       app_name_only_apps: Vec::new(),
       browser_title_apps: Vec::new(),
       ignore_calls: false,
+      narrative_assist: ActivityNarrativeAssist::default(),
       extra: BTreeMap::new(),
     }
   }
@@ -232,6 +235,30 @@ define_activity_details_access! {
     allow(dead_code, reason = "only platforms without window details report it")
   )]
   Unavailable,
+}
+
+macro_rules! define_activity_narrative_assist {
+  ($(#[$default:meta])? $first:ident, $($variant:ident),+ $(,)?) => {
+    /// Whether a suggestion's window titles go to stella AI for a description
+    /// only after the user approves each one, or without asking again.
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub enum ActivityNarrativeAssist {
+      $(#[$default])? $first,
+      $($variant),+
+    }
+
+    impl ActivityNarrativeAssist {
+      #[cfg(test)]
+      const ALL: &'static [Self] = &[Self::$first, $(Self::$variant),+];
+    }
+  };
+}
+
+define_activity_narrative_assist! {
+  #[default]
+  Ask,
+  Always,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -437,6 +464,7 @@ pub struct ActivityDaySnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  narrative_assist: ActivityNarrativeAssist,
   segments: Vec<ActivitySegment>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
   /// A day whose file exists but cannot be read.
@@ -499,6 +527,7 @@ pub struct ActivitySettingsSnapshot {
   details_access: ActivityDetailsAccess,
   browser_title_apps: Vec<AppExclusion>,
   browser_apps: Vec<AppExclusion>,
+  narrative_assist: ActivityNarrativeAssist,
   /// The apps recorded on `date`, longest first.
   apps: Vec<AppExclusion>,
   source_app_visuals: Vec<crate::foreground_app_visual::ClipboardSourceAppVisual>,
@@ -964,6 +993,17 @@ impl ActivityManager {
 
   pub fn recording_status(&self) -> ActivityRecordingStatus {
     self.settings.recording_status
+  }
+
+  pub fn set_narrative_assist(
+    &mut self,
+    assist: ActivityNarrativeAssist,
+  ) -> Result<(), String> {
+    self.require_writable()?;
+    if self.settings.narrative_assist == assist {
+      return Ok(());
+    }
+    self.update_settings(|settings| settings.narrative_assist = assist)
   }
 
   pub fn set_detect_calls(
@@ -2283,6 +2323,7 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps,
+      narrative_assist: self.settings.narrative_assist,
       source_app_visuals: Vec::new(),
       segments,
       unreadable: unreadable
@@ -2326,6 +2367,7 @@ impl ActivityManager {
       details_access,
       browser_title_apps: self.settings.browser_title_apps.clone(),
       browser_apps: self.browser_apps(&segments),
+      narrative_assist: self.settings.narrative_assist,
       apps: day_apps(&segments),
       source_app_visuals: Vec::new(),
     }
@@ -3381,6 +3423,7 @@ mod tests {
         "earliestDate",
         "excludedApps",
         "latestDate",
+        "narrativeAssist",
         "otherAccountHistoryDays",
         "persistence",
         "retention",
@@ -5970,6 +6013,71 @@ mod tests {
       serde_json::Value::Array(statuses)
     );
     assert_eq!(contract["changedEvent"], CHANGED_EVENT);
+    let assists = ActivityNarrativeAssist::ALL
+      .iter()
+      .map(|assist| serde_json::to_value(assist).unwrap())
+      .collect::<Vec<_>>();
+    assert_eq!(
+      contract["narrativeAssists"],
+      serde_json::Value::Array(assists)
+    );
+  }
+
+  #[test]
+  fn narrative_assist_asks_unless_settings_say_always() {
+    let saved: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+    }))
+    .unwrap();
+    assert_eq!(saved.narrative_assist, ActivityNarrativeAssist::Ask);
+    assert_eq!(
+      ActivitySettings::default().narrative_assist,
+      ActivityNarrativeAssist::Ask
+    );
+    let always: ActivitySettings = serde_json::from_value(serde_json::json!({
+      "recordingStatus": "recording",
+      "retention": "month",
+      "narrativeAssist": "always",
+    }))
+    .unwrap();
+    assert_eq!(always.narrative_assist, ActivityNarrativeAssist::Always);
+    assert!(always.extra.is_empty());
+    assert_eq!(
+      serde_json::to_value(&always).unwrap()["narrativeAssist"],
+      "always"
+    );
+    assert!(
+      serde_json::from_value::<ActivitySettings>(serde_json::json!({
+        "recordingStatus": "recording",
+        "retention": "month",
+        "narrativeAssist": true,
+      }))
+      .is_err()
+    );
+  }
+
+  #[test]
+  fn narrative_assist_persists_and_reaches_the_settings_snapshot() {
+    let mut manager = recording_manager();
+    manager
+      .set_narrative_assist(ActivityNarrativeAssist::Always)
+      .unwrap();
+    assert_eq!(
+      manager.settings.narrative_assist,
+      ActivityNarrativeAssist::Always
+    );
+    let settings = manager.settings_snapshot(
+      local_date(at(0)),
+      at(0),
+      &ActivitySettingsCaller::for_account_test(1, "fixture"),
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert_eq!(
+      serde_json::to_value(&settings).unwrap()["narrativeAssist"],
+      "always"
+    );
   }
 
   fn call(identifier: &str, window_title: Option<&str>) -> Observation {

@@ -893,7 +893,6 @@
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
   "no-native-ui/no-native-button": {
-    "apps/desktop/src/activity/ActivityTimeline.tsx": 1,
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 5,
     "apps/desktop/src/registry/RegistrySearch.tsx": 1,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
@@ -1186,7 +1185,6 @@
     "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2
   },
   "no-native-ui/no-native-number-input": {
-    "apps/desktop/src/activity/ActivityTimeline.tsx": 2,
     "apps/web/src/components/billing/expense-form.tsx": 1,
     "apps/web/src/components/pdf/page-organizer-crop.tsx": 1,
     "apps/web/src/components/templates/template-form.tsx": 1,
@@ -1425,7 +1423,6 @@
     "apps/api/src/handlers/clauses/update.ts": 1,
     "apps/api/src/handlers/contacts/contact-import-file.ts": 1,
     "apps/api/src/handlers/contacts/extract-procuracao.ts": 1,
-    "apps/api/src/handlers/contacts/import.ts": 2,
     "apps/api/src/handlers/document-reviews/create-run.ts": 1,
     "apps/api/src/handlers/documents/compare.ts": 2,
     "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts": 1,
