@@ -970,14 +970,14 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     expectDenied: (result) =>
       expect(result).toEqual({
         revision: null,
-        organizationMode: "enabled",
+        effectiveMode: "plain",
         consent: "revoked",
         preference: null,
       }),
     expectPositive: (result) =>
       expect(result).toEqual({
         revision: expect.any(String),
-        organizationMode: "enabled",
+        effectiveMode: "plain",
         consent: "granted",
         preference: DESKTOP_DRAFT_PREFERENCE_B,
       }),

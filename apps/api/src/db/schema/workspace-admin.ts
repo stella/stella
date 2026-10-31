@@ -92,6 +92,10 @@ export const AI_BILLING_DRAFTS_MODES = [
   ),
 ] as const;
 
+/** The mode an organization has before an administrator sets one; every
+ * reader of a missing settings row falls back to it. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.DISABLED;
+
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
 export const DEFAULT_TIME_NARRATIVE_REQUIRED = true;
@@ -198,7 +202,7 @@ export const organizationSettings = p.pgTable(
     aiBillingDraftsMode: p
       .text("ai_billing_drafts_mode", { enum: AI_BILLING_DRAFTS_MODES })
       .notNull()
-      .default(AI_BILLING_DRAFTS_MODE.DISABLED),
+      .default(DEFAULT_AI_BILLING_DRAFTS_MODE),
     personalApiKeyPolicy: p
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()

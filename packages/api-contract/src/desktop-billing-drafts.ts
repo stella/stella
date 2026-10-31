@@ -265,6 +265,12 @@ export const desktopBillingDraftResponseSchema = v.union([
   desktopBillingPlainDraftResponseSchema,
 ]);
 
+/** The `mode` a draft result names, derived from both branches. */
+export const desktopBillingDraftModeSchema = v.picklist([
+  desktopBillingGuidedDraftResponseSchema.entries.mode.literal,
+  desktopBillingPlainDraftResponseSchema.entries.mode.literal,
+]);
+
 /** Compact model grammar; every generated result must pass the canonical
  * schema once the server names its mode. */
 export const desktopBillingDraftModelResponseSchema = v.strictObject(
@@ -348,9 +354,24 @@ export const desktopBillingDraftSettingsRequestSchema = v.variant("type", [
   }),
 ]);
 
+/** What drafting the caller gets: `off` while the organization has AI
+ * billing drafts switched off, `plain` descriptions while no firm guideline
+ * file is bound, `guided` drafts checked against the bound files. */
+export const desktopBillingDraftEffectiveModeSchema = v.picklist([
+  "off",
+  "plain",
+  "guided",
+]);
+
+/** Refusal codes a client branches on instead of reading messages. */
+export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
+  organizationOff: "billing_drafts_off",
+  consentRequired: "billing_draft_consent_required",
+} as const;
+
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
   revision: v.nullable(billingDraftSettingsRevisionSchema),
-  organizationMode: v.picklist(["enabled", "disabled"]),
+  effectiveMode: desktopBillingDraftEffectiveModeSchema,
   consent: v.picklist(["granted", "revoked"]),
   preference: v.nullable(
     v.pipe(
@@ -374,6 +395,9 @@ export type DesktopBillingDraftRequest = v.InferOutput<
 export type DesktopBillingDraftResponse = v.InferOutput<
   typeof desktopBillingDraftResponseSchema
 >;
+export type DesktopBillingDraftMode = v.InferOutput<
+  typeof desktopBillingDraftModeSchema
+>;
 export type DesktopBillingGuidedDraftResponse = v.InferOutput<
   typeof desktopBillingGuidedDraftResponseSchema
 >;
@@ -391,6 +415,9 @@ export type DesktopBillingDraftOperation = v.InferOutput<
 >;
 export type DesktopBillingDraftClassification = v.InferOutput<
   typeof desktopBillingDraftClassificationSchema
+>;
+export type DesktopBillingDraftEffectiveMode = v.InferOutput<
+  typeof desktopBillingDraftEffectiveModeSchema
 >;
 export type DesktopBillingDraftSettingsRequest = v.InferOutput<
   typeof desktopBillingDraftSettingsRequestSchema

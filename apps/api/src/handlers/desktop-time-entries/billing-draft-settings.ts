@@ -9,10 +9,7 @@ import {
 } from "@stll/api-contract/desktop-billing-drafts";
 
 import type { Transaction } from "@/api/db/root";
-import {
-  billingDraftUserSettings,
-  organizationSettings,
-} from "@/api/db/schema";
+import { billingDraftUserSettings } from "@/api/db/schema";
 import {
   ACCOUNT_ACCESS,
   createSafeBoundedPublicHandler,
@@ -26,20 +23,32 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import {
   isTimestampCasToken,
   timestampCasToken,
+  timestampCasTokenText,
   timestampMatchesCasToken,
 } from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { projectionPayload } from "@/api/lib/projection-totality";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  readEffectiveDraftMode,
+  readOrganizationDraftsMode,
+} from "./billing-draft-mode";
 
 const ownSettingsColumns = {
   revision: timestampCasToken(billingDraftUserSettings.updatedAt),
   consentAt: billingDraftUserSettings.consentAt,
   preference: billingDraftUserSettings.preference,
+};
+
+type OwnSettings = {
+  revision: TimestampCasToken;
+  consentAt: Date | null;
+  preference: string | null;
 };
 
 // Every write moves the revision forward, also twice within one microsecond.
@@ -99,11 +108,7 @@ export const writeOwnBillingDraftSettings = async ({
     eq(billingDraftUserSettings.organizationId, organizationId),
     eq(billingDraftUserSettings.userId, userId),
   );
-  let rows: {
-    revision: string;
-    consentAt: Date | null;
-    preference: string | null;
-  }[];
+  let rows: OwnSettings[];
   if (change.type === "withdraw_consent") {
     rows = await tx
       .insert(billingDraftUserSettings)
@@ -160,6 +165,36 @@ export const writeOwnBillingDraftSettings = async ({
   return own;
 };
 
+type SettingsViewOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  /** Whether draft time entries are available to the caller at all. */
+  timeEntriesAvailable: boolean;
+  own: Pick<OwnSettings, "consentAt" | "preference">;
+};
+
+/** The caller's settings as the desktop shows them, with the drafting the
+ * caller gets: `off` while the organization or the feature is off. */
+const readSettingsView = async ({
+  tx,
+  organizationId,
+  timeEntriesAvailable,
+  own,
+}: SettingsViewOptions) => ({
+  effectiveMode: timeEntriesAvailable
+    ? await readEffectiveDraftMode({
+        tx,
+        organizationId,
+        organizationMode: await readOrganizationDraftsMode({
+          tx,
+          organizationId,
+        }),
+      })
+    : ("off" as const),
+  consent: own.consentAt ? ("granted" as const) : ("revoked" as const),
+  preference: own.preference,
+});
+
 export const createDesktopBillingDraftSettingsReadEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
 ) =>
@@ -179,33 +214,30 @@ export const createDesktopBillingDraftSettingsReadEndpoint = (
       );
       const settings = yield* Result.await(
         account.safeDb(async (tx) => {
-          const org = await tx
-            .select({ mode: organizationSettings.aiBillingDraftsMode })
-            .from(organizationSettings)
-            .where(
-              eq(organizationSettings.organizationId, account.organizationId),
-            )
-            .limit(1);
-          const own = await tx
-            .select(ownSettingsColumns)
-            .from(billingDraftUserSettings)
-            .where(
-              and(
-                eq(
-                  billingDraftUserSettings.organizationId,
-                  account.organizationId,
+          const own = (
+            await tx
+              .select(ownSettingsColumns)
+              .from(billingDraftUserSettings)
+              .where(
+                and(
+                  eq(
+                    billingDraftUserSettings.organizationId,
+                    account.organizationId,
+                  ),
+                  eq(billingDraftUserSettings.userId, account.userId),
                 ),
-                eq(billingDraftUserSettings.userId, account.userId),
-              ),
-            )
-            .limit(1);
+              )
+              .limit(1)
+          ).at(0);
           return {
-            revision: own.at(0)?.revision ?? null,
-            organizationMode: org.at(0)?.mode ?? "disabled",
-            consent: own.at(0)?.consentAt
-              ? ("granted" as const)
-              : ("revoked" as const),
-            preference: own.at(0)?.preference ?? null,
+            revision:
+              own === undefined ? null : timestampCasTokenText(own.revision),
+            ...(await readSettingsView({
+              tx,
+              organizationId: account.organizationId,
+              timeEntriesAvailable: true,
+              own: own ?? { consentAt: null, preference: null },
+            })),
           };
         }),
       );
@@ -253,20 +285,14 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
             if (own === undefined) {
               return undefined;
             }
-            const org = await tx
-              .select({ mode: organizationSettings.aiBillingDraftsMode })
-              .from(organizationSettings)
-              .where(
-                eq(organizationSettings.organizationId, account.organizationId),
-              )
-              .limit(1);
             return {
-              revision: own.revision,
-              organizationMode: org.at(0)?.mode ?? "disabled",
-              consent: own.consentAt
-                ? ("granted" as const)
-                : ("revoked" as const),
-              preference: own.preference,
+              revision: timestampCasTokenText(own.revision),
+              ...(await readSettingsView({
+                tx,
+                organizationId: account.organizationId,
+                timeEntriesAvailable: true,
+                own,
+              })),
             };
           }),
         );

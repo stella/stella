@@ -220,12 +220,12 @@ test("billing drafting settings accept only personal consent and bounded prefere
       v.safeParse(desktopBillingDraftSettingsRequestSchema, patch).success,
     ).toBe(false);
   }
-  for (const organizationMode of ["enabled", "disabled"] as const) {
+  for (const effectiveMode of ["off", "plain", "guided"] as const) {
     for (const consent of ["granted", "revoked"] as const) {
       for (const stored of [null, revision]) {
         const settings = {
           revision: stored,
-          organizationMode,
+          effectiveMode,
           consent,
           preference: null,
         };
@@ -234,6 +234,26 @@ test("billing drafting settings accept only personal consent and bounded prefere
         ).toEqual(settings);
       }
     }
+  }
+  // The organization's raw switch is not part of the answer: the effective
+  // mode already says whether anything is drafted.
+  for (const settings of [
+    {
+      revision,
+      organizationMode: "enabled",
+      consent: "granted",
+      preference: null,
+    },
+    {
+      revision,
+      effectiveMode: "enabled",
+      consent: "granted",
+      preference: null,
+    },
+  ]) {
+    expect(
+      v.safeParse(desktopBillingDraftSettingsResponseSchema, settings).success,
+    ).toBe(false);
   }
 });
 

@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import {
   DESKTOP_BILLING_DRAFT_LIMITS,
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   desktopBillingDraftModelResponseSchema,
   desktopBillingDraftResponseSchema,
   desktopBillingDraftReviewSchema,
@@ -39,6 +40,7 @@ import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import type { BillingDraftGate } from "./billing-draft-mode";
 import {
   type BillingDraftPrompt,
   createBillingDraftReferenceMap,
@@ -98,8 +100,8 @@ const context = {
       dateWorked: "2026-10-01",
       durationMinutes: 30,
       narrative: "Reviewed agreement",
-      taskCode: null,
-      activityCode: null,
+      taskCode: "L110",
+      activityCode: "A101",
       activityGroup: "client" as const,
     },
   ],
@@ -116,11 +118,20 @@ const context = {
   promptCachingEnabled: false,
   managedAIResidency: "eu" as const,
 };
-// No guideline file is bound: the context carries no guidelines at all.
+// No firm guideline file is bound: the context carries no guidelines and no
+// classification of earlier entries at all.
 const plainContext = {
   mode: "plain" as const,
   matters: context.matters,
-  earlierEntries: context.earlierEntries,
+  earlierEntries: context.earlierEntries.map(
+    ({ id, matterId, dateWorked, durationMinutes, narrative }) => ({
+      id,
+      matterId,
+      dateWorked,
+      durationMinutes,
+      narrative,
+    }),
+  ),
   preference: context.preference,
   orgAIConfig: context.orgAIConfig,
   promptCachingEnabled: context.promptCachingEnabled,
@@ -180,6 +191,13 @@ type ExerciseOptions = {
   copyPromptGuideline?: boolean;
   output?: DesktopBillingDraftResponse;
   draftContext?: typeof context | typeof plainContext;
+  /** What each successive gate read answers; the last one repeats. */
+  gates?: readonly BillingDraftGate[];
+};
+const consenting: BillingDraftGate = {
+  organizationMode: "enabled",
+  consentAt: new Date("2026-10-01T12:00:00Z"),
+  preference: context.preference,
 };
 const exercise = async ({
   input = body,
@@ -190,9 +208,16 @@ const exercise = async ({
   copyPromptGuideline,
   output = fixture,
   draftContext = context,
+  gates = [consenting],
 }: ExerciseOptions = {}) => {
-  const calls: { prompt: string; schema: unknown; region: unknown }[] = [];
+  const calls: {
+    prompt: string;
+    system: string;
+    schema: unknown;
+    region: unknown;
+  }[] = [];
   const receivedBodies: DesktopBillingDraftRequest[] = [];
+  let gateReads = 0;
   const { scopedDb } = createScopedDbMock(
     {},
     {
@@ -214,6 +239,7 @@ const exercise = async ({
     async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
       calls.push({
         prompt: options.prompt ?? "",
+        system: options.system ?? "",
         schema: options.outputSchema,
         region:
           options.dataClass === "customer" ? options.managedAIResidency : null,
@@ -309,6 +335,11 @@ const exercise = async ({
         scopedDb,
       });
     },
+    loadGate: async () => {
+      const gate = gates.at(Math.min(gateReads, gates.length - 1));
+      gateReads += 1;
+      return Result.ok(gate ?? consenting);
+    },
     loadContext: asTestRaw<typeof loadBillingDraftContext>(
       async ({
         body: requestBody,
@@ -344,7 +375,13 @@ const exercise = async ({
       body: JSON.stringify(input),
     }),
   );
-  return { response, calls, receivedBodies, generate };
+  return {
+    response,
+    calls,
+    receivedBodies,
+    generate,
+    gateReads: () => gateReads,
+  };
 };
 
 test("one structured request uses selected evidence, region and opaque references", async () => {
@@ -403,6 +440,92 @@ test("without guideline files a consenting user gets plain descriptions with no 
     expect(prompt).not.toHaveProperty(absent);
   }
   expect(prompt.matters.at(0)).not.toHaveProperty("ledesEnabled");
+  // No LEDES setting, code or classification reaches the model in plain
+  // mode, neither in the instructions nor in the earlier entries.
+  for (const absent of ["taskCode", "activityCode", "activityGroup"]) {
+    expect(prompt.earlierEntries.at(0)).not.toHaveProperty(absent);
+  }
+  for (const code of ["L110", "A101", "ledes"]) {
+    expect(calls.at(0)?.prompt).not.toContain(code);
+  }
+  expect(calls.at(0)?.system).not.toMatch(/ledes|utbms|task\/activity/iu);
+});
+
+test("guided mode still hands the model each earlier entry's codes", async () => {
+  const { response, calls } = await exercise();
+  expect(response.status).toBe(200);
+  const prompt = asTestRaw<BillingDraftPrompt>(
+    JSON.parse(calls.at(0)?.prompt ?? "{}"),
+  );
+  assert.ok(prompt.mode === "guided");
+  expect(prompt.earlierEntries.at(0)).toMatchObject({
+    taskCode: "L110",
+    activityCode: "A101",
+  });
+  expect(calls.at(0)?.system).toContain("UTBMS");
+});
+
+test("the organization's off switch stops plain and guided drafting before context or model", async () => {
+  for (const draftContext of [context, plainContext]) {
+    const { response, calls, receivedBodies } = await exercise({
+      draftContext,
+      gates: [{ ...consenting, organizationMode: "disabled" }],
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({
+      code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+    });
+    expect(receivedBodies).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("drafting without personal consent is refused before context or model", async () => {
+  const { response, calls, receivedBodies } = await exercise({
+    draftContext: plainContext,
+    gates: [{ ...consenting, consentAt: null }],
+  });
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({
+    code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+  });
+  expect(receivedBodies).toHaveLength(0);
+  expect(calls).toHaveLength(0);
+});
+
+test("a consent withdrawn or a switch turned off while the context loads stops the model call", async () => {
+  for (const [later, code] of [
+    [
+      { ...consenting, consentAt: null },
+      DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+    ],
+    [
+      { ...consenting, organizationMode: "disabled" },
+      DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+    ],
+  ] as const) {
+    const { response, calls, receivedBodies, gateReads } = await exercise({
+      draftContext: plainContext,
+      output: plainFixture,
+      gates: [consenting, later],
+    });
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code });
+    // The context was read under the first answer; the model never ran.
+    expect(receivedBodies).toHaveLength(1);
+    expect(gateReads()).toBe(2);
+    expect(calls).toHaveLength(0);
+  }
+});
+
+test("a consenting request reads the gate again right before the model call", async () => {
+  const { response, calls, gateReads } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+  });
+  expect(response.status).toBe(200);
+  expect(gateReads()).toBe(2);
+  expect(calls).toHaveLength(1);
 });
 
 test("plain mode refuses a model answer that carries billing fields", async () => {
@@ -765,20 +888,25 @@ test("move proposals use the authorized target's canonical name", async () => {
     },
     output: {
       ...fixture,
-      drafts: fixture.drafts.map((draft) => ({
-        ...draft,
-        operations: [
-          {
-            type: "move",
-            targetMatterId: targetId,
-            targetMatterName: "Model-supplied label",
-            durationMinutes: 15,
-            narrative: "Reviewed agreement",
-            classification: { type: "activity_group", activityGroup: "client" },
-            billable: true,
-          },
-        ],
-      })),
+      drafts: fixture.drafts.map(
+        (draft): DesktopBillingGuidedDraftResponse["drafts"][number] => ({
+          ...draft,
+          operations: [
+            {
+              type: "move",
+              targetMatterId: targetId,
+              targetMatterName: "Model-supplied label",
+              durationMinutes: 15,
+              narrative: "Reviewed agreement",
+              classification: {
+                type: "activity_group",
+                activityGroup: "client",
+              },
+              billable: true,
+            },
+          ],
+        }),
+      ),
     },
   });
   expect(response.status).toBe(200);

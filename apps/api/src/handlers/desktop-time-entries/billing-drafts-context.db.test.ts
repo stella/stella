@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -12,7 +13,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import assert from "node:assert/strict";
 import * as v from "valibot";
 
-import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
+import {
+  DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
+  desktopBillingDraftRequestSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -36,6 +40,10 @@ import {
 } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
+import {
+  billingDraftGateRefusal,
+  loadBillingDraftGate,
+} from "./billing-draft-mode";
 import { loadBillingDraftContext } from "./billing-drafts-context";
 
 const today = Temporal.PlainDate.from("2026-10-09");
@@ -271,18 +279,32 @@ afterAll(async () => {
   await releaseTestDb();
 });
 
+// As the endpoint drafts: the gate refuses first, then the context loads with
+// the caller's own preference.
 const loadBody = async (
   body: unknown,
   allowedMatterIds = [ids.wsA1, ids.wsA2],
-) =>
-  await loadBillingDraftContext({
-    safeDb: asTestRaw<SafeDb>(
-      createSafeDb(db, allowedMatterIds, ids.orgA, ids.userA1),
-    ),
-    organizationId: ids.orgA,
-    userId: ids.userA1,
-    body: v.parse(desktopBillingDraftRequestSchema, body),
+) => {
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(db, allowedMatterIds, ids.orgA, ids.userA1),
+  );
+  const account = { safeDb, organizationId: ids.orgA, userId: ids.userA1 };
+  return await Result.gen(async function* () {
+    const gate = yield* Result.await(loadBillingDraftGate(account));
+    const refusal = billingDraftGateRefusal(gate);
+    if (refusal) {
+      return Result.err(refusal);
+    }
+    const context = yield* Result.await(
+      loadBillingDraftContext({
+        ...account,
+        body: v.parse(desktopBillingDraftRequestSchema, body),
+        preference: gate.preference,
+      }),
+    );
+    return Result.ok(context);
   });
+};
 
 const load = async (
   matterId = ids.wsA1,
@@ -347,16 +369,31 @@ test("mixed-case duplicate matter UUIDs normalize before the scoped context quer
   ).toHaveLength(1);
 });
 
-test("organization disablement leaves a consenting user plain descriptions without guideline context", async () => {
+test("the organization's off switch refuses a consenting user before any context, firm file or not", async () => {
   await db
     .update(organizationSettings)
     .set({ aiBillingDraftsMode: "disabled" })
     .where(eq(organizationSettings.organizationId, ids.orgA));
-  const context = (await load()).unwrap();
-  expect(context.mode).toBe("plain");
-  expect(context).not.toHaveProperty("guidelines");
-  expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
-  expect(context.preference).toBe("Use concise Czech narratives");
+  for (const firmBound of [true, false]) {
+    if (!firmBound) {
+      await db
+        .delete(billingGuidelineFiles)
+        .where(
+          and(
+            eq(billingGuidelineFiles.organizationId, ids.orgA),
+            isNull(billingGuidelineFiles.clientId),
+          ),
+        );
+    }
+    const result = await load();
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        status: 403,
+        code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+      });
+    }
+  }
 });
 
 test("revoked personal consent prevents any AI continuation", async () => {
@@ -561,8 +598,29 @@ test("without a firm guideline file a consenting user gets plain descriptions, a
   expect(clientFiles.map(({ resourceId }) => resourceId)).toEqual([
     guidelineIds.client,
   ]);
-  const context = (await load()).unwrap();
-  expect(context.mode).toBe("plain");
-  expect(context).not.toHaveProperty("guidelines");
-  expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
+  // The earlier entry carries LEDES codes; a plain description never sees them.
+  await db
+    .update(timeEntries)
+    .set({ taskCode: "L110", activityCode: "A101" })
+    .where(eq(timeEntries.id, historyIds.today));
+  try {
+    const context = (await load()).unwrap();
+    expect(context.mode).toBe("plain");
+    expect(context).not.toHaveProperty("guidelines");
+    expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
+    expect(
+      context.earlierEntries.find(({ id }) => id === historyIds.today),
+    ).toEqual({
+      id: historyIds.today,
+      matterId: ids.wsA1,
+      dateWorked: today.toString(),
+      durationMinutes: 30,
+      narrative: "Reviewed agreement",
+    });
+  } finally {
+    await db
+      .update(timeEntries)
+      .set({ taskCode: null, activityCode: null })
+      .where(eq(timeEntries.id, historyIds.today));
+  }
 });

@@ -13,6 +13,7 @@ import {
 import type {
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
+  DesktopBillingDraftReview,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
@@ -35,6 +36,10 @@ import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission"
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  billingDraftGateRefusal,
+  loadBillingDraftGate,
+} from "./billing-draft-mode";
 import {
   BILLING_DRAFT_CONTEXT_LIMITS,
   loadBillingDraftContext,
@@ -63,6 +68,7 @@ Limits: return 1-${DESKTOP_BILLING_DRAFT_LIMITS.entries} drafts. All strings mus
 type BillingDraftEndpointOptions = {
   authorizeAccount?: typeof authorizeDesktopAccount;
   loadContext?: typeof loadBillingDraftContext;
+  loadGate?: typeof loadBillingDraftGate;
   generateObjectForTask?: typeof generateTanStackObjectForTask;
   admit?: typeof withActionAdmission;
 };
@@ -76,22 +82,33 @@ type GuidedBillingDraftContext = Extract<
   { mode: "guided" }
 >;
 
+type PlainBillingDraftContext = Extract<
+  BillingDraftPromptContext,
+  { mode: "plain" }
+>;
+
 type BillingDraftPromptMatter = Pick<
   BillingDraftPromptContext["matters"][number],
   "matterId" | "name" | "narrativeLanguage"
 >;
 
+/** What the model reads. A plain prompt names no LEDES setting, code,
+ * activity group or guideline: those fields are absent, not empty. */
 export type BillingDraftPrompt = Pick<
   DesktopBillingDraftRequest,
   "entries" | "steer" | "previousResult"
 > & {
   personalPreference: BillingDraftPromptContext["preference"];
-  earlierEntries: BillingDraftPromptContext["earlierEntries"];
 } & (
-    | { mode: "plain"; matters: BillingDraftPromptMatter[] }
+    | {
+        mode: "plain";
+        matters: BillingDraftPromptMatter[];
+        earlierEntries: PlainBillingDraftContext["earlierEntries"];
+      }
     | {
         mode: "guided";
         matters: (BillingDraftPromptMatter & { ledesEnabled: boolean })[];
+        earlierEntries: GuidedBillingDraftContext["earlierEntries"];
         guidelines: Pick<
           GuidedBillingDraftContext["guidelines"][number],
           "fileId" | "fileName" | "content" | "sections" | "matterIds"
@@ -184,10 +201,22 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
     aliases.get(id) ?? panic("Billing prompt reference is missing", id);
   const aliasResponse = (value: DesktopBillingDraftResponse) =>
     mapBillingDraftResponseReferences(value, alias);
+  // The aliased reference replaces the original, so its type is the alias's.
   const aliasMatters = <TMatter extends BillingDraftPromptMatter>(
     matters: TMatter[],
   ) =>
-    matters.map((matter) => ({ ...matter, matterId: alias(matter.matterId) }));
+    matters.map(({ matterId, ...matter }) => ({
+      ...matter,
+      matterId: alias(matterId),
+    }));
+  const aliasEarlierEntries = <TEntry extends { id: string; matterId: string }>(
+    entries: TEntry[],
+  ) =>
+    entries.map(({ id, matterId, ...entry }) => ({
+      ...entry,
+      id: alias(id),
+      matterId: alias(matterId),
+    }));
   const aliasPrompt = (value: BillingDraftPrompt) => {
     const shared = {
       entries: value.entries.map((entry) => ({
@@ -199,20 +228,21 @@ export const createBillingDraftReferenceMap = (ids: readonly string[]) => {
         value.previousResult === undefined
           ? undefined
           : aliasResponse(value.previousResult),
-      earlierEntries: value.earlierEntries.map((entry) => ({
-        ...entry,
-        id: alias(entry.id),
-        matterId: alias(entry.matterId),
-      })),
     };
     switch (value.mode) {
       case "plain":
-        return { ...value, ...shared, matters: aliasMatters(value.matters) };
+        return {
+          ...value,
+          ...shared,
+          matters: aliasMatters(value.matters),
+          earlierEntries: aliasEarlierEntries(value.earlierEntries),
+        };
       case "guided":
         return {
           ...value,
           ...shared,
           matters: aliasMatters(value.matters),
+          earlierEntries: aliasEarlierEntries(value.earlierEntries),
           guidelines: value.guidelines.map((file) => ({
             ...file,
             fileId: alias(file.fileId),
@@ -286,7 +316,6 @@ const prepareBillingDraftPrompt = ({
     steer: body.steer,
     previousResult: body.previousResult,
     personalPreference: context.preference,
-    earlierEntries: context.earlierEntries,
   };
   const references = [
     ...body.entries.map(({ entryId }) => entryId),
@@ -306,6 +335,7 @@ const prepareBillingDraftPrompt = ({
             narrativeLanguage,
           }),
         ),
+        earlierEntries: context.earlierEntries,
       });
       return { refs, prompt };
     }
@@ -325,6 +355,7 @@ const prepareBillingDraftPrompt = ({
             ledesEnabled,
           }),
         ),
+        earlierEntries: context.earlierEntries,
         guidelines: context.guidelines.map(
           ({ fileId, fileName, content, sections, matterIds }) => ({
             fileId,
@@ -435,7 +466,7 @@ type CanonicalBillingDraftResultOptions = {
 const canonicalBillingDraftReview = ({
   restored,
   context: { matters, earlierEntries },
-}: CanonicalBillingDraftResultOptions) => {
+}: CanonicalBillingDraftResultOptions): DesktopBillingDraftReview => {
   const cited = new Set(
     restored.drafts.flatMap(
       ({ matchedEarlierEntryIds }) => matchedEarlierEntryIds,
@@ -476,6 +507,56 @@ const canonicalBillingDraftReview = ({
   };
 };
 
+type AcceptGeneratedDraftOptions = {
+  generated: DesktopBillingDraftResponse;
+  refs: ReturnType<typeof createBillingDraftReferenceMap>;
+  entries: DesktopBillingDraftRequest["entries"];
+  context: BillingDraftPromptContext;
+  captureError: (error: unknown) => void;
+};
+
+/** The model's answer with its real references restored, held to the
+ * context's bounds and made canonical for review; any failure is one
+ * bounded 502. */
+const acceptGeneratedDraft = ({
+  generated,
+  refs,
+  entries,
+  context,
+  captureError,
+}: AcceptGeneratedDraftOptions): Result<
+  DesktopBillingDraftReview,
+  HandlerError
+> => {
+  const validation = refs.restore(generated).andThen((restored) => {
+    const checked = validateBillingDraftForContext({
+      result: restored,
+      entries,
+      context,
+    });
+    if (checked.isErr()) {
+      return Result.err(checked.error);
+    }
+    return Result.ok(restored);
+  });
+  if (validation.isErr()) {
+    captureError(classifyFailure(validation.error, "response_invalid"));
+    return Result.err(
+      classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: "internal_error",
+          message: "Billing draft proposals failed validation",
+        }),
+        "response_invalid",
+      ),
+    );
+  }
+  return Result.ok(
+    canonicalBillingDraftReview({ restored: validation.value, context }),
+  );
+};
+
 const validateEntryDates = (entries: DesktopBillingDraftRequest["entries"]) =>
   Result.try({
     try: () => {
@@ -493,6 +574,7 @@ const validateEntryDates = (entries: DesktopBillingDraftRequest["entries"]) =>
 export const createDesktopBillingDraftEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadContext = loadBillingDraftContext,
+  loadGate = loadBillingDraftGate,
   generateObjectForTask = generateTanStackObjectForTask,
   admit,
 }: BillingDraftEndpointOptions = {}) =>
@@ -524,7 +606,16 @@ export const createDesktopBillingDraftEndpoint = ({
           );
         }
         yield* validateEntryDates(body.entries);
-        const context = yield* Result.await(loadContext({ ...account, body }));
+        // The organization's switch and the caller's consent stop drafting
+        // before any context is read, and once more before the model call.
+        const gate = yield* Result.await(loadGate(account));
+        const refusal = billingDraftGateRefusal(gate);
+        if (refusal) {
+          return Result.err(refusal);
+        }
+        const context = yield* Result.await(
+          loadContext({ ...account, body, preference: gate.preference }),
+        );
         if (body.previousResult) {
           yield* checkPreviousResult({
             previousResult: body.previousResult,
@@ -563,6 +654,14 @@ export const createDesktopBillingDraftEndpoint = ({
                 },
                 ...(admit ? { admit } : {}),
                 async *handler({ actionSignal, modelAdmission }) {
+                  // Context loading, authorization and admission all take
+                  // time: a consent withdrawn or a switch turned off meanwhile
+                  // still stops the model call.
+                  const current = yield* Result.await(loadGate(account));
+                  const withdrawn = billingDraftGateRefusal(current);
+                  if (withdrawn) {
+                    return Result.err(withdrawn);
+                  }
                   const analytics = createTanStackAIAnalyticsCallbacks({
                     dataClass: "customer",
                     feature: "billing.activity_drafts",
@@ -644,40 +743,13 @@ export const createDesktopBillingDraftEndpoint = ({
                       },
                     }),
                   );
-                  const validation = refs
-                    .restore(result)
-                    .andThen((restored) => {
-                      const checked = validateBillingDraftForContext({
-                        result: restored,
-                        entries: body.entries,
-                        context,
-                      });
-                      if (checked.isErr()) {
-                        return Result.err(checked.error);
-                      }
-                      return Result.ok(restored);
-                    });
-                  if (validation.isErr()) {
-                    analytics.captureError(
-                      classifyFailure(validation.error, "response_invalid"),
-                    );
-                    return Result.err(
-                      classifyFailure(
-                        new HandlerError({
-                          status: 502,
-                          code: "internal_error",
-                          message: "Billing draft proposals failed validation",
-                        }),
-                        "response_invalid",
-                      ),
-                    );
-                  }
-                  return Result.ok(
-                    canonicalBillingDraftReview({
-                      restored: validation.value,
-                      context,
-                    }),
-                  );
+                  return acceptGeneratedDraft({
+                    generated: result,
+                    refs,
+                    entries: body.entries,
+                    context,
+                    captureError: analytics.captureError,
+                  });
                 },
               });
             }),

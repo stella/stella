@@ -6,19 +6,18 @@ import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import {
-  billingDraftUserSettings,
-  contacts,
-  organizationSettings,
-} from "@/api/db/schema";
+import { contacts } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {
   extractBillingGuidelineSections,
+  isFirmGuidelineFile,
   loadBillingGuidelines,
 } from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandValidatedWorkspaceId } from "@/api/lib/safe-id-boundaries";
+
+import { draftingModeFor } from "./billing-draft-mode";
 
 export const BILLING_DRAFT_CONTEXT_LIMITS = {
   historyDays: 90,
@@ -33,6 +32,8 @@ type LoadBillingDraftContextOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: DesktopBillingDraftRequest;
+  /** The caller's own drafting preference, read with the drafting gate. */
+  preference: string | null;
 };
 
 type LoadBillingDraftMattersOptions = Pick<
@@ -142,39 +143,9 @@ export const loadBillingDraftContext = async ({
   organizationId,
   userId,
   body,
+  preference,
 }: LoadBillingDraftContextOptions) =>
   await Result.gen(async function* () {
-    const settings = yield* Result.await(
-      safeDb(async (tx) => {
-        const org = await tx
-          .select({ mode: organizationSettings.aiBillingDraftsMode })
-          .from(organizationSettings)
-          .where(eq(organizationSettings.organizationId, organizationId))
-          .limit(1);
-        const own = await tx
-          .select({
-            consentAt: billingDraftUserSettings.consentAt,
-            preference: billingDraftUserSettings.preference,
-          })
-          .from(billingDraftUserSettings)
-          .where(
-            and(
-              eq(billingDraftUserSettings.organizationId, organizationId),
-              eq(billingDraftUserSettings.userId, userId),
-            ),
-          )
-          .limit(1);
-        return { org: org.at(0), own: own.at(0) };
-      }),
-    );
-    if (!settings.own?.consentAt) {
-      return Result.err(
-        new HandlerError({
-          status: 403,
-          message: "AI billing drafts require personal consent",
-        }),
-      );
-    }
     const matterIds = Array.from(
       new Set(
         body.entries.map(({ matterId }) => brandValidatedWorkspaceId(matterId)),
@@ -246,28 +217,30 @@ export const loadBillingDraftContext = async ({
           entry.workspaceId ??
           panic("Matter-scoped history returned an internal entry"),
       })),
-      preference: settings.own.preference,
+      preference,
       ...aiSettings,
     };
-    // Guideline checks, billing codes and flags apply only once the
-    // organization enables them with a firm guideline file bound; until then a
-    // consenting user gets plain descriptions of the selected matters' work.
-    const files =
-      settings.org?.mode === "enabled"
-        ? yield* Result.await(
-            loadBillingGuidelines({ safeDb, organizationId, clientIds }),
-          )
-        : undefined;
-    if (
-      files === undefined ||
-      !files.some(({ clientId }) => clientId === null)
-    ) {
+    const files = yield* Result.await(
+      loadBillingGuidelines({ safeDb, organizationId, clientIds }),
+    );
+    if (draftingModeFor(files.some(isFirmGuidelineFile)) === "plain") {
+      // A plain description carries no classification, so neither LEDES
+      // codes nor activity groups of earlier entries reach the model.
       return Result.ok({
         mode: "plain" as const,
         matters: matters.filter(({ matterId }) =>
           validatedMatterIds.includes(matterId),
         ),
         ...shared,
+        earlierEntries: shared.earlierEntries.map(
+          ({ id, matterId, dateWorked, durationMinutes, narrative }) => ({
+            id,
+            matterId,
+            dateWorked,
+            durationMinutes,
+            narrative,
+          }),
+        ),
       });
     }
     const guidelines = Array.from(

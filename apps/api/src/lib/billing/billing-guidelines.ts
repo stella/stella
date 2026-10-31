@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,
@@ -37,6 +38,56 @@ export const extractBillingGuidelineSections = (content: string) => {
   return sections;
 };
 
+// A binding counts only while its file is a reference file of one of the
+// organization's team skills. Drafting and every report of the drafting mode
+// read bindings through these conditions, so both see the same files.
+const boundResource = (organizationId: SafeId<"organization">) =>
+  and(
+    eq(agentSkillResources.id, billingGuidelineFiles.resourceId),
+    eq(agentSkillResources.organizationId, organizationId),
+  );
+const boundSkill = (organizationId: SafeId<"organization">) =>
+  and(
+    eq(agentSkills.id, agentSkillResources.skillId),
+    eq(agentSkills.organizationId, organizationId),
+    eq(agentSkills.scope, "team"),
+  );
+const boundFile = (organizationId: SafeId<"organization">) =>
+  and(
+    eq(billingGuidelineFiles.organizationId, organizationId),
+    like(agentSkillResources.path, "references/%"),
+  );
+
+/** A firm guideline file is bound to no client. */
+export const isFirmGuidelineFile = ({
+  clientId,
+}: {
+  clientId: SafeId<"contact"> | null;
+}) => clientId === null;
+
+type ReadFirmGuidelineBoundOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+};
+
+/** Whether the organization has a firm guideline file bound; client files
+ * alone never count. */
+export const readFirmGuidelineBound = async ({
+  tx,
+  organizationId,
+}: ReadFirmGuidelineBoundOptions) =>
+  (
+    await tx
+      .select({ resourceId: billingGuidelineFiles.resourceId })
+      .from(billingGuidelineFiles)
+      .innerJoin(agentSkillResources, boundResource(organizationId))
+      .innerJoin(agentSkills, boundSkill(organizationId))
+      .where(
+        and(boundFile(organizationId), isNull(billingGuidelineFiles.clientId)),
+      )
+      .limit(1)
+  ).length > 0;
+
 type LoadBillingGuidelinesOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -58,25 +109,11 @@ export const loadBillingGuidelines = async ({
           clientId: billingGuidelineFiles.clientId,
         })
         .from(billingGuidelineFiles)
-        .innerJoin(
-          agentSkillResources,
-          and(
-            eq(agentSkillResources.id, billingGuidelineFiles.resourceId),
-            eq(agentSkillResources.organizationId, organizationId),
-          ),
-        )
-        .innerJoin(
-          agentSkills,
-          and(
-            eq(agentSkills.id, agentSkillResources.skillId),
-            eq(agentSkills.organizationId, organizationId),
-            eq(agentSkills.scope, "team"),
-          ),
-        )
+        .innerJoin(agentSkillResources, boundResource(organizationId))
+        .innerJoin(agentSkills, boundSkill(organizationId))
         .where(
           and(
-            eq(billingGuidelineFiles.organizationId, organizationId),
-            like(agentSkillResources.path, "references/%"),
+            boundFile(organizationId),
             clientIds.length === 0
               ? isNull(billingGuidelineFiles.clientId)
               : or(

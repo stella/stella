@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterEach,
   beforeEach,
@@ -11,6 +11,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
+import { DESKTOP_BILLING_DRAFT_REFUSAL_CODE } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -32,7 +33,28 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 
+import {
+  billingDraftGateRefusal,
+  loadBillingDraftGate,
+} from "./billing-draft-mode";
 import { loadBillingDraftContext } from "./billing-drafts-context";
+
+/** As the endpoint drafts: the gate refuses first, then the context loads
+ * with the caller's own preference. */
+const loadGatedContext = async (
+  options: Omit<Parameters<typeof loadBillingDraftContext>[0], "preference">,
+) =>
+  await Result.gen(async function* () {
+    const gate = yield* Result.await(loadBillingDraftGate(options));
+    const refusal = billingDraftGateRefusal(gate);
+    if (refusal) {
+      return Result.err(refusal);
+    }
+    const context = yield* Result.await(
+      loadBillingDraftContext({ ...options, preference: gate.preference }),
+    );
+    return Result.ok(context);
+  });
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -211,7 +233,7 @@ if (!databaseUrl || !runPostgres) {
             },
           ],
         } satisfies DesktopBillingDraftRequest;
-        const result = await loadBillingDraftContext({
+        const result = await loadGatedContext({
           safeDb,
           organizationId,
           userId,
@@ -233,7 +255,7 @@ if (!databaseUrl || !runPostgres) {
         const firstEntry =
           body.entries.at(0) ??
           panic("Billing draft fixture requires an entry");
-        const otherMatter = await loadBillingDraftContext({
+        const otherMatter = await loadGatedContext({
           safeDb,
           organizationId,
           userId,
@@ -251,7 +273,7 @@ if (!databaseUrl || !runPostgres) {
     });
   });
 
-  test("revoked consent refuses context and organization disablement does not", async () => {
+  test("the organization's off switch and a revoked consent both refuse before any context", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db: rawDb } = openClient();
       const db = markRlsDatabase(rawDb);
@@ -280,6 +302,7 @@ if (!databaseUrl || !runPostgres) {
         await db.insert(organizationSettings).values({
           id: createSafeId<"organizationSettings">(),
           organizationId,
+          aiBillingDraftsMode: "disabled",
         });
         const safeDb = createSafeDb(db, [], organizationId, userId);
         (
@@ -291,7 +314,7 @@ if (!databaseUrl || !runPostgres) {
             }),
           )
         ).unwrap();
-        const disabled = await loadBillingDraftContext({
+        const disabled = await loadGatedContext({
           safeDb,
           organizationId,
           userId,
@@ -308,18 +331,43 @@ if (!databaseUrl || !runPostgres) {
             ],
           },
         });
-        // Organization disablement turns guideline checks off, not drafting:
-        // the consenting caller passes the consent gate and stops only at
-        // the matter scope.
+        // The off switch stops all drafting, plain descriptions included,
+        // before the consenting caller's matter is even read.
         expect(disabled.isErr()).toBe(true);
         if (disabled.isErr()) {
-          expect(disabled.error.message).toBe("Selected matter is unavailable");
+          expect(disabled.error).toMatchObject({
+            status: 403,
+            code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.organizationOff,
+          });
         }
 
         await db
           .update(organizationSettings)
           .set({ aiBillingDraftsMode: "enabled" })
           .where(eq(organizationSettings.organizationId, organizationId));
+        // Switched on, the same consenting caller passes the gate and stops
+        // only at the matter scope.
+        const enabled = await loadGatedContext({
+          safeDb,
+          organizationId,
+          userId,
+          body: {
+            entries: [
+              {
+                entryId: "selected-entry-1",
+                matterId: createSafeId<"workspace">(),
+                date: today.toString(),
+                timezone: "Europe/Prague",
+                durationMinutes: 30,
+                appNames: [],
+              },
+            ],
+          },
+        });
+        expect(enabled.isErr()).toBe(true);
+        if (enabled.isErr()) {
+          expect(enabled.error.message).toBe("Selected matter is unavailable");
+        }
         (
           await safeDb((tx) =>
             tx
@@ -333,7 +381,7 @@ if (!databaseUrl || !runPostgres) {
               ),
           )
         ).unwrap();
-        const revoked = await loadBillingDraftContext({
+        const revoked = await loadGatedContext({
           safeDb,
           organizationId,
           userId,
@@ -443,7 +491,7 @@ if (!databaseUrl || !runPostgres) {
           )
         ).unwrap();
 
-        const result = await loadBillingDraftContext({
+        const result = await loadGatedContext({
           safeDb: createSafeDb(db, [], organizationB, userId),
           organizationId: organizationB,
           userId,
@@ -508,7 +556,7 @@ if (!databaseUrl || !runPostgres) {
             preference: "Organization B preference",
           },
         ]);
-        const stillGranted = await loadBillingDraftContext({
+        const stillGranted = await loadGatedContext({
           safeDb: createSafeDb(db, [], organizationB, userId),
           organizationId: organizationB,
           userId,
