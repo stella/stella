@@ -233,14 +233,15 @@ describe.skipIf(!runPostgresTests)(
 
     test("direct auth slug updates are refused while name-only updates succeed", async () => {
       const { owner, org } = await createOrganization();
-      const outcome = await Result.tryPromise(() =>
-        getAuth().api.updateOrganization({
-          body: {
-            organizationId: org.id,
-            data: { slug: `bypass-${Bun.randomUUIDv7()}` },
-          },
-          headers: owner.headers(),
-        }),
+      const outcome = await Result.tryPromise(
+        async () =>
+          await getAuth().api.updateOrganization({
+            body: {
+              organizationId: org.id,
+              data: { slug: `bypass-${Bun.randomUUIDv7()}` },
+            },
+            headers: owner.headers(),
+          }),
       );
       expect(Result.isError(outcome)).toBe(true);
       if (Result.isError(outcome)) {
@@ -306,7 +307,9 @@ describe.skipIf(!runPostgresTests)(
         })),
       );
       expect(
-        outcomes.map(({ response }) => response.status).toSorted(),
+        outcomes
+          .map(({ response }) => response.status)
+          .toSorted((a, b) => a - b),
       ).toEqual([200, 409]);
       for (const { fixture, response } of outcomes) {
         const persistedSlug = response.status === 200 ? slug : fixture.org.slug;
