@@ -740,16 +740,10 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       readOnlyHint: true,
     },
     description:
-      "List the highlights and comments on one case-law decision or one " +
-      "statute version that the user can see: their own, and those " +
-      "colleagues shared, oldest first. Each mark lists the passages it " +
-      "covers with the quoted words. A placed passage names the block " +
-      "anchor where those words are in the document's current text. An " +
-      "orphaned passage has no place there: the text changed since the mark " +
-      "was made (or has no anchored blocks), and its words are gone " +
-      "(quote_not_found) or occur in several places nothing tells apart " +
-      "(quote_ambiguous). Report an orphaned passage by its quote, never at " +
-      "an anchor.",
+      "List visible highlights and comments on a decision or statute version, " +
+      "oldest first. Passages give quoted words and their current block anchor " +
+      "when placed; orphaned passages have quote_not_found or quote_ambiguous. " +
+      "Report orphaned passages by quote, never at an anchor.",
     inputSchema: listArgsSchema,
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },
