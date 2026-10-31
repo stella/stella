@@ -303,7 +303,7 @@ export const WorkspaceBreadcrumb = ({
       <>
         <BreadcrumbQueryContent view={workspaceView} />
         {clientSegment}
-        <BreadcrumbItem className="shrink-0">
+        <BreadcrumbItem className="group/crumb shrink-0">
           {(() => {
             if (isEditing) {
               return (
@@ -383,7 +383,9 @@ export const WorkspaceBreadcrumb = ({
                     </span>
                   ) : null}
                 </Link>
-                {isEditingRef ? null : <MatterSwitcher matter={workspace} />}
+                {isEditingRef ? null : (
+                  <MatterSwitcher matter={workspace} revealOnHover />
+                )}
               </>
             );
           })()}
