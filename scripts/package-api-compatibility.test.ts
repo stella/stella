@@ -33,8 +33,14 @@ test.each([
       before: broad,
       after: narrow,
       packageDir: process.cwd(),
-    }).join("\n"),
-  ).toContain("incompatible");
+    }),
+  ).toContainEqual(
+    expect.objectContaining({
+      type: "signature",
+      entrypoint: ".",
+      message: expect.stringContaining("incompatible"),
+    }),
+  );
 });
 
 test("overloaded methods retain every call signature", () => {
@@ -45,8 +51,14 @@ test("overloaded methods retain every call signature", () => {
     "export interface Client { convert(input: string): string; }",
   );
   expect(
-    breakingApiChanges({ before, after, packageDir: process.cwd() }).join("\n"),
-  ).toContain("incompatible");
+    breakingApiChanges({ before, after, packageDir: process.cwd() }),
+  ).toContainEqual(
+    expect.objectContaining({
+      type: "signature",
+      entrypoint: ".",
+      message: expect.stringContaining("incompatible"),
+    }),
+  );
 });
 
 test("normalization is stable and preserves unchanged overloaded contracts", () => {
@@ -87,8 +99,14 @@ test("moving a public class member to protected is visible", () => {
     "export declare class Client { protected read(): string; }",
   );
   expect(
-    breakingApiChanges({ before, after, packageDir: process.cwd() }).join("\n"),
-  ).toContain("incompatible");
+    breakingApiChanges({ before, after, packageDir: process.cwd() }),
+  ).toContainEqual(
+    expect.objectContaining({
+      type: "signature",
+      entrypoint: ".",
+      message: expect.stringContaining("incompatible"),
+    }),
+  );
 });
 
 test("private constructors retain their construction restriction", () => {
