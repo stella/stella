@@ -4,7 +4,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import updateWorkspace from "./update";
 
@@ -66,7 +69,10 @@ describe("updateWorkspace", () => {
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       select: () => {
         selectCount++;
-        return selectCount === 1 ? workspaceSelect : clientSelect;
+        if (selectCount === 1) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return selectCount === 2 ? workspaceSelect : clientSelect;
       },
     });
 
@@ -98,17 +104,20 @@ describe("updateWorkspace", () => {
       leadUserId: null,
     };
     const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the limit the contact lookup chains
-            for: () =>
-              Object.assign(Promise.resolve([workspaceRow]), {
-                limit: async () => [],
+      select: (columns: unknown) =>
+        typeof columns === "object" && columns !== null && "role" in columns
+          ? createSelectQueryMock([{ role: "owner" }])
+          : {
+              from: () => ({
+                where: () => ({
+                  // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the limit the contact lookup chains
+                  for: () =>
+                    Object.assign(Promise.resolve([workspaceRow]), {
+                      limit: async () => [],
+                    }),
+                }),
               }),
-          }),
-        }),
-      }),
+            },
     });
 
     const result = await updateWorkspace.handler(

@@ -19,6 +19,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -58,6 +59,10 @@ describe.skipIf(!enabled)("matter mutation authority after a lock wait", () => {
         name: "Mutation authority",
         slug: `mutation-authority-${suffix}`,
         createdAt: new Date(),
+      });
+      await recordNewOrganizationAccessState(db, {
+        organizationId,
+        now: new Date(),
       });
       await db.insert(user).values(
         userIds.map((id) => ({

@@ -188,7 +188,7 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
             organizationId,
             workspaceId,
             contactId: clientId,
-            role: "client",
+            role: "other",
           });
           const privateId = createSafeId<"workspace">();
           const ownerDb = createMembershipScopedDb(markRlsDatabase(db), {
@@ -398,7 +398,7 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
           );
           expect(definitions).toHaveLength(8);
           for (const definition of definitions) {
-            expect(definition["proconfig"]).toContain(
+            expect(definition.proconfig).toContain(
               "search_path=pg_catalog, public, pg_temp",
             );
           }

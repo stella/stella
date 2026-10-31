@@ -39,6 +39,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+// timeout: The shared RLS fixture applies committed migrations before transactional matter updates.
 setDefaultTimeout(120_000);
 
 let testDb: TestDatabase;

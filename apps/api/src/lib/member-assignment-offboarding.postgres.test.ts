@@ -507,7 +507,10 @@ if (!databaseUrl || !runPostgresTests) {
           const { db: secondDb } = openClient({
             logger: {
               logQuery: (query) => {
-                if (/select.*from "(?:workspaces|member)"/iu.test(query)) {
+                if (
+                  /select.*from "(?:workspaces|member)"/iu.test(query) ||
+                  query.includes("stella_lock_matter_stewardship")
+                ) {
                   attempted.resolve(undefined);
                 }
               },
