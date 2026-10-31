@@ -197,6 +197,7 @@
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
     "openSource": "Abrir fonte original",
+    "openFailed": "Não foi possível abrir o link.",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
   },

@@ -197,6 +197,7 @@
     "headnote": "Lühikokkuvõte",
     "textUnavailable": "Selle lahendi teksti ei ole saadaval",
     "openSource": "Ava algallikas",
+    "openFailed": "Linki ei õnnestunud avada.",
     "loadFailed": "Kohtupraktikat ei õnnestunud laadida.",
     "share": "Jaga"
   },
