@@ -17,13 +17,21 @@ import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
  * parses, so the assertion binds the runtime validator, not a mirror of it.
  */
 const NON_UUID_ID_INPUTS: Record<string, string> = {
+  // Both values are contact JSON metadata, never foreign keys or uuid columns.
+  "save_contact.metadata.data_boxes[].id":
+    "external seven-character data box identifier",
+  "save_contact.metadata.custom_fields[].id":
+    "caller-defined custom field key in JSON metadata",
+  "save_contact.tax_id": "national tax identifier stored as text",
+  "save_contact.vat_id": "national VAT identifier stored as text",
+  "save_contact.originating_attorney_id": "better-auth user id (text column)",
+  "save_contact.responsible_attorney_id": "better-auth user id (text column)",
   "save_contact.external.id":
     "opaque source-system record identifier stored in a text column, not a stella uuid",
   // Auth-provider (better-auth) user ids are alphanumeric text, and the
   // columns that hold them are `text`/`varchar`, never `uuid`.
   "list_time_entries.user_id": "better-auth user id (text column)",
   "resolve_rate.user_id": "better-auth user id (text column)",
-  "save_task.add_assignee_user_id": "better-auth user id (text column)",
   "save_task.remove_assignee_user_id": "better-auth user id (text column)",
   "list_audit_log.user_id": "better-auth user id (text column)",
   "add_matter_member.user_id": "better-auth user id (text column)",

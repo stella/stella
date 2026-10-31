@@ -1,21 +1,21 @@
 import * as v from "valibot";
 
 import type { CONTACT_IMPORT_TAX_ID_SCHEMES } from "@stll/api-contract";
-
 import {
   contactAddressSchema,
   contactCustomFieldSchema,
   contactEmailSchema,
   contactPhoneSchema,
-} from "@/api/db/schema-validators";
+  MAX_CONTACT_NATIONALITY_CODES,
+} from "@stll/api-contract/contact-write";
 import type {
   ContactAddress,
   ContactCustomField,
   ContactEmail,
   ContactPhone,
-} from "@/api/db/schema-validators";
+} from "@stll/api-contract/contact-write";
+
 import { createContactTypeSchema } from "@/api/handlers/contacts/schema";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { LIMITS } from "@/api/lib/limits";
 
 /**

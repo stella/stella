@@ -37,7 +37,10 @@ export const searchBodySchema = v.object({
   ),
   kinds: v.pipe(v.array(entityKindSchema), v.maxLength(ENTITY_KINDS.length)),
   editedByUserIds: v.pipe(v.array(userIdSchema), v.maxLength(64)),
-  mimeTypes: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  mimeTypes: v.pipe(
+    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+    v.maxLength(64),
+  ),
   updatedFrom: v.optional(isoDateTime),
   updatedTo: v.optional(isoDateTime),
   cursor: v.optional(paginationCursorSchema()),

@@ -1,6 +1,6 @@
 {
   "apps/api": {
-    "count": 122,
+    "count": 121,
     "files": {
       "apps/api/scripts/lib/capability-catalog.ts": 7,
       "apps/api/src/handlers/case-law/citation-kind.ts": 1,
@@ -32,7 +32,7 @@
       "apps/api/src/lib/legal-search/corpus-index-generation-store.ts": 1,
       "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": 1,
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 1,
-      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 4,
+      "apps/api/src/lib/legal-search/sk-document-backfill.ts": 3,
       "apps/api/src/lib/lists/verification/run-caps.ts": 1,
       "apps/api/src/lib/lists/verification/run-persistence.ts": 1,
       "apps/api/src/lib/lists/verification/run-summary.ts": 2,

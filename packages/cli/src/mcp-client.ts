@@ -77,6 +77,7 @@ export class McpClientError extends McpClientErrorBase<{
   httpStatus?: number;
   rpcCode?: number;
   admission?: CliActionAdmissionRefusal;
+  retryAfter?: string;
 }> {}
 
 const mcpUrl = (serverUrl: string): string =>
@@ -101,15 +102,46 @@ const requestMethod = (init: RequestInit | undefined): string | undefined => {
     : undefined;
 };
 
+const BATCH_CALL_ID_META = "stella/cli-call-id";
+const IDEMPOTENCY_KEY_META = "stella/idempotency-key";
+
+const toolCallMetadata = (
+  init: RequestInit | undefined,
+): { callId: string; idempotencyKey?: string } | undefined => {
+  if (typeof init?.body !== "string") {
+    return undefined;
+  }
+  const body = init.body;
+  const parsed = Result.try((): unknown => JSON.parse(body));
+  if (Result.isError(parsed) || !isRecord(parsed.value)) {
+    return undefined;
+  }
+  const request = parsed.value;
+  if (request["method"] !== "tools/call" || !isRecord(request["params"])) {
+    return undefined;
+  }
+  const meta = request["params"]["_meta"];
+  if (!isRecord(meta) || typeof meta[BATCH_CALL_ID_META] !== "string") {
+    return undefined;
+  }
+  const key = meta[IDEMPOTENCY_KEY_META];
+  return {
+    callId: meta[BATCH_CALL_ID_META],
+    ...(typeof key === "string" ? { idempotencyKey: key } : {}),
+  };
+};
+
 const toClientError = (
   cause: unknown,
   admission?: CliActionAdmissionRefusal,
+  retryAfter?: string,
 ): McpClientError => {
   if (admission !== undefined) {
     return new McpClientError({
       kind: "http",
       admission,
       message: admission.message,
+      ...(retryAfter === undefined ? {} : { retryAfter }),
       ...(cause instanceof SdkHttpError ? { httpStatus: cause.status } : {}),
     });
   }
@@ -117,6 +149,7 @@ const toClientError = (
     return new McpClientError({
       kind: "http",
       httpStatus: cause.status,
+      ...(retryAfter === undefined ? {} : { retryAfter }),
       message: cause.message,
     });
   }
@@ -147,35 +180,53 @@ const runMcpOperation = async <T>({
   timeoutMs,
   observeMethod,
   operation,
+  observeResponse,
 }: {
   serverUrl: string;
   token: string;
   timeoutMs?: number;
   observeMethod?: string;
   operation: (client: Client, timeoutMs: number) => Promise<T>;
+  observeResponse?: (
+    init: RequestInit | undefined,
+    response: Response,
+    admission: CliActionAdmissionRefusal | undefined,
+  ) => void;
 }): Promise<
   Result<{ value: T; evidence?: ResponseEvidence }, McpClientError>
 > => {
   let admission: CliActionAdmissionRefusal | undefined;
+  let retryAfter: string | undefined;
   let evidencePromise: Promise<ResponseEvidence | undefined> | undefined;
   const observedFetch: FetchLike = async (input, init) => {
-    const response = await apiFetch(input, init);
+    const metadata = toolCallMetadata(init);
+    const headers = new Headers(init?.headers);
+    if (metadata?.idempotencyKey !== undefined) {
+      headers.set("Idempotency-Key", metadata.idempotencyKey);
+    }
+    const response = await apiFetch(input, { ...init, headers });
+    if (response.status === 429) {
+      retryAfter = response.headers.get("Retry-After") ?? undefined;
+    }
+    let responseAdmission: CliActionAdmissionRefusal | undefined;
     if (!response.ok) {
       const refusal = await readHttpActionAdmissionRefusal(response);
+      responseAdmission = refusal;
       if (refusal !== undefined) {
         admission = refusal;
       }
     }
+    observeResponse?.(init, response, responseAdmission);
     if (observeMethod !== undefined && requestMethod(init) === observeMethod) {
-      const headers = new Headers(response.headers);
-      evidencePromise = headers
+      const responseHeaders = new Headers(response.headers);
+      evidencePromise = responseHeaders
         .get("content-type")
         ?.toLowerCase()
         .includes("application/json")
         ? response
             .clone()
             .text()
-            .then((rawBody) => ({ headers, rawBody }))
+            .then((rawBody) => ({ headers: responseHeaders, rawBody }))
         : Promise.resolve(undefined);
     }
     return response;
@@ -206,7 +257,7 @@ const runMcpOperation = async <T>({
     catch: (cause) => cause,
   });
   return Result.isError(result)
-    ? Result.err(toClientError(result.error, admission))
+    ? Result.err(toClientError(result.error, admission, retryAfter))
     : Result.ok(result.value);
 };
 
@@ -249,6 +300,85 @@ export const callTool = async ({
     );
   }
   return Result.ok(result.value.value);
+};
+
+export type BatchToolCall = (options: {
+  name: string;
+  args: Record<string, unknown>;
+  idempotencyKey?: string;
+  timeoutMs?: number;
+}) => Promise<Result<CallToolResult, McpClientError>>;
+
+/** One negotiated MCP connection shared by the bounded batch scheduler. */
+export const withBatchToolClient = async <T>({
+  serverUrl,
+  token,
+  operation,
+}: {
+  serverUrl: string;
+  token: string;
+  operation: (call: BatchToolCall) => Promise<T>;
+}): Promise<Result<T, McpClientError>> => {
+  let nextCallId = 0;
+  const failures = new Map<
+    string,
+    { retryAfter?: string; admission?: CliActionAdmissionRefusal }
+  >();
+  const result = await runMcpOperation({
+    serverUrl,
+    token,
+    observeResponse: (init, response, admission) => {
+      const metadata = toolCallMetadata(init);
+      if (metadata === undefined || response.ok) {
+        return;
+      }
+      const retryAfter = response.headers.get("Retry-After");
+      failures.set(metadata.callId, {
+        ...(retryAfter === null ? {} : { retryAfter }),
+        ...(admission === undefined ? {} : { admission }),
+      });
+    },
+    operation: async (client, timeout) =>
+      await operation(async ({ name, args, idempotencyKey, timeoutMs }) => {
+        const callId = String(nextCallId++);
+        const call = await Result.tryPromise({
+          try: async () =>
+            await client.callTool(
+              {
+                name,
+                arguments: args,
+                _meta: {
+                  [BATCH_CALL_ID_META]: callId,
+                  ...(idempotencyKey === undefined
+                    ? {}
+                    : { [IDEMPOTENCY_KEY_META]: idempotencyKey }),
+                },
+              },
+              { timeout: timeoutMs ?? timeout },
+            ),
+          catch: (cause) => cause,
+        });
+        const failure = failures.get(callId);
+        failures.delete(callId);
+        if (Result.isError(call)) {
+          return Result.err(
+            toClientError(call.error, failure?.admission, failure?.retryAfter),
+          );
+        }
+        if (!isCallToolResult(call.value)) {
+          return Result.err(
+            new McpClientError({
+              kind: "transport",
+              message: "tools/call returned an unexpected result shape",
+            }),
+          );
+        }
+        return Result.ok(call.value);
+      }),
+  });
+  return Result.isError(result)
+    ? Result.err(result.error)
+    : Result.ok(result.value.value);
 };
 
 /** Enumerate the server's tools via `tools/list`. */
