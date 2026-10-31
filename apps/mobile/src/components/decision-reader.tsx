@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { Stack } from "expo-router";
 import {
   Linking,
+  Platform,
   Share,
   useColorScheme,
   useWindowDimensions,
@@ -18,6 +19,7 @@ import { barGlyph } from "@/components/ui/bar-glyph";
 import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";
 import { decisionPage, isWebUrl } from "@/state/decision-page";
+import { linkShareContent } from "@/state/share-content";
 
 /**
  * A decision as the web's reader sets it: court, kind, date and ECLI, the
@@ -96,7 +98,7 @@ const ShareButton = ({ url }: { url: string }) => {
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Button
         onPress={() => {
-          void Share.share({ message: url, url });
+          void Share.share(linkShareContent(url, Platform.OS));
         }}
       >
         {barGlyph("share")}

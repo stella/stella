@@ -144,6 +144,7 @@ import {
 import type { SearchFilters } from "@/components/search-filters.logic";
 import { SearchScopeFilter, SearchScopeInput } from "@/components/search-scope";
 import type { SearchScope } from "@/components/search-scope";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { invalidateGroupedChatThreads } from "@/features/chat/queries";
@@ -656,6 +657,7 @@ export const SearchDialog = ({
   // The AI search API caps locale at 16 chars; send the base language, not the
   // formatting locale (which may carry a region and -u- extensions).
   const apiLocale = useI18nStore((s) => s.loadedLang);
+  const readingLanguages = useCaseLawReadingLanguages();
   const navigate = useNavigate();
   const router = useRouter();
   const currentView = useCurrentWorkspaceView();
@@ -2143,7 +2145,9 @@ export const SearchDialog = ({
                         onOpen={(hit) => {
                           onOpenChange(false);
                           detached(
-                            navigate(citationCommandRoute(hit, apiLocale)),
+                            navigate(
+                              citationCommandRoute(hit, readingLanguages),
+                            ),
                             "search-citation.open",
                           );
                         }}
