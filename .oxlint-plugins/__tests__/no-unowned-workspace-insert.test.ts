@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import path from "node:path";
 
 import { hasUnownedWorkspaceInsert } from "../sql/workspace-insert.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
@@ -11,6 +13,85 @@ const lint = async (
   await lintSingleRule("no-unowned-workspace-insert", source, { sourcePath });
 
 const hole = (expression: string) => `\${${expression}}`;
+
+for (const { name, now, changedLines, reports } of [
+  {
+    name: "unchanged during rollout",
+    now: "2026-10-31",
+    changedLines: [],
+    reports: false,
+  },
+  {
+    name: "changed inside the insertion during rollout",
+    now: "2026-10-31",
+    changedLines: [3],
+    reports: true,
+  },
+  {
+    name: "unchanged after expiry",
+    now: "2026-11-07",
+    changedLines: [],
+    reports: true,
+  },
+]) {
+  test(`creation scope: ${name}`, async () => {
+    const repository = path.resolve(import.meta.dirname, "../..");
+    const directory = await mkdtemp(
+      path.join(repository, "node_modules/workspace-insert-rollout-"),
+    );
+    const wrapper = path.join(directory, "plugin.ts");
+    const plugin = path.resolve(
+      import.meta.dirname,
+      "../no-unowned-workspace-insert.ts",
+    );
+    const scope = path.join(repository, "scripts/guard-rollouts.ts");
+    const portablePath = path.join(
+      repository,
+      "packages/portable-path/src/index.ts",
+    );
+    await Bun.write(
+      wrapper,
+      `import { createWorkspaceInsertPlugin } from ${JSON.stringify(plugin)};
+import { guardEnforcesLine } from ${JSON.stringify(scope)};
+import { repoRelativePath } from ${JSON.stringify(portablePath)};
+export default createWorkspaceInsertPlugin((options) => guardEnforcesLine({
+  ...options,
+  now: new Date(${JSON.stringify(now)}),
+  changedLines: new Map([[repoRelativePath(${JSON.stringify(repository)}, options.file), new Set(${JSON.stringify(changedLines)})]]),
+}));`,
+    );
+    try {
+      await Promise.all(
+        [
+          {
+            source:
+              'import { workspaces } from "@/api/db/schema";\ntx.insert(workspaces).values({\n  visibility: "assigned_only",\n});',
+            line: 2,
+          },
+          {
+            source:
+              "await tx.execute(sql`\n INSERT INTO workspaces (id, visibility)\n VALUES ($1, 'assigned_only');\n`);",
+            line: 1,
+          },
+        ].flatMap(({ source, line }) => [
+          lintSingleRule("no-unowned-workspace-insert", source, {
+            sourcePath: "apps/api/src/lib/creator.test.ts",
+            pluginPath: wrapper,
+          }).then((diagnostics) =>
+            expect(diagnostics).toEqual(reports ? [line] : []),
+          ),
+          lintSingleRule("no-unowned-workspace-insert", source, {
+            sourcePath:
+              ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.ts",
+            pluginPath: wrapper,
+          }).then((diagnostics) => expect(diagnostics).toEqual([line])),
+        ]),
+      );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+}
 
 test("the registered fixture proves both rejected and clean creation", async () => {
   const sourcePath =

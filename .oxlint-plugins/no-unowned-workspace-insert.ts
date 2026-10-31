@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import {
   hasUnownedWorkspaceInsert,
   isPreVisibilityWorkspaceInsert,
@@ -404,153 +405,187 @@ const historicalInsert = (
   return false;
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "no-unowned-workspace-insert" },
-  rules: {
-    "no-unowned-workspace-insert": {
-      meta: {
-        type: "problem",
-        schema: [],
-        messages: {
-          unowned:
-            "Create private matters, or rows with unproven visibility, through create-workspace-row.ts. Its creation owner acquires the complete stewardship prefix before INSERT; a bare lock call is insufficient.",
-        },
-      },
-      createOnce(context) {
-        const reported = new Set<number>();
-        const reportSql = (node: AstNode, source: SqlSource | null) => {
-          if (
-            source === null ||
-            reported.has(node.range[0]) ||
-            !hasUnownedWorkspaceInsert(
-              source.text,
-              trustedCallback(context, node) === null
-                ? new Set()
-                : source.ownedIds,
-            ) ||
-            historicalInsert(context, node, source.text) ||
-            refusalTest(context, node, source.text)
-          ) {
-            return;
-          }
-          reported.add(node.range[0]);
-          context.report({ node, messageId: "unowned" });
-        };
-        return {
-          before() {
-            reported.clear();
-            const filename = filenameForContext(context);
-            return (
-              (filename.includes("apps/api/") ||
-                filename.includes(
-                  ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.",
-                )) &&
-              !filename.endsWith(`${OWNER}.ts`)
-            );
+export const createWorkspaceInsertPlugin = (enforcesLine = guardEnforcesLine) =>
+  eslintCompatPlugin({
+    meta: { name: "no-unowned-workspace-insert" },
+    rules: {
+      "no-unowned-workspace-insert": {
+        meta: {
+          type: "problem",
+          schema: [],
+          messages: {
+            unowned:
+              "Create private matters, or rows with unproven visibility, through create-workspace-row.ts. Its creation owner acquires the complete stewardship prefix before INSERT; a bare lock call is insufficient.",
           },
-          CallExpression(node) {
-            if (!isAstNode(node)) {
-              return;
-            }
-            const callee = unwrapExpression(node.callee);
+        },
+        createOnce(context) {
+          const reported = new Set<number>();
+          const enforces = (node: AstNode) => {
+            const file = filenameForContext(context);
             if (
-              callee?.type !== "MemberExpression" ||
-              !Array.isArray(node.arguments)
-            ) {
-              return;
-            }
-            const method = getPropertyName(callee.property);
-            if (method === "insert") {
-              const table = resolveImport(context, node.arguments.at(0));
-              if (
-                table?.imported !== "workspaces" ||
-                !SCHEMA.has(table.moduleId)
-              ) {
-                return;
-              }
-              const valuesMember = node.parent;
-              const values = isAstNode(valuesMember)
-                ? valuesMember.parent
-                : null;
-              if (
-                isAstNode(valuesMember) &&
-                valuesMember.type === "MemberExpression" &&
-                getPropertyName(valuesMember.property) === "values" &&
-                isAstNode(values) &&
-                values.type === "CallExpression" &&
-                Array.isArray(values.arguments) &&
-                (nonprivateRows(context, values.arguments.at(0)) ||
-                  (() => {
-                    const callback = trustedCallback(context, node);
-                    return (
-                      callback !== null &&
-                      fromNormalizedRows(
-                        context,
-                        values.arguments.at(0),
-                        callback,
-                        false,
-                      )
-                    );
-                  })())
-              ) {
-                return;
-              }
-              context.report({ node, messageId: "unowned" });
-              return;
-            }
-            if (
-              !["query", "execute", "exec", "unsafe", "raw"].includes(
-                method ?? "",
+              file.includes(
+                ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.",
               )
             ) {
-              return;
+              return true;
             }
-            let source = sqlText(context, node.arguments.at(0));
-            const parameters = initializerOf(context, node.arguments.at(1));
-            if (
-              source !== null &&
-              parameters?.type === "ArrayExpression" &&
-              Array.isArray(parameters.elements)
-            ) {
-              const elements = parameters.elements;
-              const text = source.text;
-              let replaced = plainSql("");
-              let previous = 0;
-              for (const match of text.matchAll(/\$(\d+)/gu)) {
-                replaced = joinSql(
-                  replaced,
-                  plainSql(text.slice(previous, match.index)),
-                );
-                const argument = elements.at(Number(match.at(1)) - 1);
-                const value = sqlText(context, argument);
-                const visibility = nonprivateValue(context, argument);
-                replaced = joinSql(
-                  replaced,
-                  value !== null && value.ownedIds.size > 0
-                    ? value
-                    : visibility === null
-                      ? plainSql(match[0])
-                      : plainSql(`'${visibility}'`),
-                );
-                previous = match.index + match[0].length;
+            const start = context.sourceCode.getLocFromIndex(
+              node.range[0],
+            ).line;
+            const end = context.sourceCode.getLocFromIndex(
+              node.range[1] - 1,
+            ).line;
+            for (let line = start; line <= end; line++) {
+              if (
+                enforcesLine({
+                  guard: "no-unowned-workspace-insert",
+                  file,
+                  line,
+                })
+              ) {
+                return true;
               }
-              source = joinSql(replaced, plainSql(text.slice(previous)));
             }
-            reportSql(node, source);
-          },
-          TaggedTemplateExpression(node) {
-            if (!isAstNode(node)) {
+            return false;
+          };
+          const reportSql = (node: AstNode, source: SqlSource | null) => {
+            if (
+              source === null ||
+              !enforces(node) ||
+              reported.has(node.range[0]) ||
+              !hasUnownedWorkspaceInsert(
+                source.text,
+                trustedCallback(context, node) === null
+                  ? new Set()
+                  : source.ownedIds,
+              ) ||
+              historicalInsert(context, node, source.text) ||
+              refusalTest(context, node, source.text)
+            ) {
               return;
             }
-            if (
-              !isAstNode(node.parent) ||
-              node.parent.type !== "CallExpression"
-            ) {
-              reportSql(node, sqlText(context, node));
-            }
-          },
-        };
+            reported.add(node.range[0]);
+            context.report({ node, messageId: "unowned" });
+          };
+          return {
+            before() {
+              reported.clear();
+              const filename = filenameForContext(context);
+              return (
+                (filename.includes("apps/api/") ||
+                  filename.includes(
+                    ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.",
+                  )) &&
+                !filename.endsWith(`${OWNER}.ts`)
+              );
+            },
+            CallExpression(node) {
+              if (!isAstNode(node)) {
+                return;
+              }
+              const callee = unwrapExpression(node.callee);
+              if (
+                callee?.type !== "MemberExpression" ||
+                !Array.isArray(node.arguments)
+              ) {
+                return;
+              }
+              const method = getPropertyName(callee.property);
+              if (method === "insert") {
+                const table = resolveImport(context, node.arguments.at(0));
+                if (
+                  table?.imported !== "workspaces" ||
+                  !SCHEMA.has(table.moduleId)
+                ) {
+                  return;
+                }
+                const valuesMember = node.parent;
+                const values = isAstNode(valuesMember)
+                  ? valuesMember.parent
+                  : null;
+                if (
+                  isAstNode(valuesMember) &&
+                  valuesMember.type === "MemberExpression" &&
+                  getPropertyName(valuesMember.property) === "values" &&
+                  isAstNode(values) &&
+                  values.type === "CallExpression" &&
+                  Array.isArray(values.arguments) &&
+                  (nonprivateRows(context, values.arguments.at(0)) ||
+                    (() => {
+                      const callback = trustedCallback(context, node);
+                      return (
+                        callback !== null &&
+                        fromNormalizedRows(
+                          context,
+                          values.arguments.at(0),
+                          callback,
+                          false,
+                        )
+                      );
+                    })())
+                ) {
+                  return;
+                }
+                if (enforces(isAstNode(values) ? values : node)) {
+                  context.report({ node, messageId: "unowned" });
+                }
+                return;
+              }
+              if (
+                !["query", "execute", "exec", "unsafe", "raw"].includes(
+                  method ?? "",
+                )
+              ) {
+                return;
+              }
+              let source = sqlText(context, node.arguments.at(0));
+              const parameters = initializerOf(context, node.arguments.at(1));
+              if (
+                source !== null &&
+                parameters?.type === "ArrayExpression" &&
+                Array.isArray(parameters.elements)
+              ) {
+                const elements = parameters.elements;
+                const text = source.text;
+                let replaced = plainSql("");
+                let previous = 0;
+                for (const match of text.matchAll(/\$(\d+)/gu)) {
+                  replaced = joinSql(
+                    replaced,
+                    plainSql(text.slice(previous, match.index)),
+                  );
+                  const argument = elements.at(Number(match.at(1)) - 1);
+                  const value = sqlText(context, argument);
+                  const visibility = nonprivateValue(context, argument);
+                  replaced = joinSql(
+                    replaced,
+                    value !== null && value.ownedIds.size > 0
+                      ? value
+                      : visibility === null
+                        ? plainSql(match[0])
+                        : plainSql(`'${visibility}'`),
+                  );
+                  previous = match.index + match[0].length;
+                }
+                source = joinSql(replaced, plainSql(text.slice(previous)));
+              }
+              reportSql(node, source);
+            },
+            TaggedTemplateExpression(node) {
+              if (!isAstNode(node)) {
+                return;
+              }
+              if (
+                !isAstNode(node.parent) ||
+                node.parent.type !== "CallExpression"
+              ) {
+                reportSql(node, sqlText(context, node));
+              }
+            },
+          };
+        },
       },
     },
-  },
-});
+  });
+
+export default createWorkspaceInsertPlugin();
