@@ -82,6 +82,7 @@ const MODEL_CATALOG_INPUTS = [
 
 const TRANSITIVE_GENERATOR_INPUTS = {
   "account-export-tables": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/handlers/case-law/*",
@@ -192,6 +193,10 @@ const TRANSITIVE_GENERATOR_INPUTS = {
   ],
   "chat-transcripts": ["packages/scripts/src/child-exit-status.ts"],
   "cli-registry": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
+    "apps/api/src/lib/imports/external-ref.ts",
+    "apps/api/src/lib/imports/upsert-by-external-id.ts",
+    "apps/api/src/lib/uploads/import-origin.ts",
     "apps/api/src/lib/idempotency/*",
     "apps/api/src/agent-auth/credential-storage.ts",
     "apps/api/src/agent-auth/credentials.ts",
@@ -661,6 +666,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/generated-source-hash.ts",
   ],
   "status-tables": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/handlers/case-law/*",
@@ -766,6 +772,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "scripts/oxlint-presets/*",
   ],
   "transition-triggers": [
+    "apps/api/src/lib/imports/external-ref-limits.ts",
     "apps/api/src/*",
     "apps/api/src/db/*",
     "apps/api/src/db/schema/*",
