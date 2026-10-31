@@ -196,7 +196,9 @@ const listLocalMigrations = async (
     return [];
   }
   return await Promise.all(
-    readdirSync(migrationsDir)
+    readdirSync(migrationsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map(({ name }) => name)
       .filter((name) =>
         existsSync(nodePath.join(migrationsDir, name, "migration.sql")),
       )

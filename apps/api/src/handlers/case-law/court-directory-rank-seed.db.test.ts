@@ -18,7 +18,9 @@ import {
 } from "@/api/tests/query-plans/plan-walker";
 
 const migrationsDir = nodePath.resolve(import.meta.dir, "../../../drizzle");
-const seedMigrations = readdirSync(migrationsDir)
+const seedMigrations = readdirSync(migrationsDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory())
+  .map(({ name }) => name)
   .filter((directory) =>
     directory.includes("_case_law_court_directory_rank_seed"),
   )

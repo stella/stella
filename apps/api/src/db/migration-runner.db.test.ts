@@ -111,7 +111,11 @@ const withCorpusBundle = async (work: (folder: string) => Promise<void>) => {
   let guardedRoleCreations = 0;
   const sources: { file: string; source: string }[] = [];
   try {
-    for (const name of readdirSync(CORPUS_DIR)) {
+    for (const entry of readdirSync(CORPUS_DIR, { withFileTypes: true })) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      const { name } = entry;
       const source = nodePath.join(CORPUS_DIR, name, "migration.sql");
       if (!existsSync(source)) {
         continue;

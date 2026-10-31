@@ -487,7 +487,9 @@ describe.skipIf(!enabled)("immutable function dependent-index rebuilds", () => {
 
   test("immutable replacements from the cutover revision have registered rebuilds", async () => {
     const root = path.resolve(import.meta.dir, "../../drizzle");
-    const migrations = readdirSync(root)
+    const migrations = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map(({ name }) => name)
       .filter(
         (directory) =>
           /^\d{14}_/u.test(directory) &&
