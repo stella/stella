@@ -153,6 +153,7 @@ export const DOC_SOURCES = {
       "expo-document-picker",
       "expo-doctor",
       "expo-font",
+      "expo-glass-effect",
       "expo-notifications",
       "expo-linking",
       "expo-router",
