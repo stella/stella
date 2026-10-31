@@ -14803,7 +14803,49 @@
         }
       ]
     },
-    "20261030213017_scheduler_table_leases": {
+    "20261030193033_database_temporary_owner_only": {
+      "hash": "c6aaddf21e3a73a836d3fd6e79422bf8e001310b3595ed31fcf6e367b4c5fb97",
+      "locks": [
+        {
+          "relation": "*",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ]
+    },
+    "20261031001825_import_provenance": {
+      "hash": "b7d82a5714965fc121cc3c0bf5b2fd28d39434e352d650e7fb076b4fd470ad95",
+      "locks": [
+        {
+          "relation": "contacts",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "correspondence",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "expenses",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "invoices",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "time_entries",
+          "mode": "ACCESS EXCLUSIVE"
+        },
+        {
+          "relation": "workspaces",
+          "mode": "ACCESS EXCLUSIVE"
+        }
+      ]
+    },
+    "20261031001925_validate_import_provenance": {
+      "hash": "e3e812c373c3739bdf28f5615843cbc37934c61501197af1e88ca994d94c48ee",
+      "locks": []
+    },
+    "20261031125456_scheduler_table_leases": {
       "hash": "3a1767d06e812066c41d1fad9576a25cd488f499b7244a861d7b294433627608",
       "locks": [
         {

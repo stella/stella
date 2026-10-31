@@ -14,7 +14,7 @@ import {
 } from "../lib/scheduler/lease-timing";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
-export const TABLE_LEASE_MIGRATION = "20261030213017_scheduler_table_leases";
+export const TABLE_LEASE_MIGRATION = "20261031125456_scheduler_table_leases";
 const HOLDER_REPORT_LIMIT = 100;
 const MIGRATION_TABLE_LEASE_WAIT_MS =
   DEFAULT_LEASE_MS + defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
