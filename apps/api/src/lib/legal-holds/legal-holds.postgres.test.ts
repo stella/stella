@@ -5,6 +5,8 @@ import { eq, inArray } from "drizzle-orm";
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   auditLogs,
   chatThreads,
@@ -25,6 +27,9 @@ import { rollbackUnpersistedChatSideEffects } from "@/api/handlers/chat/send-mes
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { moveEntities } from "@/api/handlers/entities/move";
+import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/contacts/create";
+import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/contacts/delete";
+import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -818,6 +823,201 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               .from(chatThreads)
               .where(eq(chatThreads.id, threadId)),
           ).toEqual([{ id: threadId }]);
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    });
+
+    test("held matter contact relationships cannot be removed or raced by contact deletion", async () => {
+      if (!databaseUrl) {
+        throw new TypeError("DATABASE_URL is required for Postgres tests");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        const workspaceId = createSafeId<"workspace">();
+        const linkedContactId = createSafeId<"contact">();
+        const raceContactId = createSafeId<"contact">();
+        const replacementContactId = createSafeId<"contact">();
+        const workspaceContactId = createSafeId<"workspaceContact">();
+        const recordAuditEvent = createAuditRecorder({
+          organizationId,
+          workspaceId,
+          userId,
+          request: new Request("http://localhost/legal-hold-contacts"),
+          server: null,
+        });
+        const safeDbFor =
+          (tx: Transaction): SafeDb =>
+          async (run) =>
+            await Result.tryPromise(async () => await run(tx));
+        try {
+          await db.insert(user).values({
+            id: userId,
+            name: "Contact hold owner",
+            email: `${userId}@hold.test`,
+          });
+          await db.insert(organization).values({
+            id: organizationId,
+            name: "Contact hold organization",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            userId,
+            role: "owner",
+            createdAt: new Date(),
+          });
+          await db.insert(contacts).values(
+            [linkedContactId, raceContactId, replacementContactId].map(
+              (id, index) => ({
+                id,
+                organizationId,
+                type: "person" as const,
+                displayName: `Held contact ${index + 1}`,
+              }),
+            ),
+          );
+          await db.insert(workspaces).values({
+            id: workspaceId,
+            organizationId,
+            name: "Held contact matter",
+            reference: "HOLD-CONTACTS",
+            clientId: linkedContactId,
+          });
+          await db.insert(workspaceContacts).values({
+            id: workspaceContactId,
+            organizationId,
+            workspaceId,
+            contactId: linkedContactId,
+            role: "witness",
+          });
+          await db.insert(legalHolds).values({
+            id: createSafeId<"legalHold">(),
+            organizationId,
+            scopeType: "matter",
+            workspaceId,
+            reason: "Retain matter contacts",
+            placedBy: userId,
+          });
+
+          const safeDb = createSafeDb(
+            markRlsDatabase(db),
+            [workspaceId],
+            organizationId,
+            userId,
+          );
+          const unlink = await Result.gen(() =>
+            deleteWorkspaceContactHandler({
+              safeDb,
+              organizationId,
+              workspaceId,
+              workspaceContactId,
+              recordAuditEvent,
+            }),
+          );
+          expect(unlink.isErr()).toBe(true);
+          if (unlink.isErr()) {
+            expect(resolveHandlerError(unlink.error)).toMatchObject({
+              code: LEGAL_HOLD_ACTIVE,
+            });
+          }
+
+          const clientChange = await Result.gen(() =>
+            updateWorkspaceHandler({
+              safeDb,
+              organizationId,
+              workspaceId,
+              recordAuditEvent,
+              body: { clientId: replacementContactId },
+            }),
+          );
+          expect(clientChange.isErr()).toBe(true);
+          if (clientChange.isErr()) {
+            expect(resolveHandlerError(clientChange.error)).toMatchObject({
+              code: LEGAL_HOLD_ACTIVE,
+            });
+          }
+
+          const linkedDelete = await Result.gen(() =>
+            deleteContactHandler({
+              safeDb,
+              organizationId,
+              contactId: linkedContactId,
+              recordAuditEvent,
+            }),
+          );
+          expect(linkedDelete.isErr()).toBe(true);
+          if (linkedDelete.isErr()) {
+            expect(resolveHandlerError(linkedDelete.error)).toMatchObject({
+              code: LEGAL_HOLD_ACTIVE,
+            });
+          }
+
+          await withInterleaving({
+            databaseUrl,
+            schedules: [["a.link", "b.delete", "a.commit", "b.commit"]],
+            a: {
+              steps: [
+                {
+                  name: "link",
+                  run: async (tx) => {
+                    const result = await Result.gen(() =>
+                      createWorkspaceContactHandler({
+                        safeDb: safeDbFor(tx),
+                        organizationId,
+                        workspaceId,
+                        recordAuditEvent,
+                        body: { contactId: raceContactId, role: "witness" },
+                      }),
+                    );
+                    expect(result.isOk()).toBe(true);
+                  },
+                },
+              ],
+            },
+            b: {
+              steps: [
+                {
+                  name: "delete",
+                  run: async (tx) => {
+                    await Result.gen(() =>
+                      deleteContactHandler({
+                        safeDb: safeDbFor(tx),
+                        organizationId,
+                        contactId: raceContactId,
+                        recordAuditEvent,
+                      }),
+                    );
+                  },
+                },
+              ],
+            },
+            reset: async () => {
+              await db
+                .delete(workspaceContacts)
+                .where(eq(workspaceContacts.contactId, raceContactId));
+            },
+            readState: async () => ({
+              contact: await db.query.contacts.findFirst({
+                where: { id: { eq: raceContactId } },
+              }),
+              link: await db.query.workspaceContacts.findFirst({
+                where: { contactId: { eq: raceContactId } },
+              }),
+            }),
+            invariant: ({ state }) => {
+              expect(state.contact).toBeDefined();
+              expect(state.link).toBeDefined();
+            },
+          });
         } finally {
           await db
             .delete(organization)

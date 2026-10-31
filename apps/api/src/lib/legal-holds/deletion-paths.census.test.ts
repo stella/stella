@@ -7,13 +7,28 @@ const SOURCE_ROOTS = {
   scripts: new URL("../../../scripts/", import.meta.url).pathname,
 };
 const PROTECTED_TABLES = new Set([
+  "organization",
   "workspaces",
+  "workspaceContacts",
   "entities",
   "entityVersions",
-  "chatThreads",
+  "fields",
   "userFiles",
   "contacts",
+  "chatThreads",
   "organizationFileObjects",
+]);
+const PROTECTED_SQL_TABLES = new Map([
+  ["organization", "organization"],
+  ["workspaces", "workspaces"],
+  ["workspace_contacts", "workspaceContacts"],
+  ["entities", "entities"],
+  ["entity_versions", "entityVersions"],
+  ["fields", "fields"],
+  ["user_files", "userFiles"],
+  ["contacts", "contacts"],
+  ["chat_threads", "chatThreads"],
+  ["organization_file_objects", "organizationFileObjects"],
 ]);
 const STORAGE_DELETIONS = new Set([
   "deleteOrganizationFileWithSignal",
@@ -33,6 +48,46 @@ const HOLD_CHECKS = new Set([
 // Each entry names the concrete ownership boundary that permits this module's
 // deletions. The reverse census removes exceptions when their call sites vanish.
 const EXCEPTIONS = new Map([
+  [
+    "scripts/backfill-organization-file-usage.helpers.ts",
+    "The repair removes stale usage projections only; source files and matter evidence remain intact.",
+  ],
+  [
+    "scripts/seed-dev.ts",
+    "Development fixture replacement operates only on disposable seeded data outside production request paths.",
+  ],
+  [
+    "lib/organization-storage-teardown.ts",
+    "Organization teardown is reached only after its transaction has excluded active holds and recorded retained storage.",
+  ],
+  [
+    "lib/workflow-queue.ts",
+    "Workflow field replacement removes run-owned transient outputs before atomically writing their successor values.",
+  ],
+  [
+    "lib/fields/write-field.ts",
+    "Manual field writes atomically replace a derived field value; legal holds retain the source entity versions and files.",
+  ],
+  [
+    "lib/files/delete-organization-file.ts",
+    "Canonical file deletion owner performs its legal-hold check in the surrounding transaction callback.",
+  ],
+  [
+    "lib/files/organization-file-usage.ts",
+    "Usage reconciliation deletes stale projection rows only and never deletes the source file object.",
+  ],
+  [
+    "handlers/chat/send-message-side-effects.ts",
+    "Failed-send rollback deletes only a newly created empty thread identified by its private rollback token.",
+  ],
+  [
+    "handlers/chat/upload-files.ts",
+    "Upload rollback delegates persistent-object removal to the guarded organization-file deletion owner.",
+  ],
+  [
+    "handlers/entities/copy.ts",
+    "Failed-copy rollback delegates object removal to guarded file deletion after the copy transaction aborts.",
+  ],
   [
     "scripts/backfill-image-thumbnails.ts",
     "Obsolete thumbnail cleanup delegates to the guarded organization-file deletion owner.",
@@ -176,8 +231,7 @@ const EXCEPTIONS = new Map([
 ]);
 
 type DeletionCensus = {
-  deletions: string[];
-  guarded: boolean;
+  deletions: { location: string; guarded: boolean }[];
 };
 
 const censusSource = (source: string): DeletionCensus => {
@@ -217,17 +271,51 @@ const censusSource = (source: string): DeletionCensus => {
     }
     return undefined;
   };
-  const deletions: string[] = [];
-  let guarded = false;
+  const guardOwners = new Set<ts.Node>();
+  const transactionOwner = (node: ts.Node): ts.Node => {
+    let current = node.parent;
+    let nearestFunction: ts.Node | undefined;
+    while (!ts.isSourceFile(current)) {
+      if (ts.isFunctionLike(current)) {
+        nearestFunction ??= current;
+        const parent = current.parent;
+        if (
+          (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+          ts.isCallExpression(parent) &&
+          parent.arguments.includes(current) &&
+          ["safeDb", "transaction"].includes(
+            canonicalName(parent.expression) ?? "",
+          )
+        ) {
+          return current;
+        }
+      }
+      current = current.parent;
+    }
+    return nearestFunction ?? file;
+  };
+  const findGuards = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      ownerChecks.has(node.expression.text)
+    ) {
+      guardOwners.add(transactionOwner(node));
+    }
+    ts.forEachChild(node, findGuards);
+  };
+  findGuards(file);
+  const deletions: { location: string; guarded: boolean }[] = [];
+  const recordDeletion = (node: ts.Node, name: string): void => {
+    const { line } = file.getLineAndCharacterOfPosition(node.getStart(file));
+    deletions.push({
+      location: `${line + 1}:${name}`,
+      guarded: guardOwners.has(transactionOwner(node)),
+    });
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isCallExpression(node)) {
       const name = canonicalName(node.expression);
-      if (
-        ts.isIdentifier(node.expression) &&
-        ownerChecks.has(node.expression.text)
-      ) {
-        guarded = true;
-      }
       const argument = node.arguments.at(0);
       const table = argument && canonicalName(argument);
       const tableDeletion =
@@ -251,16 +339,27 @@ const censusSource = (source: string): DeletionCensus => {
         sdkDeletion ||
         bunStorageDeletion
       ) {
-        const { line } = file.getLineAndCharacterOfPosition(
-          node.getStart(file),
+        recordDeletion(node, tableDeletion ? table : name);
+      }
+    }
+    if (ts.isTaggedTemplateExpression(node)) {
+      const tag = canonicalName(node.tag);
+      if (tag === "sql") {
+        const raw = node.template.getText(file);
+        const match = /\bDELETE\s+FROM\s+(?:public\.)?["']?([a-z_]+)/iu.exec(
+          raw,
         );
-        deletions.push(`${line + 1}:${tableDeletion ? table : name}`);
+        const table = match?.at(1);
+        const canonicalTable = table && PROTECTED_SQL_TABLES.get(table);
+        if (canonicalTable) {
+          recordDeletion(node, canonicalTable);
+        }
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(file);
-  return { deletions, guarded };
+  return { deletions };
 };
 
 const mapsHoldRefusal = (source: string): boolean => {
@@ -352,10 +451,12 @@ const handlesLegalHoldActiveError = (source: string): boolean => {
 };
 
 const uncoveredModule = (path: string, source: string): string[] => {
-  const { deletions, guarded } = censusSource(source);
-  return guarded || EXCEPTIONS.has(path)
+  const { deletions } = censusSource(source);
+  return EXCEPTIONS.has(path)
     ? []
-    : deletions.map((deletion) => `${path}:${deletion}`);
+    : deletions
+        .filter(({ guarded }) => !guarded)
+        .map(({ location }) => `${path}:${location}`);
 };
 
 // Test modules and isolated fixture helpers own disposable test databases;
@@ -450,6 +551,40 @@ describe("legal hold deletion path census", () => {
     `,
       ),
     ).toHaveLength(1);
+  });
+
+  test("a guard in one transaction does not cover a second delete call", () => {
+    const source = `
+      import { requireNoHold } from "@/api/lib/legal-holds/holds";
+      await safeDb(async (tx) => {
+        await requireNoHold({ tx, organizationId, target });
+        await tx.delete(contacts);
+      });
+      await safeDb(async (tx) => {
+        await tx.delete(workspaceContacts);
+      });
+    `;
+    const census = censusSource(source);
+    expect(census.deletions.map(({ guarded }) => guarded)).toEqual([
+      true,
+      false,
+    ]);
+    expect(uncoveredModule("handlers/fixture/delete.ts", source)).toHaveLength(
+      1,
+    );
+  });
+
+  test("raw DELETE FROM calls require a hold check", () => {
+    const source =
+      "await tx.execute(sql`DELETE FROM workspace_contacts WHERE id = " +
+      "$" +
+      "{id}`);";
+    expect(censusSource(source).deletions).toEqual([
+      { location: "1:workspaceContacts", guarded: false },
+    ]);
+    expect(uncoveredModule("handlers/fixture/raw-delete.ts", source)).toEqual([
+      "handlers/fixture/raw-delete.ts:1:workspaceContacts",
+    ]);
   });
 
   // timeout: the census parses every production module in the API and worker trees.

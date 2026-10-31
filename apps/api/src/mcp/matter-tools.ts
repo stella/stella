@@ -2400,6 +2400,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
     const removed = await Result.gen(() =>
       deleteWorkspaceContactHandler({
         safeDb: context.safeDb,
+        organizationId: context.organizationId,
         workspaceId,
         workspaceContactId,
         recordAuditEvent,

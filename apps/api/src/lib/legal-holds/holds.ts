@@ -168,7 +168,11 @@ export const holdsBlocking = async ({
 }: HoldOptions): Promise<
   { type: "clear" } | { type: "held"; holds: HoldSummary[] }
 > => {
-  await lockLegalHoldOrganization({ tx, organizationId, mode: "share" });
+  await lockLegalHoldOrganization({
+    tx,
+    organizationId,
+    mode: target.type === "contacts" ? "update" : "share",
+  });
   const rows = await readLockedLegalHolds({
     tx,
     predicate:
