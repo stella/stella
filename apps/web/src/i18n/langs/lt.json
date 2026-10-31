@@ -1799,7 +1799,7 @@
       "unavailable": "Nepavyko parinkti diagramos. Rodoma lentelė.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Dirbama su kontekstu",
+    "thinking": "Mąstymas",
     "threadFiles": {
       "title": "Šio pokalbio failai"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "stellai reikia jūsų",
       "replyReadyBody": "stella baigė atsakyti jūsų pokalbyje.",
       "replyReadyTitle": "Atsakymas paruoštas"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Laukiama patvirtinimo",
+      "waitingForInput": "Laukiama įvesties",
+      "writing": "Rašoma"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",

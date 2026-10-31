@@ -1799,7 +1799,7 @@
       "unavailable": "تعذّر اختيار رسم بياني. يتم عرض الجدول.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "العمل مع السياق",
+    "thinking": "جارٍ التفكير",
     "threadFiles": {
       "title": "الملفات في هذه الدردشة"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "تحتاج stella إلى مدخلاتك",
       "replyReadyBody": "أنهت stella الرد في الدردشة.",
       "replyReadyTitle": "الرد جاهز"
+    },
+    "turnStatus": {
+      "waitingForApproval": "في انتظار الموافقة",
+      "waitingForInput": "في انتظار الإدخال",
+      "writing": "جارٍ الكتابة"
     },
     "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",

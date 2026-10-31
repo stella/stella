@@ -1799,7 +1799,7 @@
       "unavailable": "Impossible de sélectionner un graphique. Le tableau est affiché.",
       "values": "{label} : {value, number}"
     },
-    "thinking": "Traitement du contexte",
+    "thinking": "Réflexion",
     "threadFiles": {
       "title": "Fichiers de cette conversation"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "stella a besoin de vous",
       "replyReadyBody": "stella a fini de répondre dans votre conversation.",
       "replyReadyTitle": "Réponse prête"
+    },
+    "turnStatus": {
+      "waitingForApproval": "En attente d’approbation",
+      "waitingForInput": "En attente de saisie",
+      "writing": "Rédaction"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",

@@ -178,7 +178,6 @@ const ChatThreadDomPage = ({
               sendNow: session.sendQueuedMessageNow,
             }}
             queuedMessages={session.queuedMessages}
-            showThinkingIndicator
             streamdownComponents={session.streamdownComponents}
             threadRef={threadRef}
           />

@@ -351,7 +351,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -375,7 +374,6 @@ describe("chat thread messages", () => {
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
-        showThinkingIndicator={false}
         streamdownComponents={{
           a: ({ children, ...props }) => <a {...props}>{children}</a>,
         }}
@@ -1060,8 +1058,9 @@ describe("chat thread messages", () => {
         "Reading cited documents with create-document.",
       );
       expect(output).not.toContain("**");
-      expect(output).not.toContain('data-slot="loader"');
-      expect(output).not.toContain("Working with context");
+      expect(output.match(/data-slot="loader"/gu)).toHaveLength(1);
+      expect(output.match(/data-turn-live-status/gu)).toHaveLength(1);
+      expect(renderedText(output)).toContain(messages.chat.thinking);
     }
   });
 

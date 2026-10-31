@@ -1799,7 +1799,7 @@
       "unavailable": "Nie udało się wybrać wykresu. Wyświetlana jest tabela.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Pracuję z kontekstem",
+    "thinking": "Myślenie",
     "threadFiles": {
       "title": "Pliki w tym czacie"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "stella potrzebuje Twojej reakcji",
       "replyReadyBody": "stella skończyła odpowiadać na czacie.",
       "replyReadyTitle": "Odpowiedź gotowa"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Oczekiwanie na zatwierdzenie",
+      "waitingForInput": "Oczekiwanie na dane",
+      "writing": "Pisanie"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",

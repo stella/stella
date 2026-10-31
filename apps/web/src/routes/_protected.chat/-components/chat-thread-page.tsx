@@ -722,7 +722,6 @@ export const ChatThreadPage = ({
                           sendNow: sendQueuedMessageNow,
                         }}
                         queuedMessages={queuedMessages}
-                        showThinkingIndicator
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
                         threadRef={threadRef}

@@ -1799,7 +1799,7 @@
       "unavailable": "Não foi possível selecionar um gráfico. A tabela é exibida.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Trabalhando com contexto",
+    "thinking": "Raciocinando",
     "threadFiles": {
       "title": "Arquivos deste chat"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "A stella precisa de você",
       "replyReadyBody": "A stella terminou de responder no seu chat.",
       "replyReadyTitle": "Resposta pronta"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Aguardando aprovação",
+      "waitingForInput": "Aguardando informações",
+      "writing": "Escrevendo"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",

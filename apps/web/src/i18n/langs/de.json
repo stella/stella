@@ -1799,7 +1799,7 @@
       "unavailable": "Es konnte kein Diagramm ausgewählt werden. Die Tabelle wird angezeigt.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Arbeite mit Kontext",
+    "thinking": "Nachdenken",
     "threadFiles": {
       "title": "Dateien in diesem Chat"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "stella braucht Ihre Eingabe",
       "replyReadyBody": "stella hat in Ihrem Chat fertig geantwortet.",
       "replyReadyTitle": "Antwort fertig"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Warten auf Genehmigung",
+      "waitingForInput": "Warten auf Eingabe",
+      "writing": "Antwort wird verfasst"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",

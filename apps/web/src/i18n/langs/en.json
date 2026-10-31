@@ -1799,7 +1799,7 @@
       "unavailable": "A chart could not be selected. The table is shown.",
       "values": "{label}: {value, number}"
     },
-    "thinking": "Working with context",
+    "thinking": "Thinking",
     "threadFiles": {
       "title": "Files in this chat"
     },
@@ -1920,6 +1920,11 @@
       "needsInputTitle": "stella needs your input",
       "replyReadyBody": "stella finished answering in your chat.",
       "replyReadyTitle": "Reply ready"
+    },
+    "turnStatus": {
+      "waitingForApproval": "Waiting for approval",
+      "waitingForInput": "Waiting for input",
+      "writing": "Writing"
     },
     "unsupportedFileType": "Unsupported file type",
     "uploadFailed": "Failed to process file",
