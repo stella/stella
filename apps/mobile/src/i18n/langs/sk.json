@@ -140,7 +140,9 @@
     },
     "add": "Pridať",
     "scanDocument": "Naskenovať dokument",
-    "newTask": "Nová úloha"
+    "newTask": "Nová úloha",
+    "uploadDocument": "Nahrať dokument",
+    "uploadFailed": "Dokument sa nepodarilo nahrať. Skúste to znova."
   },
   "entity": {
     "type": "Typ",
