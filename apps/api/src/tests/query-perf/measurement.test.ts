@@ -95,6 +95,14 @@ test("scheduled write budgets fail closed and enforce both write limits", () => 
   expect(
     scheduledJobBudgetProblems(
       "scheduled.caseLaw.reportFreshness",
+      measured(1, 0),
+    ),
+  ).toContain(
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
+  );
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
       measured(0, 1),
     ),
   ).toContain(

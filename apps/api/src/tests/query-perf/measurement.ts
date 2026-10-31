@@ -190,7 +190,10 @@ export const scheduledJobBudgetProblems = (
     }
   }
   const writes = "writes" in budget ? budget.writes : undefined;
-  if (measured.writeMetrics.sharedBlocks > 0 && writes === undefined) {
+  if (
+    (measured.writtenRows > 0 || measured.writeMetrics.sharedBlocks > 0) &&
+    writes === undefined
+  ) {
     problems.push(`${id}: measured writes but declares no write budget`);
     return problems;
   }
