@@ -29,6 +29,7 @@ import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
@@ -326,8 +327,8 @@ const sendAccepts = async (chat: Chat): Promise<ReadonlySet<string>> => {
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled: false,
       recordAuditEvent: async () => undefined,
-      request: new Request("http://localhost/v1/chat/send"),
-      route: "/v1/chat/send",
+      request: new Request("http://localhost/v1/chat"),
+      route: "/v1/chat" satisfies ApiRoutePath,
     }),
   );
   expect(result).toBeInstanceOf(Response);

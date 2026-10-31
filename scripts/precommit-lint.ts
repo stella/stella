@@ -4,7 +4,7 @@
  * Lint autofixes are code changes, and some change behaviour, so they never
  * reach a commit unseen. The hook runs the fix pass, and when it would change
  * a staged file it prints the change, restores the file and fails. Nothing is
- * left modified for another step's `stage_fixed` to sweep into the commit, so
+ * left modified for a later `git add` to sweep into the commit, so
  * a fix pass can neither rewrite code behind a passing hook nor turn a commit
  * empty. Apply the fixes deliberately with `--apply`, review `git diff`, stage
  * and commit again.
@@ -15,7 +15,8 @@
  * runtime error. CI's lint still reports them; fix those by hand.
  *
  * Run: `bun scripts/precommit-lint.ts [--apply] <files...>` (lefthook passes
- * the staged files).
+ * the staged paths scripts/precommit-paths.ts prints, which in a merge commit
+ * are only the paths that differ from every parent).
  */
 
 import {
@@ -86,37 +87,6 @@ const unifiedDiff = (file: string, before: string, after: string): string => {
     .replace("+++ b/after", () => `+++ b/${file}`);
 };
 
-const gitObject = (cwd: string, spec: string): string | null => {
-  const result = Bun.spawnSync(["git", "rev-parse", "-q", "--verify", spec], {
-    cwd,
-  });
-  return result.exitCode === 0 ? result.stdout.toString().trim() : null;
-};
-
-/**
- * The staged files a commit actually changes. During a merge a staged file
- * whose content equals one parent was already linted on that parent's line
- * (it is main's file, or the branch's own file); only conflict resolutions and
- * content new to both parents are linted, so baselined findings in untouched
- * main files cannot block a merge commit.
- */
-export const mergeScopedFiles = (
-  files: readonly string[],
-  cwd: string = process.cwd(),
-): string[] => {
-  if (gitObject(cwd, "MERGE_HEAD") === null) {
-    return [...files];
-  }
-  return files.filter((file) => {
-    const staged = gitObject(cwd, `:${file}`);
-    return (
-      staged === null ||
-      (staged !== gitObject(cwd, `HEAD:${file}`) &&
-        staged !== gitObject(cwd, `MERGE_HEAD:${file}`))
-    );
-  });
-};
-
 export type PrecommitLintResult = {
   exitCode: number;
   changed: string[];
@@ -161,7 +131,7 @@ export const runPrecommitLint = (
 
 const main = () => {
   const apply = Bun.argv[2] === "--apply";
-  const files = mergeScopedFiles(Bun.argv.slice(apply ? 3 : 2));
+  const files = Bun.argv.slice(apply ? 3 : 2);
   if (files.length === 0) {
     return;
   }

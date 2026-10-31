@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { CONTACT_DATE_TIME_ZONE } from "@stll/api-contract/contact-date";
 import { assertProperty } from "@stll/property-testing";
+import { foldSearchMatchText } from "@stll/text-normalize";
+import { Temporal } from "@stll/time";
 
 import {
   birthDateDraft,
@@ -52,6 +55,16 @@ describe("person date of birth precision", () => {
     ).toBeNull();
     expect(
       parseBirthDateDraft({
+        precision: "year",
+        year: String(
+          Temporal.Now.plainDateISO(CONTACT_DATE_TIME_ZONE).year + 1,
+        ),
+        month: "",
+        day: "",
+      }),
+    ).toBeNull();
+    expect(
+      parseBirthDateDraft({
         precision: "day",
         year: "1900",
         month: "2",
@@ -82,62 +95,60 @@ describe("nationality query filtering", () => {
       filterNationalityOptions({
         countries,
         query: "  ČESK  ",
-        locale: "cs",
       }),
     ).toEqual(countries.slice(0, 1).concat(countries.slice(3, 4)));
     expect(
       filterNationalityOptions({
         countries,
         query: "cz",
-        locale: "cs",
       }),
     ).toEqual(countries.slice(0, 1));
     expect(
       filterNationalityOptions({
         countries,
         query: "  ",
-        locale: "cs",
       }),
     ).toEqual(countries);
-    expect(
-      filterNationalityOptions({ countries: [], query: "cz", locale: "cs" }),
-    ).toEqual([]);
+    expect(filterNationalityOptions({ countries: [], query: "cz" })).toEqual(
+      [],
+    );
   });
 
-  test("retains accents, literal punctuation, inflections, and field boundaries", () => {
+  test("ignores accents and case, keeps punctuation literal and fields apart", () => {
     expect(
       filterNationalityOptions({
         countries,
         query: "cesk",
-        locale: "cs",
       }),
-    ).toEqual([]);
+    ).toEqual(countries.slice(0, 1).concat(countries.slice(3, 4)));
+    expect(
+      filterNationalityOptions({
+        countries,
+        query: "NOVAKOV",
+      }),
+    ).toEqual(countries.slice(3, 4));
     expect(
       filterNationalityOptions({
         countries,
         query: "novákov",
-        locale: "cs",
       }),
     ).toEqual(countries.slice(3, 4));
     expect(
       filterNationalityOptions({
         countries,
         query: "[",
-        locale: "cs",
       }),
     ).toEqual(countries.slice(3, 4));
     expect(
       filterNationalityOptions({
         countries,
         query: "republika cz",
-        locale: "cs",
       }),
     ).toEqual([]);
     expect(
       filterNationalityOptions({
         countries,
         query: "česko x[",
-        locale: "cs",
       }),
     ).toEqual([]);
   });
@@ -151,37 +162,33 @@ describe("nationality query filtering", () => {
       filterNationalityOptions({
         countries: options,
         query: "\udc00",
-        locale: "cs",
       }),
     ).toEqual(options.slice(0, 1));
     expect(
       filterNationalityOptions({
         countries: options,
         query: "�",
-        locale: "cs",
       }),
     ).toEqual(options.slice(0, 1));
   });
 
-  test("uses the selected locale for dotted and dotless I", () => {
+  test("dotted and dotless I match plain i in every UI locale", () => {
     expect(
       filterNationalityOptions({
         countries,
         query: "istan",
-        locale: "tr",
       }),
     ).toEqual(countries.slice(2, 3));
     expect(
       filterNationalityOptions({
         countries,
-        query: "istan",
-        locale: "en",
+        query: "ISTAN",
       }),
-    ).toEqual([]);
+    ).toEqual(countries.slice(2, 3));
   });
 });
 
-test("nationality filtering preserves locale substring semantics", () => {
+test("nationality filtering keeps exactly the options a field of which matches", () => {
   const TEST_TEXT_LENGTH = 30;
   const TEST_COUNTRY_COUNT = 10;
   const text = fc
@@ -205,30 +212,23 @@ test("nationality filtering preserves locale substring semantics", () => {
       { maxLength: TEST_TEXT_LENGTH },
     )
     .map((parts) => parts.join(""));
+  const matchesFolded = (field: string, needle: string) =>
+    foldSearchMatchText(field.toWellFormed()).includes(
+      foldSearchMatchText(needle.trim().toWellFormed()),
+    );
   assertProperty(
-    "nationality filtering preserves locale substring semantics",
+    "nationality filtering keeps exactly the options a field of which matches",
     fc.property(
       fc.array(fc.record({ name: text, code: text }), {
         maxLength: TEST_COUNTRY_COUNT,
       }),
       text,
-      fc.constantFrom("cs", "tr", "en"),
-      (countries, query, locale) => {
-        const needle = query.trim().toLocaleLowerCase(locale);
-        const expected = countries.filter(
-          ({ name, code }) =>
-            !needle ||
-            name
-              .toLocaleLowerCase(locale)
-              .toWellFormed()
-              .includes(needle.toWellFormed()) ||
-            code
-              .toLocaleLowerCase(locale)
-              .toWellFormed()
-              .includes(needle.toWellFormed()),
-        );
-        expect(filterNationalityOptions({ countries, query, locale })).toEqual(
-          expected,
+      (countries, query) => {
+        expect(filterNationalityOptions({ countries, query })).toEqual(
+          countries.filter(
+            ({ name, code }) =>
+              matchesFolded(name, query) || matchesFolded(code, query),
+          ),
         );
       },
     ),

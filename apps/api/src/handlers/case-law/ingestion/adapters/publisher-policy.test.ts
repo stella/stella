@@ -132,7 +132,11 @@ describe("the shared publisher gate", () => {
     const rejection = await rejectionOf(reserve());
     expect(rejection).toBeInstanceOf(Error);
     expect(rejection).toMatchObject({
-      message: expect.stringContaining("invalid wait"),
+      code: "limiter_store_unavailable",
+      cause: {
+        message: expect.stringContaining("invalid wait"),
+        _tag: "PublisherGateReplyError",
+      },
     });
   });
 

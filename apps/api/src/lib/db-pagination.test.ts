@@ -123,7 +123,10 @@ describe("createTimestampIdCursorCodec", () => {
     // Wrong arity (single-part payload) is rejected.
     expect(
       codec.decode(
-        Buffer.from(JSON.stringify(["only-one"])).toString("base64url"),
+        Buffer.from(JSON.stringify(["only-one"])).toBase64({
+          alphabet: "base64url",
+          omitPadding: true,
+        }),
       ),
     ).toBeNull();
   });

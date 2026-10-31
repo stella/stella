@@ -1,12 +1,14 @@
-import type { Static } from "@sinclair/typebox";
-import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { t } from "elysia";
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { parseCaseLawDecisionPath } from "@stll/api-contract/case-law-decision-route";
+import {
+  CASE_LAW_JURISDICTIONS,
+  type CaseLawJurisdiction,
+  isCaseLawJurisdiction,
+} from "@stll/api-contract/case-law-jurisdictions";
 import { searchHistoryEntryMatch } from "@stll/api-contract/search-history-identity";
 import { parseStatutePath } from "@stll/api-contract/statute-route";
 import { normalizeUnicode } from "@stll/text-normalize";
@@ -37,102 +39,131 @@ import type {
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
 
-const documentIdSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryTitleMaxLength,
-  description:
+const documentIdSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryTitleMaxLength),
+  v.description(
     "The opened document's public identifier: a decision id or a statute ELI.",
-});
-const titleSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryTitleMaxLength,
-});
-const pathSchema = t.String({
-  minLength: 1,
-  maxLength: LIMITS.searchHistoryPathMaxLength,
-  pattern: "^/law/[A-Za-z0-9_/-]+$",
-  description: "The public law page the entry reopens.",
-});
-
-const unknownDocumentIdentitySchema = t.Object(
-  { kind: t.Literal("unknown") },
-  { additionalProperties: false },
+  ),
 );
-const decisionDocumentIdentitySchema = t.Object(
-  {
-    kind: t.Literal("decision"),
-    courtAbbreviation: t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
-    courtTier: t.Optional(
-      t.Enum(
-        Object.fromEntries(
-          COURT_TIER_LABELS.map((tier) => [tier, tier] as const),
-        ),
-      ),
-    ),
-  },
-  { additionalProperties: false },
+const titleSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryTitleMaxLength),
 );
-const statuteDocumentIdentitySchema = t.Object(
-  {
-    kind: t.Literal("statute"),
-    number: t.Nullable(t.String({ minLength: 1, maxLength: 32 })),
-    year: t.Nullable(
-      t.String({ minLength: 1, maxLength: 4, pattern: "^[0-9]{1,4}$" }),
-    ),
-  },
-  { additionalProperties: false },
+const pathSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchHistoryPathMaxLength),
+  v.regex(/^\/law\/[A-Za-z0-9_/-]+$/u),
+  v.description("The public law page the entry reopens."),
 );
 
-/** One use to record: a typed query, or a decision or statute opened. */
-export const searchHistoryEntryInputSchema = t.Union([
-  t.Object(
-    {
-      kind: t.Literal("search"),
-      query: t.String({
-        minLength: 1,
-        maxLength: LIMITS.searchQueryMaxLength,
-      }),
-    },
-    { additionalProperties: false },
+const unknownDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("unknown"),
+});
+const decisionDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("decision"),
+  courtAbbreviation: v.nullable(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   ),
-  t.Object(
-    {
-      kind: t.Literal("decision"),
-      courtId: t.Optional(
-        t.Nullable(t.String({ minLength: 1, maxLength: 128 })),
+  courtTier: v.optional(
+    v.enum(
+      Object.fromEntries(
+        COURT_TIER_LABELS.map((tier) => [tier, tier] as const),
       ),
-      documentIdentity: t.Optional(
-        t.Union([
-          decisionDocumentIdentitySchema,
-          unknownDocumentIdentitySchema,
-        ]),
-      ),
-      documentId: documentIdSchema,
-      title: titleSchema,
-      path: pathSchema,
-    },
-    { additionalProperties: false },
+    ),
   ),
-  t.Object(
-    {
-      kind: t.Literal("statute"),
-      documentIdentity: t.Optional(
-        t.Union([statuteDocumentIdentitySchema, unknownDocumentIdentitySchema]),
-      ),
-      documentId: documentIdSchema,
-      title: titleSchema,
-      path: pathSchema,
-    },
-    { additionalProperties: false },
+});
+const statuteDocumentIdentitySchema = v.strictObject({
+  kind: v.literal("statute"),
+  number: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+  year: v.nullable(
+    v.pipe(
+      v.string(),
+      v.minLength(1),
+      v.maxLength(4),
+      v.regex(/^[0-9]{1,4}$/u),
+    ),
   ),
+});
+
+// Enum derives its choices without assigning a default to an omitted filter.
+export const searchHistoryCountrySchema = v.pipe(
+  v.enum(
+    Object.fromEntries(
+      CASE_LAW_JURISDICTIONS.map((country) => [country, country] as const),
+    ),
+  ),
+  v.description(
+    "The jurisdiction the law pages were scoped to, as its corpus code (CZE, POL, EU).",
+  ),
+);
+
+const searchQuerySchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(LIMITS.searchQueryMaxLength),
+);
+
+const openedEntrySchemas = [
+  v.strictObject({
+    kind: v.literal("decision"),
+    courtId: v.optional(
+      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+    ),
+    documentIdentity: v.optional(
+      v.union([decisionDocumentIdentitySchema, unknownDocumentIdentitySchema]),
+    ),
+    documentId: documentIdSchema,
+    title: titleSchema,
+    path: pathSchema,
+  }),
+  v.strictObject({
+    kind: v.literal("statute"),
+    documentIdentity: v.optional(
+      v.union([statuteDocumentIdentitySchema, unknownDocumentIdentitySchema]),
+    ),
+    documentId: documentIdSchema,
+    title: titleSchema,
+    path: pathSchema,
+  }),
+] as const;
+
+/**
+ * One use to record: a query typed under a jurisdiction, or a decision or
+ * statute opened. An opened document's jurisdiction is the one its path names.
+ */
+export const searchHistoryEntryInputSchema = v.union([
+  v.strictObject({
+    kind: v.literal("search"),
+    query: searchQuerySchema,
+    country: searchHistoryCountrySchema,
+  }),
+  ...openedEntrySchemas,
 ]);
 
-export type SearchHistoryEntryInput = Static<
-  typeof searchHistoryEntryInputSchema
+/**
+ * What an import reads. A browser kept its searches before they named a
+ * jurisdiction, so an imported query may lack one; it is stored without it
+ * and no country-scoped list shows it.
+ */
+const searchHistoryImportEntrySchema = v.union([
+  v.strictObject({
+    kind: v.literal("search"),
+    query: searchQuerySchema,
+    country: v.optional(searchHistoryCountrySchema),
+  }),
+  ...openedEntrySchemas,
+]);
+
+export type SearchHistoryEntryInput = v.InferOutput<
+  typeof searchHistoryImportEntrySchema
 >;
 
 // Enum derives its choices without assigning a default to an omitted filter.
-export const searchHistoryKindSchema = t.Enum(
+export const searchHistoryKindSchema = v.enum(
   Object.fromEntries(SEARCH_HISTORY_KINDS.map((kind) => [kind, kind] as const)),
 );
 
@@ -173,38 +204,56 @@ const statutePayloadSchema = v.object({
 const collapseWhitespace = (value: string) =>
   normalizeUnicode(value, "NFC").trim().replaceAll(/\s+/gu, " ");
 
+/** The jurisdiction a law page path names, when it names a declared one. */
+const pathCountry = (segment: string): CaseLawJurisdiction | null => {
+  const code = segment.toUpperCase();
+  return isCaseLawJurisdiction(code) ? code : null;
+};
+
 /**
- * The entry as stored and the text its repeats are matched on. A query is
- * matched case- and spacing-insensitively, so "Náhrada  škody" and "náhrada
- * škody" are one entry; an opened document is matched on its identifier.
- * `null` when the entry is not one the law pages could have recorded.
+ * The entry as stored, the jurisdiction it was recorded under, and the text
+ * its repeats are matched on. A query is matched case- and
+ * spacing-insensitively, so "Náhrada  škody" and "náhrada škody" are one
+ * entry; an opened document is matched on its identifier. The jurisdiction
+ * is not part of the match: it files the entry, and a deletion recorded under
+ * the match holds whichever jurisdiction a later import names. `null` when
+ * the entry is not one the law pages could have recorded.
  */
 export const canonicalSearchHistoryEntry = (
   entry: SearchHistoryEntryInput,
-): { entry: SearchHistoryEntryInput; match: string } | null => {
+): {
+  entry: SearchHistoryEntryInput;
+  country: CaseLawJurisdiction | null;
+  match: string;
+} | null => {
   switch (entry.kind) {
     case "search": {
       const query = collapseWhitespace(entry.query);
-      return query.length === 0
-        ? null
-        : {
-            entry: { kind: "search", query },
-            match: searchHistoryEntryMatch(entry),
-          };
+      if (query.length === 0) {
+        return null;
+      }
+      return {
+        entry: { kind: "search", query },
+        // An imported query from before jurisdictions has none.
+        country: entry.country ?? null,
+        match: searchHistoryEntryMatch(entry),
+      };
     }
     case "decision":
     case "statute": {
       const title = collapseWhitespace(entry.title);
       const documentId = entry.documentId.trim();
-      const opensDocument =
+      const route =
         entry.kind === "decision"
-          ? parseCaseLawDecisionPath(entry.path) !== null
-          : parseStatutePath(entry.path) !== null;
-      if (title.length === 0 || documentId.length === 0 || !opensDocument) {
+          ? parseCaseLawDecisionPath(entry.path)
+          : parseStatutePath(entry.path);
+      const country = route === null ? null : pathCountry(route.country);
+      if (title.length === 0 || documentId.length === 0 || country === null) {
         return null;
       }
       return {
         entry: { ...entry, documentId, title },
+        country,
         match: searchHistoryEntryMatch(entry),
       };
     }
@@ -219,7 +268,7 @@ export const canonicalSearchHistoryEntry = (
 export const readSearchHistoryEntryInput = (
   value: unknown,
 ): SearchHistoryEntryInput | null =>
-  Value.Check(searchHistoryEntryInputSchema, value) ? value : null;
+  v.is(searchHistoryImportEntrySchema, value) ? value : null;
 
 const payloadOf = (entry: SearchHistoryEntryInput) => {
   switch (entry.kind) {
@@ -257,6 +306,9 @@ export type SearchHistoryUse = {
 
 type PreparedUse = {
   kind: SearchHistoryEntryInput["kind"];
+  country: CaseLawJurisdiction | null;
+  /** When the latest use that named a jurisdiction happened. */
+  countryUsedAt: Date | null;
   lookupKey: string;
   entry: SearchHistoryEntryInput;
   firstUsedAt: Date;
@@ -290,6 +342,8 @@ const prepareUses = async (
     if (previous === undefined) {
       prepared.set(mapKey, {
         kind: use.entry.kind,
+        country: canonical.country,
+        countryUsedAt: canonical.country === null ? null : use.usedAt,
         lookupKey,
         entry: canonical.entry,
         firstUsedAt: use.usedAt,
@@ -299,8 +353,15 @@ const prepareUses = async (
       continue;
     }
     const isLatest = use.usedAt >= previous.lastUsedAt;
+    // The latest use that names a jurisdiction files the entry, whatever
+    // order the uses arrive in; a use without one never unfiles it.
+    const refiles =
+      canonical.country !== null &&
+      (previous.countryUsedAt === null || use.usedAt >= previous.countryUsedAt);
     prepared.set(mapKey, {
       kind: previous.kind,
+      country: refiles ? canonical.country : previous.country,
+      countryUsedAt: refiles ? use.usedAt : previous.countryUsedAt,
       lookupKey,
       entry: isLatest ? canonical.entry : previous.entry,
       firstUsedAt:
@@ -336,6 +397,8 @@ export const prepareSearchHistoryRows = async (
         organizationId: owner.organizationId,
         userId: owner.userId,
         kind: use.kind,
+        country: use.country,
+        countryUsedAt: use.countryUsedAt,
         courtId:
           use.entry.kind === "decision" ? (use.entry.courtId ?? null) : null,
         lookupKey: use.lookupKey,
@@ -547,6 +610,10 @@ export const upsertSearchHistoryRows = async ({
               table.lookupKey,
             ],
             set: {
+              // Each side carries the time of its latest jurisdiction-naming
+              // use; the later one files the entry.
+              country: sql`CASE WHEN excluded.country_used_at IS NOT NULL AND (${table.countryUsedAt} IS NULL OR excluded.country_used_at::timestamptz >= ${table.countryUsedAt}) THEN excluded.country ELSE ${table.country} END`,
+              countryUsedAt: sql`GREATEST(${table.countryUsedAt}, excluded.country_used_at)`,
               courtId: sql`CASE WHEN ${incomingIsLatest} THEN excluded.court_id ELSE ${table.courtId} END`,
               ciphertext: sql`CASE WHEN ${incomingIsLatest} THEN excluded.ciphertext ELSE ${table.ciphertext} END`,
               iv: sql`CASE WHEN ${incomingIsLatest} THEN excluded.iv ELSE ${table.iv} END`,
@@ -577,6 +644,7 @@ type SearchHistoryRow = Pick<
   SearchHistoryEntryRow,
   | "id"
   | "kind"
+  | "country"
   | "courtId"
   | "ciphertext"
   | "iv"
@@ -601,6 +669,7 @@ export const toSearchHistoryEntryResponse = async (
   );
   const usage = {
     id: row.id,
+    country: row.country,
     firstUsedAt: row.firstUsedAt.toISOString(),
     lastUsedAt: row.lastUsedAt.toISOString(),
     useCount: row.useCount,
@@ -641,6 +710,8 @@ const UNPROJECTED_SEARCH_HISTORY_COLUMNS = [
   "userId",
   // A keyed hash for matching repeats; meaningless outside the database.
   "lookupKey",
+  // Orders refiling between uses; the entry's `country` is what it decides.
+  "countryUsedAt",
   // Sent decrypted, as the entry's own fields (query, or document, title
   // and path).
   "ciphertext",

@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import {
@@ -15,11 +16,7 @@ import {
   reportLeakedTimers,
 } from "@/testing/timer-guard";
 
-// Tests run the program that ships: compiled by the React Compiler, as the
-// Vite build compiles it. Components leave memoization to the compiler, so an
-// uncompiled render would loop or re-render where the app does not. The
-// first plugin whose filter matches a module loads it, so a test stubs a
-// source module with `mock.module`, never with its own `Bun.plugin`.
+// Tests run components with the same memoization as the Vite build.
 Bun.plugin(reactCompilerBunPlugin);
 
 // Tests must never inherit a developer deployment URL. A single preload owns
@@ -68,6 +65,9 @@ beforeEach(() => {
 afterEach(() => {
   markTestEnded();
   markTimerTestEnded();
+  // After the guard has cancelled the test's own leaked timers, so the drain
+  // fires only what libraries left on a fake clock (see `restoreRealTimers`).
+  restoreRealTimers();
   reportRefusedRequests();
   reportLeakedTimers();
 });

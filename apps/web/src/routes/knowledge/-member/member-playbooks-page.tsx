@@ -126,7 +126,10 @@ export function MemberPlaybooksPage({
     // Reported, not swallowed: a load that failed outright is captured and
     // told the same way as one the server refused.
     if (Result.isError(result)) {
-      getAnalytics().captureError(result.error);
+      getAnalytics().captureError(result.error, {
+        fingerprintKey: "MemberPlaybooksPage:failure",
+        scope: { type: "handler", handlerId: "MemberPlaybooksPage:failure" },
+      });
       notifyUserError(result.error, t("knowledge.playbooks.loadFailed"), {
         description: userErrorFromThrown(
           result.error,

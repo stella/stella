@@ -16,6 +16,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import transitionInvoice from "@/api/handlers/invoices/transition";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -239,10 +240,11 @@ if (!databaseUrl || !runPostgres) {
           memberRole: sessionMemberRole("owner"),
           session: { activeOrganizationId: orgId },
           request: new Request(
-            `https://example.test/v1/workspaces/${wsId}/invoices/${invoiceId}/transition`,
+            `https://example.test/v1/invoices/${wsId}/${invoiceId}/transition`,
             { method: "POST" },
           ),
-          route: "/v1/workspaces/:workspaceId/invoices/:invoiceId/transition",
+          route:
+            "/v1/invoices/:workspaceId/:invoiceId/transition" satisfies ApiRoutePath,
           recordAuditEvent: async (
             _tx: unknown,
             recorded: AuditEvent | AuditEvent[],

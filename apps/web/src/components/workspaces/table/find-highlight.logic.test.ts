@@ -2,16 +2,19 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { foldLikePostgresSearch } from "@stll/text-normalize/postgres-search-fold";
 
-import {
-  splitByMatch,
-  type TextSegment,
-} from "@/components/workspaces/table/find-highlight.logic";
+import { splitByMatch } from "@/components/workspaces/table/find-highlight.logic";
 
 const joined = (text: string, term: string): string =>
   splitByMatch(text, term)
     .map((segment) => segment.text)
     .join("");
+
+const markedRuns = (text: string, term: string): string[] =>
+  splitByMatch(text, term)
+    .filter((segment) => segment.matched)
+    .map((segment) => segment.text);
 
 const PROPERTY_TEXT_PARTS_MAX = 12;
 const PROPERTY_UNICODE_TOKENS = Object.freeze([
@@ -20,11 +23,14 @@ const PROPERTY_UNICODE_TOKENS = Object.freeze([
   " ",
   "\t",
   "é",
-  "e\u0301",
+  "é",
+  "́",
   "Ł",
   "İ",
   "ı",
   "ß",
+  "Æ",
+  "％",
   "[",
   ".",
   "+",
@@ -39,44 +45,6 @@ const unicodeText = fc
   })
   .map((parts) => parts.join(""));
 
-const previousSplitByMatch = (text: string, term: string): TextSegment[] => {
-  if (term === "" || text === "") {
-    return text === "" ? [] : [{ matched: false, start: 0, text }];
-  }
-
-  const haystack = text.toLocaleLowerCase().toWellFormed();
-  const needle = term.toLocaleLowerCase().toWellFormed();
-  if (haystack.length !== text.length || needle.length === 0) {
-    return [{ matched: false, start: 0, text }];
-  }
-
-  const segments: TextSegment[] = [];
-  let cursor = 0;
-  for (
-    let at = haystack.indexOf(needle);
-    at !== -1;
-    at = haystack.indexOf(needle, cursor)
-  ) {
-    if (at > cursor) {
-      segments.push({
-        matched: false,
-        start: cursor,
-        text: text.slice(cursor, at),
-      });
-    }
-    segments.push({
-      matched: true,
-      start: at,
-      text: text.slice(at, at + needle.length),
-    });
-    cursor = at + needle.length;
-  }
-  if (cursor < text.length) {
-    segments.push({ matched: false, start: cursor, text: text.slice(cursor) });
-  }
-  return segments;
-};
-
 describe("splitting rendered text on a find term", () => {
   test("marks every occurrence, whatever its case", () => {
     expect(splitByMatch("Lease and lease", "LEASE")).toEqual([
@@ -84,6 +52,15 @@ describe("splitting rendered text on a find term", () => {
       { matched: false, start: 5, text: " and " },
       { matched: true, start: 10, text: "lease" },
     ]);
+  });
+
+  test("marks what the server matched whatever accents were typed", () => {
+    // The server folds both sides through `search_fold`: these are the rows
+    // a find for the plain term returns, so their marks must be drawn.
+    expect(markedRuns("Antonín Dvořák", "dvorak")).toEqual(["Dvořák"]);
+    expect(markedRuns("Jürgen Müller", "MULLER")).toEqual(["Müller"]);
+    expect(markedRuns("Élise Moreau", "elise")).toEqual(["Élise"]);
+    expect(markedRuns("smlouva dvorak", "Dvořák")).toEqual(["dvorak"]);
   });
 
   test("marks nothing for an empty term", () => {
@@ -111,7 +88,7 @@ describe("splitting rendered text on a find term", () => {
     ]);
   });
 
-  test("keeps UTF-16 offsets and does not add accent folding", () => {
+  test("keeps UTF-16 offsets across folds that change length", () => {
     const text = "⚖️ Lease";
     const start = "⚖️ ".length;
     expect(splitByMatch(text, "lease")).toEqual([
@@ -123,25 +100,30 @@ describe("splitting rendered text on a find term", () => {
       { matched: true, start: 1, text: "\udc00" },
       { matched: false, start: 2, text: "b" },
     ]);
-    expect(splitByMatch("café", "cafe")).toEqual([
-      { matched: false, start: 0, text: "café" },
+    // A decomposed accent stays on the letter it belongs to.
+    expect(splitByMatch("café noir", "café")).toEqual([
+      { matched: true, start: 0, text: "café" },
+      { matched: false, start: 5, text: " noir" },
     ]);
-    expect(splitByMatch("cafe\u0301", "café")).toEqual([
-      { matched: false, start: 0, text: "cafe\u0301" },
+    // An expansion is marked whole.
+    expect(splitByMatch("Straße", "strass")).toEqual([
+      { matched: true, start: 0, text: "Straß" },
+      { matched: false, start: 5, text: "e" },
     ]);
   });
 
-  test("leaves text unmarked when lowercase expansion changes its UTF-16 length", () => {
-    const text = "İ";
-    const lowered = text.toLocaleLowerCase();
-    expect(lowered).not.toBe(text);
-    expect(splitByMatch(text, lowered)).toEqual([
-      { matched: false, start: 0, text },
-    ]);
+  test("does not fold beyond what the server folds", () => {
+    // `unaccent` has no rule for final sigma, so `σ` never matched `ς` on
+    // the server and must not be marked here.
+    expect(markedRuns("ΟΔΟΣ ος", "σ")).toEqual(["Σ"]);
+  });
+
+  test("lowers one code point to one, as the server does", () => {
+    expect(markedRuns("İstanbul", "istanbul")).toEqual(["İstanbul"]);
   });
 
   test("matches malformed text through replacement but never half an astral scalar", () => {
-    expect(splitByMatch("a\ud800b", "\uFFFD")).toEqual([
+    expect(splitByMatch("a\ud800b", "�")).toEqual([
       { matched: false, start: 0, text: "a" },
       { matched: true, start: 1, text: "\ud800" },
       { matched: false, start: 2, text: "b" },
@@ -174,24 +156,13 @@ describe("splitting rendered text on a find term", () => {
 
   test("segments always reassemble into the input", () => {
     fc.assert(
-      fc.property(fc.string(), fc.string(), (text, term) => {
-        expect(joined(text, term)).toBe(text);
-      }),
-      propertyConfig(),
-    );
-  });
-
-  test("every marked segment equals the term, case-insensitively", () => {
-    fc.assert(
-      fc.property(fc.string(), fc.string({ minLength: 1 }), (text, term) => {
-        for (const segment of splitByMatch(text, term)) {
-          if (segment.matched) {
-            expect(segment.text.toLocaleLowerCase().toWellFormed()).toBe(
-              term.toLocaleLowerCase().toWellFormed(),
-            );
-          }
-        }
-      }),
+      fc.property(
+        fc.oneof(fc.string(), unicodeText),
+        fc.oneof(fc.string(), unicodeText),
+        (text, term) => {
+          expect(joined(text, term)).toBe(text);
+        },
+      ),
       propertyConfig(),
     );
   });
@@ -207,18 +178,21 @@ describe("splitting rendered text on a find term", () => {
     );
   });
 
-  test("rendered search segments preserve the previous Unicode substring behavior", () => {
+  test("text is marked exactly when the server's fold of it contains the term", () => {
     assertProperty(
-      "rendered search segments preserve the previous Unicode substring behavior",
-      fc.property(
-        fc.oneof(fc.string(), unicodeText),
-        fc.oneof(fc.string(), unicodeText),
-        (text, term) => {
-          expect(splitByMatch(text, term)).toEqual(
-            previousSplitByMatch(text, term),
-          );
-        },
-      ),
+      "text is marked exactly when the server's fold of it contains the term",
+      fc.property(unicodeText, unicodeText, (text, term) => {
+        const needle = foldLikePostgresSearch(term);
+        fc.pre(needle !== "");
+        const runs = markedRuns(text, term);
+
+        expect(runs.length > 0).toBe(
+          foldLikePostgresSearch(text).includes(needle),
+        );
+        for (const run of runs) {
+          expect(foldLikePostgresSearch(run).includes(needle)).toBe(true);
+        }
+      }),
       propertyConfig(),
     );
   });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -54,38 +55,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { plAdministrativeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-administrative-ruling-keys";
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
@@ -104,6 +73,38 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";

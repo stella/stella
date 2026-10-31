@@ -1,8 +1,8 @@
-import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -25,13 +25,13 @@ describe("updateOrganizationSettingsHandler", () => {
   test("accepts the supported residency settings for organization administrators", () => {
     for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
       expect(
-        Value.Check(updateOrganizationSettings.config.body, {
+        v.is(updateOrganizationSettings.config.body, {
           managedAIResidency,
         }),
       ).toBe(true);
     }
     expect(
-      Value.Check(updateOrganizationSettings.config.body, {
+      v.is(updateOrganizationSettings.config.body, {
         managedAIResidency: "other",
       }),
     ).toBe(false);

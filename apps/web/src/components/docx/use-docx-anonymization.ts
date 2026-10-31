@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
@@ -14,7 +14,8 @@ import {
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -53,9 +54,11 @@ export const useDocxAnonymizationHighlights = ({
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const anonymizationTermsQueryView = useQueryView(anonymizationTermsQuery);
-  useQueryViewError(anonymizationTermsQueryView);
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
+  const anonymizationTermsQueryView = queryView(anonymizationTermsQuery);
+  useQueryViewError(
+    anonymizationTermsQueryView,
+    "useDocxAnonymizationHighlights:query",
+  );
   const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
     if (!anonymizationTermsQuery.data) {
       return [];
@@ -98,8 +101,11 @@ export const useDocxAnonymizationHighlights = ({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
   });
-  const allowlistQueryView = useQueryView(allowlistQuery);
-  useQueryViewError(allowlistQueryView);
+  const allowlistQueryView = queryView(allowlistQuery);
+  useQueryViewError(
+    allowlistQueryView,
+    "useDocxAnonymizationHighlights:query-2",
+  );
   const policyReady =
     anonymizationTermsQuery.status === "success" &&
     allowlistQuery.status === "success";
@@ -143,8 +149,12 @@ export const useDocxAnonymizationHighlights = ({
   // detected entities itself; we still need to strip them from
   // the workspace catalog list, because catalog terms are sent
   // straight to Folio without going through the worker.
-  const excludedCanonicalsSet = buildExcludedCanonicalsSet(
-    allowlistQuery.data ? allowlistQuery.data.entries : [],
+  const excludedCanonicalsSet = useMemo(
+    () =>
+      buildExcludedCanonicalsSet(
+        allowlistQuery.data ? allowlistQuery.data.entries : [],
+      ),
+    [allowlistQuery.data],
   );
   useExternalSyncEffect(() => {
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
@@ -152,13 +162,20 @@ export const useDocxAnonymizationHighlights = ({
     // the user just added to the allowlist disappear.
     detectionRef.current?.run();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms: AnonymizationTerm[] = mergeAnonymizationTerms(
-    {
+  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
+    () =>
+      mergeAnonymizationTerms({
+        isAnonymizationActive,
+        workspaceTerms: workspaceAnonymizationTerms,
+        detectedTerms: detectedAnonymizationTerms,
+        excludedCanonicals: excludedCanonicalsSet,
+      }),
+    [
       isAnonymizationActive,
-      workspaceTerms: workspaceAnonymizationTerms,
-      detectedTerms: detectedAnonymizationTerms,
-      excludedCanonicals: excludedCanonicalsSet,
-    },
+      workspaceAnonymizationTerms,
+      detectedAnonymizationTerms,
+      excludedCanonicalsSet,
+    ],
   );
   // Dispatch the live term list into the plugin. We can't simply
   // read matches right after `dispatch` because DOCX content
@@ -178,7 +195,13 @@ export const useDocxAnonymizationHighlights = ({
       view.dispatch(view.state.tr.setMeta(key, payload));
     });
     if (Result.isError(dispatched)) {
-      getAnalytics().captureError(dispatched.error);
+      getAnalytics().captureError(dispatched.error, {
+        fingerprintKey: "useDocxAnonymizationHighlights:failure",
+        scope: {
+          type: "handler",
+          handlerId: "useDocxAnonymizationHighlights:failure",
+        },
+      });
       useInspectorAnonymizationStore
         .getState()
         .markAnonymizationPipelineFailed(fieldId);
@@ -200,20 +223,21 @@ export const useDocxAnonymizationHighlights = ({
   // detection: every doc edit and DOCX load passes through it, and
   // detection ignores emissions whose document it already read
   // (term pushes).
-  const handleAnonymizationMatchesChange = (
-    matches: readonly { canonical: string; label: string }[],
-  ) => {
-    const { publishAnonymizationMatches } =
-      useInspectorAnonymizationStore.getState();
-    if (!isAnonymizationActive) {
-      return;
-    }
-    detectionRef.current?.noteDocChanged();
-    publishAnonymizationMatches(
-      fieldId,
-      aggregateAnonymizationMatches(matches),
-    );
-  };
+  const handleAnonymizationMatchesChange = useCallback(
+    (matches: readonly { canonical: string; label: string }[]) => {
+      const { publishAnonymizationMatches } =
+        useInspectorAnonymizationStore.getState();
+      if (!isAnonymizationActive) {
+        return;
+      }
+      detectionRef.current?.noteDocChanged();
+      publishAnonymizationMatches(
+        fieldId,
+        aggregateAnonymizationMatches(matches),
+      );
+    },
+    [fieldId, isAnonymizationActive],
+  );
   useExternalSyncEffect(() => {
     const { clearAnonymizationMatches } =
       useInspectorAnonymizationStore.getState();
@@ -239,22 +263,21 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   // transaction, so we just have to length-gate and publish.
   // The cleanup clears the store so a second tab opening this
   // facet doesn't see a stale prefill from the previous file.
-  const handleSelectionTextChange = (selection: {
-    from: number;
-    to: number;
-    text: string;
-  }) => {
-    if (selection.from === selection.to) {
-      return;
-    }
-    const single = selection.text.replace(/\s+/gu, " ").trim();
-    if (single.length < 2 || single.length > 200) {
-      return;
-    }
-    useInspectorAnonymizationStore
-      .getState()
-      .publishDocumentTextSelection(fieldId, single);
-  };
+  const handleSelectionTextChange = useCallback(
+    (selection: { from: number; to: number; text: string }) => {
+      if (selection.from === selection.to) {
+        return;
+      }
+      const single = selection.text.replace(/\s+/gu, " ").trim();
+      if (single.length < 2 || single.length > 200) {
+        return;
+      }
+      useInspectorAnonymizationStore
+        .getState()
+        .publishDocumentTextSelection(fieldId, single);
+    },
+    [fieldId],
+  );
   useExternalSyncEffect(
     () => () => {
       useInspectorAnonymizationStore
@@ -273,11 +296,14 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   //   stay quiet.
   // - Doc-sourced selections aren't echoed back to the editor —
   //   that would re-scroll on its own click.
-  const handleAnonymizationTermClick = (canonical: string, label: string) => {
-    useInspectorAnonymizationStore
-      .getState()
-      .selectAnonymizationTerm(canonical, label, "doc", fieldId);
-  };
+  const handleAnonymizationTermClick = useCallback(
+    (canonical: string, label: string) => {
+      useInspectorAnonymizationStore
+        .getState()
+        .selectAnonymizationTerm(canonical, label, "doc", fieldId);
+    },
+    [fieldId],
+  );
   const sidebarSelectedCanonical = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "sidebar" &&
     s.anonymizationSelection.fieldId === fieldId

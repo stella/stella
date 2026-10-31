@@ -14,7 +14,10 @@ import type { FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
-import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
+import type {
+  DesktopLinkApproval,
+  DesktopLinkOutcome,
+} from "@/features/desktop/desktop-connection-store.logic";
 import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
   watchDesktopEditHandoff,
@@ -22,7 +25,7 @@ import {
 import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
@@ -263,17 +266,26 @@ const parseDesktopConnectionStatus = (value: unknown) => {
 
 const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
 
+/** The challenge fields a bridge status must be signed for. */
+type DesktopConnectionChallenge = Pick<
+  DesktopAccountChallenge,
+  "correlationId" | "verifierHash" | "deviceJkt" | "portSecret"
+>;
+
 type VerifyDesktopConnectionOptions = {
   payload: unknown;
-  correlationId: string;
-  portSecret: string;
+  challenge: DesktopConnectionChallenge;
   nowSeconds: number;
 };
 
+/**
+ * Accepts a status only when the app signed it with this challenge's port
+ * secret over `correlationId\nverifierHash\ndeviceJkt\nstatus\ntimestamp`
+ * within the skew window: a status signed for any other challenge fails.
+ */
 export const verifyDesktopConnectionStatus = async ({
   payload,
-  correlationId,
-  portSecret,
+  challenge: { correlationId, verifierHash, deviceJkt, portSecret },
   nowSeconds,
 }: VerifyDesktopConnectionOptions) => {
   const status = parseDesktopConnectionStatus(payload);
@@ -315,7 +327,7 @@ export const verifyDesktopConnectionStatus = async ({
     key,
     signature,
     new TextEncoder().encode(
-      `${correlationId}\n${status}\n${payload.timestamp}`,
+      `${correlationId}\n${verifierHash}\n${deviceJkt}\n${status}\n${payload.timestamp}`,
     ),
   );
   return valid ? status : null;
@@ -362,7 +374,7 @@ const createDesktopEditHandoff = async ({
       propertyId: toSafeId<"property">(propertyId),
     });
 
-  return unwrapEden(response) satisfies DesktopEditHandoff;
+  return unwrapApiResponse(response) satisfies DesktopEditHandoff;
 };
 
 const readDesktopEditHandoffStatus = async ({
@@ -379,11 +391,12 @@ const readDesktopEditHandoffStatus = async ({
     })
     .status.get();
 
-  return unwrapEden(response);
+  return unwrapApiResponse(response);
 };
 
-const launchDesktopEditHandoff = (deepLinkUrl: string) => {
-  window.location.href = deepLinkUrl;
+/** Hands a `stella://` link to the operating system. */
+export const openDesktopUrl = (desktopUrl: string) => {
+  window.location.href = desktopUrl;
 };
 
 const waitForDesktopEditHandoffOpened = async ({
@@ -415,16 +428,15 @@ export const hasDesktopAccountChallenge = () =>
   accountAttempt.challenge.expiresAt > Temporal.Now.instant().epochMilliseconds;
 
 type ReadDesktopConnectionOptions = {
-  correlationId: string;
-  portSecret: string;
+  challenge: DesktopConnectionChallenge;
   request?: typeof fetchWithTimeout;
 };
 
 export const readDesktopConnection = async ({
-  correlationId,
-  portSecret,
+  challenge,
   request = fetchWithTimeout,
 }: ReadDesktopConnectionOptions) => {
+  const { correlationId, portSecret } = challenge;
   const query = new URLSearchParams({ correlationId });
   const path = `/v1/connection?${query.toString()}`;
   const url = `${DESKTOP_BRIDGE_URL}${path}`;
@@ -477,8 +489,7 @@ export const readDesktopConnection = async ({
     try: async () =>
       await verifyDesktopConnectionStatus({
         payload: parsed.value,
-        correlationId,
-        portSecret,
+        challenge,
         nowSeconds: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
       }),
     catch: () => new DesktopBridgeIncompatibleError(),
@@ -515,22 +526,55 @@ export const resolveDesktopAccountLink = ({
   return Result.ok(browserAccount.email);
 };
 
+/**
+ * Whether the app on this computer proves, over the loopback bridge, that it
+ * started this exact challenge and still waits for it. A link crafted
+ * elsewhere carries a port secret no local app holds, so it never proves.
+ */
+const provesLocalDesktopChallenge = async (
+  challenge: DesktopConnectionChallenge,
+) => {
+  const status = await readDesktopConnection({ challenge });
+  return status.isOk() && status.value === "pending";
+};
+
+type LinkDesktopAccountOptions = Pick<LinkAccountRequest, "apiBaseUrl"> & {
+  approval: DesktopLinkApproval;
+  /** Receives the app link once the grant exists, so the page can offer it again. */
+  onDesktopOpening: (desktopUrl: string) => void;
+};
+
 export const linkDesktopAccount = async ({
   apiBaseUrl,
-}: Pick<LinkAccountRequest, "apiBaseUrl">) => {
+  approval,
+  onDesktopOpening,
+}: LinkDesktopAccountOptions) => {
   captureDesktopAccountLink();
   const attempt = accountAttempt;
-  accountAttempt = null;
   if (attempt?.type === "update-required") {
+    accountAttempt = null;
     return Result.ok({
       status: "update-required",
     } as const satisfies DesktopLinkOutcome);
   }
   const challenge = attempt?.challenge;
+  const challengeLive =
+    challenge !== undefined &&
+    challenge.expiresAt > Temporal.Now.instant().epochMilliseconds;
+  // The challenge stays in place until the page may answer it, so a refused
+  // proof still leaves it for the explicit approval.
   if (
-    !challenge ||
-    challenge.expiresAt <= Temporal.Now.instant().epochMilliseconds
+    approval === "local-proof" &&
+    (!challengeLive || !(await provesLocalDesktopChallenge(challenge)))
   ) {
+    return Result.ok({
+      status: "approval-required",
+    } as const satisfies DesktopLinkOutcome);
+  }
+  if (accountAttempt === attempt) {
+    accountAttempt = null;
+  }
+  if (!challengeLive) {
     const params = new URLSearchParams({
       apiBaseUrl,
       webOrigin: window.location.origin,
@@ -548,7 +592,7 @@ export const linkDesktopAccount = async ({
           message: "desktop_account_conflict",
         });
       }
-      const grant = unwrapEden(
+      const grant = unwrapApiResponse(
         await api["desktop-registry"].grant.post(
           desktopAccountGrantRequest(challenge),
         ),
@@ -565,16 +609,15 @@ export const linkDesktopAccount = async ({
         userId: grant.userId,
         organizationId: grant.organizationId,
       });
-      window.location.href = `stella://account/complete?${params.toString()}`;
+      const desktopUrl = `stella://account/complete?${params.toString()}`;
+      onDesktopOpening(desktopUrl);
+      openDesktopUrl(desktopUrl);
       const deadline = Math.min(
         challenge.expiresAt,
         new Date(grant.expiresAt).getTime(),
       );
       while (Temporal.Now.instant().epochMilliseconds < deadline) {
-        const connection = await readDesktopConnection({
-          correlationId: challenge.correlationId,
-          portSecret: challenge.portSecret,
-        });
+        const connection = await readDesktopConnection({ challenge });
         if (connection.isOk()) {
           const status = connection.value;
           switch (status) {
@@ -608,7 +651,7 @@ export const linkDesktopAccount = async ({
 
 export const openFileInDesktop = async (input: OpenFileInDesktopInput) => {
   const handoff = await createDesktopEditHandoff(input);
-  launchDesktopEditHandoff(handoff.deepLinkUrl);
+  openDesktopUrl(handoff.deepLinkUrl);
   return {
     type: "handoff-pending",
     waitUntilOpened: waitForDesktopEditHandoffOpened({

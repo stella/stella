@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
@@ -22,7 +24,8 @@ import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/cont
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
-import type { McpRequestContext } from "@/api/mcp/context";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -31,7 +34,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import createComment from "./create";
 import deleteComment from "./delete";
@@ -67,6 +69,10 @@ const seedTenant = async (db: GatedTestDb): Promise<Tenant> => {
     name: "Claim comment firm",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     [author, colleague].map((id) => ({
@@ -296,7 +302,7 @@ const withTenants = async (
 const capabilityContext = async (
   db: GatedTestDb,
   tenant: Tenant,
-): Promise<McpRequestContext> => {
+): Promise<McpRequestResources> => {
   const scopedDb = scopedFor(db, tenant);
   const safeDb = createSafeDb(
     markRlsDatabase(db),

@@ -1,14 +1,15 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { DOCX_SUGGESTIONS_PAGE_SIZE_MAX } from "@stll/api-contract";
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
-  tPaginationCursor,
-  tSafeId,
+  paginationCursorSchema,
+  resourceIdSchema,
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -113,19 +114,20 @@ const listDocxSuggestions = createSafeHandler(
       consumesServices: false,
     },
     access: "read",
-    params: workspaceParams({ entityId: tSafeId("entity") }),
-    query: t.Object({
-      cursor: t.Optional(tPaginationCursor()),
-      limit: t.Optional(
-        t.Integer({ minimum: 1, maximum: DOCX_SUGGESTIONS_PAGE_SIZE_MAX }),
+    params: workspaceParams({ entityId: resourceIdSchema("entity") }),
+    query: v.object({
+      cursor: v.optional(paginationCursorSchema()),
+      limit: v.optional(
+        numberFromString(
+          v.pipe(
+            v.number(),
+            v.integer(),
+            v.minValue(1),
+            v.maxValue(DOCX_SUGGESTIONS_PAGE_SIZE_MAX),
+          ),
+        ),
       ),
-      status: t.Optional(
-        t.Union([
-          t.Literal("pending"),
-          t.Literal("accepted"),
-          t.Literal("rejected"),
-        ]),
-      ),
+      status: v.optional(v.picklist(["pending", "accepted", "rejected"])),
     }),
   },
   async function* ({ workspaceId, params, query, safeDb }) {

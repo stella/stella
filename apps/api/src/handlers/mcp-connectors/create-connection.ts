@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import {
   MCP_RESPONSE_DISPOSITION,
@@ -20,9 +20,9 @@ import {
   discoverOAuthMetadata,
 } from "@/api/lib/mcp-upstream/oauth";
 
-const requestBody = t.Object({
-  connectorSlug: t.String({ minLength: 1, maxLength: 80 }),
-  token: t.String({ minLength: 1, maxLength: 4096 }),
+const requestBody = v.object({
+  connectorSlug: v.pipe(v.string(), v.minLength(1), v.maxLength(80)),
+  token: v.pipe(v.string(), v.minLength(1), v.maxLength(4096)),
 });
 
 const config = {

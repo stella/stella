@@ -47,7 +47,7 @@ import {
   invalidCompatIdResult,
   publicLawDisabledResult,
 } from "@/api/mcp/compat-shared";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import type {
   McpCompatSearchResult,
@@ -72,6 +72,8 @@ import {
   defineMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import { openMcpRead } from "@/api/mcp/write-tool-authority";
 
 type CompatToolName = "fetch" | "search";
 
@@ -98,9 +100,9 @@ const PUBLIC_LAW_FEATURE = "FEATURE_PUBLIC_LAW";
  * failure envelope.
  */
 const readAuthorizedMatterContent = async <T>(
-  context: McpRequestContext,
+  context: McpRequestResources,
   read: (
-    tx: Parameters<Parameters<McpRequestContext["scopedDb"]>[0]>[0],
+    tx: Parameters<Parameters<McpRequestResources["scopedDb"]>[0]>[0],
     workspaceIds: AuthorizedWorkspaceIds,
   ) => Promise<T>,
 ): Promise<Result<T, unknown>> =>
@@ -127,7 +129,7 @@ const getFetchableEntityMap = async ({
   context,
   entityIds,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   entityIds: string[];
 }) => {
   if (entityIds.length === 0) {
@@ -346,6 +348,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "searches only public law and caller-accessible matter records",
+    ),
     readClass: "both",
     anonymized: {
       exposure: "anonymize",
@@ -375,6 +380,9 @@ const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    permissions: openMcpRead(
+      "fetches only public law or caller-accessible matter records",
+    ),
     readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
@@ -443,7 +451,7 @@ const searchMatterKnowledge = async ({
   cursor,
   query,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   cursor: string | undefined;
   query: string;
 }): Promise<Result<MatterSearchPage, unknown>> => {
@@ -511,7 +519,7 @@ const handleCompatSearchTool: McpToolHandler<
           query,
         });
   if (matterResult.isErr()) {
-    return internalFailureResult(matterResult.error);
+    return internalFailureResult(matterResult.error, "mcp.compatSearch.matter");
   }
   const matter = matterResult.value;
 
@@ -618,7 +626,7 @@ const handleCompatFetchTool: McpToolHandler<
       }),
   );
   if (loaded.isErr()) {
-    return internalFailureResult(loaded.error);
+    return internalFailureResult(loaded.error, "mcp.compatFetch.matter");
   }
   const row = loaded.value.at(0);
 

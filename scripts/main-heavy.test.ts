@@ -250,6 +250,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
       ),
     ),
     run_required: "true",
+    heavy_proof: "true",
     trusted: "true",
     suite_depth: "full",
     queue_depth: "full",

@@ -1,14 +1,14 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
-const paramsSchema = t.Object({
-  lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
-  blockId: t.String({ minLength: 1, maxLength: 128 }),
+const paramsSchema = v.object({
+  lawId: v.pipe(v.string(), v.regex(/^BOE-[A-Z]-\d{4}-\d+$/u)),
+  blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
 
 const boeTextBlock = createSafeRootHandler(

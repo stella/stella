@@ -1,7 +1,10 @@
-import { EventType } from "@tanstack/ai";
+import { convertMessagesToModelMessages, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { readFailureBrand } from "@stll/errors";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage } from "@/api/handlers/chat/types";
@@ -21,6 +24,10 @@ import { LIMITS } from "@/api/lib/limits";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import {
+  SKILL_SUMMARY_SECRET,
+  skillSummaryMessage,
+} from "@/api/tests/helpers/skill-summary-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -58,6 +65,122 @@ const textMessage = ({
 });
 
 describe("chat history compaction", () => {
+  test("the chat summarizer omits skill payloads while preserving conversation, outcomes, and the authorized tail", async () => {
+    const older = skillSummaryMessage({
+      id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000a1"),
+      instructions: SKILL_SUMMARY_SECRET.repeat(100),
+    });
+    const tail = [
+      textMessage({ id: "latest", role: "user", text: "Continue the work" }),
+      skillSummaryMessage({
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000a2"),
+      }),
+    ];
+    const messages = [older, ...tail];
+    const before = JSON.stringify(messages);
+    const preserveTokens = planChatCompaction({
+      messages: tail,
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    let captured = "";
+    const result = await compactChatMessages({
+      messages,
+      preserveTokens,
+      triggerTokens: 1,
+      summarizeTranscript: async (transcript) => {
+        captured = transcript;
+        return "Conversation and outcomes retained";
+      },
+    });
+    expect(captured).not.toBe("");
+    expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
+    expect(captured).toContain("ORDINARY CONVERSATION");
+    expect(captured).toContain("ORDINARY OUTCOME");
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.messages.slice(1)).toEqual(tail);
+    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.value.messages.at(-1))).toContain(
+      SKILL_SUMMARY_SECRET,
+    );
+    expect(JSON.stringify(messages)).toBe(before);
+  });
+
+  test("the model-step summarizer applies the same skill policy without changing its wire tail", async () => {
+    const older = skillSummaryMessage({
+      id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000b1"),
+      instructions: SKILL_SUMMARY_SECRET.repeat(100),
+    });
+    const prefix = convertMessagesToModelMessages([older]);
+    const tail = convertMessagesToModelMessages([
+      textMessage({ id: "latest", role: "user", text: "Continue the work" }),
+      skillSummaryMessage({
+        id: toSafeId<"chatMessage">("00000000-0000-4000-8000-0000000000b2"),
+      }),
+    ]);
+    const messages = [...prefix, ...tail];
+    const before = JSON.stringify(messages);
+    const preserveTokens = planModelCompaction({
+      messages: tail,
+      triggerTokens: Number.MAX_SAFE_INTEGER,
+    }).totalTokens;
+    let captured = "";
+    const result = await compactModelMessages({
+      messages,
+      preserveTokens,
+      triggerTokens: 1,
+      summarizeTranscript: async (transcript) => {
+        captured = transcript;
+        return "Conversation and outcomes retained";
+      },
+    });
+    expect(captured).not.toBe("");
+    expect(captured).not.toContain(SKILL_SUMMARY_SECRET);
+    expect(captured).toContain("ORDINARY CONVERSATION");
+    expect(captured).toContain("ORDINARY OUTCOME");
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.messages.slice(1)).toEqual(tail);
+    expect(result.value.messages.at(-1)).toBe(tail.at(-1));
+    expect(JSON.stringify(result.value.messages)).toContain(
+      SKILL_SUMMARY_SECRET,
+    );
+    expect(JSON.stringify(messages)).toBe(before);
+  });
+
+  test("an orphan result is rejected before the chat summarizer receives text", async () => {
+    let calls = 0;
+    const summary = compactChatMessages({
+      messages: [
+        {
+          id: "orphan",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-result",
+              toolCallId: "missing",
+              state: "complete",
+              content: SKILL_SUMMARY_SECRET,
+            },
+          ],
+        },
+        textMessage({ id: "latest", role: "user", text: "Continue" }),
+      ],
+      preserveTokens: 1,
+      triggerTokens: 1,
+      summarizeTranscript: async () => {
+        calls += 1;
+        return "Unexpected summary";
+      },
+    });
+    expect(await rejectionOf(summary)).toMatchObject({
+      message: expect.stringContaining("Tool result has no matching call"),
+    });
+    expect(calls).toBe(0);
+  });
+
   test("bounds the summary in its prompt, well under a ceiling sized to the input", () => {
     const targets: number[] = [];
     for (const chars of [0, 4000, 40_000, 400_000, 4_000_000]) {
@@ -427,6 +550,52 @@ describe("chat history compaction", () => {
         summarizeTranscript: failures.fails,
       });
       expect(observedSummaryError).toBe(true);
+    });
+
+    test("carries the summarizer's failure class onto the reported error", async () => {
+      const reported: unknown[] = [];
+      const deadline = async (): Promise<string> => {
+        throw new ModelDeadlineExceededError({ deadlineMs: 30_000 });
+      };
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      await compactModelMessages({
+        messages: longThread.map((message): ModelMessage => ({
+          role: message.role === "user" ? "user" : "assistant",
+          content: message.parts
+            .map((part) => (part.type === "text" ? part.content : ""))
+            .join(""),
+        })),
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: deadline,
+      });
+      expect(reported.map((error) => readFailureBrand(error)?.reason)).toEqual([
+        "model_deadline_exceeded",
+        "model_deadline_exceeded",
+      ]);
+    });
+
+    test("leaves an unclassified summarizer failure unclassified", async () => {
+      const reported: unknown[] = [];
+      await compactChatMessages({
+        messages: longThread,
+        ...budget,
+        onSummaryError: (error) => {
+          reported.push(error);
+        },
+        summarizeTranscript: failures.fails,
+      });
+      expect(reported).toHaveLength(1);
+      expect(readFailureBrand(reported[0])).toBeUndefined();
     });
 
     test("keeps step history the same way", async () => {

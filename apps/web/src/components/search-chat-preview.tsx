@@ -19,6 +19,7 @@ import {
   getAdjacentSearchMatchIndex,
   getCenteredSearchMatchScrollTop,
   MAX_SEARCH_PREVIEW_MATCHES,
+  readScrollPaddingBlockEnd,
   type SearchMatchSummary,
 } from "@/lib/search-match-navigation";
 import { searchTextQueryKey } from "@/lib/search-text";
@@ -131,6 +132,7 @@ export const SearchChatPreview = ({
         currentScrollTop: scrollArea.scrollTop,
         matchHeight: matchRect.height,
         matchTop: matchRect.top,
+        obscuredBlockEnd: readScrollPaddingBlockEnd(scrollArea),
       }),
     });
     lastScrolledMatchRef.current = activeMatch;

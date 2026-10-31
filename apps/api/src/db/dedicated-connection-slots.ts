@@ -124,7 +124,10 @@ type DedicatedSqlClient = {
 type CreateDedicatedConnectionOwnerOptions<TClient extends DedicatedSqlClient> =
   {
     capacity: number;
-    openClient: (options: SQL.PostgresOrMySQLOptions) => TClient;
+    openClient: (
+      options: SQL.PostgresOrMySQLOptions,
+      purpose: "work" | "cancellation" | "maintenance",
+    ) => TClient;
   };
 
 /** The transport seam keeps admission and close-failure tests on the real owner. */
@@ -148,16 +151,19 @@ export const createDedicatedConnectionOwner = <
       try: () => {
         signal.throwIfAborted();
         return {
-          client: openClient({
-            url,
-            max: 1,
-            idleTimeout: 0,
-            connectionTimeout,
-            connection: {
-              statement_timeout: statementTimeout,
-              lock_timeout: lockTimeout,
+          client: openClient(
+            {
+              url,
+              max: 1,
+              idleTimeout: 0,
+              connectionTimeout,
+              connection: {
+                statement_timeout: statementTimeout,
+                lock_timeout: lockTimeout,
+              },
             },
-          }),
+            "work",
+          ),
         };
       },
       catch: (error) => error,
@@ -194,13 +200,16 @@ export const createDedicatedConnectionOwner = <
           return cancellation.attempt.promise;
         }
         const performCancellation = async () => {
-          const canceller = openClient({
-            url,
-            max: 1,
-            idleTimeout: 0,
-            connectionTimeout,
-            connection: { statement_timeout: cancellationStatementTimeout },
-          });
+          const canceller = openClient(
+            {
+              url,
+              max: 1,
+              idleTimeout: 0,
+              connectionTimeout,
+              connection: { statement_timeout: cancellationStatementTimeout },
+            },
+            "cancellation",
+          );
           attempt.session = "open";
           try {
             await canceller.unsafe("SELECT pg_cancel_backend($1)", [pid]);
@@ -242,7 +251,7 @@ export const createDedicatedConnectionOwner = <
   const openMaintenanceSql = async (url: string) => {
     const releaseSlots = await acquireSlots({ kind: "maintenance" });
     const opened = Result.try({
-      try: () => ({ client: openClient({ url, max: 1 }) }),
+      try: () => ({ client: openClient({ url, max: 1 }, "maintenance") }),
       catch: (error) => error,
     });
     if (opened.isErr()) {

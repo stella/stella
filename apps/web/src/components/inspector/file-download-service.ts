@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 
+import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import {
@@ -15,7 +16,18 @@ import { downloadFile } from "@/lib/utils";
 
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 
+/** The export modes by name, so a request names one the API validates. */
+const MARKED_PDF_EXPORT = {
+  highlights: "highlights",
+  highlightsWithComments: "highlightsWithComments",
+} as const satisfies { [Mode in MarkedPdfExportMode]: Mode };
+
 const BUILT_RENDITION_REQUEST = {
+  marked: { path: "marked", query: `?mode=${MARKED_PDF_EXPORT.highlights}` },
+  withComments: {
+    path: "marked",
+    query: `?mode=${MARKED_PDF_EXPORT.highlightsWithComments}`,
+  },
   reference: { path: "stamped", query: "?metadata=keep" },
   "reference-scrubbed": { path: "stamped", query: "?metadata=strip" },
   scrubbed: { path: "scrubbed", query: "" },
@@ -35,9 +47,7 @@ type DownloadTabFileProps = {
 /**
  * A rendition the API builds from the stored bytes, as a Blob. Served by the
  * API rather than by a presigned storage URL because those bytes exist only
- * per request, and fetched directly rather than through the treaty client,
- * which text-decodes every non-JSON body except `application/octet-stream` and
- * would mangle the DOCX.
+ * per request, and fetched directly rather than through the API client.
  *
  * Preserves typed API refusals and transport errors for the notification owner.
  */
@@ -85,13 +95,16 @@ const fetchBuiltFile = async ({
 const isBuiltRendition = (
   variant: DownloadVariant,
 ): variant is BuiltRendition =>
+  variant === "marked" ||
+  variant === "withComments" ||
   variant === "reference" ||
   variant === "reference-scrubbed" ||
   variant === "scrubbed";
 
 /**
  * Downloads one field's file in the requested copy: the uploaded original and
- * the stored PDF conversion through a presigned URL, the reference and
+ * the stored PDF conversion through a presigned URL, the PDF with the
+ * reader's highlights (and, asked for, comments), the reference and
  * metadata-free copies from the API that builds them. Every download entry
  * point goes through here, so the inspector header and the matter row menu
  * cannot hand over different bytes for the same choice.

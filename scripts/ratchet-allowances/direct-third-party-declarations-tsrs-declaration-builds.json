@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 13,
+  "reason": "Each of the 13 packages whose tsdown declaration build runs tsrs declares the already locked tsrs itself, so filtered workspace installs (the web image builder's) include the tool its build runs; tsdown-declaration-tools.test.ts enforces it."
+}

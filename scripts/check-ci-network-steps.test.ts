@@ -213,6 +213,57 @@ ${stepEnv}        run: cargo build --locked
 });
 
 describe("shell detection", () => {
+  test("git network subcommands are fetches with or without global options", () => {
+    for (const subcommand of ["clone", "fetch", "ls-remote", "pull"]) {
+      expect(
+        scanShell(`git ${subcommand} origin`, "git").map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+      expect(
+        scanShell(
+          `git -c protocol.version=2 -C repo --no-pager --git-dir=.git --work-tree=. ${subcommand} origin`,
+          "git",
+        ).map((fetch) => fetch.kind),
+      ).toEqual([`git ${subcommand}`]);
+    }
+  });
+
+  test("git fetch through retry.sh counts as retried", () => {
+    expect(
+      scanShell("bash scripts/retry.sh git fetch origin main", "git").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["git fetch", true]]);
+  });
+
+  test("quoted global option values with spaces still reveal the subcommand", () => {
+    const command =
+      'git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --tags origin main';
+    expect(
+      scanShell(command, "git").map((fetch) => [fetch.kind, fetch.wrapped]),
+    ).toEqual([["git fetch", false]]);
+    expect(
+      scanShell(`bash "$NETWORK_RETRY_SCRIPT" ${command}`, "git").map(
+        (fetch) => [fetch.kind, fetch.wrapped],
+      ),
+    ).toEqual([["git fetch", true]]);
+  });
+
+  test("option values quoted inside a word still reveal the subcommand", () => {
+    for (const command of [
+      'git -c http.extraheader="Authorization: basic $auth" fetch origin main',
+      'git --git-dir="repo with spaces/.git" fetch origin main',
+    ]) {
+      expect(
+        scanShell(command, "git").map((fetch) => fetch.kind),
+        command,
+      ).toEqual(["git fetch"]);
+    }
+  });
+
+  test("git commands without network access are not fetches", () => {
+    expect(scanShell("git status\ngit rev-parse HEAD", "git")).toEqual([]);
+  });
+
   test("loopback readiness probes are not fetches", () => {
     expect(
       scanShell(

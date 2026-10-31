@@ -8,7 +8,8 @@
 // changed workspaces plus reverse dependants. Known global inputs widen only
 // the check family they can affect, preserving independent lint and typecheck
 // cache hits. Root scripts sit outside workspace tasks, so changed root
-// sources are linted directly and root TypeScript projects run through a
+// sources are linted directly (every root source when a lint-wide input
+// changes, as in the full check) and root TypeScript projects run through a
 // cacheable Turbo root task. Inconsistent affected-workspace output still
 // fails safe to the full check.
 
@@ -29,6 +30,7 @@ import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 import { matches } from "./oxlint-config-scopes";
+import { lintModuleClosure } from "./oxlint-module-closure";
 import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
@@ -106,9 +108,13 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/sha256-owners.ts",
   "$TURBO_ROOT$/scripts/sha256-migration-ledger.json",
   "$TURBO_ROOT$/scripts/status-write-shapes.ts",
-  "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/oxlint-disable-rule-ids.ts",
   "$TURBO_ROOT$/scripts/oxlint-rule-ids.ts",
+  "$TURBO_ROOT$/scripts/guard-rollout-policy.ts",
+  "$TURBO_ROOT$/scripts/guard-rollouts/*.ts",
+  "$TURBO_ROOT$/scripts/guard-rollouts.gen.ts",
+  "$TURBO_ROOT$/scripts/guard-rollouts.ts",
+  "$TURBO_ROOT$/scripts/ci-install-preinstall-files.ts",
   "$TURBO_ROOT$/apps/api/src/lib/lists/sanctions/monitoring-transition-identities.ts",
   "$TURBO_ROOT$/apps/api/src/lib/db/read-bounded.ts",
   "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
@@ -129,6 +135,25 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/ledger-membership.ts",
   "$TURBO_ROOT$/scripts/product-frontend-files.ts",
   "$TURBO_ROOT$/scripts/react-compiler-bailouts.json",
+  "$TURBO_ROOT$/.claude/mcp/doc-sources.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/capability-request.ts",
+  "$TURBO_ROOT$/packages/api-contract/src/case-law-text-field.ts",
+  "$TURBO_ROOT$/packages/auth-model/src/contract.ts",
+  "$TURBO_ROOT$/packages/errors/src/query-field-policy.ts",
+  "$TURBO_ROOT$/packages/portable-path/src/index.ts",
+  "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
+  "$TURBO_ROOT$/packages/scripts/src/generated-artifact-format.ts",
+  "$TURBO_ROOT$/packages/scripts/src/syntax-tree.ts",
+  "$TURBO_ROOT$/packages/sha256/src/node.ts",
+  "$TURBO_ROOT$/scripts/aggregate-lock-baseline.json",
+  "$TURBO_ROOT$/scripts/calendar-day-ledger.json",
+  "$TURBO_ROOT$/scripts/contract-domain-ledger.ts",
+  "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
+  "$TURBO_ROOT$/scripts/generated-artifacts.ts",
+  "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+  "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
+  "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
+  "$TURBO_ROOT$/scripts/test-timing-ledger.json",
 ] as const;
 export const LINT_ONLY_CACHE_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
@@ -142,12 +167,12 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/scripts/rust-test-determinism-scan.ts",
   "$TURBO_ROOT$/scripts/check-rust-test-determinism.test.ts",
   "$TURBO_ROOT$/scripts/rust-test-determinism-baseline.json",
+  "$TURBO_ROOT$/scripts/rust-test-determinism-reviewed-boundaries.json",
   ...DEPENDENCY_CACHE_INPUTS,
   ...SHARED_COMPILER_CACHE_INPUTS,
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/lint-oxlint-fixtures.sh",
   "$TURBO_ROOT$/scripts/oxlint-safe-fixers.test.ts",
-  "$TURBO_ROOT$/scripts/oxlint-typebox-unsafe.test.ts",
   "$TURBO_ROOT$/scripts/oxlint-additional-guards.test.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.ts",
   "$TURBO_ROOT$/scripts/check-oxlint-fixture-counts.test.ts",
@@ -157,6 +182,14 @@ export const PLUGIN_FIXTURE_INPUTS = [
   "$TURBO_ROOT$/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.oxlint-plugins.json",
 ] as const;
+// The inputs above cover the lint configs' own modules through the
+// configuration cache inputs, which leave out a module an app owns so that
+// editing it does not invalidate every workspace lint. The fixture check still
+// loads that module under Node, which resolves neither a tsconfig path alias
+// nor an extensionless import, so the planner selects the check for every
+// module the configs and plugins load, read from the checkout's import graph.
+export const pluginFixtureModules = (root: string): ReadonlySet<string> =>
+  new Set(lintModuleClosure(root).modules);
 export const PLUGIN_REGISTRY_INPUTS = [
   ...OXLINT_CONFIGURATION_CACHE_INPUTS,
   "$TURBO_ROOT$/scripts/check-oxlint-plugin-registry.ts",
@@ -170,6 +203,17 @@ export const ROOT_SCRIPT_LINT_INPUTS = [
   "$TURBO_ROOT$/scripts/root-script-lint.ts",
   "$TURBO_ROOT$/scripts/tsconfig.json",
   "$TURBO_ROOT$/tsconfig.scripts.json",
+] as const;
+// Inputs that change what the root lint reports for a root source the pull
+// request does not touch. When one changes, the affected check lints every
+// root lint path, as the full check does, so a rule or config change cannot
+// pass its pull request and then fail the full check on main. Root scripts and
+// rule sources stay with the root-script-lint and plugin-fixtures checks,
+// whose own inputs cover them.
+const ROOT_LINT_INPUTS = [
+  ...DEPENDENCY_CACHE_INPUTS,
+  ...SHARED_COMPILER_CACHE_INPUTS,
+  ...LINT_ONLY_CACHE_INPUTS,
 ] as const;
 const TURBO_CONFIG_PATH = "turbo.json";
 const TURBO_ROOT_INPUT_PREFIX = "$TURBO_ROOT$/";
@@ -211,8 +255,19 @@ type CheckPlan = { type: "fallback"; changedPath: string } | ScopedCheckPlan;
 type PlanCheckOptions = {
   changedPaths: readonly string[];
   presentChangedPaths: readonly string[];
+  /**
+   * The tracked or unignored files present in the checkout. Only root paths
+   * are read, so a caller may leave out the workspace files.
+   */
+  repositoryPaths: readonly string[];
   affectedWorkspacePaths: readonly string[];
   workspacePaths: ReadonlySet<string>;
+  /**
+   * Every repository file the lint configs and their plugins load,
+   * transitively: the plugin fixture check loads them all under Node, so a
+   * change to any of them can break it. See `pluginFixtureModules`.
+   */
+  pluginModulePaths: ReadonlySet<string>;
 };
 
 const workspaceForPath = (file: string): string | null => {
@@ -266,7 +321,10 @@ const isTypeScriptPath = (file: string): boolean =>
   file.endsWith(".mts") ||
   file.endsWith(".cts");
 
-const rootChecksForPath = (file: string): readonly RootCheck[] => {
+const rootChecksForPath = (
+  file: string,
+  pluginModulePaths: ReadonlySet<string>,
+): readonly RootCheck[] => {
   const rootChecks: RootCheck[] = [];
   if (
     file.endsWith(".css") ||
@@ -280,7 +338,10 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
   if (PLUGIN_REGISTRY_INPUTS.some((input) => matchesTurboInput(file, input))) {
     rootChecks.push(ROOT_CHECKS.pluginRegistry);
   }
-  if (PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))) {
+  if (
+    pluginModulePaths.has(file) ||
+    PLUGIN_FIXTURE_INPUTS.some((input) => matchesTurboInput(file, input))
+  ) {
     rootChecks.push(ROOT_CHECKS.pluginFixtures);
   }
   if (invalidatesRootScriptLint(file)) {
@@ -292,8 +353,10 @@ const rootChecksForPath = (file: string): readonly RootCheck[] => {
 export const planCheck = ({
   changedPaths,
   presentChangedPaths,
+  repositoryPaths,
   affectedWorkspacePaths,
   workspacePaths,
+  pluginModulePaths,
 }: PlanCheckOptions): CheckPlan => {
   const targets = [...new Set(affectedWorkspacePaths)].toSorted();
   if (targets.some((target) => !workspacePaths.has(target))) {
@@ -334,7 +397,7 @@ export const planCheck = ({
     ROOT_CHECKS.repoTypecheck,
   ]);
   for (const changedPath of changedPaths) {
-    for (const rootCheck of rootChecksForPath(changedPath)) {
+    for (const rootCheck of rootChecksForPath(changedPath, pluginModulePaths)) {
       rootCheckSet.add(rootCheck);
     }
   }
@@ -352,6 +415,18 @@ export const planCheck = ({
   );
   const rootScriptLintRuns = rootCheckSet.has(ROOT_CHECKS.rootScriptLint);
   const pluginFixturesRun = rootCheckSet.has(ROOT_CHECKS.pluginFixtures);
+  const rootLintCandidates = changedPaths.some((changedPath) =>
+    ROOT_LINT_INPUTS.some((input) => matchesTurboInput(changedPath, input)),
+  )
+    ? [
+        ...presentChangedPaths,
+        ...repositoryPaths.filter(
+          (file) =>
+            !file.startsWith("scripts/") &&
+            !file.startsWith(".oxlint-plugins/"),
+        ),
+      ]
+    : presentChangedPaths;
 
   return {
     type: "scoped",
@@ -361,7 +436,7 @@ export const planCheck = ({
       : { type: "targets", targets },
     rootLintPaths: [
       ...new Set(
-        presentChangedPaths.filter(
+        rootLintCandidates.filter(
           (changedPath) =>
             workspaceForPath(changedPath) === null &&
             (changedPath.startsWith("scripts/")
@@ -1210,6 +1285,10 @@ export const planResultBoundaryLint = ({
   return resultBoundaryLintCommand(candidates, measureDebt(base));
 };
 
+/** Only the unpartitioned check and the rest leg run the root checks. */
+const runsRootChecks = (leg: CodeCheckLeg | undefined): boolean =>
+  leg === undefined || leg === "rest";
+
 type ScopedCommandsOptions = {
   leg: CodeCheckLeg;
   workspaces: ReadonlySet<string>;
@@ -1220,7 +1299,7 @@ export const scopedCommands = (
   partition?: ScopedCommandsOptions,
 ): string[][] => {
   if (partition !== undefined) {
-    const ownsRoot = partition.leg === "rest";
+    const ownsRoot = runsRootChecks(partition.leg);
     const commands = scopedCommands({
       type: "scoped",
       lint: plan.lint,
@@ -1315,8 +1394,12 @@ export const planFullCheck = ({
   const plan = planCheck({
     changedPaths: files,
     presentChangedPaths: files,
+    repositoryPaths: files,
     affectedWorkspacePaths: [...workspaces],
     workspacePaths: workspaces,
+    // Every file counts as changed, so the declared inputs already select
+    // every root check; the check below fails if one is left out.
+    pluginModulePaths: new Set(),
   });
   if (plan.type === "fallback") {
     panic(`full code-check planned a fallback for ${plan.changedPath}`);
@@ -1345,6 +1428,7 @@ type ScopeCheck = {
 
 const planScope = async (
   scope: CheckScope,
+  leg: CodeCheckLeg | undefined,
 ): Promise<Result<ScopeCheck, CommandFailedError>> => {
   switch (scope.type) {
     case "all": {
@@ -1366,6 +1450,10 @@ const planScope = async (
       if (changed.isErr()) {
         return changed;
       }
+      const repository = repositoryPaths();
+      if (repository.isErr()) {
+        return repository;
+      }
       const affected = await discoverAffectedWorkspaces({
         mergeBase: changed.value.mergeBase,
       });
@@ -1378,8 +1466,17 @@ const planScope = async (
               : planCheck({
                   changedPaths: changed.value.paths,
                   presentChangedPaths,
+                  repositoryPaths: presentPaths(
+                    repository.value.filter(
+                      (file) => workspaceForPath(file) === null,
+                    ),
+                  ),
                   affectedWorkspacePaths: discovery.paths,
                   workspacePaths: workspacePaths(),
+                  // A leg that drops the root checks skips reading the graph.
+                  pluginModulePaths: runsRootChecks(leg)
+                    ? pluginFixtureModules(REPO_ROOT)
+                    : new Set(),
                 }),
           changedPaths: changed.value.paths,
           presentChangedPaths,
@@ -1408,7 +1505,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = await planScope(options.scope);
+  const scoped = await planScope(options.scope, options.leg);
   if (scoped.isErr()) {
     return scoped;
   }

@@ -8,8 +8,8 @@ import { LIMITS } from "@/api/lib/limits";
  * The agent-facing text of `search_case_law` per guidance mode
  * (`MCP_CASE_LAW_SEARCH_GUIDANCE`).
  *
- * `off` is the contract as it read before guidance existed, byte for byte, so
- * the gate can be evaluated against it. `v1` adds what a model cannot infer
+ * `off` is the contract without experimental query-writing guidance, so the
+ * gate can be evaluated against it. `v1` adds what a model cannot infer
  * from the schema: a hit is one passage holding every required word, so a
  * long phrasing finds less, not more; `limit` is shared evenly, so a weak
  * extra phrasing costs the good one slots; and the courts example names every
@@ -41,15 +41,7 @@ const DESCRIPTION_HEAD =
   "names each hit's phrasings. `limit` is split evenly.";
 
 const DESCRIPTION_TAIL =
-  " Without strict, empty first relevance pages try some_terms hits ranked " +
-  "by term coverage; short pages may append them after all_terms hits. " +
-  "Totals/facets count full matches (facets: first phrasing, page one; total: " +
-  "uncounted for multiple phrasings). Filters: court, language, dates, " +
-  "decision type, provision, source_id (facets.source value). searches[] " +
-  "reports queryUsed and warnings. strict requires every word; otherwise " +
-  "function words are optional. Hits carry match, citationAuthority, " +
-  "matchingPassages, resourceName and caseNumber. read_case_law_decision " +
-  "types the reference; read_case_law_citations gives citing polarity.";
+  " Facets are opt-in by name, first phrasing on page one only. Totals count full matches; uncounted for multiple phrasings. strict requires every word; otherwise function words are optional. Relevance pages may add some_terms hits after all_terms hits. searches[] reports queryUsed/warnings. source_id uses facets.source values.";
 
 const QUERIES_TAIL =
   "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.";

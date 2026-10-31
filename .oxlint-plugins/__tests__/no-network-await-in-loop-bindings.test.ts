@@ -23,7 +23,7 @@ test("keeps imported aliases namespaces and fluent clients network bound", async
   expect(
     await lintSingleRule(
       "no-network-await-in-loop",
-      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport * as http from "@stll/fetch";\nimport { api as client } from "@/lib/eden-client";\nasync function load() { for (const id of ids) {\nawait read(id);\nawait http.fetchWithTimeout(id);\nawait client.documents({ id }).get();\nawait client["copy-to-workspace"].post({ id });\n} }',
+      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport * as http from "@stll/fetch";\nimport { api as client } from "@/lib/api";\nasync function load() { for (const id of ids) {\nawait read(id);\nawait http.fetchWithTimeout(id);\nawait client.documents({ id }).get();\nawait client["copy-to-workspace"].post({ id });\n} }',
     ),
   ).toEqual([5, 6, 7, 8]);
 });
@@ -39,7 +39,7 @@ test("ignores parameters shadowing imported owners", async () => {
   expect(
     await lintSingleRule(
       "no-network-await-in-loop",
-      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/eden-client";\nasync function load(read, api) { for (const id of ids) { await read(id); await api.documents.get(id); } }',
+      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/api";\nasync function load(read, api) { for (const id of ids) { await read(id); await api.documents.get(id); } }',
     ),
   ).toEqual([]);
 });
@@ -47,7 +47,7 @@ test("ignores block scoped shadows without hiding later imports", async () => {
   expect(
     await lintSingleRule(
       "no-network-await-in-loop",
-      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/eden-client";\nasync function load() { for (const id of ids) {\n{ const read = localRead; const api = localClient; await read(id); await api.documents.get(id); }\nawait read(id); await api.documents.get(id);\n} }',
+      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/api";\nasync function load() { for (const id of ids) {\n{ const read = localRead; const api = localClient; await read(id); await api.documents.get(id); }\nawait read(id); await api.documents.get(id);\n} }',
     ),
   ).toEqual([5, 5]);
 });
@@ -55,7 +55,7 @@ test("resolves hoisted declarations before their source order", async () => {
   expect(
     await lintSingleRule(
       "no-network-await-in-loop",
-      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/eden-client";\nasync function load() { for (const id of ids) { await read(id); await api.get(id); await fetch(id); }\nfunction read(id) { return id; }\nvar api;\nfunction fetch(id) { return id; } }',
+      'import { fetchWithTimeout as read } from "@stll/fetch";\nimport { api } from "@/lib/api";\nasync function load() { for (const id of ids) { await read(id); await api.get(id); await fetch(id); }\nfunction read(id) { return id; }\nvar api;\nfunction fetch(id) { return id; } }',
     ),
   ).toEqual([]);
 });

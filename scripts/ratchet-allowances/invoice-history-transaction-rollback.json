@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "apps/api/src/lib/organization-storage-teardown.ts: The completeWorkspaceDeletion transaction owner rejects retained invoice history with a typed WorkspaceBillingHistoryError. Throwing rolls back the caller's deleting-status fence and all transaction work; returning normally would commit that fence. executeAuthorizedWorkspaceDeletion captures the transaction rejection into Result and the handler returns the documented conflict."
+}

@@ -1,13 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { aiMemories } from "@/api/db/schema";
 import { canManageMemory } from "@/api/handlers/memories/authorization";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { AI_MEMORY_FEATURE_ID } from "@/api/lib/feature-access/registry";
@@ -18,7 +18,7 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   permissions: { chat: ["update"] },
   mcp: { type: "internal", reason: "assistant_chat" },
-  params: t.Object({ memoryId: tSafeId("aiMemory") }),
+  params: v.object({ memoryId: resourceIdSchema("aiMemory") }),
 } satisfies HandlerConfig;
 
 const deleteMemory = createSafeRootHandler(
@@ -123,7 +123,7 @@ const deleteMemory = createSafeRootHandler(
   },
 );
 
-declareAggregateMutation(deleteMemory.handler, {
+declareAggregateMutation(deleteMemory, {
   type: "independent",
   reason:
     "Deletes one memory row in one transaction and re-checks its ownership fields in the delete itself; no aggregate state spans memories.",

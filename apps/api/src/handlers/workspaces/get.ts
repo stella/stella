@@ -1,8 +1,8 @@
 import { sql } from "drizzle-orm";
-import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
+import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ReadWorkspaceHandlerProps = {

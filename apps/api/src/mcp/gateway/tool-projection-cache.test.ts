@@ -8,7 +8,7 @@ import { assertProperty } from "@stll/property-testing";
 import { readPresent, readUnavailable } from "@/api/lib/errors/read-outcome";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { MCP_DEFAULT_RESOURCE_SCOPES, type McpMode } from "@/api/mcp/constants";
-import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpRequestResources } from "@/api/mcp/context";
 import {
   hiddenMcpDescriptorIds,
   scopeMcpDescriptorProse,
@@ -57,13 +57,13 @@ const principal = ({
   enrolment,
   hiddenDescriptors = [],
   grantedScopes = [],
-}: PrincipalOptions): McpRequestContext => {
+}: PrincipalOptions): McpRequestResources => {
   const organizationId = `org_${id}`;
   const userId = `user_${id}`;
   const hiddenBindings = new Map(
     hiddenDescriptors.map((descriptor) => [descriptor, UNENROLLED_FEATURE_ID]),
   );
-  return asTestRaw<McpRequestContext>({
+  return asTestRaw<McpRequestResources>({
     accessibleWorkspaceIds: [],
     organizationId,
     userId,
@@ -115,7 +115,7 @@ const servedShape = (tools: readonly McpTool[]): unknown =>
 const uncachedShape = (
   definitions: readonly McpToolDefinition[],
   mode: McpMode,
-  context: McpRequestContext,
+  context: McpRequestResources,
 ): unknown => {
   const hidden = hiddenMcpDescriptorIds(context, DEFAULT_MCP_TOOL_DEFINITIONS);
   const scope = (schema: Record<string, unknown>) =>
@@ -237,14 +237,14 @@ describe("tools/list scope isolation over HTTP", () => {
     getMcpToolDefinition,
     getMcpToolRequiredScopesHint,
     handleMcpToolCall,
-    listMcpResources: () => [],
+    listMcpResources: async () => [],
     listMcpTools,
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,
     resolveMcpSessionContext: async (session) =>
       await Promise.resolve(
         contexts.get(session.userId.replace("user_", "")) ??
-          asTestRaw<McpRequestContext>({}),
+          asTestRaw<McpRequestResources>({}),
       ),
   });
 
@@ -297,7 +297,7 @@ describe("registry narrowing is resolved only for discovery", () => {
     const resolve = mock(
       async () => await Promise.resolve(readPresent(["ares" as const])),
     );
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<McpRequestResources>({
       loadEnabledRegistrySlugs: resolve,
     });
 
@@ -317,7 +317,7 @@ describe("registry narrowing is resolved only for discovery", () => {
   });
 
   test("an unavailable read leaves the full enum advertised", async () => {
-    const context = asTestRaw<McpRequestContext>({
+    const context = asTestRaw<McpRequestResources>({
       loadEnabledRegistrySlugs: async () =>
         await Promise.resolve(
           readUnavailable({ kind: "thrown", error: new Error("read failed") }),
@@ -394,21 +394,57 @@ describe("registry narrowing is resolved only for discovery", () => {
   });
 });
 
-describe("reference visibility with memoized tool mentions", () => {
-  test("each request's own tool vocabulary still decides whether a reference is served", () => {
-    const served = (context: McpRequestContext) =>
-      listMcpResources("default", context).some(
+describe("reference visibility per request", () => {
+  test("each request's own tool vocabulary still decides whether a reference is served", async () => {
+    const served = async (context: McpRequestResources) =>
+      (await listMcpResources("default", { context })).some(
         ({ uri }) => uri === TEMPLATE_WORKFLOW_REFERENCE_URI,
       );
-    const everyTool = principal({ id: "all", enrolment: "none" });
+    const everyTool = principal({
+      id: "all",
+      enrolment: "none",
+      grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES,
+    });
     const withoutTemplates = principal({
       id: "no-templates",
       enrolment: "none",
       hiddenDescriptors: ["create_template"],
+      grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES,
+    });
+    const readOnly = principal({
+      id: "read-only",
+      enrolment: "none",
+      grantedScopes: ["stella:read", "stella:search"],
     });
 
-    expect(served(everyTool)).toBe(true);
-    expect(served(withoutTemplates)).toBe(false);
-    expect(served(everyTool)).toBe(true);
+    expect(await served(everyTool)).toBe(true);
+    expect(await served(withoutTemplates)).toBe(false);
+    // The session's own tools/list decides, scopes included: a session that
+    // cannot create a template is not pointed at the template workflow.
+    expect(await served(readOnly)).toBe(false);
+    expect(await served(everyTool)).toBe(true);
+  });
+
+  test("a shipped skill is served only where the session can call the tools it needs", async () => {
+    const PLAYBOOK_SKILL_URI = "stella://skills/playbook-builder";
+    const servedTo = async (id: string, grantedScopes: readonly string[]) =>
+      (
+        await listMcpResources("default", {
+          context: principal({ id, enrolment: "none", grantedScopes }),
+        })
+      ).map(({ uri }) => uri);
+
+    // save_playbook is the skill's last step; a read-only session lists the
+    // skill's reads but not that write, so it is never offered the skill.
+    expect(
+      await servedTo("reader", ["stella:read", "stella:search"]),
+    ).not.toContain(PLAYBOOK_SKILL_URI);
+    expect(
+      await servedTo("knowledge-writer", [
+        "stella:read",
+        "stella:search",
+        "stella:knowledge_write",
+      ]),
+    ).toContain(PLAYBOOK_SKILL_URI);
   });
 });

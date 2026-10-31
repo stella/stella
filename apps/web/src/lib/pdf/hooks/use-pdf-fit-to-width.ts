@@ -1,6 +1,6 @@
+import { useCallback } from "react";
 import type { RefCallback, RefObject } from "react";
 
-import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/react/shallow";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -19,21 +19,18 @@ export const usePDFFitToWidth = ({
     fitToWidth,
     scaleOffset,
     updateContainerWidth,
-    rerenderAtScale,
     consumePendingScrollAnchor,
   ] = usePDFStore(
     useShallow((s) => [
       s.fitToWidth,
       s.scaleOffset,
       s.updateContainerWidth,
-      s.rerenderAtScale,
       s.consumePendingScrollAnchor,
     ]),
   );
   const effectiveScale = usePDFStore(
     useShallow((s) => s.scale + s.scaleOffset),
   );
-  const debouncedRerender = useDebouncedCallback(rerenderAtScale, 150);
 
   useExternalSyncEffect(() => {
     const anchor = consumePendingScrollAnchor();
@@ -50,40 +47,45 @@ export const usePDFFitToWidth = ({
     return undefined;
   }, [consumePendingScrollAnchor, containerRef, effectiveScale]);
 
-  return (container: HTMLDivElement | null) => {
-    if (!container || fitToWidth === undefined || scaleOffset !== 0) {
-      return undefined;
-    }
-
-    // Observe the ScrollArea viewport (the visible area),
-    // not the content container. The content container's
-    // width is determined by the PDF pages themselves,
-    // creating a circular dependency.
-    const viewport = container.closest<HTMLElement>(
-      SCROLL_AREA_VIEWPORT_SELECTOR,
-    );
-    const observeTarget = viewport ?? container;
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries.at(-1);
-      if (!entry) {
-        return;
+  return useCallback(
+    (container: HTMLDivElement | null) => {
+      if (!container || fitToWidth === undefined || scaleOffset !== 0) {
+        return undefined;
       }
 
-      const containerWidth = entry.contentRect.width;
-      if (containerWidth <= 0) {
-        return;
-      }
+      // Observe the ScrollArea viewport (the visible area),
+      // not the content container. The content container's
+      // width is determined by the PDF pages themselves,
+      // creating a circular dependency.
+      const viewport = container.closest<HTMLElement>(
+        SCROLL_AREA_VIEWPORT_SELECTOR,
+      );
+      const observeTarget = viewport ?? container;
 
-      updateContainerWidth(containerWidth, container);
-      debouncedRerender(effectiveScale);
-    });
+      // Every `observe` reports the current size once, and the viewer
+      // re-attaches this ref whenever its page list changes, so the same
+      // width arrives again and again. The store redraws pages only when the
+      // width changes the scale.
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries.at(-1);
+        if (!entry) {
+          return;
+        }
 
-    observer.observe(observeTarget);
+        const containerWidth = entry.contentRect.width;
+        if (containerWidth <= 0) {
+          return;
+        }
 
-    return () => {
-      observer.disconnect();
-      debouncedRerender.cancel();
-    };
-  };
+        updateContainerWidth(containerWidth, container);
+      });
+
+      observer.observe(observeTarget);
+
+      return () => {
+        observer.disconnect();
+      };
+    },
+    [fitToWidth, scaleOffset, updateContainerWidth],
+  );
 };

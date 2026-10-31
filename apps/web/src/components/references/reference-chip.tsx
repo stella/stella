@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { createContext, Fragment, isValidElement, use } from "react";
 
 import { skipToken, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
 import {
@@ -42,10 +42,12 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /**
  * The matter a chat surface renders in. An entity href persisted without its
@@ -120,8 +122,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       reference.type === "entity" ? reference.entityId : null,
     ),
   );
-  const hintQueryView = useQueryView(hintQuery);
-  useQueryViewError(hintQueryView);
+  const hintQueryView = queryView(hintQuery);
+  useQueryViewError(hintQueryView, "useReferenceFacts:query");
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
@@ -286,6 +288,9 @@ const ReferenceChipView = ({
         <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
       }
       onActivate={onActivate}
+      // The label truncates, so the full name stays one hover away and is
+      // the chip's accessible name. A rich label carries no plain string.
+      title={labelContent === undefined ? visual.label : undefined}
       truncate
     >
       {label}
@@ -300,9 +305,7 @@ const ReferenceChipView = ({
 export const useReferenceActivation = (reference: ChatReference) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
+  const router = useRouter();
   const { open: openDecision } = useOpenDecisionTab();
 
   switch (reference.type) {
@@ -314,16 +317,19 @@ export const useReferenceActivation = (reference: ChatReference) => {
       return () =>
         detached(
           (async () => {
-            const result = await openEntityInInspector(
+            const result = await openEntityInInspector({
+              documentOnScreen: getCurrentWorkspaceDocument(
+                router.state.matches,
+              ),
               entityId,
               label,
-              matterId,
-            );
+              workspaceId: matterId,
+            });
             if (result.type === "folder") {
               await navigateToWorkspaceFolder({
                 folderId: result.entityId,
                 navigate,
-                pathname,
+                router,
                 queryClient,
                 targetWorkspaceId: result.workspaceId,
               });

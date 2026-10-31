@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   useMutation,
@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/icons";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuRadioGroup,
@@ -31,7 +32,6 @@ import {
   MenuSub,
   MenuSubPopup,
   MenuSubTrigger,
-  MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import { UNKNOWN_AUTHOR_LABEL } from "@stll/ui/review-author-avatar";
@@ -65,22 +65,23 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import { getFormatter } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
+import { queryView } from "@/lib/query-view.logic";
 import { routeQueryOptions } from "@/lib/react-query";
 import {
   DAY_AND_MONTH_FORMAT,
   WEEKDAY_INITIAL_FORMAT,
 } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { overviewOptions, workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
@@ -116,6 +117,7 @@ type VirtualAnchor = {
 type UpcomingMenuState = {
   open: boolean;
   anchor: VirtualAnchor | null;
+  opener: HTMLElement | null;
   task: UpcomingTaskContext | null;
 };
 
@@ -159,13 +161,14 @@ const formatHours = (hours: number) =>
 // ── Main component ───────────────────────────────────────
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
+  const idempotentSubmit = useIdempotentSubmit();
   const t = useTranslations();
   const workflowsEnabled = useWorkflowsPreviewEnabled();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReviewTimeEntries = usePermissions({ timeEntry: ["approve"] });
   const timeBillingEnabled = useTimeBillingRouteEnabled() && canReadTimeEntries;
   const tWorkspaces = useTranslations("workspaces");
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const firstWeekday = getFirstWeekday(locale);
   const navigate = useNavigate({ from: "/workspaces/$workspaceId" });
   const queryClient = useQueryClient();
@@ -174,6 +177,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [upcomingMenu, setUpcomingMenu] = useState<UpcomingMenuState>({
     open: false,
     anchor: null,
+    opener: null,
     task: null,
   });
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
@@ -186,7 +190,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     });
   // Views — find view IDs by layout type for stat card navigation
   const viewsQuery = useQuery(viewsOptions(workspaceId));
-  const viewsView = useQueryView(viewsQuery);
+  const viewsView = queryView(viewsQuery);
   const views = viewsView.type === "items" ? viewsView.items : undefined;
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
   // reads that cache (`enabled: false`) so the general matter shell never fires
@@ -197,7 +201,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     ...flowRunsOptions({ workspaceId }),
     enabled: false,
   });
-  const flowRunsDataView = useQueryView(flowRunsDataQuery);
+  const flowRunsDataView = queryView(flowRunsDataQuery);
   const flowRunsData =
     flowRunsDataView.type === "items" ? flowRunsDataView.items : undefined;
   const activeFlowRunCount =
@@ -205,39 +209,47 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
           .length
       : 0;
-  const findViewByType = (type: string) =>
-    views?.find((v) => v.layout.type === type);
+  const findViewByType = useCallback(
+    (type: string) => views?.find((v) => v.layout.type === type),
+    [views],
+  );
 
   const createTaskOnce = useSingleFlight();
-  const handleCreateTask = async () =>
-    createTaskOnce.run(async () => {
-      const { data: taskData, error: taskError } = await api
-        .tasks({ workspaceId })
-        .put({
-          name: t("tasks.untitled"),
-        });
-      const entityId = taskData?.entityId;
-      if (taskError || !entityId) {
-        notifyUserError(
-          taskError ? toAPIError(taskError) : undefined,
-          t("errors.actionFailed"),
+  const handleCreateTask = useCallback(
+    async () =>
+      await createTaskOnce.run(async () => {
+        const { data: taskData, error: taskError } = await idempotentSubmit.run(
+          {
+            operation: JSON.stringify([
+              "api.tasks({workspaceId})",
+              { workspaceId },
+            ]),
+            body: { name: t("tasks.untitled") },
+            send: async (creationPayload) =>
+              api.tasks({ workspaceId }).put(creationPayload),
+          },
         );
-        return;
-      }
-      stellaToast.add({
-        title: t("success.taskCreated"),
-        type: "success",
-      });
-      detached(
-        queryClient.invalidateQueries({
-          queryKey: workspacesKeys.overview(workspaceId),
-        }),
-        "overview-view.invalidate",
-      );
-      useInspectorTabsStore
-        .getState()
-        .openTask({ taskId: entityId, workspaceId, isNew: true });
-    });
+        const entityId = taskData?.entityId;
+        if (taskError || !entityId) {
+          notifyUserError(
+            taskError ? toAPIError(taskError) : undefined,
+            t("errors.actionFailed"),
+          );
+          return;
+        }
+        stellaToast.add({ title: t("success.taskCreated"), type: "success" });
+        detached(
+          queryClient.invalidateQueries({
+            queryKey: workspacesKeys.overview(workspaceId),
+          }),
+          "overview-view.invalidate",
+        );
+        useInspectorTabsStore
+          .getState()
+          .openTask({ taskId: entityId, workspaceId, isNew: true });
+      }),
+    [workspaceId, t, queryClient, idempotentSubmit, createTaskOnce],
+  );
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({
@@ -253,7 +265,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           taskId: toSafeId<"entity">(taskId),
           status,
         });
-      return unwrapEden(response);
+      return unwrapApiResponse(response);
     },
     onSuccess: async (_data, variables) => {
       await Promise.all([
@@ -273,7 +285,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     },
   });
 
-  const handleTaskContextMenu =
+  const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -282,9 +294,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         anchor: {
           getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
         },
+        opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
-    };
+    },
+    [],
+  );
 
   const menuTaskStatus = upcomingMenu.task?.status ?? null;
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
@@ -298,7 +313,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     cancelled: t("tasks.statusValues.cancelled"),
   };
 
-  const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
+  const recentEntities = useMemo(
+    () => data.recentEntities.filter((e) => e.kind !== "folder"),
+    [data.recentEntities],
+  );
   const hasActivity = recentEntities.length > 0;
 
   // Re-compute the current date when the user returns to the
@@ -324,20 +342,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  // The API reads the agenda on its own: open tasks due today or later,
-  // nearest first, undated last. The local date also applies here, so a
-  // cached response drops yesterday's deadlines once the day rolls over.
-  const tasks = data.upcomingAgenda.filter(
-    (task) => task.dueDate === null || task.dueDate >= today,
-  );
+  const tasks = data.upcomingAgenda;
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
-  const weekStart = getWeekStart(locale, Temporal.PlainDate.from(today));
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
+  const weekStart = useMemo(
+    () => getWeekStart(locale, Temporal.PlainDate.from(today)),
+    [today, locale],
+  );
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
-  const timeSummaryView = useQueryView(
+  const timeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(
@@ -351,7 +366,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     }),
   );
 
-  const teamTimeSummaryView = useQueryView(
+  const teamTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntryTeamSummaryOptions(
@@ -366,18 +381,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const prevWeekStart = useMemo(
     () => weekStart.subtract({ days: 7 }),
     [weekStart],
   );
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const prevWeekEnd = useMemo(
     () => weekStart.subtract({ days: 1 }),
     [weekStart],
   );
 
-  const previousTimeSummaryView = useQueryView(
+  const previousTimeSummaryView = queryView(
     useQuery({
       ...routeQueryOptions(
         timeEntrySummaryOptions(
@@ -405,7 +418,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           : currentTimeView.items.totalMinutes) / 60
       : null;
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const teamHeatmap = useMemo(() => {
     if (!teamTimeSummary) {
       return [];
@@ -429,12 +441,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // The agenda is already ordered by nearest deadline.
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
-  const tasksWithDue = useMemo(
-    () => tasks.filter((task) => task.dueDate !== null),
-    [tasks],
-  );
+  // The agenda is already ordered with dated tasks before undated tasks.
+  const nextDeadlineTask = tasks.find((task) => task.dueDate !== null);
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
@@ -446,7 +454,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
         <StatCard
           icon={<FolderTreeIcon className="size-4" />}
-          label={t("workspaces.overview.totalDocuments")}
+          label="workspaces.overview.totalDocuments"
           onClick={() => {
             const view = findViewByType("filesystem");
             if (view) {
@@ -463,7 +471,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
         <StatCard
           icon={<SquareCheckIcon className="size-4" />}
-          label={t("workspaces.tasksCount", { count: data.taskCount })}
+          label="workspaces.overview.openTasks"
           onClick={() => {
             const view = findViewByType("kanban");
             if (view) {
@@ -480,9 +488,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         />
         <StatCard
           icon={<CalendarClockIcon className="size-4" />}
-          label={t("workspaces.overview.nextDeadline")}
+          label="workspaces.overview.nextDeadline"
           onClick={() => {
-            const task = tasksWithDue.at(0);
+            const task = nextDeadlineTask;
             if (task) {
               useInspectorTabsStore.getState().openTask({
                 taskId: task.entityId,
@@ -491,9 +499,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          sublabel={tasksWithDue.at(0)?.name}
+          sublabel={nextDeadlineTask?.name}
           value={(() => {
-            const date = tasksWithDue.at(0)?.dueDate;
+            const date = nextDeadlineTask?.dueDate;
             if (!date) {
               return "—";
             }
@@ -506,7 +514,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         {timeBillingEnabled && (
           <StatCard
             icon={<ClockIcon className="size-4" />}
-            label={t("workspaces.overview.timeThisWeek")}
+            label="workspaces.overview.timeThisWeek"
             {...(currentTimeView.type === "items" &&
             currentTimeView.refetchError === undefined
               ? {
@@ -537,7 +545,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         {workflowsEnabled && (
           <StatCard
             icon={<WorkflowIcon className="size-4" />}
-            label={t("common.workflows")}
+            label="common.workflows"
             onClick={() => {
               detached(
                 navigate({
@@ -571,6 +579,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 getBoundingClientRect: () =>
                   new DOMRect(e.clientX, e.clientY, 0, 0),
               },
+              opener:
+                e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
               task: null,
             });
           })}
@@ -632,6 +642,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                   toDateTimeEpoch(task.dueDate),
                                   { ...DAY_AND_MONTH_FORMAT, timeZone: "UTC" },
                                 )}
+                                {task.dueDate < today
+                                  ? ` · ${t("tasks.overdue")}`
+                                  : ""}
                               </>
                             )}
                           </span>
@@ -661,16 +674,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               setUpcomingMenu((previous) =>
                 open
                   ? { ...previous, open }
-                  : { open: false, anchor: null, task: null },
+                  : { ...previous, open: false, anchor: null },
               );
             }}
             open={upcomingMenu.open}
           >
-            <MenuTrigger
-              nativeButton={false}
-              render={<span className="sr-only" />}
-            />
-            <MenuPopup anchor={upcomingMenu.anchor ?? undefined}>
+            <MenuAnchor />
+            <MenuPopup
+              anchor={upcomingMenu.anchor ?? undefined}
+              finalFocus={() => upcomingMenu.opener}
+            >
               {upcomingMenu.task === null ? (
                 <MenuItem
                   disabled={createTaskOnce.pending}
@@ -1045,18 +1058,24 @@ const OverviewSectionHeader = ({
 
 type StatCardProps = {
   icon: React.ReactNode;
-  label: string;
+  label:
+    | "common.workflows"
+    | "workspaces.overview.nextDeadline"
+    | "workspaces.overview.openTasks"
+    | "workspaces.overview.timeThisWeek"
+    | "workspaces.overview.totalDocuments";
   value: React.ReactNode;
   sublabel?: string | undefined;
   onClick?: () => void;
 };
 
 const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
+  const t = useTranslations();
   const content = (
     <>
       <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
         {icon}
-        {label}
+        {t(label)}
       </div>
       <div className="text-xl font-semibold tabular-nums">{value}</div>
       {sublabel && (

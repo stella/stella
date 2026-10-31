@@ -125,7 +125,7 @@ const DOCUMENT_PROPERTY_VALUE_SCHEMA = v.variant("type", [
   v.object({ type: v.literal("minutes"), value: v.number() }),
 ]);
 
-/** Runtime decoder for the UI-only fetch route excluded from Eden's type graph. */
+/** Runtime decoder for the UI-only fetch route the API client does not type. */
 export const DOCUMENT_PROPERTIES_RESULT_SCHEMA = v.variant("status", [
   v.object({
     status: v.literal("available"),

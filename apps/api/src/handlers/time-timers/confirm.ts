@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import * as v from "valibot";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
@@ -22,13 +22,13 @@ const confirmTimer = createSafeRootHandler(
       consumesServices: false,
     },
     params: timerParams,
-    body: t.Object({
-      timezoneId: t.String({ minLength: 1, maxLength: 64 }),
-      billable: t.Optional(t.Boolean()),
-      activityGroup: t.Optional(
-        t.Union([
-          t.Literal(TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
-          t.Literal(TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+    body: v.object({
+      timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+      billable: v.optional(v.boolean()),
+      activityGroup: v.optional(
+        v.union([
+          v.literal(TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+          v.literal(TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
         ]),
       ),
     }),

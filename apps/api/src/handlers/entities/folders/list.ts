@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
+import * as v from "valibot";
+
+import { numberFromString } from "@stll/api-contract/http-input";
 
 import { entityContextId } from "@/api/db/entity-feature-policies";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -8,7 +10,7 @@ import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { paginationCursorSchema } from "@/api/lib/custom-schema";
 import {
   decodeEntityListCursor,
   encodeEntityListCursor,
@@ -19,13 +21,20 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
-const listFoldersQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Integer({ minimum: 1, maximum: LIMITS.entitiesWindowSizeMax }),
+const listFoldersQuerySchema = v.object({
+  limit: v.optional(
+    numberFromString(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(LIMITS.entitiesWindowSizeMax),
+      ),
+    ),
   ),
-  cursor: t.Optional(tPaginationCursor()),
+  cursor: v.optional(paginationCursorSchema()),
 });
-type ListFoldersQuery = (typeof listFoldersQuerySchema)["static"];
+type ListFoldersQuery = v.InferOutput<typeof listFoldersQuerySchema>;
 
 type ListFoldersHandlerProps = {
   safeDb: SafeDb;

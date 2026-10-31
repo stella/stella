@@ -332,7 +332,13 @@ const runKnip = (): unknown => {
   // knip exits non-zero whenever it reports issues, which is the normal case
   // for a budget: only unparsable output is a failure.
   const stdout = knip.stdout.toString();
-  const parsed = Result.try((): unknown => JSON.parse(stdout));
+  // The generation preflight may report a cache hit before knip writes JSON.
+  // Anchor on the reporter's top-level shape rather than accepting arbitrary
+  // trailing output as a report.
+  const reportStart = stdout.indexOf('{"issues":');
+  const parsed = Result.try((): unknown =>
+    JSON.parse(reportStart === -1 ? stdout : stdout.slice(reportStart)),
+  );
   if (Result.isError(parsed)) {
     panic(
       `knip did not produce JSON output:\n${knip.stderr.toString().trim() || stdout.trim()}`,

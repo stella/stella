@@ -13,6 +13,9 @@
  *    category the target locale needs (e.g. Polish few/many, Arabic's six).
  *  - terminology: per-locale renderings marked `forbidden` in glossary.json
  *    do not appear (keeps canonical terms consistent across the product).
+ *  - bare errors: no en message says only that something failed ("Error",
+ *    "Something went wrong") without telling the person what to do next.
+ *    Never grandfathered.
  *
  * Existing debt is grandfathered in i18n-lint-baseline.json so the gate
  * catches only NEW regressions. Burn the baseline down over time.
@@ -26,6 +29,8 @@ import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
 import { panic } from "better-result";
 import path from "node:path";
+
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { parseGlossary } from "./glossary-gen";
 import type { Glossary } from "./glossary-gen";
@@ -138,6 +143,27 @@ export const findPlaceholderMismatch = (
 };
 
 /** ICU parse error message, or null when the value is valid ICU MessageFormat. */
+/**
+ * An argument that names a storage handle (`blockId`, `paraId`, `commentIds`)
+ * rather than something the reader knows. A user-facing string that
+ * interpolates one shows a raw id ("Replace 707C9911"): say what the thing is
+ * or what changes instead, and pass that.
+ */
+const INTERNAL_ID_ARGUMENT = /(?:Id|ID|Ids|IDs)$/u;
+
+/** The internal-identifier arguments a message interpolates; empty when none. */
+export const findInternalIdArguments = (value: string): string[] => {
+  const ast = safeParse(value);
+  if (ast === null) {
+    return [];
+  }
+  const names = new Set<string>();
+  collectArgNames(ast, names);
+  return [...names]
+    .filter((name) => INTERNAL_ID_ARGUMENT.test(name))
+    .toSorted();
+};
+
 export const findIcuError = (value: string): string | null => {
   const result = cachedParse(value);
   return result instanceof Error ? result.message : null;
@@ -639,6 +665,61 @@ export const findForbiddenTerms = (
   return hits;
 };
 
+/**
+ * Whole messages that say something failed and nothing else. Nobody can act
+ * on them, so a failure message says what to do next (try again, reload).
+ */
+const BARE_ERROR_MESSAGES = new Set([
+  "action failed",
+  "an error has occurred",
+  "an error occurred",
+  "an unexpected error occurred",
+  "an unknown error occurred",
+  "error",
+  "error occurred",
+  "errors",
+  "oops",
+  "oops, something went wrong",
+  "operation failed",
+  "request failed",
+  "something went wrong",
+  "unexpected error",
+  "unknown error",
+]);
+
+const TRAILING_ERROR_PUNCTUATION = new Set([".", "!", ":", "\u2026"]);
+
+const stripTrailingErrorPunctuation = (value: string): string => {
+  let end = value.length;
+  while (end > 0) {
+    const character = value.at(end - 1);
+    if (!character || !TRAILING_ERROR_PUNCTUATION.has(character)) {
+      break;
+    }
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const bareErrorForm = (value: string): string => {
+  const normalized = normalizeUnicode(value, "NFC")
+    .toLowerCase()
+    .replaceAll("\u2019", "'")
+    .replaceAll(/\s+/gu, " ")
+    .trim();
+  return stripTrailingErrorPunctuation(normalized).trim();
+};
+
+export const isBareErrorMessage = (value: string): boolean =>
+  BARE_ERROR_MESSAGES.has(bareErrorForm(value));
+
+/** Keys of the en messages that only say something failed. */
+export const findBareErrors = (source: Record<string, string>): string[] =>
+  Object.entries(source)
+    .filter(([, value]) => isBareErrorMessage(value))
+    .map(([key]) => key)
+    .toSorted();
+
 // --- baseline ---
 
 export type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
@@ -875,6 +956,32 @@ if (import.meta.main) {
         console.log(`\n${path.resolve(langsDir, "en.json")}:`);
         for (const key of sourceErrors) {
           console.log(`  icu (source): ${key}`);
+        }
+      }
+
+      // A bare failure message is never grandfathered either.
+      const bare = findBareErrors(source);
+      if (bare.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const key of bare) {
+          console.log(
+            `  bare-error (source): ${key} says only that something failed; say what to do next`,
+          );
+        }
+      }
+      // Never grandfathered either: a raw id in front of a user is never right.
+      const idArguments = Object.entries(source)
+        .map(([key, value]) => [key, findInternalIdArguments(value)] as const)
+        .filter(([, names]) => names.length > 0)
+        .toSorted(([a], [b]) => a.localeCompare(b));
+      if (idArguments.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const [key, names] of idArguments) {
+          console.log(
+            `  internal id (source): ${key} interpolates ${names.join(", ")}; describe the thing instead`,
+          );
         }
       }
     }

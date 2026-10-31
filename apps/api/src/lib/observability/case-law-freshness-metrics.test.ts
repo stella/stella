@@ -14,11 +14,31 @@ afterEach(resetMetricLineSinkForTesting);
 
 const report = {
   backlogItems: 3,
-  oldestUnpublishedAgeSeconds: 42,
-  oldestUnpublishedAgeSource: "desired_at",
+  backlogCapped: false,
+  oldestUnpublishedAge: { type: "measured", seconds: 42, source: "desired_at" },
   sourceAges: [{ source: "cz-ns", ageSeconds: 19 }],
   convergence: "pending",
+  lastCompletedIdentifierPass: { repairs: 2, ageSeconds: 120 },
 } as const;
+
+test("an incomplete oldest age emits no age record", () => {
+  const records: Record<string, unknown>[] = [];
+  setMetricLineSinkForTesting((line) => {
+    records.push(JSON.parse(line));
+  });
+  emitCaseLawFreshnessReport({
+    ...report,
+    backlogCapped: true,
+    oldestUnpublishedAge: { type: "incomplete" },
+  });
+
+  expect(
+    records.flatMap((record) =>
+      Object.keys(record).filter((key) => key !== "_aws"),
+    ),
+  ).not.toContain("CaseLawOldestUnpublishedAgeSeconds");
+  expect(records).toHaveLength(5);
+});
 
 test("emits one owned EMF record per metric with only its bounded dimension", () => {
   const records: Record<string, unknown>[] = [];
@@ -27,7 +47,7 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
   });
   emitCaseLawFreshnessReport(report);
 
-  expect(records).toHaveLength(4);
+  expect(records).toHaveLength(6);
   expect(
     records.map((record) =>
       Object.keys(record).filter((key) => key !== "_aws"),
@@ -36,6 +56,8 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
     ["CaseLawProjectionBacklogItems"],
     ["CaseLawOldestUnpublishedAgeSeconds"],
     ["CaseLawSourceSyncAgeSeconds", "source"],
+    ["CaseLawDecisionIdentifierRepairs"],
+    ["CaseLawDecisionIdentifierPassAgeSeconds"],
     ["CaseLawProjectionConvergence", "status"],
   ]);
   expect(records.map((record) => record["_aws"])).toEqual([
@@ -68,12 +90,58 @@ test("emits one owned EMF record per metric with only its bounded dimension", ()
     expect.objectContaining({
       CloudWatchMetrics: [
         expect.objectContaining({
+          Dimensions: [[]],
+          Metrics: [
+            { Name: "CaseLawDecisionIdentifierRepairs", Unit: "Count" },
+          ],
+        }),
+      ],
+    }),
+    expect.objectContaining({
+      CloudWatchMetrics: [
+        expect.objectContaining({
+          Dimensions: [[]],
+          Metrics: [
+            {
+              Name: "CaseLawDecisionIdentifierPassAgeSeconds",
+              Unit: "Seconds",
+            },
+          ],
+        }),
+      ],
+    }),
+    expect.objectContaining({
+      CloudWatchMetrics: [
+        expect.objectContaining({
           Dimensions: [["status"]],
           Metrics: [{ Name: "CaseLawProjectionConvergence", Unit: "Count" }],
         }),
       ],
     }),
   ]);
+});
+
+test("a never-completed identifier pass emits no completion metrics", () => {
+  const records: Record<string, unknown>[] = [];
+  setMetricLineSinkForTesting((line) => {
+    records.push(JSON.parse(line));
+  });
+  emitCaseLawFreshnessReport({
+    ...report,
+    lastCompletedIdentifierPass: null,
+  });
+
+  expect(records).toHaveLength(4);
+  expect(
+    records.flatMap((record) =>
+      Object.keys(record).filter((key) => key !== "_aws"),
+    ),
+  ).not.toContain("CaseLawDecisionIdentifierPassAgeSeconds");
+  expect(
+    records.flatMap((record) =>
+      Object.keys(record).filter((key) => key !== "_aws"),
+    ),
+  ).not.toContain("CaseLawDecisionIdentifierRepairs");
 });
 
 test("the scheduler task reads and emits one report per run", async () => {
@@ -93,5 +161,5 @@ test("the scheduler task reads and emits one report per run", async () => {
     }),
   );
   expect(transactions).toBe(1);
-  expect(lines).toHaveLength(4);
+  expect(lines).toHaveLength(6);
 });

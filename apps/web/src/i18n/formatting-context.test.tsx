@@ -4,11 +4,13 @@ import { expect, test } from "bun:test";
 import { IntlProvider, useTranslations } from "use-intl";
 
 import { Step, Steps } from "@stll/ui/steps";
+import { IntFieldValue } from "@stll/workspace-ui/field-value";
 
 import {
   FormattingProvider,
   stepsMarkerStyle,
   useFormatter,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import {
@@ -17,6 +19,7 @@ import {
   supportedLanguages,
 } from "@/i18n/i18n-store";
 import messages from "@/i18n/langs/ar.json";
+import { useMessageLocale } from "@/i18n/message-locale";
 
 const FormattingProbe = () => {
   const t = useTranslations("billing.invoices");
@@ -98,4 +101,50 @@ test("Steps refuses an unsupported actual numbering system", () => {
   expect(() => stepsMarkerStyle("en-u-nu-deva")).toThrow(
     "Steps requires a supported formatting numbering system",
   );
+});
+
+const LocaleProbe = () => (
+  <>
+    {useMessageLocale()}
+    {"|"}
+    {useFormattingLocale()}
+  </>
+);
+
+test("the UI language and the formatting locale are read separately", () => {
+  const markup = renderToStaticMarkup(
+    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en-IN" timeZone="UTC">
+        <LocaleProbe />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  expect(markup).toBe("ar|en-IN");
+});
+
+test("the UI language must be a supported one", () => {
+  expect(() =>
+    renderToStaticMarkup(
+      <IntlProvider locale="xx" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en-IN" timeZone="UTC">
+          <LocaleProbe />
+        </FormattingProvider>
+      </IntlProvider>,
+    ),
+  ).toThrow("IntlProvider must be given a supported UI language");
+});
+
+test("workspace-ui components format in the formatting locale", () => {
+  const markup = renderToStaticMarkup(
+    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en-IN" timeZone="UTC">
+        <IntFieldValue
+          content={{ type: "int", version: 1, value: 100_000, currency: null }}
+        />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+
+  expect(markup).toContain("1,00,000");
 });

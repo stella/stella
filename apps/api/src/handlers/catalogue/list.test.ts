@@ -1,8 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 
 import { appendCustomSkillEntries } from "./list";
+
+const userId = toSafeId<"user">("user-current");
 
 const organizationId = toSafeId<"organization">("org-current");
 
@@ -12,7 +15,8 @@ describe("appendCustomSkillEntries", () => {
       [];
 
     appendCustomSkillEntries({
-      canDeleteTeamSkills: false,
+      memberRole: sessionMemberRole("member"),
+      userId,
       curatedSlugs: new Set(),
       organizationId,
       response,
@@ -20,8 +24,12 @@ describe("appendCustomSkillEntries", () => {
         {
           description: "Review contracts.",
           enabled: true,
-          id: "skill-team",
+          id: toSafeId<"agentSkill">("skill-team"),
+          origin: "authored",
+          userId,
           invocation: "auto",
+          boundWorkspaceId: null,
+          boundClientId: null,
           license: null,
           name: "Contract review",
           scope: "team",
@@ -43,7 +51,8 @@ describe("appendCustomSkillEntries", () => {
       [];
 
     appendCustomSkillEntries({
-      canDeleteTeamSkills: false,
+      memberRole: sessionMemberRole("member"),
+      userId,
       curatedSlugs: new Set(),
       organizationId,
       response,
@@ -51,8 +60,12 @@ describe("appendCustomSkillEntries", () => {
         {
           description: "Team version.",
           enabled: true,
-          id: "skill-team",
+          id: toSafeId<"agentSkill">("skill-team"),
+          origin: "authored",
+          userId,
           invocation: "auto",
+          boundWorkspaceId: null,
+          boundClientId: null,
           license: null,
           name: "Review",
           scope: "team",
@@ -61,8 +74,14 @@ describe("appendCustomSkillEntries", () => {
         {
           description: "Private version.",
           enabled: false,
-          id: "skill-private",
+          id: toSafeId<"agentSkill">("skill-private"),
+          origin: "authored",
+          userId,
           invocation: "manual",
+          boundWorkspaceId: toSafeId<"workspace">(
+            "0199a1b2-0000-7000-8000-0000000000aa",
+          ),
+          boundClientId: null,
           license: null,
           name: "Review",
           scope: "private",
@@ -75,7 +94,8 @@ describe("appendCustomSkillEntries", () => {
     expect(response[0]).toMatchObject({
       chatSkillId: "skill-private",
       installedSkillId: "skill-private",
-      // The shown row's own setting, not the shadowed team row's.
+      // The shown row's own settings, not the shadowed team row's.
+      binding: "matter",
       invocation: "manual",
       slug: "review",
     });
@@ -86,7 +106,8 @@ describe("appendCustomSkillEntries", () => {
       [];
 
     appendCustomSkillEntries({
-      canDeleteTeamSkills: false,
+      memberRole: sessionMemberRole("member"),
+      userId,
       curatedSlugs: new Set(),
       organizationId,
       response,
@@ -94,8 +115,12 @@ describe("appendCustomSkillEntries", () => {
         {
           description: "Unavailable team version.",
           enabled: false,
-          id: "skill-team",
+          id: toSafeId<"agentSkill">("skill-team"),
+          origin: "authored",
+          userId,
           invocation: "auto",
+          boundWorkspaceId: null,
+          boundClientId: null,
           license: null,
           name: "Review",
           scope: "team",
@@ -112,7 +137,8 @@ describe("appendCustomSkillEntries", () => {
       [];
 
     appendCustomSkillEntries({
-      canDeleteTeamSkills: true,
+      memberRole: sessionMemberRole("admin"),
+      userId,
       curatedSlugs: new Set(),
       organizationId,
       response,
@@ -120,8 +146,12 @@ describe("appendCustomSkillEntries", () => {
         {
           description: "Manageable team version.",
           enabled: false,
-          id: "skill-team",
+          id: toSafeId<"agentSkill">("skill-team"),
+          origin: "authored",
+          userId,
           invocation: "auto",
+          boundWorkspaceId: null,
+          boundClientId: null,
           license: null,
           name: "Review",
           scope: "team",

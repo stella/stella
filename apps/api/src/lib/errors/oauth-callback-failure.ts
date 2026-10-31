@@ -1,3 +1,8 @@
+import type {
+  HandlerExceptionScope,
+  RequestExceptionScope,
+} from "@stll/errors";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -20,13 +25,15 @@ export const oauthCallbackFailureReason = (
   error: unknown,
   {
     request,
+    scope,
     ...ctx
   }: {
     operation: string;
     organizationId: SafeId<"organization">;
     request: Request;
+    scope: RequestExceptionScope | HandlerExceptionScope;
   },
 ): "invalid-secret" | "unexpected" => {
-  observeFailure(error, { sink: OAUTH_CALLBACK_FAILURE, ctx, request });
+  observeFailure(error, { sink: OAUTH_CALLBACK_FAILURE, ctx, request, scope });
   return HandlerError.is(error) ? "invalid-secret" : "unexpected";
 };

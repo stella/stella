@@ -6,6 +6,7 @@ import { createFormatter } from "use-intl/core";
 
 import type { Temporal } from "@stll/time";
 import type { Steps } from "@stll/ui/steps";
+import { WorkspaceUiFormattingProvider } from "@stll/workspace-ui/formatting";
 
 import type { NumberingPreference } from "@/i18n/i18n-store";
 import { formatRelativeTimeIn } from "@/lib/relative-time";
@@ -30,9 +31,15 @@ export const FormattingProvider = ({
   // time-zone changes.
   const formatter = createFormatter({ locale, timeZone });
 
+  // @stll/workspace-ui cannot read this module's context; its own provider
+  // receives the same locale and time zone here.
   return (
     <FormattingLocaleContext value={locale}>
-      <FormatterContext value={formatter}>{children}</FormatterContext>
+      <FormatterContext value={formatter}>
+        <WorkspaceUiFormattingProvider locale={locale} timeZone={timeZone}>
+          {children}
+        </WorkspaceUiFormattingProvider>
+      </FormatterContext>
     </FormattingLocaleContext>
   );
 };
@@ -45,10 +52,15 @@ export const useFormatter = (): Formatter => {
   return formatter;
 };
 
-export const useLocale = (): string => {
+/**
+ * The reader's formatting locale for numbers, dates and collation. The UI
+ * language that messages render in is `useMessageLocale` from
+ * `@/i18n/message-locale`.
+ */
+export const useFormattingLocale = (): string => {
   const locale = useContext(FormattingLocaleContext);
   if (!locale) {
-    panic("useLocale must be used within FormattingProvider");
+    panic("useFormattingLocale must be used within FormattingProvider");
   }
   return locale;
 };
@@ -75,7 +87,8 @@ export const stepsMarkerStyle = (locale: string) => {
   return STEPS_MARKER_STYLES[system];
 };
 
-export const useStepsMarkerStyle = () => stepsMarkerStyle(useLocale());
+export const useStepsMarkerStyle = () =>
+  stepsMarkerStyle(useFormattingLocale());
 
 type RelativeTimeFormat = (date: Date | string | Temporal.Instant) => string;
 
@@ -90,6 +103,6 @@ type RelativeTimeFormat = (date: Date | string | Temporal.Instant) => string;
  * locale, so the cache follows it.
  */
 export const useRelativeTime = (): RelativeTimeFormat => {
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   return (date) => formatRelativeTimeIn(locale, date);
 };

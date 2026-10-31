@@ -13,7 +13,7 @@
     "./resource-uri": "./src/resource-uri.ts",
     "./shared/contracts": "./src/shared/generated/contracts.js",
     "./document-upload/upload-target": "./src/document-upload/upload-target.ts",
-    "./bundles": "./src/generated/bundles.ts",
+    "./bundles": "./src/bundles.ts",
     "./case-law-results/model": "./src/case-law-results/model.ts",
     "./case-law-results/parse": "./src/case-law-results/parse.ts"
   },
@@ -50,7 +50,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "21.0.1",
+    "@happy-dom/global-registrator": "21.0.4",
     "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",

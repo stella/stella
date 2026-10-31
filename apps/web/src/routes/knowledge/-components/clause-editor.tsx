@@ -57,9 +57,9 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 import {
   bodyKey,
@@ -121,7 +121,7 @@ export type ClauseRewrite = (
 ) => Promise<ClauseParagraph[]>;
 
 const rewriteClause: ClauseRewrite = async (request) =>
-  unwrapEden(await api.clauses["ai-rewrite"].post(request)).body;
+  unwrapApiResponse(await api.clauses["ai-rewrite"].post(request)).body;
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -300,7 +300,13 @@ export const ClauseEditor = ({
             };
             detached(
               settleReviewPersist(persistReviewedBody, (error) => {
-                getAnalytics().captureError(error);
+                getAnalytics().captureError(error, {
+                  fingerprintKey: "ClauseEditor.onUpdate:failure",
+                  scope: {
+                    type: "handler",
+                    handlerId: "ClauseEditor.onUpdate:failure",
+                  },
+                });
                 notifyUserError(error, t("clauses.saveFailed"), {
                   description: userErrorFromThrown(
                     error,
@@ -435,7 +441,10 @@ export const ClauseEditor = ({
       return;
     }
     if (rewrittenResult.isErr()) {
-      getAnalytics().captureError(rewrittenResult.error.cause);
+      getAnalytics().captureError(rewrittenResult.error.cause, {
+        fingerprintKey: "ClauseEditor.runRewrite:cause",
+        scope: { type: "handler", handlerId: "ClauseEditor.runRewrite:cause" },
+      });
       notifyUserError(rewrittenResult.error, t("ai.editWithAI"), {
         description: userErrorFromThrown(
           rewrittenResult.error.cause,
@@ -455,7 +464,7 @@ export const ClauseEditor = ({
 
     const rewritten = rewrittenResult.value;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
-      notifyUserError(undefined, t("ai.editWithAI"), {
+      notifyUserProblem(t("ai.editWithAI"), {
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });

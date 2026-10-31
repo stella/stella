@@ -1,6 +1,10 @@
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+
+beforeEach(() => {
+  listenMock.mockReset();
+});
 
 const listenMock = mock();
 

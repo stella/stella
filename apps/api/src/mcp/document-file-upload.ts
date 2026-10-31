@@ -11,12 +11,12 @@ import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-exec
 import { createSha256 } from "@stll/sha256/bun";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putPresignedUpload } from "@/api/lib/s3-presign";
-import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { isRecord } from "@/api/lib/type-guards";
 import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
-import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
@@ -29,6 +29,7 @@ import {
   structuredErrorResult,
   uuidInputSchema,
 } from "@/api/mcp/tool-utils";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 export const DOCUMENT_UPLOAD_APP_RESOURCE_URI =
   DOCUMENT_VERSION_UPLOAD_TRANSPORT.resourceUri;
@@ -104,7 +105,7 @@ const invokeCapability = async ({
   context,
 }: {
   args: Record<string, unknown>;
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
 }): Promise<CapabilityResult> => {
   const response = await CAPABILITY_TOOL_HANDLERS[
     MCP_CAPABILITY_EXECUTORS.write
@@ -121,6 +122,7 @@ const invokeCapability = async ({
             new Error(
               "Upload capability returned an unexpected success result",
             ),
+            "mcp.uploadCapability.unexpectedResult",
           ),
         };
   }
@@ -129,6 +131,7 @@ const invokeCapability = async ({
       status: "error",
       result: internalFailureResult(
         new Error("Upload capability returned a non-structured egress plan"),
+        "mcp.uploadCapability.nonStructuredResult",
       ),
     };
   }
@@ -169,7 +172,7 @@ const abortReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   uploadId: string;
   workspaceId: string;
 }): Promise<CapabilityResult> =>
@@ -222,7 +225,7 @@ const abortCreatedReservation = async ({
   uploadId,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies: DocumentFileUploadDependencies;
   uploadId: string;
   workspaceId: string;
@@ -233,11 +236,14 @@ const abortCreatedReservation = async ({
     catch: (cause) => cause,
   });
   if (Result.isError(aborted)) {
-    dependencies.captureCleanupFailure(aborted.error, {
-      source: "mcp_document_upload",
-      uploadId,
-      workspaceId,
-    });
+    dependencies.captureCleanupFailure(
+      aborted.error,
+      handlerErrorContext("abortCreatedReservation.aborted_error", {
+        source: "mcp_document_upload",
+        uploadId,
+        workspaceId,
+      }),
+    );
     return false;
   }
   if (aborted.value.status === "ok") {
@@ -248,11 +254,11 @@ const abortCreatedReservation = async ({
     new Error("Document upload reservation cleanup failed", {
       cause: aborted.value.result,
     }),
-    {
+    handlerErrorContext("abortCreatedReservation.failure", {
       source: "mcp_document_upload",
       uploadId,
       workspaceId,
-    },
+    }),
   );
   return false;
 };
@@ -278,7 +284,7 @@ export const uploadRemoteDocumentVersion = async ({
   file,
   workspaceId,
 }: {
-  context: McpRequestContext;
+  context: AuthorizedMcpRequestContext;
   dependencies?: DocumentFileUploadDependencies;
   entityId: string;
   file: UploadDocumentVersionInput["file"];
@@ -355,6 +361,7 @@ export const uploadRemoteDocumentVersion = async ({
     }
     return internalFailureResult(
       new Error("uploads.create returned an invalid reservation"),
+      "mcp.documentUpload.invalidReservation",
     );
   }
 
@@ -395,6 +402,7 @@ export const uploadRemoteDocumentVersion = async ({
   if (!parsedFinalized.success) {
     return internalFailureResult(
       new Error("uploads.update returned an invalid entity-version result"),
+      "mcp.documentUpload.invalidFinalizedResult",
     );
   }
   return structuredEgressPlan({

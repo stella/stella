@@ -122,6 +122,7 @@ const runInstall = ({
     writeFileSync(githubEnv, "");
 
     const result = spawnSync("bash", [script], {
+      maxBuffer: 2 ** 30,
       encoding: "utf-8",
       env: {
         ...process.env,

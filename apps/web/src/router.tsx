@@ -28,6 +28,7 @@ import {
 import { isAuthFlowPathname } from "@/lib/redirect";
 import { installSessionCacheGuard } from "@/lib/session-cache-guard";
 import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
+import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
 
@@ -82,6 +83,10 @@ export function getRouter() {
   const router = createRouter({
     routeTree,
     defaultPreload: "intent",
+    // A scalar param reaches its schema as the URL's text, never as a number
+    // or a boolean the default guessed from it.
+    parseSearch: parseRouteSearch,
+    stringifySearch: stringifyRouteSearch,
     context: { analyticsValue, queryClient, routeErrorLifecycle },
     defaultOnCatch: () => {
       routeErrorLifecycle.caught(readCaughtRouteTemplate());

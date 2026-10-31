@@ -1,4 +1,4 @@
-import { Suspense, use, useDeferredValue } from "react";
+import { Suspense, use, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { Result } from "better-result";
@@ -23,7 +23,10 @@ import {
 } from "@/lib/pdf/pdf-page-scroll.logic";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
-import { getCenteredSearchMatchScrollTop } from "@/lib/search-match-navigation";
+import {
+  getCenteredSearchMatchScrollTop,
+  readScrollPaddingBlockEnd,
+} from "@/lib/search-match-navigation";
 
 type PDFPageSearchMatch = {
   boxes: readonly PDFSearchBox[];
@@ -260,46 +263,50 @@ const PDFSearchHighlightBox = ({
     boxIndex === 0 &&
     isActive &&
     isPDFSearchMatchScrollRequest({ matchIndex, pageId, scrollTo });
-  const highlightRef = (element: HTMLDivElement | null) => {
-    if (!element || !shouldCenter) {
-      return;
-    }
+  const highlightRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element || !shouldCenter) {
+        return;
+      }
 
-    // The page ref first aligns the requested page. Centre the match in the
-    // following frame, using post-alignment geometry, and consume only the
-    // same request so a newer citation/anonymization jump cannot be cleared.
-    requestAnimationFrame(() => {
-      if (
-        !element.isConnected ||
-        element.dataset["active"] !== "true" ||
-        !isPDFSearchMatchScrollRequest({
-          matchIndex,
-          pageId,
-          scrollTo: store.getState().scrollTo,
-        })
-      ) {
-        return;
-      }
-      const scrollViewport = element.closest<HTMLElement>(
-        SCROLL_AREA_VIEWPORT_SELECTOR,
-      );
-      if (!scrollViewport) {
-        return;
-      }
-      const containerRect = scrollViewport.getBoundingClientRect();
-      const matchRect = element.getBoundingClientRect();
-      scrollViewport.scrollTo({
-        top: getCenteredSearchMatchScrollTop({
-          containerHeight: containerRect.height,
-          containerTop: containerRect.top,
-          currentScrollTop: scrollViewport.scrollTop,
-          matchHeight: matchRect.height,
-          matchTop: matchRect.top,
-        }),
+      // The page ref first aligns the requested page. Centre the match in the
+      // following frame, using post-alignment geometry, and consume only the
+      // same request so a newer citation/anonymization jump cannot be cleared.
+      requestAnimationFrame(() => {
+        if (
+          !element.isConnected ||
+          element.dataset["active"] !== "true" ||
+          !isPDFSearchMatchScrollRequest({
+            matchIndex,
+            pageId,
+            scrollTo: store.getState().scrollTo,
+          })
+        ) {
+          return;
+        }
+        const scrollViewport = element.closest<HTMLElement>(
+          SCROLL_AREA_VIEWPORT_SELECTOR,
+        );
+        if (!scrollViewport) {
+          return;
+        }
+        const containerRect = scrollViewport.getBoundingClientRect();
+        const matchRect = element.getBoundingClientRect();
+        scrollViewport.scrollTo({
+          top: getCenteredSearchMatchScrollTop({
+            containerHeight: containerRect.height,
+            containerTop: containerRect.top,
+            currentScrollTop: scrollViewport.scrollTop,
+            matchHeight: matchRect.height,
+            matchTop: matchRect.top,
+            obscuredBlockEnd: readScrollPaddingBlockEnd(scrollViewport),
+          }),
+        });
+        store.getState().setScrollTo(null);
       });
-      store.getState().setScrollTo(null);
-    });
-  };
+    },
+    [matchIndex, pageId, shouldCenter, store],
+  );
 
   return (
     <div

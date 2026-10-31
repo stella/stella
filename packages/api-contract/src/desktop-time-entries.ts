@@ -1,6 +1,8 @@
 import * as v from "valibot";
 
-import { vApiDate } from "./api-date";
+import { isPlausibleLocale } from "@stll/agent-input/locale";
+
+import { apiDateSchema } from "./api-date";
 
 export const desktopMatterSchema = v.strictObject({
   id: v.pipe(v.string(), v.maxLength(200)),
@@ -45,7 +47,7 @@ export type DesktopMatterCandidatesResponse = v.InferOutput<
 
 export const desktopTimeEntryBatchItemSchema = v.strictObject({
   matterId: v.pipe(v.string(), v.uuid()),
-  dateWorked: vApiDate,
+  dateWorked: apiDateSchema,
   timezoneId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   durationMinutes: v.pipe(
     v.number(),
@@ -104,4 +106,47 @@ export const desktopTimeEntryBatchStatusSchema = v.variant("type", [
 ]);
 export type DesktopTimeEntryBatchStatus = v.InferOutput<
   typeof desktopTimeEntryBatchStatusSchema
+>;
+
+export const DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_LIMIT = 40;
+export const DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_MAX_LENGTH = 300;
+export const DESKTOP_TIME_ENTRY_NARRATIVE_LOCALE_MAX_LENGTH = 35;
+export const DESKTOP_TIME_ENTRY_NARRATIVE_MATTER_NAME_MAX_LENGTH = 200;
+export const desktopTimeEntryNarrativeRequestSchema = v.strictObject({
+  titles: v.pipe(
+    v.array(
+      v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(1),
+        v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_MAX_LENGTH),
+      ),
+    ),
+    v.minLength(1),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_TITLE_LIMIT),
+  ),
+  locale: v.pipe(
+    v.string(),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_LOCALE_MAX_LENGTH),
+    v.check(isPlausibleLocale, "Expected a BCP 47 language tag"),
+  ),
+  matterName: v.nullable(
+    v.pipe(
+      v.string(),
+      v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MATTER_NAME_MAX_LENGTH),
+    ),
+  ),
+});
+export type DesktopTimeEntryNarrativeRequest = v.InferOutput<
+  typeof desktopTimeEntryNarrativeRequestSchema
+>;
+export const desktopTimeEntryNarrativeResponseSchema = v.strictObject({
+  narrative: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH),
+  ),
+});
+export type DesktopTimeEntryNarrativeResponse = v.InferOutput<
+  typeof desktopTimeEntryNarrativeResponseSchema
 >;

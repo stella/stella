@@ -1,17 +1,18 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
-import { t } from "elysia";
-import type { Static } from "elysia";
+import * as v from "valibot";
 
+import { numberFromString } from "@stll/api-contract/http-input";
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import {
-  tPaginationCursor,
-  tPaginationLimit,
-  tUuid,
+  paginationCursorSchema,
+  paginationLimitSchema,
+  uuidSchema,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -33,11 +34,15 @@ import type {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 
-export const listAnnotationsQuerySchema = t.Object({
+export const listAnnotationsQuerySchema = v.object({
   targetType: annotationTargetTypeSchema,
-  targetId: tUuid,
-  cursor: t.Optional(tPaginationCursor()),
-  limit: t.Optional(tPaginationLimit(LIMITS.readerAnnotationsPageSizeMax)),
+  targetId: uuidSchema,
+  cursor: v.optional(paginationCursorSchema()),
+  limit: v.optional(
+    numberFromString(
+      paginationLimitSchema(LIMITS.readerAnnotationsPageSizeMax),
+    ),
+  ),
 });
 
 const annotationCursor = createTimestampIdCursorCodec({
@@ -82,6 +87,10 @@ const UNPROJECTED_ANNOTATION_COLUMNS = [
   "workspaceId",
   "verificationRunId",
   "verificationClaimId",
+  // A matter document's mark is listed by the document's own route
+  // (`matter-document-list.ts`), never here.
+  "entityId",
+  "pageTextSha256",
 ] as const satisfies readonly (keyof AnnotationRow)[];
 
 type MissingProjectedAnnotationColumn = UnprojectedColumns<
@@ -109,8 +118,13 @@ type ListReaderAnnotationsProps = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
 > & {
-  query: Omit<Static<typeof listAnnotationsQuerySchema>, "targetType"> & {
-    targetType: ReaderAnnotationTargetType;
+  query: Omit<
+    v.InferOutput<typeof listAnnotationsQuerySchema>,
+    "targetType"
+  > & {
+    /** A matter document's marks span the document's versions, so they are
+     *  listed by `listMatterDocumentAnnotations` instead. */
+    targetType: Exclude<ReaderAnnotationTargetType, "matter-document">;
   };
   /**
    * The claim a `verification-claim` listing reads, from the matter route's
@@ -123,6 +137,7 @@ export const listReaderAnnotationsHandler = async function* ({
   organizationId,
   query,
   safeDb,
+  readCopies = readWithdrawnCopyProjection,
   userId,
   verificationClaim,
 }: ListReaderAnnotationsProps) {
@@ -205,9 +220,22 @@ export const listReaderAnnotationsHandler = async function* ({
       annotationCursor.encode(item.createdAtCursor, item.id),
   });
 
+  const projection = yield* Result.await(
+    Result.tryPromise(async () =>
+      readCopies({
+        values: [],
+        decisionIds: targetType === "decision" ? [query.targetId] : [],
+      }),
+    ),
+  );
   return Result.ok({
     ...page,
     limit,
-    items: page.items.map(({ createdAtCursor: _, ...item }) => item),
+    items: page.items.map(({ createdAtCursor: _, ...item }) =>
+      projection.annotation(
+        item,
+        targetType === "decision" ? query.targetId : null,
+      ),
+    ),
   });
 };

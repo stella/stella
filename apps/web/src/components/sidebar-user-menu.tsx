@@ -58,7 +58,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { getDisplayName } from "@/lib/get-display-name";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;
@@ -86,8 +87,8 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
   const roleQuery = useChromeQuery(roleOptions);
-  const roleView = useQueryView(roleQuery);
-  useQueryViewError(roleView);
+  const roleView = queryView(roleQuery);
+  useQueryViewError(roleView, "SidebarUserMenu:query");
   const role = roleView.type === "items" ? roleView.items : undefined;
 
   const displayName = getDisplayName(user.name, user.email) ?? t("common.user");
@@ -312,8 +313,8 @@ const OrganizationMenuSection = ({
   const analytics = useAnalytics();
   const invalidateSession = useInvalidateSession();
   const organizationsQuery = useChromeQuery(organizationListOptions(userId));
-  const organizationsView = useQueryView(organizationsQuery);
-  useQueryViewError(organizationsView);
+  const organizationsView = queryView(organizationsQuery);
+  useQueryViewError(organizationsView, "OrganizationMenuSection:query");
   const organizations =
     organizationsView.type === "items" ? organizationsView.items : undefined;
 
@@ -333,7 +334,13 @@ const OrganizationMenuSection = ({
       },
       onError: (error) => {
         notifyUserError(error, t("errors.actionFailed"));
-        analytics.captureError(error);
+        analytics.captureError(error, {
+          fingerprintKey: "OrganizationMenuSection:failure",
+          scope: {
+            type: "handler",
+            handlerId: "OrganizationMenuSection:failure",
+          },
+        });
       },
     });
 

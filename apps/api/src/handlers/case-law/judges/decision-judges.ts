@@ -10,6 +10,7 @@ import {
   caseLawDecisions,
   caseLawJudges,
 } from "@/api/db/schema";
+import { matchCzechDeclinedName } from "@/api/handlers/case-law/judges/czech-declined-name";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -42,21 +43,33 @@ type DecisionCourt = {
 type DecisionJudgeRow = typeof caseLawDecisionJudges.$inferInsert;
 
 /**
+ * A judge with the key their row is stored under: the printed name's own, or
+ * for a declined name the roster row it resolved to, which is then known.
+ */
+type KeyedDecisionJudge = {
+  role: DecisionJudgeRole;
+  nameAsPrinted: string;
+  nameKey: string;
+  judgeId: SafeId<"caseLawJudge"> | null;
+};
+
+/**
  * The decision's rows, keyed and positioned.
  *
  * `(decision_id, role, name_key)` is the primary key, so one name printed
  * twice in a role is one row: the second mention says nothing the first did
- * not. Position is the order within the role, as printed.
+ * not. That is also how a rapporteur both the record card and the opening
+ * sentence name stays one row. Position is the order within the role, as
+ * printed.
  */
 const decisionJudgeRows = (
   decisionId: SafeId<"caseLawDecision">,
-  judges: readonly DecisionJudgeInput[],
+  judges: readonly KeyedDecisionJudge[],
 ): DecisionJudgeRow[] => {
   const rows = new Map<string, DecisionJudgeRow>();
   const nextPosition = new Map<DecisionJudgeRole, number>();
 
-  for (const { role, nameAsPrinted } of judges) {
-    const nameKey = judgeNameKey(nameAsPrinted);
+  for (const { role, nameAsPrinted, nameKey, judgeId } of judges) {
     if (nameKey === "") {
       continue;
     }
@@ -68,7 +81,7 @@ const decisionJudgeRows = (
     nextPosition.set(role, position + 1);
     rows.set(identity, {
       decisionId,
-      judgeId: null,
+      judgeId,
       nameAsPrinted,
       nameKey,
       role,
@@ -117,14 +130,84 @@ const rosterIdsByNameKey = async (
   return new Map(roster.map(({ id, nameKey }) => [nameKey, id]));
 };
 
+const courtRoster = async (
+  tx: DecisionJudgeWriter,
+  { country, court }: DecisionCourt,
+) =>
+  await tx
+    .select({
+      id: caseLawJudges.id,
+      fullName: caseLawJudges.fullName,
+      nameKey: caseLawJudges.nameKey,
+    })
+    .from(caseLawJudges)
+    .where(
+      and(eq(caseLawJudges.country, country), eq(caseLawJudges.court, court)),
+    );
+
+/**
+ * Each judge keyed for storage, declined names resolved against the court's
+ * roster. A declined name is shown under the roster's name for the person,
+ * never as the sentence declined it, so one the roster cannot place is left
+ * out and reported rather than stored.
+ */
+const keyedJudges = async (
+  tx: DecisionJudgeWriter,
+  decisionCourt: DecisionCourt,
+  judges: readonly DecisionJudgeInput[],
+): Promise<KeyedDecisionJudge[]> => {
+  const roster = judges.some((judge) => judge.czechDeclinedName !== undefined)
+    ? await courtRoster(tx, decisionCourt)
+    : [];
+
+  return judges.flatMap((judge): KeyedDecisionJudge[] => {
+    if (judge.czechDeclinedName === undefined) {
+      return [
+        {
+          role: judge.role,
+          nameAsPrinted: judge.nameAsPrinted,
+          nameKey: judgeNameKey(judge.nameAsPrinted),
+          judgeId: null,
+        },
+      ];
+    }
+    const match = matchCzechDeclinedName(judge.czechDeclinedName, roster);
+    switch (match.type) {
+      case "matched":
+        return [
+          {
+            role: judge.role,
+            nameAsPrinted: match.judge.fullName,
+            nameKey: match.judge.nameKey,
+            judgeId: match.judge.id,
+          },
+        ];
+      case "unmatched":
+      case "ambiguous":
+        logger.warn("case_law.judge_unmatched", {
+          country: decisionCourt.country,
+          court: decisionCourt.court,
+          judgeKey: judgeNameKey(judge.czechDeclinedName),
+          match: match.type,
+        });
+        return [];
+      default: {
+        match satisfies never;
+        return panic(`Unhandled declined-name match: ${String(match)}`);
+      }
+    }
+  });
+};
+
 /**
  * Replace the judges a decision names, inside the caller's transaction.
  *
- * The decision states these names, so they are stored whether or not the
- * court's roster has been imported: an unmatched name keeps `judge_id` null
- * and is linked by {@link relinkUnmatchedDecisionJudgesPage} once the roster
- * arrives. The miss is reported, never swallowed: a court whose names never
- * match is a parser or roster defect, and silence is what would hide it.
+ * A printed name is stored whether or not the court's roster has been
+ * imported: an unmatched one keeps `judge_id` null and is linked by
+ * {@link relinkUnmatchedDecisionJudgesPage} once the roster arrives. A declined
+ * name is stored only once the roster places it (see {@link keyedJudges}). The
+ * miss is reported, never swallowed: a court whose names never match is a
+ * parser or roster defect, and silence is what would hide it.
  */
 export const replaceDecisionJudges = async (
   tx: DecisionJudgeWriter,
@@ -135,19 +218,27 @@ export const replaceDecisionJudges = async (
     .delete(caseLawDecisionJudges)
     .where(eq(caseLawDecisionJudges.decisionId, decisionId));
 
-  const rows = decisionJudgeRows(decisionId, judges);
-  if (rows.length === 0) {
+  if (judges.length === 0) {
     return;
   }
 
   const decisionCourt = await readDecisionCourt(tx, decisionId);
+  const rows = decisionJudgeRows(
+    decisionId,
+    await keyedJudges(tx, decisionCourt, judges),
+  );
+  if (rows.length === 0) {
+    return;
+  }
+
+  const unlinked = rows.filter(({ judgeId }) => judgeId === null);
   const rosterIds = await rosterIdsByNameKey(
     tx,
     decisionCourt,
-    rows.map(({ nameKey }) => nameKey),
+    unlinked.map(({ nameKey }) => nameKey),
   );
 
-  for (const row of rows) {
+  for (const row of unlinked) {
     const judgeId = rosterIds.get(row.nameKey);
     if (judgeId === undefined) {
       // `judgeKey`, not `nameKey`: the logger drops attribute keys that read

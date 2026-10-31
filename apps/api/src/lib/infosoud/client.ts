@@ -1,4 +1,6 @@
-import { InfoSoudClient } from "@stll/infosoud";
+import { EXTRA_COURTS, InfoSoudClient } from "@stll/infosoud";
+
+export const getKnownInfoSoudCourtName = (code: string) => EXTRA_COURTS[code];
 
 let sharedClient: InfoSoudClient | undefined;
 

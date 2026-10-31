@@ -166,12 +166,13 @@ export const TableFindBar = ({
             <Button
               className={cn(appliedTerm !== null && "font-normal")}
               size={appliedTerm === null ? "icon-xs" : "xs"}
+              // The hint, not the name: this bar sits beside a control that
+              // also narrows the rows, and what separates them is where each
+              // one looks.
+              tooltip={t("workspaces.views.findInTableHint")}
               variant="ghost"
             />
           }
-          // The hint, not the name: this bar sits beside a control that also
-          // narrows the rows, and what separates them is where each one looks.
-          title={t("workspaces.views.findInTableHint")}
         >
           <SearchIcon className="size-3.5" />
           {appliedTerm !== null && (

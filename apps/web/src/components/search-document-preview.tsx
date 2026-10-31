@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { ReactNode } from "react";
 
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -19,6 +19,7 @@ import type {
   NativeSearchStatus,
 } from "@/lib/search.logic";
 import { shouldShowNativeSearchFallback } from "@/lib/search.logic";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 type SearchDocumentPreviewProps = {
   fallback: ReactNode;
@@ -41,27 +42,34 @@ export const SearchDocumentPreview = ({
   const { handleResetZoom, handleWheelZoom, handleZoom, scaleOffsets } =
     usePdfTabZoom();
   const scaleOffset = scaleOffsets.get(target.fieldId) ?? 0;
-  const handleSearchMatchSummaryChange = (summary: SearchMatchSummary) => {
-    setSearchMatchSummary(summary);
-    setNativeSearchStatus(summary.count > 0 ? "matched" : "unmatched");
-    setActiveSearchMatchIndex((current) =>
-      summary.count === 0 ? 0 : Math.min(current, summary.count - 1),
-    );
-  };
-  const navigateSearchMatches = (direction: "next" | "previous") => {
-    setActiveSearchMatchIndex((current) =>
-      getAdjacentSearchMatchIndex({
-        activeIndex: current,
-        direction,
-        matchCount: searchMatchSummary.count,
-      }),
-    );
-  };
-  const handlePreviewError = () => {
+  const { viewId } = useWorkspaceViewParams(target.workspaceId);
+  const handleSearchMatchSummaryChange = useCallback(
+    (summary: SearchMatchSummary) => {
+      setSearchMatchSummary(summary);
+      setNativeSearchStatus(summary.count > 0 ? "matched" : "unmatched");
+      setActiveSearchMatchIndex((current) =>
+        summary.count === 0 ? 0 : Math.min(current, summary.count - 1),
+      );
+    },
+    [],
+  );
+  const navigateSearchMatches = useCallback(
+    (direction: "next" | "previous") => {
+      setActiveSearchMatchIndex((current) =>
+        getAdjacentSearchMatchIndex({
+          activeIndex: current,
+          direction,
+          matchCount: searchMatchSummary.count,
+        }),
+      );
+    },
+    [searchMatchSummary.count],
+  );
+  const handlePreviewError = useCallback(() => {
     setActiveSearchMatchIndex(0);
     setSearchMatchSummary({ count: 0, truncated: false });
     setNativeSearchStatus("unmatched");
-  };
+  }, []);
   const viewer = (
     <PeekPdfViewer
       pdfPageSource="portfolio"
@@ -78,7 +86,7 @@ export const SearchDocumentPreview = ({
       onWheelZoom={(deltaY) => handleWheelZoom(target.fieldId, deltaY)}
       scaleOffset={scaleOffset}
       searchText={searchText}
-      viewId="all"
+      viewId={viewId}
       workspaceId={target.workspaceId}
     />
   );

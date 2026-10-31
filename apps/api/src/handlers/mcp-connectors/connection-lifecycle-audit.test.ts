@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import createMcpConnection from "@/api/handlers/mcp-connectors/create-connection";
 import { createDeleteMcpConnectionHandler } from "@/api/handlers/mcp-connectors/delete-connection";
 import updateMcpConnection from "@/api/handlers/mcp-connectors/update-connection";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
@@ -106,7 +107,7 @@ describe("per-user MCP connection audit trail", () => {
       request: new Request("https://api.example.test/v1/mcp/connections", {
         method: "POST",
       }),
-      route: "/v1/mcp/connections",
+      route: "/v1/mcp/connections" satisfies ApiRoutePath,
     });
 
     expect(await createMcpConnection.handler(context)).toEqual({
@@ -157,7 +158,7 @@ describe("per-user MCP connection audit trail", () => {
         `https://api.example.test/v1/mcp/connections/${connectionId}`,
         { method: "PATCH" },
       ),
-      route: "/v1/mcp/connections/:connectionId",
+      route: "/v1/mcp/connections/:connectionId" satisfies ApiRoutePath,
     });
 
     expect(await updateMcpConnection.handler(context)).toEqual({
@@ -191,7 +192,7 @@ describe("per-user MCP connection audit trail", () => {
         `https://api.example.test/v1/mcp/connections/${connectionId}`,
         { method: "PATCH" },
       ),
-      route: "/v1/mcp/connections/:connectionId",
+      route: "/v1/mcp/connections/:connectionId" satisfies ApiRoutePath,
     });
 
     expect(await updateMcpConnection.handler(context)).toMatchObject({
@@ -226,7 +227,7 @@ describe("per-user MCP connection audit trail", () => {
         `https://api.example.test/v1/mcp/connections/${connectionId}`,
         { method: "DELETE" },
       ),
-      route: "/v1/mcp/connections/:connectionId",
+      route: "/v1/mcp/connections/:connectionId" satisfies ApiRoutePath,
     });
 
     expect(await deleteMcpConnection.handler(context)).toEqual({
