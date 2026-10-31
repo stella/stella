@@ -12,7 +12,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { lockLegalHoldOrganization } from "./holds";
 
-export type LegalHoldScope =
+type LegalHoldScope =
   | { type: "matter"; workspaceId: SafeId<"workspace"> }
   | {
       type: "entity";

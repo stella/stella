@@ -139,6 +139,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Highlights and comments on a matter document are available on every deployment",
   ],
   [
+    "/v1/workspaces/:workspaceId/legal-holds",
+    "Legal holds preserve matter evidence on every deployment; placing or releasing one needs the legal hold permission, a reason and explicit approval",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/legal-holds",
+    "Legal holds preserve matter evidence on every deployment; placing or releasing one needs the legal hold permission, a reason and explicit approval",
+  ],
+  [
     "/synthetic",
     "Dedicated session creation is deployment-owned and refuses access when its credential is unset",
   ],
