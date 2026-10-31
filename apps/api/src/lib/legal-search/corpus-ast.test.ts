@@ -173,7 +173,8 @@ describe("corpus reader schema at persistence boundaries", () => {
         fallbackText: "Decision text.",
         source: "synthetic",
       }).unwrap();
-      expect(prepared.ast).toBe(stored);
+      // The very object the parser produced, not a rebuilt copy.
+      expect(Object.is(prepared.ast, stored)).toBe(true);
       expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
     } finally {
       report.mockRestore();

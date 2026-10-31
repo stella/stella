@@ -58,7 +58,7 @@ const anyOrderDocument = fc
     })),
   }));
 
-test("block order never makes a prepared AST unreadable", () => {
+test("block order never refuses a stored row, and writers store it as given", () => {
   const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
   try {
     assertProperty(
