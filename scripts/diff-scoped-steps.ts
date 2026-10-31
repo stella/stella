@@ -162,9 +162,8 @@ export const DIFF_SCOPED_STEPS = {
   "main-heavy.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
-  "visual-preview.yml:preview#Select preview changes": gap(
-    "dependents",
-    "Its path list omits the Playwright runner action and the CI service image inventory the tests use.",
+  "visual-preview.yml:preview#Select preview changes": expands(
+    "Applies the workflow's pull request path filter, which a test binds to every script and action the job runs.",
   ),
   "publish-npm.yml:pack#Verify manual package recovery source": diffComplete(
     "Checks that the recovered package source is an ancestor of main.",
