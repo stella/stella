@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 
-import { ZipArchive } from "@stll/docx-core/zip";
 import {
   ATTACHED_TEMPLATE_SECURITY_RULE,
   type AttachedTemplateTargetKind,
   isOpcRelationshipPartPath,
+  loadDocx,
   sanitizeAttachedTemplateRelationships,
   sanitizeAttachedTemplateSource,
 } from "@stll/docx-utils";
@@ -46,8 +46,8 @@ export const prepareAttachedTemplateFile = async (
     try: async (): Promise<PreparedAttachedTemplateFile | null> => {
       // Reads stay within the sizes the archive declares; the entry cap
       // refuses an archive with too many records before any is read.
-      const zip = await ZipArchive.read(await originalFile.arrayBuffer(), {
-        limits: { maxEntries: MAX_ARCHIVE_ENTRIES },
+      const zip = await loadDocx(await originalFile.arrayBuffer(), {
+        maxEntries: MAX_ARCHIVE_ENTRIES,
       });
       const entries = zip.entries();
 
