@@ -167,7 +167,20 @@ const CLUSTER_VISIBILITY_TESTS = new Set([
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ]);
 
-/** Migration roles and visibility proofs require every other cluster worker to finish. */
+// EXPLAIN (ANALYZE, BUFFERS) charges a relation-cache rebuild to the first
+// statement that touches the relation afterwards (an audit insert pays about
+// 240 pages instead of 12). Other workers' DDL overflows the cluster-wide
+// invalidation queue and resets a measuring backend's caches at arbitrary
+// points, so a suite comparing single-sample block counts across corpus sizes
+// needs a cluster no other worker writes to.
+const CLUSTER_CATALOG_CACHE_TESTS = new Set([
+  "src/tests/query-perf/scheduled-run.postgres.test.ts",
+]);
+
+/**
+ * Migration roles, visibility proofs and single-sample block measurements
+ * require every other cluster worker to finish.
+ */
 export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
@@ -175,6 +188,7 @@ export const clusterExclusivePostgresTests = (
   for (const [testPath, source] of sources) {
     if (
       CLUSTER_VISIBILITY_TESTS.has(testPath) ||
+      CLUSTER_CATALOG_CACHE_TESTS.has(testPath) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>
