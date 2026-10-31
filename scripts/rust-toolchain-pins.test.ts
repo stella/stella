@@ -4,7 +4,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 const root = path.resolve(import.meta.dir, "..");
-const PINNED_VERSION = "1.99.0";
+const PINNED_VERSION = "1.99.1";
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/u;
 
 // Each crate owns its pin; rustup finds it from the package directory, so

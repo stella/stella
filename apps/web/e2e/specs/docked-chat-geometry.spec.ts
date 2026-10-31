@@ -103,7 +103,7 @@ const expectDockGeometry = async (page: Page) => {
             '[data-slot="docked-chat-composer"]',
           );
           if (!(composer instanceof HTMLElement)) {
-            throw new Error(
+            throw new TypeError(
               "Thread card is missing its registered composer column",
             );
           }

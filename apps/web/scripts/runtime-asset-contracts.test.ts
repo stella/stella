@@ -1,12 +1,60 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  DEPENDENCY_WASI_WORKERS,
   referencedAssetPath,
   resolveSourceWorkerEntry,
+  workerEntryFileName,
   workerSourceSpecifiers,
 } from "./runtime-asset-contracts";
 
 describe("runtime asset contracts", () => {
+  test("each WASI producer has a distinct asset matching its own contract", () => {
+    const workers = Object.values(DEPENDENCY_WASI_WORKERS);
+    const emittedNames = new Set<string>();
+    for (const worker of workers) {
+      for (const prefix of [
+        "/checkout/node_modules",
+        "/cache/links/package/node_modules",
+        "C:\\checkout\\node_modules",
+      ]) {
+        for (const query of ["", "?worker_file&type=module"]) {
+          const sourcePath = `${prefix}${worker.sourceEntry}${query}`;
+          const name = workerEntryFileName({ facadeModuleId: sourcePath });
+          const asset = `dist/client/${name.replace("[hash]", "abcdefgh")}`;
+          expect(
+            new Bun.Glob(
+              `dist/client/assets/${worker.assetStem}-????????.js`,
+            ).match(asset),
+          ).toBe(true);
+          expect(name).not.toContain("[name]");
+          emittedNames.add(name);
+        }
+      }
+    }
+    expect(emittedNames.size).toBe(workers.length);
+  });
+
+  test("unregistered workers retain their default names and cannot claim a WASI contract", () => {
+    for (const facadeModuleId of [
+      null,
+      "/checkout/src/workers/pdf-search-worker.ts",
+      "/checkout/node_modules/another-package/dist/wasi-worker-browser.mjs",
+    ]) {
+      const name = workerEntryFileName({ facadeModuleId });
+      expect(name).toBe("assets/[name]-[hash].js");
+      for (const { assetStem } of Object.values(DEPENDENCY_WASI_WORKERS)) {
+        expect(
+          new Bun.Glob(`assets/${assetStem}-????????.js`).match(
+            name
+              .replace("[name]", "wasi-worker-browser")
+              .replace("[hash]", "abcdefgh"),
+          ),
+        ).toBe(false);
+      }
+    }
+  });
+
   test("discovers every supported Vite worker form", () => {
     const source = `
       new Worker(new URL("./classic.js", import.meta.url));

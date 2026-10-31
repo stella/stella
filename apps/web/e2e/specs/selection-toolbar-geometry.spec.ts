@@ -117,7 +117,7 @@ for (const [name, selectionCase] of Object.entries(cases)) {
           if (node instanceof HTMLLinkElement) {
             const link = node.cloneNode();
             if (!(link instanceof HTMLLinkElement)) {
-              throw new Error("Stylesheet link clone changed element type");
+              throw new TypeError("Stylesheet link clone changed element type");
             }
             link.href = node.href;
             return link.outerHTML;
