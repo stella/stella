@@ -189,7 +189,7 @@ describe("persisted citation scopes", () => {
     expect(checked.unwrap()).toEqual(opinions);
   });
 
-  test("validates scopes against the blocks the writer stored, repeated identities included", () => {
+  test("refuses scopes over repeated block identities, which no writer stores", () => {
     const paragraph = (id: string, anchorId: string) => ({
       id,
       anchorId,
@@ -197,8 +197,8 @@ describe("persisted citation scopes", () => {
       inlines: [{ type: "text" as const, text: anchorId }],
       plainText: anchorId,
     });
-    // The writer indexes "p" at its last position, so "p" and "q" are one
-    // contiguous opinion; the reader re-keys the repeated "p".
+    // The reader re-keys a repeated "p", so scopes naming it could point at a
+    // different block than the writer meant.
     const documentAst = {
       ...ast(),
       blocks: [
@@ -207,22 +207,23 @@ describe("persisted citation scopes", () => {
         paragraph("q", "paragraph-3"),
       ],
     } satisfies DocumentAst;
+    expect(isDocumentAst(documentAst)).toBe(false);
     const scopes = [
       { opinionId: "majority", blockIds: ["p", "q"], boundaries: "proven" },
     ] as const;
-    expect(
-      v
-        .parse(persistedDocumentAstSchema, documentAst)
-        .blocks.map(({ id }) => id),
-    ).not.toEqual(documentAst.blocks.map(({ id }) => id));
-
-    const envelope = citationScopeEnvelope(documentAst, scopes);
-    const stored: unknown = structuredClone(documentAst);
     const checked = validatedCitationScopes(
-      { [CITATION_SCOPE_METADATA_KEY]: envelope },
-      stored,
+      {
+        [CITATION_SCOPE_METADATA_KEY]: citationScopeEnvelope(
+          documentAst,
+          scopes,
+        ),
+      },
+      structuredClone(documentAst),
     );
-    expect(checked.unwrap()).toEqual(scopes);
+    if (!Result.isError(checked)) {
+      expect.unreachable("Repeated identities carry no scopes");
+    }
+    expect(checked.error.defect).toBe("invalid-envelope");
   });
 
   test("refuses scopes over a legacy-shaped AST the writer contract no longer describes", () => {
