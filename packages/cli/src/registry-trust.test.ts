@@ -519,11 +519,29 @@ describe("validateFetchedToolsList: the committed registry clears every cap", ()
   });
 });
 
-// timeout: the exporter initializes the API registry in a subprocess bounded to 25 seconds.
+// timeout: runtime preparation and registry export each have a 25-second deadline.
 test("every curated command binding matches the current server registry and protocol", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-live-registry-"));
   const projectionPath = path.join(directory, "registry.json");
   try {
+    const prepared = Bun.spawn(
+      [process.execPath, "run", "generate:capability-runtime"],
+      {
+        cwd: fileURLToPath(new URL("../../../apps/api/", import.meta.url)),
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 25_000,
+      },
+    );
+    const [preparedExitCode, preparedStderr] = await Promise.all([
+      prepared.exited,
+      new Response(prepared.stderr).text(),
+      new Response(prepared.stdout).text(),
+    ]);
+    expect({
+      exitCode: preparedExitCode,
+      stderr: preparedExitCode === 0 ? "" : preparedStderr,
+    }).toEqual({ exitCode: 0, stderr: "" });
     const exporter = Bun.spawn(
       [
         process.execPath,
@@ -640,7 +658,7 @@ test("every curated command binding matches the current server registry and prot
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
-}, 30_000);
+}, 60_000);
 
 test("caller feature denials retain valid decisions and reject malformed or contradictory evidence", () => {
   const featureAccess = {

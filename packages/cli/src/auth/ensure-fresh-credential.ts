@@ -222,24 +222,21 @@ const refreshCredentialUnderLock = async (
 
   // The shared lock covers only the local generation check and whole-file update.
   // A different credential may finish its exchange at the same time.
-  const persisted = await Result.tryPromise(
-    async () =>
-      await updateCredentialFile(input.configDir, (latest) => {
-        const stored = findCredentialByOrgId(
-          latest,
-          input.credential.serverUrl,
-          input.credential.orgId,
-        );
-        if (stored === undefined || !sameGeneration(stored, input.credential)) {
-          return { status: "unchanged", value: "changed" } as const;
-        }
-        return {
-          status: "updated",
-          file: upsertCredential(latest, updated),
-          value: "persisted",
-        } as const;
-      }),
-  );
+  const persisted = await updateCredentialFile(input.configDir, (latest) => {
+    const stored = findCredentialByOrgId(
+      latest,
+      input.credential.serverUrl,
+      input.credential.orgId,
+    );
+    if (stored === undefined || !sameGeneration(stored, input.credential)) {
+      return { status: "unchanged", value: "changed" } as const;
+    }
+    return {
+      status: "updated",
+      file: upsertCredential(latest, updated),
+      value: "persisted",
+    } as const;
+  });
   if (Result.isError(persisted)) {
     return Result.ok({
       credential: updated,

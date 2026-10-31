@@ -33,7 +33,7 @@ test("separate invocations reuse registry and token caches while tracing only du
       const body = v.parse(
         v.object({
           id: v.exactOptional(v.union([v.number(), v.string()])),
-          method: v.exactOptional(v.string()),
+          method: v.string(),
         }),
         await request.json(),
       );
@@ -169,7 +169,7 @@ test.each([
         const body = v.parse(
           v.object({
             id: v.exactOptional(v.union([v.number(), v.string()])),
-            method: v.exactOptional(v.string()),
+            method: v.string(),
           }),
           await request.json(),
         );
@@ -344,7 +344,7 @@ test("server grants override JWT claims in native and advanced capability execut
       const body = v.parse(
         v.object({
           id: v.exactOptional(v.union([v.number(), v.string()])),
-          method: v.exactOptional(v.string()),
+          method: v.string(),
           params: v.exactOptional(v.unknown()),
         }),
         await request.json(),
@@ -493,7 +493,7 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
         const body = v.parse(
           v.object({
             id: v.exactOptional(v.union([v.number(), v.string()])),
-            method: v.exactOptional(v.string()),
+            method: v.string(),
           }),
           await request.json(),
         );

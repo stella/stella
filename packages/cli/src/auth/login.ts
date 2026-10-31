@@ -377,7 +377,9 @@ export const login = async (
       updatedAt: now,
     };
 
-    await persistLogin({ configDir: options.configDir, credential });
+    yield* Result.await(
+      persistLogin({ configDir: options.configDir, credential }),
+    );
 
     return Result.ok({
       expiresAt: credential.expiresAt,

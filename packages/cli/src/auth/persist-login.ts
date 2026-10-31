@@ -4,6 +4,8 @@
 // later command failed with "No server configured" until `--server` was passed
 // again. Keeping them in one function is what makes that state unreachable.
 
+import { Result } from "better-result";
+
 import { readCliConfig, writeCliConfig } from "./cli-config.js";
 import {
   setDefaultOrg,
@@ -11,6 +13,8 @@ import {
   upsertCredential,
 } from "./credential-store.js";
 import type { StoredCredential } from "./credential-store.js";
+import { TokenExchangeError } from "./errors.js";
+import type { CliAuthError } from "./errors.js";
 
 // The credential already names its server and org; taking them as separate
 // arguments would let a caller persist a default that disagrees with it.
@@ -20,8 +24,8 @@ export const persistLogin = async ({
 }: {
   readonly configDir: string;
   readonly credential: StoredCredential;
-}): Promise<void> => {
-  await updateCredentialFile(configDir, (file) => ({
+}): Promise<Result<void, CliAuthError>> => {
+  const updated = await updateCredentialFile(configDir, (file) => ({
     status: "updated",
     value: undefined,
     file: setDefaultOrg(
@@ -31,9 +35,22 @@ export const persistLogin = async ({
     ),
   }));
 
-  const config = await readCliConfig(configDir);
-  await writeCliConfig(configDir, {
-    ...config,
-    defaultServerUrl: credential.serverUrl,
+  if (updated.isErr()) {
+    return updated;
+  }
+  return await Result.tryPromise({
+    try: async () => {
+      const config = await readCliConfig(configDir);
+      await writeCliConfig(configDir, {
+        ...config,
+        defaultServerUrl: credential.serverUrl,
+      });
+    },
+    catch: (cause) =>
+      new TokenExchangeError({
+        message:
+          "Could not persist the default server after login. Check the configuration directory permissions and retry.",
+        cause,
+      }),
   });
 };

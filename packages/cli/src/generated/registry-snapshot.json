@@ -804,6 +804,44 @@
               "decisionType": {
                 "type": ["string", "null"]
               },
+              "decisionTypeKind": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "judgment",
+                      "order",
+                      "finding",
+                      "resolution",
+                      "opinion",
+                      "decision",
+                      "administrative_decision",
+                      "ministry_of_justice_decision",
+                      "penal_order",
+                      "payment_order",
+                      "uniformity_decision",
+                      "principle_decision",
+                      "merits_decision",
+                      "leave_refused",
+                      "court_direction",
+                      "statement_of_reasons",
+                      "minutes_extract",
+                      "signalling_decision",
+                      "individual_tax_ruling",
+                      "general_tax_ruling",
+                      "tax_explanations",
+                      "binding_rate_information",
+                      "binding_excise_information",
+                      "protective_opinion",
+                      "top_up_tax_opinion",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "ecli": {
                 "type": ["string", "null"]
               },
@@ -872,6 +910,7 @@
               "decisionId",
               "resourceName",
               "decisionType",
+              "decisionTypeKind",
               "ecli",
               "language",
               "matchedQueries",
@@ -3506,6 +3545,9 @@
             "additionalProperties": false
           }
         },
+        "hint": {
+          "type": "string"
+        },
         "reason": {
           "enum": [
             "unknown_document",
@@ -3807,6 +3849,9 @@
             "additionalProperties": false
           }
         },
+        "hint": {
+          "type": "string"
+        },
         "reason": {
           "enum": [
             "unknown_document",
@@ -3873,13 +3918,13 @@
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max templates to return (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -3889,7 +3934,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     },

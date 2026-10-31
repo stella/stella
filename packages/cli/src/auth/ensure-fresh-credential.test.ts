@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   readCredentialFile,
@@ -225,7 +226,7 @@ describe("ensureFreshCredential", () => {
           ready.resolve(undefined);
         }
         await ready.promise;
-        const token = body.get("refresh_token");
+        const token = v.parse(v.string(), body.get("refresh_token"));
         return Response.json({
           access_token: `new-${token}`,
           refresh_token: `rotated-${token}`,
@@ -262,12 +263,12 @@ describe("ensureFreshCredential", () => {
         expect(
           stored.credentials
             .map((credential) => credential.accessToken)
-            .toSorted(),
+            .toSorted((left, right) => left.localeCompare(right)),
         ).toEqual(["new-first", "new-second"]);
         expect(
           stored.credentials
-            .map((credential) => credential.refreshToken)
-            .toSorted(),
+            .map((credential) => v.parse(v.string(), credential.refreshToken))
+            .toSorted((left, right) => left.localeCompare(right)),
         ).toEqual(["rotated-first", "rotated-second"]);
       } finally {
         provider.close();

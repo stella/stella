@@ -338,7 +338,7 @@ test("parallel credential mutations preserve every profile in the shared store",
   );
   try {
     const orgIds = Array.from({ length: 8 }, (_, index) => `org-${index}`);
-    await Promise.all(
+    const results = await Promise.all(
       orgIds.map(
         async (orgId) =>
           await updateCredentialFile(configDir, (file) => ({
@@ -348,6 +348,7 @@ test("parallel credential mutations preserve every profile in the shared store",
           })),
       ),
     );
+    expect(results.every((result) => result.isOk())).toBe(true);
     const stored = await readCredentialFile(configDir);
     expect(stored.credentials.map(({ orgId }) => orgId).toSorted()).toEqual(
       orgIds.toSorted(),
@@ -373,4 +374,35 @@ test("production credential writes remain owned by the atomic store updater", as
     }
   }
   expect(bypasses).toEqual([]);
+});
+
+test("credential mutation failures return typed errors and release the store lock", async () => {
+  const configDir = await mkdtemp(
+    path.join(os.tmpdir(), "stella-store-failure-"),
+  );
+  try {
+    const cause = new TypeError("synthetic credential transform failure");
+    const failed = await updateCredentialFile(configDir, () => {
+      throw cause;
+    });
+    expect(failed.isErr()).toBe(true);
+    if (failed.isErr()) {
+      expect(failed.error._tag).toBe("TokenRefreshError");
+      expect(failed.error.cause).toMatchObject({ cause });
+    }
+    const recovered = await updateCredentialFile(configDir, (file) => ({
+      status: "updated",
+      file: upsertCredential(file, buildCredential()),
+      value: "persisted",
+    }));
+    expect(recovered.isOk()).toBe(true);
+    if (recovered.isOk()) {
+      expect(recovered.value).toBe("persisted");
+    }
+    expect((await readCredentialFile(configDir)).credentials).toEqual([
+      buildCredential(),
+    ]);
+  } finally {
+    await rm(configDir, { recursive: true, force: true });
+  }
 });

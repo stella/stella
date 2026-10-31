@@ -745,9 +745,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
 const listTemplatesArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: v.optional(
-      uuidInputSchema(
-        "Template id to describe its fields in detail; omit to list templates",
-      ),
+      uuidInputSchema("Template id for field details; omit to list"),
     ),
     limit: v.optional(
       v.pipe(
@@ -755,12 +753,11 @@ const listTemplatesArgsSchema = nullAsAbsent(
         v.integer(),
         v.minValue(LIMITS.mcpListPageSizeMin),
         v.maxValue(MAX_LIST_LIMIT),
-        v.description("Max templates to return (list mode)"),
+        v.description("Page size (list mode)"),
       ),
     ),
     cursor: cursorInput({
-      description:
-        "Opaque cursor from a previous list_templates call to fetch the next page",
+      description: "Next-page cursor from list_templates",
     }),
   }),
 );

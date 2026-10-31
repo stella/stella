@@ -35,6 +35,7 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
+import { resolveEffectiveGrants } from "../../../../../../packages/cli/src/auth/command-scopes";
 import { loadBakedCapabilityCatalog } from "../../../../../../packages/cli/src/capability-catalog-load";
 import { deriveCapabilityLeaf } from "../../../../../../packages/cli/src/generate-capability-tree";
 import { runCapabilityCommand } from "../../../../../../packages/cli/src/run-capability-command";
@@ -379,6 +380,7 @@ const seed = async (db: GatedTestDb) => {
           configDir: "",
           serverUrl: server.url.origin,
           token,
+          effectiveGrants: resolveEffectiveGrants({ token }),
         },
         flags: {
           matterId: workspaceId,

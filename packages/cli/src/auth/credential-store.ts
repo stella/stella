@@ -338,11 +338,21 @@ type CredentialUpdate<T> =
 export const updateCredentialFile = async <T extends CredentialUpdate<unknown>>(
   configDir: string,
   update: (file: CredentialFile) => T,
-): Promise<T["value"]> => {
-  await mkdir(configDir, { mode: 0o700, recursive: true });
+): Promise<Result<T["value"], TokenRefreshError>> => {
+  const directory = await Result.tryPromise({
+    try: async () => await mkdir(configDir, { mode: 0o700, recursive: true }),
+    catch: (cause) =>
+      new TokenRefreshError({
+        message: `Could not create the credential directory ${configDir}. Check its permissions before retrying.`,
+        cause,
+      }),
+  });
+  if (Result.isError(directory)) {
+    return Result.err(directory.error);
+  }
   const lock = await acquireRefreshLock(configDir);
   if (Result.isError(lock)) {
-    throw lock.error;
+    return Result.err(lock.error);
   }
   const outcome = await Result.tryPromise(async () => {
     const decision = update(await readCredentialFile(configDir));
@@ -359,13 +369,20 @@ export const updateCredentialFile = async <T extends CredentialUpdate<unknown>>(
   });
   const released = await Result.tryPromise(lock.value);
   if (Result.isError(released)) {
-    throw new TokenRefreshError({
-      message: `${Result.isError(outcome) ? `${outcome.error.message} ` : ""}Could not remove the credential store lock ${credentialLockPath(configDir)}. Confirm no command is updating credentials, then remove this lock before retrying.`,
-      cause: Result.isError(outcome) ? outcome.error : released.error,
-    });
+    return Result.err(
+      new TokenRefreshError({
+        message: `${Result.isError(outcome) ? `${outcome.error.message} ` : ""}Could not remove the credential store lock ${credentialLockPath(configDir)}. Confirm no command is updating credentials, then remove this lock before retrying.`,
+        cause: Result.isError(outcome) ? outcome.error : released.error,
+      }),
+    );
   }
   if (Result.isError(outcome)) {
-    throw outcome.error;
+    return Result.err(
+      new TokenRefreshError({
+        message: `Could not update the credential store ${credentialsFilePath(configDir)} (${outcome.error.message}).`,
+        cause: outcome.error,
+      }),
+    );
   }
-  return outcome.value;
+  return Result.ok(outcome.value);
 };

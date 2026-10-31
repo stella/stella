@@ -173,18 +173,22 @@ export const logout = async (
   configDir: string,
   serverUrl: string,
   orgHint: string | undefined,
-): Promise<Result<{ orgId: string }, CliAuthError>> =>
-  await updateCredentialFile(configDir, (file) =>
+): Promise<Result<{ orgId: string }, CliAuthError>> => {
+  const updated = await updateCredentialFile(configDir, (file) =>
     selectedCredentialUpdate(
       removeSelectedCredential(file, serverUrl, orgHint),
     ),
   );
+  return updated.isErr() ? updated : updated.value;
+};
 
 export const switchOrg = async (
   configDir: string,
   serverUrl: string,
   orgHint: string,
-): Promise<Result<{ orgId: string }, CliAuthError>> =>
-  await updateCredentialFile(configDir, (file) =>
+): Promise<Result<{ orgId: string }, CliAuthError>> => {
+  const updated = await updateCredentialFile(configDir, (file) =>
     selectedCredentialUpdate(selectDefaultOrg(file, serverUrl, orgHint)),
   );
+  return updated.isErr() ? updated : updated.value;
+};
