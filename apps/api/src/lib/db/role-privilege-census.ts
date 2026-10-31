@@ -38,11 +38,8 @@ export type Census = {
   policies: PolicyCensus[];
 };
 
-export const readRolePrivilegeCensus = async (
-  database: SQL,
-): Promise<Census> => {
-  const rows = await database.unsafe<CensusRow[]>(`
-    WITH RECURSIVE
+const rolePrivilegeCensusQuery = `
+    WITH
     application_roles AS (
       SELECT oid, rolname, rolsuper, rolcreatedb, rolcreaterole, rolcanlogin, rolreplication, rolbypassrls
       FROM pg_catalog.pg_roles
@@ -50,12 +47,6 @@ export const readRolePrivilegeCensus = async (
     ),
     direct_memberships(member, parent, admin_option, inherit_option, set_option) AS (
       SELECT member, roleid, admin_option, inherit_option, set_option FROM pg_catalog.pg_auth_members
-    ),
-    memberships(member, parent) AS (
-      SELECT member, parent FROM direct_memberships UNION
-      SELECT memberships.member, auth.parent
-      FROM memberships
-      JOIN direct_memberships auth ON auth.member = memberships.parent
     ),
     application_schemas AS (
       SELECT oid, nspname, nspowner, nspacl
@@ -72,16 +63,10 @@ export const readRolePrivilegeCensus = async (
       JOIN application_schemas namespace ON namespace.oid = class.relnamespace
       WHERE class.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
     ),
-    effective_grantees(role_oid, grant_oid) AS (
-      SELECT oid, oid FROM application_roles
-      UNION ALL
-      SELECT oid, 0::oid FROM application_roles
-      UNION
-      SELECT memberships.member, memberships.parent FROM memberships
-    ),
-    object_acl(kind, object_name, owner_oid, acl) AS (
+    object_acl(kind, object_name, object_oid, sub_id, owner_oid, acl) AS (
       SELECT CASE WHEN relation.relkind = 'S' THEN 'sequence' ELSE 'table' END,
-             relation.nspname || '.' || relation.relname, relation.relowner,
+             relation.nspname || '.' || relation.relname, relation.oid, 0,
+             relation.relowner,
              COALESCE(relation.relacl, pg_catalog.acldefault(
                CASE WHEN relation.relkind = 'S' THEN 's'::"char" ELSE 'r'::"char" END,
                relation.relowner
@@ -89,15 +74,14 @@ export const readRolePrivilegeCensus = async (
       FROM application_relations relation
       UNION ALL
       SELECT 'column', relation.nspname || '.' || relation.relname || '.' || attribute.attname,
-             relation.relowner, attribute.attacl
+             relation.oid, attribute.attnum, relation.relowner, attribute.attacl
       FROM application_relations relation
       JOIN pg_catalog.pg_attribute attribute ON attribute.attrelid = relation.oid
       WHERE attribute.attnum > 0 AND NOT attribute.attisdropped
-        AND attribute.attacl IS NOT NULL
       UNION ALL
       SELECT 'function', namespace.nspname || '.' || procedure.proname ||
              '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
-             procedure.proowner,
+             procedure.oid, 0, procedure.proowner,
              COALESCE(procedure.proacl, pg_catalog.acldefault('f', procedure.proowner))
       FROM pg_catalog.pg_proc procedure
       JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
@@ -105,42 +89,111 @@ export const readRolePrivilegeCensus = async (
       UNION ALL
       SELECT 'procedure', namespace.nspname || '.' || procedure.proname ||
              '(' || pg_catalog.pg_get_function_identity_arguments(procedure.oid) || ')',
-             procedure.proowner,
+             procedure.oid, 0, procedure.proowner,
              COALESCE(procedure.proacl, pg_catalog.acldefault('f', procedure.proowner))
       FROM pg_catalog.pg_proc procedure
       JOIN application_schemas namespace ON namespace.oid = procedure.pronamespace
       WHERE procedure.prokind = 'p'
       UNION ALL
-      SELECT 'schema', schema.nspname, schema.nspowner,
+      SELECT 'schema', schema.nspname, schema.oid, 0, schema.nspowner,
              COALESCE(schema.nspacl, pg_catalog.acldefault('n', schema.nspowner))
       FROM application_schemas schema
       UNION ALL
       SELECT CASE WHEN type.typtype = 'd' THEN 'domain' ELSE 'type' END,
-             namespace.nspname || '.' || type.typname, type.typowner,
+             namespace.nspname || '.' || type.typname, type.oid, 0, type.typowner,
              COALESCE(type.typacl, pg_catalog.acldefault('T', type.typowner))
       FROM pg_catalog.pg_type type
       JOIN application_schemas namespace ON namespace.oid = type.typnamespace
       UNION ALL
-      SELECT 'large_object', metadata.oid::text, metadata.lomowner,
+      SELECT 'large_object', metadata.oid::text, metadata.oid, 0, metadata.lomowner,
              COALESCE(metadata.lomacl, pg_catalog.acldefault('L', metadata.lomowner))
       FROM pg_catalog.pg_largeobject_metadata metadata
+      UNION ALL
+      SELECT 'database', database.datname, database.oid, 0, database.datdba,
+             COALESCE(database.datacl, pg_catalog.acldefault('d', database.datdba))
+      FROM pg_catalog.pg_database database
+      WHERE database.datname = current_database()
     ),
     expanded_acl AS (
-      SELECT object_acl.kind, object_acl.object_name,
-             acl.grantee, acl.privilege_type, acl.is_grantable
+      SELECT object_acl.kind, object_acl.object_name, object_acl.object_oid,
+             object_acl.sub_id, acl.grantor, acl.grantee, acl.privilege_type,
+             acl.is_grantable
       FROM object_acl
       CROSS JOIN LATERAL pg_catalog.aclexplode(object_acl.acl) acl
     ),
-    effective_acl AS (
-      SELECT grantee.role_oid, acl.kind, acl.object_name, acl.privilege_type,
-             bool_or(acl.is_grantable) AS is_grantable
-      FROM expanded_acl acl
-      JOIN effective_grantees grantee ON grantee.grant_oid = acl.grantee
-      GROUP BY grantee.role_oid, acl.kind, acl.object_name, acl.privilege_type
+    privilege_candidates AS (
+      SELECT object_acl.kind, object_acl.object_name, object_acl.object_oid,
+             object_acl.sub_id, privilege.privilege_type
+      FROM object_acl
+      CROSS JOIN LATERAL (VALUES
+        ('database', 'CONNECT'), ('database', 'CREATE'), ('database', 'TEMPORARY'),
+        ('schema', 'CREATE'), ('schema', 'USAGE'),
+        ('table', 'DELETE'), ('table', 'INSERT'), ('table', 'MAINTAIN'),
+        ('table', 'REFERENCES'), ('table', 'SELECT'), ('table', 'TRIGGER'),
+        ('table', 'TRUNCATE'), ('table', 'UPDATE'),
+        ('column', 'INSERT'), ('column', 'REFERENCES'), ('column', 'SELECT'),
+        ('column', 'UPDATE'),
+        ('sequence', 'SELECT'), ('sequence', 'UPDATE'), ('sequence', 'USAGE'),
+        ('function', 'EXECUTE'), ('procedure', 'EXECUTE'),
+        ('domain', 'USAGE'), ('type', 'USAGE'),
+        ('large_object', 'SELECT'), ('large_object', 'UPDATE')
+      ) privilege(object_kind, privilege_type)
+      WHERE privilege.object_kind = object_acl.kind
+    ),
+    role_privileges AS (
+      SELECT role.oid AS role_oid, candidate.*,
+             CASE candidate.kind
+               WHEN 'database' THEN pg_catalog.has_database_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'schema' THEN pg_catalog.has_schema_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'table' THEN pg_catalog.has_table_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'column' THEN pg_catalog.has_column_privilege(role.oid, candidate.object_oid, candidate.sub_id::smallint, candidate.privilege_type)
+               WHEN 'sequence' THEN pg_catalog.has_sequence_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'function' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'procedure' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'domain' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'type' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+               WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(role.oid, candidate.object_oid, candidate.privilege_type)
+             END AS effective,
+             CASE candidate.kind
+               WHEN 'database' THEN pg_catalog.has_database_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'schema' THEN pg_catalog.has_schema_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'table' THEN pg_catalog.has_table_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'column' THEN pg_catalog.has_column_privilege(role.oid, candidate.object_oid, candidate.sub_id::smallint, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'sequence' THEN pg_catalog.has_sequence_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'function' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'procedure' THEN pg_catalog.has_function_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'domain' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'type' THEN pg_catalog.has_type_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+               WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(role.oid, candidate.object_oid, candidate.privilege_type || ' WITH GRANT OPTION')
+             END AS grantable
+      FROM application_roles role
+      CROSS JOIN privilege_candidates candidate
+    ),
+    set_reachable_acl AS (
+      SELECT DISTINCT privilege.role_oid, privilege.kind, privilege.object_name,
+             privilege.privilege_type
+      FROM role_privileges privilege
+      JOIN application_roles member ON member.oid = privilege.role_oid
+      JOIN pg_catalog.pg_roles parent
+        ON parent.oid <> member.oid
+       AND pg_catalog.pg_has_role(member.oid, parent.oid, 'SET')
+      WHERE NOT privilege.effective
+        AND CASE privilege.kind
+          WHEN 'database' THEN pg_catalog.has_database_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'schema' THEN pg_catalog.has_schema_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'table' THEN pg_catalog.has_table_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'column' THEN pg_catalog.has_column_privilege(parent.oid, privilege.object_oid, privilege.sub_id::smallint, privilege.privilege_type)
+          WHEN 'sequence' THEN pg_catalog.has_sequence_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'function' THEN pg_catalog.has_function_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'procedure' THEN pg_catalog.has_function_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'domain' THEN pg_catalog.has_type_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'type' THEN pg_catalog.has_type_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+          WHEN 'large_object' THEN pg_catalog.has_largeobject_privilege(parent.oid, privilege.object_oid, privilege.privilege_type)
+        END
     ),
     relation_roles AS (
       SELECT DISTINCT acl.role_oid, relation.oid
-      FROM effective_acl acl
+      FROM role_privileges acl
       JOIN application_relations relation
         ON (
           acl.kind IN ('table', 'sequence')
@@ -150,6 +203,7 @@ export const readRolePrivilegeCensus = async (
           AND left(acl.object_name, length(relation.nspname || '.' || relation.relname) + 1) =
               relation.nspname || '.' || relation.relname || '.'
         )
+      WHERE acl.effective
     ),
     results AS (
       SELECT role.rolname AS role, 'attribute'::text AS kind,
@@ -170,9 +224,30 @@ export const readRolePrivilegeCensus = async (
       JOIN pg_catalog.pg_roles parent ON parent.oid = membership.parent
       UNION ALL
       SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
-             acl.privilege_type || ':GRANTABLE:' || acl.is_grantable
-      FROM effective_acl acl
+             acl.privilege_type || ':EFFECTIVE'
+      FROM role_privileges acl
       JOIN application_roles role ON role.oid = acl.role_oid
+      WHERE acl.effective
+      UNION ALL
+      SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+             acl.privilege_type || ':EFFECTIVE_GRANTABLE'
+      FROM role_privileges acl
+      JOIN application_roles role ON role.oid = acl.role_oid
+      WHERE acl.grantable
+      UNION ALL
+      SELECT role.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+             acl.privilege_type || ':SET_REACHABLE'
+      FROM set_reachable_acl acl
+      JOIN application_roles role ON role.oid = acl.role_oid
+      UNION ALL
+      SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE grantee.rolname END,
+             'privilege', acl.kind || ':' || acl.object_name || ':' ||
+             acl.privilege_type || ':GRANTOR:' || grantor.rolname ||
+             ':GRANTABLE:' || acl.is_grantable
+      FROM expanded_acl acl
+      LEFT JOIN application_roles grantee ON grantee.oid = acl.grantee
+      JOIN pg_catalog.pg_roles grantor ON grantor.oid = acl.grantor
+      WHERE acl.grantee = 0 OR grantee.oid IS NOT NULL
       UNION ALL
       SELECT role.rolname, 'privilege',
              'table:' || relation.nspname || '.' || relation.relname ||
@@ -201,7 +276,12 @@ export const readRolePrivilegeCensus = async (
       JOIN application_roles role ON role.oid = accessible.role_oid
     )
     SELECT role, kind, value FROM results ORDER BY role, kind, value
-  `);
+`;
+
+export const readRolePrivilegeCensus = async (
+  database: SQL,
+): Promise<Census> => {
+  const rows = await database.unsafe<CensusRow[]>(rolePrivilegeCensusQuery);
 
   const policies = await database.unsafe<PolicyCensus[]>(`
     SELECT schemaname AS schema, tablename AS table, policyname AS policy,
