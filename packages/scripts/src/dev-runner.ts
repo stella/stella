@@ -1830,6 +1830,7 @@ const spawnPersistentStep = (step: Step, rootDir: string) => {
     label: step.label,
     cwd: step.cwd,
     env,
+    output: "inherit",
     stdin: "inherit",
   }).map((child) => ({
     cmd: step.cmd,
@@ -1851,6 +1852,7 @@ const startBackgroundStep = (step: Step, rootDir: string) => {
     label: step.label,
     cwd: step.cwd,
     env,
+    output: "inherit",
     stdin: "ignore",
   }).map((child) => ({
     cmd: step.cmd,
