@@ -957,7 +957,7 @@ test.each(["payload", "withdrawal", "window", "method"] as const)(
     const middleId = ids.at(1);
     const newestId = ids.at(2);
     if (middleId === undefined || newestId === undefined) {
-      panic("Reader freshness fixture has three versions");
+      return panic("Reader freshness fixture has three versions");
     }
     const readPage = async () => {
       const page = await listStatuteVersionsHandler({

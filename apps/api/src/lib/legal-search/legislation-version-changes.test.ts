@@ -58,11 +58,19 @@ describe("planVersionChanges", () => {
   });
 
   test("a write outdates only its own summary and the next eligible version's", () => {
-    const first = version("2020-01-01");
+    const first = version("2020-01-01", {
+      changeSummary: {
+        type: "first",
+        method: STATUTE_VERSION_CHANGES_METHOD,
+        payloadRevision: 1,
+      },
+    });
     const second = version("2021-01-01");
     const skipped = version("2021-06-01", { eligible: false });
     const third = version("2022-01-01");
-    const fourth = version("2023-01-01");
+    const fourth = version("2023-01-01", {
+      changeSummary: comparedWith(third),
+    });
 
     expect(
       targets(
@@ -78,7 +86,13 @@ describe("planVersionChanges", () => {
   });
 
   test("a version that stopped applying still outdates the next one's summary", () => {
-    const first = version("2020-01-01");
+    const first = version("2020-01-01", {
+      changeSummary: {
+        type: "first",
+        method: STATUTE_VERSION_CHANGES_METHOD,
+        payloadRevision: 1,
+      },
+    });
     const withdrawn = version("2021-01-01", { eligible: false });
     const third = version("2022-01-01");
 
@@ -196,6 +210,31 @@ test.each(
         ? { ...row, versionValidFrom: opening, payloadRevision: 2n }
         : row,
     );
+    expect(targets(planVersionChanges({ versions, around: moved.id }))).toEqual(
+      targets(planVersionChanges({ versions })),
+    );
+  },
+);
+
+test.each([null, { type: "unrecognized" }] as const)(
+  "repairs a re-dated version's former successor without stored provenance: %j",
+  (changeSummary) => {
+    const first = version("2020-01-01", {
+      changeSummary: {
+        type: "first",
+        method: STATUTE_VERSION_CHANGES_METHOD,
+        payloadRevision: 1,
+      },
+    });
+    const moved = version("2023-01-01", {
+      payloadRevision: 2n,
+      changeSummary: comparedWith(first),
+    });
+    const formerSuccessor = version("2022-01-01", { changeSummary });
+    const next = version("2024-01-01", {
+      changeSummary: comparedWith(formerSuccessor),
+    });
+    const versions = [first, moved, formerSuccessor, next];
     expect(targets(planVersionChanges({ versions, around: moved.id }))).toEqual(
       targets(planVersionChanges({ versions })),
     );

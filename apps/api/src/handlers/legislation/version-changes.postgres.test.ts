@@ -58,7 +58,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 versionValidFrom: `202${index}-01-01`,
               })),
             );
-            return await run(db, sourceId, { openClient });
+            await run(db, sourceId, { openClient });
           } finally {
             await db
               .delete(legislationSources)
@@ -229,7 +229,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           })),
         ]);
         expect(counts.reduce((sum, { written }) => sum + written, 0)).toBe(2);
-        expect(counts.map(({ written }) => written).toSorted()).toEqual([0, 2]);
+        expect(
+          counts
+            .map(({ written }) => written)
+            .toSorted((left, right) => left - right),
+        ).toEqual([0, 2]);
         expect(counts.flatMap(({ audits }) => audits)).toEqual([
           { counts: { summaries: 2 } },
         ]);

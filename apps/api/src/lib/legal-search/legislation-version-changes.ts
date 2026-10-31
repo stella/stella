@@ -118,7 +118,8 @@ export const isVersionChangeSummaryFresh = ({
 /**
  * Which versions a write of `around` can have outdated: itself (its text or
  * its window changed), its new successor and any stored summary that used it
- * as a base before the change. Every version when nothing was written.
+ * as a base before the change. Missing provenance is rebuilt too. Every
+ * version when nothing was written.
  */
 const scopeAround = (
   ordered: readonly VersionChangeCandidate[],
@@ -134,22 +135,23 @@ const scopeAround = (
     return () => true;
   }
   const next = ordered.slice(index + 1).find((version) => version.eligible);
-  const formerSuccessors = ordered.filter((version) => {
+  const scope = new Set([around, ...(next === undefined ? [] : [next.id])]);
+  for (const version of ordered) {
     const parsed = v.safeParse(
       storedStatuteVersionChangesSchema,
       version.changeSummary,
     );
-    return (
-      parsed.success &&
+    // Missing provenance cannot establish a former successor. Rebuild that
+    // row rather than leave an unknown summary outside the repair scope.
+    if (!parsed.success) {
+      scope.add(version.id);
+    } else if (
       parsed.output.type !== "first" &&
       parsed.output.base.documentId === around
-    );
-  });
-  const scope = new Set([
-    around,
-    ...(next === undefined ? [] : [next.id]),
-    ...formerSuccessors.map((version) => version.id),
-  ]);
+    ) {
+      scope.add(version.id);
+    }
+  }
   return (version) => scope.has(version.id);
 };
 
