@@ -143,6 +143,29 @@ test("ci-browser keeps the successful PR heavy-gate prerequisite", () => {
   );
 });
 
+test("desktop Rust tests start on a pull request only after the heavy gate passes", () => {
+  const job = v.parse(
+    v.object({ needs: v.array(v.string()), if: v.string() }),
+    jobs["desktop-rust-tests"],
+  );
+  expect(job.needs).toEqual(["ci-plan", "pr-heavy-gate"]);
+  const pullRequest = eventContext("pull_request");
+  const gated = (gate: string) =>
+    evaluate(job.if, {
+      ...pullRequest,
+      values: {
+        ...pullRequest.values,
+        "needs.ci-plan.outputs.desktop_rust_checks_required": "true",
+        "needs.ci-plan.outputs.pr_heavy_gate_required": "true",
+        "needs.pr-heavy-gate.result": gate,
+      },
+    });
+  expect(gated("success")).toBe(true);
+  for (const gate of ["failure", "skipped", "cancelled"]) {
+    expect(gated(gate), gate).toBe(false);
+  }
+});
+
 const REPRESENTATIVE_PLAN_FIXTURES = [
   ["apps/api/src/server.ts"],
   ["apps/web/src/app/layout.tsx"],

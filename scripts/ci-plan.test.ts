@@ -2461,6 +2461,9 @@ test("desktop Rust tests select classified merge-group changes at every queue de
                 event === EVENT.mergeGroup && runRequired === "true",
               ),
               "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+              "needs.ci-plan.result": "success",
+              "needs.ci-plan.outputs.pr_heavy_gate_required": "true",
+              "needs.pr-heavy-gate.result": "success",
               "needs.ci-plan.outputs.trusted": "true",
               "needs.ci-plan.outputs.desktop_rust_checks_required":
                 required ?? "",
@@ -9011,7 +9014,7 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     ).toEqual(["ci-plan", "pr-heavy-gate"]);
   }
   expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual(
-    expect.arrayContaining(["ci-tests", "web-build"]),
+    expect.arrayContaining(["ci-tests", "ci-browser", "web-build"]),
   );
 });
 

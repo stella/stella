@@ -6587,9 +6587,14 @@ jobs:
   # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-rust-tests:
     name: Desktop Rust Tests (${{ matrix.os }})
-    needs: ci-plan
+    # Like the lint legs, a pull request starts these runners only after the
+    # cheap checks pass.
+    needs: [ci-plan, pr-heavy-gate]
     if: >-
-      inputs.pr_depth_only != true
+      !cancelled()
+      && needs.ci-plan.result == 'success'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.pr_heavy_gate_required != 'true' || needs.pr-heavy-gate.result == 'success')
+      && inputs.pr_depth_only != true
       && needs.ci-plan.outputs.run_required != 'false'
       && (github.event_name != 'pull_request' || needs.ci-plan.outputs.coverage_profile == 'normal-v1')
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
