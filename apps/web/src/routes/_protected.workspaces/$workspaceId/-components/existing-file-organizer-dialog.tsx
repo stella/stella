@@ -167,14 +167,17 @@ export const ExistingFileOrganizerDialog = ({
     suggestionStatus !== "generating" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const folderByEntityId = useMemo(
     () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
     [existingFolders],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const fileByEntityId = useMemo(
     () => new Map(files.map((file) => [file.entityId, file])),
     [files],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const initialRows = useMemo(
     () =>
       buildFileNameSuggestions(
@@ -201,44 +204,32 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [files, fileByEntityId, folderByEntityId],
   );
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        existingFolders: existingFolders.map((folder) => ({
-          id: folder.entityId,
-          name: folder.name,
-          path: folder.path,
-          parentId: folder.parentId,
-        })),
-        files: files.map((file) => ({
-          id: file.entityId,
-          name: file.originalName,
-          parentId: file.parentId,
-        })),
-      }),
-    [existingFolders, files],
-  );
+  const requestKey = JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
   const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
   }));
-  const suggestionRequestFolders = useMemo(
-    () =>
-      existingFolders.map((folder) => ({
-        entityId: toSafeId<"entity">(folder.entityId),
-        name: folder.name,
-        path: folder.path,
-      })),
-    [existingFolders],
-  );
-  const suggestionRequestFiles = useMemo(
-    () =>
-      files.map((file) => ({
-        entityId: toSafeId<"entity">(file.entityId),
-        originalName: file.originalName,
-      })),
-    [files],
-  );
+  const suggestionRequestFolders = existingFolders.map((folder) => ({
+    entityId: toSafeId<"entity">(folder.entityId),
+    name: folder.name,
+    path: folder.path,
+  }));
+  const suggestionRequestFiles = files.map((file) => ({
+    entityId: toSafeId<"entity">(file.entityId),
+    originalName: file.originalName,
+  }));
 
   // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
   // editable rows on each open. Cached AI results for the same files are reshown
@@ -369,6 +360,7 @@ export const ExistingFileOrganizerDialog = ({
     );
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const summary = useMemo<RowChangeSummary>(() => {
     // Move and rename are counted independently: a file that both
     // moves and renames increments both "moved" and "renamed". Only
@@ -1003,6 +995,7 @@ const OrganizerTreePreview = ({
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
   const locale = useI18nStore((s) => s.loadedLang);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);

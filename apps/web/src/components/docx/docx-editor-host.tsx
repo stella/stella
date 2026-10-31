@@ -120,6 +120,7 @@ const DocxEditorSlotInstance = ({
   // Keyed by the document's fields, not its identity: a caller that builds
   // the document inline must not rewrite the claim on every render.
   const { entityId, fileFieldId, propertyId, workspaceId } = document;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const claim: DocxEditorClaim = useMemo(() => {
     const base = {
       bindings,

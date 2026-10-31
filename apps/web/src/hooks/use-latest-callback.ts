@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
@@ -29,7 +29,7 @@ export const useLatestCallback = <A extends unknown[], R>(
   useExternalSyncEffect(() => {
     latest.current = fn;
   }, [fn]);
-  // Library-contract memoization: stable identity is the entire point of
-  // this hook, so `useCallback` is sanctioned here despite React Compiler.
-  return useCallback((...args: A) => latest.current(...args), []);
+  // Stable identity is the entire point of this hook. The closure reads only
+  // the ref, so the React Compiler creates it once per component instance.
+  return (...args: A) => latest.current(...args);
 };

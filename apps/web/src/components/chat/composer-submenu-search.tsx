@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { panic } from "better-result";
 
 import { SearchIcon } from "@stll/ui/icons";
@@ -88,22 +86,19 @@ export const ComposerSubmenuSearch = ({
   // Listens on the popup's own node: a nested submenu is a separate portal,
   // so its keys never reach this listener. Stable identity, so the listener
   // attaches once per popup rather than once per render.
-  const bindPopupKeys = useCallback(
-    (node: HTMLDivElement | null) => {
-      const popup = node?.closest('[role="menu"]');
-      if (!(popup instanceof HTMLElement)) {
-        return undefined;
-      }
-      const controller = new AbortController();
-      popup.addEventListener("keydown", routeStrayKey, {
-        signal: controller.signal,
-      });
-      return () => {
-        controller.abort();
-      };
-    },
-    [routeStrayKey],
-  );
+  const bindPopupKeys = (node: HTMLDivElement | null) => {
+    const popup = node?.closest('[role="menu"]');
+    if (!(popup instanceof HTMLElement)) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    popup.addEventListener("keydown", routeStrayKey, {
+      signal: controller.signal,
+    });
+    return () => {
+      controller.abort();
+    };
+  };
 
   return (
     <div className="px-2 pt-1.5 pb-2" ref={bindPopupKeys}>

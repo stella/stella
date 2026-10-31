@@ -274,11 +274,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   }
 
   const schema = useWorkspaceKanbanSchema(properties);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const grouping = useMemo(
     () => resolveWorkspaceKanbanGrouping(configuredGroupBy, schema),
     [configuredGroupBy, schema],
   );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const subgroupDefinition = useMemo(
     () =>
       resolveWorkspaceKanbanSubgroup(
@@ -324,6 +326,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({
@@ -365,6 +368,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const subgroupView = queryView(subgroupQuery);
   const subgroupQueryData =
     subgroupView.type === "items" ? subgroupView.items : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const subgroupEntities = useMemo(
     () =>
       subgroupQueryData
@@ -372,14 +376,11 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         : [],
     [subgroupQueryData],
   );
-  const subgroup = useMemo(
-    () =>
-      resolveWorkspaceKanbanDynamicSubgroup(
-        subgroupDefinition,
-        subgroupEntities,
-      ),
-    [subgroupDefinition, subgroupEntities],
+  const subgroup = resolveWorkspaceKanbanDynamicSubgroup(
+    subgroupDefinition,
+    subgroupEntities,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const subgroupMatrix = useMemo(() => {
     if (
       !hasSupportedSubgroup ||

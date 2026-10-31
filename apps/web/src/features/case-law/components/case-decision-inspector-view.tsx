@@ -39,7 +39,7 @@ import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import { decisionInspectorAnnotationTarget } from "@/features/case-law/components/case-decision-inspector-view.logic";
-import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { analysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
 import { DecisionCitationBox } from "@/features/case-law/components/case-viewer/decision-citation-box";
 import { DecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts";
@@ -119,7 +119,7 @@ export const CaseDecisionInspectorView = ({
         return panic("Unhandled analysis state");
     }
   })();
-  const analysisContents = useAnalysisReaderOutline(analysisTree);
+  const analysisContents = analysisReaderOutline(analysisTree);
   // No text is shown before the decision loads, so the default is moot then.
   const caseNumberType =
     decision?.caseNumberType ?? DECISION_IDENTIFIER_TYPES.CASE_NUMBER;

@@ -25,7 +25,7 @@ const { ReaderBreadcrumb } = await import("./reader-breadcrumb");
 const { useReaderTextScale } =
   await import("@stll/decision-reader/use-reader-text-scale");
 const { default: messages } = await import("@/i18n/langs/en.json");
-const { useAnalysisReaderOutline } =
+const { analysisReaderOutline } =
   await import("@/features/case-law/components/case-viewer/analysis/reader-breadcrumb");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { WebReaderPresentationProvider } =
@@ -323,7 +323,7 @@ test("paragraph-only decisions retain completed analysis Contents across inspect
     },
   ];
   const ReaderSurface = () => {
-    const analysis = useAnalysisReaderOutline(completedAnalysisTree);
+    const analysis = analysisReaderOutline(completedAnalysisTree);
     return (
       <LegalReaderBreadcrumb
         blocks={[
@@ -437,7 +437,7 @@ test("a headings-less decision marks its analysis trail as AI-generated", async 
     },
   ];
   const Reader = () => {
-    const analysis = useAnalysisReaderOutline(tree);
+    const analysis = analysisReaderOutline(tree);
     return (
       <AnalysisProviders>
         <LegalReaderBreadcrumb
@@ -1136,7 +1136,7 @@ test("Contents places streamed analysis sections among the headings without movi
     section("a-2", "Reasons for dismissal", "b3"),
   ];
   const Reader = ({ tree }: { tree: typeof bothSections | null }) => {
-    const analysis = useAnalysisReaderOutline(tree);
+    const analysis = analysisReaderOutline(tree);
     return (
       <AnalysisProviders>
         <LegalReaderBreadcrumb

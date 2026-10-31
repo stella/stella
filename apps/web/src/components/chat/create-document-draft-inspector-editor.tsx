@@ -1,4 +1,4 @@
-import { use, useCallback, useRef, useState } from "react";
+import { use, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
@@ -91,54 +91,49 @@ export const CreateDocumentDraftInspectorEditor = ({
   const draftEditable =
     getCreateDocumentDraftEditorAccess(payload) === "editable";
 
-  const attachEditor = useCallback(
-    (editor: DocxEditorRef | null) => {
-      if (editor === null) {
-        return undefined;
-      }
-      if (!draftEditable) {
-        editorRef.current = editor;
-        return () => {
-          if (editorRef.current === editor) {
-            editorRef.current = null;
-          }
-        };
-      }
-      return attachCreateDocumentDraftEditor({
-        editor,
-        editorRef,
-        toolCallId: payload.toolCallId,
-      });
-    },
-    [draftEditable, payload.toolCallId],
-  );
-  const handleChatThreadIdChange = useCallback(
-    (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
-      const changed = setCreateDocumentDraftInspectorChatThreadId({
-        chatThreadId,
-        inspector: useInspectorTabsStore.getState(),
-        toolCallId: payload.toolCallId,
-      });
-      if (changed && chatThreadId !== payload.chatThreadId) {
-        clearCreateDocumentDraftChatThreadBinding(payload.toolCallId);
-      }
-    },
-    [payload.chatThreadId, payload.toolCallId],
-  );
-  const handleActiveDraftChatBound = useCallback(
-    (chatThreadId: CreateDocumentDraftPayload["chatThreadId"]) => {
-      bindCreateDocumentDraftInspectorChatThread({
-        chatThreadId,
-        inspector: useInspectorTabsStore.getState(),
-        toolCallId: payload.toolCallId,
-      });
-      retainCreateDocumentDraftChatThread({
-        chatThreadId,
-        toolCallId: payload.toolCallId,
-      });
-    },
-    [payload.toolCallId],
-  );
+  const attachEditor = (editor: DocxEditorRef | null) => {
+    if (editor === null) {
+      return undefined;
+    }
+    if (!draftEditable) {
+      editorRef.current = editor;
+      return () => {
+        if (editorRef.current === editor) {
+          editorRef.current = null;
+        }
+      };
+    }
+    return attachCreateDocumentDraftEditor({
+      editor,
+      editorRef,
+      toolCallId: payload.toolCallId,
+    });
+  };
+  const handleChatThreadIdChange = (
+    chatThreadId: CreateDocumentDraftPayload["chatThreadId"],
+  ) => {
+    const changed = setCreateDocumentDraftInspectorChatThreadId({
+      chatThreadId,
+      inspector: useInspectorTabsStore.getState(),
+      toolCallId: payload.toolCallId,
+    });
+    if (changed && chatThreadId !== payload.chatThreadId) {
+      clearCreateDocumentDraftChatThreadBinding(payload.toolCallId);
+    }
+  };
+  const handleActiveDraftChatBound = (
+    chatThreadId: CreateDocumentDraftPayload["chatThreadId"],
+  ) => {
+    bindCreateDocumentDraftInspectorChatThread({
+      chatThreadId,
+      inspector: useInspectorTabsStore.getState(),
+      toolCallId: payload.toolCallId,
+    });
+    retainCreateDocumentDraftChatThread({
+      chatThreadId,
+      toolCallId: payload.toolCallId,
+    });
+  };
 
   if (persistedFileQuery.error) {
     throw persistedFileQuery.error;

@@ -10,7 +10,6 @@
  * statutes are column definitions and a row host over this.
  */
 
-import { useMemo } from "react";
 import type { ReactNode } from "react";
 
 import { useTable } from "@tanstack/react-table";
@@ -115,16 +114,10 @@ export const PublicLawTable = <
   // say nothing about the search in flight: that table waits instead.
   const isWaiting = isLoading || (isRefreshing && rows.length === 0);
   const selectedIds = selection?.selectedIds;
-  const rowSelection: RowSelectionState = useMemo(() => {
-    if (selectedIds === undefined) {
-      return NO_SELECTION;
-    }
-    const picked: RowSelectionState = {};
-    for (const id of selectedIds) {
-      picked[id] = true;
-    }
-    return picked;
-  }, [selectedIds]);
+  const rowSelection: RowSelectionState =
+    selectedIds === undefined
+      ? NO_SELECTION
+      : Object.fromEntries(selectedIds.map((id) => [id, true]));
 
   const tableState = useTableState({
     columnLayout: {

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import type { ViewerSurface } from "@/components/viewer/recoverable-viewer-boundary";
@@ -27,36 +27,33 @@ export const MeasuredPdfProvider = ({
 }: MeasuredPdfProviderProps) => {
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
 
-  const containerRef = useCallback(
-    (container: HTMLDivElement | null) => {
-      if (!active || initialFitWidth !== undefined || !container) {
-        return undefined;
+  const containerRef = (container: HTMLDivElement | null) => {
+    if (!active || initialFitWidth !== undefined || !container) {
+      return undefined;
+    }
+
+    const updateWidth = (width: number) => {
+      if (width > 0) {
+        setInitialFitWidth(width);
+      }
+    };
+
+    updateWidth(container.clientWidth);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.at(-1);
+      if (!entry) {
+        return;
       }
 
-      const updateWidth = (width: number) => {
-        if (width > 0) {
-          setInitialFitWidth(width);
-        }
-      };
+      updateWidth(entry.contentRect.width);
+    });
 
-      updateWidth(container.clientWidth);
-
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries.at(-1);
-        if (!entry) {
-          return;
-        }
-
-        updateWidth(entry.contentRect.width);
-      });
-
-      observer.observe(container);
-      return () => {
-        observer.disconnect();
-      };
-    },
-    [active, initialFitWidth],
-  );
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+    };
+  };
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col" ref={containerRef}>

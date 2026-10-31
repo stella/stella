@@ -15,7 +15,6 @@ import { sleep } from "@stll/concurrency/sleep";
 import { installRenderProbe, RENDER_CAUSES } from "@stll/render-probe";
 import type { RenderSnapshot } from "@stll/render-probe";
 import { formatRenderReport } from "@stll/render-probe/report";
-import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import type { ChatThreadDomSession } from "@/components/chat/chat-thread-dom-page";
@@ -49,10 +48,6 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // React DOM reads its DevTools hook once, when it loads: before any import
 // below reaches it.
 const probe = installRenderProbe();
-// The page renders as it ships: compiled by the React Compiler, as the Vite
-// build compiles it. Without it the page would render far wider than in the
-// app, and a width budget would hold the wrong program.
-Bun.plugin(reactCompilerBunPlugin);
 
 const ORACLE = "chat.render.stream-commits-bounded";
 

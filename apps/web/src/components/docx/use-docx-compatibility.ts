@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { DocxCompatibility } from "@stll/folio-react";
 
@@ -41,9 +41,9 @@ export const useDocxCompatibility = ({
     },
   );
 
-  const resetCompatibility = useCallback(() => {
+  const resetCompatibility = () => {
     setCompatibilityState({ targetKey: editTargetKey, value: null });
-  }, [editTargetKey]);
+  };
 
   return { compatibility, handleCompatibilityChange, resetCompatibility };
 };

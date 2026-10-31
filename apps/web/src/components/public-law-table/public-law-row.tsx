@@ -9,7 +9,7 @@
  */
 
 import type React from "react";
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import { flexRender } from "@tanstack/react-table";
 import { row_getCanSelect } from "@tanstack/react-table/static-functions";
@@ -95,13 +95,10 @@ export const PublicLawRow = <TRow extends PublicLawRowData>({
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
-  const setRowRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      rowRef.current = element;
-      measureElement(element);
-    },
-    [measureElement],
-  );
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    measureElement(element);
+  };
   const visibleCells = getOrderedCells(row.getVisibleCells(), renderColumns);
   const addPropertyCell = addPropertyColumn
     ? row

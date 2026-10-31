@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, mock } from "bun:test";
 
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+import { reactCompilerBunPlugin } from "@stll/scripts/src/react-compiler-bun-plugin";
 
 import {
   installDomNetworkGuard,
@@ -14,6 +15,9 @@ import {
   markTimerTestStarted,
   reportLeakedTimers,
 } from "@/testing/timer-guard";
+
+// Tests run components with the same memoization as the Vite build.
+Bun.plugin(reactCompilerBunPlugin);
 
 // Tests must never inherit a developer deployment URL. A single preload owns
 // this process-wide value so test files can restore it safely.

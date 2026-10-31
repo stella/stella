@@ -151,6 +151,7 @@ export const MemberCombobox = ({
 
   // Base UI copies `items` into its own state whenever the prop's identity
   // changes, so the list is rebuilt only when its inputs change.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- Base UI requires item identities to survive selection changes; coalescing this cache with selected resets the search input
   const items = useMemo(() => {
     const compareNames = compareByLocale(locale);
     const memberItems = members
@@ -172,7 +173,7 @@ export const MemberCombobox = ({
     return [none, ...memberItems];
   }, [locale, members, noneLabel, unknownUser]);
 
-  const selected = useMemo((): MemberComboboxItem | null => {
+  const selected = ((): MemberComboboxItem | null => {
     if (value === null) {
       return null;
     }
@@ -191,7 +192,7 @@ export const MemberCombobox = ({
         unknownUser,
       member: selectedFallback,
     };
-  }, [items, selectedFallback, unknownUser, value]);
+  })();
 
   const selectedMember = selected?.type === "member" ? selected.member : null;
 

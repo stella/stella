@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -95,7 +95,7 @@ export function MemberPlaybooksPage({
   const currentNextCursor =
     nextCursor === undefined ? initialNextCursor : nextCursor;
 
-  const handleLoadMore = useCallback(async () => {
+  const handleLoadMore = async () => {
     const cursor = currentNextCursor;
     if (!cursor) {
       return;
@@ -161,9 +161,9 @@ export function MemberPlaybooksPage({
 
     setExtraPlaybooks((prev) => [...prev, ...data.items]);
     setNextCursor(data.nextCursor);
-  }, [currentNextCursor, t, playbookActions]);
+  };
 
-  const handleRefresh = useCallback(() => {
+  const handleRefresh = () => {
     // Abort any in-flight page load so its result cannot append a stale page
     // back into the list we are about to reset. handleLoadMore's abort branch
     // intentionally leaves loadingMore set, so clear it here.
@@ -173,12 +173,12 @@ export function MemberPlaybooksPage({
     setExtraPlaybooks([]);
     setNextCursor(undefined);
     playbookActions.invalidatePlaybooks();
-  }, [playbookActions]);
+  };
 
-  const handleBackToList = useCallback(() => {
+  const handleBackToList = () => {
     setView({ kind: "list" });
     handleRefresh();
-  }, [handleRefresh]);
+  };
 
   if (view.kind === "editor") {
     return (

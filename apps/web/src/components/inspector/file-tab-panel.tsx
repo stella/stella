@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   Dispatch,
   MouseEvent,
@@ -273,6 +273,7 @@ export const FileTabPanel = ({
   const t = useTranslations();
   const [pdfColorMode, setPDFColorMode] = useState<PDFColorMode>("system");
   const setFileFacet = useInspectorTabsStore((s) => s.setFileFacet);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const display = useMemo(
     () => getFileTabDisplayState({ activeId, minimized, scaleOffsets, tab }),
     [activeId, minimized, scaleOffsets, tab],
@@ -335,12 +336,9 @@ export const FileTabPanel = ({
     tab,
   });
 
-  const handleViewerError = useCallback(
-    (error: unknown) => {
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    [t],
-  );
+  const handleViewerError = (error: unknown) => {
+    notifyUserError(error, t("errors.actionFailed"));
+  };
 
   const docxEditor = useDocxEditorBindings({
     docxActionsRef,

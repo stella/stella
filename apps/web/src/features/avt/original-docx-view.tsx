@@ -84,6 +84,7 @@ export const OriginalDocxView = ({
   // array is made once.
   const [plugins] = React.useState(() => [createDocumentPlugin(setDoc)]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const locations = React.useMemo(
     () =>
       doc === null

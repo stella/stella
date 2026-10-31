@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -133,7 +133,7 @@ export const ReaderAnswerCard = ({
     }
   }
   const expanded = busy || display === "expanded";
-  const observe = useCallback((node: HTMLElement | null) => {
+  const observe = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
     }
@@ -154,7 +154,7 @@ export const ReaderAnswerCard = ({
       observerRef.current = null;
       cardRef.current = null;
     };
-  }, []);
+  };
   useLayoutEffect(() => {
     if (!active) {
       visibility.current = "tracking";

@@ -28,6 +28,7 @@ export const useDocxOpenTiming = ({
   fieldId,
   surface,
 }: UseDocxOpenTimingOptions) =>
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   useCallback(
     (editor: TimedDocxEditor | null) => {
       editorRef.current = editor;

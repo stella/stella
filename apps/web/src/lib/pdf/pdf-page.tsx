@@ -1,4 +1,4 @@
-import { Suspense, use, useCallback, useDeferredValue } from "react";
+import { Suspense, use, useDeferredValue } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { Result } from "better-result";
@@ -263,50 +263,47 @@ const PDFSearchHighlightBox = ({
     boxIndex === 0 &&
     isActive &&
     isPDFSearchMatchScrollRequest({ matchIndex, pageId, scrollTo });
-  const highlightRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      if (!element || !shouldCenter) {
+  const highlightRef = (element: HTMLDivElement | null) => {
+    if (!element || !shouldCenter) {
+      return;
+    }
+
+    // The page ref first aligns the requested page. Centre the match in the
+    // following frame, using post-alignment geometry, and consume only the
+    // same request so a newer citation/anonymization jump cannot be cleared.
+    requestAnimationFrame(() => {
+      if (
+        !element.isConnected ||
+        element.dataset["active"] !== "true" ||
+        !isPDFSearchMatchScrollRequest({
+          matchIndex,
+          pageId,
+          scrollTo: store.getState().scrollTo,
+        })
+      ) {
         return;
       }
-
-      // The page ref first aligns the requested page. Centre the match in the
-      // following frame, using post-alignment geometry, and consume only the
-      // same request so a newer citation/anonymization jump cannot be cleared.
-      requestAnimationFrame(() => {
-        if (
-          !element.isConnected ||
-          element.dataset["active"] !== "true" ||
-          !isPDFSearchMatchScrollRequest({
-            matchIndex,
-            pageId,
-            scrollTo: store.getState().scrollTo,
-          })
-        ) {
-          return;
-        }
-        const scrollViewport = element.closest<HTMLElement>(
-          SCROLL_AREA_VIEWPORT_SELECTOR,
-        );
-        if (!scrollViewport) {
-          return;
-        }
-        const containerRect = scrollViewport.getBoundingClientRect();
-        const matchRect = element.getBoundingClientRect();
-        scrollViewport.scrollTo({
-          top: getCenteredSearchMatchScrollTop({
-            containerHeight: containerRect.height,
-            containerTop: containerRect.top,
-            currentScrollTop: scrollViewport.scrollTop,
-            matchHeight: matchRect.height,
-            matchTop: matchRect.top,
-            obscuredBlockEnd: readScrollPaddingBlockEnd(scrollViewport),
-          }),
-        });
-        store.getState().setScrollTo(null);
+      const scrollViewport = element.closest<HTMLElement>(
+        SCROLL_AREA_VIEWPORT_SELECTOR,
+      );
+      if (!scrollViewport) {
+        return;
+      }
+      const containerRect = scrollViewport.getBoundingClientRect();
+      const matchRect = element.getBoundingClientRect();
+      scrollViewport.scrollTo({
+        top: getCenteredSearchMatchScrollTop({
+          containerHeight: containerRect.height,
+          containerTop: containerRect.top,
+          currentScrollTop: scrollViewport.scrollTop,
+          matchHeight: matchRect.height,
+          matchTop: matchRect.top,
+          obscuredBlockEnd: readScrollPaddingBlockEnd(scrollViewport),
+        }),
       });
-    },
-    [matchIndex, pageId, shouldCenter, store],
-  );
+      store.getState().setScrollTo(null);
+    });
+  };
 
   return (
     <div

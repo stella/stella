@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useId, useRef, useState } from "react";
+import { lazy, Suspense, useId, useRef, useState } from "react";
 import type { ReactElement, RefObject } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -205,48 +205,42 @@ export const PublicStatuteViewer = ({
   // for keeps the version menu, which switches by id.
   const canPickDate = normalizeStatuteStoredSlug(work.slug) !== null;
 
-  const goTo = useCallback(
-    (params: StatuteRouteParams, nextAsOf: string | undefined) => {
-      const search = { asOf: nextAsOf, q: find.findQuery || undefined };
+  const goTo = (params: StatuteRouteParams, nextAsOf: string | undefined) => {
+    const search = { asOf: nextAsOf, q: find.findQuery || undefined };
 
-      detached(
-        params.version === undefined
-          ? navigate({
-              params: { country: params.country, slug: params.slug },
-              search,
-              to: "/law/$country/statutes/$slug",
-            })
-          : navigate({
-              params: {
-                country: params.country,
-                slug: params.slug,
-                version: params.version,
-              },
-              search,
-              to: "/law/$country/statutes/$slug/v/$version",
-            }),
-        "statutes.reader-navigate",
-      );
-    },
-    [find.findQuery, navigate],
-  );
+    detached(
+      params.version === undefined
+        ? navigate({
+            params: { country: params.country, slug: params.slug },
+            search,
+            to: "/law/$country/statutes/$slug",
+          })
+        : navigate({
+            params: {
+              country: params.country,
+              slug: params.slug,
+              version: params.version,
+            },
+            search,
+            to: "/law/$country/statutes/$slug/v/$version",
+          }),
+      "statutes.reader-navigate",
+    );
+  };
 
-  const handleVersionChange = useCallback(
-    (nextDocumentId: string) => {
-      const next = versions.find((version) => version.id === nextDocumentId);
+  const handleVersionChange = (nextDocumentId: string) => {
+    const next = versions.find((version) => version.id === nextDocumentId);
 
-      if (next === undefined) {
-        return;
-      }
+    if (next === undefined) {
+      return;
+    }
 
-      // A version that cannot apply opens at its id: no day names it.
-      goTo(
-        statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
-        undefined,
-      );
-    },
-    [goTo, versions],
-  );
+    // A version that cannot apply opens at its id: no day names it.
+    goTo(
+      statuteVersionRouteParams({ isDefault: next.isDefault, version: next }),
+      undefined,
+    );
+  };
 
   // A comparison is a view of the text on screen, not another address: it
   // lives in the search params, beside the path that names the text.

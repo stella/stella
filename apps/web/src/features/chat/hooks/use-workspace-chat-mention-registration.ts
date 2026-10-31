@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
@@ -72,10 +72,8 @@ export const useWorkspaceChatMentionRegistration = (
   );
   const activeView =
     activeViewView.type === "items" ? activeViewView.items : undefined;
-  const { filters, sorts } = useMemo(
-    () => getMentionViewScope(activeView?.layout),
-    [activeView?.layout],
-  );
+  const { filters, sorts } = getMentionViewScope(activeView?.layout);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const createSearchOptions = useCallback(
     (query: string) => {
       const search = query.trim();
@@ -89,18 +87,15 @@ export const useWorkspaceChatMentionRegistration = (
     },
     [filters, sorts, workspaceId],
   );
-  const searchEntities = useCallback(
-    async (query: string) => {
-      const options = createSearchOptions(query);
-      if (pendingSearchRef.current) {
-        pendingSearchRef.current.queryKey = options.queryKey;
-      }
-      const data = await queryClient.query(options);
+  const searchEntities = async (query: string) => {
+    const options = createSearchOptions(query);
+    if (pendingSearchRef.current) {
+      pendingSearchRef.current.queryKey = options.queryKey;
+    }
+    const data = await queryClient.query(options);
 
-      return toEntityMentionOptions({ data, workspaceId });
-    },
-    [createSearchOptions, queryClient, workspaceId],
-  );
+    return toEntityMentionOptions({ data, workspaceId });
+  };
   const debouncedSearchEntities = useDebouncedCallback(
     async ({
       query,
@@ -122,6 +117,7 @@ export const useWorkspaceChatMentionRegistration = (
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const searchMentionItems = useCallback(
     async (query: string) => {
       const previous = pendingSearchRef.current;

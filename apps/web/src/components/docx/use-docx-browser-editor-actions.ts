@@ -62,38 +62,32 @@ export const useDocxBrowserEditorActions = ({
   const { finalize: finalizeActiveSession, state } = editSession;
 
   // Registers this render's action handles into the parent-provided ref
-  // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
-  // actionsMapRef / actionsRef change) so useImperativeHandle only
+  // and/or keyed map. The React Compiler keeps it stable unless actionsKey /
+  // actionsMapRef / actionsRef change, so useImperativeHandle only
   // re-attaches for those changes or for its own dep list below.
-  const registerActions = useCallback(
-    (actions: DocxBrowserEditorActions | null) => {
-      if (!actions) {
-        return undefined;
-      }
-      const actionsMap = actionsMapRef?.current;
-      if (actionsRef) {
-        actionsRef.current = actions;
-      }
-      if (actionsMap && actionsKey) {
-        actionsMap.set(actionsKey, actions);
-      }
+  const registerActions = (actions: DocxBrowserEditorActions | null) => {
+    if (!actions) {
+      return undefined;
+    }
+    const actionsMap = actionsMapRef?.current;
+    if (actionsRef) {
+      actionsRef.current = actions;
+    }
+    if (actionsMap && actionsKey) {
+      actionsMap.set(actionsKey, actions);
+    }
 
-      return () => {
-        if (actionsRef?.current === actions) {
-          actionsRef.current = null;
-        }
-        if (
-          actionsMap &&
-          actionsKey &&
-          actionsMap.get(actionsKey) === actions
-        ) {
-          actionsMap.delete(actionsKey);
-        }
-      };
-    },
-    [actionsKey, actionsMapRef, actionsRef],
-  );
+    return () => {
+      if (actionsRef?.current === actions) {
+        actionsRef.current = null;
+      }
+      if (actionsMap && actionsKey && actionsMap.get(actionsKey) === actions) {
+        actionsMap.delete(actionsKey);
+      }
+    };
+  };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const handleDesktopSessionExit = useCallback(async () => {
     switch (getDocxLeaveAction(state)) {
       case "allow":

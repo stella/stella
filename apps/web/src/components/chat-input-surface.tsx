@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import "./chat-editor.css";
 import type { ReactNode } from "react";
@@ -172,16 +172,13 @@ export const ChatInputSurface = ({
   // chat-editor-provider), so the only thing missing is a user-visible
   // signal. Route it through analytics AND a toast: swallowing the
   // failure into telemetry alone leaves the send silently lost.
-  const handleSubmitError = useCallback(
-    (error: unknown): void => {
-      getAnalytics().captureError(error, {
-        fingerprintKey: "ChatInputSurface:failure",
-        scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
-      });
-      notifyUserError(error, t("common.somethingWentWrong"));
-    },
-    [t],
-  );
+  const handleSubmitError = (error: unknown): void => {
+    getAnalytics().captureError(error, {
+      fingerprintKey: "ChatInputSurface:failure",
+      scope: { type: "handler", handlerId: "ChatInputSurface:failure" },
+    });
+    notifyUserError(error, t("common.somethingWentWrong"));
+  };
 
   const { submitDraft } = useChatComposerWiring({
     controller,

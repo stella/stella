@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -465,9 +465,8 @@ export const useCellMetadataFlags = ({
   );
 
   const serverManualFlags = metadata?.manualFlags;
-  const metadataManualFlags = useMemo(
-    () => normalizeManualFlags(serverManualFlags ?? NO_MANUAL_FLAGS),
-    [serverManualFlags],
+  const metadataManualFlags = normalizeManualFlags(
+    serverManualFlags ?? NO_MANUAL_FLAGS,
   );
   const serverLocked = metadata?.locked === true;
 
@@ -492,26 +491,19 @@ export const useCellMetadataFlags = ({
     }
   }, [key, metadataManualFlags, override, serverLocked]);
 
-  const activeFlags = useMemo(
-    () =>
-      currentManualFlags.flatMap((flagId) => {
-        const flag = getCellFlagById(flagId);
-        return flag === undefined ? [] : [flag];
-      }),
-    [currentManualFlags],
-  );
+  const activeFlags = currentManualFlags.flatMap((flagId) => {
+    const flag = getCellFlagById(flagId);
+    return flag === undefined ? [] : [flag];
+  });
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
-  const tintFlag = useMemo(
-    () =>
-      TINT_PRIORITY.flatMap((flagId) => {
-        if (!currentManualFlags.includes(flagId)) {
-          return [];
-        }
-        const flag = getCellFlagById(flagId);
-        return flag === undefined ? [] : [flag];
-      }).at(0) ?? null,
-    [currentManualFlags],
-  );
+  const tintFlag =
+    TINT_PRIORITY.flatMap((flagId) => {
+      if (!currentManualFlags.includes(flagId)) {
+        return [];
+      }
+      const flag = getCellFlagById(flagId);
+      return flag === undefined ? [] : [flag];
+    }).at(0) ?? null;
 
   // Refs let the debounced flush read the latest server snapshot
   // without re-creating the callback on every prop change.

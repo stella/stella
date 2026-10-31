@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -151,14 +151,14 @@ export const useMarkdownFileDraft = ({
     }
   }
 
-  const discard = useCallback(() => {
+  const discard = () => {
     if (isSaving) {
       return;
     }
     editorRef.current?.resetMarkdown(text);
     setDraft(text);
-  }, [isSaving, text]);
-  const save = useCallback(() => {
+  };
+  const save = () => {
     if (isSaving) {
       return;
     }
@@ -184,29 +184,23 @@ export const useMarkdownFileDraft = ({
       text: editorRef.current?.captureForSave() ?? draft,
       workspaceId: tab.workspaceId,
     });
-  }, [draft, filePropertyId, isSaving, saveDraft, tab]);
-  const textQueryState = useMemo(
-    () => ({
-      error: textQuery.error,
-      isPending: textQuery.isPending,
-      refetch: textQuery.refetch,
-    }),
-    [textQuery.error, textQuery.isPending, textQuery.refetch],
-  );
+  };
+  const textQueryState = {
+    error: textQuery.error,
+    isPending: textQuery.isPending,
+    refetch: textQuery.refetch,
+  };
 
-  return useMemo(
-    () => ({
-      discard,
-      editorRef,
-      isDirty,
-      isSaving,
-      save,
-      setDraft,
-      text,
-      textQuery: textQueryState,
-    }),
-    [discard, isDirty, isSaving, save, text, textQueryState],
-  );
+  return {
+    discard,
+    editorRef,
+    isDirty,
+    isSaving,
+    save,
+    setDraft,
+    text,
+    textQuery: textQueryState,
+  };
 };
 
 export type MarkdownFileDraft = ReturnType<typeof useMarkdownFileDraft>;

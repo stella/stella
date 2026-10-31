@@ -10,7 +10,7 @@
  * Public-safe: everything it needs about the rows arrives as props.
  */
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
@@ -125,10 +125,10 @@ export const TableFindBar = ({
   // something to select. Its identity has to be stable: React detaches and
   // reattaches a ref callback that changes, which would re-select the term
   // under a caret the reader had placed mid-word.
-  const bindInput = useCallback((node: HTMLInputElement | null) => {
+  const bindInput = (node: HTMLInputElement | null) => {
     inputRef.current = node;
     node?.select();
-  }, []);
+  };
 
   return (
     <Popover

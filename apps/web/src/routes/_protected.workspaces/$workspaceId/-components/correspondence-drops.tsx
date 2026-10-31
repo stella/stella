@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
@@ -79,47 +79,36 @@ const CorrespondenceDropsTable = ({ workspaceId }: { workspaceId: string }) => {
     hasNextPage,
     isFetching,
   } = useInfiniteQuery(correspondenceDropsOptions(workspaceId));
-  const columns = useMemo(
-    () =>
-      columnHelper.columns([
-        columnHelper.accessor("sender", {
-          header: t("emailViewer.from"),
-          cell: ({ getValue }) => <bdi dir="ltr">{getValue()}</bdi>,
-        }),
-        columnHelper.accessor("receivedAt", {
-          header: t("correspondence.receivedAt"),
-          cell: ({ getValue }) => (
-            <time className="tabular-nums" dateTime={getValue()}>
-              {format.dateTime(
-                new Date(getValue()),
-                MEDIUM_DATE_SHORT_TIME_FORMAT,
-              )}
-            </time>
-          ),
-        }),
-        columnHelper.accessor("reason", {
-          header: t("common.reason"),
-          cell: ({ getValue, row }) => (
-            <div className="space-y-1 whitespace-normal">
-              <p>{t(CORRESPONDENCE_DROP_REASON_LABELS[getValue()])}</p>
-              {row.original.setupHint !== null && (
-                <p className="text-muted-foreground text-xs">
-                  {t.rich(
-                    CORRESPONDENCE_DROP_HINT_LABELS[row.original.setupHint],
-                    { protocol: (chunks) => <bdi dir="ltr">{chunks}</bdi> },
-                  )}
-                </p>
-              )}
-            </div>
-          ),
-        }),
-      ]),
-    [format, t],
-  );
-  const items = useMemo(
-    () => (data ? data.pages.flatMap((page) => page.items) : []),
-    [data],
-  );
+  const columns = columnHelper.columns([
+    columnHelper.accessor("sender", {
+      header: t("emailViewer.from"),
+      cell: ({ getValue }) => <bdi dir="ltr">{getValue()}</bdi>,
+    }),
+    columnHelper.accessor("receivedAt", {
+      header: t("correspondence.receivedAt"),
+      cell: ({ getValue }) => (
+        <time className="tabular-nums" dateTime={getValue()}>
+          {format.dateTime(new Date(getValue()), MEDIUM_DATE_SHORT_TIME_FORMAT)}
+        </time>
+      ),
+    }),
+    columnHelper.accessor("reason", {
+      header: t("common.reason"),
+      cell: ({ getValue, row }) => (
+        <div className="space-y-1 whitespace-normal">
+          <p>{t(CORRESPONDENCE_DROP_REASON_LABELS[getValue()])}</p>
+          {row.original.setupHint !== null && (
+            <p className="text-muted-foreground text-xs">
+              {t.rich(CORRESPONDENCE_DROP_HINT_LABELS[row.original.setupHint], {
+                protocol: (chunks) => <bdi dir="ltr">{chunks}</bdi>,
+              })}
+            </p>
+          )}
+        </div>
+      ),
+    }),
+  ]);
+  const items = data ? data.pages.flatMap((page) => page.items) : [];
   const table = useTable({
     features: dropTableFeatures,
     data: items,

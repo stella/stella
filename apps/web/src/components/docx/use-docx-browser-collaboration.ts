@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
@@ -96,20 +96,20 @@ export const useDocxBrowserCollaboration = ({
     workspaceId,
   });
   const collaborationSession = collaborationState.room;
-  const cancelCollaboration = useCallback(() => {
+  const cancelCollaboration = () => {
     setRequestState((previous) =>
       previous.status === "cancelled" && previous.targetKey === targetKey
         ? previous
         : { status: "cancelled", targetKey },
     );
-  }, [targetKey]);
-  const requestCollaboration = useCallback(() => {
+  };
+  const requestCollaboration = () => {
     setRequestState((previous) =>
       previous.status === "requested" && previous.targetKey === targetKey
         ? previous
         : { status: "requested", targetKey },
     );
-  }, [targetKey]);
+  };
   const {
     canPublishCollaborationVersion,
     discardPendingPublication,

@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -190,23 +190,20 @@ const ExpandableText = ({ text }: { text: string }) => {
   // Measure only while clamped, so overflow is detected against the
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
-  const textRef = useCallback(
-    (el: HTMLParagraphElement | null) => {
-      if (expanded || !el) {
-        return undefined;
-      }
+  const textRef = (el: HTMLParagraphElement | null) => {
+    if (expanded || !el) {
+      return undefined;
+    }
 
-      const measure = () => {
-        setOverflowing(el.scrollHeight > el.clientHeight + 1);
-      };
+    const measure = () => {
+      setOverflowing(el.scrollHeight > el.clientHeight + 1);
+    };
 
-      measure();
-      const observer = new ResizeObserver(measure);
-      observer.observe(el);
-      return () => observer.disconnect();
-    },
-    [expanded],
-  );
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  };
 
   return (
     <div className="flex flex-col items-start gap-1.5">

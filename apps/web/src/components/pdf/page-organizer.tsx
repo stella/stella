@@ -777,6 +777,7 @@ const LoadedPDFPageOrganizer = ({
     maxPages: format.number(MAX_PAGE_EDITOR_PAGES),
     maxSources: format.number(MAX_PAGE_EDITOR_SOURCES),
   });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const pageInfoBySource = useMemo(() => {
     const bySource = new Map<string, readonly PageInfo[]>();
     bySource.set(ORIGINAL_SOURCE_ID, [...sourceDocument.pages.values()]);

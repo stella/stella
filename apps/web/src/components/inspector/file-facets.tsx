@@ -91,6 +91,7 @@ export const TabFacetBar = ({
   const activeBadge = version ? `v${String(version.versionNumber)}` : undefined;
   const isDocx = mimeType === DOCX_MIME;
   const isEmail = isEmailFile({ fileName, mimeType });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const facets = useMemo(
     () =>
       // Document review operates on DOCX structure, so its chip is absent on

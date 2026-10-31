@@ -105,10 +105,12 @@ const InviteMemberForm = ({
   const t = useTranslations();
   const [isOpen, setIsOpen] = useState(false);
   const inviteMember = useInviteMember();
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const schema = useMemo(
     () => inviteMemberSchema(currentUserRole, t("validation.invalidEmail")),
     [currentUserRole, t],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const defaultValues = useMemo(
     () => ({ email: "", role: defaultRole }),
     [defaultRole],

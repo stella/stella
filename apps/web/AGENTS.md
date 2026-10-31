@@ -110,6 +110,15 @@
 - Web code returns `Result`; `try`/`catch` belongs only to the boundary modules
   listed in `scripts/result-boundary-globs.ts`.
 
+## Memoization
+
+- The React Compiler memoizes every web function it compiles, so web code
+  removes legacy memoization in one sweep instead of the gradual cleanup above.
+  Keep a manual `useMemo` or `useCallback` only where the compiler leans on it
+  (removing it drops other cache scopes or stops the function compiling) or an
+  effect dependency must stay stable, and name which in the suppression reason.
+  Files with a compiler bailout keep their memoization until it is fixed.
+
 ## Typed Query Cache Access
 
 - Use the owning query options' `.queryKey` for `getQueryData` and `setQueryData`;

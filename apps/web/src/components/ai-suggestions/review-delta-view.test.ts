@@ -1,5 +1,7 @@
-import { isValidElement } from "react";
+import { createElement, isValidElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { ReviewAlignedPair } from "@/components/ai-suggestions/review-aligned-pair";
@@ -8,13 +10,23 @@ import {
   PassagesDisclosure,
   ReviewDeltaView,
 } from "@/components/ai-suggestions/review-delta-view";
+import type { ReviewDeltaViewProps } from "@/components/ai-suggestions/review-delta-view";
 import { ReviewPresenceMatrix } from "@/components/ai-suggestions/review-presence-matrix";
 import { ReviewTermTable } from "@/components/ai-suggestions/review-term-row";
 
-// apps/web has no @testing-library/react dependency (no other *.test.tsx
-// under components/ai-suggestions renders into a DOM either), so this
-// verifies dispatch by calling the component function directly and
-// inspecting the returned element tree rather than mounting it.
+// This verifies dispatch by inspecting the element tree the component
+// returns rather than mounting it. The React Compiler gives the component a
+// cache hook, so it is called inside a probe's render, and the probe renders
+// nothing: the children never mount and need no providers.
+const renderedBy = (props: ReviewDeltaViewProps) => {
+  let element: ReturnType<typeof ReviewDeltaView> | undefined;
+  const Probe = () => {
+    element = ReviewDeltaView(props);
+    return null;
+  };
+  renderToStaticMarkup(createElement(Probe));
+  return element ?? panic("The probe did not render the delta view");
+};
 
 const side = { label: "Target", passages: [] };
 
@@ -48,7 +60,7 @@ describe("review delta view dispatch", () => {
       standard: null,
       target: null,
     };
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta,
       standard: side,
       target: side,
@@ -64,7 +76,7 @@ describe("review delta view dispatch", () => {
       standard: null,
       target: null,
     };
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta,
       standard: side,
       target: side,
@@ -82,7 +94,7 @@ describe("review delta view dispatch", () => {
   // second question used to have no answer at all for these two kinds.
   test("an enumeration delta keeps the passages under the matrix", () => {
     const delta: ReviewDelta = { items: [], kind: "enumeration" };
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta,
       standard: side,
       target: side,
@@ -100,7 +112,7 @@ describe("review delta view dispatch", () => {
       kind: "presence",
       term: "Losses",
     };
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta,
       standard: side,
       target: side,
@@ -113,7 +125,7 @@ describe("review delta view dispatch", () => {
 
   test("a language delta is the aligned pair alone, with no delta to mark", () => {
     const delta: ReviewDelta = { kind: "language" };
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta,
       standard: side,
       target: side,
@@ -123,7 +135,7 @@ describe("review delta view dispatch", () => {
   });
 
   test("the reference name overrides the standard column label", () => {
-    const element = ReviewDeltaView({
+    const element = renderedBy({
       delta: { kind: "language" },
       standard: side,
       standardLabel: "Standard (Master NDA)",

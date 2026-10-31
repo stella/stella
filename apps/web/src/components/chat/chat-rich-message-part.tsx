@@ -268,6 +268,7 @@ const MediaPart = ({ part }: { part: MediaChatPart }) => {
 const UiResource = ({ part }: { part: UiResourcePart }) => {
   const t = useTranslations();
   const frameTitle = t("chat.richContentTitle");
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const sandboxUrl = useMemo(
     () => withMcpAppFrameTitle(mcpAppSandboxUrl(), frameTitle),
     [frameTitle],

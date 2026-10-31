@@ -68,6 +68,10 @@ const { resolveActionCapabilities } =
 const { NO_STATUTE_COMPARE } =
   await import("@/features/statutes/statute-compare-search");
 const { PublicStatuteViewer } = await import("@/routes/law/-statute-detail");
+// Compile the overlay before the test's readiness timeout starts. React.lazy
+// still resolves its import after the first paint; the assertions below verify
+// that the reader is present and the composer is absent at that boundary.
+await import("@/components/ai-suggestions/file-viewer-with-ai.impl");
 const { dockedChatLegalPayloads } =
   await import("../../../e2e/helpers/docked-chat-legal-payloads");
 

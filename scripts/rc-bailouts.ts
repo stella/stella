@@ -626,6 +626,11 @@ const run = (): number => {
   } else if (process.argv.includes("--check")) {
     mode = "check";
   }
+  // A compiler upgrade can stop reporting bailouts without failing the scan,
+  // which reads as "no bailouts". Prove detection before trusting a result.
+  if (mode !== "report" && runSelfTest() !== 0) {
+    return 1;
+  }
   const roots = [WEB_APP_ROOT, ...reactPackageRoots()];
   const files = roots.flatMap(sourcesUnder);
   const bailouts = new Map<string, BailoutRecord>();

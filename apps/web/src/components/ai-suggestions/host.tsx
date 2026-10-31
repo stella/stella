@@ -13,7 +13,7 @@
  */
 
 import "@/components/chat-editor.css";
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   FocusEvent as ReactFocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -389,31 +389,28 @@ export const ChatThreadCard = ({
     setCollapseCueSeq((seq) => seq + 1);
     pulseCollapseCue();
   });
-  const watchOutsidePresses = useCallback(
-    (card: HTMLDivElement | null) => {
-      if (card === null) {
-        return undefined;
+  const watchOutsidePresses = (card: HTMLDivElement | null) => {
+    if (card === null) {
+      return undefined;
+    }
+    const column =
+      card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        event.button === 0 &&
+        isPressOutsideDockedChat({ column, target: event.target })
+      ) {
+        cueCollapse();
       }
-      const column =
-        card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
-      const onPointerDown = (event: PointerEvent) => {
-        if (
-          event.button === 0 &&
-          isPressOutsideDockedChat({ column, target: event.target })
-        ) {
-          cueCollapse();
-        }
-      };
-      // Capture phase: the reader handles its own presses (selection,
-      // links) and may stop them before they bubble to the document.
-      const owner = card.ownerDocument;
-      owner.addEventListener("pointerdown", onPointerDown, true);
-      return () => {
-        owner.removeEventListener("pointerdown", onPointerDown, true);
-      };
-    },
-    [cueCollapse],
-  );
+    };
+    // Capture phase: the reader handles its own presses (selection,
+    // links) and may stop them before they bubble to the document.
+    const owner = card.ownerDocument;
+    owner.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      owner.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  };
   return (
     <DockedChatSurface slot="thread">
       <div
@@ -619,11 +616,10 @@ export const PromptBar = (props: PromptBarProps) => {
   // The bar emits `{ prompt }`; the underlying composer emits the
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
-  const handleComposerSubmit = useCallback(
-    async (draft: ChatInputDraft): Promise<ChatSendOutcome> =>
-      await onSubmit({ prompt: draft.html, files: draft.files }),
-    [onSubmit],
-  );
+  const handleComposerSubmit = async (
+    draft: ChatInputDraft,
+  ): Promise<ChatSendOutcome> =>
+    await onSubmit({ prompt: draft.html, files: draft.files });
 
   const { submitDraft } = useChatComposerWiring({
     controller: editorController,
@@ -664,61 +660,52 @@ export const PromptBar = (props: PromptBarProps) => {
   if (!presetChipsVisible && scopePromptPreset !== null) {
     setScopePromptPreset(null);
   }
-  const submitPreset = useCallback(
-    (preset: AISuggestionPreset) => {
-      if (canSubmitNow !== undefined && !canSubmitNow()) {
+  const submitPreset = (preset: AISuggestionPreset) => {
+    if (canSubmitNow !== undefined && !canSubmitNow()) {
+      return;
+    }
+    if (presetScopeChooser?.appliesTo(preset)) {
+      if (presetScopeChooser.shouldAskForScope()) {
+        setScopePromptPreset(preset);
         return;
       }
-      if (presetScopeChooser?.appliesTo(preset)) {
-        if (presetScopeChooser.shouldAskForScope()) {
-          setScopePromptPreset(preset);
-          return;
-        }
-        presetScopeChooser.onSubmit(preset, "document");
-        return;
-      }
-      detached(
-        Promise.resolve(
-          onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
-        ),
-        "ai-suggestions-host.submit-preset",
-      );
-    },
-    [canSubmitNow, onSubmit, presetScopeChooser],
-  );
-  const resolvePresetScope = useCallback(
-    (scope: PromptBarPresetScope) => {
-      const preset = scopePromptPreset;
-      setScopePromptPreset(null);
-      if (preset === null || presetScopeChooser === undefined) {
-        return;
-      }
-      presetScopeChooser.onSubmit(preset, scope);
-    },
-    [scopePromptPreset, presetScopeChooser],
-  );
+      presetScopeChooser.onSubmit(preset, "document");
+      return;
+    }
+    detached(
+      Promise.resolve(
+        onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] }),
+      ),
+      "ai-suggestions-host.submit-preset",
+    );
+  };
+  const resolvePresetScope = (scope: PromptBarPresetScope) => {
+    const preset = scopePromptPreset;
+    setScopePromptPreset(null);
+    if (preset === null || presetScopeChooser === undefined) {
+      return;
+    }
+    presetScopeChooser.onSubmit(preset, scope);
+  };
   // Tab with an empty input writes the first preset INTO the composer (the
   // user can edit before sending); clicking a chip accepts and sends as-is.
   // Escape backs out of the inline preset-scope chooser.
-  const handleShellKeyDown = useCallback(
-    (event: ReactKeyboardEvent) => {
-      if (event.key === "Escape" && scopePromptPreset !== null) {
-        event.preventDefault();
-        setScopePromptPreset(null);
-        return;
-      }
-      if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
-        return;
-      }
-      const first = presets.at(0);
-      if (!first || !editor) {
-        return;
-      }
+  const handleShellKeyDown = (event: ReactKeyboardEvent) => {
+    if (event.key === "Escape" && scopePromptPreset !== null) {
       event.preventDefault();
-      editor.chain().focus().insertContent(first.prompt).run();
-    },
-    [presetChipsVisible, presets, editor, scopePromptPreset],
-  );
+      setScopePromptPreset(null);
+      return;
+    }
+    if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
+      return;
+    }
+    const first = presets.at(0);
+    if (!first || !editor) {
+      return;
+    }
+    event.preventDefault();
+    editor.chain().focus().insertContent(first.prompt).run();
+  };
   const handleShellFocus = () => {
     onFocusChange?.(true);
   };

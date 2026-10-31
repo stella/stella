@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -42,23 +42,23 @@ export const useSuggestedFollowupPrompts = ({
   const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
     ReadonlySet<string>
   >(() => new Set<string>());
-  const handleAskUserEditingChange = useCallback(
-    (toolCallId: string, isEditing: boolean) => {
-      setEditingAskUserToolCallIds((current) => {
-        if (current.has(toolCallId) === isEditing) {
-          return current;
-        }
-        const next = new Set(current);
-        if (isEditing) {
-          next.add(toolCallId);
-        } else {
-          next.delete(toolCallId);
-        }
-        return next;
-      });
-    },
-    [],
-  );
+  const handleAskUserEditingChange = (
+    toolCallId: string,
+    isEditing: boolean,
+  ) => {
+    setEditingAskUserToolCallIds((current) => {
+      if (current.has(toolCallId) === isEditing) {
+        return current;
+      }
+      const next = new Set(current);
+      if (isEditing) {
+        next.add(toolCallId);
+      } else {
+        next.delete(toolCallId);
+      }
+      return next;
+    });
+  };
   const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
   const suggestedPromptsAvailability = resolveSuggestedPromptsAvailability({
     editorIsEmpty: editorIsInitiallyEmpty,

@@ -5,6 +5,7 @@ import noDirectDecisionIdentifierColumnWrite from "./guard-rollouts/no-direct-de
 import noDynamicKeyInOperator from "./guard-rollouts/no-dynamic-key-in-operator.ts";
 import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-library-screen.ts";
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
+import noManualMemo from "./guard-rollouts/no-manual-memo.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
 import noPlanScanNodeLiterals from "./guard-rollouts/no-plan-scan-node-literals.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
@@ -21,6 +22,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-dynamic-key-in-operator": noDynamicKeyInOperator,
   "no-global-testing-library-screen": noGlobalTestingLibraryScreen,
   "no-inert-autofocus": noInertAutofocus,
+  "no-manual-memo": noManualMemo,
   "no-parser-inline-flatten": noParserInlineFlatten,
   "no-plan-scan-node-literals": noPlanScanNodeLiterals,
   "portable-path": portablePath,

@@ -90,6 +90,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
   const openChat = useInspectorTabsStore((s) => s.openChat);
   const shortcutGroups = useEffectiveShortcutGroups();
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const context: CommandActionContext = useMemo(
     () => ({
       canCreateMatter,
@@ -130,6 +131,7 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     ],
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const effectiveHotkeys = useMemo(() => {
     const hotkeys = new Map<CommandAction["shortcutId"], HotkeyChord>();
     for (const group of shortcutGroups) {
@@ -142,38 +144,34 @@ export function useCommandActions(open: boolean): UseCommandActionsResult {
     return hotkeys;
   }, [shortcutGroups]);
 
-  const resolvedActions = useMemo(
-    () =>
-      COMMAND_ACTIONS.filter(
-        (action) =>
-          action.isAvailable(context) &&
-          (action.capability === null ||
-            capabilities[action.capability].type === "available" ||
-            role === "admin"),
-      ).map((action) => {
-        const resolved: ResolvedCommandAction = {
-          id: action.id,
-          capability: action.capability,
-          group: action.group,
-          titleKey: action.titleKey,
-          icon: action.icon,
-          isAvailable: action.isAvailable,
-          run: action.run,
-          title: t(action.titleKey),
-        };
-        if (action.shortcutId === undefined) {
-          return resolved;
-        }
-        resolved.shortcutId = action.shortcutId;
-        const hotkey = effectiveHotkeys.get(action.shortcutId);
-        if (!hotkey) {
-          panic(`No effective hotkey for command action "${action.id}"`);
-        }
-        resolved.hotkey = hotkey;
-        return resolved;
-      }),
-    [capabilities, context, effectiveHotkeys, role, t],
-  );
+  const resolvedActions = COMMAND_ACTIONS.filter(
+    (action) =>
+      action.isAvailable(context) &&
+      (action.capability === null ||
+        capabilities[action.capability].type === "available" ||
+        role === "admin"),
+  ).map((action) => {
+    const resolved: ResolvedCommandAction = {
+      id: action.id,
+      capability: action.capability,
+      group: action.group,
+      titleKey: action.titleKey,
+      icon: action.icon,
+      isAvailable: action.isAvailable,
+      run: action.run,
+      title: t(action.titleKey),
+    };
+    if (action.shortcutId === undefined) {
+      return resolved;
+    }
+    resolved.shortcutId = action.shortcutId;
+    const hotkey = effectiveHotkeys.get(action.shortcutId);
+    if (!hotkey) {
+      panic(`No effective hotkey for command action "${action.id}"`);
+    }
+    resolved.hotkey = hotkey;
+    return resolved;
+  });
 
   const executeAction = (actionId: string) => {
     const action = resolvedActions.find((a) => a.id === actionId);

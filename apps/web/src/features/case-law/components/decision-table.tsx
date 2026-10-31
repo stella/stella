@@ -8,7 +8,7 @@
  * statute tables cannot drift from each other.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { queryHighlightTokens } from "@stll/decision-reader/query-marks";
@@ -115,19 +115,12 @@ export const DecisionTable = ({
     referenceKind,
   });
   const sorting = decisionTableSorting(dateOrder);
-  const rows = useMemo(
-    () =>
-      decisions.map((decision): DecisionRowData => ({
-        kind: "decision",
-        decision,
-        children: [],
-      })),
-    [decisions],
-  );
-  const selection = useMemo(
-    () => ({ onSelectedIdsChange, selectedIds }),
-    [onSelectedIdsChange, selectedIds],
-  );
+  const rows = decisions.map((decision): DecisionRowData => ({
+    kind: "decision",
+    decision,
+    children: [],
+  }));
+  const selection = { onSelectedIdsChange, selectedIds };
 
   // The rail is a transparent strip pinned over the table's end columns, so it
   // is reserved only where it actually carries a control; otherwise it would
@@ -150,20 +143,17 @@ export const DecisionTable = ({
     ReadonlySet<string>
   >(NO_EXPANDED_HEADNOTES);
 
-  const renderScope = useMemo(
-    () => ({
-      contentMode: layout.contentMode,
-      expandedHeadnoteIds,
-      onToggleHeadnote: (decisionId: string) => {
-        setExpandedHeadnoteIds((current) =>
-          withHeadnoteToggled(current, decisionId),
-        );
-      },
-      queryTokens: queryHighlightTokens(query),
-      searchQuery: query,
-    }),
-    [expandedHeadnoteIds, layout.contentMode, query],
-  );
+  const renderScope = {
+    contentMode: layout.contentMode,
+    expandedHeadnoteIds,
+    onToggleHeadnote: (decisionId: string) => {
+      setExpandedHeadnoteIds((current) =>
+        withHeadnoteToggled(current, decisionId),
+      );
+    },
+    queryTokens: queryHighlightTokens(query),
+    searchQuery: query,
+  };
 
   return (
     <DecisionRenderScope value={renderScope}>

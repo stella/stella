@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useMemo } from "react";
+import { lazy, memo, Suspense } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -121,46 +121,29 @@ const FileTabViewerComponent = ({
   tab,
 }: FileTabViewerProps) => {
   const t = useTranslations();
-  const pdfColorControl = useMemo(
-    () =>
-      getPeekPDFColorControl({
-        colorMode: pdfColorMode,
-        mimeType: tab.mimeType,
-        onColorModeChange: onPdfColorModeChange,
-      }),
-    [onPdfColorModeChange, pdfColorMode, tab.mimeType],
+  const pdfColorControl = getPeekPDFColorControl({
+    colorMode: pdfColorMode,
+    mimeType: tab.mimeType,
+    onColorModeChange: onPdfColorModeChange,
+  });
+  const officeResetKeys = [tab.id];
+  const officeSuspenseFallback = (
+    <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
+      {t("common.loading")}
+    </div>
   );
-  const officeResetKeys = useMemo(() => [tab.id], [tab.id]);
-  const officeSuspenseFallback = useMemo(
-    () => (
-      <div className="text-muted-foreground flex min-h-0 flex-1 items-center justify-center text-sm">
-        {t("common.loading")}
-      </div>
-    ),
-    [t],
-  );
-  const docxDocument = useMemo(
-    () => ({
-      entityId: tab.entityId,
-      fileFieldId: tab.id,
-      propertyId: entity.filePropertyId ?? "",
-      workspaceId: tab.workspaceId,
-    }),
-    [entity.filePropertyId, tab.entityId, tab.id, tab.workspaceId],
-  );
-  const docxFallback = useMemo(() => <PeekSuspenseFallback />, []);
-  const handlePdfWheelZoom = useCallback(
-    (deltaY: number) => handleWheelZoom(tab.id, deltaY),
-    [handleWheelZoom, tab.id],
-  );
-  const handleReset = useCallback(
-    () => handleResetZoom(tab.id),
-    [handleResetZoom, tab.id],
-  );
-  const handleZoomDirection = useCallback(
-    (direction: "in" | "out") => handleZoom(tab.id, direction),
-    [handleZoom, tab.id],
-  );
+  const docxDocument = {
+    entityId: tab.entityId,
+    fileFieldId: tab.id,
+    propertyId: entity.filePropertyId ?? "",
+    workspaceId: tab.workspaceId,
+  };
+  const docxFallback = <PeekSuspenseFallback />;
+  const handlePdfWheelZoom = (deltaY: number) =>
+    handleWheelZoom(tab.id, deltaY);
+  const handleReset = () => handleResetZoom(tab.id);
+  const handleZoomDirection = (direction: "in" | "out") =>
+    handleZoom(tab.id, direction);
 
   const fileViewer = (() => {
     if (isEmailDisplay) {

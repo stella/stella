@@ -74,6 +74,7 @@ export const DocumentAiSourceBar = ({
     selectJustificationByFieldId(s.justifications, fieldId),
   );
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const slots = useMemo(() => {
     if (!justification || !entity || !properties) {
       return [];
@@ -109,6 +110,7 @@ export const DocumentAiSourceBar = ({
   const pages = useOptionalPDFStore((s) => s.pages);
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const activeDocumentJustificationContent = useMemo(
     () =>
       justification
@@ -126,6 +128,7 @@ export const DocumentAiSourceBar = ({
         : null,
     [activeTab.id, justification],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const citations = useMemo(
     () =>
       activeDocumentJustificationContent

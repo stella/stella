@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type React from "react";
 
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -216,13 +216,10 @@ export const DraggableRow = ({
   const rowRef = useRef<HTMLDivElement>(null);
   // Stable ref callback so React doesn't re-run TanStack Virtual's
   // measureElement on every render.
-  const setRowRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      rowRef.current = element;
-      measureElement(element);
-    },
-    [measureElement],
-  );
+  const setRowRef = (element: HTMLDivElement | null) => {
+    rowRef.current = element;
+    measureElement(element);
+  };
   const [bulkEntities, setBulkEntities] = useState<TableTreeNode[] | undefined>(
     undefined,
   );

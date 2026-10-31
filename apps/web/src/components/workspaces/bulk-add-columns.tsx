@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useMemo, useRef, useState } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -338,26 +338,23 @@ const useColumnDrafts = (defaultFileIds: string[], seed?: Draft) => {
   const [drafts, setDrafts] = useState(initialDrafts);
   const nextId = useNextId(drafts.length);
 
-  const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
+  const updateDraft = (id: number, patch: Partial<Draft>) => {
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...patch } : d)),
     );
-  }, []);
+  };
 
-  const removeDraft = useCallback((id: number) => {
+  const removeDraft = (id: number) => {
     setDrafts((prev) =>
       prev.length === 1 ? prev : prev.filter((d) => d.id !== id),
     );
-  }, []);
+  };
 
-  const addDraft = useCallback(() => {
+  const addDraft = () => {
     setDrafts((prev) => [...prev, makeEmptyDraft(nextId(), defaultFileIds)]);
-  }, [defaultFileIds, nextId]);
+  };
 
-  const validDrafts = useMemo(
-    () => drafts.filter((d) => d.name.trim().length > 0),
-    [drafts],
-  );
+  const validDrafts = drafts.filter((d) => d.name.trim().length > 0);
   const isDirty = columnDraftsChanged(drafts, initialDrafts);
 
   const handlersFor = (draft: Draft): DraftHandlers => ({
@@ -502,6 +499,7 @@ const PropertyColumnsBody = ({
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const fileProperties = useMemo<FileChip[]>(
     () =>
       properties.flatMap((p) =>
@@ -509,17 +507,16 @@ const PropertyColumnsBody = ({
       ),
     [properties],
   );
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const allProperties = useMemo<FileChip[]>(
     () => properties.map((p) => ({ id: p.id, name: p.name })),
     [properties],
   );
-  const defaultFileIds = useMemo(
-    () => fileProperties.map((p) => p.id),
-    [fileProperties],
-  );
+  const defaultFileIds = fileProperties.map((p) => p.id);
 
   // Shared "applies to" scope: gate every AI column added here to one document
   // type (or all). Offered only when a Document Type classifier exists.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const classifier = useMemo(
     () => resolveDocumentTypeClassifier(properties),
     [properties],
@@ -771,10 +768,10 @@ const QuestionColumnsBody = ({
 
 const useNextId = (initial: number) => {
   const ref = useRef(initial);
-  return useCallback(() => {
+  return () => {
     ref.current += 1;
     return ref.current;
-  }, []);
+  };
 };
 
 /**
@@ -822,26 +819,20 @@ const DraftCard = ({
     onChange({ prompt: next });
   });
 
-  const promptField: PropertyPromptFieldHandle = useMemo(
-    () => ({
-      name: `draft-${draft.id}`,
-      state: { value: initialPrompt },
-      handleChange: handlePromptChange,
-      handleBlur: () => undefined,
-    }),
-    [draft.id, handlePromptChange, initialPrompt],
-  );
+  const promptField: PropertyPromptFieldHandle = {
+    name: `draft-${draft.id}`,
+    state: { value: initialPrompt },
+    handleChange: handlePromptChange,
+    handleBlur: () => undefined,
+  };
 
-  const handleMentions = useCallback(
-    (mentions: string[]) => {
-      onChange({ mentions });
-    },
-    [onChange],
-  );
+  const handleMentions = (mentions: string[]) => {
+    onChange({ mentions });
+  };
 
-  const handleEditorReady = useCallback((editor: Editor) => {
+  const handleEditorReady = (editor: Editor) => {
     editorRef.current = editor;
-  }, []);
+  };
 
   const trimmedName = draft.name.trim();
   const isAi = draft.tool === "ai-model" && isWorkspace;
@@ -905,18 +896,11 @@ const DraftCard = ({
     });
   };
 
-  const sourceIds = useMemo(
-    () => [...new Set([...draft.fileIds, ...draft.mentions])],
-    [draft.fileIds, draft.mentions],
-  );
-  const selectedFiles = useMemo(
-    () =>
-      sourceIds.flatMap((id) => {
-        const found = allProperties.find((p) => p.id === id);
-        return found ? [found] : [];
-      }),
-    [sourceIds, allProperties],
-  );
+  const sourceIds = [...new Set([...draft.fileIds, ...draft.mentions])];
+  const selectedFiles = sourceIds.flatMap((id) => {
+    const found = allProperties.find((p) => p.id === id);
+    return found ? [found] : [];
+  });
   const availableFiles = allProperties.filter((p) => !sourceIds.includes(p.id));
   const needsOptions =
     draft.contentType === "single-select" ||

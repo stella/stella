@@ -948,9 +948,9 @@ test("the original PDF mounts its viewer and claim boxes inside the PDF store", 
     const { client } = await mount(run);
     await seedPdfFile(client, run, await onePagePdf());
     openOriginal();
-    await nextFrame();
-    await nextFrame();
-    expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    await waitFor(() => {
+      expect(document.querySelector("[data-avt-original-pdf]")).not.toBeNull();
+    });
     await waitFor(() => {
       expect(
         client

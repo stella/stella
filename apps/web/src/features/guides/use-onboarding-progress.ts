@@ -87,6 +87,7 @@ export const useOnboardingProgress = (
   useQueryViewError(dataView, "useOnboardingProgress:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const stored = useMemo(
     () => parseGuideProgress(data?.user.guideProgress),
     [data?.user.guideProgress],

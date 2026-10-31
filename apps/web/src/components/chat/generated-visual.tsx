@@ -83,18 +83,16 @@ const GeneratedVisualFrame = ({
     retry: false,
   });
   const now = useLatestCallback(() => performance.now());
-  const actionGate = useMemo(
-    () =>
-      page.data === undefined
-        ? null
-        : createVisualActionGate({
-            data: page.data.data,
-            links: page.data.links,
-            literalLinks: page.data.literalLinks,
-            now,
-          }),
-    [page.data, now],
-  );
+  const actionGate =
+    page.data === undefined
+      ? null
+      : createVisualActionGate({
+          data: page.data.data,
+          links: page.data.links,
+          literalLinks: page.data.literalLinks,
+          now,
+        });
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const shell = useMemo(
     () => createVisualShellSession({ url: sandboxUrl.href }),
     [sandboxUrl.href],

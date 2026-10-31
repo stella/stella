@@ -252,14 +252,15 @@ export const useTemplateStudioSlashMenu = ({
   const slashViewRef = useRef<SlashView>("root");
   const slashHighlightRef = useRef(0);
   const slashFromRef = useRef<number | null>(null);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const setSlashView = useCallback((view: SlashView) => {
     slashViewRef.current = view;
     setSlashViewState(view);
   }, []);
-  const setSlashHighlight = useCallback((index: number) => {
+  const setSlashHighlight = (index: number) => {
     slashHighlightRef.current = index;
     setSlashHighlightState(index);
-  }, []);
+  };
   const studioFields = useTemplateStudioStore((state) => state.fields);
 
   const slashClausesEnabled = slash !== null && slashView === "clauses";
@@ -280,6 +281,7 @@ export const useTemplateStudioSlashMenu = ({
     slashClauseDataView.type === "items"
       ? slashClauseDataView.items
       : undefined;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const slashClauses: SlashClause[] = useMemo(
     () =>
       slashClauseData && "items" in slashClauseData
@@ -294,6 +296,7 @@ export const useTemplateStudioSlashMenu = ({
     debouncedClauseSearchRef.current = debouncedClauseSearch;
   }, [slashClauses, debouncedClauseSearch]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const slashRows = useMemo((): SlashRows => {
     if (slash === null) {
       return { view: "root", items: [] };
@@ -313,6 +316,7 @@ export const useTemplateStudioSlashMenu = ({
     };
   }, [slash, slashView, studioFields, slashClauses]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const positionSlashMenu = useCallback(
     (from: number) => {
       const host = overlayHostRef.current;
@@ -391,6 +395,7 @@ export const useTemplateStudioSlashMenu = ({
     }
   };
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const dismissSlash = useCallback(() => {
     const view = editorViewRef.current;
     if (view && getTemplateSlashMenu(view.state).active) {

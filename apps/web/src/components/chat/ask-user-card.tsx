@@ -1,5 +1,5 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { Pluggable } from "unified";
@@ -175,27 +175,19 @@ export const AskUserCard = ({
   // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
-  const analysisComponents = useMemo(
-    () => ({
-      a: createAnalysisAnchor(workspaceId),
-      img: messageComponents.img,
-      "stll-anon": renderAnalysisAnonymizedSpan,
-    }),
-    [workspaceId],
-  );
+  const analysisComponents = {
+    a: createAnalysisAnchor(workspaceId),
+    img: messageComponents.img,
+    "stll-anon": renderAnalysisAnonymizedSpan,
+  };
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo(
-    () => [
-      ...Object.values(defaultRehypePlugins),
-      rehypeScopeAnswerIds,
-      ...(pairs.length > 0
-        ? [[rehypeAnonSpans, pairs] satisfies Pluggable]
-        : []),
-      rehypeChatLinks,
-    ],
-    [pairs],
-  );
+  const analysisRehypePlugins = [
+    ...Object.values(defaultRehypePlugins),
+    rehypeScopeAnswerIds,
+    ...(pairs.length > 0 ? [[rehypeAnonSpans, pairs] satisfies Pluggable] : []),
+    rehypeChatLinks,
+  ];
   const answeredOutput = part.state === "complete" ? part.output : null;
   const isLoading =
     part.state === "awaiting-input" || part.state === "input-streaming";
@@ -240,22 +232,16 @@ export const AskUserCard = ({
     return () => onEditingChange?.(part.id, false);
   }, [isEditing, onEditingChange, part.id]);
 
-  const setAnswer = useCallback(
-    (idx: number, value: string) =>
-      setAnswers((prev) => ({ ...prev, [idx]: value })),
-    [],
-  );
+  const setAnswer = (idx: number, value: string) =>
+    setAnswers((prev) => ({ ...prev, [idx]: value }));
 
-  const toggleCustom = useCallback(
-    (idx: number) =>
-      setCustomMode((prev) => ({
-        ...prev,
-        [idx]: !prev[idx],
-      })),
-    [],
-  );
+  const toggleCustom = (idx: number) =>
+    setCustomMode((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
 
-  const buildOutput = useCallback((): AskUserOutput | null => {
+  const buildOutput = (): AskUserOutput | null => {
     if (!input) {
       return null;
     }
@@ -265,9 +251,9 @@ export const AskUserCard = ({
         answer: answers[i] ?? "",
       })),
     };
-  }, [input, answers]);
+  };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!input || submitted) {
       return;
     }
@@ -277,9 +263,9 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
     onSubmit(part.id, output);
-  }, [input, submitted, buildOutput, onSubmit, part.id]);
+  };
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     if (!input || !answeredOutput || !canRerun) {
       return;
     }
@@ -311,14 +297,14 @@ export const AskUserCard = ({
     }
     setCustomMode(nextCustom);
     setIsEditing(true);
-  }, [input, answeredOutput, canRerun]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
     setCustomMode({});
-  }, []);
+  };
 
-  const handleRerun = useCallback(() => {
+  const handleRerun = () => {
     if (!input || !onEditAndRerun) {
       return;
     }
@@ -328,22 +314,19 @@ export const AskUserCard = ({
     }
     setIsEditing(false);
     detached(onEditAndRerun(part.id, output), "ask-user-card.edit-and-rerun");
-  }, [input, onEditAndRerun, buildOutput, part.id]);
+  };
 
-  const handleFormSubmit = useCallback<
-    NonNullable<ComponentProps<"form">["onSubmit"]>
-  >(
-    (event) => {
-      event.preventDefault();
-      if (isEditing) {
-        handleRerun();
-        return;
-      }
+  const handleFormSubmit: NonNullable<ComponentProps<"form">["onSubmit"]> = (
+    event,
+  ) => {
+    event.preventDefault();
+    if (isEditing) {
+      handleRerun();
+      return;
+    }
 
-      handleSubmit();
-    },
-    [handleRerun, handleSubmit, isEditing],
-  );
+    handleSubmit();
+  };
 
   if (!input || isWithdrawn) {
     return (

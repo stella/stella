@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -464,7 +464,7 @@ export const ChatThreadPage = ({
   // the block at any height. A ref callback, not a mount effect: it follows
   // whichever block element is mounted, so a remounted block can never
   // leave the padding measured from a stale one.
-  const observeComposerBlock = useCallback((block: HTMLDivElement | null) => {
+  const observeComposerBlock = (block: HTMLDivElement | null) => {
     const host = block?.closest<HTMLElement>(`[${COMPOSER_HOST_ATTRIBUTE}]`);
     if (!block || !host) {
       return undefined;
@@ -481,7 +481,7 @@ export const ChatThreadPage = ({
     return () => {
       observer.disconnect();
     };
-  }, []);
+  };
 
   // Stable across stream chunks: the composer takes this as a prop, and a
   // closure over `messages` would re-render it once per chunk.

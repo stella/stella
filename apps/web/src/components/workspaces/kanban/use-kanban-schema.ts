@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useTranslations } from "use-intl";
 
 import type { WorkspaceKanbanSchema } from "@/components/workspaces/kanban/kanban-view.logic";
@@ -16,25 +14,21 @@ export const useWorkspaceKanbanSchema = (
 ): WorkspaceKanbanSchema => {
   const t = useTranslations();
 
-  return useMemo(
-    () =>
-      workspaceKanbanSchema({
-        properties,
-        statusLabels: {
-          open: t("tasks.statusValues.open"),
-          in_progress: t("tasks.statusValues.in_progress"),
-          in_review: t("tasks.statusValues.in_review"),
-          done: t("tasks.statusValues.done"),
-          cancelled: t("tasks.statusValues.cancelled"),
-        },
-        entityKindLabels: {
-          document: t("common.document"),
-          folder: t("search.kinds.folder"),
-          task: t("search.kinds.task"),
-          message: t("search.kinds.message"),
-          link: t("search.kinds.link"),
-        },
-      }),
-    [properties, t],
-  );
+  return workspaceKanbanSchema({
+    properties,
+    statusLabels: {
+      open: t("tasks.statusValues.open"),
+      in_progress: t("tasks.statusValues.in_progress"),
+      in_review: t("tasks.statusValues.in_review"),
+      done: t("tasks.statusValues.done"),
+      cancelled: t("tasks.statusValues.cancelled"),
+    },
+    entityKindLabels: {
+      document: t("common.document"),
+      folder: t("search.kinds.folder"),
+      task: t("search.kinds.task"),
+      message: t("search.kinds.message"),
+      link: t("search.kinds.link"),
+    },
+  });
 };

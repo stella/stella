@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import type { RefObject } from "react";
 
 import { panic, Result, TaggedError } from "better-result";
@@ -177,7 +176,7 @@ export const useDocxSessionFinish = ({
   } = editSession;
   const t = useTranslations();
 
-  const cancelActiveSession = useCallback(async () => {
+  const cancelActiveSession = async () => {
     if (collaborationSession !== null) {
       if (collaborationState.status === "readOnly") {
         cancelCollaboration();
@@ -224,16 +223,9 @@ export const useDocxSessionFinish = ({
       notifyUserError(cancelResult.error, t("common.networkError"));
       throw cancelResult.error;
     }
-  }, [
-    cancelCollaboration,
-    cancelDesktopSession,
-    collaborationSession,
-    collaborationState.status,
-    onClose,
-    t,
-  ]);
+  };
 
-  const handleFinalize = useCallback(async () => {
+  const handleFinalize = async () => {
     // Soft, non-blocking reminder: if AI suggestions are still pending
     // for this entity, note it once before finalizing. Purely
     // informational — finalize proceeds either way (the suggestions
@@ -324,38 +316,14 @@ export const useDocxSessionFinish = ({
     finalizedBufferRef.current = buffer;
     hasSessionChangesRef.current = false;
     return await finalizeActiveSession();
-  }, [
-    cancelActiveSession,
-    clearQueuedChangeCheckpoint,
-    editorRef,
-    entityId,
-    fieldId,
-    finalizeActiveSession,
-    finalizedBufferRef,
-    hasSessionChangesRef,
-    isCollaborativeEditing,
-    publishCollaborationVersion,
-    isDirty,
-    lastEditingBufferRef,
-    optimisticPreviewRef,
-    preservedLoadedBufferRef,
-    previewFile,
-    saveActiveCheckpoint,
-    setAutosaveStatus,
-    t,
-  ]);
+  };
 
-  const handleCancel = useCallback(async () => {
+  const handleCancel = async () => {
     clearQueuedChangeCheckpoint();
     await cancelActiveSession();
     preservedLoadedBufferRef.current = null;
     hasSessionChangesRef.current = false;
-  }, [
-    cancelActiveSession,
-    clearQueuedChangeCheckpoint,
-    hasSessionChangesRef,
-    preservedLoadedBufferRef,
-  ]);
+  };
 
   return { handleCancel, handleFinalize };
 };

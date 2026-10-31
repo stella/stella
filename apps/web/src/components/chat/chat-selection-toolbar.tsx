@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { RefObject } from "react";
 
 import { useTranslations } from "use-intl";
@@ -115,11 +115,11 @@ export const ChatSelectionToolbar = ({
     null,
   );
 
-  const refreshEditedAnswer = useCallback(async () => {
+  const refreshEditedAnswer = async () => {
     if (editing !== null) {
       await onAnswerEdited?.(editing.anchor.messageId);
     }
-  }, [editing, onAnswerEdited]);
+  };
 
   const readSelection = useLatestCallback(
     (ownerDoc: Document, pointer?: { x: number; y: number }) => {

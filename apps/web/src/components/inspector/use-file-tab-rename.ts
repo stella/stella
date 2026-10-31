@@ -20,6 +20,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const startRename = useCallback((tab: FileTab) => {
     setEditValue(splitFileName(tab.label).baseName);
     setEditingTabId(tab.id);

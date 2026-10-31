@@ -33,6 +33,7 @@ export const useDocxTabEditSession = ({
     Map<string, DocxCompatibility>
   >(() => new Map());
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const handleStartDocxEdit = useCallback(
     async (tabId: string) => {
       const compatibility = docxCompatibilityByTab.get(tabId);

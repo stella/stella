@@ -308,6 +308,7 @@ type SearchPreviewBodyProps = Pick<
 
 const SearchPreviewBody = (props: SearchPreviewBodyProps) => {
   const { hit } = props;
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const searchText = useMemo(
     () =>
       getSearchHighlightText({
@@ -369,15 +370,11 @@ const SearchTextPreview = ({
   userId,
 }: SearchPreviewBodyProps) => {
   const t = useTranslations();
-  const searchText = useMemo(
-    () =>
-      getSearchHighlightText({
-        headline: hit.headline,
-        previewLocatorCandidates,
-        query,
-      }),
-    [hit.headline, previewLocatorCandidates, query],
-  );
+  const searchText = getSearchHighlightText({
+    headline: hit.headline,
+    previewLocatorCandidates,
+    query,
+  });
   const target = getSearchPreviewTarget(hit);
   const { data, isError, isFetching, refetch } = useQuery(
     searchPreviewOptions({

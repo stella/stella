@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -134,24 +134,23 @@ export const MatterCombobox = ({
   // changes, so a list rebuilt on every render re-renders the combobox
   // forever. Memoized on the cached query results (stable references) and
   // the pinned order, the list changes only when its inputs do.
-  const items = useMemo(() => {
-    // Nothing to offer until the navigation list has loaded.
-    const workspaces =
-      navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
-    const matters = workspaces.map(toMatterOption);
-    if (!browsing) {
-      return matters;
-    }
-    const recentIds = selectPinnedThenRecentWorkspaces({
-      chatActivityByWorkspaceId: chatActivityByWorkspace(
-        mergeGroupedChatThreadPages(chatHistory?.pages),
-      ),
-      limit: MATTER_PICKER_RECENT_LIMIT,
-      pinnedOrder,
-      workspaces,
-    }).map((matter) => matter.id);
-    return groupMatterOptions({ matters, recentIds });
-  }, [browsing, chatHistory, navigation, pinnedOrder]);
+  // Nothing to offer until the navigation list has loaded.
+  const navigationWorkspaces =
+    navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
+  const matterOptions = navigationWorkspaces.map(toMatterOption);
+  const items = browsing
+    ? groupMatterOptions({
+        matters: matterOptions,
+        recentIds: selectPinnedThenRecentWorkspaces({
+          chatActivityByWorkspaceId: chatActivityByWorkspace(
+            mergeGroupedChatThreadPages(chatHistory?.pages),
+          ),
+          limit: MATTER_PICKER_RECENT_LIMIT,
+          pinnedOrder,
+          workspaces: navigationWorkspaces,
+        }).map((matter) => matter.id),
+      })
+    : matterOptions;
 
   return (
     <div className="flex flex-col gap-2">

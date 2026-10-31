@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
@@ -59,7 +59,7 @@ export const useDocxAnonymizationHighlights = ({
     anonymizationTermsQueryView,
     "useDocxAnonymizationHighlights:query",
   );
-  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
+  const workspaceAnonymizationTerms = (() => {
     if (!anonymizationTermsQuery.data) {
       return [];
     }
@@ -70,7 +70,7 @@ export const useDocxAnonymizationHighlights = ({
         label: entry.label,
         variants: entry.variants,
       }));
-  }, [anonymizationTermsQuery.data]);
+  })();
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
   // entity as a Folio decoration term. Combined with workspace
@@ -149,12 +149,8 @@ export const useDocxAnonymizationHighlights = ({
   // detected entities itself; we still need to strip them from
   // the workspace catalog list, because catalog terms are sent
   // straight to Folio without going through the worker.
-  const excludedCanonicalsSet = useMemo(
-    () =>
-      buildExcludedCanonicalsSet(
-        allowlistQuery.data ? allowlistQuery.data.entries : [],
-      ),
-    [allowlistQuery.data],
+  const excludedCanonicalsSet = buildExcludedCanonicalsSet(
+    allowlistQuery.data ? allowlistQuery.data.entries : [],
   );
   useExternalSyncEffect(() => {
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
@@ -162,21 +158,12 @@ export const useDocxAnonymizationHighlights = ({
     // the user just added to the allowlist disappear.
     detectionRef.current?.run();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
-    () =>
-      mergeAnonymizationTerms({
-        isAnonymizationActive,
-        workspaceTerms: workspaceAnonymizationTerms,
-        detectedTerms: detectedAnonymizationTerms,
-        excludedCanonicals: excludedCanonicalsSet,
-      }),
-    [
-      isAnonymizationActive,
-      workspaceAnonymizationTerms,
-      detectedAnonymizationTerms,
-      excludedCanonicalsSet,
-    ],
-  );
+  const mergedAnonymizationTerms = mergeAnonymizationTerms({
+    isAnonymizationActive,
+    workspaceTerms: workspaceAnonymizationTerms,
+    detectedTerms: detectedAnonymizationTerms,
+    excludedCanonicals: excludedCanonicalsSet,
+  });
   // Dispatch the live term list into the plugin. We can't simply
   // read matches right after `dispatch` because DOCX content
   // loads asynchronously: the first dispatch hits an empty doc
@@ -223,21 +210,20 @@ export const useDocxAnonymizationHighlights = ({
   // detection: every doc edit and DOCX load passes through it, and
   // detection ignores emissions whose document it already read
   // (term pushes).
-  const handleAnonymizationMatchesChange = useCallback(
-    (matches: readonly { canonical: string; label: string }[]) => {
-      const { publishAnonymizationMatches } =
-        useInspectorAnonymizationStore.getState();
-      if (!isAnonymizationActive) {
-        return;
-      }
-      detectionRef.current?.noteDocChanged();
-      publishAnonymizationMatches(
-        fieldId,
-        aggregateAnonymizationMatches(matches),
-      );
-    },
-    [fieldId, isAnonymizationActive],
-  );
+  const handleAnonymizationMatchesChange = (
+    matches: readonly { canonical: string; label: string }[],
+  ) => {
+    const { publishAnonymizationMatches } =
+      useInspectorAnonymizationStore.getState();
+    if (!isAnonymizationActive) {
+      return;
+    }
+    detectionRef.current?.noteDocChanged();
+    publishAnonymizationMatches(
+      fieldId,
+      aggregateAnonymizationMatches(matches),
+    );
+  };
   useExternalSyncEffect(() => {
     const { clearAnonymizationMatches } =
       useInspectorAnonymizationStore.getState();
@@ -263,21 +249,22 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   // transaction, so we just have to length-gate and publish.
   // The cleanup clears the store so a second tab opening this
   // facet doesn't see a stale prefill from the previous file.
-  const handleSelectionTextChange = useCallback(
-    (selection: { from: number; to: number; text: string }) => {
-      if (selection.from === selection.to) {
-        return;
-      }
-      const single = selection.text.replace(/\s+/gu, " ").trim();
-      if (single.length < 2 || single.length > 200) {
-        return;
-      }
-      useInspectorAnonymizationStore
-        .getState()
-        .publishDocumentTextSelection(fieldId, single);
-    },
-    [fieldId],
-  );
+  const handleSelectionTextChange = (selection: {
+    from: number;
+    to: number;
+    text: string;
+  }) => {
+    if (selection.from === selection.to) {
+      return;
+    }
+    const single = selection.text.replace(/\s+/gu, " ").trim();
+    if (single.length < 2 || single.length > 200) {
+      return;
+    }
+    useInspectorAnonymizationStore
+      .getState()
+      .publishDocumentTextSelection(fieldId, single);
+  };
   useExternalSyncEffect(
     () => () => {
       useInspectorAnonymizationStore
@@ -296,14 +283,11 @@ export const useDocxAnonymizationSelection = (fieldId: string) => {
   //   stay quiet.
   // - Doc-sourced selections aren't echoed back to the editor —
   //   that would re-scroll on its own click.
-  const handleAnonymizationTermClick = useCallback(
-    (canonical: string, label: string) => {
-      useInspectorAnonymizationStore
-        .getState()
-        .selectAnonymizationTerm(canonical, label, "doc", fieldId);
-    },
-    [fieldId],
-  );
+  const handleAnonymizationTermClick = (canonical: string, label: string) => {
+    useInspectorAnonymizationStore
+      .getState()
+      .selectAnonymizationTerm(canonical, label, "doc", fieldId);
+  };
   const sidebarSelectedCanonical = useInspectorAnonymizationStore((s) =>
     s.anonymizationSelection.source === "sidebar" &&
     s.anonymizationSelection.fieldId === fieldId

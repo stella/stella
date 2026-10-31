@@ -2,7 +2,6 @@ import {
   createContext,
   Suspense,
   use,
-  useCallback,
   useDeferredValue,
   useState,
 } from "react";
@@ -816,23 +815,20 @@ const ActivityLoadSentinel = ({
 }: ActivityLoadSentinelProps) => {
   const t = useTranslations();
   const loadEarlier = useLatestCallback(onLoadEarlier);
-  const sentinelRef = useCallback(
-    (node: HTMLSpanElement | null) => {
-      if (!node || hasError || isFetching) {
-        return undefined;
-      }
-      const root = horizontal ? node.closest("[data-activity-scroll]") : null;
-      if (horizontal && !root) {
-        return undefined;
-      }
-      return observeActivityIntersection({
-        node,
-        onIntersect: loadEarlier,
-        root,
-      });
-    },
-    [hasError, horizontal, isFetching, loadEarlier],
-  );
+  const sentinelRef = (node: HTMLSpanElement | null) => {
+    if (!node || hasError || isFetching) {
+      return undefined;
+    }
+    const root = horizontal ? node.closest("[data-activity-scroll]") : null;
+    if (horizontal && !root) {
+      return undefined;
+    }
+    return observeActivityIntersection({
+      node,
+      onIntersect: loadEarlier,
+      root,
+    });
+  };
 
   if (hasError) {
     return (

@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import type { RefCallback, RefObject } from "react";
 
 import { useShallow } from "zustand/react/shallow";
@@ -47,45 +46,42 @@ export const usePDFFitToWidth = ({
     return undefined;
   }, [consumePendingScrollAnchor, containerRef, effectiveScale]);
 
-  return useCallback(
-    (container: HTMLDivElement | null) => {
-      if (!container || fitToWidth === undefined || scaleOffset !== 0) {
-        return undefined;
+  return (container: HTMLDivElement | null) => {
+    if (!container || fitToWidth === undefined || scaleOffset !== 0) {
+      return undefined;
+    }
+
+    // Observe the ScrollArea viewport (the visible area),
+    // not the content container. The content container's
+    // width is determined by the PDF pages themselves,
+    // creating a circular dependency.
+    const viewport = container.closest<HTMLElement>(
+      SCROLL_AREA_VIEWPORT_SELECTOR,
+    );
+    const observeTarget = viewport ?? container;
+
+    // Every `observe` reports the current size once, and the viewer
+    // re-attaches this ref whenever its page list changes, so the same
+    // width arrives again and again. The store redraws pages only when the
+    // width changes the scale.
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries.at(-1);
+      if (!entry) {
+        return;
       }
 
-      // Observe the ScrollArea viewport (the visible area),
-      // not the content container. The content container's
-      // width is determined by the PDF pages themselves,
-      // creating a circular dependency.
-      const viewport = container.closest<HTMLElement>(
-        SCROLL_AREA_VIEWPORT_SELECTOR,
-      );
-      const observeTarget = viewport ?? container;
+      const containerWidth = entry.contentRect.width;
+      if (containerWidth <= 0) {
+        return;
+      }
 
-      // Every `observe` reports the current size once, and the viewer
-      // re-attaches this ref whenever its page list changes, so the same
-      // width arrives again and again. The store redraws pages only when the
-      // width changes the scale.
-      const observer = new ResizeObserver((entries) => {
-        const entry = entries.at(-1);
-        if (!entry) {
-          return;
-        }
+      updateContainerWidth(containerWidth, container);
+    });
 
-        const containerWidth = entry.contentRect.width;
-        if (containerWidth <= 0) {
-          return;
-        }
+    observer.observe(observeTarget);
 
-        updateContainerWidth(containerWidth, container);
-      });
-
-      observer.observe(observeTarget);
-
-      return () => {
-        observer.disconnect();
-      };
-    },
-    [fitToWidth, scaleOffset, updateContainerWidth],
-  );
+    return () => {
+      observer.disconnect();
+    };
+  };
 };

@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -224,34 +217,22 @@ const PeekPdfViewerContent = ({
   );
   const file = fileQuery.data;
 
-  const renderPageOverlay = useCallback(
-    (pageId: string) => (
-      <>
-        <PeekPageOverlays
-          activePropertyId={activePropertyId}
-          entityId={entityId}
-          fieldId={fieldId}
-          onPeekNavigate={onPeekNavigate}
-          pageId={pageId}
-          viewId={viewId}
-          workspaceId={workspaceId}
-        />
-        {pdfPageOverlay?.(pageId)}
-        {interactionMode === "preview-only" ? null : (
-          <PdfSignPlacementLayer pageId={pageId} />
-        )}
-      </>
-    ),
-    [
-      activePropertyId,
-      entityId,
-      fieldId,
-      interactionMode,
-      onPeekNavigate,
-      pdfPageOverlay,
-      viewId,
-      workspaceId,
-    ],
+  const renderPageOverlay = (pageId: string) => (
+    <>
+      <PeekPageOverlays
+        activePropertyId={activePropertyId}
+        entityId={entityId}
+        fieldId={fieldId}
+        onPeekNavigate={onPeekNavigate}
+        pageId={pageId}
+        viewId={viewId}
+        workspaceId={workspaceId}
+      />
+      {pdfPageOverlay?.(pageId)}
+      {interactionMode === "preview-only" ? null : (
+        <PdfSignPlacementLayer pageId={pageId} />
+      )}
+    </>
   );
 
   if (fileQuery.isError) {
@@ -518,14 +499,12 @@ const PeekDocxViewer = ({
   });
   // Stable ref callback so React doesn't detach/re-attach the fit-zoom
   // ResizeObserver every render.
-  const composedContainerRef = useMemo(
-    () => composeRefs(containerRef, fitZoomRef),
-    [fitZoomRef],
-  );
+  const composedContainerRef = composeRefs(containerRef, fitZoomRef);
   useDocxBlockScroll({ editorRef, fieldId });
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- useExternalSyncEffect requires a stable search-highlight callback dependency
   const highlightSearchResult = useCallback(() => {
     if (searchText === undefined) {
       return true;
@@ -588,6 +567,7 @@ const PeekDocxViewer = ({
     searchTextKey,
   ]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- useExternalSyncEffect requires a stable search-highlight callback dependency
   const scheduleSearchHighlight = useCallback(() => {
     if (searchHighlightFrameRef.current !== null) {
       cancelAnimationFrame(searchHighlightFrameRef.current);
@@ -600,7 +580,6 @@ const PeekDocxViewer = ({
       },
     });
   }, [highlightSearchResult]);
-
   useMountEffect(() => () => {
     if (searchHighlightFrameRef.current !== null) {
       cancelAnimationFrame(searchHighlightFrameRef.current);
@@ -611,7 +590,7 @@ const PeekDocxViewer = ({
     scheduleSearchHighlight();
   }, [scheduleSearchHighlight]);
 
-  const handleDocumentReady = useCallback(() => {
+  const handleDocumentReady = () => {
     searchResultCacheRef.current = null;
     // Folio paints a read-only document before it builds the editor view, and
     // host plugins only see the document through that view.
@@ -619,12 +598,12 @@ const PeekDocxViewer = ({
       editorRef.current?.ensureEditorView({ focus: false });
     }
     scheduleSearchHighlight();
-  }, [plugins, scheduleSearchHighlight]);
+  };
 
-  const handleEditorViewReady = useCallback(() => {
+  const handleEditorViewReady = () => {
     searchResultCacheRef.current = null;
     scheduleSearchHighlight();
-  }, [scheduleSearchHighlight]);
+  };
 
   // Sync scaleOffset from inspector +/- buttons to Folio zoom
   useLayoutEffect(() => {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { PluggableList } from "unified";
 
@@ -47,6 +47,7 @@ export const SearchChatPreview = ({
   const [matchSummary, setMatchSummary] =
     useState<SearchMatchSummary>(EMPTY_MATCH_SUMMARY);
   const searchTextKey = searchTextQueryKey(searchText);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: without this memo boundary the React Compiler stops caching values in this function
   const rehypePluginsByMessage = useMemo<PluggableList[]>(() => {
     // Allocate immutable per-message budgets from the same matcher before
     // rendering. Their sum is globally bounded while each transform remains
@@ -137,18 +138,15 @@ export const SearchChatPreview = ({
     lastScrolledMatchRef.current = activeMatch;
   }, [activeIndex, domRevision, matchSummary.count]);
 
-  const navigate = useCallback(
-    (direction: "next" | "previous") => {
-      setActiveIndex((current) =>
-        getAdjacentSearchMatchIndex({
-          activeIndex: current,
-          direction,
-          matchCount: matchSummary.count,
-        }),
-      );
-    },
-    [matchSummary.count],
-  );
+  const navigate = (direction: "next" | "previous") => {
+    setActiveIndex((current) =>
+      getAdjacentSearchMatchIndex({
+        activeIndex: current,
+        direction,
+        matchCount: matchSummary.count,
+      }),
+    );
+  };
 
   return (
     <div ref={rootRef} className="space-y-5">

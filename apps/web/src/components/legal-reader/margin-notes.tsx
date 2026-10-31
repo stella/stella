@@ -237,6 +237,7 @@ const GutterNotes = ({
   const [heights] = useState(() => new Map<string, number>());
 
   // Added/removed from scroll + resize listeners by reference.
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- kept: react-hooks/exhaustive-deps cannot see compiler memoization, and this value is an effect dependency
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
     const wrapper = containerRef.current;
