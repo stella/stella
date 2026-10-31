@@ -4050,21 +4050,29 @@ test("PR e2e selection schedules its build and shard together", () => {
   expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
     true,
   );
-  expect(
-    evaluate(jobIf(ciJobs["e2e-production-shard"]), {
-      values: {
-        "github.event_name": EVENT.pullRequest,
-        "inputs.pr_depth_only": false,
-        "needs.ci-plan.outputs.run_required": "true",
-        "needs.ci-plan.outputs.trusted": "true",
-        "needs.ci-plan.outputs.coverage_profile": "pilot-fast-v1",
-        "needs.ci-plan.outputs.e2e_production_required": "true",
-        "needs.web-build.result": "success",
-        "needs.heavy-web-build.result": "skipped",
-      },
-      status: { always: true, cancelled: false },
-    }),
-  ).toBe(true);
+  // A normal-profile PR runs its selected shards; the pilot profile leaves
+  // them to the merge group.
+  for (const [profile, runs] of [
+    ["normal-v1", true],
+    ["pilot-fast-v1", false],
+  ] as const) {
+    expect(
+      evaluate(jobIf(ciJobs["e2e-production-shard"]), {
+        values: {
+          "github.event_name": EVENT.pullRequest,
+          "inputs.pr_depth_only": false,
+          "needs.ci-plan.outputs.run_required": "true",
+          "needs.ci-plan.outputs.trusted": "true",
+          "needs.ci-plan.outputs.coverage_profile": profile,
+          "needs.ci-plan.outputs.e2e_production_required": "true",
+          "needs.web-build.result": "success",
+          "needs.heavy-web-build.result": "skipped",
+        },
+        status: { always: true, cancelled: false },
+      }),
+      profile,
+    ).toBe(runs);
+  }
 
   const values = {
     "github.event_name": EVENT.pullRequest,
