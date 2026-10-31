@@ -315,6 +315,12 @@ export const foldStoredSupplements = async ({
           outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
           detail: disposition.decisionId,
         });
+      case "removed":
+        return Result.ok({
+          ...base,
+          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+          detail: disposition.formerJudgmentId,
+        });
       default: {
         disposition satisfies never;
         return panic(
