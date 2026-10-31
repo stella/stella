@@ -230,7 +230,10 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"documentProcessingRun">(), workspaceId },
       mode: "update",
     },
-    invoiceSendCapacity: { aggregate: "invoiceSendCapacity", id: { organizationId } },
+    invoiceSendCapacity: {
+      aggregate: "invoiceSendCapacity",
+      id: { organizationId },
+    },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
     fileComparisonCapacity: {
       aggregate: "fileComparisonCapacity",
