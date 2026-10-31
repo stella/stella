@@ -9,13 +9,17 @@ import { SettingsPageHeader } from "@/components/settings-page-header";
 import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { organizationOptions } from "@/lib/organization/queries";
+import {
+  organizationKeys,
+  organizationOptions,
+} from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { routePresentation } from "@/routes/-route-presentation";
 import { OrganizationDangerZone } from "@/routes/_protected.admin/-components/organization-danger-zone";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.admin/-components/organization/jurisdictions-card";
 import { OrganizationProfileCard } from "@/routes/_protected.admin/-components/organization/profile-card";
+import { OrganizationSlugCard } from "@/routes/_protected.admin/-components/organization/slug-card";
 import { OrganizationTimeZoneCard } from "@/routes/_protected.admin/-components/organization/time-zone-card";
 
 export const Route = createFileRoute("/_protected/admin/general")({
@@ -43,7 +47,13 @@ function OrganizationGeneralPage() {
   const { data: organization } = useSuspenseQuery(
     organizationOptions(activeOrganizationId),
   );
+  const canChangeOrganization = usePermissions({ organization: ["update"] });
   const isOwner = usePermissions({ organization: ["delete"] });
+  const refreshOrganization = async () => {
+    await router.options.context.queryClient.invalidateQueries({
+      queryKey: organizationKeys.root,
+    });
+  };
   // The danger zone awaits this inside its mutation, so a failure reaches the
   // mutation's error handling rather than floating.
   const leaveOrganization = async () => {
@@ -55,6 +65,11 @@ function OrganizationGeneralPage() {
     <>
       <SettingsPageHeader title={t("admin.general")} />
       <OrganizationProfileCard />
+      <OrganizationSlugCard
+        slug={organization.slug}
+        canChange={canChangeOrganization}
+        onSuccess={refreshOrganization}
+      />
       <Frame>
         <FramePanel>
           <div className="flex flex-wrap items-center justify-between gap-3">

@@ -73,6 +73,37 @@ A file over the ceiling is refused, naming the limit; send such a document from
 an MCP host that can attach it to the tool's file reference rather than
 re-exporting it to fit.
 
+## Batch operations
+
+Run many commands with one credential resolution, registry load, and MCP session:
+
+```sh
+stella batch ops.jsonl --concurrency 6 > results.jsonl
+cat ops.jsonl | stella batch - --dry-run
+stella batch ops.jsonl --resume results.jsonl > resumed.jsonl
+```
+
+Each line contains a CLI command path, its `--input` payload, and an optional
+caller ID, for example `{"command":"contact delete","input":{"contact_id":"<contact-id>"},"id":"remove-1"}`.
+Use `stella contact delete --schema` to inspect the payload. Results are JSONL
+in input order; any error or unknown outcome makes the command exit nonzero.
+Concurrency defaults to 6 and is limited to 16. Files are limited to 64 MiB.
+Destructive commands require `--yes`; batch never prompts.
+
+`--dry-run` validates every line locally and makes no server requests. Resume
+skips successful receipts and lists unknown outcomes for reconciliation without
+resubmitting them. Keep the original input and caller IDs unchanged between runs;
+combine original and resumed receipt files to retain all successful receipts.
+Only capabilities whose handlers declare durable replay receive idempotency keys.
+Rate-limit refusals honor the server delay and retry within a bounded budget;
+uncertain writes are never retried automatically.
+
+Bulk capabilities with an ID collection accept `--ids a,b,c` or `--ids @ids.txt` (one ID per
+line), trim blanks, remove duplicates, and chunk requests at the endpoint's schema
+limit. Consecutive property creates and case-law matter-link creates use equivalent
+replay-capable bulk endpoints when available. Other operations retain their
+individual semantics.
+
 ## Case-law coverage
 
 Use `stella case-law coverage --json` before concluding a decision is missing.
