@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { checkMergeGroupJobClassification } from "./check-ci-job-classification";
 import {
   readDecisions,
   writeDecision,
@@ -18,6 +19,7 @@ import {
   CLASSIFICATION_INPUT_GLOBS,
   decisionPathForKey,
 } from "./ci-job-classification/inputs";
+import { ReviewRequiredError } from "./ci-job-classification/review";
 import { AdmissionError, parseDocument } from "./ci-job-classification/yaml";
 import { GENERATORS } from "./generated-files";
 
@@ -580,6 +582,204 @@ test("independent privileged approvals merge without conflict", () => {
     stdout: "Classified 1 workflows\n",
     stderr: "",
   });
+});
+
+const compositionRepository = (kind = "ordinary") => {
+  const baseWorkflow =
+    "jobs: {check: {steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}";
+  const workflowChange = baseWorkflow.replace(
+    "0000000000000000000000000000000000000000",
+    "2222222222222222222222222222222222222222",
+  );
+  const baseAction =
+    "name: check\nruns: {using: composite, steps: [{uses: acme/check@0000000000000000000000000000000000000000}]}\n";
+  const actionChange = baseAction.replace(
+    "0000000000000000000000000000000000000000",
+    "1111111111111111111111111111111111111111",
+  );
+  const root = mkdtempSync(path.join(tmpdir(), "classification-compose-"));
+  roots.push(root);
+  mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
+  mkdirSync(path.join(root, ".github/actions/check"), { recursive: true });
+  mkdirSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
+    recursive: true,
+  });
+  writeFileSync(
+    path.join(root, ".github/ci-job-classification-sources.json"),
+    "{}",
+  );
+  writeFileSync(
+    path.join(root, ".github/ci-job-classification-decisions.json"),
+    "{}",
+  );
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), baseWorkflow);
+  writeFileSync(
+    path.join(root, ".github/actions/check/action.yml"),
+    baseAction,
+  );
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Classification Test",
+        "-c",
+        "user.email=classification-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        "-C",
+        root,
+        ...args,
+      ],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  };
+  const commit = (message: string) => {
+    git("add", ".");
+    git("commit", "--quiet", "-m", message);
+  };
+  git("init", "--quiet");
+  commit("base inputs");
+  const actualDigest = () => {
+    const checked = run(root, "--check", "--base", "HEAD");
+    const digest = /\/([a-f0-9]{64})\.json/u.exec(checked.stderr)?.[1];
+    if (!digest) {
+      throw new AdmissionError({
+        message: `fixture digest missing: ${checked.stderr}`,
+      });
+    }
+    return digest;
+  };
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  git("add", ".");
+  git("commit", "--quiet", "--amend", "--no-edit");
+  const base = gitOutput(root, "rev-parse", "HEAD");
+  git("switch", "-c", "workflow-change");
+  writeFileSync(path.join(root, ".github/workflows/ci.yml"), workflowChange);
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  commit("workflow change");
+  const first = gitOutput(root, "rev-parse", "HEAD");
+  git("switch", "-c", "action-change", base);
+  writeFileSync(
+    path.join(root, ".github/actions/check/action.yml"),
+    actionChange,
+  );
+  writeDecision(root, keyOf("check"), {
+    kind,
+    qualifier: "Reviewed checks",
+    reviewedDigest: actualDigest(),
+  });
+  commit("action change");
+  const second = gitOutput(root, "rev-parse", "HEAD");
+  git("merge", "--no-edit", "workflow-change");
+  return { root, base, first, second };
+};
+
+const gitOutput = (root: string, ...args: string[]) => {
+  const result = Bun.spawnSync(["git", "-C", root, ...args], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(result.exitCode, decoder.decode(result.stderr)).toBe(0);
+  return decoder.decode(result.stdout).trim();
+};
+
+test("ordinary job approvals compose across a merge group", () => {
+  const { root, base, first, second } = compositionRepository();
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    mergeGroup: {
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    },
+  });
+  expect(result.isOk()).toBe(true);
+});
+
+test("ordinary composition refuses content from no approving pull request", () => {
+  const { root, base, first, second } = compositionRepository();
+  writeFileSync(
+    path.join(root, ".github/workflows/ci.yml"),
+    "jobs: {check: {steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@3333333333333333333333333333333333333333}]}}",
+  );
+  const decisionDirectory = path.join(
+    root,
+    CLASSIFICATION_DECISIONS_PATH,
+    encodeURIComponent(keyOf("check")),
+  );
+  for (const file of new Bun.Glob("*.json").scanSync({
+    cwd: decisionDirectory,
+  })) {
+    if (file !== "decision.json") {
+      rmSync(path.join(decisionDirectory, file));
+    }
+  }
+  writeFileSync(
+    path.join(decisionDirectory, "decision.json"),
+    `${JSON.stringify({ kind: "ordinary", qualifier: "Reviewed checks" }, null, 2)}\n`,
+  );
+  expect(decisionsIn(root)[keyOf("check")]).toEqual({
+    kind: "ordinary",
+    qualifier: "Reviewed checks",
+    approvedDigests: [],
+  });
+  gitOutput(root, "add", ".");
+  gitOutput(
+    root,
+    "-c",
+    "user.name=Classification Test",
+    "-c",
+    "user.email=classification-test@example.invalid",
+    "commit",
+    "-m",
+    "unreviewed input",
+  );
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    mergeGroup: {
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    },
+  });
+  expect(result.isErr()).toBe(true);
+});
+
+test("sensitive job composition names the later pull request for re-approval", () => {
+  const { root, base, first, second } = compositionRepository("priority");
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    mergeGroup: {
+      members: [
+        { number: 41, head: first },
+        { number: 42, head: second },
+      ],
+    },
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr() && result.error instanceof ReviewRequiredError) {
+    expect(result.error.refusal).toBe(
+      "classification needs re-approval after #42",
+    );
+    expect(result.error.message).toContain(
+      "classification needs re-approval after #42",
+    );
+  }
 });
 
 test("conflicting modes are rejected", () => {
