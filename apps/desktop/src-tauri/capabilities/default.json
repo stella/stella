@@ -40,6 +40,7 @@
     "allow-activity-get-settings",
     "allow-activity-set-capture-details",
     "allow-activity-set-detect-calls",
+    "allow-activity-set-narrative-assist",
     "allow-activity-set-browser-title-capture",
     "allow-activity-set-app-detail-capture",
     "allow-activity-open-accessibility-settings",
