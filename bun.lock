@@ -868,7 +868,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.15",
+      "version": "0.2.16",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -916,7 +916,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.2.1",
+      "version": "6.2.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1578,7 +1578,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.58.0",
+      "version": "0.59.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1673,7 +1673,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.0",
+      "version": "0.15.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
