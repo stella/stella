@@ -140,7 +140,9 @@
     },
     "add": "Dodaj",
     "scanDocument": "Zeskanuj dokument",
-    "newTask": "Nowe zadanie"
+    "newTask": "Nowe zadanie",
+    "uploadDocument": "Prześlij dokument",
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
   },
   "entity": {
     "type": "Typ",
