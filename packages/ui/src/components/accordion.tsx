@@ -30,7 +30,7 @@ const AccordionTrigger = ({
     <AccordionPrimitive.Trigger
       className={cn(
         "focus-visible:ring-ring flex flex-1 cursor-pointer items-start justify-between gap-4 rounded-md text-start font-medium outline-none focus-visible:ring-[3px] disabled:pointer-events-none disabled:opacity-64 data-panel-open:*:data-[slot=accordion-indicator]:rotate-180",
-        size === "compact" ? "py-2 text-xs" : "py-4 text-sm",
+        size === "compact" ? "py-1.5 text-xs" : "py-4 text-sm",
         className,
       )}
       data-slot="accordion-trigger"
