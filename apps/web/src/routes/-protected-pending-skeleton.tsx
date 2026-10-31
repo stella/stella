@@ -1,3 +1,4 @@
+import { use } from "react";
 import type { ReactElement } from "react";
 
 import {
@@ -7,6 +8,8 @@ import {
   PanelRightIcon,
 } from "@stll/ui/icons";
 import {
+  resolveInspectorPaneWidth,
+  shouldForceSidebarCollapsed,
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
 } from "@stll/ui/inspector";
@@ -14,6 +17,13 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { cn } from "@stll/ui/utils";
 
+import { readPersistedInspectorPaneOpen } from "@/components/inspector/inspector-broadcast";
+import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { PendingInspectorScopeContext } from "@/components/inspector/pending-inspector-scope";
+import {
+  SIDEBAR_WIDTH_ICON_PX,
+  SIDEBAR_WIDTH_PX,
+} from "@/components/sidebar-sizing";
 import {
   DEFAULT_SIDEBAR_OPEN,
   readPersistedSidebarOpen,
@@ -40,13 +50,33 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // icons, the rail toggles), so the frame is already the app; only what
 // depends on data or on the active locale shimmers: nav labels, pinned
 // matters, the account card, the breadcrumb and the page body. Intentionally
-// free of hooks, context, data, and Suspense. A page that is the same for
-// every visitor can take the content column's place.
+// free of data fetching and Suspense; the first-frame owner supplies any
+// inspector storage scope. A page that is the same for every visitor can
+// take the content column's place.
 export function ProtectedPendingSkeleton({
   content,
 }: {
   content?: ReactElement | undefined;
 }) {
+  const inspectorScope = use(PendingInspectorScopeContext);
+  const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
+  const paneRequested =
+    inspectorScope !== undefined &&
+    readPersistedInspectorPaneOpen(inspectorScope);
+  const sidebarOpen =
+    (readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) &&
+    !shouldForceSidebarCollapsed({
+      expandedSidebarWidth: SIDEBAR_WIDTH_PX,
+      inspectorPaneOpen: paneRequested,
+      viewportWidth,
+    });
+  const paneWidth = paneRequested
+    ? resolveInspectorPaneWidth({
+        desiredWidth: readPersistedInspectorPaneWidth(),
+        sidebarWidth: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+        viewportWidth,
+      })
+    : undefined;
   return (
     <div
       aria-hidden={content === undefined ? "true" : undefined}
@@ -54,11 +84,7 @@ export function ProtectedPendingSkeleton({
     >
       {/* The sidebar as the user left it: its cookie reads the same on the
           server and in the browser. */}
-      {(readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) ? (
-        <ExpandedSidebarSkeleton />
-      ) : (
-        <CollapsedSidebarSkeleton />
-      )}
+      {sidebarOpen ? <ExpandedSidebarSkeleton /> : <CollapsedSidebarSkeleton />}
 
       {/* Main content column: header bar (breadcrumb) + page body. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -83,12 +109,14 @@ export function ProtectedPendingSkeleton({
         )}
       </div>
 
-      {/* Right side rail: the real toggle and new-chat icons, no tabs yet. */}
+      {/* Reserve the member's pane while its code and tabs load. */}
       <div
         className={cn(
           "bg-muted/50 text-muted-foreground hidden shrink-0 flex-col border-s md:flex",
           SIDE_RAIL_WIDTH,
         )}
+        data-slot="inspector-pending-dock"
+        style={paneWidth === undefined ? undefined : { width: paneWidth }}
       >
         <div
           className={cn(

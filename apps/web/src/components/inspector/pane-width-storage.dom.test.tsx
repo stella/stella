@@ -26,6 +26,16 @@ const {
 } = await import("@/components/inspector/pane-width-storage");
 const { deviceStorage } = await import("@/lib/account/browser-storage");
 
+const { inspectorStateEntry, inspectorMinimizedEntry } =
+  await import("@/components/inspector/inspector-storage-keys");
+const { writePersistedState, removePersistedState } =
+  await import("@/lib/persisted-state/registry");
+const { ProtectedPendingSkeleton } =
+  await import("@/routes/-protected-pending-skeleton");
+const { PendingInspectorScopeContext } =
+  await import("@/components/inspector/pending-inspector-scope");
+const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
+
 const storage = deviceStorage("local");
 
 type Surface = Parameters<typeof migrateInspectorPaneWidth>[0];
@@ -61,6 +71,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  removePersistedState(inspectorStateEntry, pendingScope).unwrap();
+  removePersistedState(inspectorMinimizedEntry, pendingScope).unwrap();
 });
 
 afterAll(async () => {
@@ -196,3 +208,79 @@ test("safe-mode StrictMode mounting preserves the saved width until a user resiz
     value: INSPECTOR_PANE_DEFAULT_WIDTH + INSPECTOR_PANE_KEYBOARD_STEP,
   });
 });
+
+test("the member loading frame reserves the saved inspector before tabs mount", () => {
+  storage.setItem(INSPECTOR_PANE_WIDTH_STORAGE_KEY, "320");
+  writePersistedState(inspectorStateEntry, pendingScope, {
+    tabs: [
+      {
+        type: "chat",
+        id: "00000000-0000-4000-8000-000000000001",
+        label: "Chat",
+        contextMatterIds: [],
+      },
+    ],
+    groups: [],
+    groupAssignments: {},
+    activeId: "00000000-0000-4000-8000-000000000001",
+    collapsedGroupIds: [],
+  }).unwrap();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
+  const { container, rerender } = render(
+    <PendingInspectorScopeContext value={pendingScope}>
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
+  );
+  const dockWidth = () =>
+    container
+      .querySelector('[data-slot="inspector-pending-dock"]')
+      ?.getAttribute("style");
+  expect(dockWidth()).toBe("width: 320px;");
+  rerender(
+    <PendingInspectorScopeContext
+      value={{ ...pendingScope, userId: "another-user" }}
+    >
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
+  );
+  expect(dockWidth()).toBeNull();
+  writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
+  rerender(
+    <PendingInspectorScopeContext value={pendingScope}>
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
+  );
+  expect(dockWidth()).toBeNull();
+});
+
+test.each([
+  { tabs: [{ type: "retired-tab" }] },
+  { tabs: [{ type: "chat", id: "missing-required-fields" }] },
+  {
+    tabs: [
+      { type: "retired-tab" },
+      { type: "chat", id: "missing-required-fields" },
+    ],
+  },
+])(
+  "discarded persisted tabs reserve no member loading pane: %j",
+  ({ tabs }) => {
+    writePersistedState(inspectorStateEntry, pendingScope, {
+      tabs,
+      groups: [],
+      groupAssignments: {},
+      activeId: null,
+      collapsedGroupIds: [],
+    }).unwrap();
+    const { container } = render(
+      <PendingInspectorScopeContext value={pendingScope}>
+        <ProtectedPendingSkeleton />
+      </PendingInspectorScopeContext>,
+    );
+    expect(
+      container
+        .querySelector('[data-slot="inspector-pending-dock"]')
+        ?.getAttribute("style"),
+    ).toBeNull();
+  },
+);

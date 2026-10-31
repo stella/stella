@@ -28,6 +28,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Prose } from "@stll/ui/prose";
+import { ScrollArea } from "@stll/ui/scroll-area";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -652,23 +653,25 @@ function TaskBrowser({
       <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {t("publicTools.discovery.tasksTitle")}
       </p>
-      <div className="mt-2 flex flex-nowrap gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0">
-        {PUBLIC_TOOL_TASKS.map((task) => {
-          const Icon = TASK_ICON[task];
-          return (
-            <Button
-              className="bg-muted/45 hover:bg-muted/70 min-h-11 shrink-0 justify-start"
-              key={task}
-              onClick={() => onSelect(task)}
-              type="button"
-              variant="ghost"
-            >
-              <Icon className="text-muted-foreground" />
-              {t(TASK_LABEL_KEY[task])}
-            </Button>
-          );
-        })}
-      </div>
+      <ScrollArea className="mt-2 h-14 w-full">
+        <div className="flex flex-nowrap gap-2 pb-2">
+          {PUBLIC_TOOL_TASKS.map((task) => {
+            const Icon = TASK_ICON[task];
+            return (
+              <Button
+                className="bg-muted/45 hover:bg-muted/70 min-h-11 shrink-0 justify-start"
+                key={task}
+                onClick={() => onSelect(task)}
+                type="button"
+                variant="ghost"
+              >
+                <Icon className="text-muted-foreground" />
+                {t(TASK_LABEL_KEY[task])}
+              </Button>
+            );
+          })}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

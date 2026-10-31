@@ -14,6 +14,7 @@ import type { TranslationKey } from "@/i18n/types";
 export type KnowledgeSection = {
   key: "templates" | "styles" | "clauses" | "playbooks" | "workflows" | "tools";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  publicAccess: "catalogue" | "account" | "unavailable";
   to:
     | "/knowledge/templates"
     | "/knowledge/styles"
@@ -37,36 +38,42 @@ export type KnowledgeSection = {
 export const knowledgeSections: readonly KnowledgeSection[] = [
   {
     key: "tools",
+    publicAccess: "catalogue",
     icon: PackageIcon,
     to: "/knowledge/tools",
     titleKey: "knowledge.sections.tools.title",
   },
   {
     key: "templates",
+    publicAccess: "catalogue",
     icon: LayoutTemplateIcon,
     to: "/knowledge/templates",
     titleKey: "knowledge.sections.templates.title",
   },
   {
     key: "styles",
+    publicAccess: "account",
     icon: PaletteIcon,
     to: "/knowledge/styles",
     titleKey: "styleSets.title",
   },
   {
     key: "clauses",
+    publicAccess: "account",
     icon: TextQuoteIcon,
     to: "/knowledge/clauses",
     titleKey: "common.clauses",
   },
   {
     key: "playbooks",
+    publicAccess: "catalogue",
     icon: ClipboardCheckIcon,
     to: "/knowledge/playbooks",
     titleKey: "common.playbooks",
   },
   {
     key: "workflows",
+    publicAccess: "unavailable",
     icon: WorkflowIcon,
     to: "/knowledge/workflows",
     titleKey: "common.workflows",
