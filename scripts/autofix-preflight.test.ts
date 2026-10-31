@@ -5,26 +5,33 @@ import { decideAutofixPreflight } from "./autofix-preflight";
 type DecisionFixture = {
   generatorSelected?: boolean;
   formatClean?: boolean;
+  lintClean?: boolean;
   lintPaths?: string[];
-  toolError?: boolean;
+  toolError?: "format" | "lint";
 };
 
 const decide = ({
   generatorSelected = false,
   formatClean = true,
+  lintClean = true,
   lintPaths = [],
-  toolError = false,
+  toolError,
 }: DecisionFixture = {}) =>
   decideAutofixPreflight(
     { generatorSelected, formatPaths: ["./README.md"], lintPaths },
     {
       formatClean: () => {
-        if (toolError) {
+        if (toolError === "format") {
           throw new TypeError("formatter failed");
         }
         return formatClean;
       },
-      lintClean: () => true,
+      lintClean: () => {
+        if (toolError === "lint") {
+          throw new TypeError("linter failed");
+        }
+        return lintClean;
+      },
     },
   );
 
@@ -36,8 +43,12 @@ test("one unformatted file runs the fixers", () => {
   expect(decide({ formatClean: false })).toBe("run");
 });
 
-test("a lint path that can have a safe-rule fix runs with the type graph", () => {
-  expect(decide({ lintPaths: ["./source.ts"] })).toBe("run");
+test("a clean TypeScript path skips the full fixer", () => {
+  expect(decide({ lintPaths: ["./source.ts"] })).toBe("skip");
+});
+
+test("a TypeScript path with a safe-rule finding runs the fixers", () => {
+  expect(decide({ lintClean: false, lintPaths: ["./source.ts"] })).toBe("run");
 });
 
 test("a selected generator runs the fixers", () => {
@@ -45,5 +56,6 @@ test("a selected generator runs the fixers", () => {
 });
 
 test("a tool error fails closed and runs the fixers", () => {
-  expect(decide({ toolError: true })).toBe("run");
+  expect(decide({ toolError: "format" })).toBe("run");
+  expect(decide({ lintPaths: ["./source.ts"], toolError: "lint" })).toBe("run");
 });

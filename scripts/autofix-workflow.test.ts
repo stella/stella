@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 
-import { SAFE_AUTOFIX_RULES, safeAutofixRuleArgs } from "./autofix-safe-rules";
+import {
+  SAFE_AUTOFIX_RULES,
+  safeAutofixRuleArgs,
+  TYPE_AWARE_AUTOFIX_RULES,
+} from "./autofix-safe-rules";
 import { requiresTauriAlignment } from "./check-tauri-package-alignment";
 import {
   CI_GENERATION_COMMANDS,
@@ -819,6 +823,9 @@ test("source fixes use only the documented safe-rule allowlist and never save PR
   ]);
   for (const reason of Object.values(SAFE_AUTOFIX_RULES)) {
     expect(reason.length).toBeGreaterThan(20);
+  }
+  for (const rule of TYPE_AWARE_AUTOFIX_RULES) {
+    expect(SAFE_AUTOFIX_RULES).not.toHaveProperty(rule);
   }
   expect(workflow).not.toContain("save: true");
   expect(workflow).not.toContain("--fix-dangerously");

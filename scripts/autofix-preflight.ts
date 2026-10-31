@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { TYPE_AWARE_SAFE_AUTOFIX_RULES } from "./autofix-safe-rules";
+import { safeAutofixRuleArgs } from "./autofix-safe-rules";
 
 type PreflightChecks = {
   formatClean: (paths: readonly string[]) => boolean;
@@ -13,8 +13,6 @@ type PreflightInput = {
   lintPaths: readonly string[];
 };
 
-const hasTypeAwareRules = (rules: readonly string[]) => rules.length > 0;
-
 export const decideAutofixPreflight = (
   input: PreflightInput,
   checks: PreflightChecks,
@@ -26,11 +24,7 @@ export const decideAutofixPreflight = (
     if (!checks.formatClean(input.formatPaths)) {
       return "run";
     }
-    if (
-      input.lintPaths.length > 0 &&
-      (hasTypeAwareRules(TYPE_AWARE_SAFE_AUTOFIX_RULES) ||
-        !checks.lintClean(input.lintPaths))
-    ) {
+    if (input.lintPaths.length > 0 && !checks.lintClean(input.lintPaths)) {
       return "run";
     }
     return "skip";
@@ -70,12 +64,13 @@ if (import.meta.main) {
         ]),
       lintClean: (paths) =>
         commandSucceeds([
-          "bun",
+          "bunx",
           "--bun",
-          "oxlint",
+          "oxlint@1.87.0",
           "-c",
           "oxlint.config.ts",
           "--no-error-on-unmatched-pattern",
+          ...safeAutofixRuleArgs(),
           ...paths,
         ]),
     },
