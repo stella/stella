@@ -546,6 +546,18 @@ jobs:
             echo "::notice::Alignment fixer sources changed; CI enforces alignment without automatic edits."
           fi
 
+      - name: Raise stale bridge version
+        id: bridge-version
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" HEAD -- scripts/fix-bridge-version.sh; then
+            bash scripts/fix-bridge-version.sh
+            echo "allowed=apps/desktop/src-tauri/src/types.rs|apps/desktop/fixtures/rpc/app-snapshot.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Bridge-version fixer changed; CI enforces the bump without automatic edits."
+          fi
+
       # Reconcile merged manifest metadata without moving existing package
       # pins. The helper restores bun.lock and fails on any resolution change.
       - name: Refresh merged lockfile
@@ -719,6 +731,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           GENERATOR_ALLOWED: ${{ needs.regenerate-scope.outputs.allowed }}
           TAURI_ALLOWED: ${{ steps.tauri.outputs.allowed }}
+          BRIDGE_VERSION_ALLOWED: ${{ steps.bridge-version.outputs.allowed }}
         run: |
           set -euo pipefail
 
@@ -779,6 +792,7 @@ jobs:
           done < "$RUNNER_TEMP/autofix-changed-paths"
           IFS='|' read -r -a generated <<< "$GENERATOR_ALLOWED"
           IFS='|' read -r -a tauri_paths <<< "$TAURI_ALLOWED"
+          IFS='|' read -r -a bridge_version_paths <<< "$BRIDGE_VERSION_ALLOWED"
           excludes=()
           for path in "${changed[@]}"; do
             if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
@@ -791,6 +805,10 @@ jobs:
             excludes+=(":(exclude,glob)$path" ":(exclude,glob)$path/**")
           done
           for path in "${tauri_paths[@]}"; do
+            [[ -n "$path" ]] || continue
+            excludes+=(":(exclude,literal)$path")
+          done
+          for path in "${bridge_version_paths[@]}"; do
             [[ -n "$path" ]] || continue
             excludes+=(":(exclude,literal)$path")
           done
