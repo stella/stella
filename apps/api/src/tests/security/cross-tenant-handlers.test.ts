@@ -20,6 +20,7 @@ import {
 } from "@stll/api-contract/signals";
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 import { sha256Hex } from "@stll/sha256/bun";
+import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -205,7 +206,6 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestWithdrawalCopyReader } from "@/api/tests/helpers/withdrawn-copy-reader";
 import { createRlsDesktopCredentials } from "@/api/tests/security/rls-desktop-credentials";

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { timeEntries } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
@@ -18,7 +20,6 @@ import {
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
 import { serveForTest } from "@/api/tests/helpers/test-server";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopMatterCandidatesEndpoint } from "./candidates";
@@ -49,9 +50,16 @@ test("desktop time entry endpoints require desktop account credentials", async (
     `time-entries/${WORKSPACE_ID}`,
     "time-entries/batch",
     "time-entries/batch/status",
+    "time-entries/narrative",
   ]) {
     let body = JSON.stringify(BODY);
-    if (path === "time-entries/batch/status") {
+    if (path === "time-entries/narrative") {
+      body = JSON.stringify({
+        titles: ["Katastr nemovitostí"],
+        locale: "cs-CZ",
+        matterName: null,
+      });
+    } else if (path === "time-entries/batch/status") {
       body = JSON.stringify({ idempotencyKey: "test" });
     } else if (path === "time-entries/batch") {
       body = JSON.stringify({
@@ -64,7 +72,7 @@ test("desktop time entry endpoints require desktop account credentials", async (
         `http://localhost/v1/desktop/${path}`,
         path.startsWith("time-entries/")
           ? {
-              method: "PUT",
+              method: path === "time-entries/narrative" ? "POST" : "PUT",
               headers: { "content-type": "application/json" },
               body,
             }

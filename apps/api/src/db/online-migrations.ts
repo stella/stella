@@ -46,6 +46,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -82,6 +83,7 @@ import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
+import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "./legal-list-source-decision-backfill";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -966,6 +968,8 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
+  LEGAL_LIST_SOURCE_DECISION_BACKFILL,
+  CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
 ];
 
 /**
@@ -1018,7 +1022,7 @@ type OnlineMigrationMode =
   | { operation: "validate"; report: OnlineMigrationStartupReport };
 
 type OnlineMigrationOptions = {
-  repairs?: readonly OnlineRepair[];
+  repairs: readonly OnlineRepair[];
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -1071,7 +1075,7 @@ export type OnlineMigrationStartupReport = {
  */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  options: OnlineMigrationOptions,
 ): Promise<
   | { type: "validated"; report: OnlineMigrationStartupReport }
   | { type: "migrator_active" }
@@ -1212,7 +1216,7 @@ const walkOnlineMigrations = async ({
   return await processOnlineRepairAt({
     connection,
     mode,
-    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    repairs: options.repairs,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),

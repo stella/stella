@@ -814,8 +814,10 @@
       "deleteRateTable": "Delete rate table",
       "editRateTable": "Edit rate table",
       "effectiveFrom": "Effective from",
+      "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
       "hourlyRate": "Hourly rate",
+      "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
-      "remove": "Remove filter {filter}"
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
     },
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Full view not yet available"
     },
     "activity": {
+      "newerVersion": "This content is shown in a newer version.",
       "review": "Review update"
     },
     "aiPrompt": "AI message composer",
@@ -4537,6 +4542,7 @@
     "aiTitle": "Connect your AI provider",
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.",
     "appsTitle": "Get stella everywhere",
+    "browserExtensionCardDescription": "Let chat work with the websites you already use, in a Chrome tab you choose.",
     "catalogueAlwaysOn": "Always on",
     "catalogueCommunityHeading": "Others",
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}",
@@ -5016,7 +5022,6 @@
       "beta": "Beta Features",
       "betaAvt": "AVT document verification",
       "betaAvtDescription": "Check a matter's documents claim by claim against the facts of a list",
-      "betaCaseLawDescription": "Show the public case law search and reader in the sidebar",
       "betaDescription": "Try features that are still in development",
       "betaInbox": "Inbox & notifications",
       "betaInboxDescription": "Show the Inbox and the notification bell",
@@ -5052,6 +5057,8 @@
       "desktopCardConnectedTitle": "stella desktop is linked",
       "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.",
       "desktopCardMissingTitle": "stella desktop isn't linked yet",
+      "desktopCardOpeningDetail": "Linking this computer to <bdi>{identity}</bdi> on {host}. If your browser asks, allow it to open stella desktop.",
+      "desktopCardOpeningTitle": "Opening stella desktop...",
       "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.",
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
@@ -5071,6 +5078,7 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
@@ -5144,6 +5152,10 @@
     "connections": {
       "accessTitle": "{clientName} can",
       "browseIntegrations": "Add a service",
+      "browserExtensionConnectHint": "After installing, open the extension on this stella tab, allow website access, and connect the tab.",
+      "browserExtensionDescription": "stella chat can read and use websites in a Chrome tab you choose. Every action waits for your approval.",
+      "browserExtensionInstall": "Add to Chrome",
+      "browserExtensionTitle": "Browser extension",
       "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.",
       "cliInstallLabel": "Install",
       "cliLoginLabel": "Log in",
@@ -5394,7 +5406,7 @@
     },
     "inForceSince": "In force since {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "Leading decisions",
+    "leadingDecision": "Leading decision",
     "leadingDecisionsExplanation": "The first mention in each decision, ranked by citation authority: weighted incoming citations, adjusted for court rank, citation polarity and age.",
     "noVersionInForce": "No version of this act was in force on the selected date.",
     "openEnded": "present",
@@ -5405,15 +5417,11 @@
     "pendingChanges": "Upcoming amendments",
     "pendingChangesIncomplete": "The publisher data may not include every upcoming amendment.",
     "provisionAskContextPrompt": "\n\nPassages applying it in the most authoritative decisions:\n{passages}\n\nUse the case-law tools to read any of these decisions in full or to find further decisions citing the provision.",
-    "provisionAskPlaceholder": "Ask about this provision",
-    "provisionAskQuestionPrompt": "About {subject}: {question}",
     "provisionAskSummarize": "Summarize how courts apply this provision",
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.",
     "provisionDetailsFor": "Details of {provision}",
     "provisionEffectiveFrom": "in force since {date}",
-    "provisionHistoryEarliest": "Earliest wording on record.",
     "provisionHistoryEmpty": "No wording of this provision is on record.",
-    "provisionHistoryLoadOlder": "Load older versions to compare wordings.",
     "provisionHistoryUnavailable": "This provision's history could not be loaded.",
     "provisionPartTextUnavailable": "Text of {provisionLabel} is not available",
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}",
@@ -6234,8 +6242,10 @@
       "downloadAsZip": "Download as ZIP",
       "downloadExtractedText": "Extracted text (.txt)",
       "downloadFailed": "Download failed",
+      "downloadOriginal": "Original file",
       "downloadPdf": "Download as PDF",
       "downloadSearchablePdf": "Searchable PDF",
+      "downloadWithComments": "Download with comments",
       "emptyFile": "The file is empty.",
       "includeReferenceNumber": "Include reference number",
       "itemLimitReached": "This matter has reached its item limit.",
@@ -6524,6 +6534,14 @@
           "started": "Started a review of"
         },
         "empty": "No activity in this matter yet.",
+        "fields": {
+          "dueDate": "due date",
+          "parentFolder": "parent folder",
+          "priority": "priority",
+          "property": "property",
+          "schedule": "schedule",
+          "sortOrder": "order"
+        },
         "filterLabel": "Filter activity",
         "filters": {
           "all": "All activity",
@@ -6573,6 +6591,7 @@
           "translation": "translation"
         },
         "title": "Matter activity",
+        "updatedFields": "Updated {fields}",
         "views": {
           "list": "List view",
           "timeline": "Timeline view"
