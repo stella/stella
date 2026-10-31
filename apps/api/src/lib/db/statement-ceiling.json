@@ -4,8 +4,8 @@
   "worker": {},
   "scheduler": {
     "reviewOrganization.reset": {
-      "threshold": 979,
-      "reason": "Initial CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests."
+      "threshold": 1030,
+      "reason": "Initial CI census: the complete canonical table sweep, fixture seeding and audit queries plus transaction round trips in both real registered reset tests, with the legal-hold fence and check each matter, item, thread and file deletion takes before it deletes."
     }
   }
 }
