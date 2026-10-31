@@ -38,8 +38,8 @@ use protocol::{
 };
 
 use crate::runner_protocol::{
-  ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject, ReadyHarness,
-  RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
+  ApprovalKind, Harness, HarnessModel, HarnessReport, JsonObject, LimitedHarness,
+  ReadyHarness, RunApproval, RunOutcome, RunRef, RunTokenRefresh, SignedOutHarness,
   UnsupportedHarness,
 };
 
@@ -316,6 +316,13 @@ pub(crate) fn harness_report(
       HarnessReport::NeedsLogin(SignedOutHarness {
         id: harness,
         version: version.clone(),
+      })
+    }
+    ProbeOutcome::LimitUntil { version, resets_at } => {
+      HarnessReport::LimitUntil(LimitedHarness {
+        id: harness,
+        version: version.clone(),
+        resets_at: resets_at.clone(),
       })
     }
     // The runner report carries the refused version only.

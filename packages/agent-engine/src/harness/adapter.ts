@@ -122,12 +122,20 @@ export type HarnessModel = {
   inputModalities: readonly string[];
 };
 
+/** A plan limit the harness reports as exhausted, and when it resets. */
+export type HarnessUsageLimit = { resetsAt: string };
+
 export type HarnessProbe = {
   version: string;
   auth: HarnessAuth;
   models: readonly HarnessModel[];
   /** What this harness and adapter can do, as the runner reports it. */
   capabilities: readonly HarnessCapability[];
+  /**
+   * Set when the harness reports its plan limit exhausted with a known
+   * reset; `null` when it reports none or cannot say when it resets.
+   */
+  usageLimit: HarnessUsageLimit | null;
 };
 
 export class HarnessProbeError extends TaggedError("HarnessProbeError")<{

@@ -291,7 +291,14 @@ const probe = async (
         }),
       );
     }
-    return Result.ok({ version, auth, models, capabilities: capabilities() });
+    return Result.ok({
+      version,
+      auth,
+      models,
+      capabilities: capabilities(),
+      // The probe does not read rate limits; a limited turn reports them.
+      usageLimit: null,
+    });
   })();
   await close(client, options.gracePeriodMs);
   return result;

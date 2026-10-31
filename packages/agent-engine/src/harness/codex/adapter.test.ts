@@ -617,6 +617,7 @@ describe("Codex adapter over a stdio app-server", () => {
         },
       ],
       capabilities: ["approvals", "interrupt", "resume"],
+      usageLimit: null,
     });
     const methods = harness.received().map(({ method }) => method);
     expect(methods).not.toContain("thread/start");
