@@ -55,6 +55,7 @@ describe("workspace update cache invalidation", () => {
       clientId: {
         type: "clientId",
         value: "contact_test",
+        expectedClientId: null,
       },
       color: { type: "color", value: "purple" },
       leadUserId: {
@@ -91,7 +92,16 @@ describe("workspace update cache invalidation", () => {
     const contactId = toSafeId<"contact">("contact_test");
 
     const bodies = [
-      workspaceUpdateBody({ type: "clientId", value: "contact_test" }),
+      workspaceUpdateBody({
+        type: "clientId",
+        value: "contact_test",
+        expectedClientId: null,
+      }),
+      workspaceUpdateBody({
+        type: "clientId",
+        value: "contact_test",
+        expectedClientId: "contact_previous",
+      }),
       workspaceUpdateBody({ type: "color", value: "purple" }),
       workspaceUpdateBody({ type: "color", value: null }),
       workspaceUpdateBody({ type: "leadUserId", value: "user_test" }),
@@ -101,7 +111,11 @@ describe("workspace update cache invalidation", () => {
     ];
 
     expect(bodies).toEqual([
-      { clientId: contactId },
+      { clientId: contactId, expectedClientId: null },
+      {
+        clientId: contactId,
+        expectedClientId: toSafeId<"contact">("contact_previous"),
+      },
       { color: "purple" },
       { color: null },
       { leadUserId: "user_test" },

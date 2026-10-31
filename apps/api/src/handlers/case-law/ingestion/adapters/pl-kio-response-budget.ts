@@ -69,7 +69,16 @@ export const loadPlKioHtml = (
     );
   }
   let allocations = 0;
+  // The budget bounds the DOM the publisher's markup builds. Cheerio keeps
+  // this tree adapter for every later fragment it parses on the document
+  // (`replaceWith(" ")` parses its string), and charging that work too
+  // refused documents whose markup fits: AST validation alone parses one
+  // fragment per `<br>` of a printed page.
+  let parsingPublisherMarkup = true;
   const charge = (count: number) => {
+    if (!parsingPublisherMarkup) {
+      return;
+    }
     allocations += count;
     if (allocations > PL_KIO_HTML_BUDGET.maxDomAllocations) {
       PL_KIO_HTML_BUDGET.reject("KIO HTML exceeds DOM allocation budget");
@@ -122,7 +131,11 @@ export const loadPlKioHtml = (
     },
   } satisfies typeof adapter;
   return Result.try({
-    try: () => cheerio.load(html, { treeAdapter }),
+    try: () => {
+      const document = cheerio.load(html, { treeAdapter });
+      parsingPublisherMarkup = false;
+      return document;
+    },
     catch: (error) => {
       if (error instanceof PlKioHtmlBudgetError) {
         return error;

@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useState } from "react";
+import { type PropsWithChildren, type ReactNode, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -29,6 +29,7 @@ import {
   emptyColor,
   resolveOptionColor,
 } from "@/components/workspaces/property-utils";
+import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type {
@@ -99,12 +100,14 @@ const PropertyCellContent = ({
   if (property.content.type === "file" || fieldContent?.type === "file") {
     return (
       <span className="flex min-w-0 items-center gap-1.5">
-        <CellMetadataFlags
-          entityId={entity.entityId}
-          metadata={cellMetadata}
-          propertyId={property.id}
-          workspaceId={property.workspaceId}
-        />
+        {offersCellReview("file") && (
+          <CellMetadataFlags
+            entityId={entity.entityId}
+            metadata={cellMetadata}
+            propertyId={property.id}
+            workspaceId={property.workspaceId}
+          />
+        )}
         <EditableField
           content={fieldContent}
           displayVariant="table"
@@ -296,16 +299,13 @@ export const PropertyCell = ({
   if (property.tool.type !== "ai-model") {
     return <PropertyCellContent entity={entity} property={property} />;
   }
+  const state = propertyAiCellState(entity.fields[property.id]);
+  let failure: ReactNode;
+  if (content?.type === "error") {
+    failure = <PropertyCellContent entity={entity} property={property} />;
+  }
   return (
-    <AiCell
-      state={propertyAiCellState(content)}
-      preview={preview}
-      failure={
-        content?.type === "error" ? (
-          <PropertyCellContent entity={entity} property={property} />
-        ) : undefined
-      }
-    >
+    <AiCell state={state} preview={preview} failure={failure}>
       <PropertyCellContent entity={entity} property={property} />
     </AiCell>
   );

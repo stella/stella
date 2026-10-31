@@ -3,13 +3,13 @@ import { afterEach, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   czNsFixture,
@@ -27,6 +27,7 @@ import {
   plUodoFixture,
   plUokikFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 type SupportedDriver = {
@@ -35,6 +36,7 @@ type SupportedDriver = {
   part: string;
   file?: string;
   text?: string;
+  textRoot?: string;
 };
 type Driver = SupportedDriver | { driver: "unsupported"; reason: string };
 const DRIVERS = {
@@ -122,6 +124,13 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     part: "document",
     file: "eu-ecj-fulltext-en.html",
   },
+  "uk-fcl": {
+    driver: "xml",
+    fixture: ukFclFixture,
+    textRoot: "header, judgmentBody",
+    part: "document",
+    file: "../parsers/__fixtures__/uk-fcl.xml",
+  },
   "hu-bhgy": {
     driver: "unsupported",
     reason: "Folio DOCX and RTF runs require an AST/byte-level driver.",
@@ -143,6 +152,11 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     fixture: plUokikFixture,
     part: "detail",
     file: "pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
+  },
+  "cz-uohs": {
+    driver: "unsupported",
+    reason:
+      "Decision text is read from stored PDF and office document objects, which require an object-level driver.",
   },
 } as const satisfies Record<string, Driver>;
 const drivers = new Map<string, Driver>(Object.entries(DRIVERS));
@@ -464,12 +478,20 @@ for (const adapter of replayAdapters) {
     const misses: string[] = [];
     for (const [slotIndex, slot] of slots.entries()) {
       const $ = cheerio.load(slot.text, { xml: driver.driver === "xml" });
+      const roots =
+        driver.textRoot === undefined
+          ? $("*")
+          : $(driver.textRoot).find("*").add($(driver.textRoot));
+      expect(
+        roots.length,
+        "The declared text surface must exist",
+      ).toBeGreaterThan(0);
       const containers =
         driver.driver === "json-text"
           ? ["text"]
           : [
               ...new Set(
-                $("*")
+                roots
                   .toArray()
                   .flatMap((node) =>
                     isTag(node) && node.children.length > 0 ? [node.name] : [],
@@ -486,7 +508,11 @@ for (const adapter of replayAdapters) {
         let mutated = `${first} ${slot.text} ${last} ${bare}`;
         if (driver.driver !== "json-text") {
           const dom = cheerio.load(slot.text, { xml: driver.driver === "xml" });
-          const target = dom("*")
+          const candidates =
+            driver.textRoot === undefined
+              ? dom("*")
+              : dom(driver.textRoot).find("*").add(dom(driver.textRoot));
+          const target = candidates
             .filter((_, node) => isTag(node) && node.name === kind)
             .first();
           target.prepend(`<zzprobe>${first}</zzprobe>${bare}`);

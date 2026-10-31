@@ -33,8 +33,8 @@ import {
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { AdapterKey } from "@/api/handlers/case-law/consts";
-import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import type { SourceAdapter } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 // ── Bounds ───────────────────────────────────────────────
@@ -410,6 +410,13 @@ const ADAPTER_CONFORMANCE = {
     disposition: "exercised",
     exhaustedSource: () =>
       jsonResponse({ head: { vars: [] }, results: { bindings: [] } }),
+    maxSteadyStateCursors: 4,
+    maxSteadyStatePositions: 1,
+  },
+  [ADAPTER_KEYS.UK_FCL]: {
+    disposition: "exercised",
+    exhaustedSource: () =>
+      xmlResponse('<feed xmlns="http://www.w3.org/2005/Atom"/>'),
     maxSteadyStateCursors: 4,
     maxSteadyStatePositions: 1,
   },

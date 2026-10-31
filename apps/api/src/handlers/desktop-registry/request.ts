@@ -95,6 +95,7 @@ export const createDesktopRegistryRequestEndpoint = (
               catch: () =>
                 new HandlerError({
                   status: 503,
+                  code: "internal_error",
                   message: "Could not disconnect registry search",
                 }),
             }),
@@ -114,6 +115,7 @@ export const createDesktopRegistryRequestEndpoint = (
               catch: (cause) =>
                 new HandlerError({
                   status: 503,
+                  code: "internal_error",
                   message: "Could not verify desktop account",
                   cause,
                 }),

@@ -3,8 +3,7 @@ import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { sleep } from "@stll/concurrency/sleep";
-import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 import { responseOrderProperty } from "@stll/property-testing/response-order";
 import type { ResponseOrder } from "@stll/property-testing/response-order";
 
@@ -110,16 +109,19 @@ const isPreferences = (
 const installBackend = (order: ResponseOrder) => {
   let snapshot: AppSnapshot = INITIAL_SNAPSHOT;
   const pushes: AppSnapshot[] = [];
+  const pushDeliveries: Promise<void>[] = [];
   const outcomes: SaveOutcome[] = [];
   const unexpected: string[] = [];
   const pushStateChanged = () => {
     pushes.push(snapshot);
-    void order
-      .hold(
-        "state-changed",
-        () => pushes.shift() ?? panic("state-changed delivered twice"),
-      )
-      .then(async (payload) => await emit("state-changed", payload));
+    pushDeliveries.push(
+      order
+        .hold(
+          "state-changed",
+          () => pushes.shift() ?? panic("state-changed delivered twice"),
+        )
+        .then(async (payload) => await emit("state-changed", payload)),
+    );
   };
   mockWindows("main");
   mockIPC(
@@ -157,6 +159,9 @@ const installBackend = (order: ResponseOrder) => {
     { shouldMockEvents: true },
   );
   return {
+    drainPushes: async () => {
+      await Promise.all(pushDeliveries);
+    },
     expectSave: (outcome: SaveOutcome) => {
       outcomes.push(outcome);
     },
@@ -184,61 +189,64 @@ const shownChecked = (container: HTMLElement, key: PreferenceKey) =>
 const flushAct = async (run: () => Promise<void>) => {
   await act(async () => {
     await run();
-    // Continuations of a released reply run a few microtasks after it.
-    await sleep(0);
   });
 };
 
-test(
-  "notification preferences show the backend's newest state in every response order",
-  async () => {
-    await assertProperty(
-      "notification preferences show the backend's newest state in every response order",
-      responseOrderProperty({
-        scenario: steps,
-        act: flushAct,
-        run: async (order, scenario) => {
-          const backend = installBackend(order);
-          const view = render(
-            <DesktopIntlProvider language="en" messages={defaultMessages}>
-              <App />
-            </DesktopIntlProvider>,
-          );
-          try {
-            // Unheld replies (the account read) land inside this act scope.
-            await flushAct(async () => undefined);
-            await order.settle();
-            for (const step of scenario) {
-              switch (step.type) {
-                case "toggle":
-                  backend.expectSave(step.outcome);
+test("notification preferences show the backend's newest state in every response order", async () => {
+  await assertProperty(
+    "notification preferences show the backend's newest state in every response order",
+    responseOrderProperty({
+      scenario: steps,
+      act: flushAct,
+      run: async (order, scenario) => {
+        const backend = installBackend(order);
+        const view = render(
+          <DesktopIntlProvider language="en" messages={defaultMessages}>
+            <App />
+          </DesktopIntlProvider>,
+        );
+        try {
+          // Unheld replies (the account read) land inside this act scope.
+          await flushAct(async () => undefined);
+          await order.settle();
+          for (const step of scenario) {
+            switch (step.type) {
+              case "toggle":
+                backend.expectSave(step.outcome);
+                await flushAct(async () => {
                   fireEvent.click(toggleInput(view.container, step.key));
-                  break;
-                case "release":
-                  await order.releaseOne();
-                  break;
-                default:
-                  step satisfies never;
-              }
+                });
+                // Every click must issue its save before responses are released.
+                expect(backend.unsentSaves()).toBe(0);
+                break;
+              case "release":
+                await order.releaseOne();
+                break;
+              default:
+                step satisfies never;
             }
-            await order.settle();
-            const shown = Object.fromEntries(
-              PREFERENCE_KEYS.map((key) => [
-                key,
-                shownChecked(view.container, key),
-              ]),
-            );
-            expect(backend.unsentSaves()).toBe(0);
-            expect(shown).toEqual(backend.preferences());
-            expect(backend.unexpected).toEqual([]);
-          } finally {
-            view.unmount();
-            clearMocks();
           }
-        },
-      }),
-      { numRuns: 60 },
-    );
-  },
-  propertyTestTimeout(60_000),
-);
+          await order.settle();
+          await flushAct(backend.drainPushes);
+          const shown = Object.fromEntries(
+            PREFERENCE_KEYS.map((key) => [
+              key,
+              shownChecked(view.container, key),
+            ]),
+          );
+          expect(backend.unsentSaves()).toBe(0);
+          expect(shown).toEqual(backend.preferences());
+          expect(backend.unexpected).toEqual([]);
+        } finally {
+          await order.settle();
+          await flushAct(backend.drainPushes);
+          await flushAct(async () => {
+            view.unmount();
+          });
+          clearMocks();
+        }
+      },
+    }),
+    { numRuns: 60 },
+  );
+});

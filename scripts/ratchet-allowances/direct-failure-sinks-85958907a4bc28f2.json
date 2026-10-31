@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/lib/legal-search/corpus-ast.ts",
+  "delta": 2,
+  "reason": "The one shared storage boundary for every parser's document AST reports a reader-schema rejection with its source, parser version and failing checks; the failure-context allowlist cannot carry parser version or check names, so this owner logs and captures directly, once for all AST writers."
+}

@@ -61,8 +61,6 @@ export const BASELINE_PATHS = {
   testSubjectReachability: "scripts/test-subject-reachability-baseline.json",
   /** scripts/sql-perf-baseline.ts */
   sqlPerf: ".oxlint-plugins/sql-perf-baseline.json",
-  /** apps/api/src/tests/query-perf/query-perf.test.ts */
-  queryPerf: "apps/api/src/tests/query-perf/baseline.json",
   /** apps/api/scripts/mcp-coverage-guard.ts */
   mcpCoverage: "apps/api/mcp-coverage-baseline.json",
   /** apps/api/scripts/mcp-surface-baseline.ts */
@@ -84,6 +82,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
   caseLawReadFault:
     "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
+  /** apps/api/scripts/update-structure-fidelity-baseline.ts */
+  caseLawStructureFidelity:
+    "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
   /** apps/api/src/lib/legal-search/parsers/validate-ast-defaults.test.ts */
   validateAstDefaults:
     "apps/api/src/lib/legal-search/parsers/validate-ast-defaults.baseline.json",

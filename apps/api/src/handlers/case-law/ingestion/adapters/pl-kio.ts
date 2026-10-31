@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
 import type * as cheerio from "cheerio";
@@ -21,42 +22,13 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { adapterCatch } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { readPlKioLayout } from "@/api/handlers/case-law/ingestion/parsers/pl-kio-layout";
 import {
   legacyQuarantineHtmlText,
   visibleHtmlText,
@@ -108,7 +80,37 @@ import {
   decisionCourtExceedsStorage,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  RawIngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
@@ -871,12 +873,21 @@ const loadPlKioHtmlForParser = (html: string) => {
     // oxlint-disable-next-line result-boundary/no-throw-outside-boundary -- the shared parser's callback contract returns a CheerioAPI; the enclosing Result.try in assemblePlKioDecision records the rejection via plKioParseError
     throw loaded.error;
   }
+  // The converter's print layout is read back before the parser walks the
+  // document; see pl-kio-layout.ts.
+  readPlKioLayout(loaded.value);
   return loaded.value;
 };
 
-const PL_KIO_PARSER_BOUNDS = {
+/**
+ * How the Polish parser reads this publisher's documents: bounded, through
+ * the layout reader, with `<sup>` and the small-type indices it lifts kept
+ * raised.
+ */
+const PL_KIO_PARSER_OPTIONS = {
   loadHtml: loadPlKioHtmlForParser,
   htmlExpansionBudget: PL_KIO_HTML_BUDGET,
+  superscripts: true,
 } as const;
 
 const plKioDocumentOf = (
@@ -1105,7 +1116,7 @@ export const assemblePlKioDecision = ({
               documentUrl:
                 id === undefined ? undefined : documentUrlOf(id, kind),
               content,
-              ...PL_KIO_PARSER_BOUNDS,
+              ...PL_KIO_PARSER_OPTIONS,
               keywords: itemsOf(
                 detail,
                 "Zagadnienia merytoryczne w odwołaniu z Indeksu tematycznego",

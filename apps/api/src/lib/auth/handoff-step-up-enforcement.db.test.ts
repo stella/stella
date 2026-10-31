@@ -12,6 +12,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import { oauthClient, oauthConsent, session } from "@/api/db/auth-schema";
+import { accountExportsRoute } from "@/api/handlers/account-exports/routes";
 import { agentAuthConfirmRoute } from "@/api/handlers/agent-auth/routes";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { meRoute } from "@/api/handlers/me/routes";
@@ -108,6 +109,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     // The routes as the API serves them: pipeline, access step, handler.
     await using api = serveRoutesForTest([
       ...meRoute,
+      ...accountExportsRoute,
       ...agentAuthConfirmRoute,
       ...apiKeysRoute,
     ]);

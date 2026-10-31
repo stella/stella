@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/case-law/ingestion/removal-reconciliation.ts",
+  "delta": 3,
+  "reason": "Publisher probe failures, typed erasure failures and unexpected item failures are recorded as durable bounded retries and captured with the decision context. Each sink covers a distinct failure boundary while discovery continues."
+}

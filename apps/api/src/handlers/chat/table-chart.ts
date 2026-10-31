@@ -6,6 +6,8 @@ import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -34,6 +36,7 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
   createSafeRootHandler(
     config,
     async function* ({
+      orgAIConfigStatus,
       actionSignal,
       body,
       orgAIConfig,
@@ -45,6 +48,10 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
       session,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const table = v.safeParse(tableChartRequestSchema, body);
       if (!table.success) {
         return yield* Result.err(

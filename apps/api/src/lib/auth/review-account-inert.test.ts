@@ -12,6 +12,7 @@ import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
 import { createReviewAccountPlugin } from "@/api/lib/auth/review-account-plugin";
 import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
@@ -206,6 +207,7 @@ describe("restricted review account, unconfigured", () => {
       ).scopes,
     ).toEqual(scopes);
     const authenticated = await authenticateMcpRequest("credential.fixture", {
+      resolveApiKeySession: resolveMachineApiKeySession,
       verifyToken: async () => ({
         sub: "user_one",
         org_id: "org_any",

@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
@@ -10,7 +11,9 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import { provisionBlocks } from "@stll/legal-ast/provision-preview";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -97,12 +100,16 @@ export const ProvisionWording = ({
     );
   }
 
+  const statuteLists = statuteListSchemeFor(statute.country);
   // The wording is unfolded inside another document's reader, so it names its
   // own publisher rather than inheriting the citing decision's.
   return (
     <SourceLinkPolicyProvider urls={[statute.documentUrl, statute.sourceUrl]}>
       <article
-        className="reader-paper reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-paper reader-statute text-card-foreground text-start",
+        )}
         lang={statute.language}
         ref={containerRef}
         style={READER_STYLE}
@@ -114,6 +121,7 @@ export const ProvisionWording = ({
             block={block}
             key={block.id}
             rangesByPieceId={NO_RANGES}
+            statuteLists={statuteLists}
             variant="statute"
           />
         ))}

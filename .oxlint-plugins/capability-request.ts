@@ -26,6 +26,7 @@
  */
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { CAPABILITY_REQUEST_HEADER } from "../packages/api-contract/src/capability-request.ts";
 import {
   API_CLIENT_CLIENT_EXPORTS,
   API_CLIENT_CLIENT_MODULES,
@@ -192,11 +193,11 @@ const passesRequest = (call: AstNode, request: string): boolean => {
     spread !== -1 &&
     properties
       .slice(spread + 1)
-      .every((property) => !mayReplaceHeaders(property))
+      .every((property) => !mayReplaceHeaders(property, request))
   );
 };
 
-const mayReplaceHeaders = (property: unknown): boolean => {
+const mayReplaceHeaders = (property: unknown, request: string): boolean => {
   if (!isAstNode(property) || property.type !== "Property") {
     return true;
   }
@@ -204,10 +205,55 @@ const mayReplaceHeaders = (property: unknown): boolean => {
     return true;
   }
   const key = property.key;
-  return (
-    !isAstNode(key) ||
-    (key.type === "Identifier" && key.name === "headers") ||
-    (key.type === "Literal" && key.value === "headers")
+  if (!isAstNode(key)) {
+    return true;
+  }
+  if (
+    (key.type !== "Identifier" || key.name !== "headers") &&
+    (key.type !== "Literal" || key.value !== "headers")
+  ) {
+    return false;
+  }
+  const headers = unwrapExpression(property.value);
+  if (
+    headers?.type !== "ObjectExpression" ||
+    !Array.isArray(headers.properties)
+  ) {
+    return true;
+  }
+  // HTTP header names ignore case. Every custom name must be static and
+  // distinct from the declaration before the exact request headers are spread.
+  const custom = headers.properties.slice(0, -1);
+  if (
+    custom.some((header) => {
+      if (
+        !isAstNode(header) ||
+        header.type !== "Property" ||
+        header.computed === true ||
+        header.method === true ||
+        header.kind !== "init"
+      ) {
+        return true;
+      }
+      const name = getPropertyName(header.key);
+      return (
+        name === null ||
+        name.toLowerCase() === CAPABILITY_REQUEST_HEADER.toLowerCase()
+      );
+    })
+  ) {
+    return true;
+  }
+  const final = headers.properties.at(-1);
+  if (!isAstNode(final) || final.type !== "SpreadElement") {
+    return true;
+  }
+  const source = unwrapExpression(final.argument);
+  return !(
+    source?.type === "MemberExpression" &&
+    memberPropertyName(source) === "headers" &&
+    isIdentifierReference(source.object) &&
+    source.object.name === request
   );
 };
 

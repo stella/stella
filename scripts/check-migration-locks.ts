@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -7,8 +7,11 @@ import path from "node:path";
 import { MIGRATION_LOCK_BASELINE } from "./migration-lock-baseline";
 import {
   checkMigrationLocks,
+  MIGRATION_LOCK_ALLOWANCES_PATH,
+  type MigrationLockAllowance,
   migrationLockPairs,
   type MigrationSource,
+  parseMigrationLockAllowances,
 } from "./migration-lock-census";
 import { censusOnlineDdlSource } from "./online-ddl-lock-census";
 
@@ -36,6 +39,31 @@ export const readMigrationLockSources = (): MigrationSource[] =>
       file,
       source: readFileSync(path.join(ROOT, file), "utf-8"),
     }));
+
+export const readMigrationLockAllowances = (): {
+  allowances: MigrationLockAllowance[];
+  errors: string[];
+} => {
+  const allowances: MigrationLockAllowance[] = [];
+  const errors: string[] = [];
+  for (const file of [
+    ...new Bun.Glob(`${MIGRATION_LOCK_ALLOWANCES_PATH}/*`).scanSync(ROOT),
+  ].toSorted()) {
+    const parsed = Result.try({
+      try: (): unknown =>
+        JSON.parse(readFileSync(path.join(ROOT, file), "utf-8")),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(parsed)) {
+      errors.push(`${file}: not valid JSON`);
+      continue;
+    }
+    const result = parseMigrationLockAllowances(file, parsed.value);
+    allowances.push(...result.allowances);
+    errors.push(...result.errors);
+  }
+  return { allowances, errors };
+};
 
 export const historicalLockSources = (revision: string): MigrationSource[] =>
   gitText(["ls-tree", "-r", "--name-only", revision, "apps/api/drizzle"])
@@ -94,10 +122,13 @@ const main = () => {
     }
   }
   const sources = readMigrationLockSources();
+  const allowances = readMigrationLockAllowances();
   const result = checkMigrationLocks({
     sources,
     baseline: MIGRATION_LOCK_BASELINE.entries,
+    allowances: allowances.allowances,
   });
+  result.errors.push(...allowances.errors);
   const baselineFolders = new Set(
     MIGRATION_LOCK_BASELINE.entries.map(({ migration }) => migration),
   );

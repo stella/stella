@@ -66,9 +66,7 @@ export const getPropertyRunTargetIds = ({
       continue;
     }
 
-    const cellState = propertyAiCellState(
-      entity.fields[propertyId]?.content,
-    ).type;
+    const cellState = propertyAiCellState(entity.fields[propertyId]).type;
     if (
       action === "remaining" &&
       cellState !== "not_run" &&

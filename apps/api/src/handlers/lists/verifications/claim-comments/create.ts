@@ -37,6 +37,7 @@ const bodySchema = v.strictObject({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(
     "Claim comments refresh through the claim's own comment query; no listed resource set changes",
   ),
@@ -105,10 +106,10 @@ const createClaimComment = createSafeHandler(
         ...(body.requestId === undefined ? {} : { requestId: body.requestId }),
       },
       organizationId: session.activeOrganizationId,
+      placement: { type: "verification-claim", claimId, runId, workspaceId },
       recordAuditEvent,
       safeDb,
       userId: user.id,
-      verificationClaim: { claimId, runId, workspaceId },
     });
   },
 );
