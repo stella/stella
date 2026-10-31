@@ -6,7 +6,9 @@ import {
   MERGE_GROUP_PR_COVERAGE,
   type PlanScopeOutput,
   PR_COVERAGE_BASELINE,
+  PR_PLAN_COVERAGE_BASELINE,
 } from "./ci-merge-group-pr-coverage";
+import { computeChangedFileScope, DEFAULT_DETECTORS } from "./ci-plan-scope";
 import { type Context, evaluate } from "./github-expression";
 
 const workflowSource = readFileSync(
@@ -129,6 +131,148 @@ test("fixed merge-group jobs reject their former PR-only gaps", () => {
     }
   }
 });
+
+test("ci-browser keeps the successful PR heavy-gate prerequisite", () => {
+  const job = v.parse(
+    v.object({ needs: v.array(v.string()), if: v.string() }),
+    jobs["ci-browser"],
+  );
+  expect(job.needs).toEqual(["ci-plan", "pr-heavy-gate"]);
+  expect(job.if).toContain(
+    "(github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')",
+  );
+});
+
+const REPRESENTATIVE_PLAN_FIXTURES = [
+  ["apps/api/src/server.ts"],
+  ["apps/web/src/app/layout.tsx"],
+  ["apps/desktop/src/mainview/App.tsx"],
+  ["apps/landing/src/pages/index.astro"],
+  ["apps/api/src/db/schema.ts"],
+  ["bun.lock"],
+  [".github/workflows/ci.yml"],
+] as const;
+
+// Each declared plan output contributes a path from its own selector surface;
+// the shared fixtures above retain the cross-scope combinations used by the
+// planner tests rather than reducing this to isolated happy paths.
+const SCOPE_PLAN_FIXTURES = {
+  agent_sandbox_docker_required: "apps/agent-sandbox/Dockerfile",
+  api_image_deps_required: "apps/api/Dockerfile",
+  api_image_smoke_required: "scripts/smoke-api-image.sh",
+  ci_browser_required: "apps/desktop/src/mainview/App.tsx",
+  ci_tests_required: "apps/api/src/server.ts",
+  database_migrations_required: "apps/api/src/db/migrations/meta/_journal.json",
+  dependency_changes_required: "bun.lock",
+  dependency_malware_required: "bun.lock",
+  desktop_rust_checks_required: "apps/desktop/src-tauri/src/lib.rs",
+  desktop_windows_dry_run_required: "apps/desktop/src-tauri/Cargo.toml",
+  docker_checks_required: "apps/api/Dockerfile",
+  e2e_core_required: "apps/web/e2e/core/auth.spec.ts",
+  e2e_landing_required: "apps/web/e2e/landing/home.spec.ts",
+  e2e_production_required: "apps/web/e2e/core/auth.spec.ts",
+  heavy_web_build_required: "apps/web/src/app/layout.tsx",
+  landing_build_required: "apps/landing/src/pages/index.astro",
+  legal_atlas_image_required: "apps/legal-atlas/Dockerfile",
+  marketing_screenshots_required: "apps/landing/src/pages/index.astro",
+  migration_rehearsal_required: "apps/api/src/db/migrations/meta/_journal.json",
+  mobile_build_required: "apps/mobile/app.json",
+  package_checks_required: "packages/ui/src/index.ts",
+  postgres_service_suites_required: "apps/api/src/db/schema.ts",
+  query_perf_required: "apps/api/src/db/schema.ts",
+  release_typecheck_required: "VERSION",
+  route_smoke_required: "apps/api/src/server.ts",
+  run_required: ".github/workflows/ci.yml",
+  scan_engine_wasm_required: "packages/scan-engine/src/lib.rs",
+  service_suites_required: "apps/api/src/server.ts",
+  stack_redaction_browsers_required: "apps/web/e2e/stack-redaction.spec.ts",
+  web_build_pr_required: "apps/web/e2e/production/documents.spec.ts",
+  web_image_smoke_required: "apps/web/Dockerfile",
+  windows_scripts_required: "scripts/windows/setup.ps1",
+} as const;
+
+const PLAN_FIXTURES = [
+  ...REPRESENTATIVE_PLAN_FIXTURES,
+  ...Object.values(SCOPE_PLAN_FIXTURES).map((file) => [file] as const),
+];
+
+const scopePlan = (
+  files: readonly string[],
+  eventName: "pull_request" | "merge_group",
+) =>
+  computeChangedFileScope(
+    {
+      changedFiles: files,
+      comparisonBase: "",
+      scopeUnknown: false,
+      eventName,
+      suiteDepth: eventName === "pull_request" ? "fast" : "full",
+      heavyOnly: false,
+      prTitle: "",
+    },
+    DEFAULT_DETECTORS,
+  );
+
+const rawPlanOutput = (
+  plan: ReturnType<typeof scopePlan>,
+  output: PlanScopeOutput,
+) => {
+  if (output === "run_required") {
+    return true;
+  }
+  if (output === "ci_browser_required") {
+    return (
+      plan.package_checks_required === "true" &&
+      plan.ci_browser_scope_required === "true" &&
+      plan.desktop_browser_required === "true"
+    );
+  }
+  if (output === "web_build_pr_required") {
+    return plan.web_build_required === "true";
+  }
+  if (output === "heavy_web_build_required") {
+    return false;
+  }
+  if (
+    output === "ci_tests_required" ||
+    output === "query_perf_required" ||
+    output === "service_suites_required"
+  ) {
+    return plan.package_checks_required === "true";
+  }
+  if (output === "postgres_service_suites_required") {
+    return plan.postgres_suites_required === "true";
+  }
+  if (output === "marketing_screenshots_required") {
+    return plan.landing_build_required === "true";
+  }
+  return plan[output] === "true";
+};
+
+// timeout: repository-backed selectors scan package and import graphs for both plans.
+test("fast PR plans cover every full merge-group job scope", () => {
+  const fixturePlans = PLAN_FIXTURES.map((files) => ({
+    mergeGroup: scopePlan(files, "merge_group"),
+    pullRequest: scopePlan(files, "pull_request"),
+  }));
+  const violations = Object.entries(MERGE_GROUP_PR_COVERAGE).flatMap(
+    ([name, coverage]) => {
+      if (coverage.type !== "runs-on-pr") {
+        return [];
+      }
+      expect(SCOPE_PLAN_FIXTURES, name).toHaveProperty(coverage.scopeOutput);
+      const uncovered = fixturePlans.some(
+        ({ mergeGroup, pullRequest }) =>
+          rawPlanOutput(mergeGroup, coverage.scopeOutput) &&
+          !rawPlanOutput(pullRequest, coverage.scopeOutput),
+      );
+      return uncovered ? [name] : [];
+    },
+  );
+  expect(violations.toSorted()).toEqual(
+    [...PR_PLAN_COVERAGE_BASELINE].toSorted(),
+  );
+}, 15_000);
 
 test("i18n PR coverage records current-base input drift", () => {
   expect(MERGE_GROUP_PR_COVERAGE["ci-checks-rest"]).toEqual({

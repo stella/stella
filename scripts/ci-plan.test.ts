@@ -5273,6 +5273,7 @@ test("only the dedicated malware gate activates Safe Chain and keeps Bun package
 test("every browser suite runs on its required matrix legs, the playground on every shard leg", () => {
   const browser = v.parse(
     v.object({
+      needs: v.array(v.string()),
       strategy: v.object({
         "fail-fast": v.literal(false),
         matrix: v.object({ include: v.string() }),
@@ -5287,6 +5288,7 @@ test("every browser suite runs on its required matrix legs, the playground on ev
     }),
     ciJobs["ci-browser"],
   );
+  expect(browser.needs).toEqual(["ci-plan", "pr-heavy-gate"]);
   expect(browser.strategy.matrix.include).toBe(
     ["$", "{{ fromJSON(needs.ci-plan.outputs.ui_playground_matrix) }}"].join(
       "",
@@ -8969,6 +8971,7 @@ test("only the resolver chooses a run's comparison base", () => {
 
 // The jobs that wait on pr-heavy-gate directly; the rest wait through them.
 const GATED_HEAVY_ROOTS = [
+  "ci-browser",
   "ci-tests",
   "e2e-landing",
   "postgres-service-suites",
@@ -8979,6 +8982,7 @@ const GATED_HEAVY_ROOTS = [
 test("the planner derives the PR heavy jobs from everything waiting on the gate", () => {
   expect(PR_HEAVY_JOBS).toEqual([
     "api-test-durations",
+    "ci-browser",
     "ci-tests",
     "e2e-landing",
     "e2e-production-shard",

@@ -159,3 +159,12 @@ export const PR_COVERAGE_BASELINE = [
   "windows-scripts",
   "ci-quick-checks",
 ] as const satisfies readonly MergeGroupJob[];
+
+// Full-depth merge-group selection can still be broader than fast PR
+// selection even when the workflow job itself is PR-reachable. Keep that
+// planner mismatch independently shrink-only so fixing an entry must update
+// the census rather than silently weakening the comparison.
+export const PR_PLAN_COVERAGE_BASELINE = [
+  "e2e-production-shard",
+  "postgres-service-suites",
+] as const satisfies readonly MergeGroupJob[];

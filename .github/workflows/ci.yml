@@ -3316,11 +3316,12 @@ jobs:
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
   ci-browser:
-    needs: [ci-plan]
+    needs: [ci-plan, pr-heavy-gate]
     if: >-
       needs.ci-plan.outputs.run_required != 'false'
       && !cancelled()
       && needs.ci-plan.result == 'success'
+      && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
       && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-24.04
