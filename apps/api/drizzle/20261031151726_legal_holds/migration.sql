@@ -30,7 +30,7 @@ CREATE POLICY "legal_holds_owner_access" ON "legal_holds" AS PERMISSIVE FOR ALL 
 CREATE FUNCTION "legal_hold_delete_backstop"() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
   IF TG_TABLE_NAME = 'workspaces' THEN
