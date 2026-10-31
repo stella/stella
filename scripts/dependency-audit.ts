@@ -61,7 +61,11 @@ import {
   readReleaseAgePolicy,
   readReleaseAgeReleases,
 } from "./dependency-audit-assessment";
-import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
+import {
+  type DependencyAuditRemediationPlan,
+  updatedResolutionEntries,
+  verifyDependencyAuditRemediation,
+} from "./dependency-audit-remediation";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -427,21 +431,19 @@ const saveBaseline = async (
   await Bun.write(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
 };
 
-const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
-  const assessments = await assessCurrent(advisories);
-  const plan = planDependencyAuditRemediation({ assessments, now: new Date() });
+const applyRemediationProposal = async (
+  plan: DependencyAuditRemediationPlan,
+): Promise<void> => {
   const manifestPath = path.resolve(REPO_ROOT, "package.json");
   const manifest: unknown = await Bun.file(manifestPath).json();
   if (!isRecord(manifest)) {
     panic("Dependency remediation requires a package.json object");
   }
   const currentResolutions = manifest["resolutions"];
-  const resolutions = isRecord(currentResolutions)
-    ? { ...currentResolutions }
-    : {};
-  for (const [name, version] of plan.pins) {
-    resolutions[name] = version;
-  }
+  const resolutions = updatedResolutionEntries(
+    isRecord(currentResolutions) ? currentResolutions : {},
+    plan.pins,
+  );
   if (plan.pins.size > 0) {
     await Bun.write(
       manifestPath,
@@ -463,6 +465,56 @@ const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
     }
     await Bun.write(bunfigPath, bunfig);
   }
+};
+
+const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
+  const assessments = await assessCurrent(advisories);
+  const transactionPaths = [
+    path.resolve(REPO_ROOT, "package.json"),
+    path.resolve(REPO_ROOT, "bunfig.toml"),
+    path.resolve(REPO_ROOT, "bun.lock"),
+  ];
+  const plan = await verifyDependencyAuditRemediation({
+    assessments,
+    now: new Date(),
+    resolve: async (proposal) => {
+      const snapshot = await Promise.all(
+        transactionPaths.map(
+          async (file) => [file, await Bun.file(file).text()] as const,
+        ),
+      );
+      const revert = async (): Promise<void> => {
+        await Promise.all(
+          snapshot.map(async ([file, contents]) => Bun.write(file, contents)),
+        );
+      };
+      try {
+        await applyRemediationProposal(proposal);
+        const process = Bun.spawn(
+          ["bun", "--no-env-file", "install", "--lockfile-only"],
+          {
+            cwd: REPO_ROOT,
+            stdout: "inherit",
+            stderr: "inherit",
+          },
+        );
+        const exitCode = await process.exited;
+        if (exitCode !== 0) {
+          throw new AuditCommandError(
+            `bun install --lockfile-only failed with exit code ${exitCode}`,
+          );
+        }
+        const current = await collectGatedAdvisories();
+        return {
+          assessments: current.length === 0 ? [] : await assessCurrent(current),
+          revert,
+        };
+      } catch (error) {
+        await revert();
+        throw error;
+      }
+    },
+  });
 
   if (plan.acceptanceDrafts.length > 0) {
     const baseline = await readBaseline();

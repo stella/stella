@@ -16,6 +16,33 @@ export type DependencyAuditRemediationPlan = {
   acceptanceDrafts: readonly BaselineEntry[];
 };
 
+type ResolvedRemediation = {
+  assessments: readonly AdvisoryAssessment[];
+  revert: () => Promise<void>;
+};
+
+type VerifyRemediationOptions = PlanRemediationOptions & {
+  resolve: (
+    plan: DependencyAuditRemediationPlan,
+  ) => Promise<ResolvedRemediation>;
+};
+
+const isPackageWideResolution = (name: string): boolean =>
+  name.startsWith("@") ? name.split("/").length === 2 : !name.includes("/");
+
+export const updatedResolutionEntries = (
+  current: Readonly<Record<string, unknown>>,
+  pins: ReadonlyMap<string, string>,
+): Record<string, unknown> => {
+  const packageWide = [...pins.keys()].filter(isPackageWideResolution);
+  return Object.fromEntries([
+    ...Object.entries(current).filter(([existing]) =>
+      packageWide.every((name) => !existing.endsWith(`/${name}`)),
+    ),
+    ...pins,
+  ]);
+};
+
 type PlanRemediationOptions = {
   assessments: readonly AdvisoryAssessment[];
   now: Date;
@@ -138,7 +165,7 @@ export const planDependencyAuditRemediation = ({
       );
       const resolutionPaths = new Map(
         group.flatMap(({ resolutionPaths: assessmentPaths }) =>
-          assessmentPaths.map((path) => [path.resolution, path] as const),
+          assessmentPaths.map((path) => [path.copyPath, path] as const),
         ),
       );
       const everyCopyIsVulnerable = [...copies].every(([path]) =>
@@ -192,6 +219,64 @@ export const planDependencyAuditRemediation = ({
         acceptanceDrafts.push(acceptanceDraft(assessment, now));
       }
     }
+  }
+
+  return { pins, quarantineExclusions, acceptanceDrafts };
+};
+
+const advisoryKey = ({ advisory }: AdvisoryAssessment): string =>
+  `${advisory.id}/${advisory.package}`;
+
+/**
+ * Lets Bun decide whether each package-level proposal is valid. The resolver
+ * owns the filesystem transaction and supplies a rollback for a rejected
+ * proposal; process and registry failures reject instead of becoming drafts.
+ */
+export const verifyDependencyAuditRemediation = async ({
+  assessments,
+  now,
+  resolve,
+}: VerifyRemediationOptions): Promise<DependencyAuditRemediationPlan> => {
+  const pins = new Map<string, string>();
+  const quarantineExclusions: DependencyAuditRemediationPlan["quarantineExclusions"][number][] =
+    [];
+  const acceptanceDrafts: BaselineEntry[] = [];
+  const initial = new Set(assessments.map(advisoryKey));
+
+  for (const group of Map.groupBy(
+    assessments,
+    ({ advisory }) => advisory.package,
+  ).values()) {
+    const proposal = planDependencyAuditRemediation({
+      assessments: group,
+      now,
+    });
+    if (proposal.pins.size === 0) {
+      acceptanceDrafts.push(...proposal.acceptanceDrafts);
+      continue;
+    }
+
+    const resolved = await resolve(proposal);
+    const remaining = new Set(resolved.assessments.map(advisoryKey));
+    const targets = new Set(group.map(advisoryKey));
+    const targetRemains = [...targets].some((key) => remaining.has(key));
+    const introducedAdvisory = [...remaining].some((key) => !initial.has(key));
+    if (targetRemains || introducedAdvisory) {
+      await resolved.revert();
+      acceptanceDrafts.push(
+        ...group.flatMap((assessment) =>
+          assessment.acceptance === undefined
+            ? [acceptanceDraft(assessment, now)]
+            : [],
+        ),
+      );
+      continue;
+    }
+
+    for (const [name, version] of proposal.pins) {
+      pins.set(name, version);
+    }
+    quarantineExclusions.push(...proposal.quarantineExclusions);
   }
 
   return { pins, quarantineExclusions, acceptanceDrafts };

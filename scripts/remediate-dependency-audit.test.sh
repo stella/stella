@@ -23,6 +23,10 @@ if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --assess" ]]; then
   exit "${TEST_ASSESS_STATUS:-0}"
 fi
 if [[ "$*" == "--no-env-file scripts/dependency-audit.ts --prepare-remediation" ]]; then
+  if [[ "${TEST_RESOLVER_ERROR:-false}" == true ]]; then
+    echo 'registry unavailable' >&2
+    exit 3
+  fi
   if [[ "${TEST_FIX_AVAILABLE:-false}" == true ]]; then
     echo pinned > package.json
   fi
@@ -93,9 +97,17 @@ for scenario in TEST_FIX_AVAILABLE TEST_QUARANTINED TEST_UPSTREAM_BLOCKED TEST_S
   : > "$GITHUB_OUTPUT"
   env "$scenario=true" TEST_OPEN_PRS=1 bash "$subject"
   grep -q '^changed=true$' "$GITHUB_OUTPUT"
-  [[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 4 ]]
+  [[ "$(grep -Ec '^bun ' "$TEST_CALLS")" == 3 ]]
   refute_call '^gh pr list |^gh pr create |^git push '
   [[ "$(git rev-parse HEAD)" == "$initial_sha" ]]
 done
+git restore bun.lock bunfig.toml scripts/dependency-audit-baseline.json package.json apps/web/package.json
+: > "$TEST_CALLS"
+: > "$GITHUB_OUTPUT"
+if TEST_RESOLVER_ERROR=true bash "$subject"; then
+  echo 'A resolver failure must stop remediation.' >&2
+  exit 1
+fi
+refute_call '^bun .* --prune-baseline$|^git push |^gh pr create '
 [[ "$(cat scripts/dependency-audit-baseline.json)" == baseline || "$(cat scripts/dependency-audit-baseline.json)" == pruned ]]
 echo 'ok  remediation refreshes existing branches and plans every disposition'

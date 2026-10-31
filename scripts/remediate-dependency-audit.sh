@@ -15,7 +15,6 @@ fi
 # remediation pull request. The publishing action refreshes that branch when
 # the pull request already exists, so preparation must never refuse a retry.
 bun --no-env-file scripts/dependency-audit.ts --prepare-remediation
-bun --no-env-file install --lockfile-only
 # Runs after the fix so acceptances it resolved are removed in the same pull
 # request; pruning only removes entries, so it never accepts an advisory.
 bun --no-env-file scripts/dependency-audit.ts --prune-baseline

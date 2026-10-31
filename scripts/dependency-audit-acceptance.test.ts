@@ -26,7 +26,11 @@ import {
   patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
 import type { AdvisoryAssessment } from "./dependency-audit-assessment";
-import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
+import {
+  planDependencyAuditRemediation,
+  updatedResolutionEntries,
+  verifyDependencyAuditRemediation,
+} from "./dependency-audit-remediation";
 
 const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
@@ -217,6 +221,102 @@ describe("remediation selects one complete package fix", () => {
       "GHSA-1111-1111-1111",
       "GHSA-2222-2222-2222",
     ]);
+  });
+});
+
+describe("remediation verifies the resolver result", () => {
+  const now = new Date("2026-10-31T12:00:00.000Z");
+  const assessment: AdvisoryAssessment = {
+    advisory: currentAdvisory,
+    disposition: {
+      status: "fix_available",
+      installableVersions: ["1.4.1"],
+      quarantinedVersions: [],
+    },
+    acceptance: undefined,
+    affectedPaths: ["parent/example"],
+    copies: [
+      { path: "parent/example", version: "1.4.0" },
+      { path: "parent@2/example", version: "2.0.0" },
+    ],
+    resolutionPaths: [
+      {
+        copyPath: "parent/example",
+        resolution: "parent/example",
+        requirement: "^1.0.0",
+      },
+      {
+        copyPath: "parent@2/example",
+        resolution: "parent/example",
+        requirement: "^2.0.0",
+      },
+    ],
+    action: "test action",
+  };
+
+  test("two parent versions fall back to a draft when Bun keeps the vulnerable copy", async () => {
+    let reverted = false;
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [assessment],
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts.map(({ id }) => id)).toEqual([
+      currentAdvisory.id,
+    ]);
+  });
+
+  test("a verified package-wide fix replaces a vulnerable scoped pin", async () => {
+    let resolutions: Record<string, unknown> = {
+      "parent/pkg": "1.4.0",
+      unrelated: "3.0.0",
+    };
+    const packageAssessment = {
+      ...assessment,
+      advisory: { ...currentAdvisory, package: "pkg" },
+      affectedPaths: ["pkg"],
+      copies: [{ path: "pkg", version: "1.4.0" }],
+      resolutionPaths: [],
+    } satisfies AdvisoryAssessment;
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [packageAssessment],
+      now,
+      resolve: async (proposal) => {
+        resolutions = updatedResolutionEntries(resolutions, proposal.pins);
+        const patchedVersionSelected =
+          resolutions["pkg"] === "1.4.1" &&
+          resolutions["parent/pkg"] === undefined;
+        return {
+          assessments: patchedVersionSelected ? [] : [packageAssessment],
+          revert: async () => {},
+        };
+      },
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.4.1"]]);
+    expect(resolutions).toEqual({ pkg: "1.4.1", unrelated: "3.0.0" });
+  });
+
+  test("a resolver error is propagated instead of becoming a draft", async () => {
+    expect(
+      await rejectionOf(
+        verifyDependencyAuditRemediation({
+          assessments: [assessment],
+          now,
+          resolve: async () => {
+            throw new TypeError("registry unavailable");
+          },
+        }),
+      ),
+    ).toMatchObject({ message: "registry unavailable" });
   });
 });
 
