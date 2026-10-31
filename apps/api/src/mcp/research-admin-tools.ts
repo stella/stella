@@ -155,7 +155,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
         v.pipe(
           v.picklist(Object.values(AUDIT_PERFORMER_FILTER)),
           v.description(
-            "Only entries performed by people (members and their agents), or only by automations (background services)",
+            "people (members and their agents) or automations (services)",
           ),
         ),
       ),
@@ -212,11 +212,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Read the organization's audit trail (compliance view). Returns audit " +
     "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. Filter by matter_id, " +
-    "action, resource_type (with optional resource_id), user_id, performer " +
-    "(people or automations), and a created-at range (from/to, ISO " +
-    "date-time). Paginate with limit and " +
-    "cursor. Requires organization audit-log access.",
+    "user id, matter, timestamp, and change detail. Filters: matter_id, " +
+    "action, resource_type, resource_id, user_id, performer, from/to; " +
+    "paginate with limit and cursor. Requires organization audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
