@@ -1960,6 +1960,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -4647,6 +4648,15 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
+          "error",
+      },
+    },
+    {
+      files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
       ],
@@ -5545,6 +5555,14 @@ const config = defineConfig({
       ],
       excludeFiles: ["**/*.test.ts"],
       rules: { "no-source-raw-projection/no-source-raw-projection": "error" },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
+          "error",
+      },
     },
     {
       // A publisher is not a court: every decision portal these adapters read
