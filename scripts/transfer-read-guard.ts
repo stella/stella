@@ -339,6 +339,9 @@ class TransferReadInspector {
     ) {
       parent = this.parentOf(parent);
     }
+    if (parent.type === "AssignmentPattern") {
+      return this.textOf(parent.left);
+    }
     if (parent.type === "VariableDeclarator") {
       return this.textOf(parent.id);
     }
@@ -837,6 +840,7 @@ class TransferReadInspector {
     const parent = this.parentOf(node);
     return (
       parent.type === "VariableDeclarator" ||
+      parent.type === "AssignmentPattern" ||
       parent.type === "MethodDefinition" ||
       (parent.type === "Property" && parent.method)
     );
