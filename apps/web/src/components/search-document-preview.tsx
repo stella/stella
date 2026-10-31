@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -50,19 +50,15 @@ export const SearchDocumentPreview = ({
       summary.count === 0 ? 0 : Math.min(current, summary.count - 1),
     );
   };
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const navigateSearchMatches = useCallback(
-    (direction: "next" | "previous") => {
-      setActiveSearchMatchIndex((current) =>
-        getAdjacentSearchMatchIndex({
-          activeIndex: current,
-          direction,
-          matchCount: searchMatchSummary.count,
-        }),
-      );
-    },
-    [searchMatchSummary.count],
-  );
+  const navigateSearchMatches = (direction: "next" | "previous") => {
+    setActiveSearchMatchIndex((current) =>
+      getAdjacentSearchMatchIndex({
+        activeIndex: current,
+        direction,
+        matchCount: searchMatchSummary.count,
+      }),
+    );
+  };
   const handlePreviewError = () => {
     setActiveSearchMatchIndex(0);
     setSearchMatchSummary({ count: 0, truncated: false });

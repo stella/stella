@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   useMutation,
@@ -335,8 +335,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
   const weekStart = getWeekStart(locale, Temporal.PlainDate.from(today));
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
+  const weekEnd = weekStart.add({ days: 6 });
 
   const timeSummaryView = queryView(
     useQuery({
@@ -367,11 +366,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const prevWeekStart = useMemo(
-    () => weekStart.subtract({ days: 7 }),
-    [weekStart],
-  );
+  const prevWeekStart = weekStart.subtract({ days: 7 });
   const prevWeekEnd = weekStart.subtract({ days: 1 });
 
   const previousTimeSummaryView = queryView(
@@ -402,8 +397,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           : currentTimeView.items.totalMinutes) / 60
       : null;
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const teamHeatmap = useMemo(() => {
+  const teamHeatmap = (() => {
     if (!teamTimeSummary) {
       return [];
     }
@@ -422,7 +416,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         daily,
       };
     });
-  }, [teamTimeSummary, firstWeekday]);
+  })();
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 

@@ -504,7 +504,7 @@ const PeekDocxViewer = ({
   const searchTextKey =
     searchText === undefined ? undefined : searchTextQueryKey(searchText);
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- useExternalSyncEffect requires a stable search-highlight callback dependency
   const highlightSearchResult = useCallback(() => {
     if (searchText === undefined) {
       return true;
@@ -567,7 +567,7 @@ const PeekDocxViewer = ({
     searchTextKey,
   ]);
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- useExternalSyncEffect requires a stable search-highlight callback dependency
   const scheduleSearchHighlight = useCallback(() => {
     if (searchHighlightFrameRef.current !== null) {
       cancelAnimationFrame(searchHighlightFrameRef.current);

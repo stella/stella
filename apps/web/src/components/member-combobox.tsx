@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -151,8 +151,7 @@ export const MemberCombobox = ({
 
   // Base UI copies `items` into its own state whenever the prop's identity
   // changes, so the list is rebuilt only when its inputs change.
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const items = useMemo(() => {
+  const items = (() => {
     const compareNames = compareByLocale(locale);
     const memberItems = members
       .map((member): MemberComboboxItem => ({
@@ -171,7 +170,7 @@ export const MemberCombobox = ({
       label: noneLabel,
     };
     return [none, ...memberItems];
-  }, [locale, members, noneLabel, unknownUser]);
+  })();
 
   const selected = ((): MemberComboboxItem | null => {
     if (value === null) {

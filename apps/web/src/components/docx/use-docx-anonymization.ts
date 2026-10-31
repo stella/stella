@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
@@ -59,8 +59,7 @@ export const useDocxAnonymizationHighlights = ({
     anonymizationTermsQueryView,
     "useDocxAnonymizationHighlights:query",
   );
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
+  const workspaceAnonymizationTerms = (() => {
     if (!anonymizationTermsQuery.data) {
       return [];
     }
@@ -71,7 +70,7 @@ export const useDocxAnonymizationHighlights = ({
         label: entry.label,
         variants: entry.variants,
       }));
-  }, [anonymizationTermsQuery.data]);
+  })();
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
   // entity as a Folio decoration term. Combined with workspace

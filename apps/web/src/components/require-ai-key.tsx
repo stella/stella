@@ -1,5 +1,5 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
@@ -117,8 +117,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
-  const openAIKeyDialog = useCallback(() => {
+  const openAIKeyDialog = () => {
     if (
       dataQuery.status === "success" &&
       data?.providerConfiguration === "allowed" &&
@@ -126,9 +125,8 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status]);
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
-  const ensureAIAvailable = useCallback(async () => {
+  };
+  const ensureAIAvailable = async () => {
     const availability = await queryClient
       .query({
         ...availabilityOptions,
@@ -184,10 +182,9 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       type: "info",
     });
     return false;
-  }, [availabilityOptions, dataQuery.status, queryClient, t]);
+  };
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
-  const openIfAIUnavailable = useCallback(() => {
+  const openIfAIUnavailable = () => {
     if (
       dataQuery.status === "success" &&
       data &&
@@ -198,7 +195,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     ) {
       setOpen(true);
     }
-  }, [data, dataQuery.status, isFetching]);
+  };
   let aiUnavailable: AIUnavailableState | null = null;
   if (
     dataQuery.status === "error" ||
@@ -242,16 +239,12 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     availability = "available";
   }
 
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const value = useMemo(
-    () => ({
-      availability,
-      ensureAIAvailable,
-      openAIKeyDialog,
-      openIfAIUnavailable,
-    }),
-    [availability, ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
-  );
+  const value = {
+    availability,
+    ensureAIAvailable,
+    openAIKeyDialog,
+    openIfAIUnavailable,
+  };
 
   return (
     <AIAvailabilityContext value={value}>

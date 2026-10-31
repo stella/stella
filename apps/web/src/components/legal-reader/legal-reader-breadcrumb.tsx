@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { panic } from "better-result";
 
@@ -38,8 +38,7 @@ export const LegalReaderBreadcrumb = ({
   analysis,
   viewport,
 }: LegalReaderBreadcrumbProps) => {
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const headings = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
+  const headings = readerBreadcrumbPaths(blocks);
   const contents = readerContents({
     anchorOrder: blocks.map(({ anchorId }) => anchorId),
     headings,

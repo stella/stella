@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
@@ -150,17 +150,14 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
-  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
-  const unavailableNativeToolBackendSlugs = useMemo<
-    ReadonlySet<string> | undefined
-  >(() => {
+  const unavailableNativeToolBackendSlugs = (() => {
     if (!nativeToolDeployAvailability) {
       return undefined;
     }
     return new Set(
       nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
     );
-  }, [nativeToolDeployAvailability]);
+  })();
   const onboardingCatalogueEntries = loadCatalogue().filter((entry) =>
     isCatalogueEntryAvailableDuringOnboarding(entry, {
       unavailableNativeToolBackendSlugs,
