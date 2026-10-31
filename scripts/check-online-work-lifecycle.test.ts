@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { ONLINE_WORK_DEPENDENCIES } from "../apps/api/src/db/online-migrations";
+import { ONLINE_WORK_LIFECYCLE } from "../apps/api/src/db/online-work-lifecycle";
 import {
   checkOnlineWorkLifecycle,
   findMigrateScriptsWithoutMode,
@@ -115,6 +117,47 @@ describe("online work prerequisites", () => {
     ).toEqual([
       "tenant_key_repair: is FINALIZED but depends on tenant_key_idx, which is unregistered; register the prerequisite DEPLOY_BLOCKING or FINALIZED first",
     ]);
+  });
+
+  test("a dependent the lifecycle does not register fails", () => {
+    expect(
+      findUnreadyPrerequisites(
+        lifecycleOf({ tenant_key_idx: "finalized" }),
+        dependencies,
+      ),
+    ).toEqual([
+      "tenant_key_repair: declares prerequisites but has no lifecycle entry",
+    ]);
+  });
+
+  // The registry the check runs against passes, and the same registry with
+  // one dependent finalized ahead of its pending prerequisite does not.
+  test("the registered lifecycle passes, and finalizing a dependent early fails", () => {
+    expect(
+      findUnreadyPrerequisites(ONLINE_WORK_LIFECYCLE, ONLINE_WORK_DEPENDENCIES),
+    ).toEqual([]);
+    const pendingDependents = [...ONLINE_WORK_DEPENDENCIES].flatMap(
+      ([name, prerequisites]) => {
+        const pendingPrerequisite = prerequisites.find(
+          (prerequisite) =>
+            ONLINE_WORK_LIFECYCLE[prerequisite].state === "pending",
+        );
+        return pendingPrerequisite === undefined
+          ? []
+          : [{ name, prerequisite: pendingPrerequisite }];
+      },
+    );
+    expect(pendingDependents.length).toBeGreaterThan(0);
+    for (const { name, prerequisite } of pendingDependents) {
+      expect(
+        findUnreadyPrerequisites(
+          { ...ONLINE_WORK_LIFECYCLE, [name]: { state: "finalized" } },
+          ONLINE_WORK_DEPENDENCIES,
+        ),
+      ).toContain(
+        `${name}: is FINALIZED but depends on ${prerequisite}, which is PENDING; register the prerequisite DEPLOY_BLOCKING or FINALIZED first`,
+      );
+    }
   });
 });
 
