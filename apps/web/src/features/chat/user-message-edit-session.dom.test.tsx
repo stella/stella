@@ -332,7 +332,7 @@ describe("an edit the server does not accept", () => {
 
       expect(await editNotice(page)).toBe(notice);
       await testing.waitFor(() => {
-        expect(shownMessages(page)).toEqual(storedAfterRefusal);
+        expect(shownMessages(page)).toEqual([...storedAfterRefusal]);
       });
       expect(editField(page)?.textContent).toBe("Second question again");
       expect(page.session().error).toBeUndefined();
@@ -356,7 +356,7 @@ describe("an edit the server does not accept", () => {
       translations.chat.sendErrorConnectionFailed,
     );
     await testing.waitFor(() => {
-      expect(shownMessages(page)).toEqual(STORED);
+      expect(shownMessages(page)).toEqual([...STORED]);
     });
     expect(editField(page)?.textContent).toBe("Second question again");
     expect(server.unexpected).toEqual([]);

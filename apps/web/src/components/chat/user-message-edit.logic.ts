@@ -16,6 +16,7 @@ import type { ChatRequestError } from "@/features/chat/chat-request-error";
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";
 import type { TranslationKey } from "@/i18n/types";
 import { STATUS_ERROR_KEYS, STATUS_TO_KEY } from "@/lib/errors/localization";
+import type { StatusErrorKey } from "@/lib/errors/localization";
 import { toSafeId } from "@/lib/safe-id";
 
 export type UserMessageEditAttachmentPart =
@@ -68,37 +69,49 @@ export type UserMessageEditFailure = Exclude<
   { type: "accepted" }
 >;
 
-const editRefusalNoticeKey = (
-  code: ChatMessageEditErrorCode,
-): TranslationKey => {
-  switch (code) {
-    case CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning:
-      return "chat.editMessageRefused";
-    case CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged:
-      return "chat.editMessageRefusedHistoryChanged";
-    case CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing:
-    case CHAT_MESSAGE_EDIT_ERROR_CODE.targetNotUserMessage:
-      return "chat.editMessageRefusedTargetMissing";
-  }
-};
+/** The notice for each code the server refuses an edit with. */
+const EDIT_REFUSAL_NOTICE_KEYS = {
+  [CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged]:
+    "chat.editMessageRefusedHistoryChanged",
+  [CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing]:
+    "chat.editMessageRefusedTargetMissing",
+  [CHAT_MESSAGE_EDIT_ERROR_CODE.targetNotUserMessage]:
+    "chat.editMessageRefusedTargetMissing",
+  [CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning]: "chat.editMessageRefused",
+} as const satisfies Record<ChatMessageEditErrorCode, TranslationKey>;
+
+type UserMessageEditNoticeKey =
+  | (typeof EDIT_REFUSAL_NOTICE_KEYS)[ChatMessageEditErrorCode]
+  | StatusErrorKey
+  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]]
+  | "chat.editMessageAiUnavailable"
+  | "chat.sendError";
 
 /** What the open edit form tells the user about an edit that was not
- *  accepted. */
+ *  accepted: one notice for every outcome, decided by an exhaustive
+ *  switch. */
 export const userMessageEditNoticeKey = (
   failure: UserMessageEditFailure,
-): TranslationKey => {
+): UserMessageEditNoticeKey => {
+  let key: UserMessageEditNoticeKey;
   switch (failure.type) {
     case "edit-refused":
-      return editRefusalNoticeKey(failure.code);
+      key = EDIT_REFUSAL_NOTICE_KEYS[failure.code];
+      break;
     case "request-refused":
-      return STATUS_TO_KEY[failure.status] ?? STATUS_ERROR_KEYS.unknown;
+      key = STATUS_TO_KEY[failure.status] ?? STATUS_ERROR_KEYS.unknown;
+      break;
     case "ai-unavailable":
-      return "chat.editMessageAiUnavailable";
+      key = "chat.editMessageAiUnavailable";
+      break;
     case "request-failed":
-      return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[failure.kind];
+      key = CHAT_REQUEST_ERROR_TRANSLATION_KEYS[failure.kind];
+      break;
     case "failed":
-      return "chat.sendError";
+      key = "chat.sendError";
+      break;
   }
+  return key;
 };
 
 const isEditAttachmentPart = (

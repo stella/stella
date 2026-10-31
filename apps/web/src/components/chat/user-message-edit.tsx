@@ -369,6 +369,18 @@ export const useUserMessageEdit = ({
   }
 
   if (draft !== null) {
+    const submitEdit = async (
+      edit: UserMessageEdit,
+    ): Promise<UserMessageEditOutcome> => {
+      const outcome = await actions.onSubmit(message.id, edit);
+      // The sent copy takes this message's id and place once the server
+      // accepted it; until then, and after any refusal, the form stays open
+      // on the draft.
+      if (outcome.type === "accepted") {
+        setDraft(null);
+      }
+      return outcome;
+    };
     return {
       editing: true,
       editor: (
@@ -379,16 +391,7 @@ export const useUserMessageEdit = ({
             setDraft(null);
           }}
           onHold={() => actions.holdQueue(message.id)}
-          onSubmit={async (edit) => {
-            const outcome = await actions.onSubmit(message.id, edit);
-            // The sent copy takes this message's id and place once the
-            // server accepted it; until then, and after any refusal, the
-            // form stays open on the draft.
-            if (outcome.type === "accepted") {
-              setDraft(null);
-            }
-            return outcome;
-          }}
+          onSubmit={submitEdit}
         />
       ),
     };

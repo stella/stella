@@ -1197,14 +1197,12 @@ export const useChatSession = ({
             buildEditedUserMessage({ edit, messageId }),
             { ...options, timingSurface },
           );
-          switch (acceptance.status) {
-            case "accepted":
-              applySendQueueEvent({ type: "message-edit-accepted", messageId });
-              return { type: "accepted" };
-            case "failed":
-              await showStoredChatThread(chat, rewoundFrom);
-              return userMessageEditFailure(acceptance.error);
+          if (acceptance.status === "accepted") {
+            applySendQueueEvent({ type: "message-edit-accepted", messageId });
+            return { type: "accepted" };
           }
+          await showStoredChatThread(chat, rewoundFrom);
+          return userMessageEditFailure(acceptance.error);
         },
       );
       // A message the page no longer holds cannot be edited from it.

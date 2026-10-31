@@ -659,7 +659,7 @@ export const acquireChatRuntime = ({
     storedThreadReaders.set(
       runtime,
       async () =>
-        await queryClient.fetchQuery({
+        await queryClient.query({
           ...chatThreadOptions({ activeOrganizationId, context, key }),
           staleTime: 0,
         }),
