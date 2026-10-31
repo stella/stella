@@ -13,12 +13,13 @@ updates:
       default-days: 5
     groups:
       stella-shared:
+        # Reusable workflows are named stella/.github/.github/workflows/<file>,
+        # so they need their own pattern to land in this one grouped update.
+        # These are pinned by commit SHA, so an update has no semver type and
+        # an update-types filter would leave every one of them ungrouped.
         patterns:
           - "stella/.github/*"
-        update-types:
-          - "major"
-          - "minor"
-          - "patch"
+          - "stella/.github/.github/workflows/*"
       minor-and-patch:
         patterns:
           - "*"

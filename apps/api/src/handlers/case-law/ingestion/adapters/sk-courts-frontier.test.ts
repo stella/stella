@@ -17,8 +17,8 @@ import {
   test,
 } from "bun:test";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const NOW = new Date("2026-09-17T09:30:00.000Z");
