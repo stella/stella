@@ -31,6 +31,7 @@ import {
   executeCheckCommands,
   failureExitCode,
   formatCheckFailure,
+  greenBaseScope,
   LINT_ONLY_CACHE_INPUTS,
   lintAllTrace,
   matchedLintAllInputs,
@@ -2407,5 +2408,66 @@ describe("check failure summary", () => {
       "code-check: failed (exit 1): bun scripts/check-oxlint-plugin-registry.ts",
     );
     expectNoStackFrames(formatted);
+  });
+});
+
+describe("main's code check compares with the last green commit", () => {
+  const repository = (root: string, ...args: string[]) => {
+    const result = Bun.spawnSync(
+      [
+        "git",
+        "-c",
+        "user.name=Code Check Test",
+        "-c",
+        "user.email=code-check-test@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        ...args,
+      ],
+      { cwd: root, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    return result.stdout.toString().trim();
+  };
+
+  test("a green ancestor scopes the check; anything else checks every file", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "green-base-"));
+    try {
+      repository(root, "init", "--quiet");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "green");
+      const green = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-c", "side");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "side");
+      const side = repository(root, "rev-parse", "HEAD");
+      repository(root, "switch", "--quiet", "-");
+      repository(root, "commit", "--quiet", "--allow-empty", "-m", "main");
+
+      expect(greenBaseScope(green, root)).toEqual({
+        type: "affected",
+        base: green,
+      });
+      // Not an ancestor of the checked tree, unknown, or malformed.
+      expect(greenBaseScope(side, root)).toEqual({ type: "all" });
+      expect(greenBaseScope("", root)).toEqual({ type: "all" });
+      expect(greenBaseScope("f".repeat(40), root)).toEqual({ type: "all" });
+      expect(greenBaseScope("HEAD~1", root)).toEqual({ type: "all" });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  test("every Code quality step uses the green base outside a pull request or merge group", () => {
+    const sources = [
+      readFileSync(".github/workflows/ci.yml", "utf-8"),
+      readFileSync(".github/ci-checks/code-quality-web-rest.yml", "utf-8"),
+    ].join("\n");
+    for (const leg of CODE_CHECK_LEGS) {
+      expect(sources).toContain(
+        `bun run code-check:affected -- --leg ${leg} --green-base "$GREEN_BASE"`,
+      );
+    }
+    expect(
+      sources.match(/GREEN_BASE: \$\{\{ inputs\.green_base \|\| '' \}\}/gu),
+    ).toHaveLength(CODE_CHECK_LEGS.length);
   });
 });

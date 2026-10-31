@@ -460,9 +460,32 @@ export const codeCheckExclusions = (
     .toSorted()
     .map((workspace) => `--filter=!./${workspace}`);
 
+const FULL_COMMIT = /^[0-9a-f]{40}$/u;
+
+/**
+ * The scope for a check of main: the change since the last commit known
+ * green, or every file when that commit is missing, malformed or not an
+ * ancestor of the checked tree. Comparing main with itself would check
+ * nothing, so the scope fails closed to the full check.
+ */
+export const greenBaseScope = (greenBase: string, root: string): CheckScope => {
+  if (!FULL_COMMIT.test(greenBase)) {
+    return { type: "all" };
+  }
+  const ancestor = Bun.spawnSync(
+    ["git", "merge-base", "--is-ancestor", greenBase, "HEAD"],
+    { cwd: root, stdout: "ignore", stderr: "ignore" },
+  );
+  return ancestor.exitCode === 0
+    ? { type: "affected", base: greenBase }
+    : { type: "all" };
+};
+
 type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
+  /** A main commit known green; replaces `scope` once resolved. */
+  greenBase?: string;
   dryRun: boolean;
   /** Pre-push leaves a change that needs the full check to CI. */
   skipFullFallback: boolean;
@@ -471,6 +494,7 @@ type Options = {
 const parseArgs = (args: readonly string[]): Options => {
   let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
+  let greenBase: string | undefined;
   let all = false;
   let dryRun = false;
   let skipFullFallback = false;
@@ -505,14 +529,23 @@ const parseArgs = (args: readonly string[]): Options => {
       base = value;
       continue;
     }
+    if (argument === "--green-base") {
+      // An empty value is a valid request: no green commit is known.
+      greenBase = argv.next().value ?? panic("--green-base requires a value");
+      continue;
+    }
     panic(`Unknown argument: ${argument}`);
   }
 
   if (all && base !== null) {
     panic("--all checks every tracked file and takes no --base");
   }
+  if (greenBase !== undefined && (all || base !== null)) {
+    panic("--green-base chooses the scope and takes no --all or --base");
+  }
   return {
     ...(leg === undefined ? {} : { leg }),
+    ...(greenBase === undefined ? {} : { greenBase }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
@@ -1503,7 +1536,18 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   if (toolchain.isErr()) {
     return toolchain;
   }
-  const scoped = await planScope(options.scope, options.leg);
+  const checkScope =
+    options.greenBase === undefined
+      ? options.scope
+      : greenBaseScope(options.greenBase, process.cwd());
+  if (options.greenBase !== undefined) {
+    console.log(
+      checkScope.type === "affected"
+        ? `code-check: checking changes since green main ${checkScope.base}`
+        : "code-check: no reachable green main commit; checking every file",
+    );
+  }
+  const scoped = await planScope(checkScope, options.leg);
   if (scoped.isErr()) {
     return scoped;
   }
