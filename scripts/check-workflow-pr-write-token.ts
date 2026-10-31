@@ -150,11 +150,35 @@ const checkoutExpressionOf = (value: string): string | undefined => {
   return expression === "" || /[{}]/u.test(expression) ? undefined : expression;
 };
 
-const trustedCheckoutValue = (
-  value: unknown,
-  trigger: string,
-  field: "ref" | "repository",
-): boolean => {
+// The comparison-base output is trusted only when the step that produces it is
+// the repository's resolver, not merely a step with the same id.
+const TARGET_BASE_STEP_ID = "target-base";
+const TARGET_BASE_ACTION = "./.github/actions/merge-target-base";
+const TARGET_BASE_RUN = 'bash "$RUNNER_TEMP/merge-target-base.sh"';
+
+const trustedTargetBase = (steps: readonly unknown[]): boolean =>
+  steps.some(
+    (step) =>
+      record(step) &&
+      step["id"] === TARGET_BASE_STEP_ID &&
+      (step["uses"] === TARGET_BASE_ACTION ||
+        (typeof step["run"] === "string" &&
+          step["run"].trim() === TARGET_BASE_RUN)),
+  );
+
+type TrustedCheckoutValueOptions = {
+  value: unknown;
+  trigger: string;
+  field: "ref" | "repository";
+  steps: readonly unknown[];
+};
+
+const trustedCheckoutValue = ({
+  value,
+  trigger,
+  field,
+  steps,
+}: TrustedCheckoutValueOptions): boolean => {
   if (value === undefined) {
     return field === "repository" || trigger !== "pull_request";
   }
@@ -163,7 +187,9 @@ const trustedCheckoutValue = (
   }
   const checkoutExpression = checkoutExpressionOf(value);
   if (checkoutExpression === undefined) {
-    return true;
+    // A literal is trusted; an expression interpolated into a longer value
+    // (`refs/heads/${{ ... }}`) is not an approved form.
+    return !value.includes("${{");
   }
   if (checkoutExpression === "github.workflow_sha") {
     return true;
@@ -174,7 +200,10 @@ const trustedCheckoutValue = (
   if (checkoutExpression === "github.sha" && trigger !== "pull_request") {
     return true;
   }
-  return checkoutExpression === "steps.target-base.outputs.base_sha";
+  return (
+    checkoutExpression === `steps.${TARGET_BASE_STEP_ID}.outputs.base_sha` &&
+    trustedTargetBase(steps)
+  );
 };
 
 type Truth = "false" | "true" | "unknown";
@@ -483,12 +512,18 @@ export const checkWorkflowPrivilegeSource = (
           new Set(
             prTriggers.filter(
               (trigger) =>
-                !trustedCheckoutValue(withValue["ref"], trigger, "ref") ||
-                !trustedCheckoutValue(
-                  withValue["repository"],
+                !trustedCheckoutValue({
+                  value: withValue["ref"],
                   trigger,
-                  "repository",
-                ),
+                  field: "ref",
+                  steps,
+                }) ||
+                !trustedCheckoutValue({
+                  value: withValue["repository"],
+                  trigger,
+                  field: "repository",
+                  steps,
+                }),
             ),
           ),
         );

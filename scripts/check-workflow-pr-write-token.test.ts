@@ -71,6 +71,24 @@ describe("privileged workflow policy", () => {
     const body = `    env:\n      PR_HEAD: \${{ github.event.pull_request.head.sha }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ env.PR_HEAD }}\n      - run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
   });
+  test("refuses interpolated refs and repositories under pull_request_target", () => {
+    for (const field of [
+      `ref: refs/heads/\${{ env.PR_BRANCH }}`,
+      `repository: \${{ inputs.owner }}/repo`,
+    ]) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ${field}\n      - run: bash scripts/x.sh`;
+      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    }
+  });
+  test("trusts the comparison base only from the repository resolver", () => {
+    const checkout = `      - uses: actions/checkout@pin\n        with:\n          ref: \${{ steps.target-base.outputs.base_sha }}\n      - run: bash scripts/x.sh`;
+    const impostor = `    steps:\n      - id: target-base\n        run: echo "base_sha=\${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"\n${checkout}`;
+    expect(check(workflow("pull_request_target", impostor))).not.toHaveLength(
+      0,
+    );
+    const resolver = `    steps:\n      - id: target-base\n        uses: ./.github/actions/merge-target-base\n${checkout}`;
+    expect(check(workflow("pull_request_target", resolver))).toHaveLength(0);
+  });
   test("refuses workflow_run artifacts executed with a secret", () => {
     const source = workflow(
       "workflow_run",
@@ -152,14 +170,9 @@ jobs:
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
     expect(check(workflow("pull_request", body))).toHaveLength(0);
   });
-  test("accepts literal refs and the comparison-base resolver output", () => {
-    for (const ref of [
-      "main",
-      "v1.2.3",
-      "steps.target-base.outputs.base_sha",
-    ]) {
-      const checkoutRef = ref.startsWith("steps.") ? `\${{ ${ref} }}` : ref;
-      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ${checkoutRef}\n      - run: bash scripts/x.sh`;
+  test("accepts literal refs", () => {
+    for (const ref of ["main", "v1.2.3"]) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ${ref}\n      - run: bash scripts/x.sh`;
       expect(check(workflow("pull_request_target", body))).toHaveLength(0);
     }
   });
