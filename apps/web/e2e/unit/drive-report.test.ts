@@ -10,7 +10,6 @@ import {
   parseDriveArgs,
   summarizeSamples,
 } from "../agent/drive-report";
-import type { NetworkCapture } from "../helpers/network";
 
 const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({
   apiRequests: 1,
@@ -23,15 +22,16 @@ const sample = (overrides: Partial<MeasureSample> = {}): MeasureSample => ({
   ...overrides,
 });
 
-const request = (dbQueries: number | null, responseBytes: number | null) =>
-  ({
-    dbQueries,
-    dbQueryHeaderMissing: dbQueries === null,
-    method: "GET",
-    pathname: "/v1/contacts",
-    responseBytes,
-    responseBodyReadFailure: null,
-  }) satisfies NetworkCapture["requests"][number];
+const request = (dbQueries: number | null, responseBytes: number | null) => ({
+  dbQueries,
+  dbQueryHeaderMissing: dbQueries === null,
+  method: "GET",
+  pathname: "/v1/contacts",
+  responseSize:
+    responseBytes === null
+      ? { status: "streamed" as const }
+      : { status: "measured" as const, bytes: responseBytes },
+});
 
 describe("parseDriveArgs", () => {
   test("snap takes several paths and the defaults", () => {

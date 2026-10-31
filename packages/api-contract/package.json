@@ -53,6 +53,7 @@
     "./table-chart": "./src/table-chart.ts",
     "./chat-turn-errors": "./src/chat-turn-errors.ts",
     "./chat-message-revisions": "./src/chat-message-revisions.ts",
+    "./chat-thread-scope": "./src/chat-thread-scope.ts",
     "./spawn-subagents": "./src/spawn-subagents.ts",
     "./correspondence": "./src/correspondence.ts",
     "./json-schema-regex": "./src/json-schema-regex.ts",

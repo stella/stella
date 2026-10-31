@@ -5,14 +5,15 @@ import { describe, expect, test } from "bun:test";
 import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
   countDuplicateGets,
+  createResponseSizeSample,
   diffNetworkBaseline,
+  isTrackedProtocolRequest,
   mergeNetworkBaseline,
   NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
-  type NetworkCapture,
   normalizeApiPath,
-  readResponseBytes,
   responseSizeAllowance,
+  type ResponseSizeOutcome,
   type RouteNetworkMetrics,
   summarizeCapture,
   waitForQuietPeriod,
@@ -20,6 +21,35 @@ import {
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 const UUID_UPPER = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE";
+
+describe("protocol request coverage", () => {
+  test.each([undefined, "Fetch", "XHR", "EventSource"])(
+    "tracks API requests with resource type %s",
+    (type) => {
+      expect(
+        isTrackedProtocolRequest(
+          { type, url: "https://api.example.test/v1/contacts" },
+          "https://api.example.test",
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("excludes known non-API resource types and other origins", () => {
+    expect(
+      isTrackedProtocolRequest(
+        { type: "Image", url: "https://api.example.test/image" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+    expect(
+      isTrackedProtocolRequest(
+        { type: undefined, url: "https://web.example.test/v1/contacts" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("normalizeApiPath", () => {
   test("leaves a plain path untouched", () => {
@@ -94,6 +124,139 @@ describe("duplicate resource reads", () => {
   });
 });
 
+describe("decoded protocol response sizes", () => {
+  test("sums decoded chunks only after loadingFinished", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    sample.receive(2048);
+    expect(sample.outcome.status).toBe("unreadable");
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 3072 });
+  });
+
+  test("empty completed responses have a measured zero-byte body", () => {
+    const sample = createResponseSizeSample();
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 0 });
+  });
+
+  test.each([true, false])(
+    "retains the error and cancellation flag on loadingFailed (%s)",
+    (canceled) => {
+      const sample = createResponseSizeSample();
+      sample.receive(1024);
+      sample.fail({ errorText: "net::ERR_ABORTED", canceled });
+      sample.complete();
+      expect(sample.outcome).toEqual({
+        status: "failed",
+        error: "net::ERR_ABORTED",
+        canceled,
+      });
+    },
+  );
+
+  test("omitted cancellation means a transport failure", () => {
+    const sample = createResponseSizeSample();
+    sample.fail({ errorText: "net::ERR_CONNECTION_RESET" });
+    expect(sample.outcome).toEqual({
+      status: "failed",
+      error: "net::ERR_CONNECTION_RESET",
+      canceled: false,
+    });
+  });
+
+  test("unfinished responses remain unreadable with their reason", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    expect(sample.outcome).toEqual({
+      status: "unreadable",
+      error: "CDP loadingFinished was not observed",
+    });
+  });
+
+  test("streams stay excluded even if they later finish", () => {
+    const sample = createResponseSizeSample();
+    sample.stream();
+    sample.receive(1024);
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "streamed" });
+  });
+});
+
+const failureSamples = [
+  { status: "failed", error: "diagnostic reason", canceled: true },
+  { status: "unreadable", error: "diagnostic reason" },
+] as const satisfies readonly ResponseSizeOutcome[];
+
+describe("response size outcomes", () => {
+  const key = "GET /v1/contacts";
+  const summarize = (outcomes: ResponseSizeOutcome[]) =>
+    summarizeCapture({
+      requests: outcomes.map((responseSize) => ({
+        method: "GET",
+        pathname: "/v1/contacts",
+        dbQueries: 1,
+        dbQueryHeaderMissing: false,
+        responseSize,
+      })),
+      depthChain: [],
+    });
+  const problemsFor = (outcomes: ResponseSizeOutcome[]) =>
+    diffNetworkBaseline(
+      {
+        "/contacts": {
+          depth: 0,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: [key],
+          requestCounts: { [key]: outcomes.length },
+          responseSizes: { [key]: 1024 },
+        },
+      },
+      new Map([["/contacts", summarize(outcomes)]]),
+    ).problems;
+
+  test("uses the largest completed sample and excludes streams", () => {
+    const result = summarize([
+      { status: "measured", bytes: 0 },
+      { status: "streamed" },
+      { status: "measured", bytes: 512 },
+    ]);
+    expect(result.responseSizes).toEqual({ [key]: 512 });
+    expect(result.responseSizeFailures).toEqual({});
+    expect(result.requestCounts[key]).toBe(3);
+  });
+
+  test.each(failureSamples)(
+    "retains $status samples even beside a measured response",
+    (failure) => {
+      const failures = problemsFor([
+        { status: "measured", bytes: 512 },
+        failure,
+      ]);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toContain("Response size missing");
+      expect(failures[0]).toContain(`${failure.status}: diagnostic reason`);
+    },
+  );
+
+  test.each(failureSamples)(
+    "a key with only $status samples fails",
+    (failure) => {
+      expect(problemsFor([failure])).toHaveLength(1);
+    },
+  );
+
+  test("zero-byte completed responses remain measured", () => {
+    expect(problemsFor([{ status: "measured", bytes: 0 }])).toEqual([]);
+  });
+
+  test("completed samples still enforce the existing payload budget", () => {
+    expect(
+      problemsFor([{ status: "measured", bytes: 100_000 }]).join("\n"),
+    ).toContain("Response payload grew");
+  });
+});
+
 describe("waitForQuietPeriod", () => {
   test("observes the minimum window before returning idle", async () => {
     let current = 100;
@@ -162,7 +325,7 @@ const metrics = (
   ),
   missingDbQueryCounts: Record<string, number> = {},
   responseSizes: Record<string, number> = {},
-  missingResponseSizeCounts: Record<string, number> = {},
+  responseSizeFailures: RouteNetworkMetrics["responseSizeFailures"] = {},
 ): RouteNetworkMetrics => ({
   requests: [...requests].toSorted(),
   requestCounts,
@@ -171,8 +334,7 @@ const metrics = (
   dbQueries,
   missingDbQueryCounts,
   responseSizes,
-  missingResponseSizeCounts,
-  responseBodyReadFailures: {},
+  responseSizeFailures,
 });
 
 describe("diffNetworkBaseline", () => {
@@ -216,7 +378,12 @@ describe("diffNetworkBaseline", () => {
       };
       const depthOnly = diffNetworkBaseline(
         { "/contacts": entry },
-        new Map([["/contacts", metrics(entry.requests, 5)]]),
+        new Map([
+          [
+            "/contacts",
+            metrics(entry.requests, 5, {}, undefined, {}, entry.responseSizes),
+          ],
+        ]),
       );
       expect(depthOnly.problems).toEqual([]);
       expect(depthOnly.notices.join("\n")).toContain(
@@ -510,7 +677,10 @@ describe("diffNetworkBaseline", () => {
       responseSizes: { "GET /v1/contacts": 1024 },
     },
   };
-  const sizeMetrics = (bytes: number, missing: Record<string, number> = {}) =>
+  const sizeMetrics = (
+    bytes: number,
+    missing: RouteNetworkMetrics["responseSizeFailures"] = {},
+  ) =>
     metrics(
       ["GET /v1/contacts"],
       2,
@@ -582,7 +752,11 @@ describe("diffNetworkBaseline", () => {
             undefined,
             {},
             {},
-            { "GET /v1/contacts": 1 },
+            {
+              "GET /v1/contacts": [
+                { status: "unreadable", error: "body failed" },
+              ],
+            },
           ),
         ],
       ]),
@@ -592,313 +766,14 @@ describe("diffNetworkBaseline", () => {
     );
   });
 
-  test.each([
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: undefined,
-      failure: null,
-      bytes: 2048,
-      expected: 2048,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: "gzip",
-      failure: null,
-      bytes: 100,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: "br",
-      failure: null,
-      bytes: 100,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: undefined,
-      failure: { errorText: "aborted" },
-      bytes: 100,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: undefined,
-      failure: null,
-      bytes: 0,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: undefined,
-      failure: null,
-      bytes: -1,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: undefined,
-      encoding: undefined,
-      failure: null,
-      bytes: Number.NaN,
-      expected: null,
-    },
-    {
-      worker: true,
-      transfer: undefined,
-      encoding: undefined,
-      failure: null,
-      bytes: 100,
-      expected: null,
-    },
-    {
-      worker: false,
-      transfer: "gzip",
-      encoding: undefined,
-      failure: null,
-      bytes: 100,
-      expected: null,
-    },
-  ])(
-    "uses completed unencoded transport bytes without weakening decoded-size budgets: %j",
-    async ({ worker, transfer, encoding, failure, bytes, expected }) => {
-      const record: NetworkCapture["requests"][number] = {
-        method: "GET",
-        pathname: "/v1/contacts",
-        dbQueries: null,
-        dbQueryHeaderMissing: false,
-        responseBytes: null,
-        responseBodyReadFailure: null,
-      };
-      await readResponseBytes(
-        {
-          status: () => 200,
-          fromServiceWorker: () => worker,
-          headers: () => ({
-            ...(encoding === undefined ? {} : { "content-encoding": encoding }),
-            ...(transfer === undefined
-              ? {}
-              : { "transfer-encoding": transfer }),
-          }),
-          request: () => ({
-            failure: () => failure,
-            sizes: async () => ({
-              requestBodySize: 0,
-              requestHeadersSize: 0,
-              responseBodySize: bytes,
-              responseHeadersSize: 0,
-            }),
-          }),
-          body: async () => {
-            throw new Error("Response body buffer unavailable");
-          },
-        },
-        record,
-      );
-      expect(record.responseBytes).toBe(expected);
-      const { problems } = diffNetworkBaseline(
-        sizeBaseline,
-        new Map([
-          [
-            "/contacts",
-            summarizeCapture({ requests: [record], depthChain: [] }),
-          ],
-        ]),
-      );
-      expect(problems).toHaveLength(1);
-      expect(problems.at(0)).toContain(
-        expected === null ? "Response size missing" : "Response payload grew",
-      );
-    },
-  );
-
-  test("a failed response body reports its HTTP status and driver error without request URLs", async () => {
-    const record = {
-      method: "GET",
-      pathname: "/v1/contacts",
-      dbQueries: null,
-      dbQueryHeaderMissing: false,
-      responseBytes: null,
-      responseBodyReadFailure: null,
-    };
-    const reason =
-      "Protocol error (Network.getResponseBody): No resource with given identifier found";
-    await readResponseBytes(
-      {
-        status: () => 200,
-        fromServiceWorker: () => false,
-        headers: () => ({}),
-        request: () => ({
-          failure: () => null,
-          sizes: async () => ({
-            requestBodySize: 0,
-            requestHeadersSize: 0,
-            responseBodySize: 0,
-            responseHeadersSize: 0,
-          }),
-        }),
-        body: async () => {
-          throw new Error(
-            `${reason}: https://api.example.test/v1/contacts?token=private`,
-          );
-        },
-      },
-      record,
-    );
-    const observed = summarizeCapture({ requests: [record], depthChain: [] });
-    expect(observed.missingResponseSizeCounts).toEqual({
-      "GET /v1/contacts": 1,
-    });
-    expect(observed.responseBodyReadFailures).toEqual({
-      "GET /v1/contacts": [
-        {
-          reason: "unavailable",
-          status: 200,
-          errorName: "Error",
-          message: `${reason}: <response URL>`,
-        },
-      ],
-    });
-    const { problems } = diffNetworkBaseline(
-      sizeBaseline,
-      new Map([["/contacts", observed]]),
-    );
-    expect(problems).toHaveLength(1);
-    expect(problems.at(0)).toContain(`HTTP 200; Error: ${reason}`);
-    expect(problems.at(0)).not.toContain("api.example.test");
-    expect(problems.at(0)).not.toContain("private");
-  });
-
-  test("a successful auth response discarded by navigation is not a missing size even when the request is aborted", async () => {
-    const record: NetworkCapture["requests"][number] = {
-      method: "GET",
-      pathname: "/api/auth/organization/get-active-member-role",
-      dbQueries: 1,
-      dbQueryHeaderMissing: false,
-      responseBytes: null,
-      responseBodyReadFailure: null,
-    };
-    await readResponseBytes(
-      {
-        status: () => 200,
-        fromServiceWorker: () => false,
-        headers: () => ({}),
-        request: () => ({
-          failure: () => ({ errorText: "net::ERR_ABORTED" }),
-          sizes: async () => ({
-            requestBodySize: 0,
-            requestHeadersSize: 0,
-            responseBodySize: 0,
-            responseHeadersSize: 0,
-          }),
-        }),
-        body: async () => {
-          throw new Error(
-            "response.body: Protocol error (Network.getResponseBody): No data found for resource with given identifier\nResponse body is not available for a response that was navigated away from. Read response.body() before triggering any navigation.",
-          );
-        },
-      },
-      record,
-    );
-    expect(record.responseBodyReadFailure?.reason).toBe("navigation-discarded");
-    const observed = summarizeCapture({ requests: [record], depthChain: [] });
-    expect(observed.missingResponseSizeCounts).toEqual({});
-    expect(observed.requestCounts).toEqual({
-      "GET /api/auth/organization/get-active-member-role": 1,
-    });
-    const authResponseBaseline = {
-      "/chat": {
-        depth: 0,
-        requests: ["GET /api/auth/organization/get-active-member-role"],
-        responseSizes: {
-          "GET /api/auth/organization/get-active-member-role": 1024,
-        },
-      },
-    } satisfies NetworkBaseline;
-    expect(
-      diffNetworkBaseline(authResponseBaseline, new Map([["/chat", observed]]))
-        .problems,
-    ).toEqual([]);
-  });
-
-  test.each([
-    { status: 200, failure: null, navigated: true, missing: false },
-    { status: 204, failure: null, navigated: true, missing: false },
-    { status: 500, failure: null, navigated: true, missing: true },
-    {
-      status: 200,
-      failure: { errorText: "aborted" },
-      navigated: true,
-      missing: false,
-    },
-    { status: 200, failure: null, navigated: false, missing: true },
-  ])(
-    "only successful bodies explicitly discarded on navigation are excluded: %j",
-    async ({ status, failure, navigated, missing }) => {
-      const record: NetworkCapture["requests"][number] = {
-        method: "GET",
-        pathname: "/v1/contacts",
-        dbQueries: 2,
-        dbQueryHeaderMissing: false,
-        responseBytes: null,
-        responseBodyReadFailure: null,
-      };
-      await readResponseBytes(
-        {
-          status: () => status,
-          fromServiceWorker: () => false,
-          headers: () => ({ "content-encoding": "gzip" }),
-          request: () => ({
-            failure: () => failure,
-            sizes: async () => ({
-              requestBodySize: 0,
-              requestHeadersSize: 0,
-              responseBodySize: 0,
-              responseHeadersSize: 0,
-            }),
-          }),
-          body: async () => {
-            throw new Error(
-              navigated
-                ? "Response body is not available for a response that was navigated away from. Read response.body() before triggering any navigation."
-                : "Protocol error (Network.getResponseBody): No data found for resource with given identifier",
-            );
-          },
-        },
-        record,
-      );
-      expect(record.responseBodyReadFailure?.reason).toBe(
-        missing ? "unavailable" : "navigation-discarded",
-      );
-      const observed = summarizeCapture({ requests: [record], depthChain: [] });
-      expect(observed.requests).toEqual(["GET /v1/contacts"]);
-      expect(observed.dbQueries).toEqual({ "GET /v1/contacts": 2 });
-      expect(observed.responseSizes).toEqual({});
-      expect(observed.missingResponseSizeCounts).toEqual(
-        missing ? { "GET /v1/contacts": 1 } : {},
-      );
-      expect(
-        diffNetworkBaseline(sizeBaseline, new Map([["/contacts", observed]]))
-          .problems,
-      ).toHaveLength(missing ? 1 : 0);
-    },
-  );
-
-  test("a request without a measured size is not a missing response-size count", () => {
-    // Mirrors "a request without a response is not a missing db-query count":
-    // no measurement attempt (e.g. a streamed response, excluded entirely by
-    // network.ts's isStreamedResponse) is not the same as a failed one.
+  test("a budgeted request with no measured sample fails", () => {
     const { problems } = diffNetworkBaseline(
       sizeBaseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
     );
-    expect(problems).toEqual([]);
+    expect(
+      problems.some((problem) => problem.includes("Response size missing")),
+    ).toBe(true);
   });
 });
 
@@ -1188,7 +1063,14 @@ describe("merge-base scoped comparison", () => {
   );
 
   test("an intentional increase passes only with the declared budget", () => {
-    const observed = metrics(["GET /v1/contacts", "GET /v1/new"], 1);
+    const observed = metrics(
+      ["GET /v1/contacts", "GET /v1/new"],
+      1,
+      {},
+      undefined,
+      {},
+      entry.responseSizes,
+    );
     const results = new Map([["/contacts", observed]]);
     expect(
       diffNetworkBaseline(baseline, results).problems.join("\n"),
