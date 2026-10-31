@@ -16,7 +16,9 @@ import {
   checkRelease,
   collectGatedAdvisories,
   pruneBaseline,
+  quarantinedRemediationBody,
   readBaseline,
+  remediationOutputs,
   runDependencyAuditCli,
   runReleaseCheck as executeReleaseAudit,
   writeBaseline,
@@ -107,6 +109,59 @@ test("remediation plans pins, quarantine exclusions, and dated blocker acceptanc
       affectedPaths: ["blocked"],
     }),
   ]);
+});
+
+test("quarantined remediation reports publisher provenance and maintainer continuity", async () => {
+  const plan = {
+    pins: new Map([["pkg", "2.0.0"]]),
+    quarantineExclusions: [
+      {
+        package: "pkg",
+        version: "2.0.0",
+        quarantineExpires: "2026-11-03T00:00:00.000Z",
+      },
+    ],
+    acceptanceDrafts: [],
+  };
+  const readDocument = async () => ({
+    time: {
+      "1.0.0": "2026-09-01T00:00:00.000Z",
+      "2.0.0": "2026-10-30T00:00:00.000Z",
+    },
+    versions: {
+      "1.0.0": { maintainers: [{ name: "alice" }] },
+      "2.0.0": { _npmUser: { name: "alice" } },
+    },
+  });
+  const body = await quarantinedRemediationBody(plan, readDocument);
+  expect(await remediationOutputs(plan, readDocument)).toEqual({
+    quarantined: "true",
+    prBody: body,
+  });
+  expect(body).toContain("| Package | Pinned version | npm publish time |");
+  expect(body).toContain(
+    "| pkg | 2.0.0 | 2026-10-30T00:00:00.000Z | alice | yes |",
+  );
+});
+
+test("non-quarantined remediation keeps the summary without registry reads", async () => {
+  let reads = 0;
+  const body = await quarantinedRemediationBody(
+    { pins: new Map(), quarantineExclusions: [], acceptanceDrafts: [] },
+    async () => {
+      reads += 1;
+      return {};
+    },
+  );
+  expect(reads).toBe(0);
+  expect(body).not.toContain("| Package |");
+  expect(
+    await remediationOutputs({
+      pins: new Map(),
+      quarantineExclusions: [],
+      acceptanceDrafts: [],
+    }),
+  ).toEqual({ quarantined: "false" });
 });
 
 describe("remediation selects one complete package fix", () => {

@@ -1,5 +1,6 @@
 // One assessment per advisory, including every vulnerable lockfile resolution.
 import { panic, Result, TaggedError } from "better-result";
+import nodePath from "node:path";
 
 import { readInstallPolicy } from "./check-stll-quarantine-excludes";
 import type { Advisory, BaselineEntry } from "./dependency-audit";
@@ -801,11 +802,21 @@ export const installableVersions = (
 // a newly published compatible patch changes the assessment immediately.
 const readBunInfo = async (
   name: string,
-  field: "versions" | "time",
+  field?: "versions" | "time",
 ): Promise<unknown> => {
   const result = await Result.tryPromise(async () => {
     const proc = Bun.spawn(
-      ["bun", "--no-env-file", "info", name, field, "--json", "--no-cache"],
+      [
+        "bash",
+        nodePath.resolve(import.meta.dir, "retry.sh"),
+        "bun",
+        "--no-env-file",
+        "info",
+        name,
+        ...(field === undefined ? [] : [field]),
+        "--json",
+        "--no-cache",
+      ],
       {
         stdout: "pipe",
         stderr: "pipe",
@@ -830,6 +841,9 @@ const readBunInfo = async (
   }
   return result.value;
 };
+
+export const readRegistryDocument = async (name: string): Promise<unknown> =>
+  readBunInfo(name);
 
 // Published versions Bun would install now, honouring the quarantine.
 export const readInstallableVersions = async (

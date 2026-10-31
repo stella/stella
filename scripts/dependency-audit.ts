@@ -58,6 +58,7 @@ import {
   type InstallableRelease,
   printAssessments,
   readInstallableReleases,
+  readRegistryDocument,
   readReleaseAgePolicy,
   readReleaseAgeReleases,
 } from "./dependency-audit-assessment";
@@ -72,6 +73,8 @@ const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_PATHS.dependencyAudit);
 const GATED_SEVERITIES = new Set(["high", "critical"]);
+const REMEDIATION_SUMMARY =
+  "Pins available patched releases, adds temporary release-age exclusions when a security fix is still quarantined, drafts dated acceptances for remaining upstream blockers, and removes stale acceptances.";
 
 // Flags read by the workflow's remediation job.
 const markOutput = (name: "advisory_failure" | "stale_acceptance"): void => {
@@ -79,6 +82,106 @@ const markOutput = (name: "advisory_failure" | "stale_acceptance"): void => {
   if (output !== undefined && output !== "") {
     appendFileSync(output, `${name}=true\n`);
   }
+};
+
+const writeOutput = (name: string, value: string): void => {
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined && output !== "") {
+    appendFileSync(output, `${name}<<EOF\n${value}\nEOF\n`);
+  }
+};
+
+const writeScalarOutput = (name: string, value: string): void => {
+  const output = process.env["GITHUB_OUTPUT"];
+  if (output !== undefined && output !== "") {
+    appendFileSync(output, `${name}=${value}\n`);
+  }
+};
+
+const registryText = (value: unknown): string | undefined =>
+  typeof value === "string" && value !== "" ? value : undefined;
+
+export const quarantinedRemediationBody = async (
+  plan: DependencyAuditRemediationPlan,
+  readDocument: (name: string) => Promise<unknown> = readRegistryDocument,
+): Promise<string> => {
+  if (plan.quarantineExclusions.length === 0) {
+    return REMEDIATION_SUMMARY;
+  }
+  const rows = await Promise.all(
+    plan.quarantineExclusions.map(async (exclusion) => {
+      const document = await readDocument(exclusion.package);
+      if (!isRecord(document)) {
+        panic(`Registry document for ${exclusion.package} is not an object`);
+      }
+      const versions = document["versions"];
+      const times = document["time"];
+      if (!isRecord(versions) || !isRecord(times)) {
+        panic(
+          `Registry document for ${exclusion.package} lacks versions or publish times`,
+        );
+      }
+      const pinned = versions[exclusion.version];
+      const published = registryText(times[exclusion.version]);
+      if (!isRecord(pinned) || published === undefined) {
+        panic(
+          `Registry document for ${exclusion.package}@${exclusion.version} lacks provenance`,
+        );
+      }
+      const npmUser = pinned["_npmUser"];
+      const publisher = isRecord(npmUser)
+        ? registryText(npmUser["name"])
+        : undefined;
+      if (publisher === undefined) {
+        panic(
+          `Registry document for ${exclusion.package}@${exclusion.version} lacks _npmUser.name`,
+        );
+      }
+      const previousVersion = Object.entries(times)
+        .flatMap(([version, time]) => {
+          const timestamp = registryText(time);
+          return timestamp !== undefined &&
+            Date.parse(timestamp) < Date.parse(published)
+            ? [{ version, timestamp }]
+            : [];
+        })
+        .toSorted(
+          (left, right) =>
+            Date.parse(right.timestamp) - Date.parse(left.timestamp),
+        )
+        .at(0)?.version;
+      const previous =
+        previousVersion === undefined ? undefined : versions[previousVersion];
+      const maintainers = isRecord(previous)
+        ? previous["maintainers"]
+        : undefined;
+      let known = "unknown";
+      if (Array.isArray(maintainers)) {
+        known = maintainers.some(
+          (maintainer) =>
+            isRecord(maintainer) &&
+            registryText(maintainer["name"]) === publisher,
+        )
+          ? "yes"
+          : "no";
+      }
+      return `| ${exclusion.package} | ${exclusion.version} | ${published} | ${publisher} | ${known} |`;
+    }),
+  );
+  return `${REMEDIATION_SUMMARY}\n\n| Package | Pinned version | npm publish time | npm publisher | Publisher maintained previous version |\n| --- | --- | --- | --- | --- |\n${rows.join("\n")}`;
+};
+
+export const remediationOutputs = async (
+  plan: DependencyAuditRemediationPlan,
+  readDocument: (name: string) => Promise<unknown> = readRegistryDocument,
+): Promise<{ quarantined: "true" | "false"; prBody?: string }> => {
+  if (plan.quarantineExclusions.length === 0) {
+    return { quarantined: "false" };
+  }
+  return {
+    quarantined: "true",
+    prBody: await quarantinedRemediationBody(plan, readDocument),
+  };
 };
 
 export type Advisory = {
@@ -540,6 +643,12 @@ const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
       }
     },
   });
+
+  const outputs = await remediationOutputs(plan);
+  writeScalarOutput("quarantined", outputs.quarantined);
+  if (outputs.prBody !== undefined) {
+    writeOutput("pr_body", outputs.prBody);
+  }
 
   if (plan.acceptanceDrafts.length > 0) {
     const baseline = await readBaseline();
