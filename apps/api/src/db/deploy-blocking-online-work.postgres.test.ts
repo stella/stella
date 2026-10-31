@@ -3,13 +3,15 @@ import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import {
   MIGRATE_ONLINE_WORK_MODE,
   type MigrateOnlineWorkMode,
 } from "./migrate-online-work-mode";
-import { runMigrationsUntilSettled } from "./migration-runner";
+import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
 import { ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -46,8 +48,8 @@ const indexValidity = async (admin: SQL, names: readonly string[]) => {
 
 // CI owns this isolated PostgreSQL database and applies the committed bundle.
 describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
-  // timeout: two migrate runs over the committed bundle build online indexes
-  test("every migrate run leaves deploy-blocking indexes valid, a release's verify_finalized run included", async () => {
+  // timeout: four migrate runs over the committed bundle build online indexes
+  test("every migrate run leaves deploy-blocking indexes valid, and a release's run fails when one cannot be built", async () => {
     expect(deployBlocking).toEqual(expect.arrayContaining(IMPORT_ARBITERS));
     const url = databaseUrl ?? panic("DATABASE_URL is required");
     await withGatedTestClients(url, async ({ openClient }) => {
@@ -67,20 +69,60 @@ describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
         }
       };
       const allValid = deployBlocking.map((name) => ({ name, valid: true }));
+      const dropDeployBlocking = async () => {
+        for (const name of deployBlocking) {
+          await admin.unsafe(`DROP INDEX CONCURRENTLY IF EXISTS "${name}"`);
+        }
+        expect(await indexValidity(admin, deployBlocking)).toEqual([]);
+      };
 
       await migrate(MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED);
       expect(await indexValidity(admin, deployBlocking)).toEqual(allValid);
 
       // A release database whose deploy-blocking indexes are absent: the
       // release's own migrate run builds them before it reports success.
-      for (const name of deployBlocking) {
-        await admin.unsafe(`DROP INDEX CONCURRENTLY IF EXISTS "${name}"`);
+      await dropDeployBlocking();
+      expect(
+        await migrate(MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED),
+      ).toMatchObject({ status: "applied" });
+      expect(await indexValidity(admin, deployBlocking)).toEqual(allValid);
+
+      // Rows the arbiter cannot hold: the release's migrate run fails rather
+      // than serve upserts with no unique index behind them.
+      await dropDeployBlocking();
+      const organization = Bun.randomUUIDv7();
+      const duplicates = [Bun.randomUUIDv7(), Bun.randomUUIDv7()];
+      try {
+        await admin`INSERT INTO organization (id, name, slug, created_at) VALUES (${organization}, 'Duplicate import tenant', ${organization}, now())`;
+        for (const contact of duplicates) {
+          await admin`INSERT INTO contacts (id, organization_id, type, display_name, external_source, external_id, external_change_key, imported_at)
+            VALUES (${contact}, ${organization}, 'person', 'Duplicate import', 'fixture-import', 'same-ref', 'v1', now())`;
+        }
+        const connection = await admin.reserve();
+        const rejection = await rejectionOf(
+          runMigrations({
+            onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED,
+            connection,
+            migrationsFolder,
+            databaseUrl: url,
+            ebs: { type: "disabled" },
+          }).finally(async () => {
+            await connection.release();
+          }),
+        );
+        expect(rejection).toBeInstanceOf(Error);
+        const left = await indexValidity(admin, ["contacts_org_external_uidx"]);
+        expect(left.every(({ valid }) => !valid)).toBe(true);
+      } finally {
+        await admin`DELETE FROM contacts WHERE id IN (${duplicates.at(0)}, ${duplicates.at(1)})`;
+        await admin`DELETE FROM organization WHERE id = ${organization}`;
       }
-      expect(await indexValidity(admin, deployBlocking)).toEqual([]);
+
+      // The suites after this one find the arbiters as migrate leaves them.
       expect(
         await migrate(MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED),
       ).toMatchObject({ status: "applied" });
       expect(await indexValidity(admin, deployBlocking)).toEqual(allValid);
     });
-  }, 180_000);
+  }, 300_000);
 });
