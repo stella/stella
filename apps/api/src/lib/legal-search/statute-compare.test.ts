@@ -1,12 +1,20 @@
+import { Result, TaggedError } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { Block } from "./document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
 import {
   compareStatuteBlocks,
   countStatuteChanges,
   groupCompareRows,
-} from "./statute-compare";
-import type { StatuteChangeCounts } from "./statute-compare";
+} from "@stll/legal-ast/statute-compare";
+import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
+import type { StatuteComparisonAdapter } from "@stll/legal-ast/statute-comparison-adapter";
+
+import { statuteComparisonAdapter } from "./statute-comparison-adapter";
+
+class ComparisonFailure extends TaggedError("ComparisonFailure")<{
+  message: string;
+}> {}
 
 const heading = (text: string): Block => ({
   type: "heading",
@@ -26,7 +34,13 @@ const paragraph = (id: string, text: string): Block => ({
 });
 
 const counts = (older: readonly Block[], newer: readonly Block[]) =>
-  countStatuteChanges(compareStatuteBlocks({ older, newer }).unwrap());
+  countStatuteChanges(
+    compareStatuteBlocks({
+      older,
+      newer,
+      adapter: statuteComparisonAdapter,
+    }).unwrap(),
+  );
 
 const NONE: StatuteChangeCounts = {
   provisions: { changed: 0, added: 0, removed: 0 },
@@ -139,6 +153,7 @@ describe("countStatuteChanges", () => {
     const rows = compareStatuteBlocks({
       older: ACT,
       newer: renumbered,
+      adapter: statuteComparisonAdapter,
     }).unwrap();
     const result = countStatuteChanges(rows);
 
@@ -174,4 +189,23 @@ describe("countStatuteChanges", () => {
       words: { inserted: 0, deleted: 0 },
     });
   });
+});
+
+test("comparison preserves an injected host failure", () => {
+  const failure = new ComparisonFailure({ message: "host unavailable" });
+  const adapter = {
+    compare: () => Result.err(failure),
+    diffWords: () => [],
+  } satisfies StatuteComparisonAdapter<ComparisonFailure>;
+
+  const result = compareStatuteBlocks({
+    older: [],
+    newer: [],
+    adapter,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBe(failure);
+  }
 });

@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block } from "@stll/legal-ast/document-ast";
 import {
   compareStatuteBlocks,
@@ -9,6 +8,7 @@ import {
   splitDiffSides,
 } from "@stll/legal-ast/statute-compare";
 import type { StatuteCompareRow } from "@stll/legal-ast/statute-compare";
+import type { StatuteWordDiffSegment } from "@stll/legal-ast/statute-comparison-adapter";
 import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
@@ -23,13 +23,14 @@ import {
 } from "@/features/statutes/statute-compare";
 import type { CompareSideState } from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
 
 const textOf = (side: StatuteCompareSide | null): string | null =>
   side === null ? null : side.segments.map((segment) => segment.text).join("");
 
 const segmentTypes = (
   side: StatuteCompareSide | null | undefined,
-): WordDiffSegment["type"][] =>
+): StatuteWordDiffSegment["type"][] =>
   side?.segments.map((segment) => segment.type) ?? [];
 
 const heading = (value: string): Block => ({
@@ -52,7 +53,11 @@ const rowsOf = (
   older: readonly Block[],
   newer: readonly Block[],
 ): StatuteCompareRow[] => {
-  const result = compareStatuteBlocks({ newer, older });
+  const result = compareStatuteBlocks({
+    newer,
+    older,
+    adapter: statuteComparisonAdapter,
+  });
 
   if (result.isErr()) {
     throw result.error;
@@ -79,6 +84,7 @@ describe("compared sides", () => {
       const result = compareStatuteBlocks({
         newer: [text(after)],
         older: [text(before)],
+        adapter: statuteComparisonAdapter,
       });
 
       if (result.isErr()) {

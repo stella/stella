@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
 import { plainTextOf } from "./document-ast";
 import type { Block, Inline } from "./document-ast";
 import { buildDocumentAstSearchPieces } from "./document-search-pieces";
+import type { StatuteWordDiffSegment } from "./statute-comparison-adapter";
 import {
   compareText,
   diffMarkRanges,
@@ -30,9 +30,11 @@ const segmentArbitrary = fc.record({
   text: segmentText,
 });
 
-type Positioned = { start: number; segment: WordDiffSegment };
+type Positioned = { start: number; segment: StatuteWordDiffSegment };
 
-const positioned = (segments: readonly WordDiffSegment[]): Positioned[] => {
+const positioned = (
+  segments: readonly StatuteWordDiffSegment[],
+): Positioned[] => {
   const list: Positioned[] = [];
   let start = 0;
   for (const segment of segments) {
@@ -206,7 +208,7 @@ const blocksArbitrary = fc
   );
 
 /** A diff of a side's text: the text cut into runs of random kinds. */
-const sideDiff = (value: string): fc.Arbitrary<WordDiffSegment[]> =>
+const sideDiff = (value: string): fc.Arbitrary<StatuteWordDiffSegment[]> =>
   fc
     .array(
       fc.record({
@@ -217,7 +219,7 @@ const sideDiff = (value: string): fc.Arbitrary<WordDiffSegment[]> =>
     )
     .map((cuts) => {
       const ordered = cuts.toSorted((left, right) => left.cut - right.cut);
-      const segments: WordDiffSegment[] = [];
+      const segments: StatuteWordDiffSegment[] = [];
       let start = 0;
       for (const { cut, type } of [
         ...ordered,

@@ -1,16 +1,13 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
-import { compareContent } from "@stll/folio-core";
-import type {
-  FolioContentBlock,
-  FolioContentComparisonError,
-  FolioContentComparisonEvent,
-} from "@stll/folio-core";
-import { diffWordSegments } from "@stll/folio-core/ai-edits";
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
-
 import type { Block } from "./document-ast";
+import type {
+  StatuteComparisonAdapter,
+  StatuteComparisonBlock,
+  StatuteComparisonEvent,
+  StatuteWordDiffSegment,
+} from "./statute-comparison-adapter";
 import {
   compareText,
   hasVisibleChange,
@@ -25,13 +22,9 @@ import type { StatuteCompareSide } from "./statute-diff-marks";
  */
 
 /** What the comparison pairs blocks by: a heading only pairs a heading. */
-type CompareBlockKind = Extract<
-  FolioContentBlock["kind"],
-  "heading" | "paragraph"
->;
+type CompareBlockKind = "heading" | "paragraph";
 
-type ComparedBlock = FolioContentBlock<CompareBlockKind> & {
-  idStability: "positional";
+type ComparedBlock = StatuteComparisonBlock & {
   /** The block the reader renders; the comparison itself reads `text`. */
   block: Block;
 };
@@ -98,8 +91,8 @@ export type StatuteCompareRow = {
 };
 
 type DiffSides = {
-  before: WordDiffSegment[];
-  after: WordDiffSegment[];
+  before: StatuteWordDiffSegment[];
+  after: StatuteWordDiffSegment[];
 };
 
 /**
@@ -113,10 +106,10 @@ type DiffSides = {
  * replacement is equal on each side: nothing a reader can see changed.
  */
 export const splitDiffSides = (
-  segments: readonly WordDiffSegment[],
+  segments: readonly StatuteWordDiffSegment[],
 ): DiffSides => {
-  const before: WordDiffSegment[] = [];
-  const after: WordDiffSegment[] = [];
+  const before: StatuteWordDiffSegment[] = [];
+  const after: StatuteWordDiffSegment[] = [];
 
   let pairedWithPrevious = false;
 
@@ -158,7 +151,7 @@ export const splitDiffSides = (
 
 type RowFromSegmentsOptions = {
   key: string;
-  segments: readonly WordDiffSegment[];
+  segments: readonly StatuteWordDiffSegment[];
   base: readonly ComparedBlock[];
   revised: readonly [ComparedBlock, ...ComparedBlock[]];
 };
@@ -191,7 +184,7 @@ const rowFromSegments = ({
 
 const rowKey = (index: number): string => `r${index}`;
 
-type ComparisonEvent = FolioContentComparisonEvent<ComparedBlock>;
+type ComparisonEvent = StatuteComparisonEvent<ComparedBlock>;
 
 /** Both ends of one move, each with its own side of the rewording it carried. */
 type MoveEnds = {
@@ -217,7 +210,7 @@ const indexMoves = (
     {
       key: string;
       block: ComparedBlock;
-      segments: readonly WordDiffSegment[] | undefined;
+      segments: readonly StatuteWordDiffSegment[] | undefined;
     }
   >();
 
@@ -297,6 +290,7 @@ const rowFromEvent = (
   event: ComparisonEvent,
   index: number,
   moves: ReadonlyMap<number, MoveEnds>,
+  diffWords: StatuteComparisonAdapter<unknown>["diffWords"],
 ): StatuteCompareRow => {
   const key = rowKey(index);
 
@@ -362,7 +356,7 @@ const rowFromEvent = (
     case "merge":
       return rowFromSegments({
         key,
-        segments: diffWordSegments(
+        segments: diffWords(
           compareText(astBlocks(event.baseBlocks)),
           compareText(astBlocks(event.revisedBlocks)),
         ),
@@ -375,30 +369,33 @@ const rowFromEvent = (
   }
 };
 
-type CompareStatuteBlocksOptions = {
+type CompareStatuteBlocksOptions<Error> = {
   older: readonly Block[];
   newer: readonly Block[];
+  adapter: StatuteComparisonAdapter<Error>;
 };
 
 /**
- * Two consolidations' blocks aligned row by row with Folio's content
- * comparison, each row carrying the blocks it shows and its word diff.
+ * Two consolidations aligned by the host, each row carrying the blocks
+ * it shows and its word diff.
  */
-export const compareStatuteBlocks = ({
+export const compareStatuteBlocks = <Error>({
   newer,
   older,
-}: CompareStatuteBlocksOptions): Result<
-  StatuteCompareRow[],
-  FolioContentComparisonError
-> =>
-  compareContent({
-    base: { blocks: older.map(toComparedBlock) },
-    revised: { blocks: newer.map(toComparedBlock) },
-  }).map(({ events }) => {
-    const moves = indexMoves(events);
+  adapter,
+}: CompareStatuteBlocksOptions<Error>): Result<StatuteCompareRow[], Error> =>
+  adapter
+    .compare({
+      base: older.map(toComparedBlock),
+      revised: newer.map(toComparedBlock),
+    })
+    .map((events) => {
+      const moves = indexMoves(events);
 
-    return events.map((event, index) => rowFromEvent(event, index, moves));
-  });
+      return events.map((event, index) =>
+        rowFromEvent(event, index, moves, adapter.diffWords),
+      );
+    });
 
 /** A provision's rows: its heading run and the text under it. */
 export type StatuteCompareGroup = {

@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import {
   STATUTE_VERSION_CHANGES_METHOD,
@@ -20,6 +21,7 @@ import {
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
@@ -33,6 +35,8 @@ import {
   VERSION_CHANGE_COMPARISON_BATCH_MAX,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { VersionChangePayload } from "@/api/lib/legal-search/legislation-version-blocks";
+import { statuteComparisonAdapter } from "@/api/lib/legal-search/statute-comparison-adapter";
+import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 /**
  * What each consolidation of a Work changed against the eligible
@@ -87,9 +91,12 @@ const byOpening = (
 
 /** A payload revision as a summary stores it: a JSON number. */
 const storedRevision = (revision: bigint): number => {
-  const value = Number(revision);
-  return Number.isSafeInteger(value)
-    ? value
+  const parsed = parseIntegerToken(revision.toString(), {
+    sign: "unsigned",
+    min: 1,
+  });
+  return parsed.isOk()
+    ? parsed.value
     : panic("Legislation payload revision exceeds a safe integer");
 };
 
@@ -228,6 +235,7 @@ const computeSummary = (
     return notCompared("no-blocks");
   }
   const rows = compareStatuteBlocks({
+    adapter: statuteComparisonAdapter,
     older: older.blocks,
     newer: newer.blocks,
   });
@@ -298,7 +306,7 @@ type PlanVersionChangeTasksOptions = {
   around?: SafeId<"legislationDocument"> | undefined;
 };
 
-export type WorkVersionChangeTask = VersionChangeTask & {
+type WorkVersionChangeTask = VersionChangeTask & {
   work: LegislationVersionWork;
 };
 
@@ -462,7 +470,6 @@ export const writePreparedVersionChangesTx = async (
       .from(current)
       .where(eq(current.id, sql`batch.base_id`))
       .limit(1);
-    // audit: skip — derived public legislation state; no user action
     const changed = await tx
       .update(legislationDocuments)
       .set({
@@ -483,6 +490,10 @@ export const writePreparedVersionChangesTx = async (
       .returning({ id: legislationDocuments.id });
     written += changed.length;
   }
+  await recordSystemAudit(tx, "system:legislation-version-changes", {
+    subject: createSafeId<"systemScriptRun">(),
+    counts: { summaries: written },
+  });
   return written;
 };
 

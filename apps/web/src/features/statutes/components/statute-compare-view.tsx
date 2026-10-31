@@ -31,6 +31,8 @@ import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
 // The move flash is the reader's own `[data-highlight]` animation.
 import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
@@ -509,7 +511,10 @@ const TwoSidedComparison = ({
   sides,
 }: TwoSidedComparisonProps) => {
   const t = useTranslations();
-  const compared = compareStatuteBlocks(sides);
+  const compared = compareStatuteBlocks({
+    ...sides,
+    adapter: statuteComparisonAdapter,
+  });
 
   if (compared.isErr()) {
     return <CompareMessage>{t("statutes.compareUnavailable")}</CompareMessage>;

@@ -1,9 +1,8 @@
 import { panic } from "better-result";
 
-import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
-
 import type { Block } from "./document-ast";
 import { buildDocumentAstSearchPieces } from "./document-search-pieces";
+import type { StatuteWordDiffSegment } from "./statute-comparison-adapter";
 
 /**
  * A changed run of one piece's text, as offsets into it: the shape a reader
@@ -41,7 +40,7 @@ export const splitSurroundingWhitespace = (text: string): SurroundedText => {
  * mark.
  */
 export const diffMarkRanges = (
-  segments: readonly WordDiffSegment[],
+  segments: readonly StatuteWordDiffSegment[],
 ): DiffMarkRange[] => {
   const ranges: DiffMarkRange[] = [];
   let offset = 0;
@@ -67,7 +66,7 @@ export const diffMarkRanges = (
 
 /** Whether one side of a diff marks anything a reader can see. */
 export const hasVisibleChange = (
-  segments: readonly WordDiffSegment[],
+  segments: readonly StatuteWordDiffSegment[],
 ): boolean => diffMarkRanges(segments).length > 0;
 
 const WHITESPACE_RUN = /\s+/gu;
@@ -80,8 +79,8 @@ const visibleWords = (text: string): string =>
  * doubled space, a non-breaking one, a line break where a space was.
  */
 export const isWhitespaceReplacement = (
-  first: WordDiffSegment,
-  second: WordDiffSegment,
+  first: StatuteWordDiffSegment,
+  second: StatuteWordDiffSegment,
 ): boolean =>
   ((first.type === "del" && second.type === "ins") ||
     (first.type === "ins" && second.type === "del")) &&
@@ -124,7 +123,7 @@ export const compareText = (blocks: readonly Block[]): string =>
  */
 export type StatuteCompareSide = {
   blocks: readonly Block[];
-  segments: readonly WordDiffSegment[];
+  segments: readonly StatuteWordDiffSegment[];
 };
 
 /** A block to render, with the diff marks that fall in each of its pieces. */

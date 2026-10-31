@@ -6,7 +6,11 @@ import { drizzle } from "drizzle-orm/pglite";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { legislationDocuments, legislationSources } from "@/api/db/schema";
+import {
+  legislationDocuments,
+  legislationSources,
+  systemAuditRuns,
+} from "@/api/db/schema";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
 import {
@@ -26,7 +30,9 @@ import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislatio
 import { readVersionChangePayloads } from "@/api/lib/legal-search/legislation-version-blocks";
 import {
   planVersionChangeTasks,
+  prepareVersionChanges,
   refreshWorkVersionChanges,
+  writePreparedVersionChangesTx,
 } from "@/api/lib/legal-search/legislation-version-changes";
 import type {
   LegislationReadDb,
@@ -490,7 +496,7 @@ test("canonical object ASTs are compared outside SQL transactions", async () => 
     rows.map(
       (row) =>
         [
-          `legislation/cze/versions/${row.id}/ast.zst`,
+          String(`legislation/cze/versions/${row.id}/ast.zst`),
           parsePersistedCorpusAst(row.documentAst),
         ] as const,
     ),
@@ -605,4 +611,100 @@ test("history overflow returns a typed error without a partial comparison plan",
       .delete(legislationDocuments)
       .where(eq(legislationDocuments.eli, eli));
   }
+});
+
+describe("projection audit transaction", () => {
+  const auditRows = async () =>
+    await db
+      .select()
+      .from(systemAuditRuns)
+      .where(
+        sql`${systemAuditRuns.actor} = 'system:legislation-version-changes'`,
+      );
+
+  test.each(["commit", "audit-failure", "later-failure"] as const)(
+    "summary and audit rows settle together: %s",
+    async (outcome) => {
+      const eli = `eli/cz/projection-audit-${outcome}`;
+      await storeAll(work(eli));
+      await db
+        .update(legislationDocuments)
+        .set({ changeSummary: null })
+        .where(eq(legislationDocuments.eli, eli));
+      const before = await auditRows();
+      const tasks = (
+        await planVersionChangeTasks({
+          db: scopedDb,
+          works: [{ sourceId, eli, language: "cs" }],
+        })
+      ).unwrap();
+      const writes = (
+        await prepareVersionChanges({ db: scopedDb, tasks })
+      ).unwrap();
+      expect(writes).toHaveLength(3);
+      const result = await Result.tryPromise({
+        try: async () =>
+          await scopedDb(async (tx) => {
+            if (outcome === "audit-failure") {
+              await tx.execute(
+                sql`CREATE FUNCTION pg_temp.reject_projection_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'projection audit rejected'; END $$`,
+              );
+              await tx.execute(
+                sql`CREATE TRIGGER reject_projection_audit BEFORE INSERT ON system_audit_runs FOR EACH ROW EXECUTE FUNCTION pg_temp.reject_projection_audit()`,
+              );
+            }
+            const value = await writePreparedVersionChangesTx(tx, writes);
+            if (outcome === "later-failure") {
+              await tx.execute(sql`SELECT 1 / 0`);
+            }
+            return value;
+          }),
+        catch: (cause) => cause,
+      });
+      const after = await auditRows();
+      switch (outcome) {
+        case "commit": {
+          expect(result.isOk()).toBe(true);
+          expect(await countsOf(eli)).toEqual([
+            "first",
+            ONE_WORD,
+            ONE_PROVISION_ADDED,
+          ]);
+          expect(after.slice(before.length)).toEqual([
+            expect.objectContaining({
+              actor: "system:legislation-version-changes",
+              counts: { summaries: 3 },
+            }),
+          ]);
+          const replay = (
+            await refreshWorkVersionChanges({
+              db: scopedDb,
+              work: { sourceId, eli, language: "cs" },
+            })
+          ).unwrap();
+          expect(replay.written).toBe(0);
+          expect(await auditRows()).toEqual(after);
+          break;
+        }
+        case "audit-failure":
+        case "later-failure":
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toMatchObject({
+              cause: expect.objectContaining({
+                message:
+                  outcome === "audit-failure"
+                    ? "projection audit rejected"
+                    : "division by zero",
+              }),
+            });
+          }
+          expect(await countsOf(eli)).toEqual([null, null, null]);
+          expect(after).toEqual(before);
+          break;
+        default:
+          outcome satisfies never;
+      }
+    },
+  );
 });
