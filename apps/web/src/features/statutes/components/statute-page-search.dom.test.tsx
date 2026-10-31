@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import {
   publicStatuteSearchSchema,
@@ -10,7 +11,6 @@ import {
 } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;

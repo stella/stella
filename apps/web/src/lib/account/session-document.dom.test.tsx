@@ -10,8 +10,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const sessionArea = () =>
   browserStorage("session") ?? panic("Test requires session browser storage");

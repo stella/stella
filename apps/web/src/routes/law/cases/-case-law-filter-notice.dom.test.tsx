@@ -9,10 +9,11 @@ import {
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import cs from "@/i18n/langs/cs.json";
 import en from "@/i18n/langs/en.json";
 import { searchSchema } from "@/routes/law/cases/-case-law-search-schema";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, screen } =

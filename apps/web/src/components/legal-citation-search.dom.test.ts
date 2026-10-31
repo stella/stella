@@ -9,11 +9,11 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const originalFetch = globalThis.fetch;

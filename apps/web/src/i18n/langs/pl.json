@@ -1357,6 +1357,18 @@
     "aiPrompt": "Pole wiadomości AI",
     "aiThread": "Konwersacja AI",
     "analyzingSources": "Analizowanie źródeł",
+    "anonymizationPreview": {
+      "answer": "<person1>Małgorzata Wójcik</person1> może żądać od <person2>Łukasza Nowaka</person2> spłaty długu wraz z odsetkami za opóźnienie.",
+      "off": "Zanonimizowany tryb AI jest wyłączony: AI otrzymuje tekst w takiej postaci, w jakiej go napisano, razem z danymi osobowymi.",
+      "on": "Zanonimizowany tryb AI jest włączony: dane osobowe są zastępowane symbolami zastępczymi przed wysłaniem do AI i przywracane w odpowiedzi.",
+      "prompt": "Przygotuj odpowiedź dla <person1>Małgorzaty Wójcik</person1> (PESEL <nationalId>85121214219</nationalId>, <address>ul. Lipowa 14, Kraków</address>) w sprawie długu <person2>Łukasza Nowaka</person2>.",
+      "steps": {
+        "answered": "AI odpowiada",
+        "restored": "Czytasz",
+        "sent": "AI otrzymuje",
+        "written": "Piszesz"
+      }
+    },
     "anonymizedMode": "Zanonimizowany tryb AI",
     "anonymizedModeDisabled": "Zanonimizowany tryb AI jest wyłączony",
     "anonymizedModeEnabled": "Zanonimizowany tryb AI jest włączony",

@@ -1357,6 +1357,18 @@
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
     "analyzingSources": "Analyzuji zdroje",
+    "anonymizationPreview": {
+      "answer": "<person1>Jana Dvořáková</person1> může po <person2>Petru Svobodovi</person2> požadovat zaplacení dluhu i s úroky z prodlení.",
+      "off": "Anonymizovaný režim AI je vypnutý: AI dostane text tak, jak jste ho napsali, i s osobními údaji.",
+      "on": "Anonymizovaný režim AI je zapnutý: osobní údaje se před odesláním nahradí zástupnými hodnotami a v odpovědi se zase doplní.",
+      "prompt": "Připrav odpověď <person1>Janě Dvořákové</person1> (r. č. <nationalId>856212/1234</nationalId>, <address>Lipová 14, Brno</address>) ohledně dluhu <person2>Petra Svobody</person2>.",
+      "steps": {
+        "answered": "AI odpoví",
+        "restored": "Čtete",
+        "sent": "AI dostane",
+        "written": "Píšete"
+      }
+    },
     "anonymizedMode": "Anonymizovaný režim AI",
     "anonymizedModeDisabled": "Anonymizovaný režim AI je vypnutý",
     "anonymizedModeEnabled": "Anonymizovaný režim AI je zapnutý",

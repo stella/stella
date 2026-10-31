@@ -8,11 +8,11 @@ import {
   DECISION_MODEL_PROVIDERS,
 } from "@stll/ai-catalog";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",

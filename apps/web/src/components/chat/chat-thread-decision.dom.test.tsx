@@ -2,8 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { ChatHistoryItem } from "@/features/chat/queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ChatThreadDecision } from "./chat-thread-decision";
 

@@ -10,11 +10,11 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import { toSafeId } from "@stll/api-contract/safe-id";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 

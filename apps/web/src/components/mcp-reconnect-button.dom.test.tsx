@@ -1,10 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { requireBrowserStorage } from "@/lib/account/browser-storage";
 import { MCP_OAUTH_REQUEST_STORAGE_KEY } from "@/lib/account/storage-keys";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const originalFetch = globalThis.fetch;

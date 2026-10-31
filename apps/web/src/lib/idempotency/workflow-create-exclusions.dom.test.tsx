@@ -4,9 +4,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, fireEvent, render, renderHook, waitFor } =

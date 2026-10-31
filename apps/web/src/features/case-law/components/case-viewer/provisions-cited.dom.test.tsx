@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
 import type { provisionPreviewOptions } from "@/lib/statutes/provision-preview";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { provision } from "./provisions-cited.fixture";
 

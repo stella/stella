@@ -10,6 +10,7 @@ import { NewChatIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { AnonymizationPreviewCard } from "@/components/chat/anonymization-preview";
 import {
   ChatContextMeter,
   type ChatContextUsage,
@@ -245,11 +246,19 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
             {...guideAnchor(GUIDE_ANCHORS.chatAnonymize, guideAnchorsEnabled)}
             className="inline-flex"
           >
-            <ChatAnonymizedToggle
-              disabled={disabled}
+            {/* The preview card says what the shield does and whether it
+                is on, so the toggle's own on/off tooltip would repeat it. */}
+            <AnonymizationPreviewCard
               enabled={anonymized}
-              onChange={setAnonymized}
-              size="icon-xs"
+              trigger={
+                <ChatAnonymizedToggle
+                  disabled={disabled}
+                  enabled={anonymized}
+                  onChange={setAnonymized}
+                  size="icon-xs"
+                  tooltip={false}
+                />
+              }
             />
           </span>
           {endExtras}

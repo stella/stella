@@ -1357,6 +1357,18 @@
     "aiPrompt": "Campo de mensaje de IA",
     "aiThread": "Conversación de IA",
     "analyzingSources": "Analizando fuentes",
+    "anonymizationPreview": {
+      "answer": "<person1>María José Núñez</person1> puede reclamar a <person2>Íñigo Ibáñez</person2> la deuda más los intereses de demora.",
+      "off": "El modo de IA anonimizado está desactivado: la IA recibe el texto tal como lo escribiste, con los datos personales.",
+      "on": "El modo de IA anonimizado está activado: los datos personales se sustituyen por marcadores antes de que la IA los vea y se restauran en la respuesta.",
+      "prompt": "Redacta una respuesta a <person1>María José Núñez</person1> (DNI <nationalId>48291736Q</nationalId>, <address>Calle Mayor 14, Sevilla</address>) sobre la deuda de <person2>Íñigo Ibáñez</person2>.",
+      "steps": {
+        "answered": "La IA responde",
+        "restored": "Lees",
+        "sent": "La IA recibe",
+        "written": "Escribes"
+      }
+    },
     "anonymizedMode": "Modo de IA anonimizado",
     "anonymizedModeDisabled": "El modo de IA anonimizado está desactivado",
     "anonymizedModeEnabled": "El modo de IA anonimizado está activado",

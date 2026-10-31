@@ -4,8 +4,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/admin" });
 Object.assign(import.meta.env, {

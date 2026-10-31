@@ -1,3 +1,4 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { createRequire } from "node:module";
 import { setImmediate as nextMacrotask } from "node:timers/promises";
@@ -79,4 +80,15 @@ export const drainReactScheduler = async (): Promise<void> => {
     }
     previous = next;
   }
+};
+
+/**
+ * Remove the happy-dom globals only after React has run every scheduled task,
+ * so no callback can touch `window` once it is gone. Updates that land outside
+ * act(), such as a popup opening on its own timer while a test waits for it,
+ * leave render work in React's scheduler that reads `window` when it runs.
+ */
+export const unregisterDomEnvironment = async (): Promise<void> => {
+  await drainReactScheduler();
+  await GlobalRegistrator.unregister();
 };

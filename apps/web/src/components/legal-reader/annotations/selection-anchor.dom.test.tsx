@@ -6,8 +6,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { plainTextOf } from "@stll/legal-ast/document-ast";
 import type { Inline } from "@stll/legal-ast/inline";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { selectionAnchorsFrom } from "./selection-anchor";
 

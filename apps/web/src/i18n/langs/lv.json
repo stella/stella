@@ -1357,6 +1357,18 @@
     "aiPrompt": "AI ziņojuma lauks",
     "aiThread": "AI saruna",
     "analyzingSources": "Avotu analīze",
+    "anonymizationPreview": {
+      "answer": "<person1>Ilze Bērziņa</person1> var prasīt, lai <person2>Jānis Kalniņš</person2> atmaksā parādu kopā ar nokavējuma procentiem.",
+      "off": "Anonimizēts AI režīms ir izslēgts: AI saņem tekstu tādu, kādu to uzrakstījāt, kopā ar personas datiem.",
+      "on": "Anonimizēts AI režīms ir ieslēgts: pirms nosūtīšanas personas dati tiek aizstāti ar vietturiem un atbildē atjaunoti.",
+      "prompt": "Sagatavo atbildi <person1>Ilzei Bērziņai</person1> (personas kods <nationalId>121285-14219</nationalId>, <address>Liepu iela 14, Rīga</address>) par <person2>Jāņa Kalniņa</person2> parādu.",
+      "steps": {
+        "answered": "AI atbild",
+        "restored": "Jūs lasāt",
+        "sent": "AI saņem",
+        "written": "Jūs rakstāt"
+      }
+    },
     "anonymizedMode": "Anonimizēts AI režīms",
     "anonymizedModeDisabled": "Anonimizēts AI režīms ir izslēgts",
     "anonymizedModeEnabled": "Anonimizēts AI režīms ir ieslēgts",

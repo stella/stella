@@ -12,11 +12,11 @@ import {
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
 import type { WorkspaceFile } from "@/lib/workspaces/queries/entities";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondLatest: (request: Request) => Promise<Response> | Response = () => {

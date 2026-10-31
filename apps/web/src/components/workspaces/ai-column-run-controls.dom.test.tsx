@@ -2,9 +2,9 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import englishMessages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { AI_COLUMN_RUN_REVEAL, aiColumnRunScope } from "./ai-column-run.logic";
 import type { AiColumnRunReveal } from "./ai-column-run.logic";

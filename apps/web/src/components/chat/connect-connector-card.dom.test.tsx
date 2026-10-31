@@ -8,10 +8,10 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import { toSafeId } from "@stll/api-contract/safe-id";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

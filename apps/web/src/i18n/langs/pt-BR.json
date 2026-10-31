@@ -1357,6 +1357,18 @@
     "aiPrompt": "Campo de mensagem de IA",
     "aiThread": "Conversa de IA",
     "analyzingSources": "Analisando fontes",
+    "anonymizationPreview": {
+      "answer": "<person1>João Conceição</person1> pode cobrar de <person2>Lúcia Araújo</person2> a dívida com juros de mora.",
+      "off": "O modo IA anonimizado está desativado: a IA recebe o texto como você escreveu, com os dados pessoais.",
+      "on": "O modo IA anonimizado está ativado: os dados pessoais são trocados por marcadores antes de a IA vê-los e restaurados na resposta.",
+      "prompt": "Redija uma resposta para <person1>João Conceição</person1> (CPF <nationalId>381.924.705-12</nationalId>, <address>Rua das Flores, 14, Recife</address>) sobre a dívida de <person2>Lúcia Araújo</person2>.",
+      "steps": {
+        "answered": "A IA responde",
+        "restored": "Você lê",
+        "sent": "A IA recebe",
+        "written": "Você escreve"
+      }
+    },
     "anonymizedMode": "Modo IA anonimizado",
     "anonymizedModeDisabled": "O modo IA anonimizado está desativado",
     "anonymizedModeEnabled": "O modo de IA anonimizada está ativado",

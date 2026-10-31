@@ -1,10 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import messages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
 import { sessionOptions } from "@/lib/auth-query-options";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { QueryClient, QueryClientProvider } =

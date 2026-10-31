@@ -5,11 +5,11 @@ import { Result } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { CreateAnnotationInput } from "@/components/legal-reader/annotations/annotation-types";
 import type { GuestAnnotationStore } from "@/components/legal-reader/annotations/guest-annotation-store.logic";
 import type { ReaderAnnotationWrites } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ReaderAnnotationController } from "./use-reader-annotation-history";
 

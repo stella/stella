@@ -8,10 +8,11 @@ import {
 } from "@tanstack/react-router";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type {
   decisionLawCrumbTrailOf,

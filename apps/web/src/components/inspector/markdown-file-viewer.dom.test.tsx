@@ -5,12 +5,12 @@ import fc from "fast-check";
 
 import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { FileTab } from "./inspector-store-types";
 

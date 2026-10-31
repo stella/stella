@@ -1357,6 +1357,18 @@
     "aiPrompt": "AI message composer",
     "aiThread": "AI conversation",
     "analyzingSources": "Analyzing sources",
+    "anonymizationPreview": {
+      "answer": "<person1>Zoë Hartley</person1> can claim the unpaid rent from <person2>Renée Okafor</person2>, with interest from the due date.",
+      "off": "Anonymized AI mode is off: the AI sees your text as written, personal data included.",
+      "on": "Anonymized AI mode is on: personal data is replaced with placeholders before the AI sees it and restored in the answer.",
+      "prompt": "Draft a reply to <person1>Zoë Hartley</person1> (NI number <nationalId>QQ 12 34 56 C</nationalId>, <address>14 Elm Row, Leeds</address>) about the rent <person2>Renée Okafor</person2> owes her.",
+      "steps": {
+        "answered": "The AI answers",
+        "restored": "You read",
+        "sent": "The AI receives",
+        "written": "You write"
+      }
+    },
     "anonymizedMode": "Anonymized AI mode",
     "anonymizedModeDisabled": "Anonymized AI mode is off",
     "anonymizedModeEnabled": "Anonymized AI mode is on",

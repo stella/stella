@@ -14,10 +14,10 @@ import {
 
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { DesktopAction } from "./desktop-action-gate.logic";
 

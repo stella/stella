@@ -8,10 +8,10 @@ import * as v from "valibot";
 
 import { cents } from "@stll/money";
 import { assertProperty } from "@stll/property-testing";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts/a" });
 

@@ -1357,6 +1357,18 @@
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
+    "anonymizationPreview": {
+      "answer": "<person1>Rūta Kazlauskienė</person1> gali reikalauti, kad <person2>Jonas Petrauskas</person2> grąžintų skolą su delspinigiais.",
+      "off": "Anonimizuotas DI režimas išjungtas: DI gauna tekstą tokį, kokį parašėte, su asmens duomenimis.",
+      "on": "Anonimizuotas DI režimas įjungtas: prieš siunčiant asmens duomenys pakeičiami vietaženkliais, o atsakyme atkuriami.",
+      "prompt": "Parenk atsakymą <person1>Rūtai Kazlauskienei</person1> (asmens kodas <nationalId>48512124219</nationalId>, <address>Liepų g. 14, Kaunas</address>) dėl <person2>Jono Petrausko</person2> skolos.",
+      "steps": {
+        "answered": "DI atsako",
+        "restored": "Jūs skaitote",
+        "sent": "DI gauna",
+        "written": "Jūs rašote"
+      }
+    },
     "anonymizedMode": "Anonimizuotas DI režimas",
     "anonymizedModeDisabled": "Anonimizuotas DI režimas išjungtas",
     "anonymizedModeEnabled": "Anonimizuotas DI režimas įjungtas",

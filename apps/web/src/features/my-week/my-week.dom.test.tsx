@@ -4,13 +4,13 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import { TIME_ENTRIES_APPROVAL_BATCH_MAX } from "@stll/api-contract/limits";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 import type { TimeEntrySuggestion } from "@stll/api-contract/time-entry-types";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
 
 import type { MyTimeEntry } from "@/features/my-week/my-week-day";
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 import type { MyTimeSuggestionRange as MySuggestionRange } from "@/lib/workspaces/queries/my-time-suggestions";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { TIME_TRACKING_ENTRIES_SELECTOR } from "../../../e2e/marketing/capture-readiness";
 

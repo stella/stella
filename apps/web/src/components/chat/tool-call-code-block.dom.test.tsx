@@ -9,9 +9,10 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import arabicMessages from "@/i18n/langs/ar.json" with { type: "json" };
 import messages from "@/i18n/langs/en.json" with { type: "json" };
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ToolCallCodeTone } from "./tool-call-code-block";
 

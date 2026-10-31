@@ -7,8 +7,7 @@ import {
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
 } from "@stll/api-contract/search";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { DecisionListFilters, SearchFacets } from "./decisions";
 

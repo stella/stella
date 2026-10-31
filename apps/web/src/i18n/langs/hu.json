@@ -1357,6 +1357,18 @@
     "aiPrompt": "AI-üzenetmező",
     "aiThread": "AI-beszélgetés",
     "analyzingSources": "Források elemzése",
+    "anonymizationPreview": {
+      "answer": "<person1>Kovács Éva</person1> késedelmi kamattal együtt követelheti <person2>Szabó Gábortól</person2> a tartozást.",
+      "off": "Az anonimizált AI mód ki van kapcsolva: az AI úgy kapja meg a szöveget, ahogy megírta, a személyes adatokkal együtt.",
+      "on": "Az anonimizált AI mód be van kapcsolva: a személyes adatok küldés előtt helyőrzőkre cserélődnek, a válaszban pedig visszaállnak.",
+      "prompt": "Írj választ <person1>Kovács Évának</person1> (személyi azonosító <nationalId>2-851212-4219</nationalId>, <address>Fő utca 14., Debrecen</address>) a <person2>Szabó Gábortól</person2> követelt tartozásról.",
+      "steps": {
+        "answered": "Az AI válaszol",
+        "restored": "Ön olvassa",
+        "sent": "Az AI megkapja",
+        "written": "Ön írja"
+      }
+    },
     "anonymizedMode": "Anonimizált AI mód",
     "anonymizedModeDisabled": "Az anonimizált AI mód ki van kapcsolva",
     "anonymizedModeEnabled": "Az anonimizált AI mód be van kapcsolva",

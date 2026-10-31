@@ -3,9 +3,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import english from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/law" });
 const { cleanup, fireEvent, render, within } =

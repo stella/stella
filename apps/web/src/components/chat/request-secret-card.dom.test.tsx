@@ -5,6 +5,7 @@ import type {
   RequestSecretInput,
   RequestSecretOutput,
 } from "@stll/api-contract/chat-secret";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import type {
@@ -14,7 +15,6 @@ import type {
 import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 

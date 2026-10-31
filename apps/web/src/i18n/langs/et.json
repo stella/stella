@@ -1357,6 +1357,18 @@
     "aiPrompt": "AI sõnumiväli",
     "aiThread": "AI vestlus",
     "analyzingSources": "Allikate analüüsimine",
+    "anonymizationPreview": {
+      "answer": "<person1>Mari Tamm</person1> võib nõuda <person2>Jüri Saarelt</person2> võla tasumist koos viivisega.",
+      "off": "Anonüümitud AI režiim on väljas: AI saab teksti nii, nagu sa selle kirjutasid, koos isikuandmetega.",
+      "on": "Anonüümitud AI režiim on sees: isikuandmed asendatakse enne saatmist kohatäidetega ja taastatakse vastuses.",
+      "prompt": "Koosta vastus <person1>Mari Tammele</person1> (isikukood <nationalId>48512124219</nationalId>, <address>Pärnu mnt 14, Tartu</address>) <person2>Jüri Saarelt</person2> sissenõutava võla kohta.",
+      "steps": {
+        "answered": "AI vastab",
+        "restored": "Sina loed",
+        "sent": "AI saab",
+        "written": "Sina kirjutad"
+      }
+    },
     "anonymizedMode": "Anonüümitud AI režiim",
     "anonymizedModeDisabled": "Anonüümitud AI režiim on väljas",
     "anonymizedModeEnabled": "Anonüümitud AI režiim on sees",

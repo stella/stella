@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { type OutlineItem, OutlineRail } from "./outline-rail";
@@ -32,7 +33,7 @@ afterAll(async () => {
   } else {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const renderOutline = async (presentation: "popover" | "rail" = "popover") => {

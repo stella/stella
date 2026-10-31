@@ -20,8 +20,7 @@ import path from "node:path";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
-
-import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 

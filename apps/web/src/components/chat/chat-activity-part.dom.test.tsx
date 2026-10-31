@@ -4,12 +4,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE } from "@stll/api-contract/chat";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { Analytics } from "@/lib/analytics/types";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
 const originalFetch = globalThis.fetch;

@@ -3,12 +3,13 @@ import type { ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { AskUserInput } from "@/components/chat/chat-ui-tools";
 import type { DecisionTabTarget } from "@/features/case-law/decision-inspector.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CaseLawDecisionLocator } from "./case-law-open";
 

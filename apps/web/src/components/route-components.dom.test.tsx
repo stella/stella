@@ -2,11 +2,11 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const { renderToStaticMarkup } = await import("react-dom/server");

@@ -1357,6 +1357,18 @@
     "aiPrompt": "KI-Nachrichtenfeld",
     "aiThread": "KI-Konversation",
     "analyzingSources": "Quellen werden analysiert",
+    "anonymizationPreview": {
+      "answer": "<person1>Herr Weiß</person1> kann von <person2>Frau Schäfer</person2> die rückständige Miete samt Verzugszinsen verlangen.",
+      "off": "Anonymisierter KI-Modus ist aus: Die KI erhält Ihren Text so, wie Sie ihn geschrieben haben, samt personenbezogener Daten.",
+      "on": "Anonymisierter KI-Modus ist an: Personenbezogene Daten werden vor dem Senden durch Platzhalter ersetzt und in der Antwort wiederhergestellt.",
+      "prompt": "Entwirf eine Antwort an <person1>Herrn Jürgen Weiß</person1> (Steuer-ID <nationalId>65 438 129 074</nationalId>, <address>Lindenstraße 14, Köln</address>) zu <person2>Monika Schäfers</person2> Mietrückstand.",
+      "steps": {
+        "answered": "Die KI antwortet",
+        "restored": "Sie lesen",
+        "sent": "Die KI erhält",
+        "written": "Sie schreiben"
+      }
+    },
     "anonymizedMode": "Anonymisierter KI-Modus",
     "anonymizedModeDisabled": "Anonymisierter KI-Modus ist aus",
     "anonymizedModeEnabled": "Anonymisierter KI-Modus ist an",
