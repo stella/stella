@@ -1,6 +1,10 @@
+import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 
+import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
 import {
   openRawSourceWriteWindow,
   rawSourcePayloadKey,
@@ -33,12 +37,12 @@ export const memorySkDocumentRawStorage = () => {
   return { storage, objects };
 };
 
-/** Real deferred raw writer, with a complete body its PDF parser cannot read. */
+/** Real deferred raw writer; the default body exercises an unreadable captured PDF. */
 export const deferredSkDocumentRawFixture = async (
   inlineRaw = encodeSourceRawEnvelope({ listing: '{"id":1}' }),
+  bytes: Uint8Array = new TextEncoder().encode("%PDF-1.7 not a pdf"),
 ) => {
   const memory = memorySkDocumentRawStorage();
-  const bytes = new TextEncoder().encode("%PDF-1.7 not a pdf");
   const capture = await captureSkDocumentRaw({
     sourceId: createSafeId<"caseLawSource">(),
     decisionId: createSafeId<"caseLawDecision">(),
@@ -61,4 +65,42 @@ export const deferredSkDocumentRawFixture = async (
     objects: memory.objects,
     bytes,
   };
+};
+
+/** Supply a real captured PDF when metadata assertions drive the public replay boundary. */
+export const capturedSkDocumentReplayInput = async (
+  stored: StoredRawReparseInput,
+) => {
+  const pdf = PDF.create();
+  pdf
+    .addPage({ size: "letter" })
+    .drawText("Stored decision text.", { x: 72, y: 720, size: 12 });
+  const captured = await deferredSkDocumentRawFixture(
+    new TextDecoder().decode(stored.raw),
+    await pdf.save(),
+  );
+  return {
+    raw: new TextEncoder().encode(captured.raw),
+    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    caseNumber: stored.caseNumber,
+    sourceDocumentId: stored.sourceDocumentId,
+    language: stored.language,
+    court: stored.court,
+    ecli: stored.ecli,
+    decisionDate: stored.decisionDate,
+    decisionType: stored.decisionType,
+    sourceUrl: stored.sourceUrl,
+    documentUrl: stored.documentUrl,
+    metadata: stored.metadata,
+    readObject: (key) =>
+      Promise.resolve(Result.ok(captured.objects.get(key) ?? null)),
+  } satisfies StoredRawReparseInput;
+};
+
+export const replayCapturedSkDocument = async (
+  stored: StoredRawReparseInput,
+) => {
+  const replay =
+    skCourtsAdapter.reparseStoredRaw ?? panic("SK courts replay required");
+  return await replay(await capturedSkDocumentReplayInput(stored));
 };

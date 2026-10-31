@@ -21,6 +21,7 @@ import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
+import { replayCapturedSkDocument } from "@/api/tests/helpers/sk-document-raw-storage";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;
@@ -95,7 +96,7 @@ describe("court registry enrichment", () => {
         if (decision === null) {
           continue;
         }
-        const replay = await skCourtsAdapter.reparseStoredRaw?.({
+        const replay = await replayCapturedSkDocument({
           raw: new TextEncoder().encode(decision.sourceRaw),
           contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
           caseNumber: listedItem.spisovaZnacka,
@@ -546,7 +547,7 @@ describe("court registry enrichment", () => {
       expect(
         JSON.parse(parts?.["court-registry-unavailable"] ?? "null"),
       ).toEqual(observation);
-      const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+      const outcome = await replayCapturedSkDocument({
         raw: new TextEncoder().encode(decision.sourceRaw),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: item.spisovaZnacka,
@@ -595,7 +596,7 @@ describe("court registry enrichment", () => {
           "null",
       ),
     ).toEqual(record);
-    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+    const outcome = await replayCapturedSkDocument({
       raw: new TextEncoder().encode(decision.sourceRaw),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: item.spisovaZnacka,

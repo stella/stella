@@ -248,7 +248,7 @@ describe("SK courts stored document replay", () => {
           }
           expect(outcome.type).toBe("parsed");
           if (outcome.type !== "parsed") {
-            return panic("Captured PDF must rebuild layout");
+            panic("Captured PDF must rebuild layout");
           }
           expect(outcome.result.parserVersion).toBe(
             PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
