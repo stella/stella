@@ -86,6 +86,8 @@
     "mcp-canary.yml/mcp-canary": "main",
     "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
+    "merge-group-hold.yml/merge-group-hold": "pr-fast",
+    "merge-group-hold.yml/dequeue-held-pull-request": "pr-fast",
     "label-sync.yml/label-sync": "main",
     "landing-canary.yml/served": "main",
     "network-baseline-deliver.yml/deliver": "main",
