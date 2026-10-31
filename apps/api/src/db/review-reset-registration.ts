@@ -5,7 +5,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /** Only the migration connection registers reset authority. */
 export const REVIEW_RESET_REGISTRATION: OnlineRepair = {
-  introducedBy: "20261030200519_registered_review_reset",
+  introducedBy: "20261031202638_registered_review_reset",
   name: "review-reset-registration",
   readCompletion: async (connection) => {
     const config = requireMigrationReviewOrganizationConfig();

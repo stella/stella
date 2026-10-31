@@ -36,7 +36,7 @@ const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
 );
 const SYSTEM_MATTER_ACCESS_FUNCTIONS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
-  "20261030200019_system_matter_access_functions",
+  "20261031202138_system_matter_access_functions",
   "migration.sql",
 );
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
