@@ -91,6 +91,39 @@ const descendants = (node: unknown): AstNode[] => {
   return [node, ...children(node).flatMap((child) => descendants(child))];
 };
 
+/** Exclusive branches never render together; the larger one is what opens. */
+const renderedOptionCount = (
+  node: unknown,
+  isOption: (node: AstNode) => boolean,
+): number => {
+  if (!isAstNode(node)) {
+    return 0;
+  }
+  if (node.type === "ConditionalExpression") {
+    return Math.max(
+      renderedOptionCount(node.consequent, isOption),
+      renderedOptionCount(node.alternate, isOption),
+    );
+  }
+  return children(node).reduce(
+    (count, child) => count + renderedOptionCount(child, isOption),
+    isOption(node) ? 1 : 0,
+  );
+};
+
+/** A list mapped to text, not to elements, adds no options to the select. */
+const mapsToElements = (call: AstNode): boolean => {
+  const callback = Array.isArray(call.arguments) ? call.arguments.at(0) : null;
+  const inline =
+    isAstNode(callback) &&
+    (callback.type === "ArrowFunctionExpression" ||
+      callback.type === "FunctionExpression");
+  return (
+    !inline ||
+    descendants(callback).some((inner) => inner.type === "JSXElement")
+  );
+};
+
 const staticArrayLength = (node: unknown): number | null => {
   if (!isAstNode(node)) {
     return null;
@@ -586,8 +619,7 @@ export default eslintCompatPlugin({
             if (name === null || (!nativeSelect && !selectLocals.has(name))) {
               return;
             }
-            const nestedNodes = descendants(node);
-            const itemCount = nestedNodes.filter((inner) => {
+            const itemCount = renderedOptionCount(node, (inner) => {
               if (inner.type !== "JSXElement") {
                 return false;
               }
@@ -595,10 +627,11 @@ export default eslintCompatPlugin({
               return nativeSelect
                 ? innerName === "option"
                 : itemLocals.has(innerName ?? "");
-            }).length;
-            const mappedLongList = nestedNodes.some(
+            });
+            const mappedLongList = descendants(node).some(
               (inner) =>
                 inner.type === "CallExpression" &&
+                mapsToElements(inner) &&
                 (identifierResolvesTo(
                   context,
                   mappedListIdentifier(inner),

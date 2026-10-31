@@ -226,3 +226,38 @@ const select = <Select>{shortOptions().map((value) => <SelectItem value={value}>
     ),
   ).toEqual([]);
 });
+
+test("counts exclusive branches apart and reports a branch that is long alone", async () => {
+  const items = (length: number) =>
+    Array.from(
+      { length },
+      (_, index) => `<SelectItem value="${index}">${index}</SelectItem>`,
+    ).join("");
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+declare const wide: boolean;
+const exclusive = <Select>{wide ? <>${items(16)}</> : <>${items(16)}</>}</Select>;
+const longBranch = <Select>{wide ? <>${items(31)}</> : <>${items(2)}</>}</Select>;
+const together = <Select>${items(16)}{wide ? <>${items(16)}</> : null}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([4, 5]);
+});
+
+test("ignores a long list mapped to text and keeps one mapped to elements", async () => {
+  expect(
+    await lintSingleRule(
+      "searchable-long-select",
+      `${IMPORTS}
+import { COMMON_TIMEZONES as zones } from "@/lib/timezones";
+declare const ZoneRow: (props: { zone: string }) => null;
+declare const renderZone: (zone: string) => null;
+const text = <Select name={zones.map((zone) => zone.at(0)).join("")}><SelectItem value="a">a</SelectItem></Select>;
+const wrapped = <Select>{zones.map((zone) => <ZoneRow zone={zone} />)}</Select>;
+const named = <Select>{zones.map(renderZone)}</Select>;`,
+      { sourcePath: "source.tsx" },
+    ),
+  ).toEqual([6, 7]);
+});
