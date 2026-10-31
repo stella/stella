@@ -6,8 +6,7 @@
     "types": ["bun-types"],
     "paths": {
       "@stll/ai-catalog": ["../ai-catalog/src/index.ts"],
-      "@stll/locales": ["../locales/src/index.ts"],
-      "@/api/*": ["../../apps/api/src/*"]
+      "@stll/locales": ["../locales/src/index.ts"]
     }
   },
   "include": [".", "../../scripts/typecheck-coverage.ts"],

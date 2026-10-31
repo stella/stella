@@ -41,13 +41,6 @@ export const LINK_ICON_TRANSPORT_OWNERS = [
 
 export const OUTBOUND_TRANSPORT_CENSUS = [
   {
-    path: "packages/scripts/src/shared-test-postgres.ts",
-    class: "operator-configured-infrastructure",
-    reason:
-      "Owns bounded connections to the host-local shared test Postgres cluster.",
-    transports: ["module:bun"],
-  },
-  {
     path: "apps/web/src/lib/preload-error-recovery.ts",
     class: "package-owned-client",
     reason:

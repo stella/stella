@@ -21,8 +21,6 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
-import { createSqlClient } from "@/api/db/sql-client";
-
 import {
   resolveDockerTarget,
   resolveInstalledDevDockerKeeper,
@@ -369,23 +367,6 @@ export const ensureContainer = async (options: EnsureContainerOptions) => {
   return locked.value;
 };
 
-export const withSharedTestPostgresConnection = async <T>(
-  url: string,
-  work: (connection: ReservedSQL) => Promise<T>,
-) => {
-  const client = createSqlClient({ url, max: 1 });
-  try {
-    const connection = await client.reserve();
-    try {
-      return await work(connection);
-    } finally {
-      await connection.release();
-    }
-  } finally {
-    await client.close();
-  }
-};
-
 type ReadDockerResultOptions = {
   result: Pick<
     Bun.ReadableSyncSubprocess,
@@ -633,7 +614,12 @@ const migrateWorkerOnline = (tree: string, url: string) => {
   return Result.ok(undefined);
 };
 
-const run = async () => {
+type WithSharedTestConnection = <T>(
+  url: string,
+  work: (connection: ReservedSQL) => Promise<T>,
+) => Promise<T>;
+
+const run = async (withConnection: WithSharedTestConnection) => {
   const [action, flag, tree] = process.argv.slice(2);
   if (
     (action !== "prepare" && action !== "drop" && action !== "gc") ||
@@ -733,7 +719,7 @@ const run = async () => {
   if (container.value === "absent") {
     return Result.ok(undefined);
   }
-  return await withSharedTestPostgresConnection(
+  return await withConnection(
     `postgres://${OWNER}:${password}@127.0.0.1:${PORT}/postgres`,
     async (session) =>
       await withSharedPostgresLock(session, async () => {
@@ -831,9 +817,11 @@ const run = async () => {
   );
 };
 
-if (import.meta.main) {
+export const runSharedTestPostgres = async (
+  withConnection: WithSharedTestConnection,
+) => {
   const attempted = await Result.tryPromise({
-    try: run,
+    try: async () => await run(withConnection),
     catch: (cause) =>
       cause instanceof SharedTestPostgresError
         ? cause
@@ -847,4 +835,4 @@ if (import.meta.main) {
     process.stderr.write(`${result.error.message}\n`);
     process.exitCode = 1;
   }
-}
+};

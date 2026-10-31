@@ -56,6 +56,7 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
       try {
         for (const relative of [
           "scripts/shared-test-postgres.sh",
+          "apps/api/scripts/shared-test-postgres.ts",
           "packages/scripts/src/shared-test-postgres.ts",
           "packages/scripts/src/dev-postgres-lock.ts",
           "packages/scripts/src/dev-docker.ts",
