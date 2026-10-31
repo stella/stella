@@ -270,7 +270,7 @@ const runVersionChangesPass = async (
           }
           default:
             value satisfies never;
-            return panic("Unhandled version change batch result");
+            panic("Unhandled version change batch result");
         }
       },
       sleep: Bun.sleep,

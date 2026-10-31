@@ -177,7 +177,7 @@ const storeAll = async (inputs: readonly LegislationDocumentInput[]) => {
       corpus,
     });
     if (result.type !== "stored") {
-      return panic("fixture version was not stored");
+      panic("fixture version was not stored");
     }
     ids.push(result.id);
   }
@@ -294,7 +294,7 @@ describe("ingestion", () => {
       amended === undefined ||
       extended === undefined
     ) {
-      return panic("fixture work has three versions");
+      panic("fixture work has three versions");
     }
     await storeAll([extended, enacted, amended]);
 
@@ -310,7 +310,7 @@ describe("ingestion", () => {
         .orderBy(asc(legislationDocuments.versionValidFrom))
     ).toReversed();
     if (newest === undefined) {
-      return panic("fixture work was not stored");
+      panic("fixture work was not stored");
     }
     const legislationDb: LegislationReadDb = async (read) =>
       await withPublicLawReaderRole(db, async (roleTx) => {
@@ -338,7 +338,7 @@ describe("ingestion", () => {
       surface: "pages",
     });
     if (!("items" in page)) {
-      return panic("version list was refused");
+      panic("version list was refused");
     }
 
     expect(page.items.map(({ changes }) => changes)).toEqual([
@@ -393,7 +393,7 @@ describe("backfill", () => {
   test("a rewritten wording outdates its own summary and the next one, and only those", async () => {
     const [eli] = BACKFILLED;
     if (eli === undefined) {
-      return panic("fixture has a backfilled Work");
+      panic("fixture has a backfilled Work");
     }
     // A parser fix rewrites the middle version's AST in place.
     await db
@@ -493,13 +493,10 @@ test("canonical object ASTs are compared outside SQL transactions", async () => 
     .from(legislationDocuments)
     .where(eq(legislationDocuments.eli, eli));
   const objects = new Map(
-    rows.map(
-      (row) =>
-        [
-          String(`legislation/cze/versions/${row.id}/ast.zst`),
-          parsePersistedCorpusAst(row.documentAst),
-        ] as const,
-    ),
+    rows.map((row) => {
+      const key = `legislation/cze/versions/${row.id}/ast.zst`;
+      return [key, parsePersistedCorpusAst(row.documentAst)] as const;
+    }),
   );
   await db
     .update(legislationDocuments)
@@ -549,7 +546,7 @@ test("batch summaries refuse target and base revisions replaced after their read
   const ids = await storeAll(work(eli));
   const first = ids.at(0);
   if (first === undefined) {
-    return panic("Revision race fixture has a first version");
+    panic("Revision race fixture has a first version");
   }
   await db
     .update(legislationDocuments)
