@@ -33,6 +33,7 @@ import releaseMatterLegalHold from "@/api/handlers/workspaces/legal-holds/releas
 import readWorkspaces from "@/api/handlers/workspaces/list";
 import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
+import readWorkspaceMembers from "@/api/handlers/workspaces/members/list";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import readWorkspaceActivity from "@/api/handlers/workspaces/read-activity";
@@ -49,7 +50,6 @@ import readWorkflow from "@/api/handlers/workspaces/workflow/get";
 import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { mount, routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -107,28 +107,6 @@ const readWorkspaceContacts = createSafeHandler(
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
       readWorkspaceContactsHandler({ workspaceId, scopedDb }),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const readWorkspaceMembers = createSafeHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "list_matters" },
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readWorkspaceMembersHandler({
-            workspaceId,
-            scopedDb,
-          }),
-      ),
     );
 
     return Result.ok(response);

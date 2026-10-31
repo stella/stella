@@ -15,7 +15,7 @@ covered by one, or through `read_capability` or
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `place`, `prefill`, `prepare`, `preview`, `release`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `revert`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transcribe`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`, `void`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -119,7 +119,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.delete` | write, destructive | stella:contacts_write | — | curated tool `delete_contact` |
 | `contacts.export` | read | stella:read | — | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. contacts.list covers part of this: paginates the directory as JSON records without the portable import field set |
 | `contacts.get` | read | stella:read | — | curated tool `read_contact` |
-| `contacts.import` | write | stella:contacts_write | — | covered by `save_contact` |
+| `contacts.import` | write | stella:contacts_write | — | generic invoke → `stella capability contacts import` |
 | `contacts.list` | read | stella:read | — | curated tool `list_contacts` |
 | `contacts.sanctions.events.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-events-list` |
 | `contacts.sanctions.get` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-get` |
@@ -128,6 +128,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.sanctions.reviews.update` | write | stella:contacts_write | — | generic invoke → `stella capability contacts sanctions-reviews-update` |
 | `contacts.search` | read | stella:read | — | generic invoke → `stella capability contacts search` |
 | `contacts.update` | write | stella:contacts_write | — | covered by `save_contact` |
+
+## dictation
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `dictation.transcribe` | write | stella:chat | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: Use POST /v1/dictation/transcribe with a multipart audio file. |
 
 ## document-translations
 
@@ -178,8 +184,6 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.folders.list` | read | stella:read | — | covered by `list_documents` |
 | `entities.from-legal-source.create` | write | stella:documents_write | — | generic invoke → `stella capability entities from-legal-source-create` |
 | `entities.get` | read | stella:read | — | curated tool `read_document` |
-| `entities.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-place` |
-| `entities.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability entities legal-holds-release` |
 | `entities.list` | read | stella:read | — | curated tool `list_documents` |
 | `entities.move` | write | stella:documents_write | — | covered by `save_document` |
 | `entities.ocr.create` | write | stella:matters_write | — | generic invoke → `stella capability entities ocr-create` |
@@ -347,10 +351,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.delete` | write, destructive | stella:matters_write | — | curated tool `delete_matter` |
 | `matters.duplicate` | write | stella:matters_write | — | generic invoke → `stella capability matters duplicate` |
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
-| `matters.legal-holds.place` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-place` |
-| `matters.legal-holds.release` | write | stella:matters_write | — | generic invoke → `stella capability matters legal-holds-release` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
 | `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.members.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
@@ -742,7 +745,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
 | auth_plumbing | 33 |
-| billing_ui | 1 |
+| billing_ui | 2 |
 | chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
@@ -757,5 +760,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 19 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 20 |
+| upload_mechanics | 21 |
 | url_preview | 2 |

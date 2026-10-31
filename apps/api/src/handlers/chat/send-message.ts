@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -87,7 +88,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
-  resolveBrowserClientCapability,
+  resolveBrowserExtensionCapability,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -1868,8 +1869,9 @@ const prepareValidatedIncomingMessage = async ({
       // Validation admits persisted browser calls from any client; the
       // streaming set below registers the tool only when this request's
       // client reports a live extension.
-      browserClient: {
+      browserExtension: {
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "connected",
       },
       editApplyMode,
       docxEditRepresentation,
@@ -2952,7 +2954,9 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserClient: resolveBrowserClientCapability(body.browserClient),
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3036,6 +3040,9 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3644,6 +3651,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
+  browserExtension: BrowserExtensionCapability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3701,6 +3709,7 @@ const prepareChatContext = async ({
   sendMode,
   threadId,
   toolAvailability,
+  browserExtension,
   userContext,
   userId,
   workspaceId,
@@ -3741,6 +3750,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        browserExtension,
         userContext,
         userId,
         workspaceId,
