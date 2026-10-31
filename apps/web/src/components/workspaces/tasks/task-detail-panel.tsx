@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useRouteContext } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -61,10 +61,12 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
@@ -116,10 +118,7 @@ const TaskDetailPanelContent = ({
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const userId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.id,
-  });
+  const userId = useAuthenticatedUser().id;
 
   const {
     data: task,
@@ -224,7 +223,8 @@ const TaskDetailPanelContent = ({
     },
   });
 
-  const workflowActionMutation = useMutation({
+  const workflowActionMutation = useIdempotentMutation({
+    idempotencyScope: `tasks.${workspaceId}.${taskId}.workflow`,
     mutationFn: async (
       action:
         | { type: "acknowledge" }
@@ -233,12 +233,13 @@ const TaskDetailPanelContent = ({
             action: "reopen";
             reason?: string;
           },
+      request,
     ) => {
       const endpoint = api["work-obligations"]({
         workspaceId: toSafeId<"workspace">(workspaceId),
       })({ entityId: toSafeId<"entity">(taskId) });
       if (action.type === "acknowledge") {
-        return unwrapApiResponse(await endpoint.acknowledge.post({}));
+        return unwrapApiResponse(await endpoint.acknowledge.post({}, request));
       }
       return unwrapApiResponse(
         await endpoint.transition.post({

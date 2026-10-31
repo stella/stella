@@ -25,19 +25,31 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Reads canonical source-entry JSON; Git staging never changes the literal maps.
+  "parser-registry": "scripts/generate-parser-registry.ts",
+  "withdrawn-decision-labels":
+    "apps/web/scripts/sync-withdrawn-decision-labels.ts",
   // Runs local Oxlint against committed web and Tailwind sources; cache keys and
   // contents use content hashes and never consult the network, clock, or env.
   "tailwind-class-cache": "scripts/generate-tailwind-classes.ts",
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
+  // Lists the committed rollout file names; never imports or runs them.
+  "guard-rollout-manifest": "scripts/generate-guard-rollouts.ts",
   // Parses the install tooling import closure and replaces one Docker block.
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.
   "bun-toolchain": "scripts/generate-bun-toolchain.ts",
+  // Parses the committed CI workflow and formats a deterministic JSON map.
+  "main-heavy-infrastructure-steps":
+    "scripts/generate-main-heavy-infrastructure-steps.ts",
   // Parses schema source without opening a database connection.
   "status-tables": "apps/api/scripts/generate-status-tables.ts",
   "account-export-tables": "apps/api/scripts/generate-account-export-tables.ts",
+  // Reads declaration syntax and committed migration inventory; writes only its owner block.
+  "online-unique-index-names":
+    "apps/api/scripts/generate-online-unique-index-names.ts",
   "schema-index": "apps/api/scripts/generate-schema-index.ts",
   // Renders the versioned transition spec into its existing migration;
   // directory discovery chooses exactly one committed version-one migration.
@@ -54,6 +66,15 @@ const PURE_AUTOFIX = {
   // Source-owned module metadata and CSS tokens render Markdown blocks.
   "module-ownership": "scripts/ownership.ts",
   "design-tokens": "scripts/design-tokens-doc.ts",
+  // Resolves the committed web theme against the lockfile-pinned Tailwind
+  // palette with lightningcss; no network, clock or environment.
+  "mobile-ui-theme": "scripts/generate-mobile-ui-theme.ts",
+  // Rewrites the web's icon module and wordmark for lucide's native build,
+  // and copies lucide-static's outlines, pinned by the lockfile, into the
+  // app's asset catalog folder; reads only committed and installed files.
+  "mobile-icons": "scripts/generate-mobile-icons.ts",
+  // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
+  "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",
   // Reads glossary data, normalizes Unicode and formats fixed Markdown tables.
@@ -88,6 +109,10 @@ const PURE_AUTOFIX = {
 // A committed generator must have an explicit purity decision. Native builds
 // need toolchains outside the Bun install, and recorders need live services.
 const EXCLUDED_AUTOFIX = {
+  "request-replay-routes":
+    "Mounted handler discovery runs API module initialization under its test preload",
+  "playwright-devices":
+    "Device descriptors are refreshed explicitly from the installed SDK",
   "ci-job-classification-digests":
     "Protected workflow metadata is refreshed outside pull-request autofix",
   "failure-tags": "Generated census is excluded by the current owner policy",
@@ -98,6 +123,7 @@ const EXCLUDED_AUTOFIX = {
     "Model catalogs are explicitly excluded from automatic repair",
   "model-benchmarks": "Fetches upstream benchmark data",
   "catalogue-pinned-facts": "Fetches upstream content facts",
+  "harness-releases": "Fetches upstream release metadata",
   "us-courts": "Upstream court data refresh is excluded",
   "us-reporters": "Fetches pinned upstream reporter data",
   snowball: "Fetches/builds upstream Snowball sources",

@@ -83,7 +83,13 @@ const serveQueue = (
   {
     pageSize = 200,
     failLaterPages = false,
-  }: { pageSize?: number; failLaterPages?: boolean } = {},
+    returnRefusals = new Map(),
+  }: {
+    pageSize?: number;
+    failLaterPages?: boolean;
+    /** Entries the API refuses to return, with its reason. */
+    returnRefusals?: ReadonlyMap<string, string>;
+  } = {},
 ) => {
   let queue = [...initial];
   const calls: ApiCall[] = [];
@@ -141,9 +147,21 @@ const serveQueue = (
         request.method === "POST" &&
         path === "/time-entries/approval-queue/return"
       ) {
-        const { id } = v.parse(v.object({ id: v.string() }), body);
-        queue = queue.filter((item) => item.id !== id);
-        return json({ id, status: "draft" });
+        const { ids } = v.parse(
+          v.object({ ids: v.array(v.string()), comment: v.string() }),
+          body,
+        );
+        queue = queue.filter(
+          (item) => !ids.includes(item.id) || returnRefusals.has(item.id),
+        );
+        return json({
+          results: ids.map((id) => {
+            const reason = returnRefusals.get(id);
+            return reason === undefined
+              ? { id, status: "returned" }
+              : { id, status: "refused", reason };
+          }),
+        });
       }
       return new Response(JSON.stringify({ code: "not_found" }), {
         status: 404,
@@ -378,9 +396,122 @@ describe("approving time by person", () => {
     expect(
       calls.find(({ path }) => path === "/time-entries/approval-queue/return")
         ?.body,
-    ).toEqual({ id: "adam-1", comment: "Split the call from the drafting" });
+    ).toEqual({
+      ids: ["adam-1"],
+      comment: "Split the call from the drafting",
+    });
     expect(screen.getByText("Narrative adam-2")).toBeTruthy();
     expect(client.getQueryState(ownWeek)?.isInvalidated).toBe(true);
+  });
+
+  test("checked entries are returned together with one reason in one request", async () => {
+    const calls = serveQueue([
+      submitted("adam-1"),
+      submitted("adam-2"),
+      submitted("adam-3"),
+    ]);
+    mount();
+
+    const adam = await personSection("Adam Novak");
+    // Nothing to return together until entries are checked.
+    expect(
+      within(adam).queryByRole("button", { name: /^Return \d selected/u }),
+    ).toBeNull();
+    const [first, , third] = within(adam).getAllByRole("checkbox", {
+      name: messages.billing.approval.selectEntry,
+    });
+    if (!first || !third) {
+      throw new Error("expected selection checkboxes");
+    }
+    await act(async () => {
+      fireEvent.click(first);
+    });
+    await act(async () => {
+      fireEvent.click(third);
+    });
+    const returnSelected = within(adam).getByRole("button", {
+      name: "Return 2 selected entries",
+    });
+    // A return always carries its reason.
+    expect(returnSelected).toHaveProperty("disabled", true);
+    const reasons = within(adam).getAllByRole("textbox", {
+      name: messages.billing.approval.returnComment,
+    });
+    // The section's own reason field comes before the rows' fields.
+    const [bulkReason] = reasons;
+    if (!bulkReason || bulkReason.closest("li") !== null) {
+      throw new Error("expected the section's reason field");
+    }
+    await act(async () => {
+      fireEvent.change(bulkReason, {
+        target: { value: " Add the hearing reference " },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(returnSelected);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+    });
+    expect(screen.queryByText("Narrative adam-3")).toBeNull();
+    expect(screen.getByText("Narrative adam-2")).toBeTruthy();
+    const returns = calls.filter(
+      ({ path }) => path === "/time-entries/approval-queue/return",
+    );
+    expect(returns.map(({ body }) => body)).toEqual([
+      { ids: ["adam-1", "adam-3"], comment: "Add the hearing reference" },
+    ]);
+    expect(calls.some(({ path }) => path === "/time-entries/approve")).toBe(
+      false,
+    );
+  });
+
+  test("an entry the API refuses to return stays with the reason beside it", async () => {
+    serveQueue([submitted("adam-1"), submitted("adam-2")], {
+      returnRefusals: new Map([["adam-2", "running_timer"]]),
+    });
+    mount();
+
+    const adam = await personSection("Adam Novak");
+    for (const checkbox of within(adam).getAllByRole("checkbox", {
+      name: messages.billing.approval.selectEntry,
+    })) {
+      await act(async () => {
+        fireEvent.click(checkbox);
+      });
+    }
+    const [bulkReason] = within(adam).getAllByRole("textbox", {
+      name: messages.billing.approval.returnComment,
+    });
+    if (!bulkReason) {
+      throw new Error("expected the section's reason field");
+    }
+    await act(async () => {
+      fireEvent.change(bulkReason, { target: { value: "Split the call" } });
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(adam).getByRole("button", { name: "Return 2 selected entries" }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Narrative adam-1")).toBeNull();
+    });
+    const refused = (await screen.findByText("Narrative adam-2")).closest("li");
+    if (!(refused instanceof HTMLElement)) {
+      throw new Error("no row for adam-2");
+    }
+    // In return wording, never the approval's.
+    expect(within(refused).getByRole("alert").textContent).toBe(
+      messages.billing.approval.returnRefusals.runningTimer,
+    );
+    expect(
+      within(refused).queryByText(
+        messages.billing.approval.refusals.runningTimer,
+      ),
+    ).toBeNull();
   });
 
   test("a later page that fails to load says so and keeps the loaded entries", async () => {

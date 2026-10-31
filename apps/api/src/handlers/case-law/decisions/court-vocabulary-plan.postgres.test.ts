@@ -19,8 +19,10 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
+import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const PUBLISHED_INDEX = CASE_LAW_COURT_DATE_PUBLISHED_INDEX.name;
@@ -42,7 +44,7 @@ const indexScans = (
 };
 
 describe.skipIf(!enabled)("published court walks (postgres)", () => {
-  // timeout: isolated schema setup, two corpus sizes and VACUUM need an integration budget.
+  // timeout: isolated schema setup, two corpus sizes and the all-visible wait need an integration budget.
   test("vocabulary and browse seek published index ranges at both corpus sizes", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ?? panic("DATABASE_URL is required");
@@ -129,7 +131,7 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
                 '{"_stellaPartialObservation":{"isListingOnly":true}}'::jsonb ELSE '{}'::jsonb END
             FROM generate_series(1, ${decisions}::int) n
             CROSS JOIN (VALUES ('published'), ('redacted'), ('listing-only')) statuses(status)`);
-          await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
+          await vacuumUntilAllVisible({ db, table: "case_law_decisions" });
           await db.execute(sql`ANALYZE case_law_sources`);
           captured.length = 0;
           expect(await readCourtNames({ caseLawDb, country: "CZE" })).toEqual(
@@ -147,14 +149,26 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               vocabulary.params,
             ),
           );
-          const vocabularyScans = scanOccurrences(vocabularyPlan).filter(
-            ({ relation }) => relation === "case_law_decisions",
+          // Every scan of the table, of any kind, must be one of the two
+          // covering probes: a covering-index proof paired with the
+          // heap-fetch check below.
+          expect(
+            scanOccurrences(vocabularyPlan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            ),
+          ).toHaveLength(2);
+          const vocabularyScans = indexedAccessPaths(
+            vocabularyPlan,
+            "case_law_decisions",
+            { accessKind: "index-only" },
           );
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
-            expect(scan.index).toBe(PUBLISHED_INDEX);
-            expect(scan.nodeType).toBe("Index Only Scan");
-            expect(scan.filter).toBeNull();
+            expect(scan.branches.map(({ indexName }) => indexName)).toEqual([
+              PUBLISHED_INDEX,
+            ]);
+            // A residual filter would walk index entries the bound skips.
+            expect(scan.node["Filter"]).toBeUndefined();
           }
           for (const scan of indexScans(vocabularyPlan)) {
             expect(scan["Actual Rows"]).toBeLessThanOrEqual(1);

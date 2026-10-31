@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
@@ -15,6 +14,7 @@ import { useWorkflowServiceTierPrompt } from "@/components/workspaces/workflow-s
 import { useWorkflowStartConfirmationPrompt } from "@/components/workspaces/workflow-start-confirmation-prompt";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
@@ -34,10 +34,7 @@ export const useStartWorkflow = (workspaceId: string) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
-  const activeOrganizationId = useRouteContext({
-    from: "/_protected",
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const aiAvailabilityQueryOptions = aiAvailabilityOptions({
     organizationId: activeOrganizationId,
   });

@@ -25,15 +25,6 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
 } from "@/api/db/schema";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -64,6 +55,18 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
@@ -1151,11 +1154,19 @@ const replayWouldChangeRow = async ({
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
-}): Promise<boolean> => {
-  const result = sanitizeResult(input, metadataUrlSchema);
-  const payload = caseLawCanonicalPayload(result);
+}): Promise<Result<boolean, unknown>> => {
+  const normalized = sanitizeResult(input, metadataUrlSchema);
+  if (normalized.isErr()) {
+    return normalized;
+  }
+  const result = normalized.value;
+  const canonical = caseLawCanonicalPayload(result);
+  if (canonical.isErr()) {
+    return canonical;
+  }
+  const payload = canonical.value;
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
-    return true;
+    return Result.ok(true);
   }
   // Derived from the payload like the text is, so a parser that reads the
   // reference or its kind differently changes the row. Read as the write
@@ -1164,10 +1175,10 @@ const replayWouldChangeRow = async ({
     row.caseNumber !== storedCaseNumberOf(result) ||
     row.caseNumberType !== parsePrimaryReferenceType(result.caseNumberType)
   ) {
-    return true;
+    return Result.ok(true);
   }
   if (describedColumnsChanged({ input, result, row })) {
-    return true;
+    return Result.ok(true);
   }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
@@ -1176,20 +1187,21 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
+    return Result.ok(true);
   }
   // The stored hash answers what reading the stored payload back would.
   if (row.contentHash !== null) {
-    return parsedOutputRequiresWrite(
-      row.contentHash,
-      corpusContentHash(payload),
+    return Result.ok(
+      parsedOutputRequiresWrite(row.contentHash, corpusContentHash(payload)),
     );
   }
-  return !(await storedPayloadMatches({
-    payload,
-    row,
-    scopedDb,
-  }));
+  return Result.ok(
+    !(await storedPayloadMatches({
+      payload,
+      row,
+      scopedDb,
+    })),
+  );
 };
 
 type ProvedReplayInputOptions = Pick<
@@ -1259,7 +1271,7 @@ const replayRow = async ({
   withdraw,
   signal,
   s3Policy,
-}: ReplayRowOptions): Promise<ReplayRowReport> => {
+}: ReplayRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   const base = {
     id: row.id,
@@ -1271,24 +1283,26 @@ const replayRow = async ({
   if (reparsed.type === "supplement") {
     // Written over its own row, a supplement would stay the standalone
     // decision it is not. `supplement-fold.ts` folds it into its judgment.
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.SUPPLEMENT,
       detail: `a ${reparsed.supplement.kind} supplement; fold it instead`,
-    };
+    });
   }
 
   if (reparsed.type === "rejected") {
-    return await withdrawRejectedRow({
-      row,
-      rejection: reparsed.rejection,
-      detail: reparsed.detail,
-      rejectionPolicy,
-      scopedDb,
-      sourceLease,
-      withdraw,
-    });
+    return Result.ok(
+      await withdrawRejectedRow({
+        row,
+        rejection: reparsed.rejection,
+        detail: reparsed.detail,
+        rejectionPolicy,
+        scopedDb,
+        sourceLease,
+        withdraw,
+      }),
+    );
   }
 
   // A legacy spelling the adapter vouched for stands in for the regenerated
@@ -1306,15 +1320,15 @@ const replayRow = async ({
   });
   const selectedIdentity = decisionReplayIdentity(row.country, row);
   if (!Bun.deepEquals(regeneratedIdentity, selectedIdentity)) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.REJECTED,
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `selected ${JSON.stringify(selectedIdentity)}, regenerated ${JSON.stringify(regeneratedIdentity)}`,
-    };
+    });
   }
 
-  const changed = await replayWouldChangeRow({
+  const planned = await replayWouldChangeRow({
     metadataUrlSchema,
     row,
     // The row holds the document its supplements were composed into, which
@@ -1329,6 +1343,11 @@ const replayRow = async ({
     scopedDb,
   });
 
+  if (planned.isErr()) {
+    return planned;
+  }
+  const changed = planned.value;
+
   if (
     !changed &&
     (sourceLease === null ||
@@ -1340,7 +1359,7 @@ const replayRow = async ({
         result: reparsed.result,
       })))
   ) {
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
+    return Result.ok({ ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED });
   }
   const candidate = {
     outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY,
@@ -1351,9 +1370,9 @@ const replayRow = async ({
     decisionId: row.id,
   } as const satisfies ReplayWriteCandidate;
   if (sourceLease === null) {
-    return { ...base, outcome: candidate.outcome };
+    return Result.ok({ ...base, outcome: candidate.outcome });
   }
-  const processed = await writeReplayCandidate({
+  const written = await writeReplayCandidate({
     ...(signal === undefined ? {} : { signal }),
     ...(s3Policy === undefined ? {} : { s3Policy }),
     candidate,
@@ -1362,19 +1381,23 @@ const replayRow = async ({
     sourceId,
     resolveSourceContract,
   });
+  if (written.isErr()) {
+    return written;
+  }
+  const processed = written.value;
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-    return {
+    return Result.ok({
       ...base,
       outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
       detail: processed.reason,
-    };
+    });
   }
-  return {
+  return Result.ok({
     ...base,
     outcome: changed
       ? REPLAY_ROW_OUTCOME.APPLIED
       : REPLAY_ROW_OUTCOME.UNCHANGED,
-  };
+  });
 };
 
 type ReplayWriteCandidate = {
@@ -1529,7 +1552,11 @@ const replayOneRow = async ({
     });
   }
   const parsed = await Result.tryPromise({
-    try: async () => await capability.reparse(storedInputFor(row, raw)),
+    try: async () =>
+      await capability.reparse({
+        ...storedInputFor(row, raw),
+        readObject: storedRawResultReader(readStoredRaw),
+      }),
     catch: (cause) =>
       new ReplayStageError({
         message: "Stored replay adapter failed",
@@ -1541,23 +1568,25 @@ const replayOneRow = async ({
     return parsed;
   }
   signal?.throwIfAborted();
-  return await Result.tryPromise(
-    async () =>
-      await replayRow({
-        ...(signal === undefined ? {} : { signal }),
-        ...(s3Policy === undefined ? {} : { s3Policy }),
-        row,
-        raw,
-        resolveSourceContract,
-        metadataUrlSchema,
-        reparsed: parsed.value,
-        rejectionPolicy,
-        scopedDb,
-        sourceId,
-        sourceLease,
-        withdraw,
-      }),
-  );
+  return (
+    await Result.tryPromise(
+      async () =>
+        await replayRow({
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+          row,
+          raw,
+          resolveSourceContract,
+          metadataUrlSchema,
+          reparsed: parsed.value,
+          rejectionPolicy,
+          scopedDb,
+          sourceId,
+          sourceLease,
+          withdraw,
+        }),
+    )
+  ).andThen((outcome) => outcome);
 };
 
 // Every row outcome completes under the source lease, including paths that

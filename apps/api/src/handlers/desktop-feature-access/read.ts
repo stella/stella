@@ -27,7 +27,7 @@ const config = {
     v.object({
       features: v.object({
         "activity-timeline": decisionSchema,
-        "time-billing": decisionSchema,
+        "local-agents": decisionSchema,
       } satisfies Record<DesktopFeatureId, typeof decisionSchema>),
     }),
   ),
@@ -68,7 +68,7 @@ export const createDesktopFeatureAccessReadEndpoint = (
     return Result.ok({
       features: {
         "activity-timeline": decide(snapshot, "activity-timeline"),
-        "time-billing": decide(snapshot, "time-billing"),
+        "local-agents": decide(snapshot, "local-agents"),
       } satisfies Record<DesktopFeatureId, unknown>,
     });
   });

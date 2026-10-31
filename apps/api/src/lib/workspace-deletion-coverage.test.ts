@@ -122,7 +122,9 @@ describe("workspace deletion coverage", () => {
         edge.onDelete !== "set null" &&
         !clearedBySiblingForeignKey(edge, edges) &&
         !closure.has(edge.child) &&
-        !(edge.parent === workspaces && retainedTables.has(edge.child)),
+        // A retained row blocks the deletion: the fence refuses its own
+        // matter, and its restrictive references refuse any other.
+        !retainedTables.has(edge.child),
     );
     expect(
       uncovered.map(

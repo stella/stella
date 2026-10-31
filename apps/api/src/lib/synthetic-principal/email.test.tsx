@@ -1,13 +1,13 @@
 import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
   sendOTPEmail,
   sendReportExportStatusEmail,
 } from "@/api/lib/email/email";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import { SYNTHETIC_PRINCIPAL } from "./constants";
 

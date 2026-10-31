@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/inspector";
 import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
 import type { MatterChromeStyle } from "@stll/ui/matter-colors";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuPopup } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -27,6 +27,7 @@ import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
+import { appSidebarSurfaceOf } from "@/components/app-sidebar-surface";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
@@ -51,6 +52,7 @@ import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutEchoHud } from "@/components/shortcut-echo-hud";
 import {
+  PanelTrigger,
   SidebarProvider,
   SidebarToggleHotkey,
   SidebarTrigger,
@@ -278,7 +280,14 @@ export const ProtectedAppFrame = ({
                       routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
-                  navigation={{ content: <AppSidebar />, mode: "responsive" }}
+                  navigation={{
+                    content: (
+                      <AppSidebar
+                        surface={appSidebarSurfaceOf(activeMatterColor)}
+                      />
+                    ),
+                    mode: "responsive",
+                  }}
                   topBar={() => <ProtectedContent />}
                 >
                   {children}
@@ -348,11 +357,6 @@ function ProtectedContent() {
     }
     toggleInspector();
   };
-  // Desktop keeps the rail mounted once tabs exist, so the rail is
-  // the restore affordance. Mobile has no rail; after Back minimizes
-  // the sheet, the chrome button must reappear so the user can return.
-  const canShowInspectorButton =
-    inspectorTabsCount === 0 || (isMobile && inspectorMinimized);
   const inspectorButtonTitle = (() => {
     if (inspectorTabsCount === 0) {
       return t("inspector.openChat");
@@ -367,16 +371,22 @@ function ProtectedContent() {
   // space after the last icon) offers a quick "Open new chat"
   // shortcut without forcing a trip to the inspector toggle.
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
-  const chatMenuAnchorRef = useRef<{
+  const [chatMenuAnchor, setChatMenuAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
+  const [chatMenuOpener, setChatMenuOpener] = useState<HTMLElement | null>(
+    null,
+  );
   const handleIconRowContextMenu = (e: MouseEvent) => {
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
-    chatMenuAnchorRef.current = {
+    setChatMenuOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
+    setChatMenuAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    };
+    });
     setChatMenuOpen(true);
   };
   const handleOpenNewChatFromMenu = () => {
@@ -434,20 +444,6 @@ function ProtectedContent() {
       )}
       <GlobalTimer />
       {inboxPreviewEnabled && <NotificationBell />}
-      {canShowInspectorButton && (
-        <div className="contents md:hidden">
-          <Separator className="mx-1 h-4" orientation="vertical" />
-          <Button
-            className="size-7"
-            onClick={handleInspectorButtonClick}
-            size="icon"
-            title={inspectorButtonTitle}
-            variant="ghost"
-          >
-            <PanelRightIcon className="size-4" />
-          </Button>
-        </div>
-      )}
     </div>
   );
 
@@ -471,21 +467,35 @@ function ProtectedContent() {
             shell's own pin/matter/inspector icons without this shell importing
             any chat slice. */}
         <ChromeHeaderActionsSlot />
+        {/* Mobile has no rails: the inspector toggle closes the row at the
+            inline end as the sidebar trigger opens it at the start, and each
+            opens its panel as a sheet from its own edge. Desktop keeps the
+            inspector rail's own toggle. */}
+        {isMobile && (
+          <>
+            <Separator className="ms-2 h-4" orientation="vertical" />
+            <PanelTrigger
+              className="-me-1"
+              label={inspectorButtonTitle}
+              onClick={handleInspectorButtonClick}
+              side="right"
+            />
+          </>
+        )}
         <Menu
           onOpenChange={(nextOpen) => {
             setChatMenuOpen(nextOpen);
             if (!nextOpen) {
-              chatMenuAnchorRef.current = null;
+              setChatMenuAnchor(null);
             }
           }}
           open={chatMenuOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
-          <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={chatMenuAnchor ?? undefined}
+            finalFocus={() => chatMenuOpener}
+          >
             <ChatMenuContent label={t("chat.newChat")}>
               <LazyNewChatMenuItem
                 label={t("chat.newChat")}
@@ -666,8 +676,11 @@ function WorkspaceInspectorSidePanel({
         }}
         open={showPaneContent}
       >
+        {/* The sheet's default edge width leaves the page peeking past the
+            backdrop, as the sidebar sheet does, so a tap outside dismisses
+            it from either edge. */}
         <SheetPopup
-          className="h-dvh w-full max-w-none border-0 md:hidden"
+          className="h-dvh md:hidden"
           showCloseButton={false}
           side="inline-end"
           style={routeMatterChromeStyle}

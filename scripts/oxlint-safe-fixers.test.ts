@@ -2,7 +2,7 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 
 import { safeAutofixRuleArgs } from "./autofix-safe-rules";
 
@@ -173,6 +173,7 @@ describe.serial("custom oxlint safe fixers", () => {
 });
 
 test("automatic source fixes preserve exported declaration types", async () => {
+  await using api = new API();
   const { configPath, directory } = await writeHarness();
   await Bun.write(
     configPath,
@@ -188,9 +189,11 @@ test("automatic source fixes preserve exported declaration types", async () => {
     "",
   ].join("\n");
   await Bun.write(sourcePath, source);
-  const before = ts.transpileDeclaration(source, {
-    fileName: sourcePath,
-  }).outputText;
+  const before = (
+    await api.transpileDeclaration(source, {
+      fileName: sourcePath,
+    })
+  ).outputText;
   expect(before).toContain("mode: string;");
   expect(before).toContain("attempts: number;");
   expect(before).toContain("enabled: boolean;");
@@ -203,8 +206,10 @@ test("automatic source fixes preserve exported declaration types", async () => {
   });
   expect(fixed.exitCode, fixed.output).toBe(0);
   expect(
-    ts.transpileDeclaration(await Bun.file(sourcePath).text(), {
-      fileName: sourcePath,
-    }).outputText,
+    (
+      await api.transpileDeclaration(await Bun.file(sourcePath).text(), {
+        fileName: sourcePath,
+      })
+    ).outputText,
   ).toBe(before);
 });

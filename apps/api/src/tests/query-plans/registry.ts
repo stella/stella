@@ -54,14 +54,17 @@ import {
   type DecisionDateBand,
 } from "@/api/lib/case-law/decision-date-order";
 import {
+  DECISION_WORK_MANIFESTATIONS_MAX,
+  decisionWorkQuery,
+} from "@/api/lib/case-law/decision-work";
+import type { DecisionWork } from "@/api/lib/case-law/decision-work";
+import {
   decisionPageSql,
   ID_PAGE_SIZE,
 } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
-import {
-  SITEMAP_REFRESH_PAGE_SIZE,
-  sitemapRefreshPageSql,
-} from "@/api/lib/case-law/sitemap-shard-refresh";
+import { sitemapMonthCountSql } from "@/api/lib/case-law/sitemap-shard-refresh";
+import { SITEMAP_SHARD_BUCKET_COUNT } from "@/api/lib/case-law/sitemap-shard-sql";
 import { sourceArrivalsRefreshQuery } from "@/api/lib/case-law/source-arrivals-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesStatement } from "@/api/lib/legal-search/corpus-index-provider";
@@ -84,7 +87,10 @@ import type {
   AccessPath,
   HeapFetchMitigation,
 } from "@/api/tests/query-plans/plan-walker";
-import { QUERY_PLAN_SAMPLE } from "@/api/tests/query-plans/seed";
+import {
+  QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+  QUERY_PLAN_SAMPLE,
+} from "@/api/tests/query-plans/seed";
 
 type QueryPlanEntry = {
   id: string;
@@ -112,6 +118,16 @@ if (!Array.isArray(shardConditions)) {
 const sampleCountry =
   publicCaseLawCountry("CZE") ?? panic("The query-plan country must be public");
 const citationPageSize = 10;
+/** The sample decision as its work's only version. */
+const sampleWork: DecisionWork = {
+  subjectId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+  manifestationIds: [QUERY_PLAN_SAMPLE.caseLaw.decisionId],
+};
+/** Three versions: the read shape of a judgment held in several languages. */
+const sampleMultilingualWork: DecisionWork = {
+  subjectId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+  manifestationIds: QUERY_PLAN_SAMPLE.caseLaw.candidateIds.slice(0, 3),
+};
 /** A generous bound for a heavy ingest week. */
 const SOURCE_ARRIVALS_REFRESH_HEAP_FETCH_BUDGET = 1_000_000;
 
@@ -143,6 +159,26 @@ const DECISION_LIST_PLAN_IDS = {
     undated: "case-law.decisions-list-oldest-undated",
   },
 } as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
+
+/**
+ * The same walks with one language chosen. A language is a minority of a
+ * multilingual country's versions, which is exactly when a probe of every
+ * version in it looks cheap to the planner and a page sorts them all; the
+ * contract holds each band to the language's own walk range.
+ */
+const DECISION_LIST_LANGUAGE_PLAN_IDS = {
+  newest: {
+    dated: "case-law.decisions-list-language",
+    undated: "case-law.decisions-list-language-undated",
+  },
+  oldest: {
+    dated: "case-law.decisions-list-language-oldest",
+    undated: "case-law.decisions-list-language-oldest-undated",
+  },
+} as const satisfies Record<DecisionListSort, Record<DecisionDateBand, string>>;
+
+/** A minority language of the seed: the selective case a probe would sort. */
+const sampleListLanguage = "en";
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
@@ -251,29 +287,24 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.docket-family-key-identity"],
   },
   {
-    id: "case-law.sitemap-refresh",
-    class: "page",
+    id: "case-law.sitemap-month-count",
+    class: "aggregate",
     role: "root",
-    // A resumed page, so the plan covers the row comparison on the index keys.
     build: () =>
-      sitemapRefreshPageSql({
+      sitemapMonthCountSql({
         country: QUERY_PLAN_SAMPLE.caseLaw.country,
-        cursor: {
-          decisionDate: "2010-02-01",
-          id: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
-          sourceId: "00000000-0000-0000-0000-000000000000",
-          updatedAt: "2020-01-01T00:00:00Z",
-        },
-        pageSize: SITEMAP_REFRESH_PAGE_SIZE,
-        phase: "dated",
+        year: "2010",
+        month: "02",
       }),
     seed: "case-law",
     planMode: "covering-index",
     heapFetchMitigation: {
-      type: "batched",
-      pageSize: SITEMAP_REFRESH_PAGE_SIZE,
+      type: "heapFetchBudget",
+      rows: SITEMAP_SHARD_BUCKET_COUNT * LIMITS.caseLawSitemapShardUrlLimit,
+      reason:
+        "Scheduler-only recount of one country-month, read as one range of the partial sitemap index; a month the sitemap can still list holds at most one URL limit per bucket, and heap visits are only for pages not yet all-visible.",
     },
-    contract: planContracts["case-law.sitemap-refresh"],
+    contract: planContracts["case-law.sitemap-month-count"],
   },
   {
     // A resumed page. Its generic plan is checked in the backfill's own test.
@@ -336,6 +367,24 @@ export const QUERY_PLAN_REGISTRY = [
         }),
       seed: "case-law" as const,
       contract: planContracts[DECISION_LIST_PLAN_IDS[sort][band]],
+    })),
+  ),
+  ...DECISION_LIST_SORTS.flatMap((sort) =>
+    DECISION_DATE_BANDS.map((band) => ({
+      id: DECISION_LIST_LANGUAGE_PLAN_IDS[sort][band],
+      class: "page" as const,
+      role: "public-law-reader" as const,
+      build: (tx: Transaction) =>
+        listDecisionsPageQuery({
+          band,
+          position: undefined,
+          take: LIMITS.caseLawSearchPageSizeDefault + 1,
+          query: { country: sampleCountry, language: sampleListLanguage },
+          sort,
+          tx,
+        }),
+      seed: "case-law" as const,
+      contract: planContracts[DECISION_LIST_LANGUAGE_PLAN_IDS[sort][band]],
     })),
   ),
   {
@@ -417,7 +466,7 @@ export const QUERY_PLAN_REGISTRY = [
         // The public reader holds no doctrine grants in this release.
         doctrineAvailable: false,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "incoming",
         limit: citationPageSize,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
@@ -434,7 +483,7 @@ export const QUERY_PLAN_REGISTRY = [
       decisionCitationPageQuery({
         doctrineAvailable: true,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "incoming",
         doctrine: "limits",
         limit: citationPageSize,
@@ -453,7 +502,7 @@ export const QUERY_PLAN_REGISTRY = [
         // The public reader holds no doctrine grants in this release.
         doctrineAvailable: false,
         cursorId: undefined,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         direction: "outgoing",
         limit: citationPageSize,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
@@ -469,7 +518,7 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) =>
       decisionCitationSummaryQuery({
         currentYear: 2026,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).summary,
@@ -511,7 +560,7 @@ export const QUERY_PLAN_REGISTRY = [
     build: (tx) =>
       decisionCitationSummaryQuery({
         currentYear: 2026,
-        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        work: sampleWork,
         countries: CASE_LAW_SURFACE_COUNTRIES.search,
         tx,
       }).topCiting(CITATION_DIGEST_TOP_CITING),
@@ -520,10 +569,78 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.top-citing-decisions"],
   },
   {
-    // A provision's cited-by page: its whole subtree of link rows, one range
-    // of the byte-ordered anchor index, never a walk of the work's links.
-    id: "case-law.provision-citing-decisions",
+    // The versions of one judgment: one bounded group read of its language
+    // key, whatever the corpus holds. The limit is the overflow probe
+    // `readBounded` adds to the ceiling `readDecisionWork` reads under.
+    id: "case-law.decision-work",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionWorkQuery(tx, QUERY_PLAN_SAMPLE.caseLaw.decisionId).limit(
+        DECISION_WORK_MANIFESTATIONS_MAX + 1,
+      ),
+    seed: "case-law",
+    contract: planContracts["case-law.decision-work"],
+  },
+  {
+    // A judgment held in several languages: one anchor range per version
+    // under a merge on citation id, never every edge of the work.
+    id: "case-law.citation-page-incoming-work",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: false,
+        cursorId: undefined,
+        work: sampleMultilingualWork,
+        direction: "incoming",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-incoming-work"],
+  },
+  {
+    id: "case-law.citation-page-outgoing-work",
+    class: "page",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationPageQuery({
+        doctrineAvailable: false,
+        cursorId: undefined,
+        work: sampleMultilingualWork,
+        direction: "outgoing",
+        limit: citationPageSize,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-page-outgoing-work"],
+  },
+  {
+    id: "case-law.citation-summary-work",
     class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationSummaryQuery({
+        currentYear: 2026,
+        work: sampleMultilingualWork,
+        countries: CASE_LAW_SURFACE_COUNTRIES.search,
+        tx,
+      }).summary,
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-work"],
+  },
+  {
+    // A provision's cited-by page: its subtree of link rows is one
+    // index-only range of the byte-ordered anchor index, never a walk of the
+    // work's links, grouped per decision before any decision is read. The
+    // seed concentrates thousands of link rows on this one subtree.
+    // `citing-decisions-plan.db.test.ts` holds the decision and heap reads
+    // to the page at two subtree sizes.
+    id: "case-law.provision-citing-decisions",
+    class: "page",
     role: "public-law-reader",
     build: (tx) =>
       citingDecisionsPageQuery({
@@ -532,8 +649,8 @@ export const QUERY_PLAN_REGISTRY = [
           citingDecisionConditions(
             {
               jurisdiction: QUERY_PLAN_SAMPLE.caseLaw.country,
-              work: "/eli/cz/sb/2024/1",
-              anchor: "section-1",
+              work: QUERY_PLAN_SAMPLE.caseLaw.provisionWork,
+              anchor: QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor,
             },
             citingJurisdictionScope(QUERY_PLAN_SAMPLE.caseLaw.country) ??
               panic("The query-plan country must be public"),
@@ -543,6 +660,15 @@ export const QUERY_PLAN_REGISTRY = [
         limit: citationPageSize,
       }),
     seed: "case-law",
+    // The seeded subtree is two thirds of a small table, where a sequential
+    // scan would win; the corpus table is many times the subtree.
+    planMode: "covering-index",
+    heapFetchMitigation: {
+      type: "heapFetchBudget",
+      rows: QUERY_PLAN_PROVISION_SUBTREE_ROWS,
+      reason:
+        "The subtree range visits at most one heap page per link row under the provision, and none on an all-visible page; it reads no decision.",
+    },
     contract: planContracts["case-law.provision-citing-decisions"],
   },
   {
@@ -704,6 +830,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals]: {
     type: "registered",
     id: PUBLIC_LAW_SHARED_QUERY.caseLawCoverageArrivals,
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary]: {
+    type: "excluded",
+    reason:
+      "SECURITY DEFINER hides the singleton lookup from EXPLAIN; coverage-summary.db.test.ts checks the one-statement budget at two corpus sizes and policy revocation.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSources]: {
     type: "excluded",

@@ -11,27 +11,23 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  ArrowLeftIcon,
-  BuildingIcon,
-  PlusIcon,
-  UserIcon,
-} from "@stll/ui/icons";
+import { BuildingIcon, PlusIcon, UserIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { RouteDocumentTitle } from "@/components/route-document-title";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useDeleteContact } from "@/lib/contacts/mutations";
 import { contactOptions, contactsKeys } from "@/lib/contacts/queries";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { routePresentation } from "@/routes/-route-presentation";
 import { ClientInvoiceComposer } from "@/routes/_protected.contacts/-components/client-invoice-composer";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
@@ -44,6 +40,9 @@ import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-m
 import { VatPayerSelect } from "@/routes/_protected.contacts/-components/vat-payer-select";
 
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
+  staticData: {
+    presentation: routePresentation({ type: "entity", entity: "contact" }),
+  },
   component: ContactDetailPage,
   loader: async ({ context, params }) => {
     // Prime the contact query the page suspends on so the fetch starts during
@@ -79,13 +78,12 @@ const ContactSectionSkeleton = ({
   </section>
 );
 
-// Mirrors the real detail layout: header (back/icon/title/badge/actions) above a
+// Mirrors the real detail layout: header (icon/title/badge/actions) above a
 // two-column grid of section cards, so the page does not jump when data lands.
 function ContactDetailPending() {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
       <div className="flex items-center gap-3">
-        <Skeleton className="size-7 rounded-md" />
         <Skeleton className="size-5 rounded-full" />
         <Skeleton className="h-6 w-48" />
         <Skeleton className="h-5 w-16 rounded-md" />
@@ -158,7 +156,7 @@ function ContactDetailPage() {
 
   const handleDeleteOpen = () => {
     if (contact.clientMatterCount > 0) {
-      notifyUserError(undefined, deleteBlockedDescription);
+      notifyUserProblem(deleteBlockedDescription);
       return;
     }
 
@@ -167,22 +165,12 @@ function ContactDetailPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4">
+      <RouteDocumentTitle routeId={Route.id} title={contact.displayName} />
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button
-          aria-label={t("common.back")}
-          onClick={() => {
-            detached(
-              (async () => await navigate({ to: "/contacts" }))(),
-              "contacts.navigate",
-            );
-          }}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-        </Button>
-        <div className="flex items-center gap-2">
+      {/* The breadcrumb already leads back to the list. The actions wrap
+          under the name on narrow screens instead of running off the edge. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           {contact.type === "person" ? (
             <UserIcon className="text-muted-foreground size-5" />
           ) : (
@@ -195,7 +183,7 @@ function ContactDetailPage() {
             {t(`contacts.type.${contact.type}`)}
           </span>
         </div>
-        <div className="ms-auto flex items-center gap-2">
+        <div className="ms-auto flex flex-wrap items-center gap-2">
           {canCreateInvoice && activeClientMatters.length > 0 && (
             <Button size="sm" onClick={() => setInvoiceComposerOpen(true)}>
               {t("billing.clientComposer.title")}
@@ -203,11 +191,14 @@ function ContactDetailPage() {
           )}
           {canCreateMatter && (
             <Button
-              onClick={() =>
+              onClick={(event) =>
                 openCreateMatter({
-                  id: contact.id,
-                  displayName: contact.displayName,
-                  type: contact.type,
+                  opener: event.currentTarget,
+                  client: {
+                    id: contact.id,
+                    displayName: contact.displayName,
+                    type: contact.type,
+                  },
                 })
               }
               size="sm"

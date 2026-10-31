@@ -4,8 +4,9 @@ import type { HotkeyChord } from "@tanstack/react-hotkeys";
 import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { rootKeys, sessionOptions } from "@/lib/auth-query-options";
-import { SHORTCUT_GROUPS } from "@/lib/hotkeys";
+import { availableShortcutGroups, SHORTCUT_GROUPS } from "@/lib/hotkeys";
 import type { ShortcutGroup, ShortcutId } from "@/lib/hotkeys";
 import {
   applyOverridesToGroups,
@@ -52,7 +53,22 @@ export const useShortcutOverrides = (): ShortcutOverrides => {
  */
 export const useEffectiveShortcutGroups = (): ShortcutGroup[] => {
   const overrides = useShortcutOverrides();
-  return applyOverridesToGroups(SHORTCUT_GROUPS, overrides);
+  const timeBilling = useTimeBillingPreviewEnabled();
+  return availableShortcutGroups(
+    applyOverridesToGroups(SHORTCUT_GROUPS, overrides),
+    { timeBilling },
+  );
+};
+
+export const useAvailableHotkey = (id: ShortcutId): HotkeyChord | undefined => {
+  const groups = useEffectiveShortcutGroups();
+  for (const group of groups) {
+    const shortcut = group.shortcuts.find((candidate) => candidate.id === id);
+    if (shortcut?.binding.type === "hotkey") {
+      return shortcut.binding.hotkey;
+    }
+  }
+  return undefined;
 };
 
 /**

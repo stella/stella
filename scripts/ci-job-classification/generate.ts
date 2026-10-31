@@ -6,20 +6,24 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { decisionPathForKey } from "./inputs";
+import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+  reachableJobDocuments,
+} from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
   GIT_ORIGIN,
   parseRemoteReference,
+  recordMetadataMount,
+  resolveLocalMetadataPath,
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import {
-  isPrivilegedJobClosure,
-  isRepositoryWritingJob,
-  ReviewRequiredError,
-} from "./review";
+import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -28,15 +32,19 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
+// The decision shape the generator accepts, as readDecisions produces it.
+export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    approvedDigests: v.optional(
+      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    ),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -171,7 +179,7 @@ export const readClassificationInputsAtRevision = (
           key,
           {
             ...decision,
-            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+            approvedDigests: decision.approvedDigests ?? [],
           },
         ]),
       ),
@@ -255,7 +263,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-const createDocumentDigest = ({
+export const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {
@@ -301,36 +309,7 @@ type ReviewJobsOptions = DocumentDigestOptions & {
   documentDigest: (id: string) => string;
   observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
-type ReachableDocumentsOptions = DocumentDigestOptions & {
-  initialTargets: string[];
-};
-const reachableDocuments = ({
-  initialTargets,
-  nodes,
-  parsedDocuments,
-}: ReachableDocumentsOptions) => {
-  const documents: ParsedDocument[] = [];
-  const visited = new Set<string>();
-  const visit = (id: string) => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = nodes.get(id);
-    const parsed = parsedDocuments.get(id);
-    if (!node || node.type !== "metadata" || !parsed) {
-      return;
-    }
-    documents.push(parsed);
-    for (const target of Object.values(node.edges)) {
-      visit(target);
-    }
-  };
-  for (const target of initialTargets) {
-    visit(target);
-  }
-  return documents;
-};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -338,10 +317,20 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<string, unknown> = {};
+  const entries: Record<
+    string,
+    { kind: string; qualifier: string; reviewedDigest: string }
+  > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -353,38 +342,28 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: job.digest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : job.digest;
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
         return target ? [target] : [];
       });
-      const reachable = reachableDocuments({
+      const reachable = reachableJobDocuments({
         initialTargets: targets,
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        shape: job.shape,
-        reachableDocuments: reachable,
+      const privileged = jobPrivileges.get(key) ?? false;
+      const digest = expectedJobDigest({
+        definition: job,
+        privileged,
+        inheritedGrants: inheritedGrants.get(key),
+        dependencyDigests,
       });
       derivedJobs.set(key, {
         digest,
@@ -394,11 +373,12 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || decision.reviewedDigest !== digest) {
+      if (!decision || !decision.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
+          // The approval file format the decision reader validates.
           reviewedDigest: digest,
         };
         if (privileged) {
@@ -433,7 +413,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,
@@ -459,19 +439,32 @@ export const generateClassification = ({
     try: () => {
       const nodes: MetadataNodes = new Map();
       const parsedDocuments = new Map<string, ParsedDocument>();
+      const mounts = new Map<string, string>();
       type VisitOptions = {
         repository: string;
         file: string;
         origin: MetadataOrigin;
+        mount?: string | null;
       };
-      const visit = ({ repository, file, origin }: VisitOptions): string => {
+      const visit = ({
+        repository,
+        file,
+        origin,
+        mount = null,
+      }: VisitOptions): string => {
         const id = `source-${sha256(`${repository}:${file}`)}`;
-        if (nodes.has(id)) {
-          return id;
-        }
         const parsed = parseDocument(reader.read(repository, file));
         if (parsed.isErr()) {
           throw parsed.error;
+        }
+        recordMetadataMount({
+          mounts,
+          identity: id,
+          mount,
+          document: parsed.value,
+        });
+        if (nodes.has(id)) {
+          return id;
         }
         const references: string[] = [];
         const edges: Record<string, string> = {};
@@ -495,8 +488,13 @@ export const generateClassification = ({
           let targetId: string;
           if (reference.startsWith("$/") || reference.startsWith("./")) {
             const relative = reference.slice(2);
-            const relocation = parsed.value.relocatedActions[reference]?.at(0);
-            const sourcePath = relocation?.path ?? relative;
+            const selected = resolveLocalMetadataPath({
+              reference,
+              kind,
+              relocations: parsed.value.relocatedActions[reference] ?? [],
+              inheritedMount: mount,
+            });
+            const sourcePath = selected.path;
             let targetPath: string;
             if (kind === "reusable-workflow") {
               targetPath = relative;
@@ -516,7 +514,12 @@ export const generateClassification = ({
               }
               targetPath = found;
             }
-            targetId = visit({ repository, file: targetPath, origin });
+            targetId = visit({
+              repository,
+              file: targetPath,
+              origin,
+              mount: selected.mount,
+            });
           } else {
             const source = findRemoteSource({ reference, kind, snapshots });
             if (source) {
