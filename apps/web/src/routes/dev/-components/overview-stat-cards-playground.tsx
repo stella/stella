@@ -1,6 +1,6 @@
 import { CalendarClockIcon, SquareCheckIcon } from "@stll/ui/icons";
 
-import { StatCard } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
+import { StatCard } from "@/components/overview-stat-card";
 
 const LONG_TASK_NAME =
   "Podať námietky v podateľni úradu a doručiť rovnopis kontrolovanému subjektu pred uplynutím zákonnej lehoty";
