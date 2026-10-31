@@ -132,6 +132,7 @@
     "./public-country-capability": "./src/public-country-capability.ts",
     "./search": "./src/search.ts",
     "./template-fill-headers": "./src/template-fill-headers.ts",
+    "./time-entry-report": "./src/time-entry-report.ts",
     "./time-entry-types": "./src/time-entry-types.ts",
     "./us-court-abbreviations": "./src/us-court-abbreviations.ts",
     "./us-courts": "./src/us-courts.ts",
