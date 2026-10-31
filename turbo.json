@@ -1759,6 +1759,7 @@
         "src/i18n/langs/**",
         "$TURBO_ROOT$/apps/desktop/src/activity/preview-apps.json",
         "src/clipboard/clipboard-types.ts",
+        "src/mainview/App.tsx",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-account-policy.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-feature-access.json",
         "$TURBO_ROOT$/packages/api-contract/src/desktop-presence-policy.json",
