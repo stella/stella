@@ -7,7 +7,9 @@ export default {
   summary:
     "Organization creation and slug changes generate the same org- identifier from one fixed-size random buffer; slug length and character rules come from ORGANIZATION_SLUG_RULES next to it.",
   enforcement: {
-    // A second generator needs the lowercase base32 alphabet it encodes with.
+    // Ownership marker: the rule matches only the exact lowercase base32
+    // alphabet string the generator encodes with, so a second generator
+    // cannot spell it outside the owner.
     kind: "literal-pattern",
     pattern: "^abcdefghijklmnopqrstuvwxyz234567$",
     allowed: [],

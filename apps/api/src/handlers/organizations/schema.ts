@@ -15,7 +15,7 @@ export const organizationCreateBodySchema = v.strictObject({
     v.pipe(
       v.string(),
       v.trim(),
-      v.nonEmpty(),
+      v.minLength(ORGANIZATION_SLUG_RULES.minLength),
       v.maxLength(ORGANIZATION_SLUG_RULES.maxLength),
       v.regex(ORGANIZATION_SLUG_RULES.pattern),
       v.description(

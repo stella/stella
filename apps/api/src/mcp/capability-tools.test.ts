@@ -2351,6 +2351,7 @@ describe("handlerCtx capability authorization lifetime", () => {
       expect(request.headers.get("Idempotency-Key")).toBe("same-submission");
     }
     expect(replayCapabilities.length).toBeGreaterThan(1);
+    expect(replayCapabilities).toContain("organizations.create");
   });
 
   test("replay-enabled handlers receive the per-call transport key after the RPC body is consumed", async () => {
