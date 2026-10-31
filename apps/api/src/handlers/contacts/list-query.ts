@@ -58,6 +58,7 @@ const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   "currency",
   "paymentTermDays",
   "invoiceLanguage",
+  "timeBillingFormat",
   // Attorney assignment surfaces on the matter (workspace) contact fields,
   // not the standalone directory row.
   "originatingAttorneyId",

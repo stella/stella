@@ -40,7 +40,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
@@ -66,9 +65,13 @@ import {
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+const testFetchState = createTestFetch();
 
 const reconciliation = requireReconciliation(czNssAdapter);
 
@@ -333,8 +336,8 @@ const installStub = ({
   let searchCalls = 0;
   let continuationCalls = 0;
 
-  globalThis.fetch = asFetchMock(
-    async (input: string | URL | Request, init?: RequestInit) => {
+  testFetchState.set(
+    asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       const method = init?.method ?? "GET";
       if (init && "timeoutMs" in init && typeof init.timeoutMs === "number") {
@@ -395,7 +398,7 @@ const installStub = ({
       };
 
       return await Promise.resolve(answer());
-    },
+    }),
   );
 
   return { requests, timeouts };
@@ -758,10 +761,8 @@ describe("cz-nss page arithmetic", () => {
 // ── Listing walk ─────────────────────────────────────────
 
 describe("cz-nss listSlicePage", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   test("searches the day the slice names", async () => {
@@ -1143,14 +1144,12 @@ describe("cz-nss listSlicePage", () => {
 // ── Crawl cursor ─────────────────────────────────────────
 
 describe("cz-nss fetchPage", () => {
-  const originalFetch = globalThis.fetch;
-
   beforeEach(() => {
     setSystemTime(new Date("2026-08-11T09:30:00.000Z"));
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   afterAll(() => {
@@ -1409,10 +1408,8 @@ describe("cz-nss fetchPage", () => {
 // ── Per-item build ───────────────────────────────────────
 
 describe("cz-nss buildDecision", () => {
-  const originalFetch = globalThis.fetch;
-
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
   });
 
   const listedRow = async (): Promise<unknown> => {
@@ -1617,9 +1614,11 @@ describe("cz-nss buildDecision", () => {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
 
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const stored = {
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -1661,9 +1660,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
@@ -2009,9 +2010,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined || decision.sourceRaw === undefined) {
       throw new TypeError("Expected cz-nss stored-raw replay evidence");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
     const replay = await reparse({
       raw: new TextEncoder().encode(decision.sourceRaw),
       contentType: decision.sourceRawContentType ?? null,
@@ -2039,9 +2042,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const replayed = async (
       stored: Pick<StoredRawReparseInput, "raw" | "contentType" | "metadata">,
@@ -2188,15 +2193,15 @@ describe("cz-nss buildDecision", () => {
     ).toHaveLength(0);
     installStub({ search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
         return url.pathname.startsWith("/DokumentOriginal/Html/")
           ? htmlResponse(html)
           : await served(input, init);
-      },
+      }),
     );
     const built = await reconciliation.buildDecision(payload);
     if (built.type !== "built") {
@@ -2219,9 +2224,11 @@ describe("cz-nss buildDecision", () => {
     if (reparse === undefined) {
       throw new TypeError("Expected cz-nss to implement stored-raw replay");
     }
-    globalThis.fetch = asFetchMock(() => {
-      throw new TypeError("Stored-raw replay must not contact the publisher");
-    });
+    testFetchState.set(
+      asFetchMock(() => {
+        throw new TypeError("Stored-raw replay must not contact the publisher");
+      }),
+    );
 
     const outcome = await reparse({
       raw: new TextEncoder().encode(built.decision.sourceRaw ?? ""),
@@ -2340,7 +2347,6 @@ describe("cz-nss buildDecision", () => {
 // ── Reads the portal did not answer ──────────────────────
 
 describe("cz-nss reads the portal did not answer", () => {
-  const originalFetch = globalThis.fetch;
   let recording: RecordingLogger;
 
   beforeEach(() => {
@@ -2349,7 +2355,7 @@ describe("cz-nss reads the portal did not answer", () => {
   });
 
   afterEach(() => {
-    globalThis.fetch = originalFetch;
+    testFetchState.restore();
     recording.restore();
   });
 
@@ -2374,8 +2380,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub(stub ?? { search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2383,7 +2389,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.reject(failure());
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2497,8 +2503,8 @@ describe("cz-nss reads the portal did not answer", () => {
     installStub(stub);
     const served = globalThis.fetch;
     let detailReads = 0;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2509,7 +2515,7 @@ describe("cz-nss reads the portal did not answer", () => {
           }
         }
         return await served(input, init);
-      },
+      }),
     );
     return { detailReads: () => detailReads };
   };
@@ -2714,8 +2720,8 @@ describe("cz-nss reads the portal did not answer", () => {
   ): { requests: RecordedRequest[] } => {
     const recorded = installStub({ search: [] });
     const served = globalThis.fetch;
-    globalThis.fetch = asFetchMock(
-      async (input: string | URL | Request, init?: RequestInit) => {
+    testFetchState.set(
+      asFetchMock(async (input: string | URL | Request, init?: RequestInit) => {
         const url = new URL(
           input instanceof Request ? input.url : String(input),
         );
@@ -2723,7 +2729,7 @@ describe("cz-nss reads the portal did not answer", () => {
           return await Promise.resolve().then(fail);
         }
         return await served(input, init);
-      },
+      }),
     );
     return recorded;
   };
@@ -2803,13 +2809,15 @@ describe("cz-nss reads the portal did not answer", () => {
     test(`holds a row whose text read answers ${status} with the typed refusal`, async () => {
       installStub({ search: [], htmlDocumentStatus: 404 });
       const served = globalThis.fetch;
-      globalThis.fetch = asFetchMock(
-        async (input: string | URL | Request, init?: RequestInit) =>
-          new URL(
-            input instanceof Request ? input.url : String(input),
-          ).pathname.startsWith("/DokumentOriginal/Text/")
-            ? htmlResponse("", status)
-            : await served(input, init),
+      testFetchState.set(
+        asFetchMock(
+          async (input: string | URL | Request, init?: RequestInit) =>
+            new URL(
+              input instanceof Request ? input.url : String(input),
+            ).pathname.startsWith("/DokumentOriginal/Text/")
+              ? htmlResponse("", status)
+              : await served(input, init),
+        ),
       );
 
       const built = await buildCzNssDecision({

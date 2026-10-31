@@ -13,6 +13,7 @@ import {
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
 import type { AuditAction } from "@/api/lib/audit-log.constants";
+import { NARRATIVE_LANGUAGE_MAX_LENGTH } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { SANCTIONS_CONTACT_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 
@@ -46,6 +47,8 @@ import type {
   SchedulerPayload,
   SchedulerSchedule,
 } from "./common";
+
+export const TIME_BILLING_FORMATS = ["categories", "ledes"] as const;
 
 export const contacts = p.pgTable(
   "contacts",
@@ -87,6 +90,10 @@ export const contacts = p.pgTable(
     metadata: jsonb().$type<ContactPersistedMetadata | null>(),
     color: p.varchar({ length: 32 }),
 
+    timeBillingFormat: p
+      .text("time_billing_format", { enum: TIME_BILLING_FORMATS })
+      .notNull()
+      .default("categories"),
     // Billing fields
     registrationNumber: p.varchar("registration_number", {
       length: 64,
@@ -121,6 +128,13 @@ export const contacts = p.pgTable(
       .$onUpdate(() => new Date()),
   },
   (table) => [
+    p.check(
+      "contacts_time_billing_format_check",
+      sql`${table.timeBillingFormat} IN (${sql.join(
+        TIME_BILLING_FORMATS.map((format) => sql`${format}`),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "contacts_invoice_language_check",
       sql`${table.invoiceLanguage} IS NULL OR ${table.invoiceLanguage} IN (${sql.join(
@@ -342,6 +356,9 @@ export const workspaces = p.pgTable(
     leadUserId: p
       .text("lead_user_id")
       .references(() => user.id, { onDelete: "set null" }),
+    billingNarrativeLanguage: p.varchar("billing_narrative_language", {
+      length: NARRATIVE_LANGUAGE_MAX_LENGTH,
+    }),
     billingReference: p.varchar("billing_reference", {
       length: 128,
     }),

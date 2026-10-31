@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
+import { env } from "@/api/env";
 import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -14,6 +17,8 @@ import {
 import { readScalingScenarios } from "@/api/tests/read-scaling/scenarios";
 import { writeScalingScenarios } from "@/api/tests/read-scaling/write-scenarios";
 
+const testState = createTestState({ file: import.meta.path, config: env });
+
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "registered handler scaling",
   () => {
@@ -26,6 +31,14 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const small = await seedEntityReadScaling(db, 10);
         const large = await seedEntityReadScaling(db, 200);
         try {
+          testState.setConfig("FEATURE_TIME_BILLING", true);
+          testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+            ...env.API_FEATURE_ACCESS_GRANTS,
+            "activity-timeline": [
+              { type: "organization", organizationId: small.organizationId },
+              { type: "organization", organizationId: large.organizationId },
+            ],
+          });
           for (const scenario of readScalingScenarios) {
             expect(
               apiApp.routes.some(
@@ -38,8 +51,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               "handler-scaling",
               JSON.stringify({ name: scenario.name, at10, at200 }),
             );
-            expect(at10.rows).toBe(10);
-            expect(at200.rows).toBe(10);
+            expect(at10.rows).toBe(scenario.expectedRows);
+            expect(at200.rows).toBe(scenario.expectedRows);
             expect(at10.statements).toBeGreaterThan(0);
             expect(at10.transactionRoundTrips).toBeGreaterThan(0);
             expect(

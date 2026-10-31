@@ -179,12 +179,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   },
 
   {
-    path: "apps/api/src/handlers/case-law/ingestion/adapters/test-utils.ts",
-    class: "package-owned-client",
-    reason: "Stubs fetch with fixture responses for adapter checks.",
-    transports: ["global:fetch"],
-  },
-  {
     path: "apps/api/src/handlers/case-law/judges/import-cz-us-roster.ts",
     class: "third-party",
     reason: "Reads roster data from public court sites.",

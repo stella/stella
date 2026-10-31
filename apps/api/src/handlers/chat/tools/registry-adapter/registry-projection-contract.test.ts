@@ -72,12 +72,15 @@ import {
 } from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolledTimeBillingSnapshot } from "@/api/tests/helpers/time-billing-enrolment";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
+
+const testFetchState = createTestFetch();
 
 // Spies created in a test stay attached if it fails before restoring them.
 afterEach(() => {
@@ -339,11 +342,14 @@ const recordOutboundFetches = async <TResult>(
     },
     { preconnect: globalThis.fetch.preconnect },
   );
-  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
+  const spy = Object.assign(mock(refuse), {
+    preconnect: globalThis.fetch.preconnect,
+  });
+  testFetchState.set(spy);
   try {
     return { result: await run(), fetched };
   } finally {
-    spy.mockRestore();
+    testFetchState.restore();
   }
 };
 
@@ -511,6 +517,7 @@ const CONTRACT_CORPUS = {
           clientId: toSafeId<"contact">(uid(61)),
           leadUserId: null,
           billingReference: null,
+          billingNarrativeLanguage: null,
           color: null,
           status: "active",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),

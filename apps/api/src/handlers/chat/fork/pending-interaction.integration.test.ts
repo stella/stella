@@ -1,4 +1,11 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -53,11 +60,13 @@ beforeAll(async () => {
   safeDb = toSafeDbMock(scopedDb);
 });
 
-afterAll(async () => {
-  // Each harness restores what the previous one installed: undo in reverse.
-  for (const harness of openHarnesses.toReversed()) {
+afterEach(async () => {
+  for (const harness of openHarnesses.splice(0).toReversed()) {
     await harness.close();
   }
+});
+
+afterAll(async () => {
   if (seededThreadIds.length > 0) {
     await testDb
       .delete(chatThreads)

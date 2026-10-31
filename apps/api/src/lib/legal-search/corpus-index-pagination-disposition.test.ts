@@ -26,6 +26,9 @@ import {
   installRecordingLogger,
   type RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
+
+const testFetchState = createTestFetch();
 
 const originalFetch = globalThis.fetch;
 let logs: RecordingLogger;
@@ -35,7 +38,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  testFetchState.restore();
   logs.restore();
 });
 
@@ -55,38 +58,43 @@ const stubHits = (
   });
   const hits = rawHits.map(withRevision);
   const highlightHits = rawHighlightHits.map(withRevision);
-  globalThis.fetch = Object.assign(
-    async (
-      _input: Parameters<typeof fetch>[0],
-      init?: Parameters<typeof fetch>[1],
-    ) => {
-      const body = JSON.parse(v.parse(v.string(), init?.body));
-      if (body.snippet_fields !== undefined) {
+  testFetchState.set(
+    Object.assign(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const body = JSON.parse(v.parse(v.string(), init?.body));
+        if (body.snippet_fields !== undefined) {
+          return Response.json({
+            num_hits: highlightHits.length,
+            hits: highlightHits,
+            snippets: highlightHits.map((hit) => ({ text: [hit["text"]] })),
+          });
+        }
+        if (body.from !== undefined) {
+          return Response.json({
+            hits: {
+              total: { value: hits.length },
+              hits: hits
+                .map((hit, index) => ({
+                  _source: hit,
+                  _score: hits.length - index,
+                }))
+                .slice(body.from, body.from + body.size),
+            },
+          });
+        }
         return Response.json({
-          num_hits: highlightHits.length,
-          hits: highlightHits,
-          snippets: highlightHits.map((hit) => ({ text: [hit["text"]] })),
+          num_hits: hits.length,
+          hits: hits.slice(
+            body.start_offset,
+            body.start_offset + body.max_hits,
+          ),
         });
-      }
-      if (body.from !== undefined) {
-        return Response.json({
-          hits: {
-            total: { value: hits.length },
-            hits: hits
-              .map((hit, index) => ({
-                _source: hit,
-                _score: hits.length - index,
-              }))
-              .slice(body.from, body.from + body.size),
-          },
-        });
-      }
-      return Response.json({
-        num_hits: hits.length,
-        hits: hits.slice(body.start_offset, body.start_offset + body.max_hits),
-      });
-    },
-    { preconnect: originalFetch.preconnect },
+      },
+      { preconnect: originalFetch.preconnect },
+    ),
   );
 };
 

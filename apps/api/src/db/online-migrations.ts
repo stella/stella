@@ -38,6 +38,10 @@ import {
   BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
 } from "./billing-activity-hour-cap-constraint-validation";
 import {
+  BILLING_DRAFTS_CONSTRAINT_VALIDATIONS,
+  BILLING_DRAFTS_CONSTRAINTS,
+} from "./billing-drafts-constraint-validation";
+import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
@@ -399,6 +403,17 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "case_law_decisions_republished_ruling_idx",
     tableName: "case_law_decisions",
+  },
+  // Billing guideline file search over knowledge-file paths.
+  {
+    introducedBy: "20261031014500_activity_billing_drafts",
+    createSql:
+      'CREATE INDEX CONCURRENTLY "agent_skill_resources_path_billing_trgm_idx" ON public."agent_skill_resources" USING gin ("path" gin_trgm_ops)',
+    definitionBody:
+      "ON public.agent_skill_resources USING gin (path gin_trgm_ops)",
+    isUnique: false,
+    name: "agent_skill_resources_path_billing_trgm_idx",
+    tableName: "agent_skill_resources",
   },
   {
     introducedBy: "20261022233100_mcp_web_handoff_session_index",
@@ -954,6 +969,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
+  ...BILLING_DRAFTS_CONSTRAINT_VALIDATIONS,
   ...ORGANIZATION_ACCESS_STATE_CONSTRAINT_VALIDATIONS,
   ...READER_ANNOTATION_CONSTRAINT_VALIDATIONS,
   READER_ANSWER_CONSTRAINT_VALIDATION,
@@ -990,6 +1006,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...CORPUS_PROJECTION_DELETE_RECEIPT_CONSTRAINTS,
     ...SANCTIONS_MONITORING_CONSTRAINTS,
     ...LIST_VERIFICATION_CONSTRAINTS,
+    ...BILLING_DRAFTS_CONSTRAINTS,
     ...ORGANIZATION_ACCESS_STATE_CONSTRAINTS,
     ...READER_ANNOTATION_CONSTRAINTS,
     ...READER_ANSWER_CONSTRAINTS,

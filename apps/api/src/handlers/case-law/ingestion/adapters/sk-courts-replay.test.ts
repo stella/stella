@@ -1,6 +1,6 @@
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { skCourtsAdapter } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -18,12 +18,10 @@ import {
 } from "@/api/lib/legal-search/source-raw-envelope";
 import { skCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 import { memorySkDocumentRawStorage } from "@/api/tests/helpers/sk-document-raw-storage";
+import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
-const originalFetch = globalThis.fetch;
-afterEach(() => {
-  globalThis.fetch = originalFetch;
-});
+const testFetchState = createTestFetch();
 const replay =
   skCourtsAdapter.reparseStoredRaw ?? panic("SK courts replay required");
 
@@ -44,8 +42,10 @@ const storedInput = (decision: IngestionResult, raw: string) =>
   }) as const satisfies StoredRawReparseInput;
 
 const rejectPublisherReads = () => {
-  globalThis.fetch = asFetchMock(async () =>
-    panic("Stored replay cannot fetch publisher responses"),
+  testFetchState.set(
+    asFetchMock(async () =>
+      panic("Stored replay cannot fetch publisher responses"),
+    ),
   );
 };
 
