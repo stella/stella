@@ -15,6 +15,7 @@ import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -39,12 +40,12 @@ if (!databaseUrl || !runPostgres) {
       const organizationId = mintAuthProviderId<"organization">();
       const userId = mintAuthProviderId<"user">();
       const workspaceId = createSafeId<"workspace">();
-      const fixtureScoped = createScopedDb(
-        markRlsDatabase(firstDb),
-        [workspaceId],
+      const fixtureScoped = createScopedDb(markRlsDatabase(firstDb), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
         organizationId,
         userId,
-      );
+      });
       const record = createBackgroundAuditRecorder({
         organizationId,
         workspaceId,
@@ -106,18 +107,18 @@ if (!databaseUrl || !runPostgres) {
           status: "approved",
           billable: true,
         });
-        const firstSafe = createSafeDb(
-          markRlsDatabase(firstDb),
-          [workspaceId],
+        const firstSafe = createSafeDb(markRlsDatabase(firstDb), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
           organizationId,
           userId,
-        );
-        const secondSafe = createSafeDb(
-          markRlsDatabase(secondDb),
-          [workspaceId],
+        });
+        const secondSafe = createSafeDb(markRlsDatabase(secondDb), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
           organizationId,
           userId,
-        );
+        });
         const participant = (safeDb: typeof firstSafe) => ({
           transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
             (

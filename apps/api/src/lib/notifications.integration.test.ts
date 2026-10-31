@@ -12,6 +12,7 @@ import { user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaceMembers } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { resolveMentionTargets } from "@/api/lib/notifications";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -31,12 +32,12 @@ let emailA2 = "";
 let emailB1 = "";
 
 const mentionsIn = async (text: string) =>
-  await createScopedDb(
-    testDb,
-    [ids.wsA2],
-    ids.orgA,
-    ids.userA1,
-  )(
+  await createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA2],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  })(
     async (tx) =>
       // The embedded database's transaction handle is structurally the same
       // API with a different driver brand; the helper is driver-agnostic.

@@ -24,9 +24,12 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const isDesktopSuccessorKey = (key: string) =>
   key.startsWith(DESKTOP_REGISTRY_KEY_PREFIX) &&
@@ -76,7 +79,7 @@ export const renewDesktopCredential = async ({
   const successorHash = await defaultKeyHasher(successorKey);
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(db, async (tx) => {
+      await withAggregateTransaction(db, BUDGET, async (tx) => {
         const membershipLock = await withAggregateLock({
           aggregate: "desktopMembership",
           id: { organizationId, userId },
@@ -231,7 +234,7 @@ export const probeDesktopCredential = async ({
   const hash = await defaultKeyHasher(currentKey);
   const queried = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(db, async (tx) => {
+      await withAggregateTransaction(db, BUDGET, async (tx) => {
         const keyLock = await withAggregateLock({
           aggregate: "desktopCredential",
           id: { id: keyId, userId },

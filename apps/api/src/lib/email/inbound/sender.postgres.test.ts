@@ -15,6 +15,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailAuthentication } from "@/api/lib/email/inbound/authentication";
@@ -51,12 +52,12 @@ if (!databaseUrl || !runPostgresTests) {
         const adminId = mintAuthProviderId<"user">();
         const firstWorkspaceId = createSafeId<"workspace">();
         const secondWorkspaceId = createSafeId<"workspace">();
-        const fixtureScoped = createScopedDb(
-          markRlsDatabase(setupDb),
-          [firstWorkspaceId, secondWorkspaceId],
+        const fixtureScoped = createScopedDb(markRlsDatabase(setupDb), {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [firstWorkspaceId, secondWorkspaceId],
           organizationId,
-          adminId,
-        );
+          userId: adminId,
+        });
         const allowedSenderId = createSafeId<"correspondenceAllowedSender">();
         const firstToken = generateInboundAddressToken({ userId: null });
         const secondToken = generateInboundAddressToken({ userId: null });
@@ -193,12 +194,12 @@ if (!databaseUrl || !runPostgresTests) {
               safeDb: async (work) =>
                 await Result.tryPromise(
                   async () =>
-                    await createScopedDb(
-                      markRlsDatabase(tx),
-                      [workspaceId],
+                    await createScopedDb(markRlsDatabase(tx), {
+                      budget: BUDGETS.scopedWorkerPendingMeasurement,
+                      workspaceScope: [workspaceId],
                       organizationId,
-                      adminId,
-                    )(work),
+                      userId: adminId,
+                    })(work),
                 ),
               organizationId,
               workspaceId,

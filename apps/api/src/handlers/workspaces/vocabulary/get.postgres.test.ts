@@ -236,8 +236,12 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               );
               expect(small.rows).toBe(41);
               expect(large.rows).toBe(small.rows);
-              expect(small.statements).toBe(5);
-              expect(small.transactionRoundTrips).toBe(2);
+              // One combined deadline/role/context SELECT and four bounded reads.
+              expect([small.statements, large.statements]).toEqual([5, 5]);
+              expect([
+                small.transactionRoundTrips,
+                large.transactionRoundTrips,
+              ]).toEqual([2, 2]);
               expect(readScalingViolations({ small, large })).toEqual([]);
             } finally {
               await largeFixture.cleanup();

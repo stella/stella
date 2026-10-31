@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 export type RequestReceiptScenario = {
@@ -28,12 +29,12 @@ export const seedRequestReceiptScenario = async (
     ON CONFLICT (id) DO NOTHING`);
   await database.execute(sql`TRUNCATE request_idempotency_receipts`);
   // Receipts are written as their owner, the only writer the table's policies admit.
-  await createScopedDb(
-    markRlsDatabase(database),
-    [],
-    ORGANIZATION_ID,
-    USER_ID,
-  )(async (tx) => {
+  await createScopedDb(markRlsDatabase(database), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: ORGANIZATION_ID,
+    userId: USER_ID,
+  })(async (tx) => {
     await tx.execute(sql`INSERT INTO request_idempotency_receipts
     (id, organization_id, user_id, idempotency_key, route, request_fingerprint,
      state, response_status, response_body, claimed_at, completed_at)

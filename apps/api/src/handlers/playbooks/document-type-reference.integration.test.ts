@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   DEFAULT_DOCUMENT_TYPES,
   ensureDefaultDocumentTypes,
@@ -88,7 +89,12 @@ const orgContext = (organizationId = ids.orgA) => {
     route: "/v1/playbooks" satisfies ApiRoutePath,
     safeDb: toSafeDbMock(
       asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [], organizationId, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId,
+          userId: ids.userA1,
+        }),
       ),
     ),
     session: { activeOrganizationId: organizationId },

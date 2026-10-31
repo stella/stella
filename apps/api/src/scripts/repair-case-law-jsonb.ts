@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Repair case_law_decisions rows whose JSONB columns were stored
  * as JSON-encoded strings instead of objects/arrays.
@@ -31,8 +32,6 @@
  *   deployed, any row written or refreshed after that point is an
  *   object, and the WHERE clause skips it.
  */
-
-import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
@@ -43,7 +42,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRepair;
 
 await runScriptWithErrorOutput(async () => {
   // Hold the maintenance lane before the first statement: operator passes over
@@ -77,7 +79,7 @@ await runScriptWithErrorOutput(async () => {
   ): Promise<BatchResult | null> => {
     const cursorClause = cursorId ? sql`WHERE id > ${cursorId}::uuid` : sql``;
 
-    const rows = await withAggregateTransaction(rootDb, async (tx) => {
+    const rows = await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
       const repaired = await tx.execute(sql`
     WITH batch AS (

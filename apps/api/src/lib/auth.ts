@@ -263,6 +263,7 @@ import {
   hasCredentialAccount,
 } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   resolveWorkspaceMemberAccess,
   resolveWorkspaceMemberAuthority,
@@ -391,6 +392,8 @@ import {
   MCP_OAUTH_SCOPES,
 } from "@/api/mcp/constants";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 export { resolveWorkspaceMemberAccess, resolveWorkspaceMemberAuthority };
 
@@ -1734,6 +1737,7 @@ export const createAuth = (
     }: NewMembership) => {
       await withAggregateTransaction(
         rootDb,
+        BUDGET,
         async (tx) =>
           await recordOrganizationProfessionalUse({
             tx,
@@ -3480,7 +3484,7 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
-/** Membership-scoped handles for one credential member's request authority. */
+/** Membership-scoped handles for one credential member's authority. */
 export const createAuthDatabases = (
   databaseIdentity: Parameters<
     typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
@@ -3860,6 +3864,7 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
     featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,

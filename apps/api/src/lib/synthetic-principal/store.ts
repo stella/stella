@@ -19,6 +19,7 @@ import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-co
 import { createSafeId } from "@/api/lib/branded-types";
 import { readAccountProfileForExport } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { SYNTHETIC_SESSION_CONTROL_TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transition } from "@/api/lib/db/transitions";
 import { logger } from "@/api/lib/observability/logger";
@@ -35,6 +36,8 @@ import {
   SYNTHETIC_SESSION_PREFIX,
 } from "./constants";
 
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
+
 type MintSyntheticSessionOptions = {
   keyLabel: string;
   requestId: string | undefined;
@@ -49,111 +52,115 @@ export const createSyntheticSessionStore = (
     requestId,
     userAgent,
   }: MintSyntheticSessionOptions) => {
-    const minted = await withAggregateTransaction(database, async (tx) => {
-      const now = new Date();
-      // Updating the singleton locks it through commit, including provisioning and the audit write.
-      const [control] = await tx
-        .update(syntheticSessionControl)
-        .set({ updatedAt: now })
-        .where(eq(syntheticSessionControl.id, SYNTHETIC_SESSION_CONTROL_ID))
-        .returning({ status: syntheticSessionControl.status });
-      if (control?.status !== "enabled") {
-        return null;
-      }
-      const principal = SYNTHETIC_PRINCIPAL;
-      const existingAccount = await readAccountProfileForExport(
-        tx,
-        brandPersistedUserId(principal.user.id),
-      );
-      if (existingAccount === undefined) {
-        await tx.insert(user).values({
-          ...principal.user,
-          emailVerified: true,
+    const minted = await withAggregateTransaction(
+      database,
+      BUDGET,
+      async (tx) => {
+        const now = new Date();
+        // Updating the singleton locks it through commit, including provisioning and the audit write.
+        const [control] = await tx
+          .update(syntheticSessionControl)
+          .set({ updatedAt: now })
+          .where(eq(syntheticSessionControl.id, SYNTHETIC_SESSION_CONTROL_ID))
+          .returning({ status: syntheticSessionControl.status });
+        if (control?.status !== "enabled") {
+          return null;
+        }
+        const principal = SYNTHETIC_PRINCIPAL;
+        const existingAccount = await readAccountProfileForExport(
+          tx,
+          brandPersistedUserId(principal.user.id),
+        );
+        if (existingAccount === undefined) {
+          await tx.insert(user).values({
+            ...principal.user,
+            emailVerified: true,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+        await tx
+          .insert(organization)
+          .values({
+            ...principal.org,
+            createdAt: now,
+          })
+          .onConflictDoNothing({ target: organization.id });
+        await recordNewOrganizationAccessState(tx, {
+          organizationId: brandPersistedOrganizationId(principal.org.id),
+          now,
+        });
+        const insertedMembers = await tx
+          .insert(member)
+          .values({
+            id: principal.memberId,
+            organizationId: principal.org.id,
+            userId: principal.user.id,
+            role: "owner",
+            createdAt: now,
+          })
+          .onConflictDoNothing({ target: member.id })
+          .returning({ id: member.id });
+        if (insertedMembers.length > 0) {
+          await seedDefaultSkills({
+            organizationId: brandPersistedOrganizationId(principal.org.id),
+            userId: brandPersistedUserId(principal.user.id),
+            tx,
+          });
+        }
+        await acceptProfessionalUse({
+          tx,
+          userId: brandPersistedUserId(principal.user.id),
+        });
+
+        const token = Bun.randomUUIDv7();
+        const id = `${SYNTHETIC_SESSION_PREFIX}${token}`;
+        const lifetime =
+          decidePinnedSessionLifetime({ id, createdAt: now }) ??
+          panic("Dedicated session id did not select its fixed lifetime");
+        await tx.insert(session).values({
+          id,
+          token,
+          ...lifetime,
+          userId: SYNTHETIC_PRINCIPAL.user.id,
+          activeOrganizationId: SYNTHETIC_PRINCIPAL.org.id,
           createdAt: now,
           updatedAt: now,
+          ipAddress: "synthetic-monitor",
+          userAgent: "stella-synthetic/prod",
         });
-      }
-      await tx
-        .insert(organization)
-        .values({
-          ...principal.org,
-          createdAt: now,
-        })
-        .onConflictDoNothing({ target: organization.id });
-      await recordNewOrganizationAccessState(tx, {
-        organizationId: brandPersistedOrganizationId(principal.org.id),
-        now,
-      });
-      const insertedMembers = await tx
-        .insert(member)
-        .values({
-          id: principal.memberId,
-          organizationId: principal.org.id,
-          userId: principal.user.id,
-          role: "owner",
-          createdAt: now,
-        })
-        .onConflictDoNothing({ target: member.id })
-        .returning({ id: member.id });
-      if (insertedMembers.length > 0) {
-        await seedDefaultSkills({
-          organizationId: brandPersistedOrganizationId(principal.org.id),
-          userId: brandPersistedUserId(principal.user.id),
-          tx,
+        const audit = createBackgroundAuditRecorder({
+          organizationId: brandPersistedOrganizationId(
+            SYNTHETIC_PRINCIPAL.org.id,
+          ),
+          workspaceId: null,
+          userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
+          execution: {
+            performer: { type: "service", id: "synthetic-session", name: null },
+            trigger: { type: "system", source: "synthetic-session" },
+          },
         });
-      }
-      await acceptProfessionalUse({
-        tx,
-        userId: brandPersistedUserId(principal.user.id),
-      });
-
-      const token = Bun.randomUUIDv7();
-      const id = `${SYNTHETIC_SESSION_PREFIX}${token}`;
-      const lifetime =
-        decidePinnedSessionLifetime({ id, createdAt: now }) ??
-        panic("Dedicated session id did not select its fixed lifetime");
-      await tx.insert(session).values({
-        id,
-        token,
-        ...lifetime,
-        userId: SYNTHETIC_PRINCIPAL.user.id,
-        activeOrganizationId: SYNTHETIC_PRINCIPAL.org.id,
-        createdAt: now,
-        updatedAt: now,
-        ipAddress: "synthetic-monitor",
-        userAgent: "stella-synthetic/prod",
-      });
-      const audit = createBackgroundAuditRecorder({
-        organizationId: brandPersistedOrganizationId(
-          SYNTHETIC_PRINCIPAL.org.id,
-        ),
-        workspaceId: null,
-        userId: brandPersistedUserId(SYNTHETIC_PRINCIPAL.user.id),
-        execution: {
-          performer: { type: "service", id: "synthetic-session", name: null },
-          trigger: { type: "system", source: "synthetic-session" },
-        },
-      });
-      await audit(tx, {
-        action: AUDIT_ACTION.SYNTHETIC_SESSION_MINTED,
-        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-        resourceId: SYNTHETIC_PRINCIPAL.org.id,
-        metadata: {
-          keyLabel,
-          requestId: requestId ?? null,
-          userAgent,
+        await audit(tx, {
+          action: AUDIT_ACTION.SYNTHETIC_SESSION_MINTED,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: SYNTHETIC_PRINCIPAL.org.id,
+          metadata: {
+            keyLabel,
+            requestId: requestId ?? null,
+            userAgent,
+            expiresAt: lifetime.expiresAt.toISOString(),
+          },
+        });
+        return {
+          cookieName: sessionCookieName(),
+          cookieValue: createSignedSessionCookieValue(
+            token,
+            env.BETTER_AUTH_SECRET,
+          ),
           expiresAt: lifetime.expiresAt.toISOString(),
-        },
-      });
-      return {
-        cookieName: sessionCookieName(),
-        cookieValue: createSignedSessionCookieValue(
-          token,
-          env.BETTER_AUTH_SECRET,
-        ),
-        expiresAt: lifetime.expiresAt.toISOString(),
-      };
-    });
+        };
+      },
+    );
     if (minted) {
       logger.warn("synthetic.session_minted", {
         "synthetic.key_label": keyLabel,
@@ -165,7 +172,7 @@ export const createSyntheticSessionStore = (
   };
 
   const revokeSyntheticSessions = async () =>
-    await withAggregateTransaction(database, async (tx) => {
+    await withAggregateTransaction(database, BUDGET, async (tx) => {
       const controlTransition = await transition({
         tx,
         spec: SYNTHETIC_SESSION_CONTROL_TRANSITIONS,

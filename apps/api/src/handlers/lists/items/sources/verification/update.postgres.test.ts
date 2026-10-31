@@ -28,6 +28,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
@@ -225,7 +226,12 @@ if (!databaseUrl || !runPostgres) {
           },
         ]);
 
-        const safeDb = createSafeDb(db, [workspaceId], organizationId, userId);
+        const safeDb = createSafeDb(db, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
+          organizationId,
+          userId,
+        });
         const verify = async (
           id: typeof changedSourceId,
           status: "verified" | "rejected" | "unverified",

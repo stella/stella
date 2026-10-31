@@ -31,6 +31,7 @@ import updateTimeEntry from "@/api/handlers/time-entries/update";
 import { getAuth } from "@/api/lib/auth";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -342,18 +343,18 @@ describe("member removal with an active timer", () => {
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: fixture.organizationId },
       workspaceId: fixture.workspaceId,
-      safeDb: createSafeDb(
-        testDb,
-        [fixture.workspaceId],
-        fixture.organizationId,
-        fixture.ownerId,
-      ),
-      scopedDb: createScopedDb(
-        testDb,
-        [fixture.workspaceId],
-        fixture.organizationId,
-        fixture.ownerId,
-      ),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [fixture.workspaceId],
+        organizationId: fixture.organizationId,
+        userId: fixture.ownerId,
+      }),
+      scopedDb: createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [fixture.workspaceId],
+        organizationId: fixture.organizationId,
+        userId: fixture.ownerId,
+      }),
       recordAuditEvent,
       createAuditRecorder: () => recordAuditEvent,
       request: new Request("https://example.test/time-entry-offboarding"),

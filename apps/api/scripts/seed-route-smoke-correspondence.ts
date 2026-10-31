@@ -13,11 +13,14 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { DEFAULT_ORG_ID } from "./seed-utils";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 requireLocalDevOpen("Seeding");
 
@@ -34,7 +37,7 @@ const correspondenceId = toSafeId<"correspondence">(correspondenceValue);
 const db = openMaintenanceDb({ readOnly: false });
 
 await runScriptWithErrorOutput(async () => {
-  const filer = await withAggregateTransaction(db, async (tx) => {
+  const filer = await withAggregateTransaction(db, BUDGET, async (tx) => {
     const seededFiler = (
       await tx
         .select({ id: user.id, name: user.name, email: user.email })
@@ -66,44 +69,49 @@ await runScriptWithErrorOutput(async () => {
     return seededFiler;
   });
   const scopedDb = createRootMembershipScopedDb({
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: DEFAULT_ORG_ID,
     userId: toSafeId<"user">(filer.id),
   });
-  await withAggregateTransaction({ transaction: scopedDb }, async (tx) => {
-    await tx.insert(correspondence).values({
-      id: correspondenceId,
-      organizationId: DEFAULT_ORG_ID,
-      workspaceId,
-      direction: "in",
-      channel: "email",
-      intake: "direct",
-      authenticatedSenderAddress: "sender@correspondence.example.test",
-      originalSignature: null,
-      contentHash: "a".repeat(64),
-      dedupKey: correspondenceId.replaceAll("-", "").repeat(2),
-      from: { address: "sender@correspondence.example.test", name: null },
-      to: [{ address: filer.email, name: filer.name }],
-      cc: [],
-      subject,
-      receivedAt: new Date("2026-09-27T12:00:00.000Z"),
-      references: [],
-      bodyText: "A persisted message for correspondence route smoke.",
-      spf: "pass",
-      dkim: "pass",
-      dmarc: "pass",
-      alignedIdentifier: "correspondence.example.test",
-    });
-    await tx.insert(correspondenceFilers).values({
-      organizationId: DEFAULT_ORG_ID,
-      workspaceId,
-      correspondenceId,
-      filedByUserId: toSafeId<"user">(filer.id),
-      filedByDisplay: {
-        status: "active",
-        name: filer.name,
-        email: filer.email,
-      },
-    });
-  });
+  await withAggregateTransaction(
+    { transaction: scopedDb },
+    BUDGET,
+    async (tx) => {
+      await tx.insert(correspondence).values({
+        id: correspondenceId,
+        organizationId: DEFAULT_ORG_ID,
+        workspaceId,
+        direction: "in",
+        channel: "email",
+        intake: "direct",
+        authenticatedSenderAddress: "sender@correspondence.example.test",
+        originalSignature: null,
+        contentHash: "a".repeat(64),
+        dedupKey: correspondenceId.replaceAll("-", "").repeat(2),
+        from: { address: "sender@correspondence.example.test", name: null },
+        to: [{ address: filer.email, name: filer.name }],
+        cc: [],
+        subject,
+        receivedAt: new Date("2026-09-27T12:00:00.000Z"),
+        references: [],
+        bodyText: "A persisted message for correspondence route smoke.",
+        spf: "pass",
+        dkim: "pass",
+        dmarc: "pass",
+        alignedIdentifier: "correspondence.example.test",
+      });
+      await tx.insert(correspondenceFilers).values({
+        organizationId: DEFAULT_ORG_ID,
+        workspaceId,
+        correspondenceId,
+        filedByUserId: toSafeId<"user">(filer.id),
+        filedByDisplay: {
+          status: "active",
+          name: filer.name,
+          email: filer.email,
+        },
+      });
+    },
+  );
 });
 process.exit(0);

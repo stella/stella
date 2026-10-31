@@ -2,14 +2,20 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { type SQL, TransactionRollbackError } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+import ts from "typescript6";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
+import { HTTP_IDLE_TIMEOUT_S } from "@/api/http/timeout-policy";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import {
+  DEFAULT_LEASE_MS,
+  defaultHeartbeatIntervalMs,
+} from "@/api/lib/scheduler/lease-timing";
 import {
   aggregateExecutionRows,
   aggregateFences as fences,
@@ -18,6 +24,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
+import { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder";
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,
@@ -25,11 +32,14 @@ import {
   lockInvoiceInStatus,
   lockRequestReceiptPrincipalRows,
   withAggregateLock,
+  withAggregateTransaction,
   withAutomatedFlowRunCapLock,
   withInvoiceMatterLocks,
   withSkipLockedBatch,
 } from "./aggregate-lock";
 import namespaceLedger from "./aggregate-lock-namespaces.json" with { type: "json" };
+import { AGGREGATE_TRANSACTION_BUDGETS } from "./aggregate-transaction-budget";
+import { READ_BUDGETS } from "./read-budgets";
 
 test.each(["present", "missing"] as const)(
   "invoice matter batches retain only visible sorted row locks (%s)",
@@ -96,6 +106,347 @@ test("an empty invoice matter plan refuses before any lock query", async () => {
     message: "Invoice matter locks require at least one matter",
   });
   expect(executions).toBe(0);
+});
+
+test.each(
+  Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind === "aggregate",
+  ),
+)("budget setup preserves snapshot admission ($reason)", async (budget) => {
+  const statements: string[] = [];
+  const dialect = new PgDialect();
+  const tx = {
+    execute: async (statement: SQL) => {
+      statements.push(dialect.sqlToQuery(statement).sql);
+    },
+  };
+  await withAggregateTransaction(
+    {
+      transaction: async <Value>(
+        run: (transaction: typeof tx) => Promise<Value>,
+      ) => await run(tx),
+    },
+    budget,
+    async () => {
+      expect(statements).toEqual([
+        `SET LOCAL transaction_timeout = ${budget.milliseconds}`,
+      ]);
+    },
+  );
+});
+
+test("sitemap transaction budget covers atomic publication and its supporting statements", () => {
+  const statementDeadlineMs =
+    READ_BUDGETS["scheduled.caseLaw.refreshSitemapShards"].statementDeadlineMs;
+  const publicationStatements = 4;
+  const retirementStatements = 2;
+  const setupFenceAndReadStatements = 6;
+  const budgetSetupStatements = 1;
+  expect(
+    AGGREGATE_TRANSACTION_BUDGETS.sitemapRefresh.envelopeMs,
+  ).toBeGreaterThanOrEqual(
+    (publicationStatements +
+      retirementStatements +
+      setupFenceAndReadStatements +
+      budgetSetupStatements) *
+      statementDeadlineMs,
+  );
+});
+
+test("ordinary transaction budgets end before the online-DDL retry ladder", () => {
+  for (const budget of Object.values(AGGREGATE_TRANSACTION_BUDGETS)) {
+    if (budget.kind === "aggregate") {
+      expect(budget.milliseconds).toBeLessThan(
+        DEFAULT_LOCK_RETRY_CONFIG.budgetMs,
+      );
+    }
+  }
+});
+
+test("lease-coordinated envelopes fit within lease expiry and heartbeat detection", () => {
+  const leaseDetectionWindow =
+    DEFAULT_LEASE_MS + defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
+  for (const budget of Object.values(AGGREGATE_TRANSACTION_BUDGETS)) {
+    if (budget.kind === "lease-coordinated") {
+      expect(budget.envelopeMs).toBeLessThan(leaseDetectionWindow);
+    }
+  }
+});
+
+test("HTTP database budgets fit inside the transport idle window", () => {
+  // Transport idle expiry is not an absolute handler deadline; the database budget is independent.
+  for (const budget of [
+    AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+    AGGREGATE_TRANSACTION_BUDGETS.publicReadRequest,
+  ]) {
+    expect(budget.milliseconds).toBeLessThanOrEqual(HTTP_IDLE_TIMEOUT_S * 1000);
+  }
+});
+
+test("every transaction owner uses its registered budget classification", async () => {
+  const root = new URL("../../..", import.meta.url).pathname;
+  const glob = new Bun.Glob("{src,scripts}/**/*.ts");
+  const aggregateBudgets = new Set(
+    Object.entries(AGGREGATE_TRANSACTION_BUDGETS)
+      .filter(([, budget]) => budget.kind !== "lease-coordinated")
+      .map(([name]) => name),
+  );
+  const dedicatedBudgets = Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind === "lease-coordinated",
+  );
+  const dedicatedOwners = dedicatedBudgets.map((budget) => budget.owner);
+  const uncappedBudgets = Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+    (budget) => budget.kind === "uncapped-pending-measurement",
+  );
+  const observedUncappedCallers = new Map<string, Set<string>>(
+    uncappedBudgets.map(
+      (budget) => [budget.entryPoint, new Set<string>()] as const,
+    ),
+  );
+  expect(observedUncappedCallers.size).toBe(uncappedBudgets.length);
+  expect(new Set(dedicatedOwners).size).toBe(dedicatedOwners.length);
+  const observedDedicatedOwners: string[] = [];
+  const missing: string[] = [];
+  for await (const path of glob.scan({ cwd: root })) {
+    if (
+      /\.(?:test|spec|fixture|type-test)\.|\/(?:__tests__|__fixtures__|fixtures|tests)\//u.test(
+        path,
+      )
+    ) {
+      continue;
+    }
+    const owner = `apps/api/${path}`;
+    const dedicated = dedicatedBudgets.find((entry) => entry.owner === owner);
+    const text = await Bun.file(`${root}${path}`).text();
+    if (
+      !dedicated &&
+      !text.includes("withAggregateTransaction") &&
+      !uncappedBudgets.some((entry) => text.includes(entry.entryPoint))
+    ) {
+      continue;
+    }
+    const source = ts.createSourceFile(
+      path,
+      text,
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const budgetImports = new Set<string>();
+    const budgetTypeImports = new Set<string>();
+    const transactionImports = new Set(["withAggregateTransaction"]);
+    const uncappedImports = new Map<string, string>(
+      uncappedBudgets.map((budget) => [budget.entryPoint, budget.entryPoint]),
+    );
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement)) {
+        continue;
+      }
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) {
+        continue;
+      }
+      for (const binding of bindings.elements) {
+        const imported = binding.propertyName?.text ?? binding.name.text;
+        if (observedUncappedCallers.has(imported)) {
+          uncappedImports.set(binding.name.text, imported);
+        }
+        switch (imported) {
+          case "AGGREGATE_TRANSACTION_BUDGETS":
+            budgetImports.add(binding.name.text);
+            break;
+          case "AggregateTransactionBudget":
+            if (
+              ts.isStringLiteral(statement.moduleSpecifier) &&
+              (statement.moduleSpecifier.text ===
+                "@/api/lib/db/aggregate-transaction-budget" ||
+                (statement.moduleSpecifier.text.startsWith(".") &&
+                  new URL(
+                    statement.moduleSpecifier.text,
+                    new URL(path, `file://${root}`),
+                  ).pathname.replace(/\.ts$/u, "") ===
+                    new URL(
+                      "aggregate-transaction-budget.ts",
+                      import.meta.url,
+                    ).pathname.replace(/\.ts$/u, "")))
+            ) {
+              budgetTypeImports.add(binding.name.text);
+            }
+            break;
+          case "withAggregateTransaction":
+            transactionImports.add(binding.name.text);
+            break;
+          default:
+            break;
+        }
+      }
+    }
+    const namedBudgets = new Set<string>();
+    const isAggregateBudget = (node: ts.Node): boolean =>
+      (ts.isIdentifier(node) && namedBudgets.has(node.text)) ||
+      (ts.isPropertyAccessExpression(node) &&
+        ts.isIdentifier(node.expression) &&
+        budgetImports.has(node.expression.text) &&
+        aggregateBudgets.has(node.name.text));
+    for (const statement of source.statements) {
+      if (!ts.isVariableStatement(statement)) {
+        continue;
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        if (
+          ts.isIdentifier(declaration.name) &&
+          declaration.initializer &&
+          isAggregateBudget(declaration.initializer)
+        ) {
+          namedBudgets.add(declaration.name.text);
+        }
+      }
+    }
+    const isRequiredCallerBudget = (expression: ts.Expression): boolean => {
+      if (!ts.isIdentifier(expression)) {
+        return false;
+      }
+      const bindsBudget = (name: ts.BindingName): boolean =>
+        ts.isIdentifier(name)
+          ? name.text === expression.text
+          : name.elements.some(
+              (element) =>
+                ts.isBindingElement(element) && bindsBudget(element.name),
+            );
+      for (
+        let ancestor = expression.parent;
+        !ts.isSourceFile(ancestor);
+        ancestor = ancestor.parent
+      ) {
+        if (!ts.isFunctionLike(ancestor)) {
+          continue;
+        }
+        for (const parameter of ancestor.parameters) {
+          if (ts.isIdentifier(parameter.name)) {
+            if (parameter.name.text === expression.text) {
+              return false;
+            }
+            continue;
+          }
+          if (!ts.isObjectBindingPattern(parameter.name)) {
+            // Other binding patterns can shadow a budget but cannot prove its policy.
+            if (bindsBudget(parameter.name)) {
+              return false;
+            }
+            continue;
+          }
+          const binding = parameter.name.elements.find(
+            (element) =>
+              ts.isIdentifier(element.name) &&
+              element.name.text === expression.text,
+          );
+          if (!binding) {
+            if (bindsBudget(parameter.name)) {
+              return false;
+            }
+            continue;
+          }
+          if (
+            parameter.initializer ||
+            parameter.questionToken ||
+            binding.initializer ||
+            binding.dotDotDotToken ||
+            !parameter.type ||
+            !ts.isTypeReferenceNode(parameter.type) ||
+            !ts.isIdentifier(parameter.type.typeName)
+          ) {
+            return false;
+          }
+          const parameterTypeName = parameter.type.typeName.text;
+          const options = source.statements.find(
+            (statement) =>
+              ts.isTypeAliasDeclaration(statement) &&
+              statement.name.text === parameterTypeName,
+          );
+          if (
+            !options ||
+            !ts.isTypeAliasDeclaration(options) ||
+            !ts.isTypeLiteralNode(options.type)
+          ) {
+            return false;
+          }
+          const propertyName = binding.propertyName ?? binding.name;
+          if (!ts.isIdentifier(propertyName)) {
+            return false;
+          }
+          return options.type.members.some(
+            (member) =>
+              ts.isPropertySignature(member) &&
+              ts.isIdentifier(member.name) &&
+              member.name.text === propertyName.text &&
+              !member.questionToken &&
+              member.type &&
+              ts.isTypeReferenceNode(member.type) &&
+              ts.isIdentifier(member.type.typeName) &&
+              budgetTypeImports.has(member.type.typeName.text),
+          );
+        }
+      }
+      return false;
+    };
+    let directTransactions = 0;
+    let aggregateTransactions = 0;
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        if (
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === "transaction"
+        ) {
+          directTransactions += 1;
+        }
+        if (ts.isIdentifier(node.expression)) {
+          const uncappedEntryPoint = uncappedImports.get(node.expression.text);
+          if (uncappedEntryPoint !== undefined) {
+            const callers =
+              observedUncappedCallers.get(uncappedEntryPoint) ??
+              panic("Missing registered uncapped transaction entry point");
+            callers.add(owner);
+          }
+          if (transactionImports.has(node.expression.text)) {
+            aggregateTransactions += 1;
+            const budget = node.arguments.at(1);
+            if (
+              node.arguments.length !== 3 ||
+              !budget ||
+              !(isAggregateBudget(budget) || isRequiredCallerBudget(budget))
+            ) {
+              missing.push(
+                `${owner}:${source.getLineAndCharacterOfPosition(node.getStart()).line + 1}`,
+              );
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    if (dedicated) {
+      observedDedicatedOwners.push(owner);
+      expect({
+        owner,
+        directTransactions,
+        aggregateTransactions,
+      }).toEqual({
+        owner,
+        directTransactions: dedicated.transactionEntries,
+        aggregateTransactions: 0,
+      });
+    }
+  }
+  expect(observedDedicatedOwners.toSorted()).toEqual(
+    dedicatedOwners.toSorted(),
+  );
+  for (const budget of uncappedBudgets) {
+    const observed =
+      observedUncappedCallers.get(budget.entryPoint) ??
+      panic("Missing uncapped transaction caller census");
+    expect([...observed].toSorted()).toEqual([...budget.callers].toSorted());
+  }
+  expect(missing).toEqual([]);
 });
 
 test("an overflowing invoice matter plan refuses before acquiring any matter lock", async () => {
@@ -166,13 +517,19 @@ test("the flow cap owner opens one transaction and awaits its fence before runni
     { definitionId: createSafeId<"flowDefinition">(), database },
     async (transaction) => {
       expect(transaction).toBe(tx);
-      expect(events).toEqual(["opened", "locked"]);
+      expect(events).toEqual(["opened", "locked", "locked"]);
       events.push("decision");
       return "started";
     },
   );
   expect(result).toBe("started");
-  expect(events).toEqual(["opened", "locked", "decision", "committed"]);
+  expect(events).toEqual([
+    "opened",
+    "locked",
+    "locked",
+    "decision",
+    "committed",
+  ]);
 });
 
 test("skip-locked batches preserve their bound and close the blocking acquisition path", async () => {

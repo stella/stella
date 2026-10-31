@@ -19,6 +19,7 @@ import disconnectSharepoint from "@/api/handlers/sharepoint/disconnect";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { purgeSharepointForOrg } from "@/api/lib/sharepoint-disable-purge";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -160,7 +161,12 @@ describe("disconnect is never gated on org enablement", () => {
       }
     };
 
-    const safeDb = createSafeDb(testDb, [], ids.orgB, ids.userB1);
+    const safeDb = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
 
     const result = await disconnectSharepoint.handler(
       asTestRaw({

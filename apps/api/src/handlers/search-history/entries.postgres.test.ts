@@ -31,6 +31,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -170,12 +171,12 @@ const identity = (fixture: HistoryFixture) => ({
   },
   audit: historyAuditRecorder(fixture),
   scopedDb: NO_DB,
-  safeDb: createSafeDb(
-    fixture.rlsDb,
-    [],
-    fixture.organizationId,
-    fixture.userId,
-  ),
+  safeDb: createSafeDb(fixture.rlsDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  }),
   session: { activeOrganizationId: fixture.organizationId },
   user: { id: fixture.userId },
 });

@@ -20,6 +20,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -107,8 +108,18 @@ const runBatch = async (
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       workspaceId: ids.wsA2,
-      safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
-      scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
+      scopedDb: createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
       recordAuditEvent: (async (_tx, event) => {
         events.push(...(Array.isArray(event) ? event : [event]));
       }) satisfies BatchContext["recordAuditEvent"],

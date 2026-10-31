@@ -20,6 +20,7 @@ import getFeatureEnrolments from "@/api/handlers/organization-settings/feature-e
 import unenrolFeature from "@/api/handlers/organization-settings/feature-enrolments/unenrol";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
@@ -79,6 +80,7 @@ describe.skipIf(!runPostgresTests)(
               "enabled",
             );
             await createMembershipScopedDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId,
               userId,
               serverValidatedWorkspaceIds: [],
@@ -140,7 +142,12 @@ describe.skipIf(!runPostgresTests)(
             scopedDb: NO_DB,
             safeDb: safeDbFromScoped(
               asTestRaw<ScopedDb>(
-                createScopedDb(scopedDatabase, [], orgA, userA),
+                createScopedDb(scopedDatabase, {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceScope: [],
+                  organizationId: orgA,
+                  userId: userA,
+                }),
               ),
             ),
             session: { activeOrganizationId: orgA },
@@ -187,6 +194,7 @@ describe.skipIf(!runPostgresTests)(
                 }),
             );
             const callerDb = createMembershipScopedDb(scopedDatabase, {
+              budget: BUDGETS.scopedRequest,
               organizationId,
               userId,
               serverValidatedWorkspaceIds: [],
@@ -230,7 +238,12 @@ describe.skipIf(!runPostgresTests)(
                     scopedDb: NO_DB,
                     safeDb: safeDbFromScoped(
                       asTestRaw<ScopedDb>(
-                        createScopedDb(scopedDatabase, [], orgId, userId),
+                        createScopedDb(scopedDatabase, {
+                          budget: BUDGETS.scopedRequest,
+                          workspaceScope: [],
+                          organizationId: orgId,
+                          userId,
+                        }),
                       ),
                     ),
                     session: { activeOrganizationId: orgId },

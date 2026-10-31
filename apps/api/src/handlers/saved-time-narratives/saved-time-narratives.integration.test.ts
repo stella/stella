@@ -8,6 +8,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
@@ -81,8 +82,18 @@ const context = (
   organizationId: SafeId<"organization">,
   userId: SafeId<"user">,
 ) => ({
-  safeDb: createSafeDb(testDb, [], organizationId, userId),
-  scopedDb: createScopedDb(testDb, [], organizationId, userId),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [],
+    organizationId,
+    userId,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId,
+    userId,
+  }),
   session: { activeOrganizationId: organizationId },
   user: { id: userId },
   memberRole: sessionMemberRole("owner"),

@@ -29,6 +29,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { canInstallTemplatePacks } from "@/api/handlers/template-packs/catalogue";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -211,9 +212,21 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
-  safeDb = asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userAdmin));
+  safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+  );
   otherOrgSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [], ids.orgB, ids.userB1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    }),
   );
   const { installTemplatePackHandler: installTemplatePackHandlerImpl } =
     await import("./create");

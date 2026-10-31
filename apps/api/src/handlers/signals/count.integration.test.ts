@@ -22,6 +22,7 @@ import countInbox from "@/api/handlers/signals/count";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -109,8 +110,18 @@ const countFor = async (workspaceIds: SafeId<"workspace">[]) => {
       memberRole: sessionMemberRole("owner"),
       request: new Request("https://example.test/signals/count"),
       route: "/v1/signals/count" satisfies ApiRoutePath,
-      safeDb: createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
-      scopedDb: createScopedDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+      scopedDb: createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       query: { asOf: AS_OF },

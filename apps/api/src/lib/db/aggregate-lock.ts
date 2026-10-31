@@ -53,9 +53,23 @@ import {
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateTransactionBoundary } from "@/api/lib/db/aggregate-transaction-boundary";
+import {
+  AGGREGATE_TRANSACTION_BUDGETS,
+  type AggregateTransactionBudget,
+  tighterTransactionBudget,
+} from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import {
+  getPendingTransactionBudget,
+  getTransactionBudget,
+  inheritTransactionBudget,
+  initializeTransactionBudget,
+  withoutPendingTransactionBudget,
+  withTransactionBudgetContext,
+} from "@/api/lib/db/transaction-budget-owner";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -719,6 +733,11 @@ type AggregateDatabase<Tx extends object> = {
   };
 };
 
+const isSqlExecutor = (
+  value: object,
+): value is { execute: (statement: SQL) => PromiseLike<unknown> } =>
+  "execute" in value && typeof value.execute === "function";
+
 /** Lend transaction-owning operations a tracked savepoint of an existing transaction. */
 export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
   transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
@@ -735,6 +754,7 @@ export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
 /** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
 export const withAggregateTransaction = async <Tx extends object, T>(
   database: AggregateDatabase<Tx>,
+  budget: AggregateTransactionBudget,
   run: (tx: Tx) => Promise<T>,
 ): Promise<T> => {
   if (aggregateSavepointDatabases.has(database)) {
@@ -746,17 +766,52 @@ export const withAggregateTransaction = async <Tx extends object, T>(
   if (histories.has(database) || "rollback" in database) {
     panic("Use the aggregate savepoint owner for nested transactions");
   }
-  return await database.transaction(async (tx) => {
-    const history = lockHistory(tx);
-    assertAggregateLevelAvailable(history);
-    try {
-      const value = await run(tx);
-      assertAggregateLevelAvailable(history);
-      return value;
-    } finally {
-      history.status = "closed";
-    }
+  const selected = tighterTransactionBudget({
+    declared: budget,
+    requested: getPendingTransactionBudget(),
   });
+  let effectiveBudget = selected;
+  return await withTransactionBudgetContext(
+    selected,
+    async () =>
+      await withAggregateTransactionBoundary(
+        () =>
+          tighterTransactionBudget({
+            declared: effectiveBudget,
+            requested: getPendingTransactionBudget(),
+          }),
+        async () =>
+          await database.transaction(async (tx) => {
+            if (!isSqlExecutor(tx)) {
+              return panic("Aggregate transactions require an SQL executor");
+            }
+            const initialized = getTransactionBudget(tx);
+            if (initialized === undefined) {
+              await initializeTransactionBudget(tx, selected);
+            } else if (
+              tighterTransactionBudget({
+                declared: initialized,
+                requested: selected,
+              }) !== initialized
+            ) {
+              panic("Physical transaction already has a looser budget owner");
+            } else {
+              effectiveBudget = initialized;
+            }
+            const history = lockHistory(tx);
+            assertAggregateLevelAvailable(history);
+            try {
+              const value = await withoutPendingTransactionBudget(
+                async () => await run(tx),
+              );
+              assertAggregateLevelAvailable(history);
+              return value;
+            } finally {
+              history.status = "closed";
+            }
+          }),
+      ),
+  );
 };
 
 type SkipLockedBatchOptions<Tx extends object, Row, T> = {
@@ -785,22 +840,26 @@ export const withSkipLockedBatch = async <Tx extends object, Row, T>({
   if (!Number.isSafeInteger(limit) || limit < 1) {
     panic("Skip-locked batches require a bounded positive limit");
   }
-  return await withAggregateTransaction(database, async (tx) => {
-    const history = lockHistory(tx);
-    await prepare?.(tx);
-    const query = select(tx);
-    const target = aggregateSelectTarget(query.toSQL().sql);
-    if (target.joined || !target.filtered) {
-      panic("Skip-locked batches require a filtered single-table query");
-    }
-    // These locks never wait, but holding them while acquiring a blocking
-    // aggregate would reintroduce an unordered chain. Keep that path closed.
-    history.status = "acquiring";
-    const rows = await query.limit(limit).for("update", { skipLocked: true });
-    const value = await run(tx, rows);
-    completeAcquisition(history);
-    return value;
-  });
+  return await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.skipLockedBatchPendingMeasurement,
+    async (tx) => {
+      const history = lockHistory(tx);
+      await prepare?.(tx);
+      const query = select(tx);
+      const target = aggregateSelectTarget(query.toSQL().sql);
+      if (target.joined || !target.filtered) {
+        panic("Skip-locked batches require a filtered single-table query");
+      }
+      // These locks never wait, but holding them while acquiring a blocking
+      // aggregate would reintroduce an unordered chain. Keep that path closed.
+      history.status = "acquiring";
+      const rows = await query.limit(limit).for("update", { skipLocked: true });
+      const value = await run(tx, rows);
+      completeAcquisition(history);
+      return value;
+    },
+  );
 };
 
 const executorSavepoints = new WeakSet<object>();
@@ -894,7 +953,11 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   // Only native transaction handles expose rollback. A reusable database
   // must never enter the per-transaction history registry.
   if (!("rollback" in tx)) {
-    return await withAggregateTransaction(tx, run);
+    return await withAggregateTransaction(
+      tx,
+      AGGREGATE_TRANSACTION_BUDGETS.rootSavepointPendingMeasurement,
+      run,
+    );
   }
   const parent = lockHistory(tx);
   // Non-locking callers retain the driver's existing savepoint behavior.
@@ -912,6 +975,7 @@ export const withAggregateSavepoint = async <Tx extends object, T>(
   parent.children.add(history);
   try {
     const committed = await tx.transaction(async (savepoint) => {
+      inheritTransactionBudget(tx, savepoint);
       histories.set(savepoint, history);
       try {
         const value = await run(savepoint);
@@ -1649,6 +1713,20 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
       options satisfies never;
       return panic("Unknown advisory aggregate");
   }
+};
+
+/** Session holders must use one dedicated connection until release. */
+export const caseLawSitemapMonthSessionLockSql = (
+  month: AggregateIdentities["caseLawSitemapMonth"],
+) => {
+  const { first, second } = advisoryResource({
+    aggregate: "caseLawSitemapMonth",
+    id: month,
+  });
+  return {
+    acquire: sql`SELECT pg_try_advisory_lock(${first}, ${second}) AS acquired`,
+    release: sql`SELECT pg_advisory_unlock(${first}, ${second}) AS released`,
+  };
 };
 
 type AggregateSessionConnection = {
@@ -2609,14 +2687,18 @@ export const withAutomatedFlowRunCapLock = async <T>(
   { definitionId, database }: AutomatedFlowRunCapLockOptions,
   run: (tx: Transaction) => Promise<T>,
 ): Promise<T> =>
-  await withAggregateTransaction(database, async (tx) => {
-    await withAggregateLock({
-      aggregate: "automatedFlowRunCap",
-      id: definitionId,
-      tx,
-    });
-    return await run(tx);
-  });
+  await withAggregateTransaction(
+    database,
+    AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+    async (tx) => {
+      await withAggregateLock({
+        aggregate: "automatedFlowRunCap",
+        id: definitionId,
+        tx,
+      });
+      return await run(tx);
+    },
+  );
 
 type DecisionCitationStatsLocksOptions = {
   tx: ExecuteTransaction;

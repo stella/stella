@@ -9,6 +9,7 @@ import { searchProjectionRepairQueue, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -47,7 +48,12 @@ afterAll(async () => {
 test("stale client preconditions preserve the latest assignment and skip side effects", async () => {
   const auditEvents: unknown[] = [];
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [workspaceId], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   const callUpdate = async (expectedClientId: string | null) =>
     await Result.gen(() =>

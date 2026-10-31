@@ -23,6 +23,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { allocateNumber } from "@/api/lib/billing/number-series";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { enrolTimeBilling } from "@/api/tests/helpers/time-billing-enrolment";
@@ -69,12 +70,12 @@ const allocateInOrg = async (
   seriesId: SafeId<"numberSeries">,
   issuedAt: Date,
 ) =>
-  await createScopedDb(
-    testDb,
-    [],
+  await createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
     organizationId,
-    ids.userA1,
-  )(
+    userId: ids.userA1,
+  })(
     async (scoped) =>
       await allocateNumber(asTestRaw<Transaction>(scoped), seriesId, issuedAt),
   );
@@ -175,7 +176,12 @@ describe("number series allocation", () => {
         },
       ),
       route: "/v1/number-series/:numberSeriesId" satisfies ApiRoutePath,
-      safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: ids.orgA },
       memberRole: sessionMemberRole("owner"),
       user: { id: ids.userA1 },
@@ -242,7 +248,12 @@ describe("number series allocation", () => {
           method: "POST",
         }),
         route: "/v1/number-series" satisfies ApiRoutePath,
-        safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
+        safeDb: createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
         session: { activeOrganizationId: ids.orgA },
         memberRole: sessionMemberRole("owner"),
         user: { id: ids.userA1 },
@@ -349,12 +360,12 @@ describe("number series allocation", () => {
       new Date("2026-03-01T12:00:00.000Z"),
     );
 
-    const rowsForOrgA = await createScopedDb(
-      testDb,
-      [],
-      ids.orgA,
-      ids.userA1,
-    )(
+    const rowsForOrgA = await createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })(
       async (tx) =>
         await tx
           .select({ seriesId: numberSeriesCounters.seriesId })

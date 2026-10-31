@@ -24,6 +24,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type {
   PlaybookPositions,
@@ -64,8 +65,18 @@ const contextFor = (actor: Actor) => ({
   route: "/v1/playbooks" satisfies ApiRoutePath,
   safeDb:
     actor === "a1"
-      ? createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1)
-      : createSafeDb(testDb, [ids.wsA2], ids.orgA, ids.userA2),
+      ? createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA1, ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        })
+      : createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
   session: { activeOrganizationId: ids.orgA },
   user: { id: actor === "a1" ? ids.userA1 : ids.userA2 },
 });

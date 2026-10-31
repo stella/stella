@@ -9,6 +9,7 @@ import { fields, properties } from "@/api/db/schema";
 import type { PropertyContent } from "@/api/db/schema-validators";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -73,7 +74,12 @@ const runUpdate = async ({
   file: boolean;
   ai: boolean;
 }) => {
-  const safeDb = createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1);
+  const safeDb = createSafeDb(db, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   return await updateProperty.handler(
     asTestRaw<Context>({
       safeDb,
@@ -264,7 +270,12 @@ test("file column updates preserve document references", async () => {
             .where(eq(fields.propertyId, ids.filePropertyA1)),
         ).toEqual(beforeFields);
         const safeDb = asTestRaw<Context["safeDb"]>(
-          createSafeDb(db, [ids.wsA1], ids.orgA, ids.userA1),
+          createSafeDb(db, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
         );
         const uploadValidation = await Result.gen(() =>
           validateEntityCreate({
@@ -303,7 +314,14 @@ test("renaming a file column retains its scope and generated document creation",
     const created = await createEntityFromBuffer({
       scopedDb: asTestRaw<
         Parameters<typeof createEntityFromBuffer>[0]["scopedDb"]
-      >(createScopedDb(db, [ids.wsA1], ids.orgA, ids.userA1)),
+      >(
+        createScopedDb(db, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       userId: ids.userA1,

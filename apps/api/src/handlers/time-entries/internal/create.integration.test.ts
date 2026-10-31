@@ -26,6 +26,7 @@ import { AUDIT_ACTION, createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -109,7 +110,12 @@ const createFor = async (body: CreateCtx["body"]) => {
       body,
       request,
       route: "/v1/time-entries/internal" satisfies ApiRoutePath,
-      safeDb: createSafeDb(db, [], ids.orgA, ids.userA1),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
       scopedDb: createOrganizationScopedTestDb(db, {
         organizationId: ids.orgA,
         userId: ids.userA1,
@@ -315,7 +321,12 @@ describe("internal shape constraints", () => {
 describe("internal row write isolation", () => {
   test("UPDATE WITH CHECK refuses moving the owner's row to an inaccessible matter or another tenant", async () => {
     const id = await seed(ids.orgA, ids.userA2);
-    const scoped = createScopedDb(db, [ids.wsA2], ids.orgA, ids.userA2);
+    const scoped = createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     const inaccessible = await Result.tryPromise(
       async () =>
         await scoped(
@@ -361,7 +372,12 @@ describe("internal row write isolation", () => {
   test("another member and another tenant cannot mutate internal rows, even with a supplied row id", async () => {
     const own = await seed();
     const foreign = await seed(ids.orgB, ids.userB1);
-    const scoped = createScopedDb(db, [], ids.orgA, ids.userA2);
+    const scoped = createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     expect(
       await scoped(
         async (tx) =>

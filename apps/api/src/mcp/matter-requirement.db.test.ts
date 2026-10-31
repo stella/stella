@@ -19,6 +19,7 @@ import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adap
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   authorizedMemberRole,
@@ -83,9 +84,17 @@ const mcpRequestContext = async ({
 }: Caller): Promise<AuthorizedMcpRequestContext> => {
   const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
   const scopedDb = asTestRaw<ScopedDb>(
-    createMembershipScopedDb(testDb, identity),
+    createMembershipScopedDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
   );
-  const safeDb = asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity));
+  const safeDb = asTestRaw<SafeDb>(
+    createMembershipSafeDb(testDb, {
+      ...identity,
+      budget: BUDGETS.scopedRequest,
+    }),
+  );
   const usable = filterUsableMcpWorkspaces({
     accessibleWorkspaces: await loadAccessibleMcpWorkspaces({
       organizationId,

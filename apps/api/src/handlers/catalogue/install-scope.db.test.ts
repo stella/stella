@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { SafeDb } from "@/api/db/safe-db";
 import { createSafeDb } from "@/api/db/scoped";
 import createSkill from "@/api/handlers/skills/create";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
@@ -52,7 +53,12 @@ const installAsMember = async (scope: "private" | "team") => {
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
         ),
         body: { slug: UNKNOWN_SLUG, scope },
       },

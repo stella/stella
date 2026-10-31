@@ -19,6 +19,7 @@ import {
 } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -93,6 +94,7 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
 
 const asMember = (db: GatedTestDb, fixture: Fixture, userId: SafeId<"user">) =>
   createMembershipScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId: fixture.organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
@@ -209,12 +211,12 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
 
   test("needs an organization member in the transaction", async () => {
     await withFixture(async (db, fixture) => {
-      const service = createScopedDb(
-        markRlsDatabase(db),
-        [],
-        fixture.organizationId,
-        null,
-      );
+      const service = createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: fixture.organizationId,
+        userId: null,
+      });
       expect(
         errorText(
           await rejectionOf(

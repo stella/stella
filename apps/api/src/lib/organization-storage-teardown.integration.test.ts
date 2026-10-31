@@ -34,6 +34,7 @@ import {
   lockObjectCleanupIntentsForWriter,
   reserveObjectCleanupIntents,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createUserFileKey,
   createUserFileThumbnailKey,
@@ -479,7 +480,12 @@ beforeAll(async () => {
   });
   const organizationWriterKey = `${userId}/${uuid()}.txt`;
   const scopedSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [], organizationId, userId),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId,
+    }),
   );
   const organizationWriterIntent = await reserveObjectCleanupIntents({
     chatThreadId: globalAttachment.threadId,

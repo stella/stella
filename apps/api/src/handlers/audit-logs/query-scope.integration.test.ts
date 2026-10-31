@@ -21,6 +21,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -97,7 +98,12 @@ beforeAll(async () => {
   // A compliance reader of organization A who is a member of both matters:
   // the workspace pin cannot be what hides workspace A2's entries.
   safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
   rowInWorkspaceA1 = await seedAuditEntry({
@@ -168,7 +174,12 @@ const seededIdsOf = (items: readonly { id: SafeId<"auditLog"> }[]) =>
 describe("audit log compliance filter", () => {
   test("pages respect the reader's matter scope", async () => {
     const reader = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const page = await readPage({}, reader);
     expect(seededIdsOf(page.items).toSorted()).toEqual(
@@ -179,6 +190,7 @@ describe("audit log compliance filter", () => {
   test("organization readers follow matter availability", async () => {
     const reader = asTestRaw<SafeDb>(
       createMembershipSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
         organizationId: ids.orgA,
         serverValidatedWorkspaceIds: [],
         userId: ids.userAdmin,

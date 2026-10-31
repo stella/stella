@@ -18,6 +18,7 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { hashDesktopEditHandoffToken } from "@/api/lib/desktop-edit-sessions";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -227,7 +228,13 @@ export const createDesktopEditHandoffSafeDb = ({
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
-}): SafeDb => createSafeDb(rlsDb, [workspaceId], organizationId, userId);
+}): SafeDb =>
+  createSafeDb(rlsDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [workspaceId],
+    organizationId,
+    userId,
+  });
 
 type RecordDesktopHandoffFailureOptions = {
   kind: "desktop_edit" | "pdf_signing";

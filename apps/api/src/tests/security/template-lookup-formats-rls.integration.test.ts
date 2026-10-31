@@ -15,6 +15,7 @@ import listLookupFormats from "@/api/handlers/templates/lookup-formats/list";
 import setMyDefaultLookupFormat from "@/api/handlers/templates/lookup-formats/my-default/update";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   LOOKUP_FORMAT_DEFAULT_SOURCE,
   resolveLookupFormatDefault,
@@ -70,7 +71,12 @@ afterAll(async () => {
 describe("organization company format isolation", () => {
   test("a default is shared with colleagues, scoped to its registry, and can be cleared", async () => {
     const scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const context = {
       audit: auditRecorderDouble(),
@@ -90,7 +96,12 @@ describe("organization company format isolation", () => {
       );
     expect(await setDefault(formatA)).toEqual({ success: true });
     const colleagueDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA2),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+      }),
     );
     const listed = await listLookupFormats.handler(
       createTestHandlerContext<Parameters<typeof listLookupFormats.handler>[0]>(
@@ -116,7 +127,12 @@ describe("organization company format isolation", () => {
   });
   test("saved templates are reusable by colleagues with stable bounded pages", async () => {
     const scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const safeDb = toSafeDbMock(scopedDb);
     const auditActions: string[] = [];
@@ -151,7 +167,12 @@ describe("organization company format isolation", () => {
       throw new Error("Expected saved format");
     }
     const colleagueDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [], ids.orgA, ids.userA2),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+      }),
     );
     const listContext = {
       scopedDb: colleagueDb,
@@ -222,7 +243,12 @@ describe("organization company format isolation", () => {
       [ids.orgA, ids.userA2, formatA],
       [ids.orgB, ids.userB1, formatB],
     ] as const) {
-      const scoped = createScopedDb(testDb, [], organizationId, userId);
+      const scoped = createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId,
+        userId,
+      });
       const rows = await scoped((tx) =>
         tx.select({ id: templateLookupFormats.id }).from(templateLookupFormats),
       );
@@ -231,7 +257,12 @@ describe("organization company format isolation", () => {
   });
 
   test("cross-organization mutations cannot change or delete a format", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const updated = await scoped((tx) =>
       tx
         .update(templateLookupFormats)
@@ -259,7 +290,15 @@ describe("personal company format defaults", () => {
   const scopedFor = (
     organizationId: SafeId<"organization">,
     userId: SafeId<"user">,
-  ) => asTestRaw<ScopedDb>(createScopedDb(testDb, [], organizationId, userId));
+  ) =>
+    asTestRaw<ScopedDb>(
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
+        organizationId,
+        userId,
+      }),
+    );
   const contextFor = (
     organizationId: SafeId<"organization">,
     userId: SafeId<"user">,
@@ -437,19 +476,24 @@ describe("personal company format defaults", () => {
       [ids.orgA, ids.userA2],
       [ids.orgB, ids.userB1],
     ] as const) {
-      const rows = await createScopedDb(
-        testDb,
-        [],
+      const rows = await createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
         organizationId,
         userId,
-      )((tx) =>
+      })((tx) =>
         tx
           .select({ formatId: templateLookupFormatUserDefaults.formatId })
           .from(templateLookupFormatUserDefaults),
       );
       expect(rows).toEqual([]);
     }
-    const colleague = createScopedDb(testDb, [], ids.orgA, ids.userA2);
+    const colleague = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     const updated = await colleague((tx) =>
       tx
         .update(templateLookupFormatUserDefaults)

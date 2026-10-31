@@ -15,11 +15,14 @@ import { parseArgs } from "node:util";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   applyKeylessOrganizationMoves,
   classifyKeylessOrganizationMoves,
 } from "@/api/scripts/move-keyless-organizations-to-free.logic";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const USAGE =
   "Usage: move-keyless-organizations-to-free.ts [--apply --actor <operator>]";
@@ -36,7 +39,7 @@ if (apply !== (actor !== undefined && actor !== "")) {
 
 const db = openMaintenanceDb({ readOnly: !apply });
 await runScriptWithErrorOutput(async () => {
-  const results = await withAggregateTransaction(db, async (tx) =>
+  const results = await withAggregateTransaction(db, BUDGET, async (tx) =>
     apply
       ? await applyKeylessOrganizationMoves(tx, {
           now: new Date(),

@@ -20,6 +20,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { MailVerifier } from "@/api/lib/email/inbound/authentication";
 import {
@@ -59,12 +60,12 @@ const otherToken = generateInboundAddressToken({ userId: null });
 const receivedAt = "2026-09-26T12:00:00.000Z";
 let db: GatedTestDb;
 const fixtureScoped = () =>
-  createScopedDb(
-    markRlsDatabase(db),
-    [workspaceId, otherWorkspaceId],
+  createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: [workspaceId, otherWorkspaceId],
     organizationId,
-    adminId,
-  );
+    userId: adminId,
+  });
 const fixture = async (name: string) =>
   new Uint8Array(
     await Bun.file(new URL(`fixtures/${name}`, import.meta.url)).arrayBuffer(),
@@ -102,12 +103,12 @@ const deliver = async (
     persist: createInboundMailPersistence({
       database: db,
       scopedDbForMatter: (scope) =>
-        createScopedDb(
-          markRlsDatabase(db),
-          [scope.workspaceId],
-          scope.organizationId,
-          scope.userId,
-        ),
+        createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [scope.workspaceId],
+          organizationId: scope.organizationId,
+          userId: scope.userId,
+        }),
     }),
   });
 const records = async () =>
@@ -295,12 +296,12 @@ if (!databaseUrl || !runPostgresTests) {
       const persist = createInboundMailPersistence({
         database: db,
         scopedDbForMatter: (scope) =>
-          createScopedDb(
-            markRlsDatabase(db),
-            [scope.workspaceId],
-            scope.organizationId,
-            scope.userId,
-          ),
+          createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
+            workspaceScope: [scope.workspaceId],
+            organizationId: scope.organizationId,
+            userId: scope.userId,
+          }),
       });
       const event = {
         notificationType: "Received",
@@ -767,12 +768,12 @@ if (!databaseUrl || !runPostgresTests) {
       const persist = createInboundMailPersistence({
         database: db,
         scopedDbForMatter: (scope) =>
-          createScopedDb(
-            markRlsDatabase(db),
-            [scope.workspaceId],
-            scope.organizationId,
-            scope.userId,
-          ),
+          createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
+            workspaceScope: [scope.workspaceId],
+            organizationId: scope.organizationId,
+            userId: scope.userId,
+          }),
         scanAttachment: async ({ bytes, declaredMimeType, fileName }) =>
           Result.ok(
             testScannedFile({

@@ -8,14 +8,15 @@ import {
   resolveSharedPoolTimeoutPolicy,
 } from "@/api/db/shared-pool-timeout-policy";
 import { envDbTimeouts } from "@/api/env-db-timeouts";
+import { HTTP_REQUEST_DATABASE_BUDGET_MS } from "@/api/http/timeout-policy";
 import { executedRows } from "@/api/lib/db/executed-rows";
 
 /** Request budgets only; background and authenticated reads retain their policy. */
 export const PUBLIC_READ_STATEMENT_TIMEOUT_MS = {
-  browse: 30_000,
-  search: 30_000,
-  aggregate: 30_000,
-  sitemap: 30_000,
+  browse: HTTP_REQUEST_DATABASE_BUDGET_MS,
+  search: HTTP_REQUEST_DATABASE_BUDGET_MS,
+  aggregate: HTTP_REQUEST_DATABASE_BUDGET_MS,
+  sitemap: HTTP_REQUEST_DATABASE_BUDGET_MS,
 } as const;
 
 export const sharedPoolTimeoutPolicy = resolveSharedPoolTimeoutPolicy({

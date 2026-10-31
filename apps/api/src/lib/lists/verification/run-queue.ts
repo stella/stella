@@ -1,3 +1,4 @@
+import { panic, Result, TaggedError } from "better-result";
 /**
  * Background queue for list verifications: the same one-shot shape as the
  * document-review queue.
@@ -10,8 +11,6 @@
  * and claims are written on `(runId, position)` in one statement that ignores
  * rows already there. A re-delivered job is a no-op or rewrites nothing.
  */
-
-import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
@@ -30,6 +29,7 @@ import {
 } from "@/api/lib/bullmq-requeue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import { resolveListVerificationAccess } from "@/api/lib/lists/verification/access-context";
@@ -409,7 +409,10 @@ export const reconcileQueuedListVerificationRuns = async ({
 type RunActor = RootRunActor<"legalListVerificationRun">;
 
 const brandActor = (data: ListVerificationJobData): RunActor =>
-  createRootRunActor(data, brandPersistedListVerificationRunId);
+  createRootRunActor(
+    { ...data, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    brandPersistedListVerificationRunId,
+  );
 
 type ClaimedRun = {
   fileFieldId: SafeId<"field">;

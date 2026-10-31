@@ -24,6 +24,7 @@ import {
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { searchGlobal, searchGlobalFacet } from "@/api/lib/search/index-global";
 import type {
   GlobalFacetSearchQuery,
@@ -148,6 +149,7 @@ const visibleDocumentIds = documentFixtures
 const requestScope = (userId: SafeId<"user">): ScopedDb =>
   executeRowsScopedDb(
     createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,

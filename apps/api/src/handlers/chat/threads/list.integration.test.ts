@@ -23,6 +23,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createUserFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -59,7 +60,12 @@ const seededWorkspaceIds: SafeId<"workspace">[] = [];
 const scopedTo = (workspaceIds: SafeId<"workspace">[]): SafeDb =>
   toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
 

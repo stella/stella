@@ -30,6 +30,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
@@ -103,7 +104,14 @@ const createFileProperty = async (workspaceId: SafeId<"workspace">) => {
 };
 
 const scopeFor = (workspaceId: SafeId<"workspace">) =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [workspaceId], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const expectOk = <T, E>(result: Result<T, E>): T => {
   if (Result.isError(result)) {
@@ -323,12 +331,12 @@ test("scoped upload versions succeed with SELECT-only organization privileges", 
   const workspaceId = await createMatter("SCOPED-UPLOAD/26");
   const propertyId = await createFileProperty(workspaceId);
   const role = expectOk(
-    await createSafeDb(
-      testDb,
-      [workspaceId],
-      ids.orgA,
-      ids.userA1,
-    )(async (tx) => {
+    await createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })(async (tx) => {
       const result = await tx.execute(sql`
           SELECT current_user AS role,
             has_table_privilege(current_user, 'public.organization', 'SELECT') AS "canSelect",
@@ -548,12 +556,12 @@ describe("numbering paths preserve issued stamps across counter state", () => {
         asTestRaw<Parameters<typeof duplicateWorkspace.handler>[0]>({
           body: { includeContent: true },
           safeDb: scopeFor(duplicateSource),
-          scopedDb: createScopedDb(
-            testDb,
-            [duplicateSource],
-            ids.orgA,
-            ids.userA1,
-          ),
+          scopedDb: createScopedDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [duplicateSource],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
           memberRole: sessionMemberRole("owner"),
           orgAIConfig: null,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
@@ -665,7 +673,14 @@ test("matter creation skips an already numbered reference candidate", async () =
     await Result.gen(() =>
       createWorkspaceHandler({
         userEmail: "standard@example.test",
-        safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+        safeDb: asTestRaw(
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
         organizationId: ids.orgA,
         userId: ids.userA1,
         recordAuditEvent,
@@ -739,7 +754,14 @@ test.each([
       await Result.gen(() =>
         createWorkspaceHandler({
           userEmail: "standard@example.test",
-          safeDb: asTestRaw(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+          safeDb: asTestRaw(
+            createSafeDb(testDb, {
+              budget: BUDGETS.scopedRequest,
+              workspaceIds: [],
+              organizationId: ids.orgA,
+              userId: ids.userA1,
+            }),
+          ),
           organizationId: ids.orgA,
           userId: ids.userA1,
           recordAuditEvent,

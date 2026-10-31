@@ -22,6 +22,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -60,7 +61,12 @@ beforeAll(async () => {
   ({ testDb, ids } = await getRlsFixture());
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
 });
@@ -848,7 +854,12 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
     );
     const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
     const scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const result = await fillTemplateDocx({
       source: {
@@ -883,7 +894,12 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
     }
     const slots = [{ name: "Terms", patchKey: "@clause:Terms" }];
     const otherOrg = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsB1],
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+      }),
     );
     expect(
       (await resolveClauseSlotSources(templateId, slots, otherOrg, ids.orgB))
@@ -1003,7 +1019,12 @@ test("resolved clause provenance names latest, pinned and explicit saved version
     slotName: "Terms",
   });
   const scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   const sources = await resolveClauseSlotSources(
     templateId,

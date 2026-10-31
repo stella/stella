@@ -29,10 +29,13 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const PROFESSIONAL_USE_AUDIT_FIELD = "professionalUseAcceptance";
 const OWNER_ROLE = "owner" satisfies MemberRole;
@@ -508,7 +511,7 @@ export const recordAccountProfessionalUse = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      await withAggregateTransaction(rootDb, async (tx) => {
+      await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
         await withAggregateLock({
           tx,
           aggregate: "professionalUseAcceptance",

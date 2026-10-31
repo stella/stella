@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Stored template and style-set files reach a parser only as a `ScannedFile`.
  * A row written before scan states were recorded is `unscanned`: its first
@@ -6,8 +7,6 @@
  * Driven against a real (PGlite) database, a fake object store, and the real
  * scanner; only the outage replaces the scanner.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -29,6 +28,7 @@ import { envBase } from "@/api/env-base";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { DocxArchiveError } from "@/api/lib/docx-archive";
 import type { adaptAiFields } from "@/api/lib/docx/adapt-ai-fields";
 import type { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
@@ -125,9 +125,21 @@ let fake: FakeS3;
 
 beforeAll(async () => {
   ({ testDb, ids } = await getRlsFixture());
-  safeDb = asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1));
+  safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   fake = startFakeS3();
 }, 120_000);

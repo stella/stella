@@ -11,6 +11,7 @@ import { isHttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createTestHandlerContext,
@@ -54,7 +55,14 @@ export const skillHandlerContext = <TContext>({
     ...fields,
     memberRole: sessionMemberRole(role),
     audit: recordAuditEvent,
-    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
+    safeDb: asTestRaw<SafeDb>(
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId,
+      }),
+    ),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
   });

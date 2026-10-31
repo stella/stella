@@ -26,6 +26,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -175,8 +176,18 @@ const moveFor = async (
       user: { id: actor },
       memberRole: sessionMemberRole(role),
       workspaceId: ids.wsA2,
-      safeDb: createSafeDb(db, workspaceIds, ids.orgA, actor),
-      scopedDb: createScopedDb(db, workspaceIds, ids.orgA, actor),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId: ids.orgA,
+        userId: actor,
+      }),
+      scopedDb: createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId: ids.orgA,
+        userId: actor,
+      }),
       getActiveWorkspaceIds: async () => workspaceIds,
       getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
         workspaceIds.includes(workspaceId)

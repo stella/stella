@@ -1,3 +1,4 @@
+import { panic, Result, type UnhandledException } from "better-result";
 /**
  * The row a decision analysis lives in, and the compare-and-swap that takes
  * it. Pure over a Drizzle handle: no env, no connection of its own, so the
@@ -8,8 +9,6 @@
  * the row may have been re-parsed since a run began, and a run's result or
  * sentinel cleanup must then leave the newer parse's state alone.
  */
-
-import { panic, Result, type UnhandledException } from "better-result";
 import {
   and,
   eq,
@@ -28,6 +27,7 @@ import type { Transaction } from "@/api/db/root";
 import { caseLawAnalysisFailures, caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { redactedProviderDiagnostic } from "@/api/lib/errors/redacted-provider-diagnostic";
 
 import {
@@ -41,6 +41,8 @@ import {
   claimableAnalysisRowFor,
   storedAnalysisFingerprintFor,
 } from "./stored-analysis";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 /**
  * The Drizzle capabilities the store needs. Structural rather than a
@@ -383,7 +385,7 @@ export const createDbAnalysisStore = (
     // `FOR UPDATE` reads, and an UPDATE of this one row needs none.
     const outcome = await Result.tryPromise(
       async () =>
-        await withAggregateTransaction(db, async (tx) => {
+        await withAggregateTransaction(db, BUDGET, async (tx) => {
           const claimed = await swapAnalysisRow(tx, {
             decisionId,
             observed,

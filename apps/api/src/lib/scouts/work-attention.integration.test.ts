@@ -26,6 +26,7 @@ import {
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
@@ -187,7 +188,10 @@ const seedWork = async (work: SeedWork) => {
 const dependencies = (): WorkAttentionScoutDependencies => ({
   db: asTestRaw<typeof rootDb>(testDb),
   createScopedDb: (options) =>
-    createRootScopedDb(options, asTestRaw<RlsDatabase<Transaction>>(testDb)),
+    createRootScopedDb(
+      { ...options, budget: BUDGETS.scopedWorkerPendingMeasurement },
+      asTestRaw<RlsDatabase<Transaction>>(testDb),
+    ),
 });
 
 /**

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Organization settings loaders read through the caller's handle. Under a
  * request scope (role `stella`), the `organization_settings` policy is what
@@ -5,8 +6,6 @@
  * membership-scoped factory request authentication builds, with the other
  * organization's settings row present.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -51,6 +50,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { encryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   loadWebSearchKeys,
@@ -82,6 +82,8 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 // timeout: Boot the shared PGlite engine and complete schema before assertions.
 setDefaultTimeout(120_000);
@@ -140,6 +142,7 @@ const requestScope = (
 ): ScopedDb =>
   asTestRaw<ScopedDb>(
     createMembershipScopedDb(testDb, {
+      budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
       organizationId,
       serverValidatedWorkspaceIds: [],
       userId,
@@ -656,6 +659,7 @@ test("auth settings reads leave the database reusable for later transactions", a
     expect(providerKeys(settings.orgAIConfig)).toEqual(["model-a-key"]);
     const members = await withAggregateTransaction(
       testDb,
+      BUDGET,
       async (tx) =>
         await tx
           .select({ userId: member.userId })

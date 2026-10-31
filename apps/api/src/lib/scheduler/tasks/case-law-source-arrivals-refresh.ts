@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -14,7 +15,9 @@ export const REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK =
  * bounds that; a recount that cannot finish in it fails, and the stored rows
  * age into "unknown" rather than holding vacuum back during a bulk ingest.
  */
-const REFRESH_STATEMENT_TIMEOUT_MS = 2 * 60_000;
+const REFRESH_STATEMENT_TIMEOUT_MS =
+  AGGREGATE_TRANSACTION_BUDGETS.sourceArrivalsRefresh.statementDeadline
+    .milliseconds;
 const REFRESH_LOCK_TIMEOUT_MS = 10_000;
 
 export const refreshCaseLawSourceArrivalsTask: SchedulerTask = async ({

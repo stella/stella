@@ -19,6 +19,7 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
 import { withAggregateParentBatch } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { UPLOAD_DOCUMENT_SOURCE } from "@/api/lib/document-source";
 import { computeVersionDiffStats } from "@/api/lib/entity-versions/compute-version-diff";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -174,7 +175,6 @@ export const finalizeEntityVersion = async function* ({
   organizationId,
   workspaceId,
   userId,
-  fileBuffer: _fileBuffer,
   declaredName,
   declaredMime,
   declaredSize,
@@ -361,6 +361,7 @@ export const finalizeEntityVersion = async function* ({
         versionId: entityVersionId,
         entityId,
         scopedDb: createRootScopedDb({
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
           organizationId,
           userId,
           workspaceIds: [workspaceId],

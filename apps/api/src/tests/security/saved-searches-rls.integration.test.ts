@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { savedSearches } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import {
   getRlsFixture,
@@ -59,7 +60,12 @@ afterAll(async () => {
 
 describe("saved searches RLS", () => {
   test("never exposes another member's private searches in the same organization", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const rows = await scoped((tx) =>
       tx.select({ id: savedSearches.id }).from(savedSearches),
     );
@@ -68,7 +74,12 @@ describe("saved searches RLS", () => {
   });
 
   test("does not allow a member to update another member's search", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const rows = await scoped((tx) =>
       tx
         .update(savedSearches)

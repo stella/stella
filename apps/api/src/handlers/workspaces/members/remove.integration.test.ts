@@ -30,6 +30,7 @@ import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-wo
 import { buildMcpContextFromChat } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import {
   authorizedMemberRole,
@@ -107,7 +108,10 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
         // PGlite and Bun SQL differ only in their erased driver result type;
         // the handler exercises the same SafeDb callback contract at runtime.
         const safeDb = asTestRaw<SafeDb>(
-          createMembershipSafeDb(rlsTx, databaseIdentity),
+          createMembershipSafeDb(rlsTx, {
+            ...databaseIdentity,
+            budget: BUDGETS.scopedRequest,
+          }),
         );
         const recordAuditEvent = createAuditRecorder({
           organizationId: ids.orgA,
@@ -120,7 +124,10 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
         });
 
         const scopedDb = asTestRaw<ScopedDb>(
-          createMembershipScopedDb(rlsTx, databaseIdentity),
+          createMembershipScopedDb(rlsTx, {
+            ...databaseIdentity,
+            budget: BUDGETS.scopedRequest,
+          }),
         );
         const authorizedChatWorkspaceIds = new Set([ids.wsA2]);
         const context = authorizedMcpContextForTest(
@@ -313,7 +320,10 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
           userId: ids.userA2,
         };
         const safeDb = asTestRaw<SafeDb>(
-          createMembershipSafeDb(rlsTx, databaseIdentity),
+          createMembershipSafeDb(rlsTx, {
+            ...databaseIdentity,
+            budget: BUDGETS.scopedRequest,
+          }),
         );
         const recordAuditEvent = createAuditRecorder({
           organizationId: ids.orgA,

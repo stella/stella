@@ -17,6 +17,7 @@ import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message
 import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -42,7 +43,12 @@ beforeAll(async () => {
   ids = fixture.ids;
   safeDb = toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
 });

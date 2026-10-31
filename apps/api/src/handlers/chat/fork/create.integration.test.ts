@@ -33,6 +33,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import {
@@ -98,7 +99,12 @@ const scopedFor = ({
 }): SafeDb =>
   toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, organizationId, userId),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId,
+        userId,
+      }),
     ),
   );
 

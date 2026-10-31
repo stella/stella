@@ -11,8 +11,11 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { defineTransitions, transition } from "@/api/lib/db/transitions";
 import { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 export { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
 
@@ -60,7 +63,7 @@ export const failExhaustedQueuedRun = async ({
   workspaceId,
   now,
 }: FailExhaustedQueuedRunOptions) =>
-  await withAggregateTransaction(database, async (tx) => {
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
     const locked = await withAggregateRowQuery({
       tx,
       aggregate: "processingClaim",
@@ -218,7 +221,7 @@ export const failDocumentProcessingAttempt = async ({
   retryable = true,
   staleBefore,
 }: FailDocumentProcessingAttemptOptions) =>
-  await withAggregateTransaction(database, async (tx) => {
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
     const contexts = await tx
       .select({ workspaceId: documentProcessingRuns.workspaceId })
       .from(documentProcessingRuns)

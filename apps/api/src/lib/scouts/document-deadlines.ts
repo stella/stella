@@ -23,6 +23,7 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   isCurrentDeadlineSource,
   loadCurrentDeadlineSource,
@@ -396,8 +397,14 @@ export const runDocumentDeadlineScout = async ({
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
   };
-  const scopedDb = createRootScopedDb(member, database);
-  const safeDb = createRootSafeDb(member, database);
+  const scopedDb = createRootScopedDb(
+    { ...member, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    database,
+  );
+  const safeDb = createRootSafeDb(
+    { ...member, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    database,
+  );
 
   const scan: { admission: DeadlineScanAdmission } = {
     admission: { type: "admitted" },

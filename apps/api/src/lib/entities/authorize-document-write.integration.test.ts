@@ -10,6 +10,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizeDocumentWrite,
   authorizeDocumentWriteAccess,
@@ -133,7 +134,12 @@ describe("document write target", () => {
     ids = fixture.ids;
     safeDb = toSafeDbMock(
       asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1, ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
       ),
     );
 

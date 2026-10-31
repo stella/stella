@@ -62,7 +62,11 @@ const casts = (count: number) =>
     (_, index) => `export const item${index} = value${index} as unknown;`,
   ).join("\n")}\n`;
 
-const run = (cwd: string, command: readonly string[]) => {
+const run = (
+  cwd: string,
+  command: readonly string[],
+  event?: { name: string; ref?: string },
+) => {
   const result = Bun.spawnSync([...command], {
     cwd,
     env: {
@@ -71,6 +75,8 @@ const run = (cwd: string, command: readonly string[]) => {
       CI: "true",
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_CONFIG_GLOBAL: "/dev/null",
+      GITHUB_EVENT_NAME: event?.name,
+      GITHUB_REF: event?.ref,
     },
     stdout: "pipe",
     stderr: "pipe",
@@ -216,6 +222,57 @@ test("the definition paths list the guard's whole import closure", () => {
     RATCHET_DEFINITION_CLOSURE.filter((file) => !listed.has(file)).toSorted(),
   ).toEqual([]);
 });
+
+// timeout: exercises mode-specific checks in an isolated Git clone.
+test("the CLI scopes expired debt ceilings to relevant changes and the standing main gate", () => {
+  withClone((root) => {
+    const script = path.join(root, "scripts/ratchet.ts");
+    const futurePolicy = readFileSync(script, "utf-8")
+      .replaceAll("2026-11-13T00:00:00.000Z", "2999-11-13T00:00:00.000Z")
+      .replaceAll("2026-11-27T00:00:00.000Z", "2999-11-27T00:00:00.000Z")
+      .replaceAll("2026-12-11T00:00:00.000Z", "2999-12-11T00:00:00.000Z");
+    writeFileSync(script, futurePolicy);
+    write({
+      root,
+      relative: FIRST,
+      contents: "db.transaction(work); client.begin(work);\n",
+    });
+    commit(root, "raw transaction fixture base");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    expect(ratchet(root, "--check")).toContain("ratchet --check: OK");
+    writeFileSync(script, futurePolicy.replaceAll("2999-", "2000-"));
+    const command = [process.execPath, "scripts/ratchet.ts", "--check"];
+    const unrelated = run(root, command, {
+      name: "pull_request",
+      ref: "refs/pull/1/merge",
+    });
+    expect(unrelated.code, unrelated.output).toBe(0);
+    expect(unrelated.output).toContain("::warning title=ratchet-deadline::");
+    expect(unrelated.output).toContain(
+      "raw-api-transaction-boundaries: 2 exceeds dated ceiling 0",
+    );
+    expect(unrelated.output).toContain("next deadline none");
+    const main = run(root, command, { name: "push", ref: "refs/heads/main" });
+    expect(main.code).toBe(1);
+    expect(main.output).toContain("dated debt ceilings exceeded");
+    expect(main.output).not.toContain("invalid increase allowances");
+    write({
+      root,
+      relative: FIRST,
+      contents:
+        "db.transaction(work); client.begin(work); client.begin(moreWork);\n",
+    });
+    const increased = run(root, command, {
+      name: "pull_request",
+      ref: "refs/pull/1/merge",
+    });
+    expect(increased.code).toBe(1);
+    expect(increased.output).toContain(
+      "raw-api-transaction-boundaries: 3 exceeds dated ceiling 0",
+    );
+    expect(increased.output).toContain("dated debt ceilings exceeded");
+  });
+}, 30_000);
 
 test("a metric increase fails even with a forged committed budget", () => {
   withClone((root) => {

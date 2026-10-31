@@ -34,6 +34,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
 import {
   recordContentDeliveryReceipt,
@@ -106,7 +107,12 @@ const contextFor = <T>(
 ) =>
   createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
     scopedDb: NO_DB,
-    safeDb: createSafeDb(database, [], fixture.organizationId, fixture.userId),
+    safeDb: createSafeDb(database, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: fixture.organizationId,
+      userId: fixture.userId,
+    }),
     audit: recordAuditEvent,
     session: { activeOrganizationId: fixture.organizationId },
     user: { id: fixture.userId },

@@ -14,9 +14,12 @@ import * as v from "valibot";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import { endManualEntitlement } from "@/api/lib/usage/manual-entitlement";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const inputSchema = v.strictObject({
   "organization-id": v.pipe(
@@ -46,6 +49,7 @@ await runScriptWithErrorOutput(async () => {
   const db = openMaintenanceDb({ readOnly: false });
   const result = await withAggregateTransaction(
     db,
+    BUDGET,
     async (tx) =>
       await endManualEntitlement(tx, {
         organizationId:

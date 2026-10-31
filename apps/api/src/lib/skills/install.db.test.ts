@@ -10,6 +10,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -77,7 +78,12 @@ describe("installing a skill fetched from a URL", () => {
       `---\nname: ${name}\ndescription: Replayed import.\n---\n\nFollow the steps.`,
     );
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], ids.orgA, ids.userA1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const install = async () =>
       await installSkill({
@@ -128,7 +134,12 @@ describe("installing a skill fetched from a URL", () => {
         parsed,
         recordAuditEvent: async () => undefined,
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [], ids.orgA, ids.userA1),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
         ),
         scope: "private",
         session: { activeOrganizationId: ids.orgA },

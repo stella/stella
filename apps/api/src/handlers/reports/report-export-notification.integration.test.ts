@@ -14,6 +14,7 @@ import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-n
 import type { ReportExportNotificationEmail } from "@/api/handlers/reports/report-export-notification";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -440,7 +441,14 @@ const scopedDbFor = ({
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 }): ScopedDb =>
-  asTestRaw<ScopedDb>(createScopedDb(testDb, [workspaceId], ids.orgA, userId));
+  asTestRaw<ScopedDb>(
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId: ids.orgA,
+      userId,
+    }),
+  );
 
 type CreateRecordingDeliveryOptions = {
   onSend?: (delivery: ReportExportNotificationEmail) => Promise<void>;

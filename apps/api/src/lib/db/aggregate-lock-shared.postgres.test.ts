@@ -5,6 +5,7 @@ import { sql, TransactionRollbackError } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
@@ -18,6 +19,8 @@ import {
   withAggregateSavepoint,
   withAggregateTransaction,
 } from "./aggregate-lock";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -43,14 +46,14 @@ if (!databaseUrl || !enabled) {
           aggregate: "definitionCap",
           id: { definitionId: createSafeId<"flowDefinition">() },
         } as const;
-        await withAggregateTransaction(db, async (parent) => {
+        await withAggregateTransaction(db, BUDGET, async (parent) => {
           await parent.execute(
             sql`INSERT INTO aggregate_savepoint_values VALUES (1)`,
           );
           const database = createAggregateSavepointDatabase(parent);
           await withAggregateLock({ ...earlier, tx: parent });
           expect(
-            await withAggregateTransaction(database, async (child) => {
+            await withAggregateTransaction(database, BUDGET, async (child) => {
               await withAggregateLock({ ...later, tx: child });
               await child.execute(
                 sql`INSERT INTO aggregate_savepoint_values VALUES (2)`,
@@ -60,7 +63,7 @@ if (!databaseUrl || !enabled) {
           ).toBe("complete");
           expect(
             await rejectionOf(
-              withAggregateTransaction(database, async (child) => {
+              withAggregateTransaction(database, BUDGET, async (child) => {
                 await child.execute(
                   sql`INSERT INTO aggregate_savepoint_values VALUES (3)`,
                 );
@@ -84,6 +87,7 @@ if (!databaseUrl || !enabled) {
             await rejectionOf(
               withAggregateTransaction(
                 database,
+                BUDGET,
                 async (child) =>
                   await withAggregateLock({ ...nextEarlier, tx: child }),
               ),
@@ -91,7 +95,7 @@ if (!databaseUrl || !enabled) {
           ).toMatchObject({ message: "Aggregate lock rank inversion" });
           expect(
             await rejectionOf(
-              withAggregateTransaction(parent, async () => "unused"),
+              withAggregateTransaction(parent, BUDGET, async () => "unused"),
             ),
           ).toMatchObject({
             message:
@@ -100,12 +104,13 @@ if (!databaseUrl || !enabled) {
         });
         expect(
           await rejectionOf(
-            withAggregateTransaction(db, async (parent) => {
+            withAggregateTransaction(db, BUDGET, async (parent) => {
               await parent.execute(
                 sql`INSERT INTO aggregate_savepoint_values VALUES (4)`,
               );
               await withAggregateTransaction(
                 createAggregateSavepointDatabase(parent),
+                BUDGET,
                 async (child) => {
                   await child.execute(
                     sql`INSERT INTO aggregate_savepoint_values VALUES (5)`,

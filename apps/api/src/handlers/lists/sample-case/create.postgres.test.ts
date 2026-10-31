@@ -23,6 +23,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -164,21 +165,21 @@ const withSampleFixture = async (
           statements,
           first: {
             ...shared,
-            scopedDb: createScopedDb(
-              markRlsDatabase(db),
-              [workspaceId],
+            scopedDb: createScopedDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [workspaceId],
               organizationId,
               userId,
-            ),
+            }),
           },
           second: {
             ...shared,
-            scopedDb: createScopedDb(
-              markRlsDatabase(other),
-              [workspaceId],
+            scopedDb: createScopedDb(markRlsDatabase(other), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [workspaceId],
               organizationId,
               userId,
-            ),
+            }),
           },
         });
       } finally {

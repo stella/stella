@@ -11,6 +11,7 @@ import {
 import type { CorpusSliceTransferStorage } from "@/api/lib/case-law/corpus-slice-transfer";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 
 const TABLES = {
   sources: "case_law_sources",
@@ -78,13 +79,18 @@ type ExportExecutionOptions = {
   batchSize: number;
 };
 
+type PendingCorpusSliceManifest = {
+  manifestKey: string;
+  bytes: Uint8Array;
+};
+
 const executeCorpusSliceExport = async ({
   database,
   storage,
   prefix,
   asOf,
   batchSize,
-}: ExportExecutionOptions): Promise<CorpusSliceExportResult> => {
+}: ExportExecutionOptions): Promise<PendingCorpusSliceManifest> => {
   // Every export owns a fresh, time-ordered directory: a rerun or a failed
   // run can never rewrite shards that an earlier manifest already describes.
   const generation = `${prefix.replace(/\/$/u, "")}/generations/${Bun.randomUUIDv7()}`;
@@ -260,25 +266,40 @@ const executeCorpusSliceExport = async ({
     }),
   };
   const manifestKey = `${generation}/manifest.json`;
-  await storage.write(
+  return {
     manifestKey,
-    new TextEncoder().encode(JSON.stringify({ corpus: manifest, shards })),
-    "application/json",
-  );
-  return { manifestKey };
+    bytes: new TextEncoder().encode(
+      JSON.stringify({ corpus: manifest, shards }),
+    ),
+  };
 };
 
 /** Streams every shard from one read-only, repeatable snapshot. */
 export const exportCorpusSliceFromDatabase = async (
   options: ExportExecutionOptions,
-): Promise<CorpusSliceExportResult> =>
-  await withAggregateTransaction(options.database, async (tx) => {
-    await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
-    return await executeCorpusSliceExport({
-      ...options,
-      database: {
-        execute: async (query) => await tx.execute(query),
-        transaction: options.database.transaction,
-      },
-    });
-  });
+): Promise<CorpusSliceExportResult> => {
+  // Total duration depends on corpus size and storage I/O; retain the existing
+  // uncapped snapshot until production measurements support a total deadline.
+  const manifest = await withAggregateTransaction(
+    options.database,
+    AGGREGATE_TRANSACTION_BUDGETS.corpusSliceExport,
+    async (tx) => {
+      await tx.execute(CORPUS_SLICE_SNAPSHOT_ISOLATION);
+      return await executeCorpusSliceExport({
+        ...options,
+        database: {
+          execute: async (query) => await tx.execute(query),
+          transaction: options.database.transaction,
+        },
+      });
+    },
+  );
+  // A timed-out snapshot may have written shards; only a committed snapshot
+  // can publish the manifest that makes its generation usable.
+  await options.storage.write(
+    manifest.manifestKey,
+    manifest.bytes,
+    "application/json",
+  );
+  return { manifestKey: manifest.manifestKey };
+};

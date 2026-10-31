@@ -8,6 +8,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -68,22 +69,22 @@ if (!databaseUrl || !runPostgresTests) {
             });
             const firstBase = toSafeDbMock(
               asTestRaw<ScopedDb>(
-                createScopedDb(
-                  markRlsDatabase(first.db),
-                  [],
+                createScopedDb(markRlsDatabase(first.db), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceScope: [],
                   organizationId,
                   userId,
-                ),
+                }),
               ),
             );
             const secondBase = toSafeDbMock(
               asTestRaw<ScopedDb>(
-                createScopedDb(
-                  markRlsDatabase(second.db),
-                  [],
+                createScopedDb(markRlsDatabase(second.db), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceScope: [],
                   organizationId,
                   userId,
-                ),
+                }),
               ),
             );
             const probeLock = async (tx: Transaction) => {

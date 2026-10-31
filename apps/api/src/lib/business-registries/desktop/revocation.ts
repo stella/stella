@@ -10,6 +10,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 type RevokeDesktopRegistryCredentialOptions = {
   keyId: string;
@@ -31,7 +34,7 @@ export const revokeDesktopRegistryCredential = async ({
   expectedKeyHash,
   db = rootDb,
 }: RevokeDesktopRegistryCredentialOptions) =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     const revoked = await tx
       .update(apikey)
       .set({

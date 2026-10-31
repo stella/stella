@@ -6,6 +6,7 @@ import { chatThreads, userFiles, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createUserFileKey } from "@/api/lib/file-key";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { installPgliteMigration } from "@/api/tests/pglite-schema";
@@ -86,6 +87,7 @@ const dryMembershipQuery = async (
   fn: (tx: TestDatabaseTransaction) => Promise<void>,
 ) => {
   const membershipDb = createMembershipScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
     organizationId: ids.orgA,
     serverValidatedWorkspaceIds,
     userId: ids.userA1,

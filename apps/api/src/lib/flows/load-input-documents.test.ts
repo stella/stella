@@ -1,11 +1,3 @@
-/**
- * An `ai` step with `includeDocuments` must not silently proceed when a selected
- * input has no extracted content (extraction pending/failed, or a non-extraction
- * entity surfaced by the summaries picker). Producing legal output from an
- * incomplete document set is not acceptable, so the step fails and names the
- * unavailable inputs. Driven against a real (PGlite) database under RLS.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -14,6 +6,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+/**
+ * An `ai` step with `includeDocuments` must not silently proceed when a selected
+ * input has no extracted content (extraction pending/failed, or a non-extraction
+ * entity surfaced by the summaries picker). Producing legal output from an
+ * incomplete document set is not acceptable, so the step fails and names the
+ * unavailable inputs. Driven against a real (PGlite) database under RLS.
+ */
 import { eq } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
@@ -28,6 +27,7 @@ import {
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   FlowStepError,
   loadInputDocuments,
@@ -156,7 +156,12 @@ describe("loadInputDocuments", () => {
 
   const scopedDb = () =>
     asTestRaw<Parameters<typeof loadInputDocuments>[0]>(
-      createScopedDb(testDb, [workspaceId], organizationId, userId),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
 
   test("fails the step and names inputs whose content is unavailable", async () => {

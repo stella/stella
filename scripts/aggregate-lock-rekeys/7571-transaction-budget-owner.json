@@ -1,0 +1,14 @@
+[
+  {
+    "file": "apps/api/src/db/scoped.ts",
+    "from": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
+    "to": "969e54d207a65ac23f8c3bc9c9095280a4686c8122cd69e2f1a6090f0ef5a1ed",
+    "reason": "Fold the required budget into the existing runScopedTransaction first setup read or settings SELECT through the canonical owner, or inherit the parent deadline for a savepoint; the physical transaction count and tenant scope are unchanged."
+  },
+  {
+    "file": "apps/api/src/db/scoped.ts",
+    "from": "e8d18a77ea2d98aea9b4c5557637b0bf1ee21320ad4f6c37488fa36f0b81f9a8",
+    "to": "685e07dce556fc2bdd3d492e9e549abeb00d79b4ab58ac16c121183d6fb48739",
+    "reason": "Fold the required budget into the existing createTenantlessDb role-setting SELECT through the canonical owner, or inherit the parent deadline for a savepoint; the physical transaction count and deny-by-default tenantless scope are unchanged."
+  }
+]

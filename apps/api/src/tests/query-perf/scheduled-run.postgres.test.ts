@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
@@ -26,12 +27,12 @@ describe.skipIf(!enabled)("scheduled receipt measurement (postgres)", () => {
         const liveId = createSafeId<"requestIdempotencyReceipt">();
         const now = new Date("2026-01-10T12:00:00Z");
         try {
-          const scopedDb = createScopedDb(
-            markRlsDatabase(db),
-            [],
-            fixture.organizationId,
-            fixture.userId,
-          );
+          const scopedDb = createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [],
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+          });
           await scopedDb(
             async (tx) =>
               await tx.insert(receipts).values([

@@ -105,7 +105,7 @@ test("enumerates production source while retaining owner and migration boundarie
   expect(aggregateLockSourceIncluded("packages/new/src/worker.ts")).toBe(true);
   expect(
     aggregateLockSourceIncluded("apps/api/src/lib/db/aggregate-lock.ts"),
-  ).toBe(false);
+  ).toBe(true);
   expect(
     aggregateLockSourceIncluded("apps/api/drizzle/new/migration.sql"),
   ).toBe(false);
@@ -149,6 +149,31 @@ test("a first baseline cannot enroll a newly added source file", () => {
   expect(rows).toHaveLength(1);
   expect(
     aggregateLockBaselineProblems({ actual: rows, baseline: rows, previous }),
+  ).toContainEqual(expect.stringContaining("may only shrink"));
+});
+
+test("a stronger census enrolls only boundaries already present in base source", () => {
+  const file = "apps/api/src/lib/native-adapter.ts";
+  const baseSource = "client.begin(existingWork);";
+  const previous = aggregateLockBaseline(aggregateLockSites(file, baseSource));
+  expect(previous).toHaveLength(1);
+  expect(
+    aggregateLockBaselineProblems({
+      actual: previous,
+      baseline: previous,
+      previous,
+    }),
+  ).toEqual([]);
+  const current = aggregateLockBaseline(
+    aggregateLockSites(file, `${baseSource}\nclient.begin(newWork);`),
+  );
+  expect(current).toHaveLength(2);
+  expect(
+    aggregateLockBaselineProblems({
+      actual: current,
+      baseline: current,
+      previous,
+    }),
   ).toContainEqual(expect.stringContaining("may only shrink"));
 });
 

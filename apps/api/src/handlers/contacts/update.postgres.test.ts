@@ -5,6 +5,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -78,12 +79,12 @@ if (!databaseUrl || !runPostgresTests) {
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               params: { contactId },
-              safeDb: createSafeDb(
-                markRlsDatabase(db),
-                [],
+              safeDb: createSafeDb(markRlsDatabase(db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [],
                 organizationId,
                 userId,
-              ),
+              }),
               body: { currency },
             }),
           );
@@ -185,12 +186,12 @@ if (!databaseUrl || !runPostgresTests) {
               session: { activeOrganizationId: organizationId },
               user: { id: userId },
               params: { contactId },
-              safeDb: createSafeDb(
-                markRlsDatabase(db),
-                [],
+              safeDb: createSafeDb(markRlsDatabase(db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [],
                 organizationId,
                 userId,
-              ),
+              }),
               body,
             }),
           );

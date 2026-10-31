@@ -27,6 +27,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { recordTableRunVerdicts } from "@/api/lib/document-review/table-run-findings";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -163,6 +164,7 @@ type WorkflowRunActor = RootRunActor<"extractionRun">;
 const workflowRunActor = (data: EntityJobData): WorkflowRunActor =>
   createRootRunActor(
     {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: data.organizationId,
       workspaceId: data.workspaceId,
       userId: data.userId,
@@ -894,6 +896,7 @@ export const reconcileOrphanedWorkflows = async (
       const userId = brandPersistedUserId(cell.requestedBy);
       const recoveryActor = createRootRunActor(
         {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
           organizationId,
           workspaceId,
           userId,

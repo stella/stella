@@ -12,6 +12,7 @@ import { correspondenceDropLogs } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -111,7 +112,12 @@ const read = async ({
         ...(cursor === undefined ? {} : { cursor }),
         ...(limit === undefined ? {} : { limit }),
       },
-      safeDb: createSafeDb(testDb, [workspaceId], organizationId, userId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [workspaceId],
+        organizationId,
+        userId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
       workspaceId,

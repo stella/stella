@@ -25,6 +25,7 @@ import type { ChatAuditResourceType } from "@/api/lib/audit-log-details";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { expandThreadDataScopeOnTx } from "@/api/lib/chat/data-scope";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -85,12 +86,18 @@ afterAll(async () => {
 
 const ownerDb = () =>
   asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, matterId], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, matterId],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
 const organizationReaderDb = () =>
   asTestRaw<SafeDb>(
     createMembershipSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [],
       userId: ids.userAdmin,
@@ -98,7 +105,14 @@ const organizationReaderDb = () =>
   );
 
 const matterReaderDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [matterId], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [matterId],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 /** An organization-level thread whose content draws on `dataWorkspaceIds`. */
 const seedOrganizationThread = async (

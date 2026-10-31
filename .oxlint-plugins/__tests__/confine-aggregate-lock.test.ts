@@ -54,3 +54,19 @@ for (const primitive of [
     ).toEqual([1]);
   });
 }
+
+for (const source of [
+  "client.begin(work);",
+  'client["be" + "gin"](work);',
+  "tx.execute(sql`SET LOCAL transaction_timeout = 5000`);",
+  "connection.unsafe(\"SELECT set_config('transaction_timeout', '5s', true)\");",
+]) {
+  test(`rejects an unowned transaction boundary or timer: ${source}`, async () => {
+    expect(
+      await lintSingleRule("confine-aggregate-lock", source, {
+        cwd: "scratch",
+        sourcePath: "apps/api/src/handlers/planted.ts",
+      }),
+    ).toEqual([1]);
+  });
+}

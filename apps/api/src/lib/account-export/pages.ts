@@ -39,6 +39,7 @@ import {
   listAccountMembershipPage,
   readAccountProfileForExport,
 } from "@/api/lib/db/account-row";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readOwnFeedbackReportPage } from "@/api/lib/db/feedback-report-store";
 import { LIMITS } from "@/api/lib/limits";
 import { iterateCursorPages } from "@/api/lib/pagination";
@@ -692,7 +693,12 @@ export async function* exportAccountRows({
     const organizationId = brandPersistedOrganizationId(
       membership.organizationId,
     );
-    const narrowScopedDb = createScopedDb(database, [], organizationId, userId);
+    const narrowScopedDb = createScopedDb(database, {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      workspaceScope: [],
+      organizationId,
+      userId,
+    });
     const pages = idPages(
       async (cursor) =>
         await readOrganizationPage({
@@ -771,7 +777,12 @@ export async function* exportAccountFiles({
     const organizationId = brandPersistedOrganizationId(
       membership.organizationId,
     );
-    const scopedDb = createScopedDb(database, [], organizationId, userId);
+    const scopedDb = createScopedDb(database, {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      workspaceScope: [],
+      organizationId,
+      userId,
+    });
     const pages = idPages(
       async (cursor) =>
         await readUserFileObjectsPage({

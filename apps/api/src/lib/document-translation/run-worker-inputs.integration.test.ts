@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * A document translation reads its source under its requester's current
  * access, so nothing from a matter the requester can no longer open reaches
  * the model. Driven against a real (PGlite) database and an in-process object
  * store; the model and the output document write are fakes.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -35,6 +34,7 @@ import {
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import * as translationAI from "@/api/lib/document-translation/ai";
 import { processDocumentTranslationRun } from "@/api/lib/document-translation/run-queue";
 import * as entityWriter from "@/api/lib/entities/create-from-buffer";
@@ -98,6 +98,7 @@ fakeS3.put(
 const runId = createSafeId<"documentTranslationRun">();
 const actor = createRootRunActor(
   {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     userId: ids.userA1,

@@ -27,6 +27,7 @@ import {
   recordBillingCapCrossingsForMatters,
 } from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
 import {
@@ -123,7 +124,14 @@ afterAll(async () => {
 });
 
 const safeDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(db, [workspaceId], ids.orgA, ids.userAdmin));
+  asTestRaw<SafeDb>(
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+  );
 const audit = () =>
   createAuditRecorder({
     organizationId: ids.orgA,
@@ -307,7 +315,12 @@ test("mixed-currency approved work remains recordable but cap status is unavaila
 test("another organization cannot read or replace an arrangement under a foreign matter pin", async () => {
   await set(capped);
   const foreign = asTestRaw<SafeDb>(
-    createSafeDb(db, [workspaceId], ids.orgB, ids.userA1),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgB,
+      userId: ids.userA1,
+    }),
   );
   expect(
     await getArrangement.handler(
@@ -432,7 +445,12 @@ test("batched matter reconciliation keeps currencies separate and emits each upw
     billable: true,
   });
   const scoped = asTestRaw<SafeDb>(
-    createSafeDb(db, testWorkspaceIds, ids.orgA, ids.userAdmin),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: testWorkspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
   );
   const refresh = async () =>
     await scoped(
@@ -528,7 +546,12 @@ test("an audit failure rolls back crossing state and its audit rows together", a
     billable: true,
   });
   const scoped = asTestRaw<SafeDb>(
-    createSafeDb(db, testWorkspaceIds, ids.orgA, ids.userAdmin),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: testWorkspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
   );
   const result = await scoped(
     async (tx) =>

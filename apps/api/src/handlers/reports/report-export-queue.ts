@@ -39,6 +39,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { BullMqWorker } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -220,7 +221,11 @@ type ReportExportActorKey = Pick<
 
 const brandActor = (data: ReportExportActorKey): ExportActor => {
   const actor = createRootRunActor(
-    { ...data, runId: data.exportId },
+    {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      ...data,
+      runId: data.exportId,
+    },
     brandPersistedReportExportId,
   );
   return { ...actor, exportId: actor.runId };

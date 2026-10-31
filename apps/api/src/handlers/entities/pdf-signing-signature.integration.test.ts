@@ -18,6 +18,7 @@ import { createScopedDb, createTenantlessDb } from "@/api/db/scoped";
 import { createSubmitPdfSigningSignatureHandler } from "@/api/handlers/entities/pdf-signing-signature";
 import type { SubmitPdfSigningSignatureDependencies } from "@/api/handlers/entities/pdf-signing-signature";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { retryable } from "@/api/lib/files/pdf-signing/finalize";
 import {
   authorizePdfSigningSession,
@@ -64,10 +65,15 @@ beforeAll(async () => {
   tokenDb = {
     scoped: ({ organizationId, userId, workspaceIds }) =>
       asTestRaw<ScopedDb>(
-        createScopedDb(testDb, workspaceIds, organizationId, userId),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: workspaceIds,
+          organizationId,
+          userId,
+        }),
       ),
     tenantless: asTestRaw<TokenScopedDatabase["tenantless"]>(
-      createTenantlessDb(testDb),
+      createTenantlessDb(testDb, BUDGETS.scopedRequest),
     ),
   };
   ids = fixture.ids;

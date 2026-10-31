@@ -14,6 +14,7 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { readPublicDecisionSummaries } from "@/api/lib/case-law/decision-summaries";
 import { queueResearchAnswerCells } from "@/api/lib/case-law/research-answer-queue";
 import { runResearchAnswers } from "@/api/lib/case-law/research-answer-runner";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createDetachedModelActionStarter,
@@ -176,6 +177,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
             // The run outlives the request; this scope carries the caller's
             // organization and user, so RLS applies exactly as it did here.
             safeDb: createRootSafeDb({
+              budget: BUDGETS.scopedWorkerPendingMeasurement,
               organizationId: session.activeOrganizationId,
               userId: user.id,
               workspaceIds: [],

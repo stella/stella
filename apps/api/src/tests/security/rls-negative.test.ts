@@ -52,6 +52,7 @@ import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-messag
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -112,6 +113,7 @@ const dryMembershipQuery = async ({
   fn,
 }: DryMembershipQueryOptions): Promise<void> => {
   const membershipDb = createMembershipScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
     organizationId,
     serverValidatedWorkspaceIds,
     userId,

@@ -328,7 +328,8 @@
       "@stll/api",
       "scripts/**",
       ".oxlint-plugins/**",
-      "@stll/api-contract"
+      "@stll/api-contract",
+      "@stll/sha256"
     ],
     "Queue authority": ["**"],
     "Design token docs": [

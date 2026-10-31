@@ -6,6 +6,7 @@ import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -45,7 +46,14 @@ beforeAll(async () => {
 afterAll(async () => await releaseTestDb());
 
 const scopedSafeDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 type CreateContext = Parameters<typeof createRateEntry.handler>[0];
 const create = async (body: CreateContext["body"], tableId = rateTableId) =>
   await createRateEntry.handler(

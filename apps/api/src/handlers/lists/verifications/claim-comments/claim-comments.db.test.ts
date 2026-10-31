@@ -23,6 +23,7 @@ import {
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import type { McpRequestResources } from "@/api/mcp/context";
@@ -143,12 +144,12 @@ const seedTenant = async (db: GatedTestDb): Promise<Tenant> => {
 };
 
 const scopedFor = (db: GatedTestDb, tenant: Tenant, userId = tenant.author) =>
-  createScopedDb(
-    markRlsDatabase(db),
-    [tenant.workspaceId, tenant.otherWorkspaceId],
-    tenant.organizationId,
+  createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [tenant.workspaceId, tenant.otherWorkspaceId],
+    organizationId: tenant.organizationId,
     userId,
-  );
+  });
 
 const contextFor = (
   db: GatedTestDb,
@@ -162,12 +163,12 @@ const contextFor = (
   workspaceId,
   session: { activeOrganizationId: tenant.organizationId },
   user: { id: userId },
-  safeDb: createSafeDb(
-    markRlsDatabase(db),
-    [tenant.workspaceId, tenant.otherWorkspaceId],
-    tenant.organizationId,
+  safeDb: createSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [tenant.workspaceId, tenant.otherWorkspaceId],
+    organizationId: tenant.organizationId,
     userId,
-  ),
+  }),
   audit: createAuditRecorder({
     organizationId: tenant.organizationId,
     workspaceId,
@@ -304,12 +305,12 @@ const capabilityContext = async (
   tenant: Tenant,
 ): Promise<McpRequestResources> => {
   const scopedDb = scopedFor(db, tenant);
-  const safeDb = createSafeDb(
-    markRlsDatabase(db),
-    [tenant.workspaceId],
-    tenant.organizationId,
-    tenant.author,
-  );
+  const safeDb = createSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [tenant.workspaceId],
+    organizationId: tenant.organizationId,
+    userId: tenant.author,
+  });
   const featureAccessSnapshot = await scopedDb(
     async (tx) =>
       await resolveFeatureAccessSnapshot({
@@ -496,12 +497,12 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
           organizationId: SafeId<"organization">,
           userId: SafeId<"user">,
         ) =>
-          await createScopedDb(
-            markRlsDatabase(db),
-            [tenant.workspaceId],
+          await createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [tenant.workspaceId],
             organizationId,
             userId,
-          )(
+          })(
             async (tx) =>
               await tx
                 .select({ id: legalReaderAnnotations.id })

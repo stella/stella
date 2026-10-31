@@ -16,7 +16,10 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 export const BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK =
   "caseLaw.backfillRedactionTombstones" as const;
@@ -66,7 +69,7 @@ export const backfillCaseLawRedactionTombstones: SchedulerTask = async ({
     job.lockedBy ??
     panic("Case-law redaction tombstone backfill requires a scheduler lease");
 
-  const outcome = await withAggregateTransaction(db, async (tx) => {
+  const outcome = await withAggregateTransaction(db, BUDGET, async (tx) => {
     const page = await tx
       .selectDistinct({ decisionId: caseLawIndexJobs.decisionId })
       .from(caseLawIndexJobs)

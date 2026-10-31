@@ -88,6 +88,52 @@ describe("shared ratchet scan", () => {
     }
   });
 
+  test("raw transaction debt counts both drivers and cannot move between files", () => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), "ratchet-transaction-boundaries-"),
+    );
+    const owner = "apps/api/src/legacy.ts";
+    const other = "apps/api/src/new.ts";
+    const metric =
+      RATCHET_METRICS.find(
+        ({ id }) => id === "raw-api-transaction-boundaries",
+      ) ?? panic("Raw transaction metric is missing");
+    const measure = (source: string, extra = "") => {
+      mkdirSync(path.dirname(path.join(root, owner)), { recursive: true });
+      writeFileSync(path.join(root, owner), source);
+      writeFileSync(path.join(root, other), extra);
+      return scanTree({ tree: openSourceTree(root), metrics: [metric] })
+        .snapshot;
+    };
+    try {
+      const baseline = measure("db.transaction(work); client.begin(work);");
+      expect(baseline[metric.id]).toEqual({ count: 2, files: { [owner]: 2 } });
+      const assess = (source: string, extra = "") =>
+        assessMeasurements({
+          current: measure(source, extra),
+          baseline,
+          metrics: [metric],
+        });
+      expect(metric.growth).toBe("shrink-only");
+      expect(assess("db.transaction(work);").allowed).toBe(true);
+      expect(
+        assess(
+          'db.transaction(work); client.begin(work); client["be" + "gin"](work);',
+        ).allowed,
+      ).toBe(false);
+      expect(
+        assess("db.transaction(work);", "client.begin(work);").allowed,
+      ).toBe(false);
+      expect(
+        measure(
+          '// client.begin(work);\nconst message = "client.begin(work)";',
+        )[metric.id],
+      ).toEqual({ count: 0, files: {} });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("the unclassified handler failure census counts only ungraded 5xx constructions", () => {
     const root = mkdtempSync(path.join(tmpdir(), "ratchet-unclassified-"));
     const file = "apps/api/src/handlers/fixture.ts";

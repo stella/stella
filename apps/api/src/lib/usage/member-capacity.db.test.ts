@@ -1,11 +1,10 @@
+import { Result } from "better-result";
 /**
  * Member capacity and per-member AI access. The capacity function and the
  * member insert guard run in the database; the loaders read AI access under
  * the request scope (role `stella`), so those probes use the
  * membership-scoped factory request authentication builds.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -42,6 +41,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AI_MEMBER_ASSIGNMENT_REQUIRED_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import {
@@ -632,6 +632,7 @@ describe("AI access for members", () => {
   ): ScopedDb =>
     asTestRaw<ScopedDb>(
       createMembershipScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
         organizationId,
         serverValidatedWorkspaceIds: [],
         userId,

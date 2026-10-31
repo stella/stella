@@ -5,6 +5,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   WorkspaceBillingHistoryError,
@@ -37,7 +38,10 @@ export type DeleteWorkspaceHandlerProps = {
 export const deleteWorkspaceHandler = async function* (
   props: DeleteWorkspaceHandlerProps,
 ) {
-  const outcome = await executeAuthorizedWorkspaceDeletion(props);
+  const outcome = await executeAuthorizedWorkspaceDeletion({
+    ...props,
+    budget: AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
+  });
   if (Result.isError(outcome)) {
     if (outcome.error instanceof WorkspaceBillingHistoryError) {
       return Result.err(

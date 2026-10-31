@@ -52,6 +52,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
@@ -198,9 +199,12 @@ const actorFor = (
   userId,
   userEmail: REVIEW_EMAIL,
   memberAuthority: sessionMemberRole("owner"),
-  safeDb: createRootMembershipSafeDb({ organizationId, userId }, rlsDatabase()),
+  safeDb: createRootMembershipSafeDb(
+    { budget: BUDGETS.scopedRequest, organizationId, userId },
+    rlsDatabase(),
+  ),
   scopedDb: createRootMembershipScopedDb(
-    { organizationId, userId },
+    { budget: BUDGETS.scopedRequest, organizationId, userId },
     rlsDatabase(),
   ),
   cancelled: () => undefined,

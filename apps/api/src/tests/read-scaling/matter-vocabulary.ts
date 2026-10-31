@@ -16,6 +16,7 @@ import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -183,6 +184,7 @@ export const seedMatterVocabulary = async ({
     { id: createSafeId<"entity">(), workspaceId, kind: "task", name: "Úkol" },
   ]);
   const scopedDb = createMembershipScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId,
     userId,
     serverValidatedWorkspaceIds: [],

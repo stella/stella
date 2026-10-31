@@ -52,6 +52,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
@@ -145,6 +146,8 @@ import {
 import { getSearchMaintenance } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const WORKER_CONCURRENCY = 2;
 export const RECONCILE_BATCH_SIZE = 100;
@@ -629,7 +632,7 @@ export const persistOcrProjection = async ({
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
-  await withAggregateTransaction(database, async (tx) => {
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
     const workspace = await lockRunWorkspace(tx, run);
     if (!workspace) {
       return "source_cancelled";
@@ -938,7 +941,7 @@ export const processDocumentProcessingRun = async (
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await withAggregateTransaction(database, async (tx) => {
+  const run = await withAggregateTransaction(database, BUDGET, async (tx) => {
     const runRows = await tx
       .select({
         entityId: documentProcessingRuns.entityId,
@@ -1588,7 +1591,7 @@ export const persistMissingNativeExtractionRuns = async (
     return [];
   }
 
-  return await withAggregateTransaction(database, async (tx) => {
+  return await withAggregateTransaction(database, BUDGET, async (tx) => {
     const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
     if (liveCandidates.length === 0) {
       return [];

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Provision links for the synthetic Czech decisions of the seeded local
  * stack: the rows the provision extraction publishes for a decision, written
@@ -19,8 +20,6 @@
  * Every row is derived from the fixture, and every id from a seed label, so a
  * re-seed writes nothing new.
  */
-
-import { panic } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -51,6 +50,7 @@ import {
   lockUnredactedCitingDecisions,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   timestampCasToken,
   timestampMatchesCasToken,
@@ -67,6 +67,8 @@ import {
   seededStatuteVersionId,
 } from "./seed-legislation";
 import { seedId } from "./seed-utils";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 const JURISDICTION = "CZE";
 /** The one extraction revision the seeded links are published under. */
@@ -257,7 +259,7 @@ export const readSyntheticSeedDecision = async (
   rootDb: SeedRootDb,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<SeededDecision | null> =>
-  await withAggregateTransaction(rootDb, async (tx) => {
+  await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
     const rows = await tx
       .select({
         id: caseLawDecisions.id,
@@ -431,7 +433,7 @@ export const seedSyntheticProvisionLinks = async ({
 
   await completeProvisionStateBackfill(backfill);
 
-  await withAggregateTransaction(rootDb, async (tx) => {
+  await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
     await tx
       .insert(caseLawProvisionExtractionRevisionsRegistry)
       .values({
@@ -454,7 +456,7 @@ export const seedSyntheticProvisionLinks = async ({
   // re-taken over the stored columns is no identity of the written payload.
   // The input digest carries the stored content hash.
   for (const { snapshot, ...decision } of published) {
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       const admitted = await lockUnredactedCitingDecisions({
         tx,
         decisionIds: [decision.id],

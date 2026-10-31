@@ -7,6 +7,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   aggregateExecutionRows,
   aggregateFences,
@@ -22,6 +23,8 @@ import {
   withAggregateSavepoint,
   withAggregateTransaction,
 } from "./aggregate-lock";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 const recorder = () => {
   const statements: string[] = [];
@@ -260,7 +263,7 @@ test.each(["commit", "rollback"] as const)(
     }
     for (const iteration of [1, 2]) {
       expect(
-        await withAggregateTransaction(root, async (tx) => {
+        await withAggregateTransaction(root, BUDGET, async (tx) => {
           await withAggregateLock({
             ...aggregateFences().orgFeatureAdmission,
             tx,
@@ -277,7 +280,7 @@ test("transaction-owning operations retain their parent's aggregate history thro
   const fixture = aggregateFences();
   const database = createAggregateSavepointDatabase(tx);
   expect(
-    await withAggregateTransaction(database, async (child) => {
+    await withAggregateTransaction(database, BUDGET, async (child) => {
       await withAggregateLock({
         ...fixture.orgFeatureAdmission,
         tx: child,
@@ -298,7 +301,9 @@ test("transaction-owning operations retain their parent's aggregate history thro
   ).toBeInstanceOf(AggregateLockUpgradeRefused);
   expect(statements).toHaveLength(1);
   expect(
-    await rejectionOf(withAggregateTransaction(tx, async () => "unused")),
+    await rejectionOf(
+      withAggregateTransaction(tx, BUDGET, async () => "unused"),
+    ),
   ).toMatchObject({
     message: "Use the aggregate savepoint owner for nested transactions",
   });

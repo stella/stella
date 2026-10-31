@@ -217,7 +217,9 @@ const queryCallsite = (): string | undefined => {
 };
 
 const isSessionConfigurationQuery = (query: string): boolean =>
-  /^\s*select\s+set_config\s*\(/iu.test(query);
+  /^\s*(?:select\s+(?:pg_catalog\.)?set_config\s*\(|(?:set|reset)\s+)/iu.test(
+    query,
+  );
 
 const sqlControlType = (
   query: string,

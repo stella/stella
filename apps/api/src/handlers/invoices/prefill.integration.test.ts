@@ -27,6 +27,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { SafeHandlerLogContext } from "@/api/lib/api-handlers";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -133,8 +134,18 @@ const context = <TContext extends SafeHandlerLogContext>(
     params: { workspaceId: ids.wsA2, ...params },
     query,
     workspaceId: ids.wsA2,
-    safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, ids.userA1),
-    scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userA1),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "PUT" }),

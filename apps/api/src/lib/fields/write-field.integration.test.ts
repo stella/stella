@@ -28,6 +28,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { writeFieldValue } from "@/api/lib/fields/write-field";
 import {
@@ -130,9 +131,23 @@ afterAll(async () => {
 });
 
 const safeDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(db, [workspaceId], ids.orgA, userId()));
+  asTestRaw<SafeDb>(
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId: ids.orgA,
+      userId: userId(),
+    }),
+  );
 const scopedDb = () =>
-  asTestRaw<ScopedDb>(createScopedDb(db, [workspaceId], ids.orgA, userId()));
+  asTestRaw<ScopedDb>(
+    createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId],
+      organizationId: ids.orgA,
+      userId: userId(),
+    }),
+  );
 // One recorder shape for every surface, bound the way a request binds it, so
 // the rows the surfaces write can be compared column for column.
 const recorder = () =>

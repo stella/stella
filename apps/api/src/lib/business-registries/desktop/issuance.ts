@@ -23,9 +23,12 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 type DesktopCredentialRequest = {
   body: {
@@ -109,7 +112,7 @@ export const issueDesktopAccountCredential = async ({
 }: IssueDesktopAccountCredentialOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(database, async (tx) => {
+      await withAggregateTransaction(database, BUDGET, async (tx) => {
         const fence = await CredentialIssuanceFence.hold(tx, {
           userId: identity.userId,
           sessionId: identity.sessionId,

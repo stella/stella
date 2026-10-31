@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -118,12 +119,12 @@ if (!databaseUrl || !runPostgresTests) {
               ],
             ]),
           });
-          const safeDb = createSafeDb(
-            markRlsDatabase(db),
-            [workspaceId],
+          const safeDb = createSafeDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [workspaceId],
             organizationId,
             userId,
-          );
+          });
           for (const scope of ["user", "organization", "workspace"] as const) {
             const memoryId = createSafeId<"aiMemory">();
             await db.insert(aiMemories).values({
@@ -192,12 +193,12 @@ if (!databaseUrl || !runPostgresTests) {
           await db
             .delete(workspaceMembers)
             .where(eq(workspaceMembers.workspaceId, workspaceId));
-          const restricted = createSafeDb(
-            markRlsDatabase(db),
-            [],
+          const restricted = createSafeDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
             organizationId,
             userId,
-          );
+          });
           const result = await restricted(
             async (tx) =>
               await tx

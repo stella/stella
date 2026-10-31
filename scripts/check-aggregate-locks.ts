@@ -9,6 +9,7 @@ import {
   type AggregateLockBaselineRow,
   type AggregateLockRekey,
   aggregateLockSites,
+  aggregateLockSitesForEnforcement,
   aggregateLockSourceIncluded,
 } from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import { BASELINE_PATHS } from "./baseline-paths";
@@ -219,19 +220,9 @@ const previousAggregateLocks = (
   rows: readonly AggregateLockBaselineRow[],
   base: string,
 ) => {
-  const existing = Bun.spawnSync([
-    "git",
-    "cat-file",
-    "-e",
-    `${base}:${AGGREGATE_LOCK_BASELINE_PATH}`,
-  ]);
-  if (existing.exitCode === 0) {
-    return parseAggregateLockBaseline(
-      git(["show", `${base}:${AGGREGATE_LOCK_BASELINE_PATH}`]),
-    );
-  }
-  // Bootstrap is tied to the base source, so a newly introduced acquisition
-  // cannot be enrolled merely by regenerating the first baseline.
+  // Re-scan the deployed source with the current detector. Strengthening the
+  // census can enroll a previously invisible boundary only if it already
+  // existed in the merge base; a newly added boundary still has no budget.
   const files = [...new Set(rows.map((row) => row.file))].toSorted();
   if (files.length === 0) {
     return [];
@@ -256,7 +247,10 @@ export const checkAggregateLocks = () => {
     .filter(aggregateLockSourceIncluded);
   const actual = aggregateLockBaseline(
     files.flatMap((file) =>
-      aggregateLockSites(file, readFileSync(file, "utf-8")),
+      aggregateLockSitesForEnforcement({
+        file,
+        source: readFileSync(file, "utf-8"),
+      }),
     ),
   );
   const baseline = parseAggregateLockBaseline(
@@ -300,7 +294,10 @@ if (import.meta.main) {
     ]);
     const rows = aggregateLockBaseline(
       files.flatMap((file) =>
-        aggregateLockSites(file, readFileSync(file, "utf-8")),
+        aggregateLockSitesForEnforcement({
+          file,
+          source: readFileSync(file, "utf-8"),
+        }),
       ),
     ).map((row) => ({
       ...row,

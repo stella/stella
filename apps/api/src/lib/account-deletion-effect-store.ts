@@ -8,6 +8,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   assertValidS3DeletionEffectChunk,
   consumeInBatches,
@@ -18,6 +19,8 @@ import {
 } from "@/api/lib/destructive-effect-chunks";
 import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
 const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
@@ -158,7 +161,7 @@ export const ensureAccountDeletionEffectChunks = async (
   requestId: SafeId<"accountDeletionRequest">,
   db: AccountDeletionEffectDb,
 ): Promise<number> =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     const existing = (
       await tx
         .select({ id: accountDeletionEffectChunks.id })

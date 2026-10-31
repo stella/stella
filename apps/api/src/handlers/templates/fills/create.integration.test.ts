@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Filling a stored template into a matter records the fill's completion
  * decision: a document whose AI-decided condition nothing settled is saved,
@@ -8,8 +9,6 @@
  * The deployment has no AI backend of any tier, so the condition is undecided
  * `no-backend` and no model is ever called.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -35,6 +34,7 @@ import fillTemplateToWorkspace from "@/api/handlers/templates/fills/create";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
@@ -151,7 +151,12 @@ describe("fill to workspace records the completion decision", () => {
       createdBy: ids.userA1,
     });
     const scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     let createdEntityId: string | undefined;
     const templateEvents: Record<string, unknown>[] = [];

@@ -1,11 +1,3 @@
-/**
- * A review run is a record of a document, not of one version of it. A file
- * field is a row of one entity version, so the id a caller holds after a save
- * names only the version it is looking at; the history has to come back for
- * that id all the same, or every accepted redline orphans the run that
- * proposed it.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -14,6 +6,13 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+/**
+ * A review run is a record of a document, not of one version of it. A file
+ * field is a row of one entity version, so the id a caller holds after a save
+ * names only the version it is looking at; the history has to come back for
+ * that id all the same, or every accepted redline orphans the run that
+ * proposed it.
+ */
 import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -27,6 +26,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -92,7 +92,12 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   // The document gains a version: the same property, a new field row.
   await testDb.insert(entityVersions).values({

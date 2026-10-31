@@ -16,6 +16,7 @@ import {
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -137,12 +138,12 @@ if (!databaseUrl || !runPostgresTests) {
                 ...common,
                 params: { workspaceId, invoiceId },
                 body: { expenseIds: [expenseId] },
-                safeDb: createSafeDb(
-                  markRlsDatabase(attachment.db),
-                  [workspaceId],
+                safeDb: createSafeDb(markRlsDatabase(attachment.db), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceIds: [workspaceId],
                   organizationId,
                   userId,
-                ),
+                }),
                 recordAuditEvent: async () => {
                   // Invoice lines are inserted only after the expense claim.
                   claimed.resolve(undefined);
@@ -163,12 +164,12 @@ if (!databaseUrl || !runPostgresTests) {
             if (!session) {
               throw new Error("Mutation session is missing");
             }
-            const safeDb = createSafeDb(
-              markRlsDatabase(mutation.db),
-              [workspaceId],
+            const safeDb = createSafeDb(markRlsDatabase(mutation.db), {
+              budget: BUDGETS.scopedRequest,
+              workspaceIds: [workspaceId],
               organizationId,
               userId,
-            );
+            });
             mutating =
               operation === "edit"
                 ? updateExpense.handler(

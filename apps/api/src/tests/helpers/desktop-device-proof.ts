@@ -1,5 +1,6 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import {
   calculateJwkThumbprint,
   exportJWK,
@@ -18,6 +19,7 @@ import {
   VerifiedDesktopDeviceProof,
 } from "@/api/lib/business-registries/desktop/proof";
 import { ConsumedDesktopDeviceProof } from "@/api/lib/business-registries/desktop/proof-store";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type SignedRequestOptions = {
@@ -104,6 +106,16 @@ export const claimFixtureDeviceProof = async ({
   >({
     transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
       await callback({
+        execute: async (statement: SQL) => {
+          const query = new PgDialect().sqlToQuery(statement);
+          if (
+            query.sql !==
+            `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.scopedRequest.milliseconds}`
+          ) {
+            panic("Unexpected SQL in desktop proof persistence fixture");
+          }
+          return [];
+        },
         select: () => ({
           from: () => ({
             where: () => ({

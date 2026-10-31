@@ -4,6 +4,7 @@ import { DrizzleQueryError } from "drizzle-orm";
 
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -37,12 +38,12 @@ const unreachableCallback = (): never => {
 };
 
 const failedTransaction = async (error: unknown) => {
-  const outcome = await createSafeDb(
-    rejectingDb(error),
-    [createSafeId<"workspace">()],
-    mintAuthProviderId<"organization">(),
-    mintAuthProviderId<"user">(),
-  )(unreachableCallback);
+  const outcome = await createSafeDb(rejectingDb(error), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [createSafeId<"workspace">()],
+    organizationId: mintAuthProviderId<"organization">(),
+    userId: mintAuthProviderId<"user">(),
+  })(unreachableCallback);
 
   if (!Result.isError(outcome)) {
     throw new TypeError("Expected the transaction to fail");

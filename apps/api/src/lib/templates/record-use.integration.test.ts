@@ -20,6 +20,7 @@ import { AUDIT_ACTION, createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import type {
   fillStoredTemplate,
@@ -79,9 +80,23 @@ const seedTemplate = async (): Promise<SafeId<"template">> => {
 };
 
 const scopedDb = () =>
-  asTestRaw<ScopedDb>(createScopedDb(db, [], ids.orgA, ids.userA1));
+  asTestRaw<ScopedDb>(
+    createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 const safeDb = () =>
-  asTestRaw<SafeDb>(createSafeDb(db, [], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const recorder = () =>
   createAuditRecorder({

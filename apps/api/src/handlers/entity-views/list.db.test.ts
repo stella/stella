@@ -8,6 +8,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import {
   createTestHandlerContext,
@@ -57,7 +58,14 @@ const contextFor = (
     scopedDb: NO_DB,
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
-    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
+    safeDb: asTestRaw<SafeDb>(
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId,
+      }),
+    ),
   });
 
 describe("entity view owner isolation", () => {

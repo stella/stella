@@ -11,6 +11,7 @@ import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   classifyManualOcrCollision,
   persistManualOcrRun,
@@ -50,6 +51,12 @@ const sourceFileContent = {
 
 const executeParentLock = async (query: SQL) => {
   const compiled = new PgDialect().sqlToQuery(query);
+  if (compiled.sql.startsWith("SET LOCAL transaction_timeout")) {
+    expect(compiled.sql).toBe(
+      `SET LOCAL transaction_timeout = ${AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch.milliseconds}`,
+    );
+    return [];
+  }
   expect(compiled.sql).toContain("FOR ");
   if (compiled.sql.includes('FROM "organization"')) {
     expect(compiled.params).toEqual([organizationId]);

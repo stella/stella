@@ -13,7 +13,10 @@ import {
   withAggregateTransaction,
   withSkipLockedBatch,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const MAX_PRUNE_ROWS = 100;
 type ProofStoreDb = Pick<typeof rootDb, "transaction">;
@@ -108,6 +111,7 @@ export class ConsumedDesktopDeviceProof {
       try: async () =>
         await withAggregateTransaction(
           db,
+          BUDGET,
           async (tx) =>
             // audit: skip - Authentication receipts preserve single-use request authority independently.
             await tx

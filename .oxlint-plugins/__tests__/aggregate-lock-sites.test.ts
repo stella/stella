@@ -1,13 +1,48 @@
 import { describe, expect, test } from "bun:test";
 
+import { AGGREGATE_TRANSACTION_BUDGETS } from "../../apps/api/src/lib/db/aggregate-transaction-budget.ts";
+import type { guardEnforcesLine } from "../../scripts/guard-rollouts.ts";
 import {
+  AGGREGATE_LOCK_OWNER,
   aggregateLockBaseline,
   aggregateLockBaselineProblems,
   aggregateLockSites,
+  aggregateLockSitesForEnforcement,
+  TRANSACTION_BUDGET_OWNER,
 } from "../aggregate-lock-sites.ts";
 
 const file = "apps/api/src/handlers/example.ts";
 describe("aggregate lock confinement", () => {
+  test.each(
+    Object.values(AGGREGATE_TRANSACTION_BUDGETS).filter(
+      (budget) => budget.kind === "lease-coordinated",
+    ),
+  )(
+    "lease-coordinated owner retains SQL lock confinement ($owner)",
+    ({ owner }) => {
+      for (const method of [
+        ".transaction",
+        '["transaction"]',
+        '["trans" + "action"]',
+      ]) {
+        const source = `db${method}(async (tx) => {
+        await tx.execute(sql\`SELECT id FROM items FOR UPDATE\`);
+        await tx.execute(sql\`SELECT pg_advisory_xact_lock(1)\`);
+      });`;
+        const sites = aggregateLockSites(owner, source);
+        expect(sites.map((site) => site.primitive).toSorted()).toEqual([
+          "for update",
+          "pg_advisory_xact_lock(",
+        ]);
+        expect(
+          aggregateLockBaselineProblems({
+            actual: aggregateLockBaseline(sites),
+            baseline: [],
+          }),
+        ).toHaveLength(2);
+      }
+    },
+  );
   test("rejects raw API transaction boundaries including computed spellings", () => {
     for (const method of [
       ".transaction",
@@ -29,6 +64,119 @@ describe("aggregate lock confinement", () => {
         "storage.transaction(work)",
       ),
     ).toEqual([]);
+  });
+  test("rejects native API transaction boundaries including computed spellings", () => {
+    for (const method of [".begin", '["begin"]', '["be" + "gin"]']) {
+      const source = `client${method}(async (session) => session.unsafe(statement));`;
+      const sites = aggregateLockSites(file, source);
+      expect(sites).toHaveLength(1);
+      expect(sites.at(0)?.primitive).toBe("native-transaction-boundary");
+      expect(
+        aggregateLockBaselineProblems({
+          actual: aggregateLockBaseline(sites),
+          baseline: [],
+        }),
+      ).toContainEqual(expect.stringContaining("Unowned aggregate lock"));
+    }
+    expect(
+      aggregateLockSites("apps/web/src/example.ts", "client.begin(work)"),
+    ).toEqual([]);
+  });
+  test("only the canonical owner can set a transaction timeout", () => {
+    for (const query of [
+      "SET LOCAL transaction_timeout = 5000",
+      "set session transaction_timeout to '5s'",
+      'SET LOCAL "transaction_timeout" = 5000',
+      "SELECT set_config('transaction_timeout', '5s', true)",
+      `SELECT pg_catalog."set_config"('transaction_timeout', '5s', true)`,
+    ]) {
+      for (const source of [
+        `sql\`${query}\``,
+        `sql.raw(${JSON.stringify(query)})`,
+        `tx.execute(${JSON.stringify(query)})`,
+        `connection.unsafe(${JSON.stringify(query)})`,
+      ]) {
+        expect(aggregateLockSites(TRANSACTION_BUDGET_OWNER, source)).toEqual(
+          [],
+        );
+        for (const owner of [file, AGGREGATE_LOCK_OWNER]) {
+          const sites = aggregateLockSites(owner, source);
+          expect(sites).toHaveLength(1);
+          expect(sites.at(0)?.primitive).toBe("transaction-timeout-setting");
+          const baseline = aggregateLockBaseline(sites);
+          expect(
+            aggregateLockBaselineProblems({ actual: baseline, baseline }),
+          ).toContainEqual(
+            expect.stringContaining("Transaction timeout belongs only"),
+          );
+        }
+      }
+    }
+    expect(
+      aggregateLockSites(
+        TRANSACTION_BUDGET_OWNER,
+        "tx.execute(sql`SELECT id FROM items FOR UPDATE`); client.begin(work);",
+      ).map(({ primitive }) => primitive),
+    ).toEqual(["for update", "native-transaction-boundary"]);
+    expect(
+      aggregateLockSites(
+        file,
+        "sql`SELECT 'SET LOCAL transaction_timeout = 5'`;",
+      ),
+    ).toEqual([]);
+  });
+  test("the timer rollout does not narrow legacy lock and boundary confinement", () => {
+    const source = [
+      "tx.execute(sql`SET LOCAL transaction_timeout = 5000`);",
+      "client.begin(work);",
+      "tx.execute(sql`SELECT id FROM items FOR UPDATE`);",
+    ].join("\n");
+    const enforcesLine = (options: Parameters<typeof guardEnforcesLine>[0]) => {
+      expect(options).toMatchObject({
+        guard: "transaction-timeout-owner",
+        file,
+        line: 1,
+      });
+      return false;
+    };
+    expect(
+      aggregateLockSitesForEnforcement({ file, source, enforcesLine }).map(
+        ({ primitive }) => primitive,
+      ),
+    ).toEqual(["native-transaction-boundary", "for update"]);
+    expect(
+      aggregateLockSitesForEnforcement({
+        file,
+        source,
+        enforcesLine: () => true,
+      }).map(({ primitive }) => primitive),
+    ).toEqual([
+      "transaction-timeout-setting",
+      "native-transaction-boundary",
+      "for update",
+    ]);
+  });
+  test("scoped setup can interpolate the owner's timer fragment without duplicating its setter", () => {
+    const definition = `const timeout = sql\`set_config('transaction_timeout', \${milliseconds}, true)\`;`;
+    const consumer = `await tx.execute(sql\`SELECT \${timeout}, set_config('role', \${role}, true)\`);`;
+    expect(aggregateLockSites(TRANSACTION_BUDGET_OWNER, definition)).toEqual(
+      [],
+    );
+    expect(aggregateLockSites(file, consumer)).toEqual([]);
+    const foreignDefinition = aggregateLockSites(
+      file,
+      `${definition}\n${consumer}`,
+    );
+    expect(foreignDefinition).toHaveLength(1);
+    expect(foreignDefinition.at(0)?.primitive).toBe(
+      "transaction-timeout-setting",
+    );
+    const actual = aggregateLockBaseline(foreignDefinition);
+    expect(
+      aggregateLockBaselineProblems({ actual, baseline: actual }),
+    ).toContainEqual(
+      expect.stringContaining("Transaction timeout belongs only"),
+    );
   });
   test("enumerates SQL savepoint creation, release and rollback", () => {
     for (const operation of [

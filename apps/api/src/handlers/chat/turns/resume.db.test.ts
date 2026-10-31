@@ -26,6 +26,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { handlerFailure } from "@/api/tests/helpers/agent-skill-db";
 import { buildWireSnapshot } from "@/api/tests/helpers/chat-fixtures";
@@ -58,7 +59,14 @@ afterAll(async () => {
 });
 
 const ownerDb = () =>
-  asTestRaw<ScopedDb>(createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<ScopedDb>(
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 type SeededRun = {
   execution: ChatTurnExecution;
@@ -509,7 +517,12 @@ describe("chat turn resume", () => {
     await log.append([customChunk("privileged")]);
     const colleague: Viewer = {
       db: asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA2),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA2,
+        }),
       ),
       organizationId: ids.orgA,
       userId: ids.userA2,
@@ -519,7 +532,12 @@ describe("chat turn resume", () => {
     // must not reach the turn.
     const otherOrganization: Viewer = {
       db: asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsB1],
+          organizationId: ids.orgB,
+          userId: ids.userA1,
+        }),
       ),
       organizationId: ids.orgB,
       userId: ids.userA1,

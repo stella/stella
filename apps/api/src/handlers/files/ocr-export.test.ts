@@ -7,6 +7,7 @@ import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -202,6 +203,7 @@ describe("OCR text export matter access", () => {
       recordAuditEvent: async () => undefined,
       scopedDb: asTestRaw<ScopedDb>(
         createMembershipScopedDb(markRlsDatabase(database), {
+          budget: BUDGETS.scopedRequest,
           organizationId: ids.orgA,
           serverValidatedWorkspaceIds: workspaceIds,
           userId: memberId,

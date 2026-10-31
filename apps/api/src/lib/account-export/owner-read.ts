@@ -10,6 +10,9 @@ import { legalReaderAnnotations } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 /** The read needs only these two capabilities, so every Postgres driver's
  * transaction (production and test databases alike) satisfies it. */
@@ -34,7 +37,7 @@ export const readAccountExportAnnotationPage = async ({
   extraWhere,
   limit,
 }: ReadAccountExportAnnotationPageOptions) =>
-  await withAggregateTransaction(database, async (tx) => {
+  await withAggregateTransaction(database, BUDGET, async (tx) => {
     await tx.execute(sql`SELECT
       set_config(${SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID}, ${organizationId}, true),
       set_config(${SETTING_ACCOUNT_EXPORT_USER_ID}, ${userId}, true)`);

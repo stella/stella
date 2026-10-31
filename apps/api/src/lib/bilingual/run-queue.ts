@@ -46,6 +46,7 @@ import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { applyAiEditsToDocx } from "@/api/lib/docx-authoring/apply-ai-edits";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { loadEntityVersionDocxBuffer } from "@/api/lib/entity-versions/load-entity-version-file-buffer";
@@ -340,7 +341,10 @@ type BilingualRunActor = RootRunActor<"bilingualTranslationRun">;
 type RunActor = BilingualRunActor;
 
 const brandActor = (data: BilingualRunJobData): RunActor =>
-  createRootRunActor(data, brandPersistedBilingualTranslationRunId);
+  createRootRunActor(
+    { ...data, budget: BUDGETS.scopedWorkerPendingMeasurement },
+    brandPersistedBilingualTranslationRunId,
+  );
 
 type ClaimedRun = {
   entityId: SafeId<"entity">;

@@ -8,6 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createDatabase } from "@/api/db/sql-client";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   executeFlowStep,
   failFlowRunFromWorker,
@@ -77,12 +78,12 @@ const pausedWorker = async ({ db, f, phase }: PausedWorkerOptions) => {
   }
   const reached = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
-  const scoped = createScopedDb(
-    markRlsDatabase(db),
-    [f.workspaceId],
-    f.organizationId,
-    f.userId,
-  );
+  const scoped = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [f.workspaceId],
+    organizationId: f.organizationId,
+    userId: f.userId,
+  });
   let transactions = 0;
   const dependencies = {
     admission: testModelAdmission(f.organizationId),
@@ -175,12 +176,12 @@ if (!databaseUrl || !enabled) {
                 },
               },
             });
-            const scoped = createScopedDb(
-              markRlsDatabase(workerDb),
-              [f.workspaceId],
-              f.organizationId,
-              f.userId,
-            );
+            const scoped = createScopedDb(markRlsDatabase(workerDb), {
+              budget: BUDGETS.scopedRequest,
+              workspaceScope: [f.workspaceId],
+              organizationId: f.organizationId,
+              userId: f.userId,
+            });
             // Gate only the transaction owning the selected writer. For the AI
             // completion case the provider stub is the pre-completion barrier.
             let transactions = 0;

@@ -25,6 +25,7 @@ export const TAGGED_FAILURE_REASON = {
   AdapterFetchError: "tagged_failure",
   AggregateLockBusy: "tagged_failure",
   AggregateLockUpgradeRefused: "tagged_failure",
+  AggregateTransactionTimeoutError: "work_deadline_exceeded",
   AnonymizedFieldBoundaryError: "tagged_failure",
   ApiAccessTokenError: "tagged_failure",
   AppleSignInConfigError: "tagged_failure",

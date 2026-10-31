@@ -41,6 +41,7 @@ import { BEDROCK_IMAGE_MAX_BYTES } from "@/api/lib/chat/provider-image-input";
 import type { StreamChatChunksOptions } from "@/api/lib/chat/tanstack-chat-runtime";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
 import { toDataUrl } from "@/api/lib/data-url";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
@@ -369,7 +370,12 @@ beforeAll(
       testDb = withQueryLogger(fixture.testDb, profile.logger);
       ids = fixture.ids;
       scopedDb = asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1, ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
       );
       safeDb = toSafeDbMock(scopedDb);
       previousMockAI = env.USE_MOCK_AI;

@@ -6,6 +6,7 @@ import { organization } from "@/api/db/auth-schema";
 import { matterInboundAddresses, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
@@ -248,7 +249,12 @@ describe("inbound token owner lookup policy", () => {
   });
 
   test("the stella role cannot use the token to read outside its workspace", async () => {
-    const scoped = createScopedDb(db, [workspaceA1], organizationA, null);
+    const scoped = createScopedDb(db, {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      workspaceScope: [workspaceA1],
+      organizationId: organizationA,
+      userId: null,
+    });
     for (const token of [tokenA2, tokenB1]) {
       const visible = await scoped(async (tx) => {
         await tx.execute(

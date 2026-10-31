@@ -4,8 +4,11 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 export const SWEEP_REGISTRATIONS_TASK = "auth.sweepRegistrations" as const;
 export const REGISTRATION_RETENTION_BATCH_SIZE = 100;
@@ -85,7 +88,7 @@ export const sweepRegistrations = async ({
   now,
   retentionDays,
 }: SweepRegistrationsOptions) =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     // Ceremony locks hold claim transitions; client locks serialize usage writes.
     const selectedRegistrations = await tx.execute<{
       id: string;

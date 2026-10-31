@@ -17,6 +17,7 @@ import {
 import { HttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -131,11 +132,17 @@ describe.skipIf(!enabled)("playbook source access on PostgreSQL", () => {
           userId,
           serverValidatedWorkspaceIds: [],
         };
-        const scopedDb = createMembershipScopedDb(markRlsDatabase(db), options);
-        const safeDb = createMembershipSafeDb(markRlsDatabase(db), options);
+        const scopedDb = createMembershipScopedDb(markRlsDatabase(db), {
+          ...options,
+          budget: BUDGETS.scopedRequest,
+        });
+        const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+          ...options,
+          budget: BUDGETS.scopedRequest,
+        });
         const authorizationScopedDb = createMembershipScopedDb(
           markRlsDatabase(authorizationDb),
-          options,
+          { ...options, budget: BUDGETS.scopedRequest },
         );
         const key = Bun.randomUUIDv7();
         const invoke = async (submissionKey: string | null) =>

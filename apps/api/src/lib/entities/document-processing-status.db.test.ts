@@ -3,6 +3,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { documentProcessingRuns } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { getCurrentVersionProcessingStatuses } from "@/api/lib/entities/document-processing-status";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
@@ -87,6 +88,7 @@ afterAll(async () => {
 test("loads the latest current-version run for every entity on the page", async () => {
   const scopedDb = executeRowsScopedDb(
     createMembershipScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       serverValidatedWorkspaceIds: [ids.wsA1, ids.wsA2],
       userId: ids.userA1,

@@ -16,6 +16,7 @@ import {
   queryCountLogger,
   runWithMeasuredQueryCounter,
 } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { deleteMatterBillingRecords } from "@/api/tests/helpers/matter-billing-cleanup";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -133,12 +134,12 @@ export const suggestionRangeScalingScenario = {
               "https://example.test/v1/time-entries/me/suggestions",
             ),
             route: "/v1/time-entries/me/suggestions",
-            safeDb: createSafeDb(
-              fixture.database,
-              fixture.matters,
-              fixture.organizationId,
-              fixture.userId,
-            ),
+            safeDb: createSafeDb(fixture.database, {
+              budget: BUDGETS.scopedRequest,
+              workspaceIds: fixture.matters,
+              organizationId: fixture.organizationId,
+              userId: fixture.userId,
+            }),
             getActiveWorkspaceIds: async () =>
               await Promise.resolve(fixture.matters),
             session: { activeOrganizationId: fixture.organizationId },

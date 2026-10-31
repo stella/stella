@@ -20,6 +20,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
@@ -190,18 +191,18 @@ const context = (
       headers: { "Accept-Language": "cs" },
     }),
     route: "/v1/invoices/:workspaceId/export" satisfies ApiRoutePath,
-    safeDb: createSafeDb(
-      testDb,
-      accessibleWorkspaceIds,
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: accessibleWorkspaceIds,
       organizationId,
       userId,
-    ),
-    scopedDb: createScopedDb(
-      testDb,
-      accessibleWorkspaceIds,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: accessibleWorkspaceIds,
       organizationId,
       userId,
-    ),
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,

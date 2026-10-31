@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
@@ -250,8 +251,18 @@ const baseContext = (userId: SafeId<"user">) => ({
   recordAuditEvent: async () => {},
   request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
   route: "/v1/time-entries/:workspaceId/suggestions" satisfies ApiRoutePath,
-  safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, userId),
-  scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, userId),
+  safeDb: createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId,
+  }),
+  scopedDb: createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId,
+  }),
   session: { activeOrganizationId: ids.orgA },
   user: { id: userId },
   workspaceId: ids.wsA1,
@@ -722,7 +733,12 @@ describe("time entry suggestions integration", () => {
   });
 
   test("decisions are invisible to other members of the matter", async () => {
-    const asOtherUser = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA2);
+    const asOtherUser = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    });
     const visible = await asOtherUser((tx) =>
       tx
         .select({ id: timeEntrySuggestions.id })

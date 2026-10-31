@@ -24,6 +24,7 @@ import { updateDocumentProperties } from "@/api/handlers/files/update-document-p
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import type { FileVersionWritePolicy } from "@/api/lib/entity-versions/write-file-version";
 import {
@@ -59,10 +60,20 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
   await testDb.insert(properties).values({

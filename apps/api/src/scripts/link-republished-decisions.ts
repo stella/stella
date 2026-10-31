@@ -2,6 +2,8 @@ import { panic } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
+import type { Transaction } from "@/api/db/root";
 /**
  * Link exact republished rulings already stored as separate decisions.
  *
@@ -15,14 +17,13 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
  *   bun run src/scripts/link-republished-decisions.ts --apply --limit 5000 --until <iso-instant>
  *   bun run src/scripts/link-republished-decisions.ts --reverse --limit 5000
  */
-
-import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   enterCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   lockActiveCorpusProjectionSourceTx,
   synchronizeLockedCorpusProjectionDesiredStateTx,
@@ -36,6 +37,8 @@ import {
   selectRepublishedDecisionReport,
 } from "@/api/scripts/link-republished-decisions-plan";
 import { flagInteger } from "@/api/scripts/repair-flags";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 await runScriptWithErrorOutput(async () => {
   const args = new Set(Bun.argv.slice(2));
@@ -98,6 +101,7 @@ await runScriptWithErrorOutput(async () => {
   if (reverse) {
     const outcomes = await withAggregateTransaction(
       rootDb,
+      BUDGET,
       async (tx) =>
         await reverseRepublishedDecisionBatch(tx, limit, reconcile(tx)),
     );
@@ -162,6 +166,7 @@ await runScriptWithErrorOutput(async () => {
   }
   const outcomes = await withAggregateTransaction(
     rootDb,
+    BUDGET,
     async (tx) =>
       await applyRepublishedDecisionBatch(tx, candidates, reconcile(tx)),
   );

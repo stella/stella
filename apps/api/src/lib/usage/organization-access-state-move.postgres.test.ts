@@ -20,6 +20,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   moveKeylessOrganizationsToFree,
   recordNewOrganizationAccessState,
@@ -28,6 +29,8 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -210,7 +213,7 @@ if (!databaseUrl || !runPostgres) {
             });
             await written.promise;
 
-            const move = withAggregateTransaction(moverDb, async (tx) =>
+            const move = withAggregateTransaction(moverDb, BUDGET, async (tx) =>
               moveKeylessOrganizationsToFree(asTestRaw<Transaction>(tx), {
                 now: new Date(),
                 actor: "operator:test",

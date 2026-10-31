@@ -7,6 +7,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import type { Transaction } from "@/api/db/root";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { ModelRunError } from "@/api/lib/errors/provider-call-error";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { runScout } from "@/api/lib/signals/scout";
@@ -65,6 +66,7 @@ const recordFailure = async (thrown: unknown) => {
   const before = await failedRunErrors();
   const db = createRootScopedDb(
     {
+      budget: BUDGETS.scopedRequest,
       organizationId: ids.orgA,
       userId: ids.userA1,
       workspaceIds: [ids.wsA1],

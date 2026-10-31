@@ -12,6 +12,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
 import { availableRegistryHandlersForOrg } from "@/api/lib/business-registries/credentials";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   bindApprovedMcpAuditContext,
   loadAccessibleMcpWorkspaces,
@@ -47,9 +48,12 @@ describe("MCP workspace enumeration", () => {
       // userA1 also belongs to wsA2; a signed token subset must not inherit it
       // through membership mode. The foreign ID independently proves the
       // organization predicate remains active.
-      [ids.wsA1, ids.wsB1],
-      ids.orgA,
-      ids.userA1,
+      {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1, ids.wsB1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      },
     );
 
     const workspaces = await loadAccessibleMcpWorkspaces({

@@ -66,6 +66,7 @@ import {
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
 import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
@@ -125,12 +126,12 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
   const turnId = createSafeId<"chatTurn">();
   const runId = Bun.randomUUIDv7();
   const executionId = Bun.randomUUIDv7();
-  const scopedDb = createScopedDb(
-    markRlsDatabase(db),
-    [workspaceId],
+  const scopedDb = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [workspaceId],
     organizationId,
     userId,
-  );
+  });
   const safeDb = toSafeDbMock(scopedDb);
   const content = proveTextOnlyPersistedChatMessageContent({
     version: 3,
@@ -2314,9 +2315,12 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
                   },
                 }).db,
               ),
-              [workspaceId],
-              organizationId,
-              userId,
+              {
+                budget: BUDGETS.scopedRequest,
+                workspaceScope: [workspaceId],
+                organizationId,
+                userId,
+              },
             );
             const { writer, options } = await liveLogFixture("generic");
             const tailMessageId = createSafeId<"chatMessage">();
@@ -3422,12 +3426,12 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           await client.db.execute(
             sql`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${namespace} TO stella`,
           );
-          const scoped = createScopedDb(
-            markRlsDatabase(client.db),
-            [workspaceId],
+          const scoped = createScopedDb(markRlsDatabase(client.db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [workspaceId],
             organizationId,
             userId,
-          );
+          });
           const legacyDb = (async (read) =>
             await scoped(async (tx) => {
               await tx.execute(

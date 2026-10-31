@@ -32,6 +32,7 @@ import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { assertConfiguredBetterAuthOAuthPolicy } from "@/api/lib/db/assert-better-auth-oauth-policy";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { ensureDefaultDocumentTypes } from "@/api/lib/document-types/defaults";
@@ -46,6 +47,8 @@ import {
   getSeedColleagues,
   seedMemberId,
 } from "./seed-utils";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const db = openMaintenanceDb({ readOnly: false });
 
@@ -113,7 +116,7 @@ export const ensureUserExists = async ({
   email: string;
   image?: string;
 }) =>
-  withAggregateTransaction(db, async (transaction) => {
+  withAggregateTransaction(db, BUDGET, async (transaction) => {
     await transaction
       .insert(user)
       .values({

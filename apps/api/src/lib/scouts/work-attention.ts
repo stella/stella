@@ -21,6 +21,7 @@ import {
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import {
   effectiveOrganizationTimeZone,
@@ -427,6 +428,7 @@ export const runWorkAttentionScout = async ({
       continue;
     }
     const scopedDb = createScopedDb({
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: batch.organizationId,
       userId,
       workspaceIds: batch.workspaceIds,

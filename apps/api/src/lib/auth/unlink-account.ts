@@ -14,7 +14,10 @@ import {
 import type { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { lockAccountRow } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const unlinkBody = v.object({
   accountId: v.pipe(
@@ -78,7 +81,7 @@ export const createConfirmedAccountUnlinker =
     // Burn the code before this transaction so a refused removal cannot restore it.
     const removed = await Result.tryPromise({
       try: async () =>
-        await withAggregateTransaction(database, async (tx) => {
+        await withAggregateTransaction(database, BUDGET, async (tx) => {
           const userId = brandPersistedUserId(session.user.id);
           await lockAccountRow(tx, userId);
           const ownedAccount = and(

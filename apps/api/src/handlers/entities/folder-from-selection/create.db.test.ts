@@ -10,6 +10,7 @@ import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TREE_PARENT_CYCLE_ERROR_CODE } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -138,7 +139,12 @@ const seedMatter = async () => {
   // Both matters are in scope, so a refused foreign id proves the handler's
   // own matter predicate rather than row-level security.
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(db, [workspaceId, otherWorkspaceId], organizationId, userId),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId, otherWorkspaceId],
+      organizationId,
+      userId,
+    }),
   );
   return { ids, safeDb, userId, workspaceId };
 };

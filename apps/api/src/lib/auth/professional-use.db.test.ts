@@ -38,6 +38,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { createAuth, getAuth } from "@/api/lib/auth";
 import { recordAccountProfessionalUse } from "@/api/lib/auth/professional-use";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -586,7 +587,12 @@ describe("professional-use acceptance", () => {
     expect(await organizationAcceptances([organizationId])).toHaveLength(1);
 
     // ... the request role sees neither.
-    const scoped = createSafeDb(testDb, [], organizationId, userId);
+    const scoped = createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId,
+    });
     const read = await scoped(async (tx) => ({
       users: await tx
         .select()

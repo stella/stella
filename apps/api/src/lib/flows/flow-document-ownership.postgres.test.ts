@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { entities, flowRuns, flowRunSteps } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type {
   createEntityFromBuffer,
   CreateEntityFromBufferResult,
@@ -148,12 +149,12 @@ if (!databaseUrl || !enabled) {
                   admission: testModelAdmission(f.organizationId),
                   database: connection.db,
                   makeScopedDb: () =>
-                    createScopedDb(
-                      markRlsDatabase(connection.db),
-                      [f.workspaceId],
-                      f.organizationId,
-                      f.userId,
-                    ),
+                    createScopedDb(markRlsDatabase(connection.db), {
+                      budget: BUDGETS.scopedRequest,
+                      workspaceScope: [f.workspaceId],
+                      organizationId: f.organizationId,
+                      userId: f.userId,
+                    }),
                   makeSafeDb: () => f.safeDb(connection.db),
                   broadcastUpdate: () => undefined,
                   enqueueStep: async () => undefined,

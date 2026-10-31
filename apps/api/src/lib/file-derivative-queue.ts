@@ -34,6 +34,7 @@ import {
   requeueDeterministicJob,
 } from "@/api/lib/bullmq-requeue";
 import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decidePdfDerivativeAction } from "@/api/lib/file-derivative-decision";
@@ -833,11 +834,13 @@ const processPdfDerivativeJob = async (
     workspaceId,
   });
   const scopedDb = createRootScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
@@ -1058,6 +1061,7 @@ const markPdfDerivativeFailed = async (
     workspaceId,
   });
   const scopedDb = createRootScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
@@ -1091,11 +1095,13 @@ const processImageThumbnailJob = async (
     workspaceId,
   });
   const scopedDb = createRootScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
   });
   const safeDb = createRootSafeDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
@@ -1317,6 +1323,7 @@ const markImageThumbnailFailed = async (
     workspaceId,
   });
   const scopedDb = createRootScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId: brandNullablePersistedUserId(userId),
     workspaceIds: [branded.workspaceId],
@@ -1477,6 +1484,7 @@ export const requeueFileDerivative = async (
     workspaceId,
   });
   const scopedDb = createScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: branded.organizationId,
     userId,
     workspaceIds: [branded.workspaceId],

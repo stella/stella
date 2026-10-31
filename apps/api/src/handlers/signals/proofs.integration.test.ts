@@ -20,6 +20,7 @@ import { emitSignalRequest } from "@/api/handlers/signals/requests/write";
 import { transitionSignal } from "@/api/handlers/signals/transition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizedMemberRole,
   SESSION_CREDENTIAL,
@@ -38,7 +39,14 @@ let testDb: TestDatabase;
 let ids: TestIds;
 const seeded: SafeId<"signal">[] = [];
 const safeDbA1 = () =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;

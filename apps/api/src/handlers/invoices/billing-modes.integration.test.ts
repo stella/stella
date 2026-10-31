@@ -27,6 +27,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -138,8 +139,18 @@ const context = <TContext extends SafeHandlerLogContext>(
     params: { workspaceId: ids.wsA2, ...params },
     query: {},
     workspaceId: ids.wsA2,
-    safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, ids.userA1),
-    scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userA1),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "POST" }),

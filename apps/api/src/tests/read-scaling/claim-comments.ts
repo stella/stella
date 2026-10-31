@@ -22,6 +22,7 @@ import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/cont
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -67,6 +68,7 @@ const handlerContext = (db: GatedTestDb, tenant: ClaimCommentTenant) => ({
   // decisions it was admitted with, so no transaction reads them again.
   featureAccessSnapshot: tenant.featureAccessSnapshot,
   safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
     organizationId: tenant.organizationId,
     serverValidatedWorkspaceIds: [tenant.workspaceId],
     userId: tenant.userId,
@@ -172,12 +174,12 @@ export const seedClaimCommentScaling = async ({
     status: "completed",
     evidence: { listId: createSafeId<"legalList">(), facts: [] },
   });
-  await createScopedDb(
-    markRlsDatabase(db),
-    [ids.workspaceId],
-    ids.organizationId,
-    ids.userId,
-  )(
+  await createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.workspaceId],
+    organizationId: ids.organizationId,
+    userId: ids.userId,
+  })(
     async (tx) =>
       await tx.insert(legalListClaims).values({
         id: ids.claimId,
@@ -194,12 +196,12 @@ export const seedClaimCommentScaling = async ({
   grantFeature(ids.organizationId);
   const tenant: ClaimCommentTenant = {
     ...ids,
-    featureAccessSnapshot: await createScopedDb(
-      markRlsDatabase(db),
-      [ids.workspaceId],
-      ids.organizationId,
-      ids.userId,
-    )(
+    featureAccessSnapshot: await createScopedDb(markRlsDatabase(db), {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.workspaceId],
+      organizationId: ids.organizationId,
+      userId: ids.userId,
+    })(
       async (tx) =>
         await resolveFeatureAccessSnapshot({
           tx,

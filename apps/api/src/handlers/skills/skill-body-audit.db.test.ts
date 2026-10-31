@@ -14,6 +14,7 @@ import { auditEventChanges } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createTestHandlerContext,
   NO_DB,
@@ -54,7 +55,14 @@ const OLD_BODY = "Original instructions: cite every clause you rely on.";
 const NEW_BODY = "Revised instructions: cite every clause and its page.";
 
 const managerSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+  );
 
 const recordingAudit = () => {
   const events: AuditEvent[] = [];

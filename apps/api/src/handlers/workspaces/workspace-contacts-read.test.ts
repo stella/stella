@@ -6,6 +6,7 @@ import { organization } from "@/api/db/auth-schema";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -51,7 +52,14 @@ const read = async () =>
     workspaceId,
     scopedDb: asTestRaw<
       Parameters<typeof readWorkspaceContactsHandler>[0]["scopedDb"]
-    >(createScopedDb(db, [workspaceId], organizationId, null)),
+    >(
+      createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
+        organizationId,
+        userId: null,
+      }),
+    ),
   });
 
 test("contact links are returned in stable creation and identity order", async () => {

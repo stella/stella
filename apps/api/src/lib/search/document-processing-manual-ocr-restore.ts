@@ -14,6 +14,7 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
@@ -22,6 +23,8 @@ import {
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
 import { DOCUMENT_PROCESSING_RETRY_TRANSITIONS } from "@/api/lib/document-processing-retry";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -69,7 +72,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   workspaceId,
   db,
 }: RestoreManualOcrRunOptions): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });

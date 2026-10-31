@@ -14,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -95,12 +96,12 @@ describe.skipIf(!runPostgresTests)(
           })
           .onConflictDoNothing()
           .returning({ id: member.id });
-        const scopedDb = createScopedDb(
-          markRlsDatabase(db),
-          [workspaceId],
-          DEFAULT_ORG_ID,
-          toSafeId<"user">(filer.id),
-        );
+        const scopedDb = createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [workspaceId],
+          organizationId: DEFAULT_ORG_ID,
+          userId: toSafeId<"user">(filer.id),
+        });
         try {
           await db.insert(workspaces).values({
             id: workspaceId,

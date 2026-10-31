@@ -22,6 +22,7 @@ import {
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   APPROVAL_TOOL_NAME,
   approvalToolArguments,
@@ -81,7 +82,12 @@ export const registerRecordedConversationSuite = (
     testDb = fixture.testDb;
     ids = fixture.ids;
     scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1, ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     safeDb = toSafeDbMock(scopedDb);
 

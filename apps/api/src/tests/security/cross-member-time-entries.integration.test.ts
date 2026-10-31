@@ -53,6 +53,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import {
   authorizedMemberRole,
@@ -274,13 +275,18 @@ const contextFor = (
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),
     route: "/security/cross-member-time-entries",
-    safeDb: createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
-    scopedDb: createScopedDb(
-      testDb,
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
       workspaceIds,
       organizationId,
-      actor.userId,
-    ),
+      userId: actor.userId,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: workspaceIds,
+      organizationId,
+      userId: actor.userId,
+    }),
     session: { activeOrganizationId: organizationId },
     user: { id: actor.userId },
     workspaceId,
@@ -1377,7 +1383,12 @@ const mcpContextFor = async (
     status: "active" as const,
   }));
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds,
+      organizationId,
+      userId: actor.userId,
+    }),
   );
   const snapshot = await loadFeatureAccessSnapshot({
     safeDb,
@@ -1400,10 +1411,20 @@ const mcpContextFor = async (
     organizationId,
     recordAuditEvent: noopAuditRecorder,
     safeDb: asTestRaw<SafeDb>(
-      createSafeDb(testDb, workspaceIds, organizationId, actor.userId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId,
+        userId: actor.userId,
+      }),
     ),
     scopedDb: asTestRaw<ScopedDb>(
-      createScopedDb(testDb, workspaceIds, organizationId, actor.userId),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: workspaceIds,
+        organizationId,
+        userId: actor.userId,
+      }),
     ),
     userId: actor.userId,
     userEmail: "standard@example.test",

@@ -11,6 +11,10 @@ import {
 import type { CurrentMembershipScope, RlsDatabase } from "@/api/db/scoped";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
+  AGGREGATE_TRANSACTION_BUDGETS as BUDGETS,
+  type ScopedTransactionBudget,
+} from "@/api/lib/db/aggregate-transaction-budget";
+import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
   brandValidatedWorkflowActorKey,
@@ -42,6 +46,7 @@ type PinnedSafeDb = SafeDb & { readonly [EXPLICIT_PIN]: true };
 export type ContentReadDb = SafeDb & { readonly [EXPLICIT_PIN]?: never };
 
 type RootScopedDbOptions = {
+  budget: ScopedTransactionBudget;
   organizationId: SafeId<"organization">;
 } & (
   | { workspaceIds: SafeId<"workspace">[]; userId: SafeId<"user"> | null }
@@ -49,6 +54,7 @@ type RootScopedDbOptions = {
 );
 
 type OrganizationBackgroundScopeOptions = {
+  budget: typeof BUDGETS.scopedWorkerPendingMeasurement;
   organizationId: SafeId<"organization">;
   userId: null;
   workspaceScope: typeof NO_STORED_WORKSPACES;
@@ -57,32 +63,28 @@ type OrganizationBackgroundScopeOptions = {
 export const createRootScopedDb = (
   options: RootScopedDbOptions | OrganizationBackgroundScopeOptions,
   database: RlsDatabase<Transaction> = rlsDb,
-) => {
+) =>
   // This helper exists only because some modules are not allowed
   // to import the RLS database handle directly.
-  if ("workspaceScope" in options) {
-    return createScopedDb(
-      database,
-      options.workspaceScope,
-      options.organizationId,
-      options.userId,
-    );
-  }
-  return createScopedDb(
-    database,
-    options.workspaceIds,
-    options.organizationId,
-    options.userId,
-  );
-};
+  createScopedDb(database, {
+    budget: options.budget,
+    workspaceScope:
+      "workspaceScope" in options
+        ? options.workspaceScope
+        : options.workspaceIds,
+    organizationId: options.organizationId,
+    userId: options.userId,
+  });
 
 type PinnedOptions = {
+  budget: typeof BUDGETS.scopedWorkerPendingMeasurement;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   workspaceIds: SafeId<"workspace">[];
 };
 
 type MembershipOptions = {
+  budget: ScopedTransactionBudget;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 };
@@ -99,6 +101,7 @@ export const createRootOrganizationBackgroundDb = (
 ) =>
   createRootScopedDb(
     {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
       organizationId: brandPersistedOrganizationId(organizationId),
       userId: null,
       workspaceScope: NO_STORED_WORKSPACES,
@@ -114,28 +117,29 @@ export const createRootSafeDb = (
   // to import the RLS database handle directly.
   if ("workspaceScope" in options) {
     return createMembershipSafeDb(database, {
+      budget: options.budget,
       organizationId: options.organizationId,
       userId: options.userId,
       serverValidatedWorkspaceIds:
         options.workspaceScope.serverValidatedWorkspaceIds,
     });
   }
-  return createSafeDb(
-    database,
-    options.workspaceIds,
-    options.organizationId,
-    options.userId,
-  );
+  return createSafeDb(database, {
+    budget: options.budget,
+    workspaceIds: options.workspaceIds,
+    organizationId: options.organizationId,
+    userId: options.userId,
+  });
 };
 
 /** A deferred read uses current membership without adding stored matter IDs. */
 export const createRootMembershipScopedDb = (
-  { organizationId, userId }: MembershipOptions,
+  { budget, organizationId, userId }: MembershipOptions,
   database?: RlsDatabase<Transaction>,
 ): MembershipScopedDb =>
   Object.assign(
     createRootScopedDb(
-      { organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
+      { budget, organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
       database,
     ),
     { [MEMBERSHIP_SCOPE]: true as const },
@@ -143,12 +147,12 @@ export const createRootMembershipScopedDb = (
 
 /** The `Result` form of `createRootMembershipScopedDb`. */
 export const createRootMembershipSafeDb = (
-  { organizationId, userId }: MembershipOptions,
+  { budget, organizationId, userId }: MembershipOptions,
   database?: RlsDatabase<Transaction>,
 ): MembershipSafeDb =>
   Object.assign(
     createRootSafeDb(
-      { organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
+      { budget, organizationId, userId, workspaceScope: NO_STORED_WORKSPACES },
       database,
     ),
     { [MEMBERSHIP_SCOPE]: true as const },
@@ -185,8 +189,10 @@ export type TokenScopedDatabase = {
 };
 
 export const tokenScopedDatabase: TokenScopedDatabase = {
-  scoped: createRootScopedDb,
-  tenantless: async (fn) => await createTenantlessDb(rlsDb)(fn),
+  scoped: (scope) =>
+    createRootScopedDb({ ...scope, budget: BUDGETS.scopedRequest }),
+  tenantless: async (fn) =>
+    await createTenantlessDb(rlsDb, BUDGETS.scopedRequest)(fn),
 };
 
 /**
@@ -216,6 +222,7 @@ export type RootRunActor<
 };
 
 type RootRunActorData<TWorkspace extends string | null> = {
+  budget: typeof BUDGETS.scopedWorkerPendingMeasurement;
   organizationId: string;
   workspaceId: TWorkspace;
   userId: string;
@@ -247,11 +254,12 @@ export function createRootRunActor<TRun extends SafeIdType>(
         }).workspaceId;
   const userId = brandPersistedUserId(data.userId);
   const tenant = {
+    budget: data.budget,
     organizationId,
     userId,
     workspaceIds: workspaceId === null ? [] : [workspaceId],
   };
-  const member = { organizationId, userId };
+  const member = { budget: data.budget, organizationId, userId };
   return {
     organizationId,
     workspaceId,

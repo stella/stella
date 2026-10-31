@@ -28,12 +28,15 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { analysisInputOf } from "@/api/lib/case-law/analysis-prompt";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { sourceIdFor } from "./seed-case-law";
 import { seedId } from "./seed-utils";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 const RECORDED_AT = new Date("2026-01-15T09:00:00Z");
 const FIXTURE_FILES = ["cz-ns", "cz-us"] as const;
@@ -96,6 +99,7 @@ const seedCorpusAnalyses = async () => {
   try {
     const rows = await withAggregateTransaction(
       lane.rootDb,
+      BUDGET,
       async (tx) =>
         await tx
           .select({
@@ -247,7 +251,7 @@ export const seedMarketingCaseLaw = async ({
   requireLocalDevOpen("Seeding marketing case-law stories");
   const stories = await seedCorpusAnalyses();
   const readerMarks: (typeof legalReaderAnnotations.$inferInsert)[] = [];
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     for (const { scene, decision, highlight, underline } of stories) {
       const key = `marketing-case-law-${organizationId}-${userId}-${decision.id}`;
       const threadId = seedId<"chatThread">(`${key}-thread`);
@@ -391,7 +395,7 @@ export const seedMarketingCaseLaw = async ({
       );
     }
   });
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     // Reader marks force row-level security, so the transaction takes the
     // application role and names its author the way a request does.
     await tx.execute(

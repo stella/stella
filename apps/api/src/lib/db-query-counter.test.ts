@@ -139,6 +139,29 @@ describe("db query counter logger", () => {
     expect(result.repeats[0]).toContain("select * from matters where id = ?");
   });
 
+  test.each([
+    "SELECT set_config('transaction_timeout', '30000', true)",
+    "SELECT pg_catalog.set_config('statement_timeout', '30000', true)",
+    "SET LOCAL transaction_timeout = 30000",
+    "SET SESSION statement_timeout TO '30s'",
+    "SET LOCAL ROLE stella",
+    "RESET statement_timeout",
+  ])(
+    "session configuration counts without producing repeated-work findings (%s)",
+    async (query) => {
+      await runWithQueryCounter(
+        async (counter) => {
+          for (let index = 0; index < 3; index += 1) {
+            queryCountLogger.logQuery(query, []);
+          }
+          expect(counter.count).toBe(3);
+          expect(currentRepeatedQueryFingerprints()).toEqual([]);
+        },
+        { detectRepeatedQueries: true },
+      );
+    },
+  );
+
   test("pooled savepoint controls contribute neither statements nor transaction round trips", async () => {
     await runWithQueryCounter(async (counter) => {
       await runCountedTransaction(async () => {

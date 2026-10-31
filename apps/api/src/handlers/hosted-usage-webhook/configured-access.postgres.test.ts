@@ -22,6 +22,7 @@ import {
 import getAccess from "@/api/handlers/usage/get-access";
 import getLane from "@/api/handlers/usage/get-lane";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   DEFAULT_POLAR_API_VERSION,
   POLAR_ENTITLEMENT_STATUSES,
@@ -326,12 +327,12 @@ const readLaneBudgets = async ({
         scopedDb: NO_DB,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
-        safeDb: createSafeDb(
-          markRlsDatabase(nested),
-          [],
+        safeDb: createSafeDb(markRlsDatabase(nested), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
           organizationId,
           userId,
-        ),
+        }),
       });
       const response = await getLane.handler(context);
       if (!("budgets" in response)) {
@@ -650,12 +651,12 @@ describe.skipIf(!runPostgresTests)(
                 scopedDb: NO_DB,
                 memberRole: sessionMemberRole("member"),
                 session: { activeOrganizationId: organizationId },
-                safeDb: createSafeDb(
-                  markRlsDatabase(nested),
-                  [],
+                safeDb: createSafeDb(markRlsDatabase(nested), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceIds: [],
                   organizationId,
-                  null,
-                ),
+                  userId: null,
+                }),
               });
               expect(await getAccess.handler(context)).toEqual(expected);
               // Scope SET LOCAL values must roll back with the savepoint before

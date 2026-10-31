@@ -35,6 +35,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { assertCitationStorageField } from "@/api/lib/case-law/citation-storage-bounds";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   lockActiveCorpusProjectionSourceTx,
@@ -46,6 +47,8 @@ import {
 } from "@/api/lib/legal-search/decision-primary-reference";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 export const DECISION_IDENTIFIER_BACKFILL_VERSION = "typed-identifiers-v1";
 const POSTGRESQL_MAX_BIND_PARAMETERS = 65_535;
@@ -1083,6 +1086,7 @@ export const reconcileDecisionIdentifiersStep = async (
   await ensureCheckpoint(rootDb);
   const checkpoint = await withAggregateTransaction(
     rootDb,
+    BUDGET,
     async (tx) => await loadCheckpoint(tx, "none"),
   );
   if (checkpoint === null) {
@@ -1099,7 +1103,7 @@ export const reconcileDecisionIdentifiersStep = async (
     ) {
       return { status: "cooldown", completedAt: checkpoint.completedAt };
     }
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       const locked = await loadCheckpoint(tx, "for-update");
       if (
         locked?.phase ===
@@ -1119,7 +1123,7 @@ export const reconcileDecisionIdentifiersStep = async (
         retryAfter: checkpoint.verificationRetryAfter,
       };
     }
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       const locked = await loadCheckpoint(tx, "for-update");
       if (locked === null) {
         return;

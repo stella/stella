@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -74,6 +74,8 @@ type SettingsRow = {
 
 const settingsReader = (row: SettingsRow) => {
   const db = {
+    execute: async () =>
+      panic("Uncapped settings fixture must not issue setup SQL"),
     select: () => ({
       from: () => ({
         where: () => ({ limit: async () => [row] }),

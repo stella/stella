@@ -14,6 +14,7 @@ import {
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createDatabase } from "@/api/db/sql-client";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgConstraintError } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -158,12 +159,12 @@ if (!databaseUrl || !runPostgresTests) {
               },
             },
           });
-          const firstSafeDb = createSafeDb(
-            markRlsDatabase(first.db),
-            [workspaceId],
+          const firstSafeDb = createSafeDb(markRlsDatabase(first.db), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [workspaceId],
             organizationId,
             userId,
-          );
+          });
           const heldSafeDb: SafeDb = async (transactionWork) =>
             await firstSafeDb(async (tx) => {
               const result = await transactionWork(tx);
@@ -171,12 +172,12 @@ if (!databaseUrl || !runPostgresTests) {
               await releaseFirst.promise;
               return result;
             });
-          const secondSafeDb = createSafeDb(
-            markRlsDatabase(secondDatabase),
-            [workspaceId],
+          const secondSafeDb = createSafeDb(markRlsDatabase(secondDatabase), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [workspaceId],
             organizationId,
             userId,
-          );
+          });
 
           try {
             await setup.db.insert(organization).values({
@@ -353,12 +354,12 @@ if (!databaseUrl || !runPostgresTests) {
               stored.filter((row) => row.contactId === secondContactId),
             ).toHaveLength(0);
             const readResult = await readWorkspaceContactsHandler({
-              scopedDb: createScopedDb(
-                markRlsDatabase(setup.db),
-                [workspaceId],
+              scopedDb: createScopedDb(markRlsDatabase(setup.db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceScope: [workspaceId],
                 organizationId,
                 userId,
-              ),
+              }),
               workspaceId,
             });
             expect(readResult.isOk()).toBe(true);

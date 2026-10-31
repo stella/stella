@@ -35,6 +35,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
 import { CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";
@@ -195,7 +196,12 @@ beforeAll(
       testDb = withQueryLogger(fixture.testDb, profile.logger);
       ids = fixture.ids;
       scopedDb = asTestRaw<ScopedDb>(
-        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+        createScopedDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [ids.wsA1, ids.wsA2],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
       );
       safeDb = toSafeDbMock(scopedDb);
       previousMockAI = env.USE_MOCK_AI;
@@ -672,7 +678,12 @@ const seedThread = async (): Promise<SafeId<"chatThread">> => {
 
 const safeDbOf = (): SafeDb =>
   asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
 /** Every string of `value` found under a `prompts` key. */

@@ -26,6 +26,7 @@ import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   allocateEntityStamps,
   recordEntityStamps,
@@ -82,10 +83,20 @@ const setReference = async (
 
 const scopeFor = (workspaceIds: SafeId<"workspace">[]) => ({
   safeDb: asTestRaw<SafeDb>(
-    createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   ),
   scopedDb: asTestRaw<ScopedDb>(
-    createScopedDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: workspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   ),
 });
 
@@ -264,7 +275,12 @@ describe("document stamp allocation across a matter reference", () => {
     const second = await createMatter(reference, ids.orgB);
     const a = await allocate(first, 2);
     const dbB = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [second], ids.orgB, ids.userB1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [second],
+        organizationId: ids.orgB,
+        userId: ids.userB1,
+      }),
     );
     const b = await dbB(
       async (tx) =>

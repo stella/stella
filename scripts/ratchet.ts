@@ -36,6 +36,10 @@ import ts from "typescript6";
 
 import { compareCodeUnit } from "@stll/collation";
 
+import {
+  aggregateLockSites,
+  aggregateLockSourceIncluded,
+} from "../.oxlint-plugins/aggregate-lock-sites.ts";
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
 import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
@@ -2494,7 +2498,13 @@ export type RatchetMetric = (
       /** Gate each measured member independently, including virtual file keys. */
       readonly perFile?: true;
     }
-) & { readonly growth?: "shrink-only" };
+) & {
+  readonly growth?: "shrink-only";
+  readonly datedCeilings?: readonly {
+    readonly effectiveAt: string;
+    readonly maximum: number;
+  }[];
+};
 
 // One decrease-only budget per tracked rule, derived from the single
 // tracked-rule table rather than hand-listed here: a rule added to that table
@@ -3097,6 +3107,30 @@ const countUnsignalledSkipMetric: FileCounter = (content, { file }) =>
   countUnsignalledSkips(content, { file });
 
 export const RATCHET_METRICS: readonly RatchetMetric[] = [
+  {
+    scope: "file",
+    id: "raw-api-transaction-boundaries",
+    description:
+      "Unowned API transaction/begin boundaries; migrate callers to the typed budget owner and delete their exact-site baseline entries",
+    include: ["apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}"],
+    exclude: (file) => !aggregateLockSourceIncluded(file),
+    perFile: true,
+    growth: "shrink-only",
+    datedCeilings: [
+      { effectiveAt: "2026-11-13T00:00:00.000Z", maximum: 200 },
+      { effectiveAt: "2026-11-27T00:00:00.000Z", maximum: 100 },
+      { effectiveAt: "2026-12-11T00:00:00.000Z", maximum: 0 },
+    ],
+    count: (content, { file }) =>
+      aggregateLockSites(file, content).filter(
+        ({ primitive }) =>
+          primitive === "transaction-boundary" ||
+          primitive === "native-transaction-boundary",
+      ).length,
+  } as const satisfies Extract<
+    RatchetMetric,
+    { scope: "file"; measurement?: never }
+  >,
   {
     scope: "file",
     id: "unsignalled-skip",
@@ -4316,6 +4350,106 @@ export const assessMeasurements = ({
   };
 };
 
+type CheckMetricDeadlinesOptions = {
+  current: Baseline;
+  metrics?: readonly RatchetMetric[];
+  now: Date;
+} & (
+  | { mode: "main" }
+  | {
+      mode: "change";
+      baseline: Baseline;
+      changedFiles: ReadonlySet<string>;
+    }
+);
+
+type DeadlineEventOptions = {
+  eventName: string | undefined;
+  ref: string | undefined;
+};
+
+/** Local checks use change scope; the standing main gates assess the full tree. */
+export const metricDeadlineMode = ({ eventName, ref }: DeadlineEventOptions) =>
+  eventName === "schedule" ||
+  (eventName === "push" && ref === "refs/heads/main")
+    ? "main"
+    : "change";
+
+/** Unrelated changes report overdue debt without blocking its independent work. */
+export const checkMetricDeadlines = ({
+  current,
+  metrics = RATCHET_METRICS,
+  now,
+  ...context
+}: CheckMetricDeadlinesOptions) => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const currentInstant = now.getTime();
+  if (!Number.isFinite(currentInstant)) {
+    panic("Ratchet deadline clock must be a valid instant");
+  }
+  for (const metric of metrics) {
+    let active: { effectiveAt: string; maximum: number } | undefined;
+    let next: { effectiveAt: string; maximum: number } | undefined;
+    let previousInstant = Number.NEGATIVE_INFINITY;
+    let previousMaximum = Number.POSITIVE_INFINITY;
+    for (const ceiling of metric.datedCeilings ?? []) {
+      const instant = Date.parse(ceiling.effectiveAt);
+      if (
+        !Number.isFinite(instant) ||
+        instant <= previousInstant ||
+        !Number.isSafeInteger(ceiling.maximum) ||
+        ceiling.maximum < 0 ||
+        ceiling.maximum > previousMaximum
+      ) {
+        panic(
+          `${metric.id}: dated ceilings must have increasing dates and non-increasing non-negative integer maxima`,
+        );
+      }
+      previousInstant = instant;
+      previousMaximum = ceiling.maximum;
+      if (currentInstant >= instant) {
+        active = ceiling;
+      } else {
+        next ??= ceiling;
+      }
+    }
+    if (active === undefined) {
+      continue;
+    }
+    const snapshot = requireSnapshot(current, metric.id);
+    if (snapshot.count <= active.maximum) {
+      continue;
+    }
+    const message = `${metric.id}: ${snapshot.count} exceeds dated ceiling ${active.maximum} effective ${active.effectiveAt}; next deadline ${next === undefined ? "none (final target is in effect)" : `${next.effectiveAt} (maximum ${next.maximum})`}`;
+    switch (context.mode) {
+      case "main":
+        errors.push(message);
+        break;
+      case "change": {
+        const baseSnapshot = requireSnapshot(context.baseline, metric.id);
+        const touchesRawFile = [...context.changedFiles].some(
+          (file) =>
+            (snapshot.files[file] ?? 0) > 0 ||
+            (baseSnapshot.files[file] ?? 0) > 0,
+        );
+        if (snapshot.count > baseSnapshot.count || touchesRawFile) {
+          errors.push(message);
+        } else {
+          warnings.push(
+            `${message}; unchanged debt is advisory for this unrelated change`,
+          );
+        }
+        break;
+      }
+      default:
+        context satisfies never;
+        panic("Ratchet deadline mode is not supported");
+    }
+  }
+  return { errors, warnings };
+};
+
 const revisionOption = (flag: "--base" | "--head"): string | undefined => {
   const index = process.argv.indexOf(flag);
   const ref = index === -1 ? undefined : process.argv.at(index + 1);
@@ -4689,14 +4823,54 @@ const runCheck = (): number => {
     head: headRef ?? "HEAD",
     diffs: assessment.diffs,
   });
-  if (allowanceErrors.length === 0) {
+  const deadlineMode = metricDeadlineMode({
+    eventName: process.env["GITHUB_EVENT_NAME"],
+    ref: process.env["GITHUB_REF"],
+  });
+  const deadlineAssessment = checkMetricDeadlines({
+    current,
+    now: new Date(),
+    ...(deadlineMode === "main"
+      ? ({ mode: "main" } as const)
+      : ({
+          mode: "change",
+          baseline,
+          changedFiles: new Set(
+            readGit([
+              "diff",
+              "--no-renames",
+              "--name-only",
+              "-z",
+              base,
+              ...(headRef === undefined ? [] : [headRef]),
+              "--",
+            ])
+              .split("\0")
+              .filter(Boolean),
+          ),
+        } as const)),
+  });
+  for (const warning of deadlineAssessment.warnings) {
+    console.log(
+      `::warning title=ratchet-deadline::${warning.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`,
+    );
+  }
+  if (allowanceErrors.length === 0 && deadlineAssessment.errors.length === 0) {
     console.log(
       `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below the measured base tree or exactly funded.`,
     );
     return 0;
   }
 
-  console.error("\nratchet --check: invalid increase allowances:\n");
+  if (deadlineAssessment.errors.length > 0) {
+    console.error("\nratchet --check: dated debt ceilings exceeded:\n");
+    for (const error of deadlineAssessment.errors) {
+      console.error(`  ${error}`);
+    }
+  }
+  if (allowanceErrors.length > 0) {
+    console.error("\nratchet --check: invalid increase allowances:\n");
+  }
   for (const error of allowanceErrors) {
     console.error(`  ${error}`);
   }

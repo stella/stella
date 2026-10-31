@@ -6,6 +6,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   activeAuthorizedWorkspaceQuery,
@@ -93,6 +94,7 @@ describe.skipIf(!runPostgresTests)(
           ]);
 
           const scopedDb = createMembershipScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
             organizationId,
             serverValidatedWorkspaceIds: [],
             userId,

@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   createTestHandlerContext,
@@ -91,7 +92,14 @@ const contextOverridesFor = (userId: string) => ({
   body: { userId },
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userAdmin },
-  safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userAdmin)),
+  safeDb: asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+  ),
 });
 
 const assignContextFor = (userId: string): AssignSeatCtx =>

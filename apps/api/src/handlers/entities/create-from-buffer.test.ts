@@ -34,6 +34,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizeDocumentWrite,
   DocumentWriteRefusedError,
@@ -775,7 +776,12 @@ describe("service-owned buffer publication in the database", () => {
     db = fixture.testDb;
     ids = fixture.ids;
     serviceScopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(db, [ids.wsA1], ids.orgA, null),
+      createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: null,
+      }),
     );
     await db.insert(correspondence).values({
       id: correspondenceId,
@@ -852,7 +858,12 @@ describe("service-owned buffer publication in the database", () => {
     const createNamedDocument = async (creator: SafeId<"user"> | null) =>
       await createEntityFromBufferForTest({
         scopedDb: asTestRaw<ScopedDb>(
-          createScopedDb(db, [ids.wsA1], ids.orgA, creator),
+          createScopedDb(db, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: creator,
+          }),
         ),
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,

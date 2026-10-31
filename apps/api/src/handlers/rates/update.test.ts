@@ -6,6 +6,7 @@ import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
@@ -82,7 +83,14 @@ afterAll(async () => {
 // `Transaction`; asTestRaw is the established bridge for a PGlite-backed
 // safeDb in a prod-typed handler context.
 const scopedSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 type UpdateRateTableCtx = Parameters<typeof updateRateTableHandler.handler>[0];
 

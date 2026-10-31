@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -26,6 +27,8 @@ import {
   replaySingleRowReport,
 } from "./replay";
 import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 type BackgroundReplayRunnerOptions = {
   rootDb: CaseLawRootHandle;
@@ -66,6 +69,7 @@ const readReservedReplayInput = async (
   (
     await withAggregateTransaction(
       rootDb,
+      BUDGET,
       async (tx) =>
         await tx
           .select({

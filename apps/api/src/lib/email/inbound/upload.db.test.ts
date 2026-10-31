@@ -23,6 +23,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { readCorrespondenceProvenance } from "@/api/lib/email/correspondence/provenance";
 import {
@@ -68,12 +69,12 @@ const workspaceId = createSafeId<"workspace">();
 const otherWorkspaceId = createSafeId<"workspace">();
 let db: GatedTestDb;
 const fixtureScoped = () =>
-  createScopedDb(
-    markRlsDatabase(db),
-    [workspaceId, otherWorkspaceId],
+  createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    workspaceScope: [workspaceId, otherWorkspaceId],
     organizationId,
-    uploaderId,
-  );
+    userId: uploaderId,
+  });
 
 const unverifiedOriginal: typeof verifyOriginalSignature = async () =>
   Result.ok({ status: "unverified" });
@@ -116,12 +117,12 @@ const processUpload = async ({
     scope: { organizationId, workspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>
-      createScopedDb(
-        markRlsDatabase(db),
-        [scope.workspaceId],
-        scope.organizationId,
-        scope.userId,
-      ),
+      createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceScope: [scope.workspaceId],
+        organizationId: scope.organizationId,
+        userId: scope.userId,
+      }),
     verifyOriginal,
   });
 
@@ -339,12 +340,12 @@ if (!databaseUrl || !runPostgresTests) {
 
       // The uploader reads the record through the matter's row policies, and
       // the file itself stays in the matter.
-      const visible = await createScopedDb(
-        markRlsDatabase(db),
-        [workspaceId],
+      const visible = await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedWorkerPendingMeasurement,
+        workspaceScope: [workspaceId],
         organizationId,
-        uploaderId,
-      )(
+        userId: uploaderId,
+      })(
         async (tx) =>
           await tx
             .select({ id: correspondence.id })
@@ -393,12 +394,12 @@ if (!databaseUrl || !runPostgresTests) {
       }
       const delivered = await createCorrespondence({
         safeDb: safeDbFromScoped(
-          createScopedDb(
-            markRlsDatabase(db),
-            [workspaceId],
+          createScopedDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedWorkerPendingMeasurement,
+            workspaceScope: [workspaceId],
             organizationId,
-            uploaderId,
-          ),
+            userId: uploaderId,
+          }),
         ),
         workspaceId,
         organizationId,
@@ -585,12 +586,12 @@ if (!databaseUrl || !runPostgresTests) {
       const scopedDbForUploader: Parameters<
         typeof fileUploadedMail
       >[0]["scopedDbForUploader"] = (scope) =>
-        createScopedDb(
-          markRlsDatabase(db),
-          [scope.workspaceId],
-          scope.organizationId,
-          scope.userId,
-        );
+        createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedWorkerPendingMeasurement,
+          workspaceScope: [scope.workspaceId],
+          organizationId: scope.organizationId,
+          userId: scope.userId,
+        });
       const queued: Parameters<typeof processUploadedMailJob>[0]["data"][] = [];
       await enqueueUploadedMailFiling({
         file: {

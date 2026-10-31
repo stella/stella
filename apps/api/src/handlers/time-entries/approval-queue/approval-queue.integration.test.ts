@@ -31,6 +31,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import {
   authorizedMemberRole,
@@ -176,8 +177,18 @@ const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
     memberRole: sessionMemberRole(role),
-    safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
-    scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: actor,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA2],
+      organizationId: ids.orgA,
+      userId: actor,
+    }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     recordAuditEvent: recorder(null),
     createAuditRecorder: (options?: {
@@ -609,12 +620,12 @@ describe("approval lifecycle guards", () => {
     });
     timerIds.push(timerId);
     expect(
-      await createScopedDb(
-        db,
-        [ids.wsA2],
-        ids.orgA,
-        ids.userA2,
-      )((tx) => tx.select().from(timeTimers)),
+      await createScopedDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA2],
+        organizationId: ids.orgA,
+        userId: ids.userA2,
+      })((tx) => tx.select().from(timeTimers)),
     ).toEqual([]);
     const result = await approveFor([own, other]);
     if (!("results" in result)) {
@@ -778,8 +789,18 @@ test("one approval batch reconciles each client matter independently and exclude
   });
   const ctx = {
     ...context(ids.userAdmin, "owner"),
-    safeDb: createSafeDb(db, matters, ids.orgA, ids.userAdmin),
-    scopedDb: createScopedDb(db, matters, ids.orgA, ids.userAdmin),
+    safeDb: createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: matters,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
+    scopedDb: createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: matters,
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+    }),
     getActiveWorkspaceIds: async () => matters,
     body: { ids: [first, internal, second] },
   };
@@ -897,24 +918,24 @@ describe("internal work approvals", () => {
       organizationId: ids.orgB,
       userId: ids.userB1,
     });
-    const otherMember = await createSafeDb(
-      db,
-      [],
-      ids.orgA,
-      ids.userA2,
-    )((tx) =>
+    const otherMember = await createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA2,
+    })((tx) =>
       tx
         .select({ id: timeEntries.id })
         .from(timeEntries)
         .where(inArray(timeEntries.id, [assigned, unassigned, foreign])),
     );
     expect(otherMember.isOk() && otherMember.value).toEqual([{ id: assigned }]);
-    const owner = await createSafeDb(
-      db,
-      [],
-      ids.orgA,
-      ids.userA1,
-    )((tx) =>
+    const owner = await createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    })((tx) =>
       tx
         .select({ id: timeEntries.id })
         .from(timeEntries)

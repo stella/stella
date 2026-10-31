@@ -30,6 +30,7 @@ import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { installSkill } from "@/api/lib/skills/install";
 import {
@@ -178,7 +179,14 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
     },
     organizationId: ids.orgA,
     recordAuditEvent: async () => undefined,
-    safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], ids.orgA, ids.userA1)),
+    safeDb: asTestRaw<SafeDb>(
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
+    ),
     skills: noModelOfferedSkills(),
     userId: ids.userA1,
   });
@@ -420,7 +428,12 @@ describe("skill content hash", () => {
         parsed: fetched.value,
         recordAuditEvent: async () => undefined,
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [], ids.orgA, ids.userA1),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
         ),
         scope: "private",
         session: { activeOrganizationId: ids.orgA },

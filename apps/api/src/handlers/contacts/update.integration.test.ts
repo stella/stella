@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -45,7 +46,12 @@ const update = async (body: UpdateContactContext["body"]) => {
       user: { id: ids.userA1 },
       params: { contactId: ids.contactA },
       safeDb: asTestRaw<SafeDb>(
-        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
       ),
       audit: async (_tx, events) => {
         for (const event of Array.isArray(events) ? events : [events]) {

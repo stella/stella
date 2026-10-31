@@ -24,6 +24,7 @@ import {
 } from "@/api/handlers/chat/history-window";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -55,7 +56,12 @@ beforeAll(async () => {
   // helpers expect. The scoped query runs over PGlite, whose transaction type
   // differs from production only in the query-result driver (erased at
   // runtime), so it is cast to the production ScopedDb shape.
-  const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scoped = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
 });
 

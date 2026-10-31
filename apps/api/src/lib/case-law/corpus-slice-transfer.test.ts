@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { isSQLWrapper } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -48,14 +50,18 @@ const memoryStorage = () => {
  * A database double whose reads see `committedIds` live, as READ COMMITTED
  * would, until the transaction issues the snapshot isolation statement.
  */
-const snapshotDatabase = (committedIds: Set<string>) => {
+const snapshotDatabase = (
+  committedIds: Set<string>,
+  commit = () => undefined,
+) => {
   const decisionRows = [decisionId, laterId].map((id) => ({
     id,
     source_id: sourceId,
     court: "Snapshot Court",
     decision_date: "2026-01-01",
   }));
-  return asTestRaw<CaseLawRootHandle>({
+  const statements: string[] = [];
+  const database = asTestRaw<CaseLawRootHandle>({
     execute: async () => {
       throw new TypeError("export read escaped its snapshot transaction");
     },
@@ -65,26 +71,33 @@ const snapshotDatabase = (committedIds: Set<string>) => {
       let snapshot: ReadonlySet<string> | null = null;
       const visible = () => snapshot ?? committedIds;
       let decisionPage = 0;
-      return await work(
+      const result = await work(
         asTestRaw({
           execute: async (query: unknown) => {
-            if (typeof query !== "string") {
+            const statement = isSQLWrapper(query)
+              ? new PgDialect().sqlToQuery(query.getSQL()).sql
+              : query;
+            if (typeof statement !== "string") {
               throw new TypeError(
                 "export issued a statement the double cannot read",
               );
             }
-            if (query === CORPUS_SLICE_SNAPSHOT_ISOLATION) {
+            statements.push(statement);
+            if (statement.startsWith("SET LOCAL transaction_timeout")) {
+              return [];
+            }
+            if (statement === CORPUS_SLICE_SNAPSHOT_ISOLATION) {
               snapshot = new Set(committedIds);
               return [];
             }
-            if (query.includes("FROM case_law_published_decisions t")) {
+            if (statement.includes("FROM case_law_published_decisions t")) {
               const row = decisionRows
                 .filter(({ id }) => visible().has(id))
                 .at(decisionPage);
               decisionPage += 1;
               return row === undefined ? [] : [{ row: JSON.stringify(row) }];
             }
-            if (query.includes("FROM case_law_citations t")) {
+            if (statement.includes("FROM case_law_citations t")) {
               if (!visible().has(laterId)) {
                 return [];
               }
@@ -98,7 +111,7 @@ const snapshotDatabase = (committedIds: Set<string>) => {
                 },
               ];
             }
-            if (query.includes("FROM case_law_sources t")) {
+            if (statement.includes("FROM case_law_sources t")) {
               return [
                 {
                   row: JSON.stringify({ id: sourceId, adapter_key: "example" }),
@@ -109,8 +122,11 @@ const snapshotDatabase = (committedIds: Set<string>) => {
           },
         }),
       );
+      commit();
+      return result;
     },
   });
+  return Object.assign(database, { statements });
 };
 
 test("export reads only the public case-law table allowlist", () => {
@@ -214,4 +230,102 @@ test("a failed export to a reused prefix leaves the earlier export intact", asyn
   expect(
     [...objects.keys()].filter((key) => key.endsWith("/manifest.json")),
   ).toEqual([first.manifestKey]);
+});
+
+test("an export publishes its manifest only after the snapshot commits", async () => {
+  const { objects, storage } = memoryStorage();
+  const completedShards = new Set<string>();
+  const shardWrites: string[] = [];
+  const state: { transaction: "running" | "committed" } = {
+    transaction: "running",
+  };
+  const { manifestKey } = await exportCorpusSliceFromDatabase({
+    database: snapshotDatabase(new Set([decisionId, laterId]), () => {
+      expect(shardWrites.length).toBeGreaterThan(0);
+      expect(completedShards.size).toBeGreaterThan(0);
+      expect([...objects.keys()].toSorted()).toEqual(
+        [...completedShards].toSorted(),
+      );
+      state.transaction = "committed";
+    }),
+    storage: {
+      ...storage,
+      write: async (key, bytes, contentType) => {
+        if (key.endsWith("/manifest.json")) {
+          expect(state.transaction).toBe("committed");
+          await storage.write(key, bytes, contentType);
+          return;
+        }
+        expect(key.endsWith(".ndjson")).toBe(true);
+        expect(state.transaction).toBe("running");
+        shardWrites.push(key);
+        await storage.write(key, bytes, contentType);
+        completedShards.add(key);
+      },
+      openWriter: async (key, contentType) => {
+        expect(key.endsWith(".ndjson")).toBe(true);
+        const writer = await storage.openWriter(key, contentType);
+        return {
+          write: async (bytes) => {
+            expect(state.transaction).toBe("running");
+            shardWrites.push(key);
+            await writer.write(bytes);
+          },
+          close: async () => {
+            expect(state.transaction).toBe("running");
+            await writer.close();
+            completedShards.add(key);
+          },
+        };
+      },
+    },
+    prefix: "committed",
+    asOf,
+    batchSize: 1,
+  });
+  expect(objects.has(manifestKey)).toBe(true);
+});
+
+test("a transaction timeout at commit leaves the export generation unpublished", async () => {
+  const { objects, storage } = memoryStorage();
+  const commitFailure = Object.assign(
+    new TypeError("snapshot transaction timed out"),
+    {
+      code: "25P04",
+    },
+  );
+  const failure = await rejectionOf(
+    exportCorpusSliceFromDatabase({
+      database: snapshotDatabase(new Set([decisionId, laterId]), () => {
+        throw commitFailure;
+      }),
+      storage,
+      prefix: "timed-out",
+      asOf,
+      batchSize: 1,
+    }),
+  );
+  expect(failure).toBe(commitFailure);
+  expect(objects.size).toBe(5);
+  expect([...objects.keys()].every((key) => key.endsWith(".ndjson"))).toBe(
+    true,
+  );
+});
+
+test("an unmeasured export retains its snapshot without imposing a new total timer", async () => {
+  const { storage } = memoryStorage();
+  const database = snapshotDatabase(new Set([decisionId, laterId]));
+  await exportCorpusSliceFromDatabase({
+    database,
+    storage,
+    prefix: "unmeasured",
+    asOf,
+    batchSize: 1,
+  });
+  expect(database.statements.at(0)).toBe(CORPUS_SLICE_SNAPSHOT_ISOLATION);
+  expect(
+    database.statements.some((statement) =>
+      /\btransaction_timeout\b/iu.test(statement),
+    ),
+  ).toBe(false);
 });

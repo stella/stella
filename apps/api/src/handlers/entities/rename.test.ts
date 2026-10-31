@@ -14,6 +14,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createRenameEntityHandler } from "@/api/handlers/entities/rename-operation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -68,7 +69,12 @@ const invocation = (entityId = fixture.ids.entityA1) => {
   });
   // Both matters are accessible: the handler must still enforce the selected matter.
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
   return {
     enqueue,

@@ -10,6 +10,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -67,7 +68,12 @@ const listWorkspacesAs = async ({
       request: new Request("https://api.example.test/handler"),
       route: "/v1/workspaces" satisfies ApiRoutePath,
       memberRole: sessionMemberRole("owner"),
-      safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds,
+        organizationId,
+        userId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: userId },
     }),

@@ -24,6 +24,7 @@ import { env } from "@/api/env";
 import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
 import {
   LEGAL_LISTS_FEATURE_ID,
@@ -231,7 +232,13 @@ const actorFor = (
   database: TestDatabase = db,
 ) =>
   createRootRunActor(
-    { organizationId, userId, workspaceId, runId },
+    {
+      budget: BUDGETS.scopedWorkerPendingMeasurement,
+      organizationId,
+      userId,
+      workspaceId,
+      runId,
+    },
     brandPersistedListVerificationRunId,
     asTestRaw<RlsDatabase<Transaction>>(database),
   );

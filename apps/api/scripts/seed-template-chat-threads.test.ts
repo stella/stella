@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -19,6 +20,8 @@ import {
   buildTemplateChatSeedRows,
   seedTemplateChatThreads,
 } from "./seed-template-chat-threads";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const organizationId = toSafeId<"organization">("org_seed");
 const templates = [
@@ -146,6 +149,7 @@ describe("seeded Template Studio chat associations", () => {
     for (let pass = 0; pass < 2; pass += 1) {
       await withAggregateTransaction(
         testDb,
+        BUDGET,
         async (tx) => await seedTemplateChatThreads(tx, input),
       );
       expect(await readExistingAssociation()).toEqual(beforeAssociation);

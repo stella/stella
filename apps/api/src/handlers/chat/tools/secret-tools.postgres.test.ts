@@ -19,6 +19,7 @@ import { storeChatSecret } from "@/api/handlers/chat/chat-secrets";
 import { createSecretTools } from "@/api/handlers/chat/tools/secret-tools";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { ChatSecretOutboundFetch } from "@/api/lib/mcp-upstream/chat-secret";
 import { encryptMcpSecret } from "@/api/lib/mcp-upstream/crypto";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -113,12 +114,12 @@ const withFixture = async (
       enabled: true,
     });
     if (pendingReview) {
-      await createScopedDb(
-        markRlsDatabase(db),
-        [],
+      await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [],
         organizationId,
         userId,
-      )(
+      })(
         async (tx) =>
           await tx.insert(mcpConnectorAuthorizationReviews).values({
             organizationId,
@@ -278,7 +279,12 @@ if (!databaseUrl || !runPostgres) {
             const upstream = fakeUpstream();
             const tools = createSecretTools({
               safeDb: safeDbFromScoped(
-                createScopedDb(markRlsDatabase(db), [], organizationId, userId),
+                createScopedDb(markRlsDatabase(db), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceScope: [],
+                  organizationId,
+                  userId,
+                }),
               ),
               organizationId,
               userId,
@@ -370,7 +376,12 @@ if (!databaseUrl || !runPostgres) {
           db,
           async ({ organizationId, userId, connectorId }) => {
             const safeDb = safeDbFromScoped(
-              createScopedDb(markRlsDatabase(db), [], organizationId, userId),
+              createScopedDb(markRlsDatabase(db), {
+                budget: BUDGETS.scopedRequest,
+                workspaceScope: [],
+                organizationId,
+                userId,
+              }),
             );
             const threadId = createSafeId<"chatThread">();
             const tools = createSecretTools({

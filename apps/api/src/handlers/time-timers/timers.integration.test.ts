@@ -30,6 +30,7 @@ import {
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -105,10 +106,20 @@ beforeEach(async () => {
 
 const context = (workspaceIds = [ids.wsA1]) => ({
   safeDb: asTestRaw<SafeDb>(
-    createSafeDb(db, workspaceIds, ids.orgA, ids.userA1),
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   ),
   scopedDb: asTestRaw<ScopedDb>(
-    createScopedDb(db, workspaceIds, ids.orgA, ids.userA1),
+    createScopedDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: workspaceIds,
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   ),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -317,7 +328,12 @@ describe("global timer lifecycle", () => {
           >({
             ...context(),
             safeDb: asTestRaw<SafeDb>(
-              createSafeDb(db, [ids.wsA1], ids.orgA, ids.userAdmin),
+              createSafeDb(db, {
+                budget: BUDGETS.scopedRequest,
+                workspaceIds: [ids.wsA1],
+                organizationId: ids.orgA,
+                userId: ids.userAdmin,
+              }),
             ),
             memberRole: sessionMemberRole("admin"),
             user: { id: ids.userAdmin },

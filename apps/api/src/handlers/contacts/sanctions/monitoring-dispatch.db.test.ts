@@ -29,6 +29,7 @@ import { organizationSettingsRoute } from "@/api/handlers/organization-settings/
 import { createHttpApp } from "@/api/http/app";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -384,6 +385,7 @@ test("contact monitoring endpoint and capability perform the requested transitio
           .returning()
       ).at(0) ?? panic("Contact fixture missing");
     const scopedDb = createMembershipScopedDb(rlsDb, {
+      budget: BUDGETS.scopedRequest,
       organizationId,
       userId: toSafeId<"user">(browser.userId),
       serverValidatedWorkspaceIds: [],

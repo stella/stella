@@ -1,10 +1,9 @@
+import { Result } from "better-result";
 /**
  * The review-decision read behind the report builder, against a real schema:
  * only completed runs count, the newest completed run wins per position, and
  * the limit bounds distinct (entity, position) rows rather than run history.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -24,6 +23,7 @@ import {
 } from "@/api/handlers/reports/build-report-data";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type {
   DocumentReviewDecision,
   DocumentReviewFindingPayload,
@@ -152,7 +152,12 @@ beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
-  const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+  const scoped = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [ids.wsA1],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   safeDb = toSafeDbMock(asTestRaw<ScopedDb>(scoped));
 });
 

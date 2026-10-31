@@ -21,6 +21,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   openGatedTestDatabase,
@@ -97,12 +98,12 @@ if (!databaseUrl || !runPostgres) {
         workspaceId: wsId,
         userId,
       });
-      await createScopedDb(
-        markRlsDatabase(db),
-        [wsId],
-        orgId,
+      await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [wsId],
+        organizationId: orgId,
         userId,
-      )(async (tx) => {
+      })(async (tx) => {
         await tx.insert(sellerProfiles).values(
           [sellerA, sellerB, sellerC].map((id) => ({
             id,
@@ -230,12 +231,12 @@ if (!databaseUrl || !runPostgres) {
           params: { workspaceId: wsId, invoiceId },
           workspaceId: wsId,
           body: { action: "finalize" },
-          safeDb: createSafeDb(
-            markRlsDatabase(connection),
-            [wsId],
-            orgId,
+          safeDb: createSafeDb(markRlsDatabase(connection), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [wsId],
+            organizationId: orgId,
             userId,
-          ),
+          }),
           user: { id: userId, email: `${userId}@example.test` },
           memberRole: sessionMemberRole("owner"),
           session: { activeOrganizationId: orgId },
@@ -314,12 +315,12 @@ if (!databaseUrl || !runPostgres) {
       expect(rows.every((row) => row.status === INVOICE_STATUS.FINALIZED)).toBe(
         true,
       );
-      const counters = await createScopedDb(
-        markRlsDatabase(db),
-        [scenario.wsId],
-        scenario.orgId,
-        scenario.userId,
-      )(
+      const counters = await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [scenario.wsId],
+        organizationId: scenario.orgId,
+        userId: scenario.userId,
+      })(
         async (tx) =>
           await tx
             .select({
@@ -336,12 +337,12 @@ if (!databaseUrl || !runPostgres) {
           { seriesId: bSeries, lastValue: 3 },
         ]),
       );
-      const receipts = await createScopedDb(
-        markRlsDatabase(db),
-        [scenario.wsId],
-        scenario.orgId,
-        scenario.userId,
-      )(
+      const receipts = await createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [scenario.wsId],
+        organizationId: scenario.orgId,
+        userId: scenario.userId,
+      })(
         async (tx) =>
           await tx
             .select({ number: numberSeriesAllocations.number })
@@ -416,12 +417,12 @@ if (!databaseUrl || !runPostgres) {
         status: INVOICE_STATUS.FINALIZED,
       });
       expect(
-        await createScopedDb(
-          markRlsDatabase(db),
-          [scenario.wsId],
-          scenario.orgId,
-          scenario.userId,
-        )(
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [scenario.wsId],
+          organizationId: scenario.orgId,
+          userId: scenario.userId,
+        })(
           async (tx) =>
             await tx.query.numberSeriesCounters.findFirst({
               where: { seriesId: { eq: allSeries } },
@@ -447,12 +448,12 @@ if (!databaseUrl || !runPostgres) {
       });
       expect(row).toEqual({ invoiceNumber: "ALL-001" });
       expect(
-        await createScopedDb(
-          markRlsDatabase(db),
-          [scenario.wsId],
-          scenario.orgId,
-          scenario.userId,
-        )(
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [scenario.wsId],
+          organizationId: scenario.orgId,
+          userId: scenario.userId,
+        })(
           async (tx) =>
             await tx.query.numberSeriesCounters.findFirst({
               where: { seriesId: { eq: archivedSeries } },

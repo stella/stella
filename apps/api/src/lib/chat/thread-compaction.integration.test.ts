@@ -31,6 +31,7 @@ import {
 import { invalidateChatCompactionChain } from "@/api/handlers/chat/persistent-compaction";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import {
@@ -103,7 +104,12 @@ const countedSafeDb = (): SafeDb => {
   const counted = markRlsDatabase(drizzle({ client: testDb.$client, logger }));
   return toSafeDbMock(
     asTestRaw<ScopedDb>(
-      createScopedDb(counted, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(counted, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     ),
   );
 };

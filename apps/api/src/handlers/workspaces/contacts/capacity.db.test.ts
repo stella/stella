@@ -17,6 +17,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -105,7 +106,12 @@ test.each([1, LIMITS.workspaceContactsCount])(
     let auditEvents = 0;
     let flushes = 0;
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(db, [sourceId], organizationId, null),
+      createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [sourceId],
+        organizationId,
+        userId: null,
+      }),
     );
     const result = await Result.gen(() =>
       createWorkspaceContactHandler({

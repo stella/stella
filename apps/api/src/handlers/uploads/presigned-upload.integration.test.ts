@@ -34,6 +34,7 @@ import { envBase } from "@/api/env-base";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId, type SafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { processDocumentProcessingRun } from "@/api/lib/document-processing-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -238,10 +239,20 @@ describe("presigned upload mutation flow", () => {
     ).at(0);
     expect(fileField).toBeDefined();
     const scopedDb = executeRowsScopedDb(
-      createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const safeDb = executeRowsSafeDb(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userA1,
+      }),
     );
     const harness = createApprovalHarness({
       ids,
@@ -976,13 +987,18 @@ const createContext = ({
   userId,
   workspaceId,
 }: TestContextOptions) => {
-  const scopedDb = createScopedDb(
-    testDb,
-    [workspaceId],
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [workspaceId],
     organizationId,
     userId,
-  );
-  const safeDb = createSafeDb(testDb, [workspaceId], organizationId, userId);
+  });
+  const safeDb = createSafeDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [workspaceId],
+    organizationId,
+    userId,
+  });
 
   return {
     getActiveWorkspaceIds: async () => [workspaceId],

@@ -54,6 +54,7 @@ import {
   withInvoiceMatterLocks,
 } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -127,6 +128,7 @@ if (!databaseUrl || !runPostgres) {
       userId: SafeId<"user">,
     ) =>
       createMembershipScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
         organizationId: orgId,
         userId,
         serverValidatedWorkspaceIds: [],
@@ -379,6 +381,7 @@ if (!databaseUrl || !runPostgres) {
         >[0]
       >({
         safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
           organizationId: scenario.orgId,
           userId,
           serverValidatedWorkspaceIds: [],
@@ -448,6 +451,7 @@ if (!databaseUrl || !runPostgres) {
             audit: NO_AUDIT,
             scopedDb: scoped(scenario, userId),
             safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId,
               userId,
               serverValidatedWorkspaceIds: [],
@@ -545,6 +549,7 @@ if (!databaseUrl || !runPostgres) {
           Parameters<typeof transitionInvoice.handler>[0]
         >({
           safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
             organizationId: scenario.orgId,
             userId: scenario.actors.full,
             serverValidatedWorkspaceIds: [],
@@ -1355,6 +1360,7 @@ if (!databaseUrl || !runPostgres) {
           );
           return {
             safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId: target.orgId,
               userId: actor,
               serverValidatedWorkspaceIds: [],
@@ -1936,6 +1942,7 @@ if (!databaseUrl || !runPostgres) {
         true,
       );
       const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
         organizationId: scenario.orgId,
         userId,
         serverValidatedWorkspaceIds: [],
@@ -2055,6 +2062,7 @@ if (!databaseUrl || !runPostgres) {
             Parameters<typeof createInvoiceLine.handler>[0]
           >({
             safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId: scenario.orgId,
               userId: actor,
               serverValidatedWorkspaceIds: [],
@@ -2193,6 +2201,7 @@ if (!databaseUrl || !runPostgres) {
               userId,
             }),
             safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId: scenario.orgId,
               userId,
               serverValidatedWorkspaceIds: [],
@@ -2346,18 +2355,18 @@ if (!databaseUrl || !runPostgres) {
         matterIds: SafeId<"workspace">[],
       ) => {
         const userId = scenario.actors[actor];
-        const safeDb = createSafeDb(
-          markRlsDatabase(db),
-          matterIds,
-          scenario.orgId,
+        const safeDb = createSafeDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: matterIds,
+          organizationId: scenario.orgId,
           userId,
-        );
-        const scopedDb = createScopedDb(
-          markRlsDatabase(db),
-          matterIds,
-          scenario.orgId,
+        });
+        const scopedDb = createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: matterIds,
+          organizationId: scenario.orgId,
           userId,
-        );
+        });
         const contextOverrides: TestHandlerContextOverrides = {
           safeDb,
           scopedDb,
@@ -2488,12 +2497,12 @@ if (!databaseUrl || !runPostgres) {
         currency: "EUR",
       });
       const emptyThrough = async (matterIds: SafeId<"workspace">[]) =>
-        await createScopedDb(
-          markRlsDatabase(db),
-          matterIds,
-          scenario.orgId,
-          scenario.actors.owner,
-        )(
+        await createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: matterIds,
+          organizationId: scenario.orgId,
+          userId: scenario.actors.owner,
+        })(
           async (tx) =>
             await tx.query.invoices.findFirst({
               where: { id: { eq: emptyId } },
@@ -2541,6 +2550,7 @@ if (!databaseUrl || !runPostgres) {
               userId,
             }),
             safeDb: createMembershipSafeDb(markRlsDatabase(db), {
+              budget: BUDGETS.scopedRequest,
               organizationId: scenario.orgId,
               userId,
               serverValidatedWorkspaceIds: [],

@@ -11,6 +11,7 @@ import {
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
@@ -100,12 +101,12 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
         await client`INSERT INTO entities VALUES (${documentId}, ${workspaceId}), (${retainedDocumentId}, ${workspaceId})`;
 
-        const fixtureScoped = createScopedDb(
-          markRlsDatabase(db),
-          [workspaceId],
+        const fixtureScoped = createScopedDb(markRlsDatabase(db), {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [workspaceId],
           organizationId,
           userId,
-        );
+        });
         const seedRun = async (
           entityId: typeof documentId,
           status: (typeof VERIFICATION_RUN_STATUSES)[number],

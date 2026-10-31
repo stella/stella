@@ -30,6 +30,7 @@ import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import {
   brandPersistedOrganizationId,
@@ -112,7 +113,12 @@ const turnRequest = async (
 
 const ownerDb = (turn: Pick<Turn, "organizationId" | "owner">) =>
   asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [], turn.organizationId, turn.owner),
+    createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: turn.organizationId,
+      userId: turn.owner,
+    }),
   );
 
 const textChunk = (messageId: string, delta: string): StreamChunk => ({

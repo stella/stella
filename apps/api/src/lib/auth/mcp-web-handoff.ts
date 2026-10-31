@@ -29,6 +29,7 @@ import {
 import { liveSessionPredicate } from "@/api/lib/auth/session-liveness";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { logger } from "@/api/lib/observability/logger";
@@ -38,6 +39,8 @@ import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.scopedRequest;
 
 const HANDOFF_SESSION_LABEL_CAP = 100;
 export class WebHandoffOperationError extends TaggedError(
@@ -193,7 +196,7 @@ export const createWebHandoffService = ({
     ) {
       return null;
     }
-    return await withAggregateTransaction(db, async (tx) => {
+    return await withAggregateTransaction(db, BUDGET, async (tx) => {
       const grant = (
         await liveGrant(tx)
           .where(
@@ -395,7 +398,7 @@ const createHandoffRedemption = ({
       logger.info("mcp_web_handoff.refused", { reason });
       return;
     }
-    await withAggregateTransaction(db, async (tx) => {
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
       const audit = createAuditRecorder(auditBindings(row, request));
       await audit(tx, {
         action: AUDIT_ACTION.MCP_WEB_HANDOFF_REFUSED,
@@ -413,7 +416,7 @@ const createHandoffRedemption = ({
     previousOrganizationId,
     complete,
   }: HandoffConsumptionOptions) =>
-    await withAggregateTransaction(db, async (tx) => {
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
       if (!enabled()) {
         return null;
       }
@@ -507,7 +510,7 @@ const createHandoffRedemption = ({
       MCP_RATE_LIMITS.handoffRedeemUser,
     );
   const recordConfirmation = async (code: string, request: Request) =>
-    await withAggregateTransaction(db, async (tx) => {
+    await withAggregateTransaction(db, BUDGET, async (tx) => {
       const shown = (
         await tx
           .update(mcpWebHandoff)

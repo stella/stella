@@ -7,6 +7,7 @@ import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -100,12 +101,12 @@ describe("correspondence handling audit", () => {
                 "/v1/workspaces/:workspaceId/correspondence/:correspondenceId" satisfies ApiRoutePath,
               session: { activeOrganizationId: ids.orgA },
               safeDb: asTestRaw<SafeDb>(
-                createSafeDb(
-                  markRlsDatabase(tx),
-                  [ids.wsA2],
-                  ids.orgA,
-                  ids.userA1,
-                ),
+                createSafeDb(markRlsDatabase(tx), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceIds: [ids.wsA2],
+                  organizationId: ids.orgA,
+                  userId: ids.userA1,
+                }),
               ),
               recordAuditEvent: createAuditRecorder({
                 organizationId: ids.orgA,

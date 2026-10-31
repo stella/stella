@@ -23,6 +23,7 @@ import { INVOICE_LEGACY_PAYMENT_BACKFILL } from "@/api/lib/billing/invoice-payme
 import { recordInvoicePayment } from "@/api/lib/billing/invoice-payments";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import {
   type GatedTestDb,
@@ -119,12 +120,12 @@ const withFixture = async (
         status: INVOICE_STATUS.SENT,
         totalAmount: cents(TOTAL),
       });
-      const asApp = createScopedDb(
-        markRlsDatabase(db),
-        [workspaceId],
+      const asApp = createScopedDb(markRlsDatabase(db), {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
         organizationId,
         userId,
-      );
+      });
       await run({
         db,
         owner: {
@@ -153,12 +154,12 @@ const withFixture = async (
 
 // Each actor runs its payment as the application role, as a request would.
 const payingActor = (fixture: Fixture, actor: "a" | "b", amount: number) => {
-  const safeDb = createSafeDb(
-    markRlsDatabase(fixture.actors[actor]),
-    [fixture.workspaceId],
-    fixture.organizationId,
-    fixture.userId,
-  );
+  const safeDb = createSafeDb(markRlsDatabase(fixture.actors[actor]), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [fixture.workspaceId],
+    organizationId: fixture.organizationId,
+    userId: fixture.userId,
+  });
   return {
     steps: [
       {

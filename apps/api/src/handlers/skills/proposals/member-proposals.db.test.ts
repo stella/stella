@@ -13,6 +13,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   authorizedMemberRole,
   sessionMemberRole,
@@ -57,7 +58,14 @@ afterAll(async () => {
 });
 
 const memberSafeDb = (): SafeDb =>
-  asTestRaw<SafeDb>(createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1));
+  asTestRaw<SafeDb>(
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+  );
 
 const insertTeamSkillWithProposal = async () => {
   const skillId = toSafeId<"agentSkill">(Bun.randomUUIDv7());
@@ -212,7 +220,12 @@ describe("a member reviewing a team skill", () => {
 describe("an owner saving a team skill a member anchored to", () => {
   const ownerSafeDb = (): SafeDb =>
     asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
     );
 
   const saveAsOwner = async (
@@ -278,7 +291,12 @@ describe("an owner saving a team skill a member anchored to", () => {
 describe("an owner's credential managing another author's proposal or comment", () => {
   const ownerSafeDb = (): SafeDb =>
     asTestRaw<SafeDb>(
-      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [ids.wsA1],
+        organizationId: ids.orgA,
+        userId: ids.userAdmin,
+      }),
     );
   const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole =>
     authorizedMemberRole({

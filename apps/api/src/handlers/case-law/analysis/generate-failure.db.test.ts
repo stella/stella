@@ -1,3 +1,4 @@
+import { EventType } from "@tanstack/ai";
 /**
  * A generation run that fails releases the decision row and files a record of
  * why under its reader's key, and the read answers that record: so a reader
@@ -8,8 +9,6 @@
  * The row is real (the test database through the real row store); only the
  * provider is faked, at the adapter boundary the TanStack engine drives.
  */
-
-import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -46,6 +45,7 @@ import {
 } from "@/api/lib/case-law/analysis-failure";
 import { createDbAnalysisStore } from "@/api/lib/case-law/analysis-store-core";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createProviderCallError } from "@/api/lib/errors/provider-call-failure";
 import { registerProviderDiagnosticCredentials } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -385,7 +385,12 @@ describe("a failed analysis run", () => {
       startModelAction: inlineStarter(organizationId, starts),
       decisionId,
       scopedDb: executeRowsScopedDb(
-        createScopedDb(db, [], organizationId, USER_ID),
+        createScopedDb(db, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: [],
+          organizationId,
+          userId: USER_ID,
+        }),
       ),
       organizationId,
       orgAIConfig,

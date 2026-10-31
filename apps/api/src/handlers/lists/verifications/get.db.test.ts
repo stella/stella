@@ -19,6 +19,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
@@ -87,12 +88,12 @@ const seed = async (db: GatedTestDb) => {
   );
   const rlsDb = markRlsDatabase(db);
   const scoped = (userId = actor) =>
-    createScopedDb(
-      rlsDb,
-      [workspaceId, otherWorkspaceId],
+    createScopedDb(rlsDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [workspaceId, otherWorkspaceId],
       organizationId,
       userId,
-    );
+    });
   const runIds = {
     completed: createSafeId<"legalListVerificationRun">(),
     failed: createSafeId<"legalListVerificationRun">(),
@@ -201,12 +202,12 @@ const seed = async (db: GatedTestDb) => {
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
         params: { runId },
-        safeDb: createSafeDb(
-          rlsDb,
-          [workspaceId, otherWorkspaceId],
+        safeDb: createSafeDb(rlsDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId, otherWorkspaceId],
           organizationId,
           userId,
-        ),
+        }),
         audit: record,
       }),
     );
@@ -221,7 +222,12 @@ const seed = async (db: GatedTestDb) => {
     );
   const capabilityContext = async () => {
     const scopedDb = scoped();
-    const safeDb = createSafeDb(rlsDb, [workspaceId], organizationId, actor);
+    const safeDb = createSafeDb(rlsDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [workspaceId],
+      organizationId,
+      userId: actor,
+    });
     const featureAccessSnapshot = await scopedDb(
       async (tx) =>
         await resolveFeatureAccessSnapshot({

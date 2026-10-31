@@ -19,6 +19,7 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
 import {
   claimMcpRefreshLease,
@@ -197,7 +198,12 @@ const approveAuthorization = async ({
         confirmedIssuer,
         confirmedEndpointOrigins: [new URL(confirmedIssuer).origin],
       },
-      safeDb: createSafeDb(testDb, [], activeOrganizationId, ownerId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: activeOrganizationId,
+        userId: ownerId,
+      }),
       session: { activeOrganizationId },
       user: { id: ownerId },
       memberRole: sessionMemberRole("owner"),
@@ -233,7 +239,12 @@ const connectAsMember = async ({
   return await connect.handler(
     asTestRaw<Parameters<typeof connect.handler>[0]>({
       params: { slug },
-      safeDb: createSafeDb(testDb, [], organizationId, memberId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: memberId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: memberId },
       memberRole: sessionMemberRole("member"),
@@ -372,7 +383,12 @@ describe("MCP connector authorization reviews", () => {
     });
     for (const connection of connections) {
       const safeDb = asTestRaw<SafeDb>(
-        createSafeDb(measuredDb, [], organizationId, connection.userId),
+        createSafeDb(measuredDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId,
+          userId: connection.userId,
+        }),
       );
       connectionReads = 0;
       expect(
@@ -388,7 +404,12 @@ describe("MCP connector authorization reviews", () => {
     Result.unwrap(
       await recordMcpAuthorizationReview({
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [], organizationId, ownerId),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId,
+            userId: ownerId,
+          }),
         ),
         organizationId,
         userId: ownerId,
@@ -401,7 +422,12 @@ describe("MCP connector authorization reviews", () => {
     );
     for (const connection of connections) {
       const safeDb = asTestRaw<SafeDb>(
-        createSafeDb(measuredDb, [], organizationId, connection.userId),
+        createSafeDb(measuredDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId,
+          userId: connection.userId,
+        }),
       );
       connectionReads = 0;
       expect(
@@ -453,7 +479,12 @@ describe("MCP connector authorization reviews", () => {
         confirmedIssuer: "https://auth.example.test/shared",
         confirmedEndpointOrigins: ["https://auth.example.test"],
       },
-      safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: ownerId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: ownerId },
       memberRole: sessionMemberRole("owner"),
@@ -476,7 +507,12 @@ describe("MCP connector authorization reviews", () => {
       })
       .where(eq(mcpConnectors.id, sharedConnectorId));
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], organizationId, memberId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: memberId,
+      }),
     );
     expect(
       await loadMcpConnectionById({
@@ -563,7 +599,12 @@ describe("MCP connector authorization reviews", () => {
     Result.unwrap(
       await recordMcpAuthorizationReview({
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [], organizationId, ownerId),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId,
+            userId: ownerId,
+          }),
         ),
         organizationId,
         userId: ownerId,
@@ -607,7 +648,12 @@ describe("MCP connector authorization reviews", () => {
     Result.unwrap(
       await recordMcpAuthorizationReview({
         safeDb: asTestRaw<SafeDb>(
-          createSafeDb(testDb, [], organizationId, ownerId),
+          createSafeDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [],
+            organizationId,
+            userId: ownerId,
+          }),
         ),
         organizationId,
         userId: ownerId,
@@ -703,7 +749,12 @@ describe("MCP connector authorization reviews", () => {
         Result.ok({ addresses: [], url: new URL(url) }),
     });
     const ownerDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], organizationId, ownerId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: ownerId,
+      }),
     );
     const connect = async () => {
       const row = await loadMcpConnectionById({
@@ -764,7 +815,12 @@ describe("MCP connector authorization reviews", () => {
         confirmedIssuer: legacyIssuer,
         confirmedEndpointOrigins: ["https://auth.example.test"],
       },
-      safeDb: createSafeDb(testDb, [], organizationId, ownerId),
+      safeDb: createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: ownerId,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: ownerId },
       memberRole: sessionMemberRole("owner"),
@@ -969,7 +1025,12 @@ describe("MCP connector authorization reviews", () => {
 
   test("coordinates token refresh with a fenced lease and due retry", async () => {
     const safeDb = asTestRaw<SafeDb>(
-      createSafeDb(testDb, [], organizationId, ownerId),
+      createSafeDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: ownerId,
+      }),
     );
     const now = new Date("2026-10-03T12:00:00.000Z");
     const firstLease = Result.unwrap(

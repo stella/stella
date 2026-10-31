@@ -1,11 +1,10 @@
+import { panic, Result } from "better-result";
 /**
  * A bilingual run reads the document it fills under its requester's current
  * access, so nothing from a matter the requester can no longer open reaches
  * the model. Driven against a real (PGlite) database and an in-process object
  * store; the model and the version write are fakes.
  */
-
-import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -38,6 +37,7 @@ import * as bilingualAI from "@/api/lib/bilingual/ai";
 import { processBilingualRun } from "@/api/lib/bilingual/run-queue";
 import { createSafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import * as versionWriter from "@/api/lib/entity-versions/create-entity-version-from-buffer";
 import { createFileKey } from "@/api/lib/files/utils";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
@@ -99,6 +99,7 @@ fakeS3.put(
 const runId = createSafeId<"bilingualTranslationRun">();
 const actor = createRootRunActor(
   {
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
     userId: ids.userA1,

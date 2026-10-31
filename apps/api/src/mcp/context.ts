@@ -83,6 +83,7 @@ import type {
 } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import {
@@ -647,6 +648,7 @@ export const resolveMcpSessionContext = async (
   });
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
+    budget: BUDGETS.scopedRequest,
     organizationId,
     serverValidatedWorkspaceIds: [],
     userId,
@@ -684,13 +686,18 @@ export const resolveMcpSessionContext = async (
     if (hasTokenWorkspaceAttenuation) {
       return {
         pinServerValidatedWorkspaceId,
-        safeDb: createSafeDb(rlsDb, usableWorkspaceIds, organizationId, userId),
-        scopedDb: createScopedDb(
-          rlsDb,
-          usableWorkspaceIds,
+        safeDb: createSafeDb(rlsDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: usableWorkspaceIds,
           organizationId,
           userId,
-        ),
+        }),
+        scopedDb: createScopedDb(rlsDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceScope: usableWorkspaceIds,
+          organizationId,
+          userId,
+        }),
       };
     }
     const databaseIdentity = {
@@ -700,8 +707,14 @@ export const resolveMcpSessionContext = async (
     };
     return {
       pinServerValidatedWorkspaceId,
-      safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
-      scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+      safeDb: createMembershipSafeDb(rlsDb, {
+        ...databaseIdentity,
+        budget: BUDGETS.scopedRequest,
+      }),
+      scopedDb: createMembershipScopedDb(rlsDb, {
+        ...databaseIdentity,
+        budget: BUDGETS.scopedRequest,
+      }),
     };
   };
   const requestDatabaseScope = createOperationDatabaseScope();

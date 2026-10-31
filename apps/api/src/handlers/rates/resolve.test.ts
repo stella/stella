@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/billing/rates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { ValidatedOrgUserId } from "@/api/lib/validated-org-user-id";
@@ -113,7 +114,12 @@ afterAll(async () => {
 // a PGlite-backed safeDb into a prod-typed handler context.
 const scopedSafeDb = (): SafeDb =>
   asTestRaw<SafeDb>(
-    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1, ids.wsA2],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
   );
 
 const runResolve = async (input: {
@@ -230,7 +236,12 @@ describe("effective-dated rate resolution", () => {
   let validatedUserA1: ValidatedOrgUserId;
 
   beforeAll(async () => {
-    const scoped = createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const validated = await scoped(async (tx) =>
       validateOrgUserId(asTestRaw<Transaction>(tx), ids.userA1, ids.orgA),
     );

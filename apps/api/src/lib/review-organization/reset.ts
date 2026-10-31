@@ -30,6 +30,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { BoundedReadResult } from "@/api/lib/db/read-bounded";
 import {
@@ -66,6 +67,8 @@ import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDependencies } from "@/api/lib/workspace-deletion";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.reviewOrganizationReset;
 
 export const REVIEW_RESET_REFUSAL = {
   unconfigured: "unconfigured",
@@ -254,7 +257,9 @@ class ReviewSweepBlockedError extends TaggedError("ReviewSweepBlockedError")<{
 /** The review organization gained a member while the reset ran. */
 class ReviewMembershipChangedError extends TaggedError(
   "ReviewMembershipChangedError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * Holds sole membership for the length of each transaction the reset writes
@@ -415,7 +420,7 @@ const clearBillingRecords = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(scope.db, async (tx) => {
+      await withAggregateTransaction(scope.db, BUDGET, async (tx) => {
         await scope.fence.assert(tx);
         return await clearReviewOrganizationBilling(tx, organizationId);
       }),
@@ -463,6 +468,7 @@ const deleteMatters = async (scope: ResetScope) => {
     }
     const outcome = await executeAuthorizedWorkspaceDeletion(
       {
+        budget: BUDGET,
         actorUserId: userId,
         organizationId,
         recordAuditEvent: scope.recorderFor(matter.id),
@@ -624,7 +630,7 @@ const sweepRemainingRows = async (
   }
   const outcome = await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(scope.db, async (tx) => {
+      await withAggregateTransaction(scope.db, BUDGET, async (tx) => {
         await scope.fence.assert(tx);
         if (scope.signal.aborted) {
           abortTransaction(
@@ -739,7 +745,11 @@ export const resetReviewOrganization = async ({
     target: target.value,
     db,
     safeDb: createRootMembershipSafeDb(
-      { organizationId, userId },
+      {
+        budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
+        organizationId,
+        userId,
+      },
       fencedDatabase,
     ),
     fence,
@@ -809,7 +819,11 @@ export const resetReviewOrganization = async ({
       memberAuthority: sessionMemberRole(target.value.role),
       safeDb: scope.safeDb,
       scopedDb: createRootMembershipScopedDb(
-        { organizationId, userId },
+        {
+          budget: AGGREGATE_TRANSACTION_BUDGETS.scopedWorkerPendingMeasurement,
+          organizationId,
+          userId,
+        },
         fencedDatabase,
       ),
       recorderFor,

@@ -18,6 +18,7 @@ import { env } from "@/api/env";
 import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import readListItems from "@/api/handlers/lists/items/list";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
@@ -129,7 +130,12 @@ if (!databaseUrl || !runPostgres) {
           })),
         );
 
-        const safeDb = createSafeDb(db, [workspaceId], organizationId, userId);
+        const safeDb = createSafeDb(db, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [workspaceId],
+          organizationId,
+          userId,
+        });
         const organizationGrant = {
           type: "organization",
           organizationId,

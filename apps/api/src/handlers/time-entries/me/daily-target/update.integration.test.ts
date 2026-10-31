@@ -16,6 +16,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { dailyTargetBody } from "@/api/lib/billing/daily-target";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -107,7 +108,12 @@ const updateOwn = async ({
       body: { minutes },
       request: new Request("https://example.test/time-entries/me/daily-target"),
       route: "/v1/time-entries/me/daily-target" satisfies ApiRoutePath,
-      safeDb: createSafeDb(db, [], organizationId, ids.userA1),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId,
+        userId: ids.userA1,
+      }),
       session: { activeOrganizationId: organizationId },
       user: { id: ids.userA1 },
       memberRole: sessionMemberRole("member"),
@@ -137,7 +143,12 @@ const updateMember = async ({
       ),
       route:
         "/v1/time-entries/members/:userId/daily-target" satisfies ApiRoutePath,
-      safeDb: createSafeDb(db, [], ids.orgA, actorId),
+      safeDb: createSafeDb(db, {
+        budget: BUDGETS.scopedRequest,
+        workspaceIds: [],
+        organizationId: ids.orgA,
+        userId: actorId,
+      }),
       session: { activeOrganizationId: ids.orgA },
       user: { id: actorId },
       memberRole: sessionMemberRole(actor),
@@ -326,7 +337,12 @@ describe("daily target row level security", () => {
       { organizationId: ids.orgA, userId: ids.userA2, minutes: 120 },
       { organizationId: ids.orgB, userId: ids.userA1, minutes: 180 },
     ]);
-    const safeDb = createSafeDb(db, [], ids.orgA, ids.userA1);
+    const safeDb = createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    });
     const read = await safeDb(
       async (tx) => await tx.select().from(timeDailyTargets),
     );

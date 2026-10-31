@@ -14,6 +14,7 @@ import {
   reserveObjectCleanupIntents,
   settleObjectCleanupIntentsAfterWriter,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { buildTemplateS3Key } from "@/api/lib/templates/storage-keys";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import {
@@ -162,10 +163,20 @@ beforeAll(async () => {
     },
   ]);
   scopedSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [], organizationId, userId),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId,
+    }),
   );
   otherWriterSafeDb = asTestRaw<SafeDb>(
-    createSafeDb(testDb, [], organizationId, otherUserId),
+    createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [],
+      organizationId,
+      userId: otherUserId,
+    }),
   );
 
   await testDb.execute(

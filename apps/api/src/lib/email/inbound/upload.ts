@@ -14,6 +14,7 @@ import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import { correspondenceAttachments, entities } from "@/api/db/schema";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { verifyOriginalSignature } from "@/api/lib/email/inbound/authentication";
 import { PARSE_DROP_REASON } from "@/api/lib/email/inbound/ingest";
@@ -106,7 +107,12 @@ const scopedDbForUploaderDefault = ({
   workspaceId,
   userId,
 }: UploaderScope) =>
-  createRootScopedDb({ organizationId, userId, workspaceIds: [workspaceId] });
+  createRootScopedDb({
+    budget: BUDGETS.scopedWorkerPendingMeasurement,
+    organizationId,
+    userId,
+    workspaceIds: [workspaceId],
+  });
 
 // The uploader's address is read only through their membership of the file's
 // organization; a former member reads as no uploader.

@@ -15,6 +15,7 @@ import {
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { cents } from "@/api/lib/money";
 import { isPgError } from "@/api/lib/pg-error";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
@@ -38,18 +39,18 @@ if (!databaseUrl || !runPostgres) {
   const userId = mintAuthProviderId<"user">();
   const workspaceId = createSafeId<"workspace">();
   const entryId = createSafeId<"timeEntry">();
-  const scoped = createScopedDb(
-    markRlsDatabase(db),
-    [workspaceId],
+  const scoped = createScopedDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [workspaceId],
     organizationId,
     userId,
-  );
-  const safeDb = createSafeDb(
-    markRlsDatabase(db),
-    [workspaceId],
+  });
+  const safeDb = createSafeDb(markRlsDatabase(db), {
+    budget: BUDGETS.scopedRequest,
+    workspaceIds: [workspaceId],
     organizationId,
     userId,
-  );
+  });
   const recordAuditEvent = createBackgroundAuditRecorder({
     organizationId,
     workspaceId,

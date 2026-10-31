@@ -24,10 +24,13 @@ import {
   lockCaseLawRemovalSnapshots,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.corpusRefresh;
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -66,7 +69,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
           name: "Generation sitemap source",
         }),
       );
-      await withAggregateTransaction(db, async (tx) => {
+      await withAggregateTransaction(db, BUDGET, async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
         await lockCaseLawRemovalSnapshots(tx);
         await tx.insert(caseLawDecisions).values({
@@ -261,7 +264,7 @@ describe.skipIf(!enabled)("monthly sitemap removal fence (postgres)", () => {
       ]);
       const removing = Result.tryPromise(
         async () =>
-          await withAggregateTransaction(db, async (tx) => {
+          await withAggregateTransaction(db, BUDGET, async (tx) => {
             await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
             await lockCaseLawRemovalSnapshots(tx);
             await tx

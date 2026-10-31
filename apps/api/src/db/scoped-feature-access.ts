@@ -1,9 +1,10 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
-import type { SQLWrapper } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { budgetedSetupRead } from "@/api/lib/db/transaction-budget-owner";
 import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
@@ -14,12 +15,14 @@ type ScopedFeatureAccessOptions = {
   tx: { execute: (query: SQLWrapper | string) => PromiseLike<unknown> };
   organizationId: string;
   userId: string | null;
+  takeBudgetSetting?: () => SQL | undefined;
 };
 
 export const resolveScopedFeatureIds = async ({
   tx,
   organizationId,
   userId,
+  takeBudgetSetting,
 }: ScopedFeatureAccessOptions): Promise<string[]> => {
   if (userId === null) {
     return [];
@@ -34,14 +37,20 @@ export const resolveScopedFeatureIds = async ({
   if (candidates.length === 0) {
     return [];
   }
-  const identity = executedRows(
-    await tx.execute(sql`
+  const setting = takeBudgetSetting?.();
+  const identityRead = sql`
     SELECT u.email, u.email_verified AS "emailVerified"
     FROM public.member m INNER JOIN public."user" u ON u.id = m.user_id
     WHERE m.organization_id = ${organizationId} AND m.user_id = ${userId}
       AND u.deleted_at IS NULL
     LIMIT 1
-  `),
+  `;
+  const identity = executedRows(
+    await tx.execute(
+      setting === undefined
+        ? identityRead
+        : budgetedSetupRead({ setting, statement: identityRead }),
+    ),
   ).at(0);
   if (identity === undefined) {
     return [];

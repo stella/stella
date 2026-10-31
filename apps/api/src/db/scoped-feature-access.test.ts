@@ -13,6 +13,7 @@ import {
 import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
@@ -248,6 +249,62 @@ test("snapshot-less scopes do not read or admit self-serve enrolments", async ()
   }
 });
 
+test("snapshot-less requests install their timer in the identity read, including missing members", async () => {
+  await withDeployment(
+    {
+      mode: RUNTIME_MODE.strict,
+      legalLists: true,
+      featureIds: [LEGAL_LISTS_FEATURE_ID],
+    },
+    async () => {
+      testState.setConfig("FEATURE_TIME_BILLING", false);
+      const dialect = new PgDialect();
+      for (const identity of [[memberIdentity], []]) {
+        const statements: ReturnType<PgDialect["sqlToQuery"]>[] = [];
+        const tx = {
+          execute: async (query: SQLWrapper | string) => {
+            expect(typeof query).not.toBe("string");
+            if (typeof query === "string") {
+              return [];
+            }
+            const rendered = dialect.sqlToQuery(query.getSQL());
+            statements.push(rendered);
+            return rendered.sql.includes("public.member") ? identity : [];
+          },
+        };
+        const scoped = createMembershipScopedDb(
+          markRlsDatabase({
+            transaction: async <T>(run: (value: typeof tx) => Promise<T>) =>
+              await run(tx),
+          }),
+          {
+            budget: BUDGETS.scopedRequest,
+            organizationId: toSafeId<"organization">(grant.organizationId),
+            userId: toSafeId<"user">("fixture-user"),
+            serverValidatedWorkspaceIds: [],
+          },
+        );
+        let callbacks = 0;
+        await scoped(async () => {
+          callbacks += 1;
+        });
+        expect(callbacks).toBe(1);
+        expect(statements).toHaveLength(2);
+        expect(statements.at(0)?.sql).toContain("public.member");
+        expect(statements.at(0)?.sql).toContain(
+          "set_config('transaction_timeout'",
+        );
+        expect(statements.at(0)?.params).toContain("30000ms");
+        expect(statements.at(1)?.sql).toContain("set_config('role'");
+        expect(statements.at(1)?.sql).not.toContain("transaction_timeout");
+        expect(statements.at(1)?.params).toContain(
+          JSON.stringify(identity.length === 0 ? [] : [LEGAL_LISTS_FEATURE_ID]),
+        );
+      }
+    },
+  );
+});
+
 test("request transactions reuse their authenticated feature snapshot", async () => {
   await withDeployment(
     {
@@ -273,14 +330,27 @@ test("request transactions reuse their authenticated feature snapshot", async ()
       );
       const dialect = new PgDialect();
       let queries = 0;
-      const tx = {
+      let deadlineQueries = 0;
+      const createTx = () => ({
         execute: async (query: SQLWrapper | string) => {
-          queries += 1;
           expect(typeof query).not.toBe("string");
           if (typeof query === "string") {
             return [];
           }
           const rendered = dialect.sqlToQuery(query.getSQL());
+          const deadline =
+            /set_config\('transaction_timeout', \$(\d+), true\)/u.exec(
+              rendered.sql,
+            );
+          expect(deadline).not.toBeNull();
+          expect(rendered.params.at(Number(deadline?.at(1)) - 1)).toBe(
+            `${BUDGETS.scopedRequest.milliseconds}ms`,
+          );
+          expect([
+            ...rendered.sql.matchAll(/set_config\('transaction_timeout'/gu),
+          ]).toHaveLength(1);
+          deadlineQueries += 1;
+          queries += 1;
           const setting =
             /set_config\('app\.enabled_features', \$(\d+), true\)/u.exec(
               rendered.sql,
@@ -291,10 +361,11 @@ test("request transactions reuse their authenticated feature snapshot", async ()
           );
           return [];
         },
-      };
+      });
       const database = markRlsDatabase({
-        transaction: async <T>(fn: (transaction: typeof tx) => Promise<T>) =>
-          await fn(tx),
+        transaction: async <T>(
+          fn: (transaction: ReturnType<typeof createTx>) => Promise<T>,
+        ) => await fn(createTx()),
       });
       const options = {
         organizationId,
@@ -302,13 +373,20 @@ test("request transactions reuse their authenticated feature snapshot", async ()
         serverValidatedWorkspaceIds: [],
         featureAccessSnapshot,
       };
-      const scoped = createMembershipScopedDb(database, options);
-      const safe = createMembershipSafeDb(database, options);
+      const scoped = createMembershipScopedDb(database, {
+        ...options,
+        budget: BUDGETS.scopedRequest,
+      });
+      const safe = createMembershipSafeDb(database, {
+        ...options,
+        budget: BUDGETS.scopedRequest,
+      });
       await scoped(async () => undefined);
       await scoped(async () => undefined);
       const result = await safe(async () => undefined);
       expect(result.isOk()).toBe(true);
       expect(queries).toBe(3);
+      expect(deadlineQueries).toBe(3);
     },
   );
 });

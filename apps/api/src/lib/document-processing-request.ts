@@ -16,11 +16,14 @@ import {
   withAggregateRowQuery,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
 } from "@/api/lib/document-processing-contract";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 const RETRYABLE_MANUAL_OCR_CANCELLATION_CODES = [
   "policy_disabled",
@@ -116,7 +119,7 @@ export const persistManualOcrRun = async ({
   workspaceId,
   db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withAggregateTransaction(db, BUDGET, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });

@@ -13,6 +13,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -275,7 +276,12 @@ describe("extraction run store contract", () => {
       WHERE tablename = 'extraction_runs'
     `);
     const scopedDb = asTestRaw<ScopedDb>(
-      createScopedDb(testDb, [workspaceId], organizationId, userId),
+      createScopedDb(testDb, {
+        budget: BUDGETS.scopedRequest,
+        workspaceScope: [workspaceId],
+        organizationId,
+        userId,
+      }),
     );
     const existing = await createRun();
     const visible = await scopedDb((tx) =>

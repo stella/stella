@@ -18,6 +18,7 @@ import {
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { openCaseLawReadOnlySession } from "@/api/lib/case-law/maintenance-lane";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { AGGREGATE_TRANSACTION_BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { readCorpusText } from "@/api/lib/legal-search/corpus-reads";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -49,6 +50,8 @@ import type {
   SampleBucket,
   SampleSkipReason,
 } from "@/api/scripts/polarity-system-one-compare.logic";
+
+const BUDGET = AGGREGATE_TRANSACTION_BUDGETS.backgroundBatch;
 
 /**
  * How a System One reading of citation polarity compares with the label the
@@ -334,7 +337,7 @@ await runScriptWithErrorOutput(async () => {
   const { rootDb } = await openCaseLawReadOnlySession();
 
   const readSample = async () =>
-    await withAggregateTransaction(rootDb, async (tx) => {
+    await withAggregateTransaction(rootDb, BUDGET, async (tx) => {
       const citations = await tx.execute<SampledCitation>(
         sql.join(
           planSampleBuckets(options).map((bucket) => bucketQuery(tx, bucket)),

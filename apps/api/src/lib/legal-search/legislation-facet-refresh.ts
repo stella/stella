@@ -9,7 +9,6 @@ import {
   legislationFacetCounts,
   legislationFacetRefreshes,
 } from "@/api/db/schema";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationCountryFor } from "@/api/lib/legal-search/legislation-redistribution";
@@ -72,7 +71,7 @@ export const refreshLegislationFacetCounts = async (
     bucketCap = LIMITS.legislationDocumentTypeBucketLimit,
   }: RefreshOptions = {},
 ) =>
-  await withAggregateTransaction(db, async (tx) => {
+  await db.transaction(async (tx) => {
     await tx.delete(legislationFacetCounts).where(sql`true`);
     await tx.execute(sql`
       INSERT INTO ${legislationFacetCounts}

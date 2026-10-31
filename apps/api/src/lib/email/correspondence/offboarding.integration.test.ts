@@ -30,6 +30,7 @@ import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { resolveInboundSender } from "@/api/lib/email/inbound/sender";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -1014,12 +1015,12 @@ describe("correspondence offboarding", () => {
           switch (scope) {
             case "matter": {
               const safeDb = asTestRaw<SafeDb>(
-                createSafeDb(
-                  markRlsDatabase(tx),
-                  [ids.wsA2],
-                  ids.orgA,
-                  ids.userA2,
-                ),
+                createSafeDb(markRlsDatabase(tx), {
+                  budget: BUDGETS.scopedRequest,
+                  workspaceIds: [ids.wsA2],
+                  organizationId: ids.orgA,
+                  userId: ids.userA2,
+                }),
               );
               const result = await Result.gen(() =>
                 removeWorkspaceMemberHandler({

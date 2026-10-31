@@ -22,6 +22,7 @@ import { envBase } from "@/api/env-base";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
@@ -191,12 +192,12 @@ const seed = async (folder: boolean) => {
     .set({ currentVersionId })
     .where(eq(entities.id, documentId));
   const safeDb = asTestRaw<SafeDb>(
-    createSafeDb(
-      db,
-      [sourceWorkspaceId, targetWorkspaceId],
+    createSafeDb(db, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [sourceWorkspaceId, targetWorkspaceId],
       organizationId,
       userId,
-    ),
+    }),
   );
   const fake = startFakeS3();
   const key = (id: string) =>

@@ -20,6 +20,7 @@ import type { UsageEntitlementStatus } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import {
@@ -114,7 +115,12 @@ const setEntitlementStatus = async (status: UsageEntitlementStatus) => {
 // `Transaction` (different QueryResultHKT); asTestRaw is the established cast
 // for bridging a PGlite-backed tx into prod-typed lib functions.
 const assertForOrgA = async (required: number, asOf = AS_OF) => {
-  const scoped = createScopedDb(testDb, [], ids.orgA, ids.userAdmin);
+  const scoped = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [],
+    organizationId: ids.orgA,
+    userId: ids.userAdmin,
+  });
   return await scoped(async (tx) =>
     assertUsageAvailable({
       tx: asTestRaw<Transaction>(tx),
@@ -163,7 +169,12 @@ describe("usage entitlement gating boundary", () => {
   });
 
   test("rejects an organization with no entitlement", async () => {
-    const scoped = createScopedDb(testDb, [], ids.orgB, ids.userB1);
+    const scoped = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
     const result = await scoped(async (tx) =>
       assertUsageAvailable({
         tx: asTestRaw<Transaction>(tx),
@@ -212,7 +223,12 @@ describe("get-entitlement handler", () => {
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       safeDb: asTestRaw<SafeDb>(
-        createSafeDb(testDb, [], ids.orgA, ids.userAdmin),
+        createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [],
+          organizationId: ids.orgA,
+          userId: ids.userAdmin,
+        }),
       ),
     });
 

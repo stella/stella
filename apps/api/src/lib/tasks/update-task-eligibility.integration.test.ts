@@ -17,6 +17,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
@@ -89,7 +90,12 @@ const changeListItemType = async (
   await Result.gen(() =>
     updateTaskHandler(
       asTestRaw<Parameters<typeof updateTaskHandler>[0]>({
-        safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        safeDb: createSafeDb(testDb, {
+          budget: BUDGETS.scopedRequest,
+          workspaceIds: [ids.wsA1],
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
         workspaceId: ids.wsA1,
         userId: ids.userA1,
         recordAuditEvent: async () => undefined,

@@ -26,6 +26,7 @@ import {
   anonymizeDeletedAccountRow,
   lockAccountRow,
 } from "@/api/lib/db/account-row";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
@@ -81,12 +82,12 @@ if (!databaseUrl || !runPostgresTests) {
               ? "correspondence"
               : "correspondence_allowed_senders";
           const gateKey = BigInt(`0x${suffix.slice(-15)}`);
-          const safeDb = createSafeDb(
-            markRlsDatabase(writerDb),
-            [workspaceId],
+          const safeDb = createSafeDb(markRlsDatabase(writerDb), {
+            budget: BUDGETS.scopedRequest,
+            workspaceIds: [workspaceId],
             organizationId,
             userId,
-          );
+          });
           const recordAuditEvent = createBackgroundAuditRecorder({
             organizationId,
             workspaceId,
@@ -268,12 +269,12 @@ if (!databaseUrl || !runPostgresTests) {
             ]);
             const snapshots =
               writerKind === "filing"
-                ? await createScopedDb(
-                    markRlsDatabase(writerDb),
-                    [workspaceId],
+                ? await createScopedDb(markRlsDatabase(writerDb), {
+                    budget: BUDGETS.scopedRequest,
+                    workspaceScope: [workspaceId],
                     organizationId,
-                    remainingOwnerId,
-                  )(
+                    userId: remainingOwnerId,
+                  })(
                     async (tx) =>
                       await tx
                         .select({

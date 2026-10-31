@@ -17,6 +17,7 @@ import {
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createSafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
@@ -199,6 +200,7 @@ if (!databaseUrl || !runPostgresTests) {
           const held = Promise.withResolvers<number>();
           try {
             const safeDb = createMembershipSafeDb(markRlsDatabase(holderDb), {
+              budget: BUDGETS.scopedRequest,
               organizationId: seeded.organizationId,
               serverValidatedWorkspaceIds: [],
               userId: seeded.userId,
@@ -400,6 +402,7 @@ if (!databaseUrl || !runPostgresTests) {
               await holdPrefix.promise;
               return await executeAuthorizedWorkspaceDeletion(
                 {
+                  budget: BUDGETS.scopedRequest,
                   actorUserId: seeded.userId,
                   organizationId: seeded.organizationId,
                   workspaceId: seeded.workspaceId,
@@ -491,6 +494,7 @@ if (!databaseUrl || !runPostgresTests) {
             await matterLocked.promise;
             return await executeAuthorizedWorkspaceDeletion(
               {
+                budget: BUDGETS.scopedRequest,
                 actorUserId: seeded.userId,
                 organizationId: seeded.organizationId,
                 workspaceId: seeded.workspaceId,
@@ -539,6 +543,7 @@ if (!databaseUrl || !runPostgresTests) {
         const seeded = await seedMember(db);
         try {
           const safeDb = createMembershipSafeDb(markRlsDatabase(db), {
+            budget: BUDGETS.scopedRequest,
             organizationId: seeded.organizationId,
             serverValidatedWorkspaceIds: [],
             userId: seeded.userId,

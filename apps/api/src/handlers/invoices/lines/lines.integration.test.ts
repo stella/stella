@@ -51,6 +51,7 @@ import {
   type FieldDiffs,
 } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
@@ -577,7 +578,12 @@ describe("invoice lines", () => {
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         scopedDb: asTestRaw<ScopedDb>(
-          createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+          createScopedDb(testDb, {
+            budget: BUDGETS.scopedRequest,
+            workspaceScope: [ids.wsA1],
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
         ),
         query: {
           workItemId: ids.entityA1,
@@ -1417,7 +1423,12 @@ describe("invoice lines", () => {
       invoiceId,
       manual({ quantity: "1", unitPriceMinor: 500 }, STANDARD_RATE),
     );
-    const otherOrgDb = createScopedDb(testDb, [ids.wsB1], ids.orgB, ids.userB1);
+    const otherOrgDb = createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsB1],
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
 
     const visible = await otherOrgDb((tx) =>
       tx
@@ -1527,8 +1538,18 @@ const contextFor = <TContext extends SafeHandlerLogContext>(
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}`),
     route: invoiceRouteForHandler(_handler),
-    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-    scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    safeDb: createSafeDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceIds: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
+    scopedDb: createScopedDb(testDb, {
+      budget: BUDGETS.scopedRequest,
+      workspaceScope: [ids.wsA1],
+      organizationId: ids.orgA,
+      userId: ids.userA1,
+    }),
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     workspaceId: ids.wsA1,

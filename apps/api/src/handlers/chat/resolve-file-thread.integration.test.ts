@@ -9,6 +9,7 @@ import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { AGGREGATE_TRANSACTION_BUDGETS as BUDGETS } from "@/api/lib/db/aggregate-transaction-budget";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -84,12 +85,12 @@ const lookup = async (
       logger,
     }),
   );
-  const scopedDb = createScopedDb(
-    countedDb,
-    [workspaceId],
-    ids.orgA,
-    ids.userA1,
-  );
+  const scopedDb = createScopedDb(countedDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: [workspaceId],
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
 
   return await scopedDb(async (tx) => {
     queryCount = 0;
@@ -166,12 +167,12 @@ const materialize = async (
   requestedThreadId: SafeId<"chatThread">,
   accessibleWorkspaceIds: SafeId<"workspace">[] = [ids.wsA1],
 ) => {
-  const scopedDb = createScopedDb(
-    testDb,
-    accessibleWorkspaceIds,
-    ids.orgA,
-    ids.userA1,
-  );
+  const scopedDb = createScopedDb(testDb, {
+    budget: BUDGETS.scopedRequest,
+    workspaceScope: accessibleWorkspaceIds,
+    organizationId: ids.orgA,
+    userId: ids.userA1,
+  });
   return await scopedDb(async (tx) =>
     createFileChatThread(
       asTestRaw<Transaction>(tx),
