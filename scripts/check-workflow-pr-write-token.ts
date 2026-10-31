@@ -273,8 +273,10 @@ const conditionTokens = (condition: string): string[] | undefined => {
   let previous = "";
   while (previous !== expression) {
     previous = expression;
+    // The lookbehind starts each match at an identifier boundary, so a
+    // failed call is not re-walked from every later character.
     expression = expression.replace(
-      /[A-Za-z_][A-Za-z0-9_.]*\([^()]*\)/gu,
+      /(?<![A-Za-z0-9_.])[A-Za-z_][A-Za-z0-9_.]*\([^()]*\)/gu,
       "opaque",
     );
   }
