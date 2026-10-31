@@ -4,21 +4,34 @@
 // filter GitHub applies to the workflow's pull requests, so the two cannot
 // drift apart.
 
-import { panic } from "better-result";
+// The workflow runs this before installing dependencies: built-ins only.
+
 import { readFileSync } from "node:fs";
-import * as v from "valibot";
 
 export const VISUAL_PREVIEW_WORKFLOW = ".github/workflows/visual-preview.yml";
 
-const workflowSchema = v.looseObject({
-  on: v.looseObject({
-    pull_request: v.looseObject({ paths: v.array(v.string()) }),
-  }),
-});
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+class PreviewScopeError extends Error {
+  override name = "PreviewScopeError";
+  readonly _tag = "PreviewScopeError";
+}
 
 /** The pull request path filter of the visual preview workflow. */
-export const previewPaths = (workflowSource: string): string[] =>
-  v.parse(workflowSchema, Bun.YAML.parse(workflowSource)).on.pull_request.paths;
+export const previewPaths = (workflowSource: string): string[] => {
+  const workflow: unknown = Bun.YAML.parse(workflowSource);
+  const on = isRecord(workflow) ? workflow["on"] : undefined;
+  const pullRequest = isRecord(on) ? on["pull_request"] : undefined;
+  const paths = isRecord(pullRequest) ? pullRequest["paths"] : undefined;
+  if (
+    !Array.isArray(paths) ||
+    !paths.every((pattern) => typeof pattern === "string")
+  ) {
+    throw new PreviewScopeError("Missing pull_request path filter");
+  }
+  return paths;
+};
 
 type PreviewAffectedOptions = {
   changed: readonly string[];
@@ -34,17 +47,17 @@ export const previewAffected = ({
 };
 
 if (import.meta.main) {
-  const base = v.parse(
-    v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u)),
-    process.argv[2],
-  );
+  const base = process.argv[2];
+  if (base === undefined || !/^[0-9a-f]{40}$/u.test(base)) {
+    throw new PreviewScopeError("Expected a 40-character base sha");
+  }
   const diff = Bun.spawnSync(
     ["git", "diff", "--name-only", "-z", base, "HEAD"],
     { stdout: "pipe", stderr: "inherit" },
   );
   if (diff.exitCode !== 0) {
     // The workflow treats a failed decision as "run the preview".
-    panic(`git diff ${base} HEAD failed`);
+    throw new PreviewScopeError(`git diff ${base} HEAD failed`);
   }
   const changed = diff.stdout
     .toString()
