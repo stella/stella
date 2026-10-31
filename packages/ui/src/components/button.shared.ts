@@ -60,6 +60,7 @@ export const BUTTON_SIZES = [
   "lg",
   "row",
   "sm",
+  "touch",
   "xl",
   "xs",
 ] as const;

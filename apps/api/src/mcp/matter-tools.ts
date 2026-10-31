@@ -99,6 +99,13 @@ import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
+  countryInputSchema,
+  countryNormalization,
+  cursorInput,
+  nullAsAbsent,
+  uuidInputSchema,
+} from "@/api/mcp/input-schemas";
+import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
   runTextFieldSpecs,
@@ -113,9 +120,6 @@ import type {
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
-  countryInputSchema,
-  countryNormalization,
-  cursorInput,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
   entityIdInputSchema,
@@ -124,10 +128,8 @@ import {
   internalFailureResult,
   invalidCursorResult,
   notFoundResult,
-  nullAsAbsent,
   structuredEgressPlan,
   toolDataResult,
-  uuidInputSchema,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
 import {

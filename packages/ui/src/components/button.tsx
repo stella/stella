@@ -78,6 +78,7 @@ const BUTTON_SIZE_CLASS_NAMES = {
   // Small controls read in small type; `SelectTrigger` and `Input`
   // share the height, so a toolbar of `sm` controls shares one scale.
   sm: "h-8 gap-1.5 px-[calc(--spacing(2.5)-1px)] text-sm sm:h-7 sm:text-xs",
+  touch: "min-h-[44px] min-w-[44px] px-[calc(--spacing(3.5)-1px)]",
   xl: "h-11 px-[calc(--spacing(4)-1px)] text-lg sm:h-10 sm:text-base [&_svg:not([class*='size-'])]:size-5 sm:[&_svg:not([class*='size-'])]:size-4.5",
   xs: "h-7 gap-1 rounded-md px-[calc(--spacing(2)-1px)] text-sm before:rounded-[calc(var(--radius-md)-1px)] sm:h-6 sm:text-xs [&_svg:not([class*='size-'])]:size-4 sm:[&_svg:not([class*='size-'])]:size-3.5",
 } as const satisfies Record<ButtonSize, string>;
@@ -138,6 +139,7 @@ const BUTTON_SIZE_CONTENT = {
   lg: BUTTON_CONTENT.text,
   row: BUTTON_CONTENT.text,
   sm: BUTTON_CONTENT.text,
+  touch: BUTTON_CONTENT.text,
   xl: BUTTON_CONTENT.text,
   xs: BUTTON_CONTENT.text,
 } as const satisfies {

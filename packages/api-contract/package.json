@@ -156,6 +156,7 @@
     "./statute-list-schemes": "./src/statute-list-schemes.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts",
     "./desktop-presence": "./src/desktop-presence.ts",
+    "./mcp-app-failure": "./src/mcp-app-failure.ts",
     "./document-ocr-availability": "./src/document-ocr-availability.ts",
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",

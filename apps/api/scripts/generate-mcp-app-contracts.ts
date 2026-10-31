@@ -19,6 +19,7 @@ import {
 import { MCP_APP_OUTPUT_CONTRACTS } from "../src/mcp/app-contracts";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
 import { advertisedMcpOutputSchema } from "../src/mcp/write-result-omission";
+import { mcpAppInputArtifacts } from "./lib/mcp-app-inputs";
 
 const outputRoot = path.resolve(
   import.meta.dirname,
@@ -106,6 +107,7 @@ const artifacts = await formattedArtifactsLikeRepository([
     path: path.join(outputRoot, "contracts.d.ts"),
     contents: `${header}import type * as v from "valibot";\nimport type { Block } from "@stll/legal-ast/document-ast";\n\n${declarations.join("\n\n")}\n`,
   },
+  ...mcpAppInputArtifacts(outputRoot),
 ]);
 await Promise.all(
   artifacts.map(

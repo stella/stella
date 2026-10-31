@@ -44,6 +44,11 @@ const SIZES = {
     label: "text-sm",
     slop: 0,
   },
+  touch: {
+    box: `${CONTROL} min-h-11 min-w-11 gap-2 rounded-lg px-4`,
+    label: "",
+    slop: 0,
+  },
   xl: {
     box: `${CONTROL} min-h-14 gap-2 rounded-lg px-6`,
     label: "text-lg",

@@ -84,7 +84,11 @@ import {
   findRemovedInputIssues,
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
-import { plainRecord } from "@/api/mcp/input-schemas";
+import {
+  cursorInput,
+  nullAsAbsent,
+  plainRecord,
+} from "@/api/mcp/input-schemas";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -103,7 +107,6 @@ import type {
 import {
   closestToolNames,
   confirmationUnavailableResult,
-  cursorInput,
   DEFAULT_LIST_LIMIT,
   didYouMean,
   FEATURE_DISABLED_MESSAGE,
@@ -114,7 +117,6 @@ import {
   MAX_TOOL_NAME_CHARS,
   MCP_INTERNAL_ERROR_HINT,
   notFoundResult,
-  nullAsAbsent,
   oauthScopeRecoveryHint,
   quoteToolName,
   searchIndexUnavailableResult,
