@@ -89,7 +89,14 @@
     "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
     "pickTitle": "Aufgabe wählen",
     "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen.",
-    "openMatter": "Akte öffnen"
+    "openMatter": "Akte öffnen",
+    "assignedTo": "Zugewiesen an",
+    "nobody": "Nicht zugewiesen",
+    "assign": "Zuweisen",
+    "doneAssigning": "Fertig",
+    "someone": "Jemand",
+    "membersFailed": "Die Mitglieder der Akte konnten nicht geladen werden.",
+    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",
@@ -198,6 +205,7 @@
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
     "openSource": "Originalquelle öffnen",
+    "openFailed": "Der Link konnte nicht geöffnet werden.",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
   },

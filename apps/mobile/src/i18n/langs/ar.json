@@ -89,7 +89,14 @@
     "statusFailed": "تعذّر تغيير المهمة. حاول مرة أخرى.",
     "pickTitle": "اختر مهمة",
     "pickDescription": "اختر مهمة من القائمة لرؤيتها هنا.",
-    "openMatter": "فتح القضية"
+    "openMatter": "فتح القضية",
+    "assignedTo": "مُسندة إلى",
+    "nobody": "غير مُسند",
+    "assign": "إسناد",
+    "doneAssigning": "تم",
+    "someone": "شخص ما",
+    "membersFailed": "تعذّر تحميل أعضاء القضية.",
+    "assignFailed": "تعذّر إسناد المهمة. حاول مرة أخرى."
   },
   "matters": {
     "emptyTitle": "لا توجد ملفات قانونية بعد",
@@ -198,6 +205,7 @@
     "headnote": "خلاصة الحكم",
     "textUnavailable": "لا يتوفر نص لهذا الحكم",
     "openSource": "فتح المصدر الأصلي",
+    "openFailed": "تعذّر فتح الرابط.",
     "loadFailed": "تعذّر تحميل الاجتهاد القضائي.",
     "share": "مشاركة"
   },

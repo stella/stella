@@ -351,6 +351,32 @@ describe("persisted corpus JSON validation", () => {
     expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
     expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
   });
+
+  test("serves a row stored with head matter after the body, in stored order", () => {
+    const paragraph = (id: string, role: string) => ({
+      id,
+      anchorId: id,
+      type: "paragraph",
+      role,
+      inlines: [{ type: "text", text: id }],
+    });
+    const parsed = parsePersistedCorpusAst(
+      {
+        version: 1,
+        blocks: [
+          paragraph("caption", "apparatus"),
+          paragraph("reasons", "argumentation"),
+          paragraph("publisher", "apparatus"),
+        ],
+      },
+      "decision-stored-before-order-rule",
+    );
+    expect(parsed?.blocks.map((block) => block.id)).toEqual([
+      "caption",
+      "reasons",
+      "publisher",
+    ]);
+  });
 });
 
 /**

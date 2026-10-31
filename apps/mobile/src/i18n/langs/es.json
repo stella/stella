@@ -89,7 +89,14 @@
     "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
     "pickTitle": "Elija una tarea",
     "pickDescription": "Elija una tarea de la lista para verla aquí.",
-    "openMatter": "Abrir asunto"
+    "openMatter": "Abrir asunto",
+    "assignedTo": "Asignada a",
+    "nobody": "Sin asignar",
+    "assign": "Asignar",
+    "doneAssigning": "Hecho",
+    "someone": "Alguien",
+    "membersFailed": "No se pudieron cargar los miembros del asunto.",
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",
@@ -198,6 +205,7 @@
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
     "openSource": "Abrir fuente original",
+    "openFailed": "No se pudo abrir el enlace.",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
   },
