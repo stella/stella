@@ -103,22 +103,17 @@ export const canvasScale = ({
 /** The look the viewer is asked for: the app's, or always light or dark. */
 export type ViewerAppearance = "system" | "light" | "dark";
 
+/** The appearance after each, as its button cycles them. */
+const NEXT_APPEARANCE = {
+  system: "light",
+  light: "dark",
+  dark: "system",
+} as const satisfies Record<ViewerAppearance, ViewerAppearance>;
+
 /** The appearance after `appearance` as its button cycles them. */
 export const nextAppearance = (
   appearance: ViewerAppearance,
-): ViewerAppearance => {
-  switch (appearance) {
-    case "system": {
-      return "light";
-    }
-    case "light": {
-      return "dark";
-    }
-    case "dark": {
-      return "system";
-    }
-  }
-};
+): ViewerAppearance => NEXT_APPEARANCE[appearance];
 
 /** Whether the pages draw light or dark: `appearance`, or the app's scheme. */
 export const pageAppearance = (
