@@ -66,7 +66,7 @@ export const createMemberInvitationSectionsPlugin = (
             );
             switch (filtered.type) {
               case "unchanged":
-                return;
+                return undefined;
               case "filtered":
                 return await ctx.json(filtered.body);
               default: {

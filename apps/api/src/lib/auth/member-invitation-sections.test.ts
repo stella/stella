@@ -51,9 +51,6 @@ test("the authenticated organization read omits accepted invitations and retains
     body: { name: "Test organization", slug: "invitation-sections" },
   });
   expect(org).not.toBeNull();
-  if (!org) {
-    throw new TypeError("Organization fixture was not created");
-  }
   const context = await auth.$context;
   const statuses = [
     "pending",
