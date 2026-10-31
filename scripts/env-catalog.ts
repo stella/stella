@@ -1864,6 +1864,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
   "CI_POSTGRES_TEST_SHARD",
+  // Immutable migrated template used when a native suite clones its database.
+  "STELLA_POSTGRES_TEST_TEMPLATE_URL",
   "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
