@@ -12,33 +12,63 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { lockLegislationMatterLinks } from "@/api/lib/db/aggregate-lock";
-import { parsePersistedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import type { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
+import { publishedLegislationDocumentIn } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationVersionRef,
   opensOn,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { versionAstColumns } from "@/api/lib/legal-search/legislation-version-blocks";
 import { LIMITS } from "@/api/lib/limits";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
-type Request = {
-  statuteId: string;
-  provisionId: string;
-  version: string;
-  jurisdiction: string;
-};
+type MatterLinkRow = typeof legislationMatterLinks.$inferSelect;
+const toMatterLinkResponse = (row: MatterLinkRow) => ({
+  id: row.id,
+  documentId: row.documentId,
+  statuteId: row.statuteId,
+  provisionId: row.provisionId,
+  appliedVersion: row.appliedVersion,
+  jurisdiction: row.jurisdiction,
+  workspaceId: row.workspaceId,
+  linkedBy: row.linkedBy,
+  createdAt: row.createdAt,
+});
+type MatterLinkResponse = ReturnType<typeof toMatterLinkResponse>;
+true satisfies UnprojectedColumns<
+  MatterLinkRow,
+  MatterLinkResponse
+> extends never
+  ? true
+  : never;
+true satisfies UnbackedProjectionKeys<
+  MatterLinkRow,
+  MatterLinkResponse
+> extends never
+  ? true
+  : never;
 
-type Rejection = Request & {
-  reason: "not_found" | "out_of_jurisdiction" | "limit";
+type ResolvedProvisions = Awaited<
+  ReturnType<typeof resolveMatterLinkProvisions>
+>;
+type ProvisionRequest = ResolvedProvisions[number]["item"];
+type Rejection = ProvisionRequest & {
+  reason:
+    | Extract<ResolvedProvisions[number], { status: "rejected" }>["reason"]
+    | "limit";
 };
 export type LegislationMatterLinkOutcome = {
-  linked: (typeof legislationMatterLinks.$inferSelect)[];
-  existing: (typeof legislationMatterLinks.$inferSelect)[];
+  linked: MatterLinkResponse[];
+  existing: MatterLinkResponse[];
   rejected: Rejection[];
 };
 
 export const linkProvisionsToMatter = async ({
-  items,
+  provisions,
+  organizationId,
   recordAuditEvent,
   tx,
   userId,
@@ -47,60 +77,63 @@ export const linkProvisionsToMatter = async ({
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
-  items: readonly Request[];
+  provisions: ResolvedProvisions;
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
 }): Promise<LegislationMatterLinkOutcome> => {
-  const requests = [
-    ...new Map(
-      items.map((item) => [
-        `${item.statuteId}\0${item.provisionId}\0${item.version}\0${item.jurisdiction}`,
-        item,
-      ]),
-    ).values(),
-  ];
-  if (requests.length === 0) {
+  if (provisions.length === 0) {
     return { linked: [], existing: [], rejected: [] };
   }
-  await lockLegislationMatterLinks(tx, workspaceId);
-
-  const admitted = new Set<string>(PUBLIC_LEGISLATION_COUNTRIES);
-  const candidates = requests.filter((item) => admitted.has(item.jurisdiction));
-  const documents =
-    candidates.length === 0
+  await withAggregateLock({
+    tx,
+    aggregate: "workspace",
+    id: { id: workspaceId, organizationId },
+    mode: "update",
+  });
+  const documentIds = provisions.flatMap((provision) =>
+    provision.status === "available" ? [provision.documentId] : [],
+  );
+  // Recheck publication after the outside-transaction payload read.
+  const readable =
+    documentIds.length === 0
       ? []
       : await tx
-          .select({
-            eli: legislationDocuments.eli,
-            country: legislationDocuments.country,
-            version: legislationDocuments.versionValidFrom,
-            ...versionAstColumns,
-          })
+          .select({ id: legislationDocuments.id })
           .from(legislationDocuments)
           .innerJoin(
             legislationSources,
             eq(legislationSources.id, legislationDocuments.sourceId),
           )
           .where(
-            or(
-              ...candidates.map((item) =>
-                and(
-                  eq(legislationDocuments.eli, item.statuteId),
-                  eq(legislationDocuments.country, item.jurisdiction),
-                  opensOn(
-                    legislationVersionRef(legislationDocuments),
-                    sql`${item.version}::date`,
-                  ),
+            and(
+              or(
+                ...provisions.flatMap((provision) =>
+                  provision.status === "available"
+                    ? [
+                        and(
+                          eq(legislationDocuments.id, provision.documentId),
+                          eq(
+                            legislationDocuments.eli,
+                            provision.item.statuteId,
+                          ),
+                          eq(
+                            legislationDocuments.country,
+                            provision.item.jurisdiction,
+                          ),
+                          opensOn(
+                            legislationVersionRef(legislationDocuments),
+                            sql`${provision.item.version}::date`,
+                          ),
+                        ),
+                      ]
+                    : [],
                 ),
               ),
+              publishedLegislationDocumentIn(PUBLIC_LEGISLATION_COUNTRIES),
             ),
-          );
-  const documentByKey = new Map(
-    documents.map((row) => [
-      `${row.eli}\0${row.country}\0${String(row.version)}`,
-      row,
-    ]),
-  );
-  const documentIds = documents.map((row) => row.id);
+          )
+          .limit(documentIds.length);
+  const readableIds = new Set(readable.map((row) => row.id));
   const existingRows =
     documentIds.length === 0
       ? []
@@ -122,29 +155,24 @@ export const linkProvisionsToMatter = async ({
     .where(eq(legislationMatterLinks.workspaceId, workspaceId));
   let remaining =
     LIMITS.legislationMatterLinksPerWorkspace - (countRow?.value ?? 0);
-  const existing: typeof existingRows = [];
+  const existing: MatterLinkResponse[] = [];
   const rejected: Rejection[] = [];
   const inserts: (typeof legislationMatterLinks.$inferInsert)[] = [];
-  for (const item of requests) {
-    if (!admitted.has(item.jurisdiction)) {
-      rejected.push({ ...item, reason: "out_of_jurisdiction" });
+  for (const provision of provisions) {
+    const { item } = provision;
+    if (provision.status === "rejected") {
+      rejected.push({ ...item, reason: provision.reason });
       continue;
     }
-    const document = documentByKey.get(
-      `${item.statuteId}\0${item.jurisdiction}\0${item.version}`,
-    );
-    const ast = parsePersistedCorpusAst(document?.documentAst, document?.id);
-    const blocks = ast !== null && "blocks" in ast ? ast.blocks : [];
-    if (
-      document === undefined ||
-      !blocks.some((block) => block.anchorId === item.provisionId)
-    ) {
+    if (!readableIds.has(provision.documentId)) {
       rejected.push({ ...item, reason: "not_found" });
       continue;
     }
-    const prior = existingByKey.get(`${document.id}\0${item.provisionId}`);
+    const prior = existingByKey.get(
+      `${provision.documentId}\0${item.provisionId}`,
+    );
     if (prior !== undefined) {
-      existing.push(prior);
+      existing.push(toMatterLinkResponse(prior));
       continue;
     }
     if (remaining-- <= 0) {
@@ -153,7 +181,7 @@ export const linkProvisionsToMatter = async ({
     }
     inserts.push({
       id: createSafeId<"legislationMatterLink">(),
-      documentId: document.id,
+      documentId: provision.documentId,
       statuteId: item.statuteId,
       provisionId: item.provisionId,
       appliedVersion: item.version,
@@ -184,5 +212,5 @@ export const linkProvisionsToMatter = async ({
       },
     })),
   );
-  return { linked, existing, rejected };
+  return { linked: linked.map(toMatterLinkResponse), existing, rejected };
 };

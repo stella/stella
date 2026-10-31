@@ -1,11 +1,17 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
+
 import { legislationMatterLinkItemSchema } from "@/api/handlers/legislation/matter-links/create";
 import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/link-writes";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
+import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { workspaceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export const createLegislationMatterLinksBatchBodySchema = v.strictObject({
   items: v.pipe(
@@ -22,6 +28,7 @@ const config = {
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "write",
+  realtime: workspaceResourceSetUpdates(RESOURCE_TYPE.WORKSPACE),
   mcp: {
     type: "capability",
     reason: "legal_corpus_admin",
@@ -29,24 +36,45 @@ const config = {
   },
   body: createLegislationMatterLinksBatchBodySchema,
 } satisfies WorkspaceHandlerConfig;
-export default createSafeHandler(
+const createLegislationMatterLinksBatch = createSafeHandler(
   config,
-  async function* ({ body, recordAuditEvent, scopedDb, user, workspaceId }) {
-    const outcome = yield* Result.await(
+  async function* ({
+    body,
+    recordAuditEvent,
+    safeDb,
+    session,
+    user,
+    workspaceId,
+  }) {
+    const provisions = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await scopedDb(
-            async (tx) =>
-              await linkProvisionsToMatter({
-                tx,
-                workspaceId,
-                userId: user.id,
-                items: body.items,
-                recordAuditEvent,
-              }),
-          ),
+          await resolveMatterLinkProvisions({
+            items: body.items,
+            legislationDb: legislationPublicReadDb,
+          }),
+      ),
+    );
+    const outcome = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await linkProvisionsToMatter({
+            tx,
+            workspaceId,
+            userId: user.id,
+            provisions,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+          }),
       ),
     );
     return Result.ok(outcome);
   },
 );
+
+declareAggregateMutation(createLegislationMatterLinksBatch, {
+  type: "aggregate",
+  aggregates: ["workspace"],
+});
+
+export default createLegislationMatterLinksBatch;

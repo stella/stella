@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { compareCodeUnit } from "@stll/collation";
@@ -14,6 +14,7 @@ import { createScopedDb } from "@/api/db/scoped";
 import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/link-writes";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -53,87 +54,92 @@ const ast: DocumentAst = {
   ],
 };
 
-beforeAll(async () => {
-  db = await getTestDb();
-  ids = createTestIds();
-  await setupRlsTestData(db, ids);
-  await db.insert(legislationSources).values({
-    id: sourceId,
-    adapterKey: `matter-links-${sourceId}`,
-    name: "Matter links",
+describe.skipIf(!runPostgresTests)("legislation matter links", () => {
+  beforeAll(async () => {
+    db = await getTestDb();
+    ids = createTestIds();
+    await setupRlsTestData(db, ids);
+    await db.insert(legislationSources).values({
+      id: sourceId,
+      adapterKey: `matter-links-${sourceId}`,
+      name: "Matter links",
+    });
+    await db.insert(legislationDocuments).values([
+      {
+        id: czechVersion,
+        sourceId,
+        eli: "CZ/2012/89",
+        title: "Czech Civil Code",
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: "2024-01-01",
+        documentAst: ast,
+      },
+      {
+        id: slovakVersion,
+        sourceId,
+        eli: "SK/1964/40",
+        title: "Slovak Civil Code",
+        country: "SVK",
+        language: "sk",
+        versionValidFrom: "2025-01-01",
+        documentAst: ast,
+      },
+    ]);
   });
-  await db.insert(legislationDocuments).values([
-    {
-      id: czechVersion,
-      sourceId,
-      eli: "CZ/2012/89",
-      title: "Czech Civil Code",
-      country: "CZE",
-      language: "cs",
-      versionValidFrom: "2024-01-01",
-      documentAst: ast,
-    },
-    {
-      id: slovakVersion,
-      sourceId,
-      eli: "SK/1964/40",
-      title: "Slovak Civil Code",
-      country: "SVK",
-      language: "sk",
-      versionValidFrom: "2025-01-01",
-      documentAst: ast,
-    },
-  ]);
-});
-afterAll(async () => {
-  await releaseTestDb();
-});
+  afterAll(async () => {
+    await releaseTestDb();
+  });
 
-const item = (
-  jurisdiction: "CZE" | "SVK",
-): {
-  statuteId: string;
-  provisionId: string;
-  version: string;
-  jurisdiction: string;
-} =>
-  jurisdiction === "CZE"
-    ? {
-        statuteId: "CZ/2012/89",
-        provisionId: "par-1",
-        version: "2024-01-01",
-        jurisdiction,
-      }
-    : {
-        statuteId: "SK/1964/40",
-        provisionId: "par-1",
-        version: "2025-01-01",
-        jurisdiction,
-      };
+  const item = (
+    jurisdiction: "CZE" | "SVK",
+  ): {
+    statuteId: string;
+    provisionId: string;
+    version: string;
+    jurisdiction: string;
+  } =>
+    jurisdiction === "CZE"
+      ? {
+          statuteId: "CZ/2012/89",
+          provisionId: "par-1",
+          version: "2024-01-01",
+          jurisdiction,
+        }
+      : {
+          statuteId: "SK/1964/40",
+          provisionId: "par-1",
+          version: "2025-01-01",
+          jurisdiction,
+        };
 
-const link = async (
-  items: readonly ReturnType<typeof item>[],
-  workspaceIds = [ids.wsA1],
-) =>
-  await createScopedDb(
-    db,
-    workspaceIds,
-    ids.orgA,
-    ids.userA1,
-  )(
-    async (tx) =>
-      await linkProvisionsToMatter({
-        tx: asTestRaw(tx),
-        workspaceId: ids.wsA1,
-        userId: ids.userA1,
-        items,
-        recordAuditEvent: audit,
-      }),
-  );
+  const link = async (
+    items: readonly ReturnType<typeof item>[],
+    workspaceIds = [ids.wsA1],
+  ) => {
+    const provisions = await resolveMatterLinkProvisions({
+      items,
+      legislationDb: async (fn) => await fn(asTestRaw(db)),
+    });
+    return await createScopedDb(
+      db,
+      workspaceIds,
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await linkProvisionsToMatter({
+          tx: asTestRaw(tx),
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          provisions,
+          recordAuditEvent: audit,
+        }),
+    );
+  };
 
-(runPostgresTests ? test : test.skip)(
-  "batch preserves a valid provision when another jurisdiction is rejected",
-  async () => {
+  test("batch preserves a valid provision when another jurisdiction is rejected", async () => {
     await db
       .delete(legislationMatterLinks)
       .where(eq(legislationMatterLinks.workspaceId, ids.wsA1));
@@ -153,12 +159,78 @@ const link = async (
     expect(outcome.rejected).toEqual([
       { ...austrian, reason: "out_of_jurisdiction" },
     ]);
-  },
-);
+  });
 
-(runPostgresTests ? test : test.skip)(
-  "create, retry, batch, list applied versions, delete, tenancy and refusals",
-  async () => {
+  test("rejects ambiguous versions and sources that withhold redistribution", async () => {
+    const request = item("CZE");
+    const translatedId = createSafeId<"legislationDocument">();
+    await db.insert(legislationDocuments).values({
+      id: translatedId,
+      sourceId,
+      eli: request.statuteId,
+      title: "Civil Code translation",
+      country: request.jurisdiction,
+      language: "en",
+      versionValidFrom: request.version,
+      documentAst: ast,
+    });
+    const ambiguous = await link([request]);
+    expect(ambiguous.linked).toEqual([]);
+    expect(ambiguous.existing).toEqual([]);
+    expect(ambiguous.rejected).toEqual([
+      { ...request, reason: "ambiguous_version" },
+    ]);
+    await db
+      .delete(legislationDocuments)
+      .where(eq(legislationDocuments.id, translatedId));
+    await db
+      .update(legislationSources)
+      .set({
+        descriptor: {
+          license: "restricted",
+          attribution: null,
+          allowsRedistribution: false,
+          allowsDerivedAi: false,
+        },
+      })
+      .where(eq(legislationSources.id, sourceId));
+    const withheld = await link([request]);
+    expect(withheld.linked).toEqual([]);
+    expect(withheld.existing).toEqual([]);
+    expect(withheld.rejected).toEqual([{ ...request, reason: "not_found" }]);
+    await db
+      .update(legislationSources)
+      .set({ descriptor: null })
+      .where(eq(legislationSources.id, sourceId));
+  });
+
+  test("links the canonical anchor assigned to a repeated legacy anchor", async () => {
+    await db
+      .delete(legislationMatterLinks)
+      .where(eq(legislationMatterLinks.workspaceId, ids.wsA1));
+    await db
+      .update(legislationDocuments)
+      .set({
+        documentAst: {
+          ...ast,
+          blocks: [
+            ...ast.blocks,
+            ...ast.blocks.map((block) => ({ ...block, id: "p2" })),
+          ],
+        },
+      })
+      .where(eq(legislationDocuments.id, czechVersion));
+    const linked = await link([{ ...item("CZE"), provisionId: "par-1-2" }]);
+    expect(linked.rejected).toEqual([]);
+    expect(linked.linked).toHaveLength(1);
+    expect(linked.linked.at(0)?.provisionId).toBe("par-1-2");
+    await db
+      .update(legislationDocuments)
+      .set({ documentAst: ast })
+      .where(eq(legislationDocuments.id, czechVersion));
+  });
+
+  test("create, retry, batch, list applied versions, delete, tenancy and refusals", async () => {
     await db
       .delete(legislationMatterLinks)
       .where(eq(legislationMatterLinks.workspaceId, ids.wsA1));
@@ -191,7 +263,7 @@ const link = async (
     ).toBe("out_of_jurisdiction");
     expect(await rejectionOf(link([item("CZE")], [ids.wsB1]))).toHaveProperty(
       "message",
-      expect.stringContaining('insert into "legislation_matter_links"'),
+      expect.stringContaining("workspace"),
     );
     const deleted = await db
       .delete(legislationMatterLinks)
@@ -203,5 +275,5 @@ const link = async (
       )
       .returning();
     expect(deleted).toHaveLength(1);
-  },
-);
+  });
+});

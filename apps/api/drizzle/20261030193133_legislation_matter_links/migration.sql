@@ -1,3 +1,6 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '30s';--> statement-breakpoint
+
 CREATE TABLE "legislation_matter_links" (
   "id" uuid PRIMARY KEY NOT NULL,
   "document_id" uuid NOT NULL,

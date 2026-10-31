@@ -294,6 +294,9 @@ const SCOPE_STRICTNESS: Record<string, number> = {
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "legislation.matter-links.batch.create": "stella:matters_write",
+  "legislation.matter-links.create": "stella:matters_write",
+  "legislation.matter-links.delete": "stella:matters_write",
   "memories.create": "stella:memory_write",
   "memories.update": "stella:memory_write",
   // Document writes that reach storage through helpers shared with other
