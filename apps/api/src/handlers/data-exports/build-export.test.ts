@@ -823,9 +823,9 @@ describe("organisation data export builder", () => {
       expect([...resumed.memory.parts.keys()]).toEqual(
         remainingParts.map((part) => part.fileName),
       );
-      expect(resumed.checkpoints.map((part) => part.index)).toEqual(
-        remainingIndices,
-      );
+      expect(resumed.checkpoints.map((part) => part.index)).toEqual([
+        ...remainingIndices,
+      ]);
       expect(resumed.manifest.parts.map((part) => part.sha256)).toEqual(
         first.manifest.parts.map((part) => part.sha256),
       );
@@ -860,9 +860,9 @@ describe("organisation data export builder", () => {
       expect([...resumedAfterRename.memory.parts.keys()]).toEqual(
         remainingParts.map((part) => part.fileName),
       );
-      expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual(
-        remainingIndices,
-      );
+      expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual([
+        ...remainingIndices,
+      ]);
       expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
       const filePaths = (zip: JSZip) =>
         Object.values(zip.files)
