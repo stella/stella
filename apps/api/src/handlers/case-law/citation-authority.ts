@@ -54,6 +54,11 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { flattenCourtWeightEntries } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightEntry } from "@/api/lib/case-law/court-weights";
+import {
+  canonicalWorkCitationSql,
+  decisionWorkIdArraySql,
+  workAnchoredCitationsSql,
+} from "@/api/lib/case-law/decision-work";
 import { loadLocalCourtWeights } from "@/api/lib/case-law/local-case-law-config";
 import { redistributableCaseLawSourceSqlFor } from "@/api/lib/case-law/redistribution";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -229,6 +234,13 @@ export const hasResolvedCitations = async (
  * redistributable, contributes nothing AND is not counted. Those are the same
  * row being absent, and separating them would change the count.
  *
+ * The count and the score are the work's: every incoming precedent citation
+ * of any language version of the decision, each counted once however many
+ * versions of the citing judgment print it (`decision-work.ts`). Every version
+ * of a work computes the same member set, so every version holds the same
+ * value once the pass has reached it; a pass is therefore also the backfill
+ * when the rule changes.
+ *
  * Every batch row is compared, including a decision with no citations at all:
  * that is what resets a decision whose last citation went away. The write
  * guard reads the row as it stands at the write, not as the batch read it.
@@ -250,7 +262,7 @@ export const recomputeCitationAuthorityBatch = async (
 ): Promise<CitationAuthorityBatch> => {
   // audit: skip — recomputes derived public case-law citation authority
   const contribution = contributionWeight({
-    aliases: { citation: "c", citing: "citing_d" },
+    aliases: { citation: "edge", citing: "edge" },
     now: instantSql(now),
     courtWeightEntries,
   });
@@ -268,26 +280,53 @@ export const recomputeCitationAuthorityBatch = async (
        ORDER BY d.id
        LIMIT ${limit}
     ),
-    agg AS (
+    batch_work AS (
       SELECT b.id AS decision_id,
-             ln(1 + coalesce(sum(
-               CASE WHEN c.id IS NULL THEN 0 ELSE ${contribution} END
-             ), 0)) AS authority,
-             count(c.id)::int AS cnt
+             ${decisionWorkIdArraySql(sql`b.id`)} AS work_ids
         FROM batch b
-        LEFT JOIN (
-          case_law_citations c
-          JOIN case_law_published_decisions citing_d
-            ON citing_d.id = c.citing_decision_id
-          JOIN case_law_sources citing_src
-            ON citing_src.id = citing_d.source_id
-           AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
-        ) ON c.cited_decision_id = b.id
+    ),
+    agg AS (
+      SELECT bw.decision_id,
+             ln(1 + coalesce(sum(
+               CASE WHEN edge.id IS NULL THEN 0 ELSE ${contribution} END
+             ), 0)) AS authority,
+             count(edge.id)::int AS cnt
+        FROM batch_work bw
+        LEFT JOIN LATERAL (
+          SELECT anchored.id,
+                 anchored.polarity,
+                 citing_d.country,
+                 citing_d.court,
+                 citing_d.court_id,
+                 citing_d.decision_date
+            FROM ${workAnchoredCitationsSql({
+              direction: "incoming",
+              workIds: sql`bw.work_ids`,
+            })}
+            JOIN case_law_published_decisions citing_d
+              ON citing_d.id = anchored.citing_decision_id
+            JOIN case_law_sources citing_src
+              ON citing_src.id = citing_d.source_id
+             AND ${sql.raw(redistributableCaseLawSourceSqlFor("citing_src"))}
            -- Procedural references name the judgment under review, not an
            -- authority being invoked; counting them would rank a decision by
            -- how often it was appealed.
-           AND c.kind = 'precedent'
-       GROUP BY b.id
+           WHERE anchored.kind = 'precedent'
+             -- Each citation of the work once, whichever version of the
+             -- citing judgment printed it and whichever version of this
+             -- one the resolver chose for its language.
+             AND ${canonicalWorkCitationSql({
+               direction: "incoming",
+               workIds: sql`bw.work_ids`,
+               row: {
+                 citingDecisionId: sql`anchored.citing_decision_id`,
+                 citedDecisionId: sql`anchored.cited_decision_id`,
+                 kind: sql`anchored.kind`,
+                 citationText: sql`anchored.citation_text`,
+               },
+             })}
+        ) edge ON true
+       GROUP BY bw.decision_id
     ),
     updated AS (
       UPDATE case_law_decisions d
@@ -443,13 +482,23 @@ export const invalidateRemovedCitationAuthorityTx = async (
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<void> => {
   // audit: skip — derived ranking invalidation belongs to the canonical removal audit.
+  // Counts are per work, so every version of the removed decision's work and
+  // of each work it cites holds its contribution.
   await tx.execute(sql`
     UPDATE case_law_decisions
     SET citation_authority = 0, citation_count = 0
     WHERE id IN (
-      SELECT ${decisionId}::uuid UNION
-      SELECT cited_decision_id FROM case_law_citations
-      WHERE citing_decision_id = ${decisionId} AND cited_decision_id IS NOT NULL
+      SELECT unnest(${decisionWorkIdArraySql(sql`touched.id`)})
+        FROM (
+          SELECT ${decisionId}::uuid AS id
+          UNION
+          SELECT anchored.cited_decision_id
+            FROM ${workAnchoredCitationsSql({
+              direction: "outgoing",
+              workIds: decisionWorkIdArraySql(sql`${decisionId}::uuid`),
+            })}
+           WHERE anchored.cited_decision_id IS NOT NULL
+        ) touched
     )
   `);
 };

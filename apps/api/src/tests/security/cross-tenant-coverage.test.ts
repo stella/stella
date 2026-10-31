@@ -189,7 +189,11 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
-  "desktop-time-entries": {},
+  "desktop-time-entries": {
+    // Writes a narrative from the window titles in the request body; reads no
+    // stored record.
+    narrative: WAIVER_REASON.noTenantReadSurface,
+  },
   chat: {
     // Authenticated public-host icon bytes contain no tenant-owned records.
     "link-icons/get": WAIVER_REASON.noTenantReadSurface,

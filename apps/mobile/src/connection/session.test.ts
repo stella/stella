@@ -295,4 +295,33 @@ describe("access tokens", () => {
     reachable = true;
     expect(await token(source)).toBe("access-1");
   });
+
+  test("a refusal that does not end the grant keeps the session for a retry", async () => {
+    const memory = memoryStore(SESSION);
+    let available = false;
+    const endpoint = rotatingTokenEndpoint();
+    const source = createAccessTokenSource({
+      fetch: async (input, init) =>
+        available
+          ? await endpoint.fetch(input, init)
+          : Response.json(
+              { error: "temporarily_unavailable" },
+              { status: 503 },
+            ),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    const refused = await source.accessToken();
+    expect(refused.isErr() ? refused.error : undefined).toMatchObject({
+      _tag: "TokenError",
+      oauthError: "temporarily_unavailable",
+      status: 503,
+    });
+    expect(memory.stored()).toEqual(SESSION);
+    available = true;
+    expect(await token(source)).toBe("access-1");
+  });
 });
