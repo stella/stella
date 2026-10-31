@@ -10,7 +10,12 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Node,
+  parseSource,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 // Every test convention a CI runner picks up, script and shell tests included.
@@ -71,34 +76,42 @@ export type HistoryWalkFinding = {
   message: string;
 };
 
-const literalText = (node: ts.Node): string | undefined =>
-  ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)
-    ? node.text
+const literalText = (node: Node): string | undefined => {
+  if (node.type === "Literal") {
+    return typeof node.value === "string" ? node.value : undefined;
+  }
+  return node.type === "TemplateLiteral" && node.expressions.length === 0
+    ? (node.quasis.at(0)?.value.cooked ?? undefined)
     : undefined;
+};
 
-const calleeName = (expression: ts.Expression): string | undefined => {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
+const calleeName = (expression: Node): string | undefined => {
+  if (expression.type === "Identifier") {
+    return expression.name;
   }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
-  }
-  return undefined;
+  return expression.type === "MemberExpression" &&
+    !expression.computed &&
+    expression.property.type === "Identifier"
+    ? expression.property.name
+    : undefined;
 };
 
 // Literal arguments, flattening array literals such as `git(["log"])`.
-const literalArgs = (args: readonly ts.Node[]): string[] =>
-  args.flatMap((arg) =>
-    ts.isArrayLiteralExpression(arg)
+const literalArgs = (args: readonly (Node | null)[]): string[] =>
+  args.flatMap((arg) => {
+    if (arg === null) {
+      return [];
+    }
+    return arg.type === "ArrayExpression"
       ? literalArgs(arg.elements)
-      : (literalText(arg) ?? []),
-  );
+      : (literalText(arg) ?? []);
+  });
 
 // Whether git receives a history subcommand in any argument position, so
 // global options and a working directory (`git(cwd, "log")`, `-C dir`) never
 // hide it.
-const walksHistory = (node: ts.Node): boolean => {
-  if (ts.isArrayLiteralExpression(node)) {
+const walksHistory = (node: Node): boolean => {
+  if (node.type === "ArrayExpression") {
     const args = literalArgs(node.elements);
     const git = args.indexOf("git");
     return (
@@ -106,9 +119,9 @@ const walksHistory = (node: ts.Node): boolean => {
       args.slice(git + 1).some((arg) => HISTORY_SUBCOMMANDS.has(arg))
     );
   }
-  if (ts.isCallExpression(node)) {
+  if (node.type === "CallExpression") {
     const args = literalArgs(node.arguments);
-    const name = calleeName(node.expression);
+    const name = calleeName(node.callee);
     // A git wrapper passes every argument to git; `spawn("git", [...])`
     // passes what follows the "git" literal.
     const wrapper = name !== undefined && GIT_CALLEE.test(name);
@@ -120,12 +133,11 @@ const walksHistory = (node: ts.Node): boolean => {
       .slice(wrapper ? 0 : git + 1)
       .some((arg) => HISTORY_SUBCOMMANDS.has(arg));
   }
-  if (ts.isTemplateExpression(node)) {
+  if (node.type === "TemplateLiteral" && node.expressions.length > 0) {
     // Each interpolation stays one argument.
-    const text = [
-      node.head.text,
-      ...node.templateSpans.map((span) => span.literal.text),
-    ].join("ARG");
+    const text = node.quasis
+      .map((quasi) => quasi.value.cooked ?? "")
+      .join("ARG");
     return walksShell(text);
   }
   const text = literalText(node);
@@ -165,23 +177,13 @@ const scanSource = (file: string, source: string): HistoryWalkFinding[] => {
   if (isShellTest(file)) {
     return scanShell(file, source);
   }
-  const parsed = ts.createSourceFile(
-    file,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    file.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const parsed = parseSource(file, source);
   const lines = new Set<number>();
-  const visit = (node: ts.Node) => {
+  walk(parsed.program, (node) => {
     if (walksHistory(node)) {
-      lines.add(
-        parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1,
-      );
+      lines.add(parsed.locate(node.start).line);
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+  });
   return [...lines].map((line) => walkFinding(file, line));
 };
 

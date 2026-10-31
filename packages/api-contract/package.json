@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./api-date": "./src/api-date.ts",
     "./contact-date": "./src/contact-date.ts",
+    "./contact-write": "./src/contact-write.ts",
     "./conversion-refusal": "./src/conversion-refusal.ts",
     "./mcp": "./src/mcp.ts",
     "./mcp-registry": "./src/mcp-registry.ts",
@@ -28,6 +29,7 @@
     "./ai-decision-provider": "./src/ai-decision-provider.ts",
     "./review-decision": "./src/review-decision.ts",
     "./limits": "./src/limits.ts",
+    "./transcription": "./src/transcription.ts",
     "./http-input": "./src/http-input.ts",
     "./mcp-capability-executors": "./src/mcp-capability-executors.ts",
     "./mcp-tool-name": "./src/mcp-tool-name.ts",
@@ -93,6 +95,7 @@
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
+    "./mobile-push": "./src/mobile-push.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
     "./mobile-updates": "./src/mobile-updates.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
@@ -160,7 +163,8 @@
     "./mcp-app-messages": "./src/mcp-app-messages.json",
     "./mcp-app.fixtures": "./src/mcp-app.fixtures.ts",
     "./mcp-app-sandbox-policy": "./src/mcp-app-sandbox-policy.ts",
-    "./chat-ui-resources": "./src/chat-ui-resources.ts"
+    "./chat-ui-resources": "./src/chat-ui-resources.ts",
+    "./task-write": "./src/task-write.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

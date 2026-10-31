@@ -501,6 +501,8 @@ type DatePickerPopoverProps = {
    *  the control still has height; pass a call-to-action ("Select date…") to
    *  make the empty state self-explanatory. */
   placeholderLabel?: string;
+  /** Replaces the formatted date in the trigger, as a week range does. */
+  triggerLabel?: string;
   clearLabel?: string;
   defaultOpen?: boolean;
   open?: boolean;
@@ -535,6 +537,10 @@ type DatePickerPopoverProps = {
   layer?: OverlayLayer;
 };
 
+/** The trigger keeps its height with an em dash when nothing has a label. */
+const firstLabel = (...labels: readonly (string | null | undefined)[]) =>
+  labels.find((label) => label !== null && label !== undefined) ?? "—";
+
 type DatePickerPopoverContentProps = DatePickerPopoverProps & {
   locale: string;
   today: string;
@@ -556,6 +562,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     isOverdue = false,
     showIcon = true,
     placeholderLabel,
+    triggerLabel,
     clearLabel = "Clear date",
     defaultOpen = false,
     open: controlledOpen,
@@ -624,8 +631,11 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
 
   const dateDraft = useDatePickerDraft({ value, isDayDisabled, onChange });
 
-  const displayLabel =
-    formatSelection(locale, selection) ?? placeholderLabel ?? "\u2014";
+  const displayLabel = firstLabel(
+    triggerLabel,
+    formatSelection(locale, selection),
+    placeholderLabel,
+  );
 
   const selectDay = (date: string) => {
     switch (selection.mode) {

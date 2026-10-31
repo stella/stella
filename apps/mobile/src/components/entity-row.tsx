@@ -45,6 +45,10 @@ export const EntityRow = ({
     if (kind === "task" && typeof status === "string" && isTaskStatus(status)) {
       return t(`status.${status}`);
     }
+    // A document names its file's format ("PDF", "DOCX") rather than its kind.
+    if (entity.fileType !== undefined) {
+      return entity.fileType;
+    }
     return isKnownEntityKind(kind) ? t(`kind.${kind}`) : undefined;
   })();
   const details = [
