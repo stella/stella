@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 
+import { chunk } from "@stll/concurrency/chunk";
 import { isUuid } from "@stll/uuid-codec";
 
 import type { Transaction } from "@/api/db/root";
@@ -10,6 +11,7 @@ import {
   organizationDataExports,
   schedulerJobs,
 } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -43,12 +45,12 @@ import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
 export const MAINTAIN_DATA_EXPORTS_TASK = "dataExports.maintain" as const;
+export const DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS = 5000;
 
 /** Two audited transitions per state leave room for queue reads under the statement ceiling. */
 const BATCH_SIZE = 2;
 const CONTINUATION_DELAY_MS = 1000;
-// One active export per organisation bounds the queued rows; past this many
-// pages a run hands the rest to its continuation.
+// Each run hands off at most this many batches; a cursor continues the remainder.
 export const DATA_EXPORT_MAX_HANDOFF_PAGES = 48;
 /** A queued export older than this has lost its queue handoff. */
 const QUEUED_HANDOFF_SETTLE_MS = 5 * 60 * 1000;
@@ -195,10 +197,13 @@ const moveEach = async (
     }
     const result = await Result.tryPromise(
       async () =>
-        await withAggregateTransaction(
-          db,
-          async (tx: Transaction) => await move(tx, row),
-        ),
+        await withAggregateTransaction(db, async (tx: Transaction) => {
+          await setSharedStatementTimeout(
+            tx,
+            DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+          );
+          return await move(tx, row);
+        }),
     );
     if (Result.isError(result)) {
       summary.errors.push(result.error);
@@ -218,22 +223,29 @@ const moveEach = async (
 // the lifecycle could remove its files and no link is ever signed for a
 // removed object.
 const expireReady = async ({ db, summary, now }: StepArgs) => {
-  const duePage = await readCursorPage(
-    db
-      .select(sweepColumns)
-      .from(organizationDataExports)
-      .where(
-        and(
-          eq(organizationDataExports.status, "ready"),
-          atOrBefore(organizationDataExports.expiresAt, now),
+  const duePage = await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(
+      tx,
+      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+    );
+    return await readCursorPage(
+      tx
+        .select(sweepColumns)
+        .from(organizationDataExports)
+        .where(
+          and(
+            eq(organizationDataExports.status, "ready"),
+            atOrBefore(organizationDataExports.expiresAt, now),
+          ),
+        )
+        .orderBy(
+          asc(organizationDataExports.expiresAt),
+          asc(organizationDataExports.id),
         ),
-      )
-      .orderBy(
-        asc(organizationDataExports.expiresAt),
-        asc(organizationDataExports.id),
-      ),
-    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
-  );
+      { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+    );
+  });
+
   const due = duePage.items;
   summary.hasMore ||= duePage.nextCursor !== null;
   summary.expired += await moveEach(
@@ -253,22 +265,29 @@ const expireReady = async ({ db, summary, now }: StepArgs) => {
 
 const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   const staleBefore = new Date(now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS);
-  const stalePage = await readCursorPage(
-    db
-      .select({ ...sweepColumns, failures: organizationDataExports.failures })
-      .from(organizationDataExports)
-      .where(
-        and(
-          eq(organizationDataExports.status, "running"),
-          before(organizationDataExports.heartbeatAt, staleBefore),
+  const stalePage = await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(
+      tx,
+      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+    );
+    return await readCursorPage(
+      tx
+        .select({ ...sweepColumns, failures: organizationDataExports.failures })
+        .from(organizationDataExports)
+        .where(
+          and(
+            eq(organizationDataExports.status, "running"),
+            before(organizationDataExports.heartbeatAt, staleBefore),
+          ),
+        )
+        .orderBy(
+          asc(organizationDataExports.heartbeatAt),
+          asc(organizationDataExports.id),
         ),
-      )
-      .orderBy(
-        asc(organizationDataExports.heartbeatAt),
-        asc(organizationDataExports.id),
-      ),
-    { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
-  );
+      { limit: BATCH_SIZE, cursorForItem: (row) => row.id },
+    );
+  });
+
   const stale = stalePage.items;
   summary.hasMore ||= stalePage.nextCursor !== null;
   // A worker that vanished (crash, killed deploy) leaves its checkpoints:
@@ -361,46 +380,62 @@ const readQueuedPage = async ({
   cursor,
   pageSize,
   requester,
-}: ReadQueuedPageOptions) => {
-  // Fetch keys from the covering queue index before reading row payloads:
-  // owner RLS selectivity can otherwise favor a growing requester scan and sort.
-  const candidates = db
-    .select({ id: organizationDataExports.id })
-    .from(organizationDataExports)
-    .where(
-      and(
-        settled,
-        requester === "present"
-          ? isNotNull(organizationDataExports.requestedBy)
-          : isNull(organizationDataExports.requestedBy),
-        afterQueued(cursor),
-      ),
-    )
-    .orderBy(
-      asc(organizationDataExports.createdAt),
-      asc(organizationDataExports.id),
-    )
-    .limit(pageSize + 1);
-  return await readCursorPage(
-    db
+}: ReadQueuedPageOptions) =>
+  await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(
+      tx,
+      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+    );
+    // Fetch keys from the covering queue index before reading row payloads:
+    // owner RLS selectivity can otherwise favor a growing requester scan and sort.
+    const candidates = tx
       .select({
         id: organizationDataExports.id,
-        organizationId: organizationDataExports.organizationId,
-        requestedBy: organizationDataExports.requestedBy,
-        attempt: organizationDataExports.attempt,
-        createdAt: pgTimestampCursorValue(organizationDataExports.createdAt).as(
-          "created_at_cursor",
-        ),
+        createdAt: organizationDataExports.createdAt,
       })
       .from(organizationDataExports)
-      .where(inArray(organizationDataExports.id, candidates))
+      .where(
+        and(
+          settled,
+          requester === "present"
+            ? isNotNull(organizationDataExports.requestedBy)
+            : isNull(organizationDataExports.requestedBy),
+          afterQueued(cursor),
+        ),
+      )
       .orderBy(
         asc(organizationDataExports.createdAt),
         asc(organizationDataExports.id),
-      ),
-    { limit: pageSize, cursorForItem: (row) => row.id },
-  );
-};
+      )
+      .limit(pageSize + 1)
+      .as("queued_export_keys");
+    const detail = tx
+      .select({
+        organizationId: organizationDataExports.organizationId,
+        requestedBy: organizationDataExports.requestedBy,
+        attempt: organizationDataExports.attempt,
+      })
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, candidates.id))
+      .limit(1)
+      .as("queued_export_detail");
+    return await readCursorPage(
+      tx
+        .select({
+          id: candidates.id,
+          organizationId: detail.organizationId,
+          requestedBy: detail.requestedBy,
+          attempt: detail.attempt,
+          createdAt: pgTimestampCursorValue(candidates.createdAt).as(
+            "created_at_cursor",
+          ),
+        })
+        .from(candidates)
+        .innerJoinLateral(detail, sql`true`)
+        .orderBy(asc(candidates.createdAt), asc(candidates.id)),
+      { limit: pageSize, cursorForItem: (row) => row.id },
+    );
+  });
 
 const requeueQueued = async (
   { db, deps, summary, now }: StepArgs,
@@ -439,21 +474,17 @@ const requeueQueued = async (
       }),
     summary,
   );
-  // A handoff leaves its row queued (the job id makes it idempotent), so a
-  // run pages past every settled row instead of rereading the oldest page:
-  // a backlog of rows already waiting in the queue never hides later ones.
-  let cursor = initialCursor;
-  for (let page = 0; page < DATA_EXPORT_MAX_HANDOFF_PAGES; page += 1) {
-    // db-await-in-loop: keyset pages are sequential by design; each page starts after the previous page's last row
-    const queuedPage = await readQueuedPage({
-      db,
-      settled,
-      cursor,
-      pageSize: deps.handoffPageSize,
-      requester: "present",
-    });
+  // Discover one bounded window, then release the transaction before queue I/O.
+  const queuedPage = await readQueuedPage({
+    db,
+    settled,
+    cursor: initialCursor,
+    pageSize: deps.handoffPageSize * DATA_EXPORT_MAX_HANDOFF_PAGES,
+    requester: "present",
+  });
+  for (const handoffRows of chunk(queuedPage.items, deps.handoffPageSize)) {
     const handoffs = await Promise.all(
-      queuedPage.items.flatMap((row) => {
+      handoffRows.flatMap((row) => {
         const requestedBy = row.requestedBy;
         return requestedBy === null
           ? []
@@ -479,17 +510,18 @@ const requeueQueued = async (
       }
       summary.requeued += 1;
     }
-    const last = queuedPage.items.at(-1);
-    if (queuedPage.nextCursor === null || last === undefined) {
-      return null;
-    }
-    cursor = {
-      createdAt: databasePrecisionTimestamp(last.createdAt),
-      id: String(last.id),
-    };
   }
+  if (queuedPage.nextCursor === null) {
+    return null;
+  }
+  const last =
+    queuedPage.items.at(-1) ??
+    panic("Queued export continuation has no last row");
   summary.hasMore = true;
-  return cursor;
+  return {
+    createdAt: databasePrecisionTimestamp(last.createdAt),
+    id: String(last.id),
+  };
 };
 
 /**
@@ -525,6 +557,10 @@ export const createMaintainDataExportsTask =
       job.lockedBy ??
       panic("Data-export maintenance requires a scheduler lease");
     await withAggregateTransaction(db, async (tx: Transaction) => {
+      await setSharedStatementTimeout(
+        tx,
+        DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+      );
       const checkpointed = await tx
         .update(schedulerJobs)
         .set({

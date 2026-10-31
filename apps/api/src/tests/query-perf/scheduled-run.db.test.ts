@@ -83,6 +83,12 @@ test("export measurement executes every cohort once without replaying writes", a
               },
             },
           });
+          expect(
+            measured.planViolations.filter(
+              ({ kind }) =>
+                kind === "large-scan" || kind === "deadline-missing",
+            ),
+          ).toEqual([]);
           expect(await db.$count(systemAuditRuns)).toBe(1);
           const changed = await exportRows();
           const audits = await db.$count(auditLogs);

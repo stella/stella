@@ -39,7 +39,7 @@ export const READ_BUDGETS = {
     surface: "scheduled-job",
     pages: 20_000,
     reason:
-      "At most 48 queued pages of eight rows plus one sentinel (432 indexed row visits), three state probes of three rows, and at most six fenced transitions with their aggregate locks and audits. State-leading expiry, heartbeat and queue indexes bound discovery; the 20,000-page ceiling leaves more than 30 pages per discovered row for tree depth, row locks and audit writes. Quiet, transition-heavy and queued-backlog fixtures must stay within this bound at both cardinalities.",
+      "One indexed handoff window reads at most 384 rows plus a sentinel, followed by queue batches of eight outside the transaction. Three state probes read at most three rows each, and at most six fenced transitions include their aggregate locks and audits. State-leading expiry, heartbeat and queue indexes bound discovery; the unchanged 20,000-page ceiling covers tree depth, row locks and audit writes at both cardinalities.",
   },
   "scheduled.caseLaw.refreshCoverage": {
     surface: "scheduled-job",

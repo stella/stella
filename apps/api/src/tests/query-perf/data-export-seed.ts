@@ -34,6 +34,13 @@ export const seedDataExportScenario = async (
     target: schedulerJobs.id,
     set: leasedJob,
   });
+  await database.execute(sql`INSERT INTO scheduler_jobs
+    (id, task, schedule, enabled, next_run_at)
+    SELECT 'export-measurement-inert-' || i, ${job.task},
+      '{"type":"interval","everyMs":60000}'::jsonb, false, '2026-01-10T12:00:00Z'::timestamptz
+    FROM generate_series(1, ${rows}::integer) AS i
+    ON CONFLICT (id) DO NOTHING`);
+  await database.execute(sql`VACUUM (ANALYZE) scheduler_jobs`);
   await database.execute(sql`INSERT INTO "user" (id, name, email, email_verified, created_at, updated_at)
     VALUES (${USER_ID}, 'Export measurement', 'export-measurement@example.test', true, now(), now())
     ON CONFLICT (id) DO NOTHING`);
