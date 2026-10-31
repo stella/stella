@@ -3,6 +3,8 @@ import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { BILLING_STATUS, TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import {
+  TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
+  TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
   TIME_ENTRY_REPORT_QUERY_SCHEMA,
   type TimeEntryReport,
   type TimeEntryReportMetrics,
@@ -19,6 +21,20 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const MAX_REPORT_DAYS = 366;
 const MAX_REPORT_BUCKETS = 20_000;
+// Row ids are inlined as SQL literals: the grouped expression must read the
+// same in SELECT and GROUP BY, which bound parameters would not.
+const INTERNAL_ROW = sql.raw(`'${TIME_ENTRY_REPORT_INTERNAL_ROW_ID}'`);
+const NO_CLIENT_ROW = sql.raw(`'${TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID}'`);
+const BUCKETS = {
+  day: sql<string>`${timeEntries.dateWorked}::text`,
+  week: sql<string>`(${timeEntries.dateWorked} - (extract(isodow from ${timeEntries.dateWorked})::int - 1))::text`,
+  month: sql<string>`(${timeEntries.dateWorked} - (extract(day from ${timeEntries.dateWorked})::int - 1))::text`,
+};
+const memberId = sql<string>`coalesce(${timeEntries.userId}::text, 'unassigned')`;
+const matterId = sql<string>`coalesce(${timeEntries.workspaceId}::text, ${INTERNAL_ROW})`;
+// Internal work has no matter; a matter without a client is client work and
+// keeps its own row.
+const clientId = sql<string>`case when ${timeEntries.workspaceId} is null then ${INTERNAL_ROW} else coalesce(${workspaces.clientId}::text, ${NO_CLIENT_ROW}) end`;
 
 const getTimeReport = createSafeRootHandler(
   {
@@ -136,15 +152,7 @@ const getTimeReport = createSafeRootHandler(
               : null,
           };
         };
-        const buckets = {
-          day: sql<string>`${timeEntries.dateWorked}::text`,
-          week: sql<string>`(${timeEntries.dateWorked} - (extract(isodow from ${timeEntries.dateWorked})::int - 1))::text`,
-          month: sql<string>`(${timeEntries.dateWorked} - (extract(day from ${timeEntries.dateWorked})::int - 1))::text`,
-        };
-        const bucket = buckets[query.bucket];
-        const memberId = sql<string>`coalesce(${timeEntries.userId}::text, 'unassigned')`;
-        const matterId = sql<string>`coalesce(${timeEntries.workspaceId}::text, 'internal')`;
-        const clientId = sql<string>`coalesce(${workspaces.clientId}::text, 'internal')`;
+        const bucket = BUCKETS[query.bucket];
         const groups = {
           member: {
             id: memberId,
@@ -163,7 +171,7 @@ const getTimeReport = createSafeRootHandler(
           },
         };
         const group = groups[query.groupBy];
-        const readRows = async (children: boolean) =>
+        const readRows = async (children: boolean, cap: number) =>
           readBounded(
             tx
               .select({
@@ -214,12 +222,19 @@ const getTimeReport = createSafeRootHandler(
                   : group.columns),
               )
               .orderBy(bucket, children ? memberId : group.id),
-            MAX_REPORT_BUCKETS,
+            cap,
           );
-        const parents = await readRows(false);
+        const parents = await readRows(false, MAX_REPORT_BUCKETS);
+        if (parents.type === "overflow") {
+          return null;
+        }
+        // One response holds at most MAX_REPORT_BUCKETS rows: matter rows
+        // under members read only the budget the member rows leave.
         const children =
-          query.groupBy === "member" ? await readRows(true) : null;
-        if (parents.type === "overflow" || children?.type === "overflow") {
+          query.groupBy === "member"
+            ? await readRows(true, MAX_REPORT_BUCKETS - parents.rows.length)
+            : null;
+        if (children?.type === "overflow") {
           return null;
         }
         return {

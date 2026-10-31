@@ -7,6 +7,11 @@ export const TIME_ENTRY_REPORT_PERIODS = ["week", "month", "custom"] as const;
 export const TIME_ENTRY_REPORT_GROUPS = ["member", "matter", "client"] as const;
 export const TIME_ENTRY_REPORT_BUCKETS = ["day", "week", "month"] as const;
 
+/** Row id of time recorded without a matter (internal work). */
+export const TIME_ENTRY_REPORT_INTERNAL_ROW_ID = "internal";
+/** Row id of matter time whose matter has no client, on the client grouping. */
+export const TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID = "no-client";
+
 export const TIME_ENTRY_REPORT_QUERY_SCHEMA = v.object({
   from: apiDateSchema,
   to: apiDateSchema,

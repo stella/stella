@@ -1,8 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
-import type { TimeEntryReportQuery } from "@stll/api-contract/time-entry-report";
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import {
+  TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
+  TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
+  type TimeEntryReportQuery,
+} from "@stll/api-contract/time-entry-report";
 
 import { member as authMember, user as authUser } from "@/api/db/auth-schema";
 import {
@@ -13,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -389,5 +395,201 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         },
       );
     }, 120_000); // timeout: exercises grouping and billing projection against real PostgreSQL
+    test("keeps internal work apart from client matters that have no client", async () => {
+      await withGatedTestClients(
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required"),
+        async ({ openClient }) => {
+          const fixture = await seedTimeEntryReportScaling(
+            openClient({ max: 1 }).db,
+            10,
+          );
+          const clientlessMatterId = createSafeId<"workspace">();
+          try {
+            await fixture.db.insert(workspaces).values({
+              id: clientlessMatterId,
+              organizationId: fixture.organizationId,
+              clientId: null,
+              name: "Clientless report matter",
+              reference: clientlessMatterId,
+            });
+            await fixture.db.insert(workspaceMembers).values({
+              workspaceId: clientlessMatterId,
+              userId: fixture.userId,
+            });
+            const visibleMatters = [fixture.workspaceId, clientlessMatterId];
+            const reportFixture = {
+              ...fixture,
+              context: {
+                ...fixture.context,
+                getActiveWorkspaceIds: async () => visibleMatters,
+                safeDb: createMembershipSafeDb(markRlsDatabase(fixture.db), {
+                  organizationId: fixture.organizationId,
+                  userId: fixture.userId,
+                  serverValidatedWorkspaceIds: visibleMatters,
+                  featureAccessSnapshot: fixture.context.featureAccessSnapshot,
+                }),
+              },
+            };
+            await fixture.db.insert(timeEntries).values([
+              {
+                id: createSafeId<"timeEntry">(),
+                organizationId: fixture.organizationId,
+                workspaceId: clientlessMatterId,
+                userId: fixture.userId,
+                approverUserId: fixture.userId,
+                dateWorked: "2020-01-16",
+                timezoneId: "UTC",
+                durationMinutes: 40,
+                billedMinutes: 40,
+                rateAtEntry: cents(1000),
+                currency: "USD",
+                narrative: "Clientless matter work",
+                status: "submitted",
+              },
+              {
+                id: createSafeId<"timeEntry">(),
+                organizationId: fixture.organizationId,
+                workspaceId: null,
+                activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+                userId: fixture.userId,
+                dateWorked: "2020-01-17",
+                timezoneId: "UTC",
+                durationMinutes: 25,
+                billedMinutes: 0,
+                rateAtEntry: cents(0),
+                currency: UNPRICED_TIME_ENTRY_CURRENCY,
+                billable: false,
+                narrative: "Internal work",
+                status: "approved",
+              },
+            ]);
+            const byClient = await read(reportFixture, {
+              groupBy: "client",
+              bucket: "month",
+            });
+            expect(
+              byClient.rows.map(({ rowId, rowName, minutes }) => ({
+                rowId,
+                rowName,
+                minutes,
+              })),
+            ).toEqual(
+              expect.arrayContaining([
+                {
+                  rowId: fixture.clientId,
+                  rowName: "Report client",
+                  minutes: 300,
+                },
+                {
+                  rowId: TIME_ENTRY_REPORT_NO_CLIENT_ROW_ID,
+                  rowName: null,
+                  minutes: 40,
+                },
+                {
+                  rowId: TIME_ENTRY_REPORT_INTERNAL_ROW_ID,
+                  rowName: null,
+                  minutes: 25,
+                },
+              ]),
+            );
+            expect(byClient.rows).toHaveLength(3);
+            const byMatter = await read(reportFixture, {
+              groupBy: "matter",
+              bucket: "month",
+            });
+            expect(
+              byMatter.rows.map(({ rowId, minutes }) => ({ rowId, minutes })),
+            ).toEqual(
+              expect.arrayContaining([
+                { rowId: fixture.workspaceId, minutes: 300 },
+                { rowId: clientlessMatterId, minutes: 40 },
+                { rowId: TIME_ENTRY_REPORT_INTERNAL_ROW_ID, minutes: 25 },
+              ]),
+            );
+            expect(byMatter.rows).toHaveLength(3);
+          } finally {
+            await fixture.cleanup();
+          }
+        },
+      );
+    }, 120_000); // timeout: exercises client grouping against real PostgreSQL
+    test("bounds member and matter rows together by one bucket budget", async () => {
+      await withGatedTestClients(
+        process.env["DATABASE_URL"] ?? panic("DATABASE_URL required"),
+        async ({ openClient }) => {
+          const fixture = await seedTimeEntryReportScaling(
+            openClient({ max: 1 }).db,
+            10,
+          );
+          // 28 members on each of 366 days: 10,248 member rows and as many
+          // matter rows, each under the cap alone and over it together.
+          const userIds = Array.from({ length: 28 }, () =>
+            mintAuthProviderId<"user">(),
+          );
+          const year = { from: "2020-01-01", to: "2020-12-31" };
+          try {
+            await fixture.db.insert(authUser).values(
+              userIds.map((id) => ({
+                id,
+                name: `Report member ${id}`,
+                email: `${id}@example.test`,
+                emailVerified: true,
+              })),
+            );
+            await fixture.db.insert(authMember).values(
+              userIds.map((userId) => ({
+                id: mintAuthProviderIdValue(),
+                organizationId: fixture.organizationId,
+                userId,
+                role: "member",
+                createdAt: new Date("2020-01-01"),
+              })),
+            );
+            const days = Array.from({ length: 366 }, (_, index) =>
+              new Date(Date.UTC(2020, 0, 1 + index)).toISOString().slice(0, 10),
+            );
+            const entries = userIds.flatMap((userId) =>
+              days.map((dateWorked) => ({
+                id: createSafeId<"timeEntry">(),
+                organizationId: fixture.organizationId,
+                workspaceId: fixture.workspaceId,
+                userId,
+                approverUserId: fixture.userId,
+                dateWorked,
+                timezoneId: "UTC",
+                durationMinutes: 30,
+                billedMinutes: 30,
+                rateAtEntry: cents(1000),
+                currency: "USD",
+                narrative: "Year of work",
+                status: "submitted" as const,
+              })),
+            );
+            for (let start = 0; start < entries.length; start += 1000) {
+              await fixture.db
+                .insert(timeEntries)
+                .values(entries.slice(start, start + 1000));
+            }
+            const respond = async (groupBy: TimeEntryReportQuery["groupBy"]) =>
+              await report.handler(
+                createTestHandlerContext<Parameters<typeof report.handler>[0]>({
+                  ...fixture.context,
+                  route: "/v1/time-entries/report",
+                  query: { ...year, groupBy, bucket: "day" },
+                }),
+              );
+            expect(await respond("member")).toMatchObject({ code: 422 });
+            expect(
+              (await read(fixture, { ...year, groupBy: "matter" })).rows,
+            ).toHaveLength(366);
+          } finally {
+            await fixture.cleanup();
+            await fixture.db
+              .delete(authUser)
+              .where(inArray(authUser.id, userIds));
+          }
+        },
+      );
+    }, 240_000); // timeout: seeds a year of entries for many members against real PostgreSQL
   },
 );
