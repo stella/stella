@@ -96,6 +96,7 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -2119,10 +2120,14 @@ const reparseStoredRaw = async (
     return readObject;
   }
   const bytes = readObject.value;
-  // A row stored before document objects were captured, or whose document
-  // was never fetched, replays from its stored listing and detail alone.
   if (bytes === null) {
-    return metadata;
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+      status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+      detail:
+        "Stored PDF capture is required to apply the current document parser; refresh the PDF capture explicitly",
+    };
   }
   const { result } = metadata;
   const parsed = await parsePendingDocument(
