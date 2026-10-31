@@ -814,8 +814,10 @@
       "deleteRateTable": "Eliminar tabla de tarifas",
       "editRateTable": "Editar tabla de tarifas",
       "effectiveFrom": "Vigente desde",
+      "effectiveRateRequired": "No hay una tarifa vigente para este asunto, esta persona y esta fecha. Añada una tarifa o registre el tiempo como no facturable.",
       "effectiveTo": "Vigente hasta",
       "hourlyRate": "Tarifa por hora",
+      "logNonBillable": "Registrar como no facturable",
       "noRateEntries": "Aún no hay entradas de tarifa",
       "noRateFound": "Sin tarifa configurada",
       "noRateTables": "Aún no hay tablas de tarifas",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
-      "remove": "Quitar el filtro {filter}"
+      "countryMismatch": "Se han eliminado los filtros que no corresponden a {country}: {filters}.",
+      "remove": "Quitar el filtro {filter}",
+      "showInCountry": "Mostrar {filter} en {country}"
     },
     "languages": {
       "count": "{count, plural, one {# idioma} other {# idiomas}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "La vista completa aún no está disponible"
     },
     "activity": {
+      "newerVersion": "Este contenido se muestra en una versión más reciente.",
       "review": "Actualización de la revisión"
     },
     "aiPrompt": "Campo de mensaje de IA",
@@ -2357,6 +2362,7 @@
     "unknownUser": "Usuario desconocido",
     "unpin": "Desfijar",
     "unsavedChanges": "Cambios sin guardar",
+    "unsavedChangesClose": "Cambios sin guardar. Cierra de nuevo para descartarlos",
     "unsavedChangesEscape": "Cambios sin guardar. Pulsa Esc de nuevo para descartarlos",
     "unsavedLeaveConfirm": "Tienes cambios sin guardar. ¿Salir sin guardar?",
     "unverified": "Sin verificar",
@@ -2398,6 +2404,8 @@
     "returnToAgent": "Vuelve a tu agente para continuar.",
     "returnsLocally": "Volverás a {clientName} en este ordenador",
     "returnsTo": "Volverás a {clientName}",
+    "scopeAccountExportRead": "Leer tus exportaciones de datos personales",
+    "scopeAccountExportWrite": "Solicitar exportaciones de tus datos personales",
     "scopeAdminRead": "Leer el registro de auditoría de su organización",
     "scopeAdminWrite": "Gestionar los miembros y la configuración de la organización",
     "scopeBillingWrite": "Crear, editar y eliminar sus registros de tiempo",
@@ -5013,7 +5021,6 @@
       "beta": "Funciones beta",
       "betaAvt": "Verificación de documentos AVT",
       "betaAvtDescription": "Comprobar los documentos de un asunto, afirmación por afirmación, frente a los hechos de una lista",
-      "betaCaseLawDescription": "Mostrar la búsqueda y el lector de jurisprudencia pública en la barra lateral",
       "betaDescription": "Prueba funciones que aún están en desarrollo",
       "betaInbox": "Bandeja de entrada y notificaciones",
       "betaInboxDescription": "Mostrar la bandeja de entrada y la campana de notificaciones",
@@ -5049,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instálalo, o conéctalo si ya está instalado en este equipo.",
       "desktopCardMissingTitle": "stella desktop aún no está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este equipo a <bdi>{identity}</bdi> en {host}. Si el navegador lo pide, permite que abra stella desktop.",
+      "desktopCardOpeningTitle": "Abriendo stella desktop...",
       "desktopCardOutdatedDetail": "La versión {version} está vinculada a <bdi>{identity}</bdi>. Instala la última versión para que los documentos y la actividad sigan funcionando.",
       "desktopCardOutdatedTitle": "stella desktop necesita una actualización",
       "desktopClipboardDescription": "Abre, busca, organiza y reutiliza texto copiado desde cualquier aplicación.",
@@ -5068,6 +5077,7 @@
       "desktopInstallOpenStep": "Abre stella desktop una vez. El portapapeles aparece de inmediato y queda disponible en la barra de menús de macOS o en la bandeja del sistema de Windows.",
       "desktopInstallTitle": "Instalar y abrir",
       "desktopInstallWindowsStep": "Ejecuta el instalador y sigue las instrucciones.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "El historial del portapapeles se cifra y se guarda en este dispositivo.",
       "desktopPrivacyTitle": "Privado de forma predeterminada",
       "desktopSelfHostDescription": "Confía en esta URL de stella en la app de escritorio firmada para abrir localmente los documentos de esta instalación.",
@@ -5077,6 +5087,15 @@
       "displayNameSaved": "Nombre visible actualizado",
       "enterOtp": "Código de verificación",
       "otpSentSuccess": "Código de verificación enviado a su correo electrónico.",
+      "personalDataExportDescription": "Solicita una copia descargable de los datos personales de tu cuenta. La descarga estará disponible durante una hora.",
+      "personalDataExportExpired": "Esta exportación ha caducado.",
+      "personalDataExportExpiresAt": "Disponible hasta {expiresAt}.",
+      "personalDataExportFailed": "No se pudo preparar la exportación.",
+      "personalDataExportReady": "Tu exportación está lista.",
+      "personalDataExportRequest": "Solicitar exportación",
+      "personalDataExportRequestNew": "Solicitar una nueva exportación",
+      "personalDataExportTitle": "Exportar mis datos",
+      "personalDataExportWorking": "Preparando la exportación…",
       "preferredName": "Nombre preferido",
       "preferredNameDescription": "Se usa como autor en los cambios registrados y comentarios de DOCX.",
       "preferredNamePlaceholder": "Tu nombre",
@@ -5414,6 +5433,7 @@
     "showCitedPartOnly": "Mostrar solo la parte citada",
     "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
+    "sortNeedsYear": "Elija un año en los filtros para ordenar por esta columna.",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
       "current": "En vigor",
@@ -6511,6 +6531,14 @@
           "started": "Inició una revisión de"
         },
         "empty": "Aún no hay actividad en este asunto.",
+        "fields": {
+          "dueDate": "fecha de vencimiento",
+          "parentFolder": "carpeta superior",
+          "priority": "prioridad",
+          "property": "propiedad",
+          "schedule": "programación",
+          "sortOrder": "orden"
+        },
         "filterLabel": "Filtrar actividad",
         "filters": {
           "all": "Toda la actividad",
@@ -6560,6 +6588,7 @@
           "translation": "traducción"
         },
         "title": "Actividad",
+        "updatedFields": "Se actualizó: {fields}",
         "views": {
           "list": "Vista de lista",
           "timeline": "Vista cronológica"

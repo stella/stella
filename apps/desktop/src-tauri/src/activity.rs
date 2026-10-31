@@ -35,7 +35,7 @@ use crate::{
   logging::with_cause_logged,
 };
 
-pub const CHANGED_EVENT: &str = "activity-timeline-changed";
+const CHANGED_EVENT: &str = "activity-timeline-changed";
 const SAMPLE_INTERVAL: Duration = Duration::from_secs(5);
 /// A sample later than this after the previous one means the machine slept
 /// or the sampler stalled; the open segment ends at the last sample.
@@ -94,13 +94,16 @@ pub enum ActivityRecordingStatus {
   Paused,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActivitySettings {
   pub recording_status: ActivityRecordingStatus,
   pub retention: ActivityRetention,
   #[serde(default)]
   pub excluded_apps: Vec<AppExclusion>,
+  /// A new timeline records window titles and documents until the user turns
+  /// them off. Settings saved before details existed carry no consent, so a
+  /// missing field reads as off.
   #[serde(default)]
   pub capture_details: bool,
   #[serde(default)]
@@ -112,6 +115,21 @@ pub struct ActivitySettings {
   pub ignore_calls: bool,
   #[serde(flatten)]
   pub extra: BTreeMap<String, serde_json::Value>,
+}
+
+impl Default for ActivitySettings {
+  fn default() -> Self {
+    Self {
+      recording_status: ActivityRecordingStatus::default(),
+      retention: ActivityRetention::default(),
+      excluded_apps: Vec::new(),
+      capture_details: true,
+      app_name_only_apps: Vec::new(),
+      browser_title_apps: Vec::new(),
+      ignore_calls: false,
+      extra: BTreeMap::new(),
+    }
+  }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -422,7 +440,6 @@ pub struct ActivityDaySnapshot {
   drafted_entries: Vec<ActivityDraftedEntry>,
   manual_assignments: Vec<ActivityManualAssignment>,
   pending_batch: Option<ActivityPendingBatch>,
-  pub(crate) time_billing_enabled: bool,
 }
 
 #[derive(Deserialize)]
@@ -894,6 +911,10 @@ impl ActivityManager {
 
   pub fn capture_details(&self) -> bool {
     self.settings.capture_details
+  }
+
+  pub fn recording_status(&self) -> ActivityRecordingStatus {
+    self.settings.recording_status
   }
 
   pub fn set_detect_calls(
@@ -2114,6 +2135,9 @@ impl ActivityManager {
         .document
         .as_deref()
         .and_then(|path| path.rsplit(['/', '\\']).next())
+        // Terminals report their working directory as the document; a
+        // folder name says less than the app.
+        .filter(|name| std::path::Path::new(name).extension().is_some())
         .and_then(|name| foreground_app::bounded_metadata(name, MAX_DETAIL_BYTES))
         .unwrap_or_else(|| open.segment.app_name.clone())
     });
@@ -2288,7 +2312,6 @@ impl ActivityManager {
       manual_assignments,
       pending_batch,
       drafted_entries,
-      time_billing_enabled: false,
     }
   }
 }
@@ -2392,7 +2415,7 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
   }
 }
 
-fn emit_changed(app: &AppHandle) {
+pub(crate) fn emit_changed(app: &AppHandle) {
   let _ = app.emit(CHANGED_EVENT, ());
   refresh_tray(app);
 }
@@ -3565,7 +3588,7 @@ mod tests {
   fn detail_preferences_close_segments_invalidate_pending_captures_and_keep_past_details()
    {
     let mut manager = recording_manager();
-    assert!(manager.set_capture_details(true, at(0)).unwrap());
+    assert!(manager.capture_details());
     assert!(!manager.set_capture_details(true, at(0)).unwrap());
     manager.observe(at(0), active_details("word"));
     manager.observe(at(5), active_details("word"));
@@ -3765,9 +3788,10 @@ mod tests {
     assert_eq!(tray.now.as_deref(), Some("WORD"));
     assert_eq!(tray.total_ms, 5000);
     manager.set_capture_details(true, at(5)).unwrap();
-    for path in [
-      "/private/folder/draft.docx",
-      "C:\\private\\folder\\draft.docx",
+    for (path, now) in [
+      ("/private/folder/draft.docx", "draft.docx"),
+      ("C:\\private\\folder\\draft.docx", "draft.docx"),
+      ("/Users/someone", "Word"),
     ] {
       let mut path_manager = recording_manager();
       path_manager.set_capture_details(true, at(0)).unwrap();
@@ -3784,7 +3808,7 @@ mod tests {
         );
       }
       let tray = path_manager.tray_snapshot(at(5)).unwrap();
-      assert_eq!(tray.now.as_deref(), Some("draft.docx"));
+      assert_eq!(tray.now.as_deref(), Some(now));
     }
     manager
       .set_app_detail_capture(

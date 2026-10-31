@@ -57,10 +57,16 @@ const parsePublicationTime = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-// Shared by the offline release resolver and the live registry journey.
-export const selectPromotedRelease = (
-  manifest: unknown,
-): PromotionSelection => {
+type ParsedPromotions =
+  | {
+      status: "parsed";
+      promoted: { ref: string; publishedAt: string; publishedAtMs: number }[];
+    }
+  | { status: "invalid"; message: string };
+
+// One reader of the manifest: null is a known unpromoted release, an absent
+// ref was never promoted, and any malformed entry invalidates the whole file.
+const parsePromotions = (manifest: unknown): ParsedPromotions => {
   if (!isRecord(manifest)) {
     return {
       status: "invalid",
@@ -101,6 +107,50 @@ export const selectPromotedRelease = (
     }
     promoted.push({ ref, publishedAt, publishedAtMs });
   }
+  return { status: "parsed", promoted };
+};
+
+type PromotedBelowSelection =
+  | { status: "resolved"; ref: string }
+  | { status: "invalid"; message: string }
+  | { status: "missing"; message: string };
+
+/**
+ * The newest promoted final release (highest version) strictly below a
+ * version. The reference release for checks that a release's artifacts
+ * reached their registries: an unpromoted tag can never be that reference.
+ */
+export const selectPromotedReleaseBelow = (
+  manifest: unknown,
+  upperBoundVersion: string,
+): PromotedBelowSelection => {
+  const parsed = parsePromotions(manifest);
+  if (parsed.status === "invalid") {
+    return parsed;
+  }
+  const newest = parsed.promoted
+    .filter(({ ref }) => Bun.semver.order(ref.slice(1), upperBoundVersion) < 0)
+    .toSorted((left, right) =>
+      Bun.semver.order(right.ref.slice(1), left.ref.slice(1)),
+    )
+    .at(0);
+  return newest === undefined
+    ? {
+        status: "missing",
+        message: `The release publication manifest records no promoted release below ${upperBoundVersion}.`,
+      }
+    : { status: "resolved", ref: newest.ref };
+};
+
+// Shared by the offline release resolver and the live registry journey.
+export const selectPromotedRelease = (
+  manifest: unknown,
+): PromotionSelection => {
+  const parsed = parsePromotions(manifest);
+  if (parsed.status === "invalid") {
+    return parsed;
+  }
+  const { promoted } = parsed;
 
   if (promoted.length === 0) {
     return {

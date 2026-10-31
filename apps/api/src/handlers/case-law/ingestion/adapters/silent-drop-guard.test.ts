@@ -3,13 +3,13 @@ import { afterEach, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import { isTag } from "domhandler";
 
+import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
   type StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { listAdapters } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
-import baseline from "@/api/handlers/case-law/ingestion/adapters/silent-drop-guard-baseline.json";
+} from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   czNsFixture,
@@ -152,6 +152,11 @@ rozhodnutí a dospěl k závěru, že řízení bylo vedeno v souladu se zákone
     fixture: plUokikFixture,
     part: "detail",
     file: "pl-uokik-detail-2520d55b0f17a317c1257ec6007b9773.html",
+  },
+  "cz-uohs": {
+    driver: "unsupported",
+    reason:
+      "Decision text is read from stored PDF and office document objects, which require an object-level driver.",
   },
 } as const satisfies Record<string, Driver>;
 const drivers = new Map<string, Driver>(Object.entries(DRIVERS));

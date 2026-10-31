@@ -18,16 +18,10 @@
  * an `afterEach`.
  */
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
@@ -138,7 +132,13 @@ import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/par
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
@@ -1318,6 +1318,7 @@ const EU_ECJ_BINDING = {
     type: "uri",
     value: `${CELLAR_RESOURCE}${EU_ECJ_EXPRESSION}.05`,
   },
+  manifestationType: { type: "literal", value: "xhtml" },
 } as const satisfies EcjSparqlBinding;
 
 const EU_ECJ_ADAPTER_FIXTURES = new URL(
@@ -1667,13 +1668,26 @@ export const skUsFixture = (
       if (reparse === undefined) {
         return panic("the sk-us parity capture requires stored-raw replay");
       }
+      const ref = sourceBinaryRef({
+        family: RAW_SOURCE_FAMILY.CASE_LAW,
+        sourceId: SK_US_SOURCE_ID,
+        documentId: SK_US_DECISION_ID,
+        bytes: SK_US_DOCUMENT_FILE,
+        contentType: "application/pdf",
+      });
+      const objects = { "document-file": ref };
       const result = await reparse({
         raw: new TextEncoder().encode(
-          encodeSourceRawEnvelope({
-            listing: JSON.stringify(listing),
-            document: Buffer.from(content, "base64").toString("utf-8"),
-          }),
+          encodeSourceRawEnvelope(
+            {
+              listing: JSON.stringify(listing),
+              document: Buffer.from(content, "base64").toString("utf-8"),
+            },
+            objects,
+          ),
         ),
+        readObject: async (key) =>
+          Result.ok(key === ref.location ? SK_US_DOCUMENT_FILE : null),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: listing.mkRSAPNumberOfFile,
         sourceDocumentId: listing.documentId,
@@ -1687,7 +1701,13 @@ export const skUsFixture = (
         metadata: {},
       });
       return result.type === "parsed"
-        ? result.result
+        ? {
+            ...result.result,
+            sourceRaw: withSourceRawObjects(
+              result.result.sourceRaw ?? "",
+              objects,
+            ),
+          }
         : panic(`the sk-us capture did not parse: ${result.type}`);
     }
     const documentContent = JSON.stringify({
