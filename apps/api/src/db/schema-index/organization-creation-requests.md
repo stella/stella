@@ -13,7 +13,7 @@ organization_creation_requests.user_id          text         fk,not null       o
 organization_creation_requests.key              text         not null          organization-creation-requests.ts:17
 organization_creation_requests.fingerprint      text         not null          organization-creation-requests.ts:18
 organization_creation_requests.organization_id  text         fk,null           organization-creation-requests.ts:19
-organization_creation_requests.name             text         null              organization-creation-requests.ts:22
-organization_creation_requests.slug             text         null              organization-creation-requests.ts:23
-organization_creation_requests.created_at       timestamptz  default,not null  organization-creation-requests.ts:24
+organization_creation_requests.name             text         null              organization-creation-requests.ts:20
+organization_creation_requests.slug             text         null              organization-creation-requests.ts:21
+organization_creation_requests.created_at       timestamptz  default,not null  organization-creation-requests.ts:22
 ```

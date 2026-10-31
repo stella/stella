@@ -11,11 +11,12 @@ CREATE TABLE "organization_creation_requests" (
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,
   "key" text NOT NULL,
   "fingerprint" text NOT NULL,
-  "organization_id" text REFERENCES "organization"("id") ON DELETE cascade,
+  "organization_id" text,
   "name" text,
   "slug" text,
   "created_at" timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY ("user_id", "key"),
+  CONSTRAINT "organization_creation_requests_org_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE cascade,
   CONSTRAINT "organization_creation_requests_result_check" CHECK (("organization_id" IS NULL AND "name" IS NULL AND "slug" IS NULL) OR ("organization_id" IS NOT NULL AND "name" IS NOT NULL AND "slug" IS NOT NULL))
 );--> statement-breakpoint
 ALTER TABLE "organization_creation_requests" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

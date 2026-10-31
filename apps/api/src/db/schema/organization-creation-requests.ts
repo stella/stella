@@ -16,15 +16,20 @@ export const organizationCreationRequests = p.pgTable.withRLS(
       .references(() => user.id, { onDelete: "cascade" }),
     key: p.text("key").notNull(),
     fingerprint: p.text("fingerprint").notNull(),
-    organizationId: p
-      .text("organization_id")
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: p.text("organization_id"),
     name: p.text("name"),
     slug: p.text("slug"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.primaryKey({ columns: [table.userId, table.key] }),
+    p
+      .foreignKey({
+        name: "organization_creation_requests_org_fk",
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+      })
+      .onDelete("cascade"),
     p.index("organization_creation_requests_org_idx").on(table.organizationId),
     p.check(
       "organization_creation_requests_result_check",
