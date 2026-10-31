@@ -34,6 +34,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
+  outboundActions,
   pdfSigningSessions,
   requestIdempotencyReceipts,
   searchHistoryEntries,
@@ -1499,6 +1500,74 @@ const clearMemberPresence = async ({
   });
 };
 
+type ClearMemberConnectorAuthorizationOptions = Pick<
+  RemoveOrganizationMemberOptions,
+  "tx" | "organizationId" | "userId"
+> & { recordAuditEvent: AuditRecorder };
+
+const clearMemberConnectorAuthorization = async ({
+  tx,
+  organizationId,
+  userId,
+  recordAuditEvent,
+}: ClearMemberConnectorAuthorizationOptions) => {
+  await tx
+    .delete(mcpUserConnections)
+    .where(
+      and(
+        eq(mcpUserConnections.organizationId, organizationId),
+        eq(mcpUserConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointConnections)
+    .where(
+      and(
+        eq(sharepointConnections.organizationId, organizationId),
+        eq(sharepointConnections.userId, userId),
+      ),
+    );
+  await tx
+    .delete(outboundActions)
+    .where(
+      and(
+        eq(outboundActions.organizationId, organizationId),
+        eq(outboundActions.userId, userId),
+        eq(outboundActions.status, "pending"),
+      ),
+    );
+  await tx
+    .delete(chatToolGrants)
+    .where(
+      and(
+        eq(chatToolGrants.organizationId, organizationId),
+        eq(chatToolGrants.userId, userId),
+      ),
+    );
+  await tx
+    .delete(mcpOAuthState)
+    .where(
+      and(
+        eq(mcpOAuthState.organizationId, organizationId),
+        eq(mcpOAuthState.userId, userId),
+      ),
+    );
+  await tx
+    .delete(sharepointOAuthState)
+    .where(
+      and(
+        eq(sharepointOAuthState.organizationId, organizationId),
+        eq(sharepointOAuthState.userId, userId),
+      ),
+    );
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: organizationId,
+    metadata: { change: "member-connector-authorization-cleared", userId },
+  });
+};
+
 /**
  * Better Auth's permission/owner checks precede this transactional operation.
  * The membership row, its credentials and every assignment leave in the
@@ -1623,46 +1692,12 @@ export const removeOrganizationMemberInTransaction = async (
         eq(searchHistoryEntries.userId, userId),
       ),
     );
-  await tx
-    .delete(mcpUserConnections)
-    .where(
-      and(
-        eq(mcpUserConnections.organizationId, organizationId),
-        eq(mcpUserConnections.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointConnections)
-    .where(
-      and(
-        eq(sharepointConnections.organizationId, organizationId),
-        eq(sharepointConnections.userId, userId),
-      ),
-    );
-  await tx
-    .delete(chatToolGrants)
-    .where(
-      and(
-        eq(chatToolGrants.organizationId, organizationId),
-        eq(chatToolGrants.userId, userId),
-      ),
-    );
-  await tx
-    .delete(mcpOAuthState)
-    .where(
-      and(
-        eq(mcpOAuthState.organizationId, organizationId),
-        eq(mcpOAuthState.userId, userId),
-      ),
-    );
-  await tx
-    .delete(sharepointOAuthState)
-    .where(
-      and(
-        eq(sharepointOAuthState.organizationId, organizationId),
-        eq(sharepointOAuthState.userId, userId),
-      ),
-    );
+  await clearMemberConnectorAuthorization({
+    tx,
+    organizationId,
+    userId,
+    recordAuditEvent,
+  });
   await tx
     .delete(invitation)
     .where(

@@ -215,6 +215,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "outbound_actions.user_id":
+    "Pending actions are removed; claimed and terminal delivery history remains attributable, with current membership and thread access gating reads.",
   "desktop_time_entry_batches.user_id":
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":

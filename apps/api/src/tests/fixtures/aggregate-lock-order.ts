@@ -260,6 +260,11 @@ export const aggregateFences = () => {
       aggregate: "chatToolGrants",
       id: { organizationId, userId },
     },
+    outboundAction: {
+      aggregate: "outboundAction",
+      id: { id: createSafeId<"outboundAction">(), organizationId, userId },
+      mode: "update",
+    },
     personalCatalog: {
       aggregate: "personalCatalog",
       id: { organizationId, userId: mintAuthProviderId<"user">() },

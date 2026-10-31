@@ -16,6 +16,7 @@ import {
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
+  outboundActions,
   pdfSigningSessions,
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
@@ -134,6 +135,22 @@ const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
   },
   { terminal: ["failed", "expired"] },
 );
+
+const OUTBOUND_ACTION_TRANSITIONS = defineScopedTransitions({
+  table: outboundActions,
+  key: "id",
+  scope: [],
+  stateColumn: "status",
+  edges: {
+    pending: ["sending", "discarded"],
+    sending: ["sending", "sent", "failed"],
+    sent: [],
+    failed: [],
+    discarded: [],
+    expired: [],
+  },
+  initial: ["pending"],
+});
 
 export const FOLIO_COLLAB_SEED_TRANSITIONS = defineScopedTransitions({
   ...FOLIO_COLLAB_TRANSITION_IDENTITIES.FOLIO_COLLAB_SEED_TRANSITIONS,
@@ -407,6 +424,7 @@ type TransitionDecision<TTable extends StatusTable> =
 
 /** Existing domain owners remain explicit until their writers migrate. */
 export const TRANSITIONS = {
+  outboundActions: OUTBOUND_ACTION_TRANSITIONS,
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
   accountDeletionEffectChunks: { unmanaged: UNMANAGED_REASONS.cleanup },
   accountDeletionRequests: { unmanaged: UNMANAGED_REASONS.cleanup },

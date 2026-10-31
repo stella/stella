@@ -53,6 +53,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   mcpWebHandoff,
+  outboundActions,
   pdfSigningSessions,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
@@ -1264,6 +1265,7 @@ export const deleteUserFiles = async ({
 
 export const DELETE_CHAT_THREADS_TABLES = [
   fileChatThreads,
+  outboundActions,
   chatThreads,
 ] as const satisfies readonly PgTable[];
 
@@ -1278,6 +1280,48 @@ export const deleteChatThreadsAndFileLinks = async (
   await tx
     .delete(fileChatThreads)
     .where(eq(fileChatThreads.userId, currentUserId));
+  const deletedActions = tx
+    .$with("deleted_account_outbound_actions")
+    .as(
+      tx
+        .delete(outboundActions)
+        .where(eq(outboundActions.userId, currentUserId))
+        .returning({ organizationId: outboundActions.organizationId }),
+    );
+  const groups = await tx
+    .with(deletedActions)
+    .select({
+      organizationId: deletedActions.organizationId,
+      actionCount: count(),
+    })
+    .from(deletedActions)
+    .groupBy(deletedActions.organizationId);
+  const userId = brandPersistedUserId(currentUserId);
+  await recordAuditGroups({
+    tx,
+    groups: groups.map((group) => ({
+      bindings: {
+        organizationId: group.organizationId,
+        workspaceId: null,
+        userId,
+        execution: {
+          performer: { type: "user" as const, id: userId },
+          trigger: { type: "system" as const, source: "account_deletion" },
+        },
+      },
+      events: [
+        {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: group.organizationId,
+          metadata: {
+            change: "account-outbound-actions-deleted",
+            actionCount: group.actionCount,
+          },
+        },
+      ],
+    })),
+  });
   await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
 };
 

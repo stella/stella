@@ -41,6 +41,7 @@
     "./chat-connector": "./src/chat-connector.ts",
     "./internal-ui-transport": "./src/internal-ui-transport.ts",
     "./chat-secret": "./src/chat-secret.ts",
+    "./outbound-action": "./src/outbound-action.ts",
     "./chat-tool-grants": "./src/chat-tool-grants.ts",
     "./visual-theme": "./src/visual-theme.ts",
     "./visual-sandbox": "./src/visual-sandbox.ts",

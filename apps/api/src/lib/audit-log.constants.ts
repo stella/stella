@@ -74,6 +74,7 @@ export const AUDIT_RESOURCE_TYPE = {
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_ACCESS_STATE: "organization_access_state",
   ORGANIZATION_SETTINGS: "organization_settings",
+  OUTBOUND_ACTION: "outbound_action",
   PDF_SIGNING_SESSION: "pdf_signing_session",
   PLAYBOOK: "playbook",
   PROPERTY: "property",

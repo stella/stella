@@ -352,6 +352,7 @@ const AUDIT_ACTIVITY_CATEGORY_BY_RESOURCE_TYPE = {
   mcp_web_handoff: "other",
   organization_access_state: "other",
   organization_settings: "other",
+  outbound_action: "other",
   property: "other",
   rate_entry: "other",
   report_export: "other",

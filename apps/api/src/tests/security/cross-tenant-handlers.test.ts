@@ -13,6 +13,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
+import type { OutboundActionPreview } from "@stll/api-contract/outbound-action";
 import {
   SIGNAL_KIND,
   SIGNAL_KIND_ORIGIN,
@@ -23,6 +24,7 @@ import { sha256Hex } from "@stll/sha256/bun";
 import { createTestState } from "@stll/test-state";
 
 import { member, user as authUser } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   billingArrangements,
@@ -151,6 +153,11 @@ import listNotifications from "@/api/handlers/notifications/list";
 import markNotificationRead from "@/api/handlers/notifications/read-state/update";
 import getNumberSeries from "@/api/handlers/number-series/get";
 import listNumberSeries from "@/api/handlers/number-series/list";
+import { createConfirmOutboundActionHandler } from "@/api/handlers/outbound-actions/confirm";
+import discardOutboundAction from "@/api/handlers/outbound-actions/discard";
+import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
+import readOutboundAction from "@/api/handlers/outbound-actions/read";
+import { prepareOutboundAction } from "@/api/handlers/outbound-actions/store";
 import getBillingArrangement from "@/api/handlers/rates/arrangement/get";
 import readRateEntries from "@/api/handlers/rates/entries/list";
 import listSavedSearches from "@/api/handlers/saved-searches/list";
@@ -744,6 +751,30 @@ const savedSearchCriteria = (
   sort: "relevance",
 });
 
+const outboundPreview = {
+  kind: "email.send",
+  from: { address: "sender@example.test" },
+  to: [{ address: "recipient@example.test" }],
+  cc: [],
+  bcc: [],
+  subject: "Agreement",
+  bodyText: "Please review the agreement.",
+  attachments: [],
+  inReplyTo: null,
+} satisfies OutboundActionPreview;
+const outboundHash = outboundPreviewHash(outboundPreview);
+let outboundReadB: SafeId<"outboundAction">;
+let outboundConfirmB: SafeId<"outboundAction">;
+let outboundDiscardB: SafeId<"outboundAction">;
+// A second member of organization B targets these; each positive case then
+// proves the denied attempt left the owner's action pending.
+let outboundPeerReadB: SafeId<"outboundAction">;
+let outboundPeerConfirmB: SafeId<"outboundAction">;
+let outboundPeerDiscardB: SafeId<"outboundAction">;
+const confirmOutboundAction = createConfirmOutboundActionHandler({
+  "email.send": async () => Result.ok({ providerMessageId: "message-1" }),
+});
+
 // Desktop credential B is user A1 bound to organization B: a successful
 // write lands in matter B1 under organization B and that user, nowhere else.
 const expectDesktopEntryOwnedByB = async (entryId: string) => {
@@ -921,6 +952,99 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
 ];
 
 const isolationCases: IsolationCase[] = [
+  {
+    name: "outbound action read",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readOutboundAction, workspaceA, {
+        params: { actionId: outboundReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) => {
+      expectRecordFieldEquals(result, "id", outboundReadB);
+      expect(recordField(result, "preview")).toEqual(outboundPreview);
+      expectRecordFieldEquals(result, "previewHash", outboundHash);
+    },
+  },
+  {
+    name: "outbound action confirm",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(confirmOutboundAction, workspaceA, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(discardOutboundAction, workspaceA, {
+        params: { actionId: outboundDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
+  {
+    name: "outbound action read by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(readOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(readOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerReadB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", outboundPeerReadB),
+  },
+  {
+    name: "outbound action confirm by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(confirmOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(confirmOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerConfirmB },
+        body: { previewHash: outboundHash },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "status", "sent"),
+  },
+  {
+    name: "outbound action discard by another member of the same organization",
+    runAAgainstB: async ({ workspaceB }) =>
+      await runHandler(discardOutboundAction, workspaceB, {
+        params: { actionId: outboundPeerDiscardB },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(discardOutboundAction, sameUserWorkspaceB, {
+        params: { actionId: outboundPeerDiscardB },
+      }),
+    expectDenied: (result) =>
+      expect(recordField(result, "discarded")).toBe(false),
+    expectPositive: (result) =>
+      expect(recordField(result, "discarded")).toBe(true),
+  },
   ...desktopPresenceIsolationCases(),
   ...desktopCredentialIsolationCases(),
   ...readerAnswerIsolationCases(),
@@ -3261,6 +3385,30 @@ testState.beforeAll(async () => {
     chatThreadOfB(chatSendThreadB),
     { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
+  const prepareAction = async () => {
+    const prepared = await testDb.transaction(
+      async (tx) =>
+        await prepareOutboundAction({
+          tx: asTestRaw<Transaction>(tx),
+          organizationId: ids.orgB,
+          userId: ids.userA1,
+          chatThreadId: chatThreadB,
+          preview: outboundPreview,
+          now: new Date(),
+          recordAuditEvent: noopAuditRecorder,
+        }),
+    );
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+    return prepared.value.id;
+  };
+  outboundReadB = await prepareAction();
+  outboundConfirmB = await prepareAction();
+  outboundDiscardB = await prepareAction();
+  outboundPeerReadB = await prepareAction();
+  outboundPeerConfirmB = await prepareAction();
+  outboundPeerDiscardB = await prepareAction();
   const chatText = (text: string) =>
     toPersistedChatMessageContentV3({
       data: [{ type: "text" as const, content: text }],

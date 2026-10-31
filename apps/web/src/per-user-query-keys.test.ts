@@ -127,6 +127,7 @@ const READ_FRESH = "read fresh at each use, never cached";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "outbound-actions/read.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/download.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "account-exports/download/get.ts": { kind: "no-web-caller", calls: [] },
   "account-exports/get.ts": {

@@ -123,6 +123,9 @@ export const FAILURE_REASON_GRADE = {
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  // parser-output-unchanged: new outbound-action failure codes that no parser emits
+  outbound_action_storage_failed: "defect",
+  outbound_action_preview_unreadable: "defect",
   // parser-output-unchanged: invoice renderer failures grade telemetry only.
   invoice_renderer_failed: "defect",
   visual_preview_unavailable: "defect",

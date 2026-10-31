@@ -746,6 +746,7 @@ mechanics, and similar), not gaps in coverage.
 | document_processing | 26 |
 | health_infra | 2 |
 | hosted_billing | 7 |
+| human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |

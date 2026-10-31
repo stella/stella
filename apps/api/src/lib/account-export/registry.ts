@@ -300,6 +300,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  // Confirmation envelopes bind encrypted previews to an actor and approval hash.
+  outbound_actions: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   pdf_signing_sessions: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,

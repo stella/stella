@@ -659,6 +659,41 @@ const byIdWithin = (
   scopeColumns: [scopeColumn],
   scopeValues: [scopeValue],
 });
+type ByIdWithinPrincipalOptions = {
+  table: string;
+  id: string;
+  organizationId: string;
+  userId: string;
+};
+const byIdWithinPrincipal = ({
+  table,
+  id,
+  organizationId,
+  userId,
+}: ByIdWithinPrincipalOptions): RowResource => ({
+  table,
+  columns: ["id"],
+  values: [id],
+  scopeColumns: ["organization_id", "user_id"],
+  scopeValues: [organizationId, userId],
+});
+type PrincipalRowOptions = Extract<
+  RowIdentityOptions,
+  { aggregate: "chatThread" | "readerAnswer" | "outboundAction" }
+>;
+const principalRowResource = (options: PrincipalRowOptions): RowResource => {
+  const tables = {
+    chatThread: "chat_threads",
+    readerAnswer: "legal_reader_answers",
+    outboundAction: "outbound_actions",
+  } as const;
+  return byIdWithinPrincipal({
+    table: tables[options.aggregate],
+    id: options.id.id,
+    organizationId: options.id.organizationId,
+    userId: options.id.userId,
+  });
+};
 // A root row found by its own key, with no owning scope to check.
 const byUnscopedKey = (
   table: string,
@@ -882,21 +917,9 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.organizationId,
       );
     case "chatThread":
-      return {
-        table: "chat_threads",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
     case "readerAnswer":
-      return {
-        table: "legal_reader_answers",
-        columns: ["id"],
-        values: [options.id.id],
-        scopeColumns: ["organization_id", "user_id"],
-        scopeValues: [options.id.organizationId, options.id.userId],
-      };
+    case "outboundAction":
+      return principalRowResource(options);
     case "readerAnswerMessage":
       return byIdWithin(
         "legal_reader_answer_messages",
