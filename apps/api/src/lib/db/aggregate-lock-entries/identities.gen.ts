@@ -32,6 +32,7 @@ import type { Identity as MemoryIdentity } from "./memory";
 import type { Identity as ObligationIdentity } from "./obligation";
 import type { Identity as OrgFeatureAdmissionIdentity } from "./orgFeatureAdmission";
 import type { Identity as OrganizationIdentity } from "./organization";
+import type { Identity as OrganizationDataBoxesIdentity } from "./organizationDataBoxes";
 import type { Identity as OrganizationObjectIntentIdentity } from "./organizationObjectIntent";
 import type { Identity as PersonalCatalogIdentity } from "./personalCatalog";
 import type { Identity as ProcessingClaimIdentity } from "./processingClaim";
@@ -86,6 +87,7 @@ export type AggregateIdentities = {
   "obligation": ObligationIdentity;
   "orgFeatureAdmission": OrgFeatureAdmissionIdentity;
   "organization": OrganizationIdentity;
+  "organizationDataBoxes": OrganizationDataBoxesIdentity;
   "organizationObjectIntent": OrganizationObjectIntentIdentity;
   "personalCatalog": PersonalCatalogIdentity;
   "processingClaim": ProcessingClaimIdentity;
