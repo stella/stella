@@ -44,6 +44,7 @@
       "Select affected Postgres test files",
       "Select changed PR e2e shards",
       "Select root check inputs",
+      "Select schema import changes",
       "Setup Bun for dependency scope",
       "Setup Bun for planning",
       "Summarize Postgres test selection",
