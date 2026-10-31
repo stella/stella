@@ -21,7 +21,8 @@ import path from "node:path";
 import { sha256Hex } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
-import { createSqlClient } from "../../../apps/api/src/db/sql-client";
+import { createSqlClient } from "@/api/db/sql-client";
+
 import {
   resolveDockerTarget,
   resolveInstalledDevDockerKeeper,
