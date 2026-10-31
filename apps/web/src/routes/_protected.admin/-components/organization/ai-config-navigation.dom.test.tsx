@@ -519,7 +519,7 @@ test("organization instruction edits block navigation before the editor debounce
   expect(writes()).toEqual([]);
 });
 
-test("clearing organization instructions declares its capability and submit identity", async () => {
+test("clearing organization instructions declares its settings capability", async () => {
   organizationSettings = {
     ...organizationSettings,
     aiInstructions: "Řiďte se českým právem.",
@@ -539,7 +539,6 @@ test("clearing organization instructions declares its capability and submit iden
   expect(write.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
     "organization-settings.update",
   );
-  expect(write.headers.get("Idempotency-Key")).toBeTruthy();
   await waitFor(() => expect(hasUnsavedWork()).toBe(false));
 });
 

@@ -88,16 +88,10 @@ const OrganizationInstructionsEditor = ({
       type: "handler",
       handlerId: "OrganizationInstructionsEditor.save",
     },
-    mutationFn: async (aiInstructions: string, intentRequest) =>
+    mutationFn: async (aiInstructions: string) =>
       await invokeCapability("organization-settings.update", async (request) =>
         unwrapApiResponse(
-          await api["organization-settings"].post(
-            { aiInstructions },
-            {
-              ...request,
-              fetch: { headers: intentRequest.headers },
-            },
-          ),
+          await api["organization-settings"].post({ aiInstructions }, request),
         ),
       ),
     invalidate: organizationSettingsKeys.all,
