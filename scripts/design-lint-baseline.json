@@ -691,7 +691,6 @@
     "scripts/migration-catalog.ts": 2,
     "scripts/network-baseline-scope.ts": 1,
     "scripts/oxlint-rule-ids.ts": 1,
-    "scripts/prepare-maintenance-release.ts": 1,
     "scripts/publish-manifest.ts": 4,
     "scripts/ratchet.ts": 11,
     "scripts/rc-bailouts.ts": 1,
@@ -878,7 +877,7 @@
     "scripts/tanstack-drift.ts": 3
   },
   "no-native-ui/no-native-accordion": {
-    "apps/desktop/src/activity/ActivityApp.tsx": 4,
+    "apps/desktop/src/activity/ActivityApp.tsx": 2,
     "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
     "apps/web/src/components/chat/tool-approval-card.tsx": 2,
     "apps/web/src/components/chat/tool-call-card.tsx": 2,
@@ -1426,7 +1425,6 @@
     "apps/api/src/handlers/clauses/update.ts": 1,
     "apps/api/src/handlers/contacts/contact-import-file.ts": 1,
     "apps/api/src/handlers/contacts/extract-procuracao.ts": 1,
-    "apps/api/src/handlers/contacts/import.ts": 2,
     "apps/api/src/handlers/document-reviews/create-run.ts": 1,
     "apps/api/src/handlers/documents/compare.ts": 2,
     "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts": 1,
