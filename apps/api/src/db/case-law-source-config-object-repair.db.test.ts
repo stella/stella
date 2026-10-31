@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { createSafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -74,6 +76,60 @@ test("repairs legacy string configs, validates the constraint, and converges", a
     // xmin also detects an unnecessary rewrite of an already repaired row.
     expect(await readRow()).toEqual(repaired);
     expect(await readValidation()).toEqual([{ convalidated: true }]);
+  } finally {
+    await client.close();
+  }
+});
+
+test("leaves any other scalar config in place, so validation surfaces it", async () => {
+  const client = await createTestPglite();
+  const connection = {
+    execute: async (statement, params = []) => {
+      await client.query(statement, [...params]);
+    },
+    query: async (statement, params = []) =>
+      (await client.query(statement, [...params])).rows,
+    release: () => {},
+  } satisfies OnlineMigrationConnection;
+
+  try {
+    await client.exec(`ALTER TABLE public.case_law_sources
+      DROP CONSTRAINT case_law_sources_config_object`);
+    const legacy = createSafeId<"caseLawSource">();
+    const unknown = createSafeId<"caseLawSource">();
+    await client.query(
+      `INSERT INTO public.case_law_sources (id, adapter_key, name, config)
+       VALUES ($1, $2, 'Legacy config fixture', '"{}"'::jsonb),
+              ($3, $4, 'Unknown config fixture', '"paused"'::jsonb)`,
+      [legacy, `config-repair-${legacy}`, unknown, `config-repair-${unknown}`],
+    );
+    await client.exec(`ALTER TABLE public.case_law_sources
+      ADD CONSTRAINT case_law_sources_config_object
+      CHECK (jsonb_typeof(config) = 'object') NOT VALID`);
+
+    const tables = createUngatedTableGateForTests(connection);
+    expect(await rejectionOf(REPAIR.repair(connection, tables))).toMatchObject({
+      message: expect.stringContaining("case_law_sources_config_object"),
+    });
+    const configOf = async (id: string) =>
+      (
+        await client.query(
+          `SELECT config FROM public.case_law_sources WHERE id = $1`,
+          [id],
+        )
+      ).rows;
+    expect(await configOf(legacy)).toEqual([{ config: {} }]);
+    expect(await configOf(unknown)).toEqual([{ config: "paused" }]);
+    expect(
+      (
+        await client.query(
+          `SELECT convalidated FROM pg_catalog.pg_constraint
+           WHERE conrelid = 'public.case_law_sources'::regclass
+             AND conname = 'case_law_sources_config_object'`,
+        )
+      ).rows,
+    ).toEqual([{ convalidated: false }]);
+    expect((await REPAIR.readCompletion(connection)).type).toBe("incomplete");
   } finally {
     await client.close();
   }
