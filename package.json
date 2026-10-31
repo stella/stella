@@ -303,7 +303,7 @@
     "ssf": "0.11.2",
     "stylelint": "17.16.0",
     "tailwindcss": "4.3.3",
-    "temporal-polyfill": "1.0.6",
+    "temporal-polyfill": "1.0.5",
     "tsdown": "0.23.1",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "typescript6": "npm:typescript@6.0.3",
