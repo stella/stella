@@ -249,9 +249,9 @@
       "name": "list_templates",
       "nameChars": 14,
       "descriptionChars": 688,
-      "inputSchemaChars": 505,
-      "totalChars": 1207,
-      "estimatedTokens": 445
+      "inputSchemaChars": 354,
+      "totalChars": 1056,
+      "estimatedTokens": 382
     },
     {
       "name": "list_time_entries",
@@ -472,10 +472,10 @@
     {
       "name": "save_contact",
       "nameChars": 12,
-      "descriptionChars": 303,
-      "inputSchemaChars": 2200,
-      "totalChars": 2515,
-      "estimatedTokens": 1022
+      "descriptionChars": 172,
+      "inputSchemaChars": 2256,
+      "totalChars": 2440,
+      "estimatedTokens": 1002
     },
     {
       "name": "save_document",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127566,
-    "estimatedTokens": 50579
+    "characters": 127340,
+    "estimatedTokens": 50496
   }
 }
