@@ -68,7 +68,7 @@ test("billing configuration reads require the actor's current database enrollmen
       featureId: "time-billing",
     });
     expect(await read()).toMatchObject({
-      mode: "disabled",
+      mode: "enabled",
       timeBillingFormat: "categories",
       files: [],
     });

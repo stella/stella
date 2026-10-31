@@ -91,6 +91,8 @@ export const AI_BILLING_DRAFTS_MODES = [
     (mode) => mode !== AI_BILLING_DRAFTS_MODE.DISABLED,
   ),
 ] as const;
+/** Drafting is on until an administrator turns it off; no setup is needed. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.ENABLED;
 
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
@@ -198,7 +200,7 @@ export const organizationSettings = p.pgTable(
     aiBillingDraftsMode: p
       .text("ai_billing_drafts_mode", { enum: AI_BILLING_DRAFTS_MODES })
       .notNull()
-      .default(AI_BILLING_DRAFTS_MODE.DISABLED),
+      .default(DEFAULT_AI_BILLING_DRAFTS_MODE),
     personalApiKeyPolicy: p
       .text("personal_api_key_policy", { enum: PERSONAL_API_KEY_POLICIES })
       .notNull()

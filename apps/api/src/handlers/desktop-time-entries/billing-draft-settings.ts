@@ -8,6 +8,7 @@ import {
 
 import {
   billingDraftUserSettings,
+  DEFAULT_AI_BILLING_DRAFTS_MODE,
   organizationSettings,
 } from "@/api/db/schema";
 import {
@@ -70,7 +71,7 @@ export const createDesktopBillingDraftSettingsReadEndpoint = (
             )
             .limit(1);
           return {
-            organizationMode: org.at(0)?.mode ?? "disabled",
+            organizationMode: org.at(0)?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE,
             consent: own.at(0)?.consentAt
               ? ("granted" as const)
               : ("revoked" as const),
@@ -159,7 +160,8 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
               )
               .limit(1);
             return {
-              organizationMode: org.at(0)?.mode ?? "disabled",
+              organizationMode:
+                org.at(0)?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE,
               consent: own.consentAt
                 ? ("granted" as const)
                 : ("revoked" as const),

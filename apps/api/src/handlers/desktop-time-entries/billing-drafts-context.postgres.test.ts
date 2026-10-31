@@ -280,6 +280,7 @@ if (!databaseUrl || !runPostgres) {
         await db.insert(organizationSettings).values({
           id: createSafeId<"organizationSettings">(),
           organizationId,
+          aiBillingDraftsMode: "disabled",
         });
         const safeDb = createSafeDb(db, [], organizationId, userId);
         (

@@ -42,7 +42,7 @@ const createDatabase = async () => {
   return db;
 };
 
-test("billing draft migration matches declared columns and defaults to an off gate", async () => {
+test("billing draft migration matches declared columns and defaults to an enabled gate", async () => {
   await using db = await createDatabase();
   for (const table of [billingDraftUserSettings, billingGuidelineFiles]) {
     const definition = getTableConfig(table);
@@ -60,7 +60,7 @@ test("billing draft migration matches declared columns and defaults to an off ga
   expect(
     (await db.query("SELECT ai_billing_drafts_mode FROM organization_settings"))
       .rows,
-  ).toEqual([{ ai_billing_drafts_mode: "disabled" }]);
+  ).toEqual([{ ai_billing_drafts_mode: "enabled" }]);
   expect(
     (
       await db.query(

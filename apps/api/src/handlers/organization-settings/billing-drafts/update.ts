@@ -13,6 +13,7 @@ import {
   AI_BILLING_DRAFTS_MODE,
   billingGuidelineFiles,
   contacts,
+  DEFAULT_AI_BILLING_DRAFTS_MODE,
   organizationSettings,
 } from "@/api/db/schema";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
@@ -175,7 +176,7 @@ const billingDraftAuditChanges = ({
   ...(body.mode !== undefined
     ? {
         aiBillingDraftsMode: {
-          old: previousMode ?? "disabled",
+          old: previousMode ?? DEFAULT_AI_BILLING_DRAFTS_MODE,
           new: body.mode,
         },
       }
@@ -309,7 +310,8 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
           ? firmFiles
           : (body.resourceIds ?? firmFiles);
         if (
-          (body.mode ?? settingsRow?.mode ?? "disabled") === "enabled" &&
+          (body.mode ?? settingsRow?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE) ===
+            AI_BILLING_DRAFTS_MODE.ENABLED &&
           nextFirmFiles.length === 0
         ) {
           return { type: "firm_guideline_required" } as const;

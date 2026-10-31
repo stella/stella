@@ -116,7 +116,7 @@ test("billing configuration refuses missing and foreign clients while retaining 
       },
     ]);
     expect(await read()).toMatchObject({
-      mode: "disabled",
+      mode: "enabled",
       timeBillingFormat: "categories",
       files: [],
     });

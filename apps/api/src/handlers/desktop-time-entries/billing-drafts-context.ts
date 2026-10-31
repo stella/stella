@@ -7,8 +7,10 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  AI_BILLING_DRAFTS_MODE,
   billingDraftUserSettings,
   contacts,
+  DEFAULT_AI_BILLING_DRAFTS_MODE,
   organizationSettings,
 } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
@@ -167,7 +169,11 @@ export const loadBillingDraftContext = async ({
         return { org: org.at(0), own: own.at(0) };
       }),
     );
-    if (settings.org?.mode !== "enabled" || !settings.own?.consentAt) {
+    if (
+      (settings.org?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE) !==
+        AI_BILLING_DRAFTS_MODE.ENABLED ||
+      !settings.own?.consentAt
+    ) {
       return Result.err(
         new HandlerError({
           status: 403,

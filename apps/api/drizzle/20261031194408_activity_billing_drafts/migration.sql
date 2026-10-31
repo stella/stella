@@ -3,7 +3,7 @@ SET statement_timeout = '5s';--> statement-breakpoint
 
 -- Constant defaults take PostgreSQL's fast-default path; the checks are added
 -- NOT VALID and validated by the post-deploy online phase.
-ALTER TABLE organization_settings ADD COLUMN ai_billing_drafts_mode text NOT NULL DEFAULT 'disabled';--> statement-breakpoint
+ALTER TABLE organization_settings ADD COLUMN ai_billing_drafts_mode text NOT NULL DEFAULT 'enabled';--> statement-breakpoint
 ALTER TABLE organization_settings ADD CONSTRAINT organization_settings_ai_billing_drafts_mode_check CHECK (ai_billing_drafts_mode IN ('disabled', 'enabled')) NOT VALID;--> statement-breakpoint
 ALTER TABLE contacts ADD COLUMN time_billing_format text NOT NULL DEFAULT 'categories';--> statement-breakpoint
 ALTER TABLE contacts ADD CONSTRAINT contacts_time_billing_format_check CHECK (time_billing_format IN ('categories', 'ledes')) NOT VALID;--> statement-breakpoint
