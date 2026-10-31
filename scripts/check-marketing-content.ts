@@ -238,7 +238,7 @@ export const checkMarketingContent = (rootDir: string): string[] => {
     }
 
     const capture = productCaptures[product.hero.captureId];
-    for (const sources of Object.values(capture)) {
+    for (const sources of [capture.src, capture.darkSrc]) {
       for (const publicPath of new Set(Object.values(sources))) {
         const heroPath = nodePath.join(
           rootDir,

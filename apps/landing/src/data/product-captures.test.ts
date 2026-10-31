@@ -7,9 +7,10 @@ import { productCaptures } from "./product-captures";
 const publicRoot = new URL("../../public/", import.meta.url);
 const productRoot = new URL("media/products/", publicRoot);
 
-const capturePaths = Object.values(productCaptures).flatMap((capture) =>
-  Object.values(capture).flatMap((sources) => Object.values(sources)),
-);
+const capturePaths = Object.values(productCaptures).flatMap((capture) => [
+  ...Object.values(capture.src),
+  ...Object.values(capture.darkSrc),
+]);
 
 test("every shipped product PNG has a declared capture and every capture exists", () => {
   const pngPaths = readdirSync(productRoot)
