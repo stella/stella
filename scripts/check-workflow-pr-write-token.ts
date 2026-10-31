@@ -699,7 +699,13 @@ export const checkWorkflowPrivilegeSource = (
                 }),
             ),
           );
-      if (controlledTriggers.length === 0) {
+      // YAML reads a bare `if: false` as a boolean, not as expression text.
+      const stepCondition =
+        rawStep["if"] === false ? "false" : stringField(rawStep["if"]);
+      const reachableTriggers = controlledTriggers.filter(
+        (trigger) => !excludesEvent(stepCondition, trigger),
+      );
+      if (reachableTriggers.length === 0) {
         continue;
       }
       const step =
@@ -711,7 +717,7 @@ export const checkWorkflowPrivilegeSource = (
           file,
           job: jobName,
           permissions,
-          prTriggers: controlledTriggers,
+          prTriggers: reachableTriggers,
           rawJob,
           secret,
           step,

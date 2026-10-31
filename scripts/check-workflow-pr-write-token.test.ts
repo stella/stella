@@ -110,6 +110,15 @@ describe("privileged workflow policy", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: \${{ env.DIR }}\n        run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
   });
+  test("skips consumer steps whose own condition excludes the event", () => {
+    for (const condition of [
+      "false",
+      "github.event_name != 'pull_request_target'",
+    ]) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - if: ${condition}\n        run: bash scripts/x.sh`;
+      expect(check(workflow("pull_request_target", body))).toHaveLength(0);
+    }
+  });
   test("follows working directories nested inside a head checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: untrusted/subdir\n        run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
