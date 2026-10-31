@@ -98,7 +98,12 @@ export const classifyMainHeavyFailures = ({
     );
     if (
       runnerImageUnavailable &&
-      !(job.steps ?? []).some(({ conclusion }) => conclusion === "failure")
+      (job.steps ?? []).every(
+        ({ conclusion, started_at, status }) =>
+          conclusion === "success" ||
+          conclusion === "skipped" ||
+          (conclusion === null && !started_at && status !== "in_progress"),
+      )
     ) {
       return {
         name: job.name,

@@ -104,6 +104,8 @@ test.each([
 
 const unavailableImage =
   "This job failed because of a scheduled macOS 14 runner image brownout.";
+const deprecatedImage =
+  "The macOS-13 environment is now deprecated and will be removed starting December 4th, 2025.";
 type ClassificationJob = Parameters<
   typeof classifyMainHeavyFailures
 >[0]["jobs"][number];
@@ -152,12 +154,7 @@ test.each([
     job: {
       name: desktopRustJobName,
       conclusion: "failure",
-      annotations: [
-        {
-          message:
-            "The macOS-13 environment is now deprecated and will be removed starting December 4th, 2025. For more details, see https://github.com/actions/runner-images/issues/13046",
-        },
-      ],
+      annotations: [{ message: deprecatedImage }],
     } satisfies ClassificationJob,
     expected: "INFRA",
   },
@@ -172,6 +169,46 @@ test.each([
           message:
             "This job failed because of a scheduled macOS 14 runner-image brownout.",
         },
+      ],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a timed-out test stays code despite deprecation annotations",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      annotations: [{ message: deprecatedImage }],
+      steps: [{ name: "Test", conclusion: "timed_out" }],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "a mid-run cancellation stays code despite deprecation annotations",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      annotations: [{ message: deprecatedImage }],
+      steps: [
+        {
+          name: "Test",
+          conclusion: "cancelled",
+          started_at: "2026-10-30T00:00:00Z",
+        },
+      ],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "successful steps before a runner loss remain infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      runner_name: "GitHub Actions 1",
+      annotations: [{ message: deprecatedImage }],
+      steps: [
+        { name: "Checkout", conclusion: "success" },
+        { name: "Test", conclusion: null, status: "queued" },
       ],
     } satisfies ClassificationJob,
     expected: "INFRA",
