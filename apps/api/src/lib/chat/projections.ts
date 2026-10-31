@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_SOURCE,
@@ -1673,6 +1674,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  extractionWarnings: extractionWarningsSchema,
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
   // when `url` is the reader's.

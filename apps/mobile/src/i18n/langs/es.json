@@ -22,7 +22,8 @@
     "toolUsed": "Usado: {tool}",
     "threadTitle": "Conversación",
     "threadLoadFailed": "No se pudo cargar esta conversación.",
-    "threadEmptyDescription": "Esta conversación aún no tiene mensajes.",
+    "greeting": "¿En qué le gustaría trabajar?",
+    "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "sections": {
       "today": "Hoy",
       "yesterday": "Ayer",
@@ -127,6 +128,22 @@
     "currentVersion": "Versión actual",
     "loadFailed": "No se pudo cargar este elemento."
   },
+  "document": {
+    "title": "Documento",
+    "failedTitle": "No se pudo abrir este documento",
+    "failure": {
+      "offline": "No tiene conexión. Conéctese a internet y vuelva a intentarlo.",
+      "noFile": "Este documento aún no tiene archivo.",
+      "failed": "Algo salió mal al abrirlo. Vuelva a intentarlo en un momento.",
+      "unsupported": "Actualice la app para abrir documentos.",
+      "android": "Los documentos aún no se pueden abrir en la app para Android."
+    },
+    "retry": "Reintentar",
+    "preview": "Abrir vista previa",
+    "previewDescription": "Este archivo se abre en la vista previa del sistema.",
+    "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
+    "details": "Detalles"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Claridad en cada caso.",
@@ -163,7 +180,6 @@
     "newest": "Resoluciones más recientes",
     "noResults": "Nada coincide con las palabras que exigió esta búsqueda.",
     "noResultsHint": "Pruebe con menos palabras o con otras: los términos que usaría una resolución, no la frase con la que se formula una pregunta.",
-    "unavailable": "La búsqueda no está disponible temporalmente",
     "retry": "Reintentar",
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
@@ -179,6 +195,14 @@
   "writes": {
     "consentNeeded": "Para hacer cambios desde la app, stella necesita su permiso. Vuelva a iniciar sesión para concederlo.",
     "signInAgain": "Volver a iniciar sesión"
+  },
+  "loads": {
+    "offline": "stella no pudo conectar con su servidor. Revise su conexión e inténtelo de nuevo.",
+    "outdated": "Su servidor respondió en un formato que esta versión de la app no entiende. Actualice la app, o el servidor si lo administra.",
+    "consent": "Este inicio de sesión no permite a la app leer esto. Vuelva a iniciar sesión para darle acceso.",
+    "session": "Su sesión ha caducado. Vuelva a iniciar sesión.",
+    "server": "Su servidor tuvo un problema (error {status}). Inténtelo de nuevo en un momento.",
+    "refused": "Su servidor rechazó la solicitud (error {status})."
   },
   "timers": {
     "title": "Temporizadores",
@@ -213,7 +237,27 @@
     "matterTitle": "Asunto",
     "uploadFailed": "No se pudo subir el escaneo. Inténtelo de nuevo.",
     "failedTitle": "Error al escanear",
-    "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo."
+    "failed": "La cámara no pudo guardar el escaneo. Inténtelo de nuevo.",
+    "save": "Guardar",
+    "saveTitle": "Guardar en un asunto",
+    "share": "Compartir",
+    "addPages": "Añadir páginas",
+    "page": "Página {number}",
+    "rotatePage": "Girar la página {number}",
+    "removePage": "Quitar la página {number}",
+    "deletePage": "Eliminar",
+    "movePage": "Mover la página {number}",
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "noPages": "No quedan páginas. Escanee más con Añadir páginas.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "No se pudo crear el PDF. Inténtelo de nuevo.",
+    "shareFailed": "No se pudo compartir el PDF. Inténtelo de nuevo.",
+    "discardTitle": "¿Descartar este escaneo?",
+    "discardMessage": "Sus páginas no se han guardado en un asunto y se eliminarán de este dispositivo.",
+    "discard": "Descartar",
+    "keepEditing": "Seguir editando"
   },
   "shortcuts": {
     "search": "Buscar",
