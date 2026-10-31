@@ -63,7 +63,10 @@ export type FileContentWait<T, Fallback> = Omit<
   /**
    * Reads the content seen so far. A writer creates the file before it writes
    * its content, so an existing file may still be empty or partial: return
-   * `undefined` until the content is complete.
+   * `undefined` until the content is complete. Like any read here, `false` and
+   * `null` also mean "not yet", so return the parsed state in a form that is
+   * neither. A writer that ends its content with a terminator (a newline)
+   * lets `parse` tell complete content from a cut-off prefix.
    */
   parse: (content: string) => T | undefined;
 };

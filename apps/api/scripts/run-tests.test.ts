@@ -73,7 +73,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         });
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
-        await Bun.write(${JSON.stringify(marker)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        await Bun.write(${JSON.stringify(marker)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid + "\\n");
         setInterval(() => {}, 1000);
       `,
       );
@@ -102,7 +102,12 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
           description:
             "snapshot builder announces itself, its descendant and the leaf",
           path: marker,
+          // The builder ends its announcement with a newline; without it the
+          // content may stop inside a pid.
           parse: (content) => {
+            if (!content.endsWith("\n")) {
+              return undefined;
+            }
             const announcedPids = content.trim().split(" ").map(Number);
             return announcedPids.length === 3 &&
               announcedPids.every((pid) => Number.isSafeInteger(pid) && pid > 1)

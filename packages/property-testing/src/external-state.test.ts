@@ -75,6 +75,9 @@ describe("waitForFileContent", () => {
     };
   };
   const threePids = (content: string) => {
+    if (!content.endsWith("\n")) {
+      return undefined;
+    }
     const pids = content.trim().split(" ").map(Number);
     return pids.length === 3 && pids.every((pid) => pid > 1) ? pids : undefined;
   };
@@ -83,7 +86,7 @@ describe("waitForFileContent", () => {
     using files = fixture();
     // A writer creates the file before it writes, then writes in parts.
     writeFileSync(files.file, "");
-    const stages = ["41", "41 42 43"];
+    const stages = ["41", "41 42 4", "41 42 43\n"];
     const seen: string[] = [];
     const pids = await waitForFileContent({
       description: "the writer announces three pids",
@@ -99,7 +102,20 @@ describe("waitForFileContent", () => {
       intervalMs: 0,
     });
     expect(pids).toEqual([41, 42, 43]);
-    expect(seen).toEqual(["", "41", "41 42 43"]);
+    expect(seen).toEqual(["", "41", "41 42 4", "41 42 43\n"]);
+  });
+
+  test("keeps waiting while the file is missing and reads it once written", async () => {
+    using files = fixture();
+    // The first read runs before the wait yields, while the file is missing.
+    const waiting = waitForFileContent({
+      description: "the writer announces three pids",
+      path: files.file,
+      parse: threePids,
+      intervalMs: 0,
+    });
+    writeFileSync(files.file, "41 42 43\n");
+    expect(await waiting).toEqual([41, 42, 43]);
   });
 
   test("a missing file is not yet announced", async () => {
