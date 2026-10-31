@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
+// parser-output-unchanged: [us-courtlistener] stored citation scopes stop being refused when head matter follows the body; every row the previous version stored passed the order check, so its scopes and their hash are unchanged.
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
