@@ -189,6 +189,42 @@ describe("persisted citation scopes", () => {
     expect(checked.unwrap()).toEqual(opinions);
   });
 
+  test("validates scopes against the blocks the writer stored, repeated identities included", () => {
+    const paragraph = (id: string, anchorId: string) => ({
+      id,
+      anchorId,
+      type: "paragraph" as const,
+      inlines: [{ type: "text" as const, text: anchorId }],
+      plainText: anchorId,
+    });
+    // The writer indexes "p" at its last position, so "p" and "q" are one
+    // contiguous opinion; the reader re-keys the repeated "p".
+    const documentAst = {
+      ...ast(),
+      blocks: [
+        paragraph("p", "paragraph-1"),
+        paragraph("p", "paragraph-2"),
+        paragraph("q", "paragraph-3"),
+      ],
+    } satisfies DocumentAst;
+    const scopes = [
+      { opinionId: "majority", blockIds: ["p", "q"], boundaries: "proven" },
+    ] as const;
+    expect(
+      v
+        .parse(persistedDocumentAstSchema, documentAst)
+        .blocks.map(({ id }) => id),
+    ).not.toEqual(documentAst.blocks.map(({ id }) => id));
+
+    const envelope = citationScopeEnvelope(documentAst, scopes);
+    const stored: unknown = structuredClone(documentAst);
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      stored,
+    );
+    expect(checked.unwrap()).toEqual(scopes);
+  });
+
   test("rejects a stale hash even when the old scope names still exist", () => {
     const first = extract(ast());
     const annotated = first.documentAst ?? expect.unreachable();

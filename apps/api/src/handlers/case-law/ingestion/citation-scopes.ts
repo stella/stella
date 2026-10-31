@@ -4,7 +4,10 @@ import * as v from "valibot";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAstInAnyBlockOrder,
+  persistedDocumentAstSchema,
+} from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -77,6 +80,20 @@ export const citationScopeEnvelope = (
 });
 
 /** Metadata is persisted JSON and must be checked again before reuse. */
+/**
+ * The blocks a writer computed scopes against: the stored blocks as written
+ * whenever they meet the writer contract (head matter may follow the body),
+ * since the persisted reader re-keys repeated identities. Only a legacy shape
+ * the writer contract no longer describes falls back to the reader's blocks.
+ */
+const scopedBlocks = (ast: unknown): readonly Block[] | undefined => {
+  if (isDocumentAstInAnyBlockOrder(ast)) {
+    return ast.blocks;
+  }
+  const parsed = v.safeParse(persistedDocumentAstSchema, ast);
+  return parsed.success ? parsed.output.blocks : undefined;
+};
+
 export const validatedCitationScopes = (
   metadata: Record<string, unknown>,
   ast: unknown,
@@ -88,11 +105,10 @@ export const validatedCitationScopes = (
   if (value === undefined) {
     return Result.ok(undefined);
   }
-  const parsedAst = v.safeParse(persistedDocumentAstSchema, ast);
-  if (!parsedAst.success || !isRecord(ast)) {
+  const blocks = scopedBlocks(ast);
+  if (blocks === undefined || !isRecord(ast)) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  const documentAst = parsedAst.output;
   if (
     !isRecord(value) ||
     value["version"] !== CITATION_SCOPE_VERSION ||
@@ -125,7 +141,7 @@ export const validatedCitationScopes = (
   if (opinions.length !== value["opinions"].length) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  const indexed = indexCitationScopes(documentAst.blocks, opinions);
+  const indexed = indexCitationScopes(blocks, opinions);
   return Result.isError(indexed)
     ? Result.err(indexed.error)
     : Result.ok(opinions);

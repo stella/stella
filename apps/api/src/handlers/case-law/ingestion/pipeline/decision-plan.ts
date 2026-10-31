@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 
 import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import { readsUsReporterCitations } from "@stll/api-contract/us-reporter-citation";
+import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -87,10 +88,11 @@ import { logger } from "@/api/lib/observability/logger";
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
+/** The writer contract without the head-matter order rule, with content. */
 const hasPreparedUsableAst = (
   ast: IngestionResult["documentAst"] | null,
 ): ast is DocumentAst =>
-  ast !== null && "blocks" in ast && ast.blocks.length > 0;
+  isDocumentAstInAnyBlockOrder(ast) && ast.blocks.length > 0;
 
 type PendingMirrorPayload = InferOk<
   Awaited<ReturnType<typeof loadPendingMirrorPayload>>
