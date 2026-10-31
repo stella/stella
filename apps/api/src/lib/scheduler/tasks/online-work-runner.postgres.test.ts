@@ -194,6 +194,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             [index.name]: PENDING,
           };
           const runner = createOnlineWorkRunner({
+            dependencies: new Map(),
             names: ONLINE_WORK_NAMES,
             lifecycle,
             store: createDrizzleOnlineWorkStateStore(
@@ -472,6 +473,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
               };
             };
           const oldRunner = createOnlineWorkRunner({
+            dependencies: new Map(),
             names: ONLINE_WORK_NAMES,
             lifecycle,
             store: {
@@ -486,6 +488,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             detach: () => panic("A stale claimant must never start its walk"),
           });
           const successor = createOnlineWorkRunner({
+            dependencies: new Map(),
             names: ONLINE_WORK_NAMES,
             lifecycle,
             store,
@@ -587,6 +590,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
       try {
         expect(held.type).toBe("claimed");
         const runner = createOnlineWorkRunner({
+          dependencies: new Map(),
           names: ONLINE_WORK_NAMES,
           lifecycle,
           store: createDrizzleOnlineWorkStateStore(

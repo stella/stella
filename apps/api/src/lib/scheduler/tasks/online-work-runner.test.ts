@@ -135,11 +135,13 @@ type DetachedOnlineWork = Parameters<
 type HarnessOptions = {
   pending?: readonly OnlineWorkName[];
   lockHeld?: boolean;
+  dependencies?: ReadonlyMap<OnlineWorkName, readonly OnlineWorkName[]>;
 };
 
 const createHarness = ({
   pending = [FIRST, SECOND],
   lockHeld = false,
+  dependencies = new Map(),
 }: HarnessOptions = {}) => {
   const { rows, store, snapshots } = createMemoryStore();
   const claims: OnlineWorkName[] = [];
@@ -152,6 +154,7 @@ const createHarness = ({
   >();
   const detachedWork: DetachedOnlineWork[] = [];
   const runner = createOnlineWorkRunner({
+    dependencies,
     names: ONLINE_WORK_NAMES,
     lifecycle: lifecycleWithPending(pending),
     store,
@@ -291,6 +294,7 @@ describe("online work runner", () => {
     let staleReads = 1;
     const work: Promise<unknown>[] = [];
     const a = createOnlineWorkRunner({
+      dependencies: new Map(),
       names: ONLINE_WORK_NAMES,
       lifecycle,
       store,
@@ -300,6 +304,7 @@ describe("online work runner", () => {
       },
     });
     const b = createOnlineWorkRunner({
+      dependencies: new Map(),
       names: ONLINE_WORK_NAMES,
       lifecycle,
       store: {
@@ -340,6 +345,7 @@ describe("online work runner", () => {
     const walked: OnlineWorkName[] = [];
     const work: Promise<unknown>[] = [];
     const runner = createOnlineWorkRunner({
+      dependencies: new Map(),
       names: ONLINE_WORK_NAMES,
       lifecycle: lifecycleWithPending([FIRST]),
       store,
@@ -448,6 +454,7 @@ describe("online work runner", () => {
           };
         };
       const oldRunner = createOnlineWorkRunner({
+        dependencies: new Map(),
         names: ONLINE_WORK_NAMES,
         lifecycle: lifecycleWithPending([FIRST]),
         store: {
@@ -462,6 +469,7 @@ describe("online work runner", () => {
         detach: () => panic("The stale claimant must not start its walk"),
       });
       const successor = createOnlineWorkRunner({
+        dependencies: new Map(),
         names: ONLINE_WORK_NAMES,
         lifecycle: lifecycleWithPending([FIRST]),
         store,
@@ -507,6 +515,7 @@ describe("online work runner", () => {
         const walk = Promise.withResolvers<OnlineMigrationOutcome>();
         const work: DetachedOnlineWork[] = [];
         const runner = createOnlineWorkRunner({
+          dependencies: new Map(),
           names: ONLINE_WORK_NAMES,
           lifecycle: lifecycleWithPending([FIRST]),
           store,
@@ -659,6 +668,38 @@ describe("online work runner", () => {
     expect(harness.claims).toEqual([FIRST, SECOND]);
   });
 
+  test("a unit waits for its pending prerequisite to finish, even while that one waits to retry", async () => {
+    const harness = createHarness({
+      dependencies: new Map([[SECOND, [FIRST]]]),
+    });
+    await harness.tick();
+    harness.walkOf(FIRST).reject(new Error("deterministic failure"));
+    await harness.settle();
+
+    expect(await harness.tick(new Date(START.getTime() + 30_000))).toEqual({
+      type: "idle",
+    });
+    expect(harness.claims).toEqual([FIRST]);
+
+    const retry = new Date(START.getTime() + 61_000);
+    expect(await harness.tick(retry)).toEqual({ type: "started", name: FIRST });
+    harness.walkOf(FIRST).resolve({ type: "complete" });
+    await harness.settle();
+    expect(await harness.tick(retry)).toEqual({
+      type: "started",
+      name: SECOND,
+    });
+  });
+
+  test("a prerequisite every migrate run builds never holds its dependent", async () => {
+    const harness = createHarness({
+      pending: [SECOND],
+      dependencies: new Map([[SECOND, [FIRST]]]),
+    });
+
+    expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
+  });
+
   test("a deferred unit stays building and the next tick claims it again", async () => {
     const harness = createHarness({ pending: [FIRST] });
     await harness.tick();
@@ -677,6 +718,7 @@ describe("online work runner", () => {
     const { store } = createMemoryStore();
     const releases: string[] = [];
     const runner = createOnlineWorkRunner({
+      dependencies: new Map(),
       names: ONLINE_WORK_NAMES,
       lifecycle: lifecycleWithPending([FIRST]),
       store: {

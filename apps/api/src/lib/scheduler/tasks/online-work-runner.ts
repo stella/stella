@@ -36,11 +36,13 @@ import {
   claimOnlineWorkUnit,
   type ClaimOnlineWorkUnitOptions,
   ONLINE_MIGRATION_REPAIRS,
+  ONLINE_WORK_DEPENDENCIES,
   ONLINE_WORK_NAMES,
   type OnlineWorkName,
   type OnlineWorkUnitClaim,
 } from "../../../db/online-migrations";
 import {
+  isMigrateReady,
   ONLINE_WORK_LIFECYCLE,
   type OnlineWorkLifecycle,
 } from "../../../db/online-work-lifecycle";
@@ -130,6 +132,8 @@ type OnlineWorkRunnerDependencies = {
   /** Registered units in walk order; pending ones are built in this order. */
   names: readonly OnlineWorkName[];
   lifecycle: Readonly<Record<OnlineWorkName, OnlineWorkLifecycle>>;
+  /** Each unit's prerequisites; a unit waits until every one is done. */
+  dependencies: ReadonlyMap<OnlineWorkName, readonly OnlineWorkName[]>;
   store: OnlineWorkStateStore;
   claim: (
     options: Required<Pick<ClaimOnlineWorkUnitOptions, "name" | "lifecycle">>,
@@ -173,11 +177,23 @@ const SKIPPED = { type: "skipped" } as const satisfies OnlineWorkRunnerOutcome;
 export const createOnlineWorkRunner = ({
   names,
   lifecycle,
+  dependencies,
   store,
   claim,
   detach,
 }: OnlineWorkRunnerDependencies) => {
   let build: BuildState = IDLE_BUILD;
+  // A prerequisite is done once every migrate run builds it, or once this
+  // runner finalized it; until then its dependents are not claimed.
+  const prerequisitesDone = (
+    name: OnlineWorkName,
+    stateByName: ReadonlyMap<string, OnlineWorkStateSnapshot>,
+  ) =>
+    (dependencies.get(name) ?? []).every(
+      (dependency) =>
+        isMigrateReady(lifecycle[dependency]) ||
+        stateByName.get(dependency)?.state === "finalized",
+    );
   const pending = names.filter((name) => {
     const entry = lifecycle[name];
     switch (entry.state) {
@@ -263,8 +279,10 @@ export const createOnlineWorkRunner = ({
     }
     const states = await store.readStates();
     const stateByName = new Map(states.map((state) => [state.name, state]));
-    const name = pending.find((candidate) =>
-      isEligibleForAttempt(stateByName.get(candidate), now),
+    const name = pending.find(
+      (candidate) =>
+        isEligibleForAttempt(stateByName.get(candidate), now) &&
+        prerequisitesDone(candidate, stateByName),
     );
     if (name === undefined) {
       return Result.ok(IDLE);
@@ -536,6 +554,7 @@ const processRunner = (): RunnerByDb => {
     runner ??= createOnlineWorkRunner({
       names: ONLINE_WORK_NAMES,
       lifecycle: ONLINE_WORK_LIFECYCLE,
+      dependencies: ONLINE_WORK_DEPENDENCIES,
       store: createDrizzleOnlineWorkStateStore(db),
       claim: async ({ name, lifecycle }) =>
         await claimOnlineWorkUnit(maintenancePool(), {
