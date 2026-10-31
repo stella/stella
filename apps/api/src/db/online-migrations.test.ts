@@ -125,7 +125,7 @@ const runOnlineMigrations = async (
     lifecycle: {
       ...allFinalizedOnlineWork(),
       ...Object.fromEntries(
-        (options.repairs ?? []).map(({ name }) => [name, FINALIZED]),
+        options.repairs.map(({ name }) => [name, FINALIZED]),
       ),
       ...options.lifecycle,
     },
@@ -146,7 +146,7 @@ const reportOnlineMigrations = async (
     lifecycle: {
       ...allFinalizedOnlineWork(),
       ...Object.fromEntries(
-        (options.repairs ?? []).map(({ name }) => [name, FINALIZED]),
+        options.repairs.map(({ name }) => [name, FINALIZED]),
       ),
       ...options.lifecycle,
     },

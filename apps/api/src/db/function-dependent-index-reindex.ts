@@ -187,6 +187,7 @@ export const createFunctionDependentIndexReindex = ({
 };
 
 /** Each replacement revision registers once; the repair discovers its index workset. */
-export const FUNCTION_DEPENDENT_INDEX_REINDEXES: readonly ReturnType<
-  typeof createFunctionDependentIndexReindex
->[] = [];
+export const FUNCTION_DEPENDENT_INDEX_REINDEXES =
+  [] as const satisfies readonly ReturnType<
+    typeof createFunctionDependentIndexReindex
+  >[];
