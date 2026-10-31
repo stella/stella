@@ -36,7 +36,6 @@ const collectPhoneLayoutProblems = (): string[] => {
     "[role='menuitem']",
     "[role='combobox']",
   ].join(",");
-  const formFieldTags = new Set(["INPUT", "SELECT", "TEXTAREA"]);
 
   const describe = (element: Element) => {
     const tag = element.tagName.toLowerCase();
@@ -65,6 +64,40 @@ const collectPhoneLayoutProblems = (): string[] => {
   };
   const isScrollable = (overflow: string) =>
     overflow === "auto" || overflow === "scroll";
+  type ScrollReachabilityOptions = {
+    box: Element;
+    boxRect: DOMRect;
+    rect: DOMRect;
+    style: CSSStyleDeclaration;
+  };
+  const scrollReachability = ({
+    box,
+    boxRect,
+    rect,
+    style,
+  }: ScrollReachabilityOptions) => {
+    const horizontalRange = box.scrollWidth - box.clientWidth;
+    const originX = boxRect.left + box.clientLeft;
+    // scrollLeft is negative in RTL: the reachable origin is the right edge.
+    const left = originX - (style.direction === "rtl" ? horizontalRange : 0);
+    const right =
+      originX +
+      box.clientWidth +
+      (style.direction === "rtl" ? 0 : horizontalRange);
+    const top = boxRect.top + box.clientTop;
+    return {
+      x:
+        isScrollable(style.overflowX) &&
+        horizontalRange > 0 &&
+        rect.left + box.scrollLeft >= left - tolerance &&
+        rect.right + box.scrollLeft <= right + tolerance,
+      y:
+        isScrollable(style.overflowY) &&
+        box.scrollHeight > box.clientHeight &&
+        rect.top + box.scrollTop >= top - tolerance &&
+        rect.bottom + box.scrollTop <= top + box.scrollHeight + tolerance,
+    };
+  };
   // Buttons widen their hit area on touch with an absolutely positioned
   // pseudo-element; the target is whichever is larger.
   const targetSize = (element: Element, rect: DOMRect) => {
@@ -72,7 +105,11 @@ const collectPhoneLayoutProblems = (): string[] => {
     let height = rect.height;
     for (const pseudo of ["::before", "::after"]) {
       const style = getComputedStyle(element, pseudo);
-      if (style.content === "none" || style.position !== "absolute") {
+      if (
+        style.content === "none" ||
+        style.position !== "absolute" ||
+        style.pointerEvents === "none"
+      ) {
         continue;
       }
       width = Math.max(
@@ -100,10 +137,24 @@ const collectPhoneLayoutProblems = (): string[] => {
       if (element.closest("[aria-hidden='true'],[inert]") !== null) {
         return [];
       }
-      if (getComputedStyle(element).visibility !== "visible") {
+      // Inherited visibility hides a whole region (for example a closed menu).
+      // A control hidden on its own still needs the hover-only check.
+      const visibility = getComputedStyle(element).visibility;
+      if (
+        visibility !== "visible" &&
+        element.parentElement !== null &&
+        getComputedStyle(element.parentElement).visibility !== "visible"
+      ) {
         return [];
       }
-      return [{ element, rect, opacity: effectiveOpacity(element) }];
+      return [
+        {
+          element,
+          rect,
+          opacity: effectiveOpacity(element),
+          visibility,
+        },
+      ];
     },
   );
 
@@ -115,9 +166,13 @@ const collectPhoneLayoutProblems = (): string[] => {
     );
   }
 
+  const rootClipsY = [document.documentElement, document.body].some((root) => {
+    const overflow = getComputedStyle(root).overflowY;
+    return overflow === "hidden" || overflow === "clip";
+  });
   const cutOff: string[] = [];
-  for (const { element, rect, opacity } of controls) {
-    if (opacity === 0) {
+  for (const { element, rect, opacity, visibility } of controls) {
+    if (opacity === 0 || visibility !== "visible") {
       continue;
     }
     let reachableX = false;
@@ -134,19 +189,15 @@ const collectPhoneLayoutProblems = (): string[] => {
     ) {
       const style = getComputedStyle(box);
       const boxRect = box.getBoundingClientRect();
+      const reachable = scrollReachability({ box, boxRect, rect, style });
       if (!reachableX && style.overflowX !== "visible") {
         const outside =
           rect.left < boxRect.left - tolerance ||
           rect.right > boxRect.right + tolerance;
-        // Wholly outside is a collapsed or off-canvas region, not a cut.
-        const overlaps = rect.right > boxRect.left && rect.left < boxRect.right;
         if (outside) {
-          if (
-            isScrollable(style.overflowX) &&
-            box.scrollWidth > box.clientWidth
-          ) {
+          if (reachable.x) {
             reachableX = true;
-          } else if (overlaps) {
+          } else {
             problem = `${describe(element)} is cut off at the side of ${describe(box)}`;
           }
         }
@@ -155,14 +206,10 @@ const collectPhoneLayoutProblems = (): string[] => {
         const outside =
           rect.top < boxRect.top - tolerance ||
           rect.bottom > boxRect.bottom + tolerance;
-        const overlaps = rect.bottom > boxRect.top && rect.top < boxRect.bottom;
         if (outside) {
-          if (
-            isScrollable(style.overflowY) &&
-            box.scrollHeight > box.clientHeight
-          ) {
+          if (reachable.y) {
             reachableY = true;
-          } else if (overlaps) {
+          } else {
             problem = `${describe(element)} is cut off at the top or bottom of ${describe(box)}`;
           }
         }
@@ -176,15 +223,15 @@ const collectPhoneLayoutProblems = (): string[] => {
     ) {
       problem = `${describe(element)} runs past the side of the screen`;
     }
-    // The page scrolls vertically, so only fixed layers can strand a control
-    // below or above the screen.
     if (
       problem === null &&
       !reachableY &&
-      fixed &&
+      (fixed || rootClipsY) &&
       (rect.top < -tolerance || rect.bottom > window.innerHeight + tolerance)
     ) {
-      problem = `${describe(element)} sits in a fixed layer past the top or bottom of the screen`;
+      problem = fixed
+        ? `${describe(element)} sits in a fixed layer past the top or bottom of the screen`
+        : `${describe(element)} sits past the top or bottom of a non-scrollable page`;
     }
     if (problem !== null) {
       cutOff.push(problem);
@@ -193,8 +240,9 @@ const collectPhoneLayoutProblems = (): string[] => {
 
   const sized = controls
     .filter(
-      ({ element, opacity }) =>
+      ({ element, opacity, visibility }) =>
         opacity > 0 &&
+        visibility === "visible" &&
         // Links inside running text are exempt from the target size rule.
         !(
           element.tagName === "A" &&
@@ -250,11 +298,66 @@ const collectPhoneLayoutProblems = (): string[] => {
     }
   }
 
+  const hasVisibleProxy = (element: Element, rect: DOMRect) => {
+    if (
+      !(element instanceof HTMLInputElement) &&
+      !(element instanceof HTMLSelectElement) &&
+      !(element instanceof HTMLTextAreaElement)
+    ) {
+      return false;
+    }
+    const visible = (proxy: Element) => {
+      const style = getComputedStyle(proxy);
+      const proxyRect = proxy.getBoundingClientRect();
+      return (
+        style.visibility === "visible" &&
+        effectiveOpacity(proxy) > 0.05 &&
+        proxyRect.width > 1 &&
+        proxyRect.height > 1 &&
+        proxyRect.right > 0 &&
+        proxyRect.left < window.innerWidth &&
+        proxyRect.bottom > 0 &&
+        proxyRect.top < window.innerHeight &&
+        (proxy.textContent.trim() !== "" ||
+          style.backgroundImage !== "none" ||
+          (style.backgroundColor !== "rgba(0, 0, 0, 0)" &&
+            style.backgroundColor !== "transparent") ||
+          proxy.matches("img,svg,canvas,video") ||
+          proxy.querySelector("img,svg,canvas,video") !== null)
+      );
+    };
+    // A visible associated label can activate a transparent field even when
+    // it is beside it; an unrelated label cannot stand in for that field.
+    if ([...(element.labels ?? [])].some(visible)) {
+      return true;
+    }
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    // Painted siblings may use pointer-events:none so the native field above
+    // them receives the tap; hit testing alone omits those visual proxies.
+    const proxies = new Set([
+      ...document.elementsFromPoint(centerX, centerY),
+      ...(element.parentElement?.children ?? []),
+    ]);
+    return [...proxies].some((proxy) => {
+      const proxyRect = proxy.getBoundingClientRect();
+      return (
+        proxy !== element &&
+        !proxy.contains(element) &&
+        centerX >= proxyRect.left &&
+        centerX <= proxyRect.right &&
+        centerY >= proxyRect.top &&
+        centerY <= proxyRect.bottom &&
+        visible(proxy)
+      );
+    });
+  };
   const hoverOnly: string[] = [];
-  for (const { element, rect, opacity } of controls) {
-    // Native file and form inputs are laid transparently over a styled
-    // control on purpose; tapping them works.
-    if (opacity > 0.05 || formFieldTags.has(element.tagName)) {
+  for (const { element, rect, opacity, visibility } of controls) {
+    if (
+      visibility === "visible" &&
+      (opacity > 0.05 || hasVisibleProxy(element, rect))
+    ) {
       continue;
     }
     if (
