@@ -111,16 +111,15 @@ const renderedOptionCount = (
   );
 };
 
-/** A list mapped to text, not to elements, adds no options to the select. */
-const mapsToElements = (call: AstNode): boolean => {
-  const callback = Array.isArray(call.arguments) ? call.arguments.at(0) : null;
-  const inline =
-    isAstNode(callback) &&
-    (callback.type === "ArrowFunctionExpression" ||
-      callback.type === "FunctionExpression");
+/** A list joined into one string adds no options to the select. */
+const joinsToText = (call: AstNode): boolean => {
+  const parent = call.parent;
   return (
-    !inline ||
-    descendants(callback).some((inner) => inner.type === "JSXElement")
+    isAstNode(parent) &&
+    parent.type === "MemberExpression" &&
+    parent.object === call &&
+    isAstNode(parent.property) &&
+    parent.property.name === "join"
   );
 };
 
@@ -631,7 +630,7 @@ export default eslintCompatPlugin({
             const mappedLongList = descendants(node).some(
               (inner) =>
                 inner.type === "CallExpression" &&
-                mapsToElements(inner) &&
+                !joinsToText(inner) &&
                 (identifierResolvesTo(
                   context,
                   mappedListIdentifier(inner),

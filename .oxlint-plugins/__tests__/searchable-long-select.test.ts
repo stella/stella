@@ -246,7 +246,7 @@ const together = <Select>${items(16)}{wide ? <>${items(16)}</> : null}</Select>;
   ).toEqual([4, 5]);
 });
 
-test("ignores a long list mapped to text and keeps one mapped to elements", async () => {
+test("ignores a long list joined to text and keeps every other mapped list", async () => {
   expect(
     await lintSingleRule(
       "searchable-long-select",
@@ -256,8 +256,10 @@ declare const ZoneRow: (props: { zone: string }) => null;
 declare const renderZone: (zone: string) => null;
 const text = <Select name={zones.map((zone) => zone.at(0)).join("")}><SelectItem value="a">a</SelectItem></Select>;
 const wrapped = <Select>{zones.map((zone) => <ZoneRow zone={zone} />)}</Select>;
-const named = <Select>{zones.map(renderZone)}</Select>;`,
+const named = <Select>{zones.map(renderZone)}</Select>;
+const called = <Select>{zones.map((zone) => renderZone(zone))}</Select>;
+const chained = <Select>{zones.map((zone) => zone.trim()).map((zone) => <SelectItem value={zone}>{zone}</SelectItem>)}</Select>;`,
       { sourcePath: "source.tsx" },
     ),
-  ).toEqual([6, 7]);
+  ).toEqual([6, 7, 8, 9]);
 });
