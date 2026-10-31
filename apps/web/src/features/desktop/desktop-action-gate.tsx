@@ -69,7 +69,7 @@ export const useDesktopActionGate = (
   const connectApp = () => {
     detached(
       (async () => {
-        const outcome = await connect();
+        const outcome = await connect("explicit");
         switch (outcome.status) {
           case "connected": {
             stellaToast.add({
@@ -80,6 +80,11 @@ export const useDesktopActionGate = (
           }
           // The app takes over in its own window and returns here.
           case "started": {
+            return;
+          }
+          // A joined automatic attempt found no local proof; the settings
+          // page keeps the explicit approval on offer.
+          case "approval-required": {
             return;
           }
           // Nothing answered on this computer: offer the install instead.
@@ -146,7 +151,7 @@ export const useDesktopActionGate = (
   return {
     label: t(DESKTOP_ACTION_LABELS[action][presence.type]),
     status,
-    isConnecting: state.status === "connecting",
+    isConnecting: state.status === "connecting" || state.status === "opening",
     connect: connectApp,
     setUp,
     run,

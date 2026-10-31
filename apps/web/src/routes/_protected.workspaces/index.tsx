@@ -18,7 +18,7 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { SearchField } from "@stll/ui/search-field";
 import { Separator } from "@stll/ui/separator";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -43,6 +43,7 @@ import { detached } from "@/lib/detached";
 import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
+import { captureDialogReturnFocus } from "@/lib/workspaces/dialog-return-focus";
 import {
   workspacesKeys,
   workspacesRouteOptions,
@@ -297,7 +298,8 @@ const MattersContent = ({
                     primaryAction={{
                       label: t("workspaces.createNewWorkspace"),
                       icon: PlusIcon,
-                      onClick: () => openCreateMatter(),
+                      onClick: (event) =>
+                        openCreateMatter({ opener: event.currentTarget }),
                     }}
                     title={t("workspaces.emptyMatters.title")}
                   />
@@ -559,6 +561,7 @@ const MattersPageContextMenu = ({
   const t = useTranslations();
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const [open, setOpen] = useState(false);
+  const [opener, setOpener] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -575,6 +578,7 @@ const MattersPageContextMenu = ({
           return;
         }
         event.preventDefault();
+        setOpener(captureDialogReturnFocus().current);
         const x = event.clientX;
         const y = event.clientY;
         setAnchor({
@@ -593,12 +597,11 @@ const MattersPageContextMenu = ({
         }}
         open={open}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={anchor ?? undefined}>
-          <MenuItem onClick={() => openCreateMatter()}>
+        <MenuAnchor />
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => opener}>
+          <MenuItem
+            onClick={() => openCreateMatter(opener === null ? {} : { opener })}
+          >
             <PlusIcon />
             {t("workspaces.createNewWorkspace")}
           </MenuItem>

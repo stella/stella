@@ -9,10 +9,12 @@
 
 import { panic, Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   entityVersions,
@@ -100,14 +102,113 @@ true satisfies UnexpectedProjectedDocumentAnnotationColumn extends never
   ? true
   : never;
 
+type VisibleMarksQuery = MatterDocumentRef & {
+  conditions: readonly SQL[];
+  limit: number;
+  organizationId: SafeId<"organization">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+};
+
 /**
  * Every mark the caller may see on the document's file: their own, and what
  * colleagues on the matter shared. Row-level security draws that line, and
  * hides a mark whose version was withdrawn; the query names the document and
  * the file's property, so the file of each version is one file across
  * versions while another file of the same document stays apart. Oldest first,
- * so the side list reads in the order the notes were made.
+ * so the side list reads in the order the notes were made. Undefined when the
+ * caller cannot see the file.
  */
+const selectVisibleMarks = async ({
+  conditions,
+  entityId,
+  fieldId,
+  limit,
+  organizationId,
+  tx,
+  userId,
+  workspaceId,
+}: VisibleMarksQuery) => {
+  const viewed = await readMarkedDocumentField({
+    entityId,
+    fieldId,
+    tx,
+    workspaceId,
+  });
+  if (viewed === undefined) {
+    return undefined;
+  }
+  return await tx
+    .select({
+      ...DOCUMENT_ANNOTATION_PROJECTION,
+      versionNumber: entityVersions.versionNumber,
+      authorId: legalReaderAnnotations.userId,
+      authorName: user.name,
+      authorImage: user.image,
+      mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
+      createdAtCursor: annotationCursor.cursorValue.as("created_at_cursor"),
+    })
+    .from(legalReaderAnnotations)
+    .innerJoin(
+      fields,
+      and(
+        eq(fields.id, legalReaderAnnotations.targetId),
+        eq(fields.workspaceId, workspaceId),
+        eq(fields.propertyId, viewed.propertyId),
+      ),
+    )
+    .innerJoin(
+      entityVersions,
+      and(
+        eq(entityVersions.id, fields.entityVersionId),
+        eq(entityVersions.workspaceId, workspaceId),
+      ),
+    )
+    .innerJoin(
+      member,
+      and(
+        eq(member.userId, legalReaderAnnotations.userId),
+        eq(member.organizationId, organizationId),
+      ),
+    )
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(
+      and(
+        eq(legalReaderAnnotations.organizationId, organizationId),
+        eq(legalReaderAnnotations.workspaceId, workspaceId),
+        eq(legalReaderAnnotations.entityId, entityId),
+        eq(legalReaderAnnotations.targetType, "matter-document"),
+        ...conditions,
+      ),
+    )
+    .orderBy(
+      asc(legalReaderAnnotations.createdAt),
+      asc(legalReaderAnnotations.id),
+    )
+    .limit(limit);
+};
+
+type VisibleMarkRow = NonNullable<
+  Awaited<ReturnType<typeof selectVisibleMarks>>
+>[number];
+
+/** A row as the viewer receives it: the file and page it was placed on. */
+const toDocumentMark = ({
+  blockAnchorId,
+  createdAtCursor: _,
+  pageTextSha256,
+  targetId,
+  ...item
+}: VisibleMarkRow) => ({
+  ...item,
+  fieldId: targetId,
+  pageNumber:
+    pdfPageNumberOfAnchor(blockAnchorId) ??
+    panic("A matter document mark has no page anchor"),
+  pageTextSha256:
+    pageTextSha256 ?? panic("A matter document mark has no page digest"),
+});
+
 type ListMatterDocumentAnnotationsOptions = MatterDocumentRef & {
   cursor: string | undefined;
   limit: number | undefined;
@@ -116,6 +217,10 @@ type ListMatterDocumentAnnotationsOptions = MatterDocumentRef & {
   userId: SafeId<"user">;
 };
 
+/**
+ * One page of the marks the caller may see, for the viewer's side list.
+ * @yields A database failure, which ends the read.
+ */
 export const listMatterDocumentAnnotations = async function* ({
   cursor,
   entityId,
@@ -129,12 +234,7 @@ export const listMatterDocumentAnnotations = async function* ({
   const limit = normalizeTenantPageLimit(
     requestedLimit ?? LIMITS.readerAnnotationsPageSizeDefault,
   );
-  const conditions = [
-    eq(legalReaderAnnotations.organizationId, organizationId),
-    eq(legalReaderAnnotations.workspaceId, workspaceId),
-    eq(legalReaderAnnotations.entityId, entityId),
-    eq(legalReaderAnnotations.targetType, "matter-document"),
-  ];
+  const conditions: SQL[] = [];
   if (cursor !== undefined) {
     const decoded = annotationCursor.decode(cursor);
     if (!decoded) {
@@ -153,59 +253,21 @@ export const listMatterDocumentAnnotations = async function* ({
   }
 
   const rows = yield* Result.await(
-    safeDb(async (tx) => {
-      const viewed = await readMarkedDocumentField({
-        entityId,
-        fieldId,
-        tx,
-        workspaceId,
-      });
-      if (viewed === undefined) {
-        return undefined;
-      }
-      return await tx
-        .select({
-          ...DOCUMENT_ANNOTATION_PROJECTION,
-          versionNumber: entityVersions.versionNumber,
-          authorId: legalReaderAnnotations.userId,
-          authorName: user.name,
-          authorImage: user.image,
-          mine: sql<boolean>`${legalReaderAnnotations.userId} = ${userId}`,
-          createdAtCursor: annotationCursor.cursorValue.as("created_at_cursor"),
-        })
-        .from(legalReaderAnnotations)
-        .innerJoin(
-          fields,
-          and(
-            eq(fields.id, legalReaderAnnotations.targetId),
-            eq(fields.workspaceId, workspaceId),
-            eq(fields.propertyId, viewed.propertyId),
-          ),
-        )
-        .innerJoin(
-          entityVersions,
-          and(
-            eq(entityVersions.id, fields.entityVersionId),
-            eq(entityVersions.workspaceId, workspaceId),
-          ),
-        )
-        .innerJoin(
-          member,
-          and(
-            eq(member.userId, legalReaderAnnotations.userId),
-            eq(member.organizationId, organizationId),
-          ),
-        )
-        .innerJoin(user, eq(user.id, member.userId))
-        .where(and(...conditions))
-        .orderBy(
-          asc(legalReaderAnnotations.createdAt),
-          asc(legalReaderAnnotations.id),
-        )
-        // Room to finish the last mark on the page: a mark's rows are
-        // contiguous in this order and number at most the span cap.
-        .limit(limit + READER_ANNOTATION_MAX_SPANS);
-    }),
+    safeDb(
+      async (tx) =>
+        await selectVisibleMarks({
+          conditions,
+          entityId,
+          fieldId,
+          // Room to finish the last mark on the page: a mark's rows are
+          // contiguous in this order and number at most the span cap.
+          limit: limit + READER_ANNOTATION_MAX_SPANS,
+          organizationId,
+          tx,
+          userId,
+          workspaceId,
+        }),
+    ),
   );
   if (rows === undefined) {
     return Result.err(documentFileNotFound());
@@ -221,22 +283,47 @@ export const listMatterDocumentAnnotations = async function* ({
   return Result.ok({
     ...page,
     limit,
-    items: page.items.map(
-      ({
-        blockAnchorId,
-        createdAtCursor: _,
-        pageTextSha256,
-        targetId,
-        ...item
-      }) => ({
-        ...item,
-        fieldId: targetId,
-        pageNumber:
-          pdfPageNumberOfAnchor(blockAnchorId) ??
-          panic("A matter document mark has no page anchor"),
-        pageTextSha256:
-          pageTextSha256 ?? panic("A matter document mark has no page digest"),
-      }),
-    ),
+    items: page.items.map(toDocumentMark),
   });
+};
+
+type ReadAllVisibleMatterDocumentMarksOptions = MatterDocumentRef & {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+};
+
+/**
+ * Every mark the caller may see on the document's file in one read, for a
+ * copy of the file that carries them: the same rows the viewer pages
+ * through, in the same order, up to `LIMITS.markedPdfMarkRowsMax`.
+ * @yields A database failure, which ends the read.
+ */
+export const readAllVisibleMatterDocumentMarks = async function* ({
+  entityId,
+  fieldId,
+  organizationId,
+  safeDb,
+  userId,
+  workspaceId,
+}: ReadAllVisibleMatterDocumentMarksOptions) {
+  const rows = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        await selectVisibleMarks({
+          conditions: [],
+          entityId,
+          fieldId,
+          limit: LIMITS.markedPdfMarkRowsMax,
+          organizationId,
+          tx,
+          userId,
+          workspaceId,
+        }),
+    ),
+  );
+  if (rows === undefined) {
+    return Result.err(documentFileNotFound());
+  }
+  return Result.ok(rows.map(toDocumentMark));
 };

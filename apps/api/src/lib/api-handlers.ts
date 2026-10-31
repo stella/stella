@@ -584,6 +584,11 @@ export type SessionHandlerConfig = InputSchema &
   CapabilityTransportDisposition & {
     accountAccess: AccountAccess;
     mcp: McpExposure;
+    /**
+     * Session handlers run outside an organization scope, so they can only
+     * state that a successful call announces no resource sets.
+     */
+    realtime?: NoResourceSetUpdates;
   };
 
 type SessionHandlerContext<
@@ -639,6 +644,8 @@ type SafeErrorBody = {
   retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  /** Matter destination for a scope correction the caller may follow. */
+  workspaceId?: string;
   /**
    * Structured fields surfaced on specific error responses. Today
    * only the 402 UsageLimitExceeded path uses them so the
@@ -2165,6 +2172,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     ? {}
     : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
   ...(error.usage
@@ -2250,6 +2258,7 @@ export const createSafeHandler = <
 };
 
 type SessionHandlerDependencies = {
+  authenticate?: typeof authenticateSession;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
 };
 
@@ -2260,6 +2269,7 @@ export const createSafeSessionHandler = <
   config: TConfig,
   handler: SafeHandlerFn<SessionHandlerContext<TConfig>, TResult>,
   {
+    authenticate = authenticateSession,
     checkAccountOperation = checkRestrictedAccountOperation,
   }: SessionHandlerDependencies = {},
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> => {
@@ -2292,7 +2302,7 @@ export const createSafeSessionHandler = <
   return {
     ...core,
     run: async (request) => {
-      const account = await authenticateSession(request.ctx, config);
+      const account = await authenticate(request.ctx, config);
       if (!account.ok) {
         return account.answer;
       }

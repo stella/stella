@@ -1367,6 +1367,34 @@ const walkRunnerParallelSteps = ({
   availableInstalls.push(...additions);
 };
 
+// GitHub-hosted images GitHub has retired or scheduled for retirement
+// (actions/runner-images); during brownouts and after retirement a job on one
+// is cancelled before a runner is assigned.
+export const RETIRED_RUNNER_LABELS = new Map([
+  ["macos-14", "retired on 2026-11-02 (actions/runner-images#13518)"],
+]);
+
+const RETIRED_LABEL_PATTERN = new RegExp(
+  `(?<![\\w.-])(${[...RETIRED_RUNNER_LABELS.keys()].join("|")})(?![\\w.-])`,
+  "u",
+);
+
+/** Every runner label in a workflow, whether in runs-on or a matrix value. */
+export const retiredRunnerLabelProblems = (
+  workflow: string,
+  source: string,
+): string[] =>
+  source.split("\n").flatMap((line, index) => {
+    // A YAML comment starts at a `#` preceded by whitespace or line start.
+    const code = line.replace(/(^|\s)#.*$/u, "");
+    const label = RETIRED_LABEL_PATTERN.exec(code)?.at(1);
+    return label === undefined
+      ? []
+      : [
+          `${workflow}:${index + 1}: runner image ${label} is ${RETIRED_RUNNER_LABELS.get(label) ?? "retired"}; use a supported image`,
+        ];
+  });
+
 type RunnerToolProblemsOptions = {
   root: string;
   workflow: string;
@@ -1385,7 +1413,10 @@ export const runnerToolProblems = ({
   if (!isRecord(source) || !isRecord(source["jobs"])) {
     return [`${workflow}: expected workflow jobs`];
   }
-  const problems: string[] = [];
+  const problems: string[] = retiredRunnerLabelProblems(
+    workflow,
+    readFileSync(path.join(root, workflow), "utf-8"),
+  );
   for (const [jobName, job] of Object.entries(source["jobs"])) {
     if (!isRecord(job) || !Array.isArray(job["steps"])) {
       continue;

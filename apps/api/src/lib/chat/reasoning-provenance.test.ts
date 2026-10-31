@@ -7,12 +7,16 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { ReasoningProvenance } from "@stll/ai-catalog";
+import { isUnsupportedChatPart } from "@stll/api-contract/chat";
 
+import { encodeStoredChatContent } from "@/api/db/stored-chat-part-codec";
 import {
   applyChatPartPersistenceBudget,
+  chatMessageContentFromMessage,
   chatMessageFromPersisted,
   isChatPart,
   isIncomingChatPart,
+  isProviderVisibleChatPart,
   restoreServerOwnedChatParts,
   toPersistableChatMessage,
   toPersistedChatMessageContentV3,
@@ -208,6 +212,36 @@ describe("reasoning provenance survives transcript boundaries", () => {
       expect(isChatPart({ ...thinking, provenance })).toBe(false);
     }
     expect(isChatPart(thinking)).toBe(true);
+  });
+
+  test("stored reasoning with a future provenance remains unread and round trips exactly", () => {
+    const content = structuredClone(
+      toPersistedChatMessageContentV3({ data: [thinking] }),
+    );
+    const stored = content.data.at(0) ?? panic("Stored reasoning is missing");
+    const provenance = {
+      provider: "openai",
+      model: model.modelId,
+      format: "future-replay-format",
+      futureSecret: "stored-only",
+    };
+    Reflect.set(stored, "provenance", provenance);
+    const reloaded = chatMessageFromPersisted({
+      id: toSafeId<"chatMessage">("019eb9fa-c91f-7000-9b9c-9365977dda78"),
+      role: "assistant",
+      content,
+    });
+    expect(reloaded.parts).toHaveLength(1);
+    expect(reloaded.parts.every(isUnsupportedChatPart)).toBe(true);
+    expect(reloaded.parts.some(isProviderVisibleChatPart)).toBe(false);
+    const converted = convertMessagesToModelMessages([reloaded]);
+    expect(converted.at(0)?.thinking).toBeUndefined();
+    const modelInput = JSON.stringify(converted);
+    expect(modelInput).not.toContain("stored-only");
+    expect(modelInput).not.toContain("future-replay-format");
+    expect(
+      encodeStoredChatContent(chatMessageContentFromMessage(reloaded)),
+    ).toEqual(content);
   });
 
   test("client reasoning is replaced with the server-owned sequence without a rich-output budget", () => {
