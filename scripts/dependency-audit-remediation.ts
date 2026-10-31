@@ -154,8 +154,11 @@ export const planDependencyAuditRemediation = ({
         disposition.status === "fix_available" ||
         disposition.status === "fix_in_quarantine",
     );
+    // An advisory with an existing acceptance is waived even when the
+    // assessment reports it as blocked, so it never vetoes its siblings' fix.
     const blocked = group.some(
-      ({ disposition }) =>
+      ({ disposition, acceptance }) =>
+        acceptance === undefined &&
         disposition.status !== "fix_available" &&
         disposition.status !== "fix_in_quarantine" &&
         disposition.status !== "accepted",

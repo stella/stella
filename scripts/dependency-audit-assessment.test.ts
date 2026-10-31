@@ -278,6 +278,48 @@ test("a parent-qualified resolution governs its hoisted copy", () => {
   ]);
 });
 
+test("an accepted blocked advisory does not veto its sibling's fix", () => {
+  const blockedAdvisory = {
+    ...sdk,
+    id: "GHSA-blocked-0000-0000",
+    package: "example",
+    vulnerableVersions: ">=1.5.0",
+  };
+  const fixableAdvisory = {
+    ...sdk,
+    id: "GHSA-fixable-0000-0000",
+    package: "example",
+    vulnerableVersions: "<1.5.1",
+  };
+  const assessments = assessAdvisories({
+    advisories: [blockedAdvisory, fixableAdvisory],
+    accepted: [
+      {
+        ...blockedAdvisory,
+        owner: "supply-chain",
+        reason: "No forward release outside the range",
+        expiresOn: "2026-11-23",
+        affectedPaths: ["example"],
+      },
+    ],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.5.0" } }],
+        example: ["example@1.5.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.5.0", "1.5.1"]]]),
+  });
+
+  expect(
+    planDependencyAuditRemediation({
+      assessments,
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(new Map([["example", "1.5.1"]]));
+});
+
 test("every parent resolution governing a shared hoisted copy is planned", () => {
   const advisory = { ...sdk, package: "example", vulnerableVersions: "<1.4.1" };
   const [result] = assessAdvisories({
