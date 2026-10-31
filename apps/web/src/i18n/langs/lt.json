@@ -1448,6 +1448,14 @@
     "attachedImage": "Pridėtas vaizdas",
     "attachment": "Priedas",
     "audioContent": "Sugeneruotas garsas",
+    "browserExtension": {
+      "connect": "Prijungti plėtinį",
+      "connectDescription": "Šiame skirtuke spustelėkite stella plėtinio piktogramą naršyklės įrankių juostoje. Jei prašoma, leiskite pasiekti svetaines ir prijunkite šį skirtuką.",
+      "connected": "Plėtinys prijungtas",
+      "description": "Jums paprašius, stella gali atidaryti ir skaityti svetaines atskirame skirtuke.",
+      "install": "Įdiegti plėtinį",
+      "installDescription": "stella plėtinys leidžia jūsų prašymu atidaryti ir skaityti svetaines atskirame skirtuke. Įdiekite jį iš „Chrome“ internetinės parduotuvės."
+    },
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klauskite apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į DI pokalbį",
@@ -2582,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# sukurtas} few {# sukurti} other {# sukurta}}, {skipped, plural, one {# praleistas} few {# praleisti} other {# praleista}}",
       "rowLabel": "Klientas {index}",
       "skippedDuplicateContactId": "Praleista: pasikartojantis kontakto ID",
+      "skippedDuplicateExternalRef": "Praleista: tas pats šaltinis ir išorinis ID pasikartoja",
       "skippedDuplicateTaxId": "Praleista: pasikartojantis mokesčių mokėtojo kodas",
       "skippedInFileDuplicate": "Praleista: kartoja ankstesnę failo eilutę",
       "skippedInvalidRow": "Praleista: eilutė neatitinka importo taisyklių",

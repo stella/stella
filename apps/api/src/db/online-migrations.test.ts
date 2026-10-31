@@ -21,6 +21,7 @@ import {
   createDecisionDateCeilingRepair,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS } from "./import-provenance-constraint-validation";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -711,8 +712,11 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  ])(
+    "validates registered constraint $name once and rejects incomplete startup",
     async (validation) => {
       const { name } = validation;
       const harness = createHarness({ unvalidatedConstraints: [name] });

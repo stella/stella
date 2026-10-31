@@ -1448,6 +1448,14 @@
     "attachedImage": "Pievienots attēls",
     "attachment": "Pielikums",
     "audioContent": "Ģenerēts audio",
+    "browserExtension": {
+      "connect": "Savienot paplašinājumu",
+      "connectDescription": "Šajā cilnē noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā. Ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet šo cilni.",
+      "connected": "Paplašinājums savienots",
+      "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
+      "install": "Instalēt paplašinājumu",
+      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala."
+    },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI tērzēšanā",
@@ -2582,6 +2590,7 @@
       "resultsSummary": "{created, plural, zero {# izveidotu} one {# izveidots} other {# izveidoti}}, {skipped, plural, zero {# izlaistu} one {# izlaists} other {# izlaisti}}",
       "rowLabel": "Klients {index}",
       "skippedDuplicateContactId": "Izlaists: dublēts kontakta ID",
+      "skippedDuplicateExternalRef": "Izlaists: tas pats avots un ārējais ID parādās divreiz",
       "skippedDuplicateTaxId": "Izlaists: dublēts nodokļu maksātāja numurs",
       "skippedInFileDuplicate": "Izlaists: atkārto agrāku faila rindu",
       "skippedInvalidRow": "Izlaists: rinda neatbilst importa noteikumiem",

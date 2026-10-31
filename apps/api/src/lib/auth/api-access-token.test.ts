@@ -230,6 +230,31 @@ describe("which routes an API access token opens", () => {
     ).toEqual({ admitted: false, reason: "route" });
   });
 
+  test("a file attached to a chat message goes up with it, at the chat scope only", () => {
+    const send = { method: "POST", route: "/v1/chat" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...send, scopes: MOBILE_SCOPES }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...send,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Attaching opens no chat route beyond the conversation the app holds.
+    expect(
+      Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
+    ).toEqual([
+      "GET /v1/chat/threads",
+      "GET /v1/chat/threads/:threadId/messages",
+      "GET /v1/chat/threads/:threadId/messages/older",
+      "POST /v1/chat",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/join",
+      "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+    ]);
+  });
+
   test("a request no route matched is refused", () => {
     expect(
       admitApiAccessTokenRoute({

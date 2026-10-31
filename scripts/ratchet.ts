@@ -6506,7 +6506,7 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
     },
     {
       name: "empty text extraction fallback",
-      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      code: 'function fixture() {\nreturn { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };\n}',
       expected: 1,
     },
     {
@@ -6521,7 +6521,7 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
     },
     {
       name: "catch with result",
-      code: "try { read(); } catch { return Result.err(cause); }",
+      code: "function fixture() {\ntry { read(); } catch { return Result.err(cause); }\n}",
       expected: 0,
     },
   ];

@@ -1448,6 +1448,14 @@
     "attachedImage": "Manustatud pilt",
     "attachment": "Manus",
     "audioContent": "Loodud heli",
+    "browserExtension": {
+      "connect": "Ühenda laiendus",
+      "connectDescription": "Klõpsa sellel vahekaardil brauseri tööriistaribal stella laienduse ikooni. Kui küsitakse, luba juurdepääs veebisaitidele ja ühenda see vahekaart.",
+      "connected": "Laiendus on ühendatud",
+      "description": "stella saab sinu palvel veebilehti eraldi vahekaardil avada ja lugeda.",
+      "install": "Paigalda laiendus",
+      "installDescription": "stella laiendus võimaldab stellal sinu palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigalda see Chrome’i veebipoest."
+    },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
@@ -2582,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# loodud} other {# loodud}}, {skipped, plural, one {# vahele jäetud} other {# vahele jäetud}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Vahele jäetud: korduv kontakti ID",
+      "skippedDuplicateExternalRef": "Vahele jäetud: sama allikas ja väline ID esinevad kaks korda",
       "skippedDuplicateTaxId": "Vahele jäetud: korduv maksukohustuslasena registreerimise number",
       "skippedInFileDuplicate": "Vahele jäetud: kordab faili varasemat rida",
       "skippedInvalidRow": "Vahele jäetud: rida ei vasta impordireeglitele",

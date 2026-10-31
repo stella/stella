@@ -40,6 +40,19 @@
     "answerNeedsInput": "Cette réponse attend votre intervention. Poursuivez-la dans stella sur le web.",
     "answerFailed": "La réponse n’a pas pu être terminée.",
     "composerMenu": "Ouvrir le menu des pièces jointes et des outils",
+    "attachFile": "Joindre un fichier",
+    "attachment": "Pièce jointe",
+    "fileTooLarge": "Le fichier dépasse la limite de {maxSize}",
+    "maxAttachmentsReached": "Maximum {count} fichiers par message",
+    "unsupportedFileType": "Type de fichier non pris en charge",
+    "uploadFailed": "Échec du traitement du fichier",
+    "scanDocument": "Numériser un document",
+    "removeAttachment": "Retirer {name}",
+    "attachmentReading": "Préparation…",
+    "attachmentUploading": "Envoi…",
+    "pickFailed": "Impossible d’ouvrir le sélecteur de fichiers. Réessayez.",
+    "sendFileRefused": "Un fichier n’a pas pu être envoyé, donc le message n’a pas été envoyé. Retirez le fichier et réessayez.",
+    "sendFileNotAnonymizable": "Cette conversation est anonymisée et stella n’a pas pu anonymiser l’un des fichiers, donc rien n’a été envoyé. Retirez le fichier et réessayez.",
     "pickTitle": "Choisissez une conversation",
     "pickDescription": "Choisissez un fil dans la liste ou démarrez-en un avec +."
   },
@@ -76,7 +89,14 @@
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
     "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
-    "openMatter": "Ouvrir le dossier"
+    "openMatter": "Ouvrir le dossier",
+    "assignedTo": "Attribuée à",
+    "nobody": "Non attribué",
+    "assign": "Attribuer",
+    "doneAssigning": "Terminé",
+    "someone": "Quelqu’un",
+    "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -184,6 +204,7 @@
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
     "openSource": "Ouvrir la source d’origine",
+    "openFailed": "Le lien n’a pas pu être ouvert.",
     "loadFailed": "Impossible de charger la jurisprudence.",
     "share": "Partager"
   },
