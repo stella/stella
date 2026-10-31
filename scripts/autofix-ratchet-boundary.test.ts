@@ -13,20 +13,24 @@ import path from "node:path";
 
 import { AUTOFIX_PROTECTED_PATHS } from "./autofix-protected-paths";
 import { parseVerifyWorkflow } from "./verify-workflow";
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const workflow = await Bun.file(
   new URL("../.github/workflows/autofix.yml", import.meta.url),
 ).text();
-const job = workflow.slice(workflow.indexOf("  regenerate-derived-files:"));
-const restriction = job.slice(
-  job.indexOf("      - name: Restrict autofix changes"),
-  job.indexOf("      - name: Push autofixes"),
+const autofixSteps = workflowJobSteps(
+  Bun.YAML.parse(workflow),
+  "regenerate-derived-files",
 );
-const command = restriction
-  .slice(restriction.indexOf("        run: |\n") + "        run: |\n".length)
-  .split("\n")
-  .map((line) => line.replace(/^ {10}/u, ""))
-  .join("\n");
+const stepCommand = (name: string) => {
+  const run = workflowStepByName(autofixSteps, name)["run"];
+  if (typeof run !== "string") {
+    panic(`Autofix step has no command: ${name}`);
+  }
+  return run;
+};
+const selectCommand = stepCommand("Select fix paths");
+const command = stepCommand("Restrict autofix changes");
 
 type BoundaryCase = { written: string; baseline: string };
 
@@ -85,10 +89,9 @@ exit 1
 
 describe("ratchet autofix output boundary", () => {
   test("the actual fixer excludes each protected glob with the installed Bash", () => {
-    const step = parseVerifyWorkflow(workflow, "autofix").find(
-      ({ name }) => name === "Fix changed files",
-    );
-    if (!step) {
+    const steps = parseVerifyWorkflow(workflow, "autofix");
+    const fix = steps.find(({ name }) => name === "Fix changed files");
+    if (!fix) {
       panic("Autofix changed-file owner is missing");
     }
     const root = mkdtempSync(path.join(tmpdir(), "autofix-glob-boundary-"));
@@ -103,6 +106,16 @@ describe("ratchet autofix output boundary", () => {
       for (const file of [...protectedPaths, unprotected]) {
         mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
         writeFileSync(path.join(root, file), "{}");
+      }
+      for (const file of [
+        "autofix-select-paths.ts",
+        "autofix-protected-paths.ts",
+        "baseline-paths.ts",
+      ]) {
+        writeFileSync(
+          path.join(root, "scripts", file),
+          readFileSync(new URL(file, import.meta.url)),
+        );
       }
       writeFileSync(
         path.join(root, "policy"),
@@ -120,16 +133,24 @@ describe("ratchet autofix output boundary", () => {
         path.join(bin, "bun"),
         `#!/bin/bash
 if [[ "$1" == scripts/autofix-protected-paths.ts ]]; then cat "$RUNNER_TEMP/policy"; exit 0; fi
+if [[ "$1" == scripts/autofix-select-paths.ts ]]; then exec "$REAL_BUN" "$@"; fi
 printf '%s\\n' "$@" >> "$RUNNER_TEMP/commands"
 `,
         { mode: 0o755 },
       );
-      const result = Bun.spawnSync(["bash", "-c", step.run], {
-        cwd: root,
-        env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: root },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const result = Bun.spawnSync(
+        ["bash", "-c", `${selectCommand}\n${fix.run}`],
+        {
+          cwd: root,
+          env: {
+            PATH: `${bin}:/usr/bin:/bin`,
+            RUNNER_TEMP: root,
+            REAL_BUN: process.execPath,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const commands = readFileSync(path.join(root, "commands"), "utf-8");
       expect(commands).toContain(`./${unprotected}`);

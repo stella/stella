@@ -234,6 +234,19 @@ const localChecks = (options: VerifyOptions, config: HostConfig): number => {
           path.join(temporary, "autofix-added-paths"),
           `${added.join("\0")}\0`,
         );
+        const selected = Bun.spawnSync(
+          [
+            process.execPath,
+            "scripts/autofix-select-paths.ts",
+            path.join(temporary, "autofix-fix-paths"),
+            path.join(temporary, "autofix-format-paths"),
+            path.join(temporary, "autofix-lint-paths"),
+          ],
+          { cwd: repo, stdout: "inherit", stderr: "inherit" },
+        );
+        if (selected.exitCode !== 0) {
+          return selected.exitCode;
+        }
         const plan = Bun.spawnSync(
           [process.execPath, "scripts/autofix-plan.ts", "plan"],
           {
