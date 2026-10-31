@@ -325,6 +325,9 @@ type ChatEditorManagerContextValue = {
   focusThread: (threadRef: ChatThreadRef) => void;
   getMentionItems: () => Promise<ChatMentionSourceResult>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
+  /** Whether a composer for the thread is on screen to take what is handed
+   *  to it, rather than only its stored draft. */
+  hasLiveComposer: (threadRef: ChatThreadRef) => boolean;
   searchMentionItems: (query: string) => Promise<ChatMentionSourceResult>;
   insertMentionIntoThread: (
     threadRef: ChatThreadRef,
@@ -519,10 +522,20 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     )?.focus();
   }, []);
 
+  const hasLiveComposer = useCallback(
+    (threadRef: ChatThreadRef) =>
+      mountedEditorFor(
+        mountedEditorsRef.current,
+        getChatThreadKey(threadRef),
+      ) !== null,
+    [],
+  );
+
   const contextValue = useMemo<ChatEditorManagerContextValue>(
     () => ({
       focusThread,
       getMentionItems,
+      hasLiveComposer,
       getPluginRegistrations,
       insertMentionIntoThread,
       insertPastedTextIntoThread,
@@ -534,6 +547,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       focusThread,
       getMentionItems,
       getPluginRegistrations,
+      hasLiveComposer,
       insertMentionIntoThread,
       insertPastedTextIntoThread,
       registerActiveEditor,
@@ -568,6 +582,14 @@ export const ChatEditorScope = ({ children }: React.PropsWithChildren) => {
     </ChatEditorManagerContext>
   );
 };
+
+/**
+ * The manager when a provider is above, or null: for a surface that hands
+ * content to a composer when one is there and does without otherwise, such as
+ * a reader's selection toolbar on a page a visitor reads.
+ */
+export const useOptionalChatEditorManager =
+  (): ChatEditorManagerContextValue | null => use(ChatEditorManagerContext);
 
 // Drafts live in memory for every thread, including threads whose composer is
 // not mounted, so the provider that owns their lifecycle reports them; a
