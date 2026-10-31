@@ -133,7 +133,9 @@
     },
     "add": "Hozzáadás",
     "scanDocument": "Dokumentum szkennelése",
-    "newTask": "Új feladat"
+    "newTask": "Új feladat",
+    "uploadDocument": "Dokumentum feltöltése",
+    "uploadFailed": "A dokumentumot nem sikerült feltölteni. Próbálja újra."
   },
   "entity": {
     "type": "Típus",

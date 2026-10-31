@@ -133,7 +133,9 @@
     },
     "add": "Add",
     "scanDocument": "Scan a document",
-    "newTask": "New task"
+    "newTask": "New task",
+    "uploadDocument": "Upload document",
+    "uploadFailed": "The document could not be uploaded. Try again."
   },
   "entity": {
     "type": "Type",

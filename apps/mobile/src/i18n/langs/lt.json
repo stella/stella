@@ -133,7 +133,9 @@
     },
     "add": "Pridėti",
     "scanDocument": "Nuskenuoti dokumentą",
-    "newTask": "Nauja užduotis"
+    "newTask": "Nauja užduotis",
+    "uploadDocument": "Įkelti dokumentą",
+    "uploadFailed": "Dokumento įkelti nepavyko. Bandykite dar kartą."
   },
   "entity": {
     "type": "Tipas",

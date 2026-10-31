@@ -39,6 +39,12 @@ const uploadsPath = (matterId: string) =>
   `/v1/uploads/${encodeURIComponent(matterId)}`;
 
 /**
+ * Where the file a save sheet uploads came from: a scan reviewed before it,
+ * or a document picked from Files.
+ */
+export const UPLOAD_ORIGIN = { file: "file", scan: "scan" } as const;
+
+/**
  * The matter's documents column: its one property whose content is a file,
  * created with the matter, which the web uploads into as well.
  */
