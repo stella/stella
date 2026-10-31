@@ -7,7 +7,11 @@ import {
   CURRENCY_CODE_LENGTH,
   currencyCodeSchema,
 } from "@stll/api-contract/currency-code";
-import { currencyMinorUnitDigits, parseLocaleMinorUnits } from "@stll/money";
+import {
+  currencyMinorUnitDigits,
+  formatLocaleMinorUnitsInput,
+  parseLocaleMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -100,7 +104,11 @@ export const ExpenseForm = ({
       });
       if (amountResult.isErr()) {
         addIssue({
-          message: t("billing.invalidNumberFormat"),
+          message: t(
+            amountResult.error.reason === "empty"
+              ? "common.required"
+              : "billing.invalidNumberFormat",
+          ),
           path: [
             {
               type: "object",
@@ -147,14 +155,11 @@ export const ExpenseForm = ({
         markup: defaultValues?.markup ?? 0,
         amountInputValue:
           (defaultValues?.amount ?? 0) > 0
-            ? new Intl.NumberFormat(locale, {
-                minimumFractionDigits: currencyMinorUnitDigits(initialCurrency),
-                maximumFractionDigits: currencyMinorUnitDigits(initialCurrency),
-                useGrouping: false,
-              }).format(
-                (defaultValues?.amount ?? 0) /
-                  10 ** currencyMinorUnitDigits(initialCurrency),
-              )
+            ? formatLocaleMinorUnitsInput({
+                amountCents: defaultValues?.amount ?? 0,
+                currency: initialCurrency,
+                locale,
+              })
             : "",
       },
       onSubmit: async ({ value }) => {
@@ -258,15 +263,11 @@ export const ExpenseForm = ({
                   if (amount.isErr() || amount.value <= 0) {
                     return;
                   }
-                  const normalized = new Intl.NumberFormat(locale, {
-                    minimumFractionDigits:
-                      currencyMinorUnitDigits(currentCurrency),
-                    maximumFractionDigits:
-                      currencyMinorUnitDigits(currentCurrency),
-                  }).format(
-                    amount.value /
-                      10 ** currencyMinorUnitDigits(currentCurrency),
-                  );
+                  const normalized = formatLocaleMinorUnitsInput({
+                    amountCents: amount.value,
+                    currency: currentCurrency,
+                    locale,
+                  });
                   field.handleChange(normalized);
                 }}
                 onChange={(e) => {

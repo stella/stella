@@ -623,7 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "لا يمكن أن يكون السعر بالساعة سالبًا",
     "hours": "الساعات",
-    "invalidNumberFormat": "أدخل مبلغًا بتنسيق الأرقام الخاص بك",
+    "invalidNumberFormat": "تحقق من تنسيق الرقم",
     "invoiceComposer": {
       "addSellerProfile": "أضف ملف بائع في إعدادات الفوترة",
       "billedHours": "الساعات المفوترة",

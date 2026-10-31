@@ -119,26 +119,32 @@ describe("contact text editable fields", () => {
 });
 
 describe("contact hourly rates", () => {
-  test("saves localized decimals and canonical dots with exact currency rounding", () => {
+  test("saves localized decimals with exact currency rounding", () => {
     for (const locale of ["cs", "de", "fr"]) {
-      for (const trimmedInput of ["150,50", "150.50"]) {
-        expect(
-          buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
-        ).toEqual({
-          status: "valid",
-          payload: { defaultHourlyRate: cents(15_050) },
-        });
-      }
+      expect(
+        buildContactRatePayload({
+          trimmedInput: "150,50",
+          currency: "EUR",
+          locale,
+        }),
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(15_050) },
+      });
+      expect(
+        buildContactRatePayload({
+          trimmedInput: "150.50",
+          currency: "EUR",
+          locale,
+        }),
+      ).toEqual({ status: "invalid" });
       expect(
         buildContactRatePayload({
           trimmedInput: "1,005",
           currency: "EUR",
           locale,
         }),
-      ).toEqual({
-        status: "valid",
-        payload: { defaultHourlyRate: cents(101) },
-      });
+      ).toEqual({ status: "invalid" });
       expect(
         buildContactRatePayload({
           trimmedInput: "150,500",
@@ -155,10 +161,7 @@ describe("contact hourly rates", () => {
           currency: "JPY",
           locale,
         }),
-      ).toEqual({
-        status: "valid",
-        payload: { defaultHourlyRate: cents(151) },
-      });
+      ).toEqual({ status: "invalid" });
     }
     expect(
       buildContactRatePayload({
@@ -179,17 +182,28 @@ describe("contact hourly rates", () => {
     ).toEqual({ status: "invalid" });
   });
 
-  test("rejects grouping and mixed separators instead of reinterpreting a rate", () => {
+  test("accepts locale grouping but rejects ambiguous or mixed separators", () => {
+    for (const { locale, trimmedInput } of [
+      { locale: "en", trimmedInput: "1,234.50" },
+      { locale: "cs", trimmedInput: "1.234,50" },
+      { locale: "de", trimmedInput: "1.234,50" },
+      { locale: "fr", trimmedInput: "1 234,50" },
+      { locale: "fr", trimmedInput: "1\u00a0234,50" },
+      { locale: "fr", trimmedInput: "1\u202f234,50" },
+      { locale: "ar-u-nu-arab", trimmedInput: "١٬٢٣٤٫٥٠" },
+    ]) {
+      expect(
+        buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(123_450) },
+      });
+    }
+
     for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
       for (const trimmedInput of [
-        "1,234.50",
-        "1.234,50",
         "1.234.567",
         "1,234,567",
-        "1 234,50",
-        "1\u00a0234,50",
-        "1\u202f234,50",
-        "١٬٢٣٤٫٥٠",
         "150,,50",
         "150..50",
         "1e3",

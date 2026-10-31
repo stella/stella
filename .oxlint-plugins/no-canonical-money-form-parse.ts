@@ -1,7 +1,9 @@
 // User-entered values in web forms must carry the formatting locale into the
 // money owner. This syntactic boundary detects direct DOM/Form field values;
 // aliases and values returned by other functions are outside its analysis.
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
+
+import { isIdentifierReference, resolveVariable } from "./utils.ts";
 
 export default eslintCompatPlugin({
   meta: { name: "no-canonical-money-form-parse" },
@@ -14,9 +16,12 @@ export default eslintCompatPlugin({
             "Use parseLocaleMinorUnits with the formatting locale for user-entered money text.",
         },
       },
-      create(context) {
-        const canonicalNames = new Set<string>();
+      createOnce(context) {
+        let canonicalBindings = new Set<Variable>();
         return {
+          Program() {
+            canonicalBindings = new Set();
+          },
           ImportDeclaration(node) {
             if (node.source.value !== "@stll/money") {
               return;
@@ -26,17 +31,22 @@ export default eslintCompatPlugin({
                 specifier.type === "ImportSpecifier" &&
                 specifier.imported.type === "Identifier" &&
                 (specifier.imported.name === "tryToMinorUnits" ||
-                  specifier.imported.name === "toMinorUnits")
+                  specifier.imported.name === "toMinorUnits") &&
+                isIdentifierReference(specifier.local)
               ) {
-                canonicalNames.add(specifier.local.name);
+                const binding = resolveVariable(context, specifier.local);
+                if (binding !== null) {
+                  canonicalBindings.add(binding);
+                }
               }
             }
           },
           CallExpression(node) {
-            if (
-              node.callee.type !== "Identifier" ||
-              !canonicalNames.has(node.callee.name)
-            ) {
+            if (!isIdentifierReference(node.callee)) {
+              return;
+            }
+            const binding = resolveVariable(context, node.callee);
+            if (binding === null || !canonicalBindings.has(binding)) {
               return;
             }
             const text = context.sourceCode.getText(node.arguments.at(0));

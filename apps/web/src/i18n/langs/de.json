@@ -623,7 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
-    "invalidNumberFormat": "Geben Sie einen Betrag in Ihrem Zahlenformat ein",
+    "invalidNumberFormat": "Überprüfen Sie das Zahlenformat",
     "invoiceComposer": {
       "addSellerProfile": "Legen Sie in den Abrechnungseinstellungen ein Verkäuferprofil an",
       "billedHours": "Abgerechnete Stunden",

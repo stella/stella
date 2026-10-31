@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
+  formatLocaleMinorUnitsInput,
   formatMoneyCents,
   parseLocaleDecimal,
   parseLocaleMinorUnits,
@@ -12,7 +13,7 @@ import {
 } from "./format";
 
 describe("parseLocaleMinorUnits", () => {
-  const locales = ["sk-SK", "cs-CZ", "en-US", "de-DE", "pl-PL"];
+  const locales = ["sk-SK", "cs-CZ", "en-US", "en-IN", "de-DE", "pl-PL"];
 
   test("round-trips locale-formatted minor-unit amounts", () => {
     let state = 24_301;
@@ -62,6 +63,49 @@ describe("parseLocaleMinorUnits", () => {
       ).toBe(true);
     },
   );
+
+  test("returns a locale error instead of throwing for a malformed tag", () => {
+    const parsed = parseLocaleMinorUnits({
+      amount: "12.50",
+      currency: "EUR",
+      locale: "not_a_locale",
+    });
+    expect(parsed.isErr() && parsed.error.reason).toBe("locale");
+  });
+
+  test("accepts primary and secondary locale grouping sizes", () => {
+    expect(
+      parseLocaleMinorUnits({
+        amount: "12,34,567.89",
+        currency: "USD",
+        locale: "en-IN",
+      }).unwrap(),
+    ).toBe(cents(123_456_789));
+  });
+
+  test("redisplay text round-trips every currency exponent and locale", () => {
+    let state = 91_337;
+    for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+      for (const currency of ["JPY", "EUR", "KWD"]) {
+        for (let index = 0; index < 250; index += 1) {
+          state = (state * 48_271) % 2_147_483_647;
+          const amountCents = (state % 20_000_001) - 10_000_000;
+          const rendered = formatLocaleMinorUnitsInput({
+            amountCents,
+            currency,
+            locale,
+          });
+          expect(
+            parseLocaleMinorUnits({
+              amount: rendered,
+              currency,
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
+      }
+    }
+  });
 
   test("accepts locale grouping and decimal separators", () => {
     for (const amount of [

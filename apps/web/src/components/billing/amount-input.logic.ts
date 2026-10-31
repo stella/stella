@@ -1,8 +1,7 @@
 import {
-  currencyMinorUnitDigits,
+  formatLocaleMinorUnitsInput,
   parseLocaleDecimal,
   parseLocaleMinorUnits,
-  toMajorUnits,
 } from "@stll/money";
 
 /**
@@ -23,12 +22,7 @@ export const majorUnitInput = (
   amountCents: number,
   currency: string,
   locale = "en",
-): string =>
-  new Intl.NumberFormat(locale, {
-    minimumFractionDigits: currencyMinorUnitDigits(currency),
-    maximumFractionDigits: currencyMinorUnitDigits(currency),
-    useGrouping: false,
-  }).format(toMajorUnits({ amountCents, currency }));
+): string => formatLocaleMinorUnitsInput({ amountCents, currency, locale });
 
 /** Canonical decimal text, without grouping or a floating-point conversion. */
 type NormalizeMajorUnitInputOptions = {

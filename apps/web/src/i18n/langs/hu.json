@@ -623,7 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Az óradíj nem lehet negatív",
     "hours": "Órák",
-    "invalidNumberFormat": "Adjon meg egy összeget a saját számformátumában",
+    "invalidNumberFormat": "Ellenőrizze a számformátumot",
     "invoiceComposer": {
       "addSellerProfile": "Hozzon létre eladói profilt a számlázási beállításokban",
       "billedHours": "Számlázott órák",

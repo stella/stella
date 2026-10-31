@@ -13,7 +13,7 @@
  * from the app around it.
  */
 
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 
 import { cents, type CentsAmount } from "./cents";
 
@@ -50,12 +50,16 @@ export const currencyMinorUnitDigits = (currency: string): number => {
 /** A decimal amount in major units: an optional sign, digits, an optional point. */
 const DECIMAL_AMOUNT = /^(?<sign>[+-]?)(?<whole>\d*)(?:\.(?<fraction>\d*))?$/u;
 
-export class LocaleAmountParseError extends TaggedError(
-  "LocaleAmountParseError",
-)<{
+export type LocaleAmountParseError = {
+  reason:
+    | "empty"
+    | "syntax"
+    | "ambiguous"
+    | "precision"
+    | "unsafe-integer"
+    | "locale";
   message: string;
-  reason: "empty" | "syntax" | "ambiguous" | "precision" | "unsafe-integer";
-}> {}
+};
 
 export type ParseLocaleMinorUnitsParams = {
   amount: string;
@@ -63,18 +67,58 @@ export type ParseLocaleMinorUnitsParams = {
   locale: string;
 };
 
-const localeSeparators = (locale: string) => {
-  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
-  const parts = new Intl.NumberFormat(locale).formatToParts(12_345.6);
-  const digits = new Map<string, string>();
-  for (let digit = 0; digit <= 9; digit += 1) {
-    digits.set(formatter.format(digit), String(digit));
+const localeSeparators = (locale: string) =>
+  Result.try(() => {
+    const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
+    const groupedParts = new Intl.NumberFormat(locale).formatToParts(
+      1_234_567_890_123,
+    );
+    const digits = new Map<string, string>();
+    for (let digit = 0; digit <= 9; digit += 1) {
+      digits.set(formatter.format(digit), String(digit));
+    }
+    const integerGroups = groupedParts
+      .filter((part) => part.type === "integer")
+      .map((part) => part.value.length);
+    return {
+      decimal:
+        new Intl.NumberFormat(locale)
+          .formatToParts(12_345.6)
+          .find((part) => part.type === "decimal")?.value ?? ".",
+      group: groupedParts.find((part) => part.type === "group")?.value,
+      primaryGroupSize: integerGroups.at(-1) ?? 3,
+      secondaryGroupSize: integerGroups.at(-2) ?? integerGroups.at(-1) ?? 3,
+      digits,
+    };
+  });
+
+type NormalizeGroupedWholeParams = {
+  whole: string;
+  grouping: string;
+  primaryGroupSize: number;
+  secondaryGroupSize: number;
+};
+
+const normalizeGroupedWhole = ({
+  whole,
+  grouping,
+  primaryGroupSize,
+  secondaryGroupSize,
+}: NormalizeGroupedWholeParams): string | null => {
+  const groups = whole.split(grouping);
+  const leadingGroup = groups.at(0) ?? "";
+  const trailingGroup = groups.at(-1) ?? "";
+  const middleGroups = groups.slice(1, -1);
+  if (
+    !new RegExp(`^[0-9]{1,${secondaryGroupSize}}$`, "u").test(leadingGroup) ||
+    !new RegExp(`^[0-9]{${primaryGroupSize}}$`, "u").test(trailingGroup) ||
+    middleGroups.some(
+      (part) => !new RegExp(`^[0-9]{${secondaryGroupSize}}$`, "u").test(part),
+    )
+  ) {
+    return null;
   }
-  return {
-    decimal: parts.find((part) => part.type === "decimal")?.value ?? ".",
-    group: parts.find((part) => part.type === "group")?.value,
-    digits,
-  };
+  return groups.join("");
 };
 
 export type ParseLocaleDecimalParams = {
@@ -91,14 +135,20 @@ export const parseLocaleDecimal = ({
 }: ParseLocaleDecimalParams): Result<string, LocaleAmountParseError> => {
   const text = amount.trim();
   if (text.length === 0) {
-    return Result.err(
-      new LocaleAmountParseError({
-        reason: "empty",
-        message: "Amount is empty",
-      }),
-    );
+    return Result.err({
+      reason: "empty",
+      message: "Amount is empty",
+    });
   }
-  const { decimal, group, digits } = localeSeparators(locale);
+  const separators = localeSeparators(locale);
+  if (separators.isErr()) {
+    return Result.err({
+      reason: "locale",
+      message: "Invalid locale",
+    });
+  }
+  const { decimal, group, primaryGroupSize, secondaryGroupSize, digits } =
+    separators.value;
   const whitespaceGroup = group !== undefined && /^\s$/u.test(group);
   let localizedDigits = "";
   for (const character of text) {
@@ -116,12 +166,10 @@ export const parseLocaleDecimal = ({
     decimalParts.length > 2 ||
     decimalParts.some((part) => part.length === 0)
   ) {
-    return Result.err(
-      new LocaleAmountParseError({
-        reason: "syntax",
-        message: "Invalid amount format",
-      }),
-    );
+    return Result.err({
+      reason: "syntax",
+      message: "Invalid amount format",
+    });
   }
   const whole = decimalParts.at(0) ?? "";
   const fraction = decimalParts.at(1);
@@ -130,47 +178,41 @@ export const parseLocaleDecimal = ({
     fraction !== undefined &&
     fraction.length > maximumFractionDigits
   ) {
-    return Result.err(
-      new LocaleAmountParseError({
-        reason: "precision",
-        message: "Amount has too many fraction digits",
-      }),
-    );
+    return Result.err({
+      reason: "precision",
+      message: "Amount has too many fraction digits",
+    });
   }
   let wholeDigits = whole;
   if (grouping !== undefined && whole.includes(grouping)) {
     if (fraction === undefined && (grouping === "." || grouping === ",")) {
-      return Result.err(
-        new LocaleAmountParseError({
-          reason: "ambiguous",
-          message: "Amount has an ambiguous separator",
-        }),
-      );
+      return Result.err({
+        reason: "ambiguous",
+        message: "Amount has an ambiguous separator",
+      });
     }
-    const groups = whole.split(grouping);
-    if (
-      !/^[0-9]{1,3}$/u.test(groups.at(0) ?? "") ||
-      groups.slice(1).some((part) => !/^[0-9]{3}$/u.test(part))
-    ) {
-      return Result.err(
-        new LocaleAmountParseError({
-          reason: "syntax",
-          message: "Invalid amount grouping",
-        }),
-      );
+    const normalizedWhole = normalizeGroupedWhole({
+      whole,
+      grouping,
+      primaryGroupSize,
+      secondaryGroupSize,
+    });
+    if (normalizedWhole === null) {
+      return Result.err({
+        reason: "syntax",
+        message: "Invalid amount grouping",
+      });
     }
-    wholeDigits = groups.join("");
+    wholeDigits = normalizedWhole;
   }
   if (
     !/^[0-9]+$/u.test(wholeDigits) ||
     (fraction !== undefined && !/^[0-9]+$/u.test(fraction))
   ) {
-    return Result.err(
-      new LocaleAmountParseError({
-        reason: "syntax",
-        message: "Invalid amount format",
-      }),
-    );
+    return Result.err({
+      reason: "syntax",
+      message: "Invalid amount format",
+    });
   }
   return Result.ok(
     `${sign}${wholeDigits}${fraction === undefined ? "" : `.${fraction}`}`,
@@ -199,14 +241,30 @@ export const parseLocaleMinorUnits = ({
     currency,
   });
   return parsed === null
-    ? Result.err(
-        new LocaleAmountParseError({
-          reason: "unsafe-integer",
-          message: "Amount exceeds the supported range",
-        }),
-      )
+    ? Result.err({
+        reason: "unsafe-integer",
+        message: "Amount exceeds the supported range",
+      })
     : Result.ok(parsed);
 };
+
+export type FormatLocaleMinorUnitsInputParams = {
+  amountCents: number;
+  currency: string;
+  locale: string;
+};
+
+/** Render stored minor units as locale input text that parses back unchanged. */
+export const formatLocaleMinorUnitsInput = ({
+  amountCents,
+  currency,
+  locale,
+}: FormatLocaleMinorUnitsInputParams): string =>
+  new Intl.NumberFormat(locale, {
+    minimumFractionDigits: currencyMinorUnitDigits(currency),
+    maximumFractionDigits: currencyMinorUnitDigits(currency),
+    useGrouping: false,
+  }).format(toMajorUnits({ amountCents, currency }));
 
 /** Scientific notation, which `String(1e21)` and `String(1e-7)` both produce. */
 const EXPONENT_AMOUNT =
