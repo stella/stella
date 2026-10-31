@@ -42,6 +42,35 @@ const TYPE_ALIASES: Readonly<Record<string, string>> = {
   "time without time zone": "time",
 };
 
+const inputTypeWords = (tokens: Token[], end: number) => {
+  let depth = 0;
+  const words: string[] = [];
+  for (const token of tokens) {
+    if (token.index >= end) {
+      break;
+    }
+    if (token.value === "(" || token.value === "[") {
+      depth++;
+      continue;
+    }
+    if (token.value === ")" || token.value === "]") {
+      depth--;
+      continue;
+    }
+    if (depth === 0) {
+      words.push(
+        token.kind === "identifier" && !/^[a-z_][a-z0-9_]*$/u.test(token.value)
+          ? JSON.stringify(token.value)
+          : token.value,
+      );
+    }
+  }
+  return words
+    .join(" ")
+    .replace(/\s*\.\s*/gu, ".")
+    .replace(/^pg_catalog\./u, "");
+};
+
 /** Function identity excludes parameter names, defaults, OUT parameters and typmods. */
 const argumentType = (
   statement: Statement,
@@ -50,13 +79,18 @@ const argumentType = (
 ): string | null => {
   let argumentEnd = end;
   let input = tokens;
-  if (input.at(0)?.value === "out") {
+  if (input.at(0)?.kind === "word" && input.at(0)?.value === "out") {
     return null;
   }
-  if (INPUT_MODES.has(input.at(0)?.value ?? "")) {
+  if (
+    input.at(0)?.kind === "word" &&
+    INPUT_MODES.has(input.at(0)?.value ?? "")
+  ) {
     input = input.slice(1);
   }
-  const defaultIndex = input.findIndex(({ value }) => value === "default");
+  const defaultIndex = input.findIndex(
+    ({ kind, value }) => kind === "word" && value === "default",
+  );
   if (defaultIndex !== -1) {
     argumentEnd = input.at(defaultIndex)?.index ?? argumentEnd;
     input = input.slice(0, defaultIndex);
@@ -81,34 +115,9 @@ const argumentType = (
   // remain in its keyword view even though relation tokens omit them.
   const equals = statement.text.slice(start, argumentEnd).indexOf("=");
   const typeEnd = equals === -1 ? argumentEnd : start + equals;
-  let depth = 0;
-  const words: string[] = [];
-  for (const token of input) {
-    if (token.index >= typeEnd) {
-      break;
-    }
-    if (token.value === "(" || token.value === "[") {
-      depth++;
-      continue;
-    }
-    if (token.value === ")" || token.value === "]") {
-      depth--;
-      continue;
-    }
-    if (depth === 0) {
-      words.push(
-        token.kind === "identifier" && !/^[a-z_][a-z0-9_]*$/u.test(token.value)
-          ? JSON.stringify(token.value)
-          : token.value,
-      );
-    }
-  }
-  const type = words
-    .join(" ")
-    .replace(/\s*\.\s*/gu, ".")
-    .replace(/^pg_catalog\./u, "");
+  const type = inputTypeWords(input, typeEnd);
   const arrays = raw.slice(0, typeEnd - start).match(/\[\s*\]/gu)?.length ?? 0;
-  return `${TYPE_ALIASES[type] ?? type}${"[]".repeat(arrays)}`;
+  return `${TYPE_ALIASES[type] ?? type}${arrays > 0 ? "[]" : ""}`;
 };
 
 const readSignature = (
@@ -147,6 +156,7 @@ const readSignature = (
             types,
           ]),
           schema: named.relation.schema,
+          name: named.relation.name,
           types,
           next: index + 1,
         };
@@ -245,6 +255,20 @@ export const currentMigrationFunctionCorpus = (
           if (body !== undefined) {
             functions.set(
               JSON.stringify([signature.schema, name, signature.types]),
+              body,
+            );
+          }
+        } else if (
+          words.at(signature.next) === "set" &&
+          words.at(signature.next + 1) === "schema"
+        ) {
+          const body = functions.get(signature.key);
+          const schema =
+            words.at(signature.next + 2) ?? panic("Missing function schema");
+          functions.delete(signature.key);
+          if (body !== undefined) {
+            functions.set(
+              JSON.stringify([schema, signature.name, signature.types]),
               body,
             );
           }

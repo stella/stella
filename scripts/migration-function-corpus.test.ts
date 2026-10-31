@@ -118,4 +118,23 @@ describe("current migration function column references", () => {
       ]),
     ).toBe(false);
   });
+
+  test("array dimensions share one PostgreSQL function identity", () => {
+    expect(
+      references([
+        `CREATE FUNCTION proof(p text[][]) RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`,
+        `DROP FUNCTION proof(text[]);`,
+      ]),
+    ).toBe(false);
+  });
+
+  test("moving a function schema preserves its identity until the later drop", () => {
+    expect(
+      references([
+        original,
+        `ALTER FUNCTION proof(text) SET SCHEMA archive;`,
+        `DROP FUNCTION archive.proof(text);`,
+      ]),
+    ).toBe(false);
+  });
 });
