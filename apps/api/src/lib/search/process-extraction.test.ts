@@ -7,7 +7,6 @@ import JSZip from "jszip";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { writeZipEntry } from "@stll/docx-utils";
 
-import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -138,7 +137,9 @@ const database = asTestRaw<
   transaction: transactionMock,
   update: updateMock,
 });
-const transactionDatabase = asTestRaw<Pick<typeof rootDb, "transaction">>({
+const transactionDatabase = asTestRaw<
+  Parameters<typeof persistNativeExtractionProjectionWithDatabase>[1]
+>({
   transaction: transactionMock,
 });
 // The one connection an extraction is handed; every database-backed

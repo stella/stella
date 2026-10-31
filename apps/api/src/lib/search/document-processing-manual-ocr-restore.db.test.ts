@@ -17,6 +17,7 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
@@ -351,7 +352,9 @@ test.each(
     });
     const request = async () =>
       await persistManualOcrRun({
-        db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        db: markOwnerDatabase(
+          asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+        ),
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
         userId: ids.userA1,
@@ -417,7 +420,9 @@ test.each(
       status,
     });
     await requestAutomaticDocumentOcr({
-      db: asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      db: markOwnerDatabase(
+        asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
+      ),
       organizationId: ids.orgA,
       workspaceId: ids.wsA1,
       entityId: ids.entityA1,

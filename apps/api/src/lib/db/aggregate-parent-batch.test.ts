@@ -6,6 +6,7 @@ import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 
 import {
   ROW_LOCK_MODES,
@@ -32,7 +33,7 @@ test("mixed-case parent IDs use the same byte order in SQL and history", async (
     },
   };
   await withAggregateParentBatch({
-    tx,
+    tx: asOwnerTransaction(tx),
     organizationIds: ids,
     mode: "key share",
   });
@@ -69,7 +70,7 @@ test.each(["é", "a😀", 'a"b', "a\nb"])(
     expect(
       await rejectionOf(
         withAggregateParentBatch({
-          tx,
+          tx: asOwnerTransaction(tx),
           organizationIds: [invalidId],
           mode: "key share",
         }),
@@ -104,7 +105,7 @@ test.each(ROW_LOCK_MODES)(
     const { tx, queries } = recorder();
     expect(
       await withAggregateParentBatch({
-        tx,
+        tx: asOwnerTransaction(tx),
         organizationIds: [organizationId],
         workspaceIds: [workspaceId],
         mode,
@@ -142,7 +143,7 @@ test("single acquisitions constrain batches before any query executes", async ()
   expect(
     await rejectionOf(
       withAggregateParentBatch({
-        tx,
+        tx: asOwnerTransaction(tx),
         organizationIds: [organizationId],
         mode: "key share",
       }),
@@ -154,7 +155,7 @@ test("single acquisitions constrain batches before any query executes", async ()
 test("batch identities allow covered reacquisition but reject a blocking upgrade", async () => {
   const { tx, queries } = recorder();
   await withAggregateParentBatch({
-    tx,
+    tx: asOwnerTransaction(tx),
     organizationIds: [organizationId],
     workspaceIds: [workspaceId],
     mode: "key share",
@@ -178,7 +179,7 @@ test("batch identities allow covered reacquisition but reject a blocking upgrade
   expect(
     await rejectionOf(
       withAggregateParentBatch({
-        tx,
+        tx: asOwnerTransaction(tx),
         organizationIds: [organizationId],
         mode: "update",
       }),
@@ -199,7 +200,7 @@ test("stronger single locks cover weaker batches without lowering held modes", a
     mode: "update",
   });
   await withAggregateParentBatch({
-    tx,
+    tx: asOwnerTransaction(tx),
     organizationIds: [organizationId],
     workspaceIds: [workspaceId],
     mode: "key share",
@@ -225,7 +226,7 @@ test("overlapping parent acquisitions fail before a second query executes", asyn
     },
   };
   const pending = withAggregateParentBatch({
-    tx,
+    tx: asOwnerTransaction(tx),
     organizationIds: [organizationId],
     mode: "key share",
   });
@@ -274,7 +275,7 @@ test("batch high water includes the last sorted identity", async () => {
     },
   };
   await withAggregateParentBatch({
-    tx,
+    tx: asOwnerTransaction(tx),
     organizationIds: [otherOrganizationId, organizationId, otherOrganizationId],
     mode: "key share",
   });

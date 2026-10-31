@@ -11,6 +11,7 @@ import { documentProcessingRuns, entities, workspaces } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
 import { requestManualOcrHandler } from "@/api/handlers/entities/ocr/create";
 import { toSafeId } from "@/api/lib/branded-types";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import {
   classifyManualOcrCollision,
   persistManualOcrRun,
@@ -437,7 +438,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: markOwnerDatabase({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -570,7 +571,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: markOwnerDatabase({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -695,7 +696,7 @@ describe("requestManualOcrHandler", () => {
       );
 
       const run = await persistManualOcrRun({
-        db: { transaction: rootTransactionMock },
+        db: markOwnerDatabase({ transaction: rootTransactionMock }),
         organizationId,
         recordAuditEvent,
         source: {
@@ -768,7 +769,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: markOwnerDatabase({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent: async () => {
         events.push("audit");
@@ -852,7 +853,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: markOwnerDatabase({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent,
       source: {
@@ -898,7 +899,7 @@ describe("requestManualOcrHandler", () => {
     );
 
     const run = await persistManualOcrRun({
-      db: { transaction: rootTransactionMock },
+      db: markOwnerDatabase({ transaction: rootTransactionMock }),
       organizationId,
       recordAuditEvent,
       source: {

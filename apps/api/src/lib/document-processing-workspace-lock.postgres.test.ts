@@ -18,6 +18,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
@@ -487,7 +488,7 @@ if (!databaseUrl || !runPostgresTests) {
           };
           await (path === "request"
             ? persistManualOcrRun({
-                db,
+                db: markOwnerDatabase(db),
                 organizationId,
                 workspaceId,
                 userId,
@@ -495,7 +496,7 @@ if (!databaseUrl || !runPostgresTests) {
                 recordAuditEvent: async () => undefined,
               })
             : restoreManualOcrRunAfterProjectionLoss({
-                db,
+                db: markOwnerDatabase(db),
                 organizationId,
                 workspaceId,
                 ...source,
@@ -894,7 +895,7 @@ if (!databaseUrl || !runPostgresTests) {
             switch (path) {
               case "request": {
                 const result = await persistManualOcrRun({
-                  db: ocrDatabase,
+                  db: markOwnerDatabase(ocrDatabase),
                   organizationId,
                   workspaceId,
                   userId,
@@ -906,7 +907,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
               case "restore":
                 await restoreManualOcrRunAfterProjectionLoss({
-                  db: ocrDatabase,
+                  db: markOwnerDatabase(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,
@@ -918,7 +919,7 @@ if (!databaseUrl || !runPostgresTests) {
           };
           const runRepair = async () =>
             await upsertSearchDocument(source.entityId, {
-              database: repairDatabase,
+              database: markOwnerDatabase(repairDatabase),
             });
           pending.push(first === "ocr" ? runOcr() : runRepair());
           await withTimeout(async () => await firstReady.promise, {
@@ -988,7 +989,7 @@ if (!databaseUrl || !runPostgresTests) {
         const { organizationId, userId, workspaceId, source } = fixture;
         pending.push(
           persistManualOcrRun({
-            db: ocr.db,
+            db: markOwnerDatabase(ocr.db),
             organizationId,
             userId,
             workspaceId,
@@ -1122,7 +1123,7 @@ if (!databaseUrl || !runPostgresTests) {
             switch (path) {
               case "request": {
                 const result = await persistManualOcrRun({
-                  db: ocrDatabase,
+                  db: markOwnerDatabase(ocrDatabase),
                   organizationId,
                   workspaceId,
                   userId,
@@ -1138,7 +1139,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
               case "restore":
                 await restoreManualOcrRunAfterProjectionLoss({
-                  db: ocrDatabase,
+                  db: markOwnerDatabase(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,
@@ -1146,7 +1147,7 @@ if (!databaseUrl || !runPostgresTests) {
                 return;
               case "automatic":
                 await requestAutomaticDocumentOcr({
-                  db: ocrDatabase,
+                  db: markOwnerDatabase(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,

@@ -20,6 +20,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   upsertContactSearchDocument,
@@ -149,8 +150,10 @@ if (!databaseUrl || !runPostgresTests) {
             },
           });
           const project = async (
-            database: Pick<GatedTestDb, "query" | "select" | "transaction">,
+            connection: Pick<GatedTestDb, "query" | "select" | "transaction">,
           ) => {
+            // Projections lock organization parents on the owner connection.
+            const database = markOwnerDatabase(connection);
             switch (kind) {
               case "native": {
                 const outcome = await persistNativeExtractionProjection(
@@ -415,22 +418,23 @@ if (!databaseUrl || !runPostgresTests) {
       const arrived = Promise.withResolvers<undefined>();
       let arrivals = 0;
       const pending: Promise<void>[] = [];
-      const gated = (database: GatedTestDb) => ({
-        query: database.query,
-        select: database.select.bind(database),
-        transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
-          await database.transaction(async (tx) => {
-            arrivals += 1;
-            if (arrivals === 2) {
-              arrived.resolve(undefined);
-            }
-            await withTimeout(async () => await arrived.promise, {
-              label: "overlapping projection transaction barrier",
-              timeoutMs: 3000,
-            });
-            return await run(tx);
-          }),
-      });
+      const gated = (database: GatedTestDb) =>
+        markOwnerDatabase({
+          query: database.query,
+          select: database.select.bind(database),
+          transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
+            await database.transaction(async (tx) => {
+              arrivals += 1;
+              if (arrivals === 2) {
+                arrived.resolve(undefined);
+              }
+              await withTimeout(async () => await arrived.promise, {
+                label: "overlapping projection transaction barrier",
+                timeoutMs: 3000,
+              });
+              return await run(tx);
+            }),
+        });
       try {
         await setup.db.insert(organization).values({
           id: organizationId,
@@ -446,7 +450,10 @@ if (!databaseUrl || !runPostgresTests) {
             reference: `OVERLAP-${index}`,
           })),
         );
-        await upsertWorkspaceSearchDocuments(workspaceIds, setup.db);
+        await upsertWorkspaceSearchDocuments(
+          workspaceIds,
+          markOwnerDatabase(setup.db),
+        );
         await setup.db
           .update(workspaces)
           .set({ name: "Updated overlapping matter" })
