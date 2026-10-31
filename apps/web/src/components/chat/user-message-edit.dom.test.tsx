@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
@@ -12,10 +20,14 @@ GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
+const { stellaToast } = await import("@stll/ui/toast");
 const { EditableUserMessage } = await import("./user-message-edit");
 const en = (await import("@/i18n/langs/en.json")).default;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mock.restore();
+});
 afterAll(async () => {
   await unregisterDomEnvironment();
 });
@@ -166,6 +178,29 @@ describe("editing a sent message", () => {
       attachments: [ndaDocument],
       html: "<p>Review the <strong>draft</strong> NDA</p>",
     });
+  });
+
+  test("an edit whose text looks like a credential is held, as a new message is", () => {
+    const warning = spyOn(stellaToast, "warning").mockReturnValue("held");
+    const { actions, submitted } = createActions();
+    const view = renderMessage({
+      actions,
+      target: {
+        id: MESSAGE_ID,
+        parts: [{ type: "text", content: `Use sk-${"a".repeat(32)}` }],
+        role: "user",
+      },
+    });
+
+    fireEvent.keyDown(openEditor(view), { key: "Enter" });
+
+    expect(submitted).toEqual([]);
+    expect(warning.mock.calls.map(([title]) => title)).toEqual([
+      en.chat.credentialSendTitle,
+    ]);
+    expect(
+      view.getByRole("textbox", { name: en.chat.editMessageInput }),
+    ).toBeDefined();
   });
 
   test("a numbered list the user typed comes back with its numbers", () => {
