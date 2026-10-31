@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from "node:fs";
 // event. Reusable workflows are skipped; they run under their caller's event.
 const WORKFLOWS = ".github/workflows";
 const EVENT_NAME_TEST =
-  /github\.event_name\s*[!=]=\s*'(?<single>[a-z_]+)'|contains\(fromJSON\('\[(?<list>[^\]]*)\]'\),\s*github\.event_name\)/gu;
+  /github\.event_name\s*[!=]=\s*'(?<single>[a-z_]+)'|contains\(\s*fromJSON\(\s*'\[(?<list>[^\]]*)\]'\s*\)\s*,\s*github\.event_name\s*\)/gu;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -23,7 +23,12 @@ const triggersOf = (on: unknown): Set<string> => {
 
 export const namedEvents = (source: string): Set<string> => {
   const events = new Set<string>();
-  for (const { groups } of source.matchAll(EVENT_NAME_TEST)) {
+  // A full-line YAML comment is prose, not a condition.
+  const code = source
+    .split("\n")
+    .filter((line) => !line.trimStart().startsWith("#"))
+    .join("\n");
+  for (const { groups } of code.matchAll(EVENT_NAME_TEST)) {
     if (groups?.["single"] !== undefined) {
       events.add(groups["single"]);
     }
@@ -64,4 +69,15 @@ test("both condition forms name their events", () => {
       "if: github.event_name == 'pull_request' || contains(fromJSON('[\"push\", \"schedule\"]'), github.event_name)",
     ),
   ]).toEqual(["pull_request", "push", "schedule"]);
+});
+
+test("padded list conditions name their events and comments name none", () => {
+  expect([
+    ...namedEvents(
+      "if: contains( fromJSON( '[\"pull_request\"]' ) , github.event_name )",
+    ),
+  ]).toEqual(["pull_request"]);
+  expect([
+    ...namedEvents("# Was: if: github.event_name == 'pull_request'\nrun: true"),
+  ]).toEqual([]);
 });
