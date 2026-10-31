@@ -1,4 +1,6 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Temporal } from "temporal-polyfill/full";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -6,10 +8,13 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
+import { ApiRequestError } from "./api-request";
 import {
   chosenAssignees,
+  chosenDueDate,
   createTask,
   listMatterMembers,
+  newTaskAssignees,
   readTask,
   setTaskAssignee,
 } from "./tasks";
@@ -182,5 +187,34 @@ describe("task assignees", () => {
     ).toEqual(["user-3", "user-1"]);
     expect(chosenAssignees(new Set(), members)).toEqual([]);
     expect(chosenAssignees(new Set(["user-1"]), [])).toEqual([]);
+  });
+
+  test("a new task leaves its assignees to the server only when there is no member list", () => {
+    const members = [
+      { userId: "user-1", user: { id: "user-1", name: "Jan" } },
+      { userId: "user-2", user: null },
+    ];
+    const chosen = new Set(["user-2"]);
+    expect(newTaskAssignees(chosen, Result.ok(members))).toEqual(["user-2"]);
+    expect(newTaskAssignees(new Set(), Result.ok(members))).toEqual([]);
+    expect(newTaskAssignees(chosen, null)).toBeUndefined();
+    expect(
+      newTaskAssignees(
+        chosen,
+        Result.err(
+          new ApiRequestError({ message: "Bad gateway", status: 502 }),
+        ),
+      ),
+    ).toBeUndefined();
+  });
+
+  test("a new task's due day is the picked day, else the preset, else none", () => {
+    const today = Temporal.PlainDate.from("2026-12-31");
+    expect(chosenDueDate({ days: null, picked: "2027-02-14" }, today)).toBe(
+      "2027-02-14",
+    );
+    expect(chosenDueDate({ days: 1, picked: null }, today)).toBe("2027-01-01");
+    expect(chosenDueDate({ days: 0, picked: null }, today)).toBe("2026-12-31");
+    expect(chosenDueDate({ days: null, picked: null }, today)).toBeNull();
   });
 });

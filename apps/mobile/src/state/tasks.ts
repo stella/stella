@@ -177,6 +177,19 @@ export const chosenAssignees = (
     .filter((member) => chosen.has(member.userId))
     .map((member) => member.userId);
 
+/**
+ * Whom a new task goes to, from the members as they loaded: the chosen ones
+ * among them, possibly nobody. No matter, or members that did not load,
+ * leave it to the server, which gives the task to its creator.
+ */
+export const newTaskAssignees = (
+  chosen: ReadonlySet<string>,
+  loaded: Result<MatterMember[], ApiError> | null,
+): string[] | undefined =>
+  loaded !== null && Result.isOk(loaded)
+    ? chosenAssignees(chosen, loaded.value)
+    : undefined;
+
 /** Gives a task to one more person, or takes it from them. */
 export const setTaskAssignee = async ({
   assigned,
@@ -255,6 +268,16 @@ export const dayAt = (at: number, timeZone: string): Temporal.PlainDate =>
   Temporal.Instant.fromEpochMilliseconds(at)
     .toZonedDateTimeISO(timeZone)
     .toPlainDate();
+
+/**
+ * The due day (YYYY-MM-DD) a new task's choice means: the day picked in the
+ * calendar, else a preset number of `days` from `today`, else none.
+ */
+export const chosenDueDate = (
+  { days, picked }: { days: number | null; picked: string | null },
+  today: Temporal.PlainDate,
+): string | null =>
+  picked ?? (days === null ? null : today.add({ days }).toString());
 
 /** Where a due date falls from `today`. */
 export const dueOf = (

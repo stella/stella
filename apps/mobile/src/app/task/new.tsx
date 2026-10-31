@@ -21,10 +21,11 @@ import { useSession } from "@/connection/session-provider";
 import { listMatters } from "@/state/matters";
 import { pickerDate } from "@/state/picked-day";
 import {
-  chosenAssignees,
+  chosenDueDate,
   createTask,
   dayAt,
   listMatterMembers,
+  newTaskAssignees,
 } from "@/state/tasks";
 import { useAppColors, useUiColors } from "@/theme";
 
@@ -91,17 +92,17 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       return;
     }
     const days = DUE_CHOICES.find((choice) => choice.key === due)?.days ?? null;
-    const preset = days === null ? null : today.add({ days }).toString();
-    const dueDate = due === "pick" ? pickedOn : preset;
+    const dueDate = chosenDueDate(
+      { days, picked: due === "pick" ? pickedOn : null },
+      today,
+    );
     startAdding(async () => {
       setFailure(null);
-      // Members that did not load leave the choice to the server: the creator.
-      const loaded = members === null ? null : await members;
       const created = await createTask({
-        assigneeIds:
-          loaded !== null && Result.isOk(loaded)
-            ? chosenAssignees(chosen, loaded.value)
-            : undefined,
+        assigneeIds: newTaskAssignees(
+          chosen,
+          members === null ? null : await members,
+        ),
         dueDate,
         fetch,
         matterId,
@@ -185,6 +186,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
                       {
                         day: "numeric",
                         month: "short",
+                        timeZone,
                         weekday: "short",
                       },
                     )
