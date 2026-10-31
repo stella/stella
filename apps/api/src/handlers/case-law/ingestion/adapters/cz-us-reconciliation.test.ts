@@ -13,19 +13,19 @@ import {
 } from "bun:test";
 
 import {
-  listingIdentityKey,
-  parseListingIdentityKey,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  ReconciliationListingItem,
-  ReconciliationSlicePage,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   czUsAdapter,
   czUsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import type { ListedDecision } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  listingIdentityKey,
+  parseListingIdentityKey,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  ReconciliationListingItem,
+  ReconciliationSlicePage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 /** Frozen so "the current year" and "yesterday" are the same in every test. */

@@ -109,6 +109,7 @@ export const seedError = (item: string, cause: unknown) =>
 
 /** One seeded matter, as each of its per-matter steps receives it. */
 export type MatterStep = {
+  matterState: "created" | "existing";
   actor: ReviewSeedActor;
   workspaceId: SafeId<"workspace">;
   matter: SampleMatter;

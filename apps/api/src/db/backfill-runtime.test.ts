@@ -92,6 +92,9 @@ test.each([
       execute: async () => {},
       release: () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -173,6 +176,9 @@ test("observed completion clears a durable hold without reading load or running 
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -269,6 +275,9 @@ test.each(["default", "changes"] as const)(
       connection: {
         execute: async () => {},
         query: async (statement, parameters = []) => {
+          if (statement.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
+          }
           if (statement.startsWith("SELECT cursor, batch")) {
             return [checkpoint];
           }
@@ -374,6 +383,9 @@ test("a quiet multi-unit run retains its first resume transition in the final st
     connection: {
       execute: async () => {},
       query: async (statement, parameters = []) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];
         }
@@ -423,6 +435,9 @@ for (const mode of ["database", "script"] as const) {
         statement: string,
         parameters: readonly unknown[] = [],
       ) => {
+        if (statement.includes("transaction_isolation")) {
+          return [{ isolation: "read committed" }];
+        }
         if (
           statement.startsWith("INSERT INTO database_backfill_states") ||
           statement.startsWith("UPDATE database_backfill_states")

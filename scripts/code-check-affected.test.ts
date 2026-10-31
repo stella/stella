@@ -1744,6 +1744,17 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
     expect(
       jobs.get("code-quality-web-rest")?.match(/- name: Result consumption/gu),
     ).toHaveLength(2);
+    // On main the base is the checked tree itself: only a pull request or a
+    // merge group may scan its changed files, every other event scans all.
+    const scopedToChange =
+      'if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then';
+    const scopedSteps = (job: string | undefined) =>
+      (job ?? "")
+        .split("- name: Result consumption")
+        .slice(1)
+        .filter((step) => step.includes(scopedToChange)).length;
+    expect(scopedSteps(jobs.get("code-quality-api"))).toBe(1);
+    expect(scopedSteps(jobs.get("code-quality-web-rest"))).toBe(2);
     for (const leg of ["web", "rest"] as const) {
       const mutated = jobs
         .get("code-quality-web-rest")

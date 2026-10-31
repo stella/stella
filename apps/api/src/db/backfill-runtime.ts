@@ -37,6 +37,7 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
+import { runReadCommittedUnit } from "../lib/db/read-committed-unit";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
@@ -872,19 +873,13 @@ export const createBackfillRuntime = (
   const runInTransaction: IngestionTransactionRunner<
     Pick<OnlineMigrationConnection, "execute" | "query">
   > = async (work) => {
-    await connection.execute("BEGIN");
-    const outcome = await Result.tryPromise({
-      try: async () => {
-        const result = await work(connection);
-        await connection.execute("COMMIT");
-        return result;
-      },
-      catch: (cause: unknown) => cause,
-    });
+    const outcome = await runReadCommittedUnit(
+      connection,
+      async () => await work(connection),
+    );
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
-    await connection.execute("ROLLBACK");
     throw outcome.error;
   };
   return createRuntime({

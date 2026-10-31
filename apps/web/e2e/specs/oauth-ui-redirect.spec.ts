@@ -26,7 +26,7 @@ const readClientId = (value: unknown): string => {
   return value.client_id;
 };
 
-const registerBrowserClient = async (
+const registerBrowserExtension = async (
   request: APIRequestContext,
   token: string,
 ): Promise<string> => {
@@ -57,7 +57,7 @@ test("the real OAuth authorization redirect keeps its signed query in the fragme
   });
 
   try {
-    const clientId = await registerBrowserClient(apiRequest, token);
+    const clientId = await registerBrowserExtension(apiRequest, token);
     const authorizeUrl = new URL(`${AUTH_BASE_URL}/oauth2/authorize`);
     authorizeUrl.searchParams.set("client_id", clientId);
     authorizeUrl.searchParams.set("code_challenge", challenge);
