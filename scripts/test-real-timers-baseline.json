@@ -549,11 +549,6 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts": {
-    "count": 1,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
@@ -930,11 +925,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/gh-retry-processes.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/pre-push-affected.test.ts": {
     "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"

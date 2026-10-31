@@ -1909,16 +1909,6 @@
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/desktop/tests/browser/activity-interactions.playwright.spec.ts": {
-    "count": 1,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts": {
-    "count": 2,
-    "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/desktop/tests/browser/registry-interactions.playwright.spec.ts": {
     "count": 4,
     "owner": "desktop",
@@ -2139,11 +2129,6 @@
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "scripts/check-published-versions.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "scripts/ci-failure-digest.test.ts": {
     "count": 2,
     "owner": "scripts",
@@ -2164,11 +2149,6 @@
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "scripts/gh-retry-processes.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "scripts/manual-checks-workflow.test.ts": {
     "count": 4,
     "owner": "scripts",
@@ -2176,11 +2156,6 @@
   },
   "scripts/network-baseline-scope.test.ts": {
     "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/pre-push-affected.test.ts": {
-    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }
