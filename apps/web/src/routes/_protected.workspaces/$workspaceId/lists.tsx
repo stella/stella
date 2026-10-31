@@ -426,7 +426,6 @@ const LegalListDetail = ({ workspaceId, listId }: LegalListDetailProps) => {
       workspaceId: toSafeId<"workspace">(workspaceId),
     })["generation-candidates"];
     const input = {
-      queryKey: legalListKeys.generations(workspaceId, listId),
       listId: toSafeId<"legalList">(listId),
       runId: toSafeId<"legalListGenerationRun">(reviewRun.id),
       candidateId: toSafeId<"legalListGenerationCandidate">(candidateId),

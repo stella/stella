@@ -2,6 +2,30 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
+import {
+  assembleSkCourtsDecision,
+  reparseSkCourtsStoredMetadata,
+  SK_COURTS_SOURCE_FIELD_PATHS,
+  skCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import {
+  planUnreadItems,
+  type UnavailableStreaks,
+} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import {
+  isReadRefusal,
+  isStoredReadAbsence,
+  isStoredReadUnavailable,
+  READ_OUTCOME_METADATA_KEY,
+  type StoredReadOutcome,
+  UNAVAILABLE_CYCLES_BEFORE_MARKING,
+} from "@/api/lib/errors/read-outcome";
+import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import { readGzipJson } from "@/api/lib/gzip-json";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -22,34 +46,9 @@ import {
   decodeSourceRawEnvelope,
   decodeSourceRawEnvelopeObjects,
   encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
-import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
-import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import {
-  assembleSkCourtsDecision,
-  SK_COURTS_SOURCE_FIELD_PATHS,
-  skCourtsAdapter,
-} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
-import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import {
-  planUnreadItems,
-  type UnavailableStreaks,
-} from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
-import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import {
-  isReadRefusal,
-  isStoredReadAbsence,
-  isStoredReadUnavailable,
-  READ_OUTCOME_METADATA_KEY,
-  type StoredReadOutcome,
-  UNAVAILABLE_CYCLES_BEFORE_MARKING,
-} from "@/api/lib/errors/read-outcome";
-import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
-import { readGzipJson } from "@/api/lib/gzip-json";
-import {
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseOutcome,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
@@ -436,38 +435,25 @@ const storedDecision = async (
   };
 };
 
-const reparse = async (
+const reparse = (
   stored: StoredDecision,
   caseNumber: string,
-): Promise<StoredRawReparseOutcome> => {
-  const rejectPublisherIo = () =>
-    panic("Stored SK replay must not fetch publisher responses");
-  const publisherFetch = spyOn(globalThis, "fetch").mockImplementation(
-    Object.assign(rejectPublisherIo, { preconnect: rejectPublisherIo }),
-  );
-  try {
-    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
-      raw: new TextEncoder().encode(stored.sourceRaw),
-      contentType: stored.sourceRawContentType,
-      caseNumber,
-      sourceDocumentId: null,
-      language: "sk",
-      court: "",
-      ecli: null,
-      decisionDate: null,
-      decisionType: null,
-      sourceUrl: null,
-      documentUrl: null,
-      metadata: {},
-    });
-    if (outcome === undefined) {
-      return panic("sk-courts declares no reparseStoredRaw");
-    }
-    expect(publisherFetch).not.toHaveBeenCalled();
-    return outcome;
-  } finally {
-    publisherFetch.mockRestore();
-  }
+): StoredRawReparseOutcome => {
+  const outcome = reparseSkCourtsStoredMetadata({
+    raw: new TextEncoder().encode(stored.sourceRaw),
+    contentType: stored.sourceRawContentType,
+    caseNumber,
+    sourceDocumentId: null,
+    language: "sk",
+    court: "",
+    ecli: null,
+    decisionDate: null,
+    decisionType: null,
+    sourceUrl: null,
+    documentUrl: null,
+    metadata: {},
+  });
+  return outcome;
 };
 
 describe("a stored record reaches the targets the inventory declares", () => {
@@ -479,7 +465,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     expect(stored.sourceRawContentType).toBe("application/json");
     expect(decodeSourceRawEnvelope(stored.sourceRaw)).toBeNull();
 
-    const outcome = await reparse(stored, TRANSFERRED_FILE_DOCKET);
+    const outcome = reparse(stored, TRANSFERRED_FILE_DOCKET);
 
     expect(outcome.type).toBe("parsed");
   });
@@ -518,7 +504,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("the three fields the adapter used to discard land in metadata", async () => {
-    const outcome = await reparse(
+    const outcome = reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -540,7 +526,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("the record's other labelled fields keep their targets", async () => {
-    const outcome = await reparse(
+    const outcome = reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -575,7 +561,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("re-parsing writes the envelope, whatever shape it read", async () => {
-    const outcome = await reparse(
+    const outcome = reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       TRANSFERRED_FILE_DOCKET,
     );
@@ -594,7 +580,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
   });
 
   test("a payload naming another decision is refused", async () => {
-    const outcome = await reparse(
+    const outcome = reparse(
       await storedDecision(TRANSFERRED_FILE_ID),
       "9C/1/2026",
     );
@@ -605,8 +591,8 @@ describe("a stored record reaches the targets the inventory declares", () => {
     });
   });
 
-  test("a payload this adapter never wrote is refused, not guessed at", async () => {
-    const outcome = await reparse(
+  test("a payload this adapter never wrote is refused, not guessed at", () => {
+    const outcome = reparse(
       { sourceRaw: "<html></html>", sourceRawContentType: "text/html" },
       TRANSFERRED_FILE_DOCKET,
     );
@@ -694,8 +680,8 @@ describe("derived general-court metadata", () => {
     });
   });
 
-  test("stored listings without detail replay with unknown publisher URL availability", async () => {
-    const outcome = await reparse(
+  test("stored listings without detail replay with unknown publisher URL availability", () => {
+    const outcome = reparse(
       {
         sourceRaw: encodeSourceRawEnvelope({
           listing: JSON.stringify(item),

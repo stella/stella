@@ -1,7 +1,12 @@
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
 import { panic, Result } from "better-result";
+
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
@@ -50,9 +55,6 @@ import { panic, Result } from "better-result";
  * months (`undated|<boundary id>|<page>`) and the ledger holds it as a slice
  * of its own, ahead of the first month.
  */
-
-// parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256, sha256Hex as hashContent } from "@stll/sha256/bun";
@@ -60,37 +62,6 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelopeObjects,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceSurface,
-  legacyExcludedSourceField,
-  readStoredRawListing,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SourceTotalCount,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -114,7 +85,38 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceSurface,
+  legacyExcludedSourceField,
+  PUBLISHER_REQUEST,
+  readStoredRawListing,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  SourceTotalCount,
+  StoredRawReparseInput,
+  StoredRawReparseValue,
+  SyncPage,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { readStoredDocumentObject } from "@/api/lib/legal-search/stored-document-replay";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
@@ -1478,7 +1480,7 @@ const buildPlKisDecision = async (
 
 const reparsePlKisStoredRaw = async (
   stored: StoredRawReparseInput,
-): Promise<StoredRawReparseOutcome> => {
+): Promise<StoredRawReparseValue> => {
   const read = readStoredRawListing({
     stored,
     part: RAW_PART.LISTING,
@@ -1487,23 +1489,17 @@ const reparsePlKisStoredRaw = async (
   if (read.type === "rejected") {
     return read;
   }
-  const detail = readDetailPart(read.parts);
-  const objects = decodeSourceRawEnvelopeObjects(
-    new TextDecoder().decode(stored.raw),
-  );
-  if (
-    objects[PDF_OBJECT] !== undefined &&
-    detailString(detail, "TRESC_INTERESARIUSZ") === undefined
-  ) {
-    return {
-      type: "rejected",
-      rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,
-      detail: "the document is the stored PDF, which a replay does not read",
-    };
+  const readObject = await readStoredDocumentObject(stored, PDF_OBJECT);
+  if (Result.isError(readObject)) {
+    return readObject;
   }
+  // A row with neither detail text nor a stored PDF replays from its listing
+  // and detail, as the ingestion builds it.
+  const pdfBytes = readObject.value;
   const built = await assemblePlKisDecision({
     row: read.listing,
     rawParts: read.parts,
+    ...(pdfBytes === null ? {} : { pdfBytes }),
   });
   return { type: "parsed", result: built.decision };
 };
@@ -2066,6 +2062,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursor,
         });
       }
@@ -2081,6 +2078,7 @@ const sweepPage = async (
                 },
               }),
           sourceUrl: url,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: encodePlKisCursor({ ...start, month, page: page + 1 }),
         });
       }
@@ -2096,6 +2094,7 @@ const sweepPage = async (
               },
             }),
         sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor:
           after === null
             ? tip()
@@ -2104,7 +2103,12 @@ const sweepPage = async (
     }
     const after = nextMonth();
     if (after === null) {
-      return Result.ok({ decisions: [], sourceUrl: url, nextCursor: tip() });
+      return Result.ok({
+        decisions: [],
+        sourceUrl: url,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: tip(),
+      });
     }
     month = after;
     page = 0;
@@ -2112,6 +2116,7 @@ const sweepPage = async (
   return Result.ok({
     decisions: [],
     ...(url === undefined ? {} : { sourceUrl: url }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({ ...start, month, page }),
   });
 };
@@ -2165,6 +2170,7 @@ const tipPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: start.walk === "head" ? cursor : caughtUp(),
     });
   }
@@ -2185,6 +2191,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2200,6 +2207,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2223,6 +2231,7 @@ const tipPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: caughtUp(),
     });
   }
@@ -2239,6 +2248,7 @@ const tipPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor({
       phase: "tip",
       walk: "catch-up",
@@ -2296,6 +2306,7 @@ const undatedPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: cursor,
     });
   }
@@ -2310,6 +2321,7 @@ const undatedPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlKisCursor(
       (start.page + 1) * CRAWL_PAGE_SIZE < undated
         ? { ...start, page: start.page + 1 }

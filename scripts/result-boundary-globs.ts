@@ -41,9 +41,12 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/app/law/**/*.{ts,tsx}",
   "apps/mobile/src/app/task/**/*.{ts,tsx}",
   "apps/mobile/src/app/timers/**/*.{ts,tsx}",
+  "apps/mobile/src/app/scan/**/*.{ts,tsx}",
   "apps/mobile/src/components/ui/**/*.{ts,tsx}",
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
+  "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/visual-preview/src/**/*.ts",
   "apps/api/src/handlers/public-cors.ts",
   "apps/api/src/handlers/realtime-resource-sets.ts",
@@ -65,6 +68,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
+  "apps/api/src/handlers/dictation/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
   "apps/api/src/handlers/documents/**/*.ts",
@@ -111,6 +115,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
@@ -229,13 +234,18 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/sha256/src/**/*.ts",
   "packages/start-runtime/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
+  "packages/test-state/src/**/*.ts",
   "packages/text-normalize/src/**/*.ts",
+  "packages/transcript/src/**/*.ts",
   "packages/uuid-codec/src/**/*.ts",
   "packages/workspace-model/src/**/*.ts",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Adapter definitions return typed stored-read failures; the existing replay
+  // callback protocol consumes those failures through Promise rejection.
+  "apps/api/src/lib/legal-search/stored-raw-reparse-boundary.ts",
   // MCP request handlers translate typed gateway failures into SDK protocol errors.
   "apps/api/src/mcp/server-core.ts",
   // The tools/call callback observer preserves the SDK's result/rejection contract;
@@ -328,6 +338,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack Router reads the chat thread loader's redirect and its unchanged
+  // load failure only through rejection.
+  "apps/web/src/routes/_protected.chat/-thread-scope-redirect-boundary.ts",
   // TanStack's fetch and connection adapters consume Response/rejection;
   // this transport cannot return Result across the SDK callback boundary.
   "packages/chat/src/durable-transport.ts",

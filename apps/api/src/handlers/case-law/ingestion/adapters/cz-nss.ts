@@ -1,3 +1,5 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -21,37 +23,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  legacyExcludedSourceField,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
   decodeNssDocument,
@@ -103,6 +74,38 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -3467,7 +3470,11 @@ export const czNssAdapter = defineSourceAdapter({
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: cursorFor(today, 0) };
+          return {
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.NONE,
+            nextCursor: cursorFor(today, 0),
+          };
         }
 
         // 1. Get or reuse session
@@ -3487,6 +3494,7 @@ export const czNssAdapter = defineSourceAdapter({
             });
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encodeCursor({
                 date,
                 page,
@@ -3505,6 +3513,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: 1 },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor: encodeCursor({
               date: next <= today ? next : today,
               page: 0,
@@ -3525,6 +3534,7 @@ export const czNssAdapter = defineSourceAdapter({
           const next = nextDay(date);
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(next <= today ? next : today, 0),
           };
         }
@@ -3624,6 +3634,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(date, page + 1),
           };
         }
@@ -3633,6 +3644,7 @@ export const czNssAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursorFor(next <= today ? next : today, 0),
         };
       },
