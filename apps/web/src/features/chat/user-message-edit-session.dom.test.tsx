@@ -422,9 +422,7 @@ describe("an edit whose message the server no longer holds", () => {
   const composerEditor = () =>
     composer().editor ?? panic("The composer has no editor");
   const composerParagraphs = () =>
-    (composerEditor().getJSON().content ?? []).map((node) =>
-      (node.content ?? []).map((inline) => inline.text ?? "").join(""),
-    );
+    composerEditor().state.doc.content.content.map((node) => node.textContent);
   const composerPastedTexts = () =>
     readPastedTextAttachments(
       composerEditor().state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR],
