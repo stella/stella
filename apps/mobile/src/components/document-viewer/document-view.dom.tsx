@@ -22,6 +22,8 @@ type DocumentViewProps = {
    * tokens and its `dark` class, as on the web.
    */
   appearance: DomAppearance;
+  /** The pages' width as a factor of the screen's fit (see ./zoom.ts). */
+  zoom: number;
   readChunk: (offset: number, length: number) => Promise<string>;
   /**
    * The first page is on screen. The app's handlers only set state, so the
@@ -62,6 +64,7 @@ const DocumentView = ({
   size,
   locale,
   appearance,
+  zoom,
   readChunk,
   onReady,
   onFailed,
@@ -122,6 +125,7 @@ const DocumentView = ({
           invert={appearance === "dark"}
           onFailed={failed}
           onReady={ready}
+          zoom={zoom}
         />
       ) : (
         <DocxPages
@@ -129,6 +133,7 @@ const DocumentView = ({
           locale={locale}
           onFailed={failed}
           onReady={ready}
+          zoom={zoom}
         />
       );
   }

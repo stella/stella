@@ -16,8 +16,11 @@ import { useLocale, useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import DocumentView from "@/components/document-viewer/document-view.dom";
+import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
+import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { ViewerControls } from "@/components/viewer-controls";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
 import {
@@ -138,6 +141,8 @@ const OpenedDocument = ({
   const source = state.status === "signed-in" ? state.source : null;
   const [phase, setPhase] = useState<Phase>({ status: "opening" });
   const [ready, setReady] = useState(false);
+  const [zoom, setZoom] = useState(FIT_ZOOM);
+  const [appearance, setAppearance] = useState<ViewerAppearance>("system");
   // The viewer's web view may still ask for bytes, or be answered, after this
   // screen has gone; an answer sent to a removed web view throws, so none is.
   const mounted = useRef(true);
@@ -247,7 +252,10 @@ const OpenedDocument = ({
     return (
       <View style={screenStyles.screen}>
         <DocumentView
-          appearance={scheme === "dark" ? "dark" : "light"}
+          appearance={pageAppearance(
+            appearance,
+            scheme === "dark" ? "dark" : "light",
+          )}
           dom={{ style: { flex: 1 } }}
           kind={file.viewer}
           locale={locale}
@@ -266,8 +274,16 @@ const OpenedDocument = ({
             return mounted.current ? slice : await UNANSWERED;
           }}
           size={opened.size}
+          zoom={zoom}
         />
-        {ready ? null : (
+        {ready ? (
+          <ViewerControls
+            appearance={appearance}
+            onAppearance={setAppearance}
+            onZoom={setZoom}
+            zoom={zoom}
+          />
+        ) : (
           <View
             pointerEvents="none"
             style={[

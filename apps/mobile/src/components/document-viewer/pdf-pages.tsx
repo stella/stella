@@ -13,8 +13,13 @@ import type {
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
+import { canvasScale } from "./zoom";
+
 /** The canvas showing between pages and around them, as on the web. */
 const PAGE_GAP = 12;
+
+/** Room under the last page for the app's floating viewer bar. */
+const BAR_CLEARANCE = 72;
 
 /** The web's dark-mode page: inverted, with hues turned back. */
 const DARK_PAGE_FILTER = "invert(1) hue-rotate(180deg)";
@@ -28,16 +33,22 @@ const pageRatio = async (
   return viewport.height / viewport.width;
 };
 
-/** A PDF drawn by pdf.js, each page when it nears the screen. */
+/**
+ * A PDF drawn by pdf.js, each page when it nears the screen, `zoom` times
+ * the screen's width.
+ */
 export const PdfPages = ({
   bytes,
   invert,
+  zoom,
   onReady,
   onFailed,
 }: {
   bytes: Uint8Array;
   /** Draw the pages inverted, as the web does in dark mode. */
   invert: boolean;
+  /** The pages' width as a factor of the screen's (see ./zoom.ts). */
+  zoom: number;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -140,11 +151,16 @@ export const PdfPages = ({
   return (
     <div
       ref={setScroller}
-      style={{ height: "100%", overflowY: "auto", padding: PAGE_GAP }}
+      style={{
+        height: "100%",
+        overflow: "auto",
+        padding: PAGE_GAP,
+        paddingBottom: PAGE_GAP + BAR_CLEARANCE,
+      }}
     >
       {layout.ratios.map((ratio, index) => (
         <PdfPage
-          height={ratio * layout.width}
+          height={ratio * layout.width * zoom}
           invert={invert}
           // Pages never reorder; the number is the page's identity.
           key={`page-${String(index + 1)}`}
@@ -153,7 +169,7 @@ export const PdfPages = ({
           onPainted={pagePainted}
           pdf={pdf}
           scroller={scroller}
-          width={layout.width}
+          width={layout.width * zoom}
         />
       ))}
     </div>
@@ -200,7 +216,12 @@ const PdfPage = ({
       }
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({
-        scale: (width / base.width) * window.devicePixelRatio,
+        scale: canvasScale({
+          cssWidth: width,
+          pageWidth: base.width,
+          pageHeight: base.height,
+          pixelRatio: window.devicePixelRatio,
+        }),
       });
       element.width = Math.floor(viewport.width);
       element.height = Math.floor(viewport.height);
@@ -266,7 +287,8 @@ const PdfPage = ({
         display: "block",
         filter: invert ? DARK_PAGE_FILTER : "none",
         height,
-        marginBottom: PAGE_GAP,
+        // A page narrower than the screen sits in its middle.
+        margin: `0 auto ${String(PAGE_GAP)}px`,
         width,
       }}
     />
