@@ -6,9 +6,34 @@ import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { persistedCorpusAstSchema } from "@/api/lib/legal-search/corpus-ast";
 import { isRecord } from "@/api/lib/type-guards";
 
-/** The persisted schema is also the reader's admission contract. */
+const repeatsBlockIdentity = (ast: unknown): boolean => {
+  if (!isRecord(ast) || !Array.isArray(ast["blocks"])) {
+    return false;
+  }
+  const blocks = ast["blocks"].filter(isRecord);
+  return (["id", "anchorId"] as const).some((field) => {
+    const values = blocks.map((block) => block[field]);
+    return new Set(values).size !== values.length;
+  });
+};
+
+/** Writers repeat no block identity; the reader would re-key a repeat. */
+const uniqueBlockIdentitiesSchema = v.pipe(
+  v.unknown(),
+  v.check(
+    (ast) => !repeatsBlockIdentity(ast),
+    "Block ids and anchorIds must be unique",
+  ),
+);
+
+/**
+ * The persisted schema is the reader's admission contract. It re-keys a
+ * repeated block identity in rows stored before identities were checked, so
+ * a parser's own output must carry none to read back as it was written.
+ */
 export const assertReaderAcceptsAst = (ast: unknown): void => {
   v.parse(persistedCorpusAstSchema, ast);
+  v.parse(uniqueBlockIdentitiesSchema, ast);
 };
 
 const assertParserOutput = (output: unknown): void => {
