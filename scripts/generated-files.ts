@@ -1102,6 +1102,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/sha256/src/node.ts",
       "packages/collation/src/**/*.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "bunfig.toml",
       ".prettierrc.yml",
     ],
