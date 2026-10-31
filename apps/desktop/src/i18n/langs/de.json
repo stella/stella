@@ -473,6 +473,7 @@
     "calendarLabel": "Aktivität und Zeiteinträge, {date}",
     "mixedActivity": "Schneller Wechsel",
     "mixedActivityLabel": "Schneller Wechsel zwischen {apps}, {range}",
+    "moreApps": "+{count} weitere",
     "suggestionLabel": "Vorgeschlagener Eintrag: {matter}, {hours} Std.",
     "rangeHours": "{range} · {hours} Std.",
     "draftedRange": "{range} · als Entwurf",

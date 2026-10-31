@@ -473,6 +473,7 @@
     "calendarLabel": "Atividade e lançamentos de horas, {date}",
     "mixedActivity": "Troca rápida",
     "mixedActivityLabel": "Troca rápida entre {apps}, {range}",
+    "moreApps": "+{count} a mais",
     "suggestionLabel": "Lançamento sugerido: {matter}, {hours} h",
     "rangeHours": "{range} · {hours} h",
     "draftedRange": "{range} · em rascunho",

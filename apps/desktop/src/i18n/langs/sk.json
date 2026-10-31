@@ -473,6 +473,7 @@
     "calendarLabel": "Aktivita a časové záznamy, {date}",
     "mixedActivity": "Rýchle prepínanie",
     "mixedActivityLabel": "Rýchle prepínanie medzi aplikáciami {apps}, {range}",
+    "moreApps": "{count, plural, one {+1 ďalšia} few {+{count} ďalšie} other {+{count} ďalších}}",
     "suggestionLabel": "Navrhovaný záznam: {matter}, {hours} h",
     "rangeHours": "{range} · {hours} h",
     "draftedRange": "{range} · koncept",

@@ -473,6 +473,7 @@
     "calendarLabel": "النشاط وقيود الوقت، {date}",
     "mixedActivity": "تنقل سريع",
     "mixedActivityLabel": "تنقل سريع بين {apps}، {range}",
+    "moreApps": "+{count} أخرى",
     "suggestionLabel": "قيد مقترح: {matter}، {hours} س",
     "rangeHours": "{range} · {hours} س",
     "draftedRange": "{range} · مسودة",

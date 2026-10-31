@@ -2,7 +2,12 @@ import { panic } from "better-result";
 
 import type { DesktopTimeEntryMatterCandidate } from "@stll/api-contract/desktop-time-entries";
 import { Temporal } from "@stll/time";
-import { granularityMs, mergeShortSegments } from "@stll/ui/day-calendar.logic";
+import {
+  DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX,
+  DAY_CALENDAR_SLOT_HEIGHT_PX,
+  granularityMs,
+  mergeShortSegments,
+} from "@stll/ui/day-calendar.logic";
 import type {
   DayCalendarGranularity,
   DayCalendarRange,
@@ -75,9 +80,10 @@ function hourOnDay(
   return rounding === "ceil" && partial ? zoned.hour + 1 : zoned.hour;
 }
 
-/** A segment shorter than a third of a grid slot cannot hold its own label. */
+/** A segment drawn shorter than one line cannot hold its own label. */
 export const shortSegmentThresholdMs = (granularity: DayCalendarGranularity) =>
-  granularityMs(granularity) / 3;
+  (granularityMs(granularity) * DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX) /
+  DAY_CALENDAR_SLOT_HEIGHT_PX[granularity];
 
 export type ActivityBlock =
   | (DayCalendarRange & { id: string; segment: MatchedSegment; type: "single" })
@@ -156,6 +162,46 @@ export const segmentTitles = (segments: readonly MatchedSegment[]) => {
     }
     const title = cleaned.get(segment.appIdentifier)?.get(raw) ?? raw;
     return title.toLowerCase() === segment.appName.toLowerCase() ? null : title;
+  };
+};
+
+/** Apps a block's hover lists before it only counts the rest. */
+export const BLOCK_DETAIL_APP_LIMIT = 5;
+
+export type BlockDetailRow = AppTotal & { title: string | null };
+
+/** What an Activity block's hover lists: its apps, longest first, each with
+ * the title it spent longest on, and how many apps past the limit it leaves
+ * out. */
+export const blockDetails = (
+  sources: readonly MatchedSegment[],
+  titleOf: (segment: MatchedSegment) => string | null,
+): { hiddenCount: number; rows: BlockDetailRow[] } => {
+  const rows = appTotals(sources).map((app) => {
+    const titleTotals = new Map<string, number>();
+    for (const segment of sources) {
+      const title =
+        segment.appIdentifier === app.identifier ? titleOf(segment) : null;
+      if (title !== null) {
+        titleTotals.set(
+          title,
+          (titleTotals.get(title) ?? 0) + segment.endMs - segment.startMs,
+        );
+      }
+    }
+    let title: string | null = null;
+    let longestMs = 0;
+    for (const [candidate, durationMs] of titleTotals) {
+      if (durationMs > longestMs) {
+        title = candidate;
+        longestMs = durationMs;
+      }
+    }
+    return { ...app, title };
+  });
+  return {
+    hiddenCount: Math.max(0, rows.length - BLOCK_DETAIL_APP_LIMIT),
+    rows: rows.slice(0, BLOCK_DETAIL_APP_LIMIT),
   };
 };
 

@@ -473,6 +473,7 @@
     "calendarLabel": "Tegevus ja ajakanded, {date}",
     "mixedActivity": "Kiire vahetamine",
     "mixedActivityLabel": "Kiire vahetamine: {apps}, {range}",
+    "moreApps": "+{count} veel",
     "suggestionLabel": "Soovitatud kanne: {matter}, {hours} h",
     "rangeHours": "{range} · {hours} h",
     "draftedRange": "{range} · mustandina",

@@ -473,6 +473,7 @@
     "calendarLabel": "Actividad y registros de tiempo, {date}",
     "mixedActivity": "Cambios rápidos",
     "mixedActivityLabel": "Cambios rápidos entre {apps}, {range}",
+    "moreApps": "+{count} más",
     "suggestionLabel": "Registro sugerido: {matter}, {hours} h",
     "rangeHours": "{range} · {hours} h",
     "draftedRange": "{range} · en borrador",

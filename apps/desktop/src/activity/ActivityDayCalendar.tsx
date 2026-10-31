@@ -35,6 +35,7 @@ import {
 
 import {
   activityBlocks,
+  blockDetails,
   calendarHours,
   draftedBlocks,
   manualSuggestion,
@@ -44,10 +45,7 @@ import {
   nextSuggestion,
   segmentTitles,
 } from "./activity-calendar-logic";
-import type {
-  ActivityBlock,
-  ActivitySuggestion,
-} from "./activity-calendar-logic";
+import type { ActivitySuggestion } from "./activity-calendar-logic";
 import { calendarDate, timedSegments } from "./activity-logic";
 import type {
   ActivityDaySnapshot,
@@ -62,6 +60,7 @@ import type {
 } from "./ActivitySuggestionCard";
 import { EVIDENCE_DETAIL_LIMIT, matchDay } from "./day-review-logic";
 import type { MatchedSegment } from "./day-review-logic";
+import { useDurationLabel } from "./use-duration-label";
 
 const ACTIVITY_COLUMN_ID = "activity";
 const ENTRIES_COLUMN_ID = "entries";
@@ -107,25 +106,51 @@ export type ActivityCalendarPreferences = {
   narrativeDeclines: number;
 };
 
-const MixedActivityApps = ({
-  block,
+/** An Activity block's hover: its range, then each app with its time and the
+ * title it spent longest on. */
+const ActivityBlockDetails = ({
+  details,
+  range,
+  sourceAppVisuals,
 }: {
-  block: Extract<ActivityBlock, { type: "mixed" }>;
+  details: ReturnType<typeof blockDetails>;
+  range: string;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
 }) => {
   const t = useTranslations("activity");
+  const durationLabel = useDurationLabel();
   return (
-    <ul className="flex flex-col gap-0.5 text-xs">
-      {block.apps.map((app) => (
-        <li className="flex justify-between gap-3" key={app.identifier}>
-          <bdi className="truncate">{app.name}</bdi>
-          <span className="tabular-nums">
-            {t("durationMinutes", {
-              minutes: Math.max(1, Math.round(app.durationMs / 60_000)),
-            })}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <div className="flex w-64 flex-col gap-2 py-0.5 text-xs">
+      <p className="text-muted-foreground tabular-nums">{range}</p>
+      <ul className="flex flex-col gap-1.5">
+        {details.rows.map((row) => (
+          <li className="flex items-start gap-2" key={row.identifier}>
+            <ActivitySourceIcon
+              appIdentifier={row.identifier}
+              sourceAppVisuals={sourceAppVisuals}
+            />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <div className="flex items-baseline justify-between gap-3">
+                <bdi className="truncate font-medium">{row.name}</bdi>
+                <span className="text-muted-foreground shrink-0 tabular-nums">
+                  {durationLabel(row.durationMs)}
+                </span>
+              </div>
+              {row.title === null ? null : (
+                <bdi className="text-muted-foreground truncate">
+                  {row.title}
+                </bdi>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {details.hiddenCount > 0 ? (
+        <p className="text-muted-foreground">
+          {t("moreApps", { count: details.hiddenCount })}
+        </p>
+      ) : null}
+    </div>
   );
 };
 
@@ -386,6 +411,7 @@ export const ActivityDayCalendar = ({
     rangeSelection: editable,
     draftedEntries,
     suggestions,
+    narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
   });
@@ -507,6 +533,7 @@ type CalendarColumnsOptions = {
   rangeSelection: boolean;
   draftedEntries: DraftedEntries;
   suggestions: readonly ActivitySuggestion[];
+  narrativeFor: (suggestion: ActivitySuggestion) => string;
   onActivate: (suggestion: ActivitySuggestion) => void;
 };
 
@@ -519,6 +546,7 @@ function useCalendarColumns({
   rangeSelection,
   draftedEntries,
   suggestions,
+  narrativeFor,
   onActivate,
 }: CalendarColumnsOptions): DayCalendarColumn[] {
   const t = useTranslations("activity");
@@ -533,11 +561,30 @@ function useCalendarColumns({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
+  const hoursUnit = (tenths: number) =>
+    format.number(tenths / 10, {
+      maximumFractionDigits: 1,
+      minimumFractionDigits: 1,
+      style: "unit",
+      unit: "hour",
+      unitDisplay: "narrow",
+    });
+  const durationLabel = useDurationLabel();
   const titleOf = segmentTitles(segments);
 
   const activity = activityBlocks(segments, granularity).map(
     (block): DayCalendarBlock => {
       const range = formatRange(block.startMs, block.endMs);
+      const tooltip = (
+        <ActivityBlockDetails
+          details={blockDetails(
+            block.type === "mixed" ? block.sources : [block.segment],
+            titleOf,
+          )}
+          range={range}
+          sourceAppVisuals={sourceAppVisuals}
+        />
+      );
       if (block.type === "mixed") {
         const apps = format.list(
           block.apps.map(({ name }) => name),
@@ -552,7 +599,7 @@ function useCalendarColumns({
           startMs: block.startMs,
           title: t("mixedActivity"),
           tone: { type: "neutral" },
-          tooltip: <MixedActivityApps block={block} />,
+          tooltip,
         };
       }
       const { segment } = block;
@@ -560,9 +607,9 @@ function useCalendarColumns({
         ? t("callIn", { app: segment.appName })
         : segment.appName;
       const detailTitle = titleOf(segment);
-      const title = detailTitle === null ? name : `${name} · ${detailTitle}`;
+      const duration = durationLabel(segment.endMs - segment.startMs);
       return {
-        accessibleLabel: `${title}, ${range}`,
+        accessibleLabel: `${detailTitle === null ? name : `${name} · ${detailTitle}`}, ${range}`,
         caption: range,
         endMs: block.endMs,
         id: block.id,
@@ -578,10 +625,15 @@ function useCalendarColumns({
                 sourceAppVisuals={sourceAppVisuals}
               />
             )}
-            <bdi className="truncate">{title}</bdi>
+            <bdi className="truncate">
+              {[name, duration, detailTitle]
+                .filter((part) => part !== null)
+                .join(" · ")}
+            </bdi>
           </span>
         ),
         tone: matterTone(segment.matter),
+        tooltip,
       };
     },
   );
@@ -613,20 +665,32 @@ function useCalendarColumns({
       matter: name,
       hours: roundedHours,
     });
+    // The description reads first, as on a timesheet; the range stands in
+    // while there is none.
+    const narrative = narrativeFor(suggestion).trim();
     for (const run of suggestion.runs) {
       entries.push({
         accessibleLabel,
-        caption: t("rangeHours", {
-          range: formatRange(run.startMs, run.endMs),
-          hours: roundedHours,
-        }),
+        caption:
+          narrative.length > 0 ? (
+            <bdi>{narrative}</bdi>
+          ) : (
+            t("rangeHours", {
+              range: formatRange(run.startMs, run.endMs),
+              hours: roundedHours,
+            })
+          ),
         endMs: run.endMs,
         id: `${suggestion.id}:${String(run.startMs)}`,
         kind: "entry",
         onActivate: () => onActivate(suggestion),
         startMs: run.startMs,
         state: "suggestion",
-        title: <bdi>{name}</bdi>,
+        title: (
+          <bdi>
+            {name} · {hoursUnit(suggestion.roundedTenths)}
+          </bdi>
+        ),
         tone: matterTone(suggestion.matter),
       });
     }

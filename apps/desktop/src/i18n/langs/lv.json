@@ -473,6 +473,7 @@
     "calendarLabel": "Darbība un laika ieraksti, {date}",
     "mixedActivity": "Ātra pārslēgšanās",
     "mixedActivityLabel": "Ātra pārslēgšanās: {apps}, {range}",
+    "moreApps": "+{count} vēl",
     "suggestionLabel": "Ieteiktais ieraksts: {matter}, {hours} st.",
     "rangeHours": "{range} · {hours} st.",
     "draftedRange": "{range} · melnraksts",

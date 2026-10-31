@@ -473,6 +473,7 @@
     "calendarLabel": "Veikla ir laiko įrašai, {date}",
     "mixedActivity": "Greitas perjungimas",
     "mixedActivityLabel": "Greitas perjungimas: {apps}, {range}",
+    "moreApps": "+{count} daugiau",
     "suggestionLabel": "Siūlomas įrašas: {matter}, {hours} val.",
     "rangeHours": "{range} · {hours} val.",
     "draftedRange": "{range} · juodraštis",

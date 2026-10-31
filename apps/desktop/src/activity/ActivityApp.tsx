@@ -35,12 +35,7 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import {
-  appTotals,
-  calendarDate,
-  durationParts,
-  shiftDate,
-} from "./activity-logic";
+import { appTotals, calendarDate, shiftDate } from "./activity-logic";
 import type { TimedSegment } from "./activity-logic";
 import { DELETION_ONLY_NOTICE } from "./activity-notices";
 import {
@@ -59,6 +54,7 @@ import type {
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
 import previewApps from "./preview-apps.json" with { type: "json" };
+import { useDurationLabel } from "./use-duration-label";
 
 type ActivityView =
   | { type: "loading" }
@@ -505,17 +501,8 @@ const DayContent = ({
   );
 };
 
-const Duration = ({ durationMs }: { durationMs: number }) => {
-  const t = useTranslations("activity");
-  const { hours, minutes } = durationParts(durationMs);
-  if (hours > 0) {
-    return t("durationHoursMinutes", { hours, minutes });
-  }
-  if (minutes > 0) {
-    return t("durationMinutes", { minutes });
-  }
-  return t("durationUnderMinute");
-};
+const Duration = ({ durationMs }: { durationMs: number }) =>
+  useDurationLabel()(durationMs);
 
 type AppTotalsProps = {
   sampleDuration?: { identifier: string; durationMs: number };

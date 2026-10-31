@@ -6,6 +6,8 @@ import { Temporal } from "@stll/time";
 import {
   activityBlocks,
   appRows,
+  BLOCK_DETAIL_APP_LIMIT,
+  blockDetails,
   calendarHours,
   contiguousRuns,
   draftedBlocks,
@@ -117,6 +119,73 @@ describe("activity blocks", () => {
         { identifier: "com.example.editor", durationMs: MINUTE },
       ],
     });
+  });
+
+  test("a block's details list its apps longest first with their longest title", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 4, title: "Lease draft.docx" }),
+      segment({ from: 4, to: 7, app: "browser", title: "Court calendar" }),
+      segment({ from: 7, to: 9, title: "Engagement letter.docx" }),
+      segment({ from: 9, to: 10, app: "browser" }),
+      segment({ from: 10, to: 13, title: "Engagement letter.docx" }),
+    ]);
+    const details = blockDetails(segments, segmentTitles(segments));
+    expect(details).toEqual({
+      hiddenCount: 0,
+      rows: [
+        {
+          durationMs: 9 * MINUTE,
+          identifier: "com.example.editor",
+          name: "Example Editor",
+          title: "Engagement letter.docx",
+        },
+        {
+          durationMs: 4 * MINUTE,
+          identifier: "com.example.browser",
+          name: "Example Browser",
+          title: "Court calendar",
+        },
+      ],
+    });
+  });
+
+  test("a block's details stop at the app limit, count the rest and lose no time", () => {
+    const appCount = BLOCK_DETAIL_APP_LIMIT + 3;
+    const { segments } = day(
+      Array.from({ length: appCount }, (_, index) =>
+        segment({
+          from: index * 2,
+          to: index * 2 + 2,
+          app: `app-${String(index)}`,
+        }),
+      ),
+    );
+    const details = blockDetails(segments, segmentTitles(segments));
+    expect(details.rows).toHaveLength(BLOCK_DETAIL_APP_LIMIT);
+    expect(details.hiddenCount).toBe(appCount - BLOCK_DETAIL_APP_LIMIT);
+    expect(
+      details.rows.reduce((sum, row) => sum + row.durationMs, 0) +
+        details.hiddenCount * 2 * MINUTE,
+    ).toBe(appCount * 2 * MINUTE);
+  });
+
+  test("a segment one label line tall stays its own block at every grid", () => {
+    for (const granularity of [15, 30, 60] as const) {
+      const threshold = shortSegmentThresholdMs(granularity);
+      expect(threshold).toBeLessThan(granularity * MINUTE);
+      const { segments } = day([
+        segment({ from: 0, to: 30 }),
+        segment({
+          from: 30,
+          to: 30 + Math.ceil(threshold / MINUTE),
+          app: "browser",
+        }),
+        segment({ from: 30 + Math.ceil(threshold / MINUTE), to: 90 }),
+      ]);
+      expect(
+        activityBlocks(segments, granularity).map(({ type }) => type),
+      ).toEqual(["single", "single", "single"]);
+    }
   });
 
   test("titles lose the app suffix and the context the app's titles share", () => {

@@ -473,6 +473,7 @@
     "calendarLabel": "Activité et saisies de temps, {date}",
     "mixedActivity": "Changements rapides",
     "mixedActivityLabel": "Changements rapides entre {apps}, {range}",
+    "moreApps": "+{count} de plus",
     "suggestionLabel": "Saisie suggérée : {matter}, {hours} h",
     "rangeHours": "{range} · {hours} h",
     "draftedRange": "{range} · en brouillon",

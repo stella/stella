@@ -473,6 +473,7 @@
     "calendarLabel": "Aktywność i wpisy czasu, {date}",
     "mixedActivity": "Szybkie przełączanie",
     "mixedActivityLabel": "Szybkie przełączanie: {apps}, {range}",
+    "moreApps": "+{count} więcej",
     "suggestionLabel": "Proponowany wpis: {matter}, {hours} godz.",
     "rangeHours": "{range} · {hours} godz.",
     "draftedRange": "{range} · wersja robocza",

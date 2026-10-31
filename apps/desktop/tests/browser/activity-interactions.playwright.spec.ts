@@ -536,10 +536,12 @@ const pressCardShortcut = async (page: Page, key: "Backspace" | "Enter") => {
   );
 };
 
+// A block shorter than one line draws no text, so blocks are found by the
+// accessible label every block carries.
 const openSuggestion = async (page: Page, matter: string) => {
   await page
     .locator(SUGGESTION_BLOCKS)
-    .filter({ hasText: matter })
+    .and(page.locator(`[aria-label*="${matter}"]`))
     .first()
     .click();
   await expect(suggestionCard(page, matter)).toBeFocused();
@@ -2024,7 +2026,7 @@ const VISUALS_SNAPSHOT = {
       appIdentifier: "com.example.viewer",
       appName: "Preview",
       start: "2026-10-07T10:00:00Z",
-      end: "2026-10-07T10:10:00Z",
+      end: "2026-10-07T10:30:00Z",
     },
   ],
 } satisfies ActivityDaySnapshot;
@@ -2040,6 +2042,54 @@ test("the calendar reuses local app visuals and keeps a neutral fallback", async
   const fallback = blocks.filter({ hasText: "Preview" });
   await expect(fallback.locator("img")).toHaveCount(0);
   await expect(fallback.locator("svg").first()).toBeAttached();
+});
+
+test("hovering an Activity block lists its apps with time and title, then counts the rest", async ({
+  page,
+}) => {
+  const apps = Array.from({ length: 7 }, (_, index) => ({
+    appIdentifier: `com.example.app-${String(index)}`,
+    appName: `App ${String(index)}`,
+    windowTitle: `Window ${String(index)}`,
+    // Longest first: app 0 has seven minutes, app 6 one.
+    minutes: 7 - index,
+  }));
+  let minute = 0;
+  const segments = apps.map(({ minutes, ...app }) => {
+    const start = minute;
+    minute += minutes;
+    return {
+      ...app,
+      start: new Date(Date.UTC(2026, 9, 7, 9, start)).toISOString(),
+      end: new Date(Date.UTC(2026, 9, 7, 9, minute)).toISOString(),
+    };
+  });
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      captureDetails: true,
+      detailsAccess: "ready",
+      segments,
+    },
+  });
+  await page
+    .locator(ACTIVITY_BLOCKS)
+    .and(page.locator('[data-kind="mixed"]'))
+    .hover();
+  const details = page.locator('[data-slot="tooltip-popup"]');
+  await expect(details).toBeVisible();
+  for (const { appName, windowTitle } of apps.slice(0, 5)) {
+    await expect(details).toContainText(appName);
+    await expect(details).toContainText(windowTitle);
+  }
+  await expect(details).not.toContainText("App 5");
+  await expect(details).toContainText(
+    enMessages.activity.moreApps.replace("{count}", "2"),
+  );
+  await expect(details).toContainText(
+    enMessages.activity.durationMinutes.replace("{minutes}", "7"),
+  );
 });
 
 test("the settings app list reuses local app visuals and keeps a neutral fallback", async ({

@@ -473,6 +473,7 @@
     "calendarLabel": "Tevékenység és időbejegyzések, {date}",
     "mixedActivity": "Gyors váltogatás",
     "mixedActivityLabel": "Gyors váltogatás: {apps}, {range}",
+    "moreApps": "+{count} további",
     "suggestionLabel": "Javasolt bejegyzés: {matter}, {hours} ó",
     "rangeHours": "{range} · {hours} ó",
     "draftedRange": "{range} · piszkozat",
