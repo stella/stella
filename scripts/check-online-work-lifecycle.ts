@@ -210,6 +210,26 @@ export const findMigrateStepsWithoutMode = (
   return problems;
 };
 
+const SCRIPT_MODE_ASSIGNMENT =
+  /\bSTELLA_MIGRATE_ONLINE_WORK=["']?(?:verify_finalized|build_finalized|build_all)\b/u;
+
+/**
+ * A shell script that runs the migrate entrypoint names its mode itself: the
+ * workflow step that calls the script shows no migrate command to check.
+ */
+export const findMigrateScriptsWithoutMode = (
+  scripts: readonly { file: string; source: string }[],
+): string[] =>
+  scripts
+    .filter(
+      ({ source }) =>
+        MIGRATE_COMMAND.test(source) && !SCRIPT_MODE_ASSIGNMENT.test(source),
+    )
+    .map(
+      ({ file }) =>
+        `${file}: runs migrate without ${MIGRATE_MODE_VARIABLE}; set build_finalized or build_all (verify_finalized for a release database)`,
+    );
+
 const git: OnlineWorkLifecycleGit = (args) => {
   const result = Bun.spawnSync(["git", ...args]);
   return {
@@ -237,10 +257,24 @@ if (import.meta.main) {
     })),
   );
   problems.push(...findMigrateStepsWithoutMode(workflows));
+  const shellScripts = requireGit(git, ["ls-files", "-z", "--", "*.sh"])
+    .split("\0")
+    .filter((file) => file !== "")
+    .toSorted();
+  problems.push(
+    ...findMigrateScriptsWithoutMode(
+      await Promise.all(
+        shellScripts.map(async (file) => ({
+          file,
+          source: await Bun.file(file).text(),
+        })),
+      ),
+    ),
+  );
   if (problems.length > 0) {
     panic(problems.join("\n"));
   }
   console.log(
-    "Online work lifecycle transitions are release-safe, and every CI migrate step names its mode.",
+    "Online work lifecycle transitions are release-safe, and every CI migrate step and script names its mode.",
   );
 }

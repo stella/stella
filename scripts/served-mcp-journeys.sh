@@ -42,12 +42,14 @@ trap 'exit 143' TERM
 cd "$repo"
 bun --filter @stll/api generate:capability-runtime
 # Disposable database: online index builds must not wait on EBS metrics or a
-# wall-clock busy window.
+# wall-clock busy window, and the finalized work a release verifies is built
+# here, since a fresh database has none of it.
 migrate_log="$work/migrate.log"
 if ! (
   cd apps/api
   NODE_ENV=development STELLA_LOCAL_DEV=1 DB_LOAD_GATE_EBS_SIGNAL=disabled \
-    DB_LOAD_GATE_BUSY_WINDOWS='[]' bun --no-env-file src/db/migrate.ts
+    DB_LOAD_GATE_BUSY_WINDOWS='[]' STELLA_MIGRATE_ONLINE_WORK=build_finalized \
+    bun --no-env-file src/db/migrate.ts
 ) > "$migrate_log" 2>&1; then
   tail -50 "$migrate_log" >&2
   echo "Migrations failed on the disposable database." >&2

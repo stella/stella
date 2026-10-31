@@ -5,6 +5,7 @@ import path from "node:path";
 
 import {
   checkOnlineWorkLifecycle,
+  findMigrateScriptsWithoutMode,
   findMigrateStepsWithoutMode,
   ONLINE_WORK_LIFECYCLE_PATH,
   type OnlineWorkLifecycleGit,
@@ -294,6 +295,51 @@ describe("CI migrate steps name their online work mode", () => {
         ]),
       ).toEqual([]);
     }
+  });
+
+  test("a shell script that migrates names its own mode", () => {
+    const migrate =
+      "(cd apps/api && DB_LOAD_GATE_EBS_SIGNAL=disabled bun --no-env-file src/db/migrate.ts)";
+    expect(
+      findMigrateScriptsWithoutMode([
+        {
+          file: "scripts/unnamed.sh",
+          source: `#!/usr/bin/env bash\n${migrate}\n`,
+        },
+        {
+          file: "scripts/inline.sh",
+          source: `STELLA_MIGRATE_ONLINE_WORK=build_finalized ${migrate}\n`,
+        },
+        {
+          file: "scripts/exported.sh",
+          source: `export STELLA_MIGRATE_ONLINE_WORK=build_all\n${migrate}\n`,
+        },
+        {
+          file: "scripts/release.sh",
+          source: `STELLA_MIGRATE_ONLINE_WORK="verify_finalized" bun run db:migrate\n`,
+        },
+        { file: "scripts/unrelated.sh", source: "bun run build\n" },
+      ]),
+    ).toEqual([
+      "scripts/unnamed.sh: runs migrate without STELLA_MIGRATE_ONLINE_WORK; set build_finalized or build_all (verify_finalized for a release database)",
+    ]);
+  });
+
+  test("every repository shell script names the mode wherever it migrates", async () => {
+    const listed = Bun.spawnSync(["git", "ls-files", "-z", "--", "*.sh"]);
+    expect(listed.exitCode).toBe(0);
+    const files = listed.stdout
+      .toString()
+      .split("\0")
+      .filter((file) => file !== "");
+    expect(files.length).toBeGreaterThan(0);
+    const scripts = await Promise.all(
+      files.map(async (file) => ({
+        file,
+        source: await Bun.file(file).text(),
+      })),
+    );
+    expect(findMigrateScriptsWithoutMode(scripts)).toEqual([]);
   });
 
   test("every repository workflow names the mode wherever it migrates", async () => {
