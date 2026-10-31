@@ -2459,6 +2459,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
               "needs.ci-plan.outputs.heavy_proof": String(
                 event === EVENT.mergeGroup && runRequired === "true",
               ),
+              "needs.ci-plan.outputs.coverage_profile": "normal-v1",
               "needs.ci-plan.outputs.trusted": "true",
               "needs.ci-plan.outputs.desktop_rust_checks_required":
                 required ?? "",

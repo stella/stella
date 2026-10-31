@@ -3323,6 +3323,8 @@ jobs:
       && needs.ci-plan.result == 'success'
       && (github.event_name != 'pull_request' || needs.pr-heavy-gate.result == 'success')
       && inputs.pr_depth_only != true
+      &&
+      (needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser'))
       && needs.ci-plan.outputs.ci_browser_required == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -5253,12 +5255,18 @@ jobs:
       inputs.pr_depth_only != true
       &&
       needs.ci-plan.outputs.run_required != 'false'
+      && (
+      ((github.event_name == 'pull_request'
+      && needs.ci-plan.outputs.coverage_profile == 'normal-v1')
+      || (github.event_name != 'pull_request'
+      ))
       && (always()
       && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
       && (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success')
+      )
       )
     runs-on: ubuntu-24.04
     # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
@@ -6582,8 +6590,8 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && (github.event_name == 'pull_request' || needs.ci-plan.outputs.heavy_proof == 'true')
       && needs.ci-plan.outputs.run_required != 'false'
+      && (github.event_name != 'pull_request' || needs.ci-plan.outputs.coverage_profile == 'normal-v1')
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
     strategy:

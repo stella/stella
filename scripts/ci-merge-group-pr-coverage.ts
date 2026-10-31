@@ -145,8 +145,6 @@ export const PR_COVERAGE_BASELINE = [
   "mobile-build",
   "landing-build",
   "heavy-web-build",
-  "web-build",
-  "e2e-landing",
   "postgres-service-suites",
   "service-suites",
   "route-smoke",

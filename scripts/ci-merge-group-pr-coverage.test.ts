@@ -35,9 +35,11 @@ const commonValues = {
   "needs.ci-plan.outputs.pr_depth_reused": "false",
   "needs.ci-plan.outputs.pr_heavy_gate_required": "false",
   "needs.ci-plan.outputs.trusted": "true",
-  "needs.ci-plan.outputs.coverage_profile": "pilot-fast-v1",
-  "needs.ci-plan.outputs.pilot_fast_jobs":
-    '["ci-browser","dependency-malware"]',
+  // The census models the default PR profile. The pilot-fast-v1 profile is an
+  // opt-in reduced plan that needs a current certification; its own tests
+  // pin which jobs it leaves to the merge group.
+  "needs.ci-plan.outputs.coverage_profile": "normal-v1",
+  "needs.ci-plan.outputs.pilot_fast_jobs": "[]",
   "needs.ci-plan.outputs.suite_depth": "full",
   "needs.ci-plan.outputs.queue_depth": "full",
   "needs.ci-plan.outputs.heavy_proof": "false",
@@ -48,8 +50,6 @@ const eventContext = (eventName: "merge_group" | "pull_request"): Context => ({
     ...commonValues,
     "github.event_name": eventName,
     "needs.ci-plan.outputs.heavy_proof": String(eventName === "merge_group"),
-    "needs.ci-plan.outputs.coverage_profile":
-      eventName === "merge_group" ? "normal-v1" : "pilot-fast-v1",
   },
   status: { always: true, success: true, failure: false, cancelled: false },
 });
@@ -103,19 +103,19 @@ test("fixed merge-group jobs reject their former PR-only gaps", () => {
       name: "desktop-rust-tests",
       mutation: (source: string) =>
         source.replace(
-          "(github.event_name == 'pull_request' || needs.ci-plan.outputs.heavy_proof == 'true')",
+          "(github.event_name != 'pull_request' || needs.ci-plan.outputs.coverage_profile == 'normal-v1')",
           "needs.ci-plan.outputs.heavy_proof == 'true'",
         ),
     },
     {
       name: "ci-browser",
       mutation: (source: string) =>
-        `${source} && needs.ci-plan.outputs.coverage_profile == 'normal-v1'`,
+        `${source} && github.event_name != 'pull_request'`,
     },
     {
       name: "e2e-production-shard",
       mutation: (source: string) =>
-        `${source} && needs.ci-plan.outputs.coverage_profile == 'normal-v1'`,
+        `${source} && github.event_name != 'pull_request'`,
     },
   ] as const;
   for (const { name, mutation } of cases) {
@@ -249,7 +249,6 @@ const rawPlanOutput = (
   return plan[output] === "true";
 };
 
-// timeout: repository-backed selectors scan package and import graphs for both plans.
 test("fast PR plans cover every full merge-group job scope", () => {
   const fixturePlans = PLAN_FIXTURES.map((files) => ({
     mergeGroup: scopePlan(files, "merge_group"),
@@ -272,7 +271,7 @@ test("fast PR plans cover every full merge-group job scope", () => {
   expect(violations.toSorted()).toEqual(
     [...PR_PLAN_COVERAGE_BASELINE].toSorted(),
   );
-}, 15_000);
+});
 
 test("i18n PR coverage records current-base input drift", () => {
   expect(MERGE_GROUP_PR_COVERAGE["ci-checks-rest"]).toEqual({
