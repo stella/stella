@@ -14,6 +14,7 @@ import {
 } from "@stll/ui/inspector";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
+import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -54,7 +55,8 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // icons, the rail toggles), so the frame is already the app; only what
 // depends on data or on the active locale shimmers: nav labels, pinned
 // matters, the account card, the breadcrumb and the page body. Intentionally
-// free of hooks, context, data, and Suspense. A page that is the same for
+// free of data and Suspense; it tracks only the viewport and saved layout, so
+// it resizes with the frame it stands in for. A page that is the same for
 // every visitor can take the content column's place.
 export function ProtectedPendingSkeleton({
   content,
@@ -90,7 +92,7 @@ function ProtectedPendingSkeletonContent({
   content: ReactElement | undefined;
   inspectorScope: InspectorStorageScope | undefined;
 }) {
-  const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
+  const viewportWidth = useViewportWidth();
   const paneRequested =
     inspectorScope !== undefined &&
     readPersistedInspectorPaneRequested(inspectorScope) &&
