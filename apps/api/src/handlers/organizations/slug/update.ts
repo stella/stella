@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { RESOURCE_TYPE } from "@stll/api-contract";
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 
 import { changeOrganizationSlug } from "@/api/db/root";
@@ -10,6 +11,7 @@ import { getAuth } from "@/api/lib/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { consumeOrganizationSlugRateLimit } from "@/api/lib/rate-limit/organization-slug";
+import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const BASE32_ALPHABET = "abcdefghijklmnopqrstuvwxyz234567";
 const OPAQUE_SUFFIX_LENGTH = 10;
@@ -20,6 +22,7 @@ const opaqueSlug = () => {
 
 const config = {
   contract: "patch",
+  realtime: organizationResourceSetUpdates(RESOURCE_TYPE.ORGANIZATION),
   description:
     "Change the active organization's slug. Owners and admins may choose a lowercase slug or generate an opaque org- identifier. The old slug has no alias. A taken slug returns organization_slug_conflict; choose another or use type opaque.",
   permissions: { organization: ["update"] },
