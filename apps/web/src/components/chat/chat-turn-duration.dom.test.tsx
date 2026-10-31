@@ -4,6 +4,7 @@ import {
   afterEach,
   expect,
   jest,
+  mock,
   setSystemTime,
   spyOn,
   test,
@@ -12,6 +13,11 @@ import {
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 

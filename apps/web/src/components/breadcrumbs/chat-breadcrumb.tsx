@@ -14,7 +14,7 @@ import {
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
 // primed by the sidebar / chat history (a lightweight query that never
@@ -43,7 +43,7 @@ export const ChatBreadcrumb = ({
     ...groupedChatThreadsOptions({ activeOrganizationId, userId }),
     select: (data) => selectThreadTitleSummary(data.pages, threadId),
   });
-  const groupedView = useQueryView(groupedQuery);
+  const groupedView = queryView(groupedQuery);
   const groupedThread =
     groupedView.type === "items" ? groupedView.items : undefined;
 
@@ -69,7 +69,7 @@ export const ChatBreadcrumb = ({
     ...threadOptions,
     enabled: groupedThread === null,
   });
-  const threadView = useQueryView(threadQuery);
+  const threadView = queryView(threadQuery);
   const threadData = threadView.type === "items" ? threadView.items : undefined;
 
   // The grouped list only holds its first loaded pages, so an older thread that
@@ -87,7 +87,7 @@ export const ChatBreadcrumb = ({
     persistedThread: threadData,
   });
   const titleQuery = useQuery(titleOptions);
-  const titleView = useQueryView(titleQuery);
+  const titleView = queryView(titleQuery);
   const byIdTitle = titleView.type === "items" ? titleView.items : undefined;
 
   const title = groupedThread?.title ?? byIdTitle ?? null;

@@ -9,6 +9,7 @@ import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { withResultSavepoint } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
+import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -24,7 +25,9 @@ import {
   withAggregateLock,
   withAggregateRowQuery,
   withAggregateSavepoint,
+  withSkipLockedBatch,
 } from "./aggregate-lock";
+import type { AGGREGATE_LOCKS, AggregateName } from "./aggregate-lock";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -83,6 +86,168 @@ const withPublicRowFixture = async ({
 type AggregateAcquireTransaction = Parameters<
   typeof withAggregateLock
 >[0]["tx"];
+
+type AdvisoryAggregate = {
+  [
+    Name in AggregateName
+  ]: (typeof AGGREGATE_LOCKS)[Name]["kind"] extends "advisory" ? Name : never;
+}[AggregateName];
+
+/**
+ * One acquisition per advisory aggregate. Key derivation runs only on a real
+ * driver (a mocked execute accepts any parameter, including a NUL that
+ * PostgreSQL text refuses), and the map is total, so a new advisory aggregate
+ * cannot land without being acquired here.
+ */
+const advisoryAcquisitions = () => {
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
+  const workspaceId = createSafeId<"workspace">();
+  const definitionId = createSafeId<"flowDefinition">();
+  return {
+    caseLawSitemapMonth: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "caseLawSitemapMonth",
+        id: { country: "CZE", year: "2024", month: "01" },
+        tx,
+      }),
+    organizationObjectIntent: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "organizationObjectIntent",
+        id: organizationId,
+        tx,
+      }),
+    professionalUseAcceptance: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "professionalUseAcceptance",
+        id: { userId },
+        tx,
+      }),
+    orgFeatureAdmission: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "orgFeatureAdmission",
+        id: { organizationId, featureId: "flows" },
+        tx,
+      }),
+    definitionCap: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "definitionCap",
+        id: { definitionId },
+        tx,
+      }),
+    caseLawRepublication: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "caseLawRepublication",
+        id: "global",
+        tx,
+      }),
+    legislationAmendmentWork: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "legislationAmendmentWork",
+        id: {
+          sourceId: createSafeId<"legislationSource">(),
+          eli: "eli/cz/sb/2024/1",
+          language: "ces",
+        },
+        tx,
+      }),
+    desktopBatch: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "desktopBatch",
+        id: { organizationId, userId, idempotencyKey: "batch-1" },
+        tx,
+      }),
+    chatOwnerStoredContentEgress: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "chatOwnerStoredContentEgress",
+        id: { organizationId, userId },
+        tx,
+      }),
+    chatStoredContentEgress: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "chatStoredContentEgress",
+        id: createSafeId<"chatThread">(),
+        tx,
+      }),
+    readerAnnotation: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "readerAnnotation",
+        id: {
+          id: createSafeId<"legalReaderAnnotation">(),
+          organizationId,
+          userId,
+        },
+        tx,
+      }),
+    chatToolGrants: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "chatToolGrants",
+        id: { organizationId, userId },
+        tx,
+      }),
+    automatedFlowRunCap: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "automatedFlowRunCap",
+        id: definitionId,
+        tx,
+      }),
+    contactCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "contactCapacity",
+        id: { organizationId },
+        tx,
+      }),
+    fileComparisonCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "fileComparisonCapacity",
+        id: { organizationId },
+        tx,
+      }),
+    billingCodeCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "billingCodeCapacity",
+        id: { workspaceId },
+        tx,
+      }),
+    expenseCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "expenseCapacity",
+        id: { workspaceId },
+        tx,
+      }),
+    rateTableWorkspace: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "rateTableWorkspace",
+        id: { workspaceId },
+        tx,
+      }),
+    mcpOAuthState: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "mcpOAuthState",
+        id: {
+          connectorId: createSafeId<"mcpConnector">(),
+          organizationId,
+          userId,
+        },
+        tx,
+      }),
+    personalCatalog: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "personalCatalog",
+        id: { organizationId, userId },
+        tx,
+      }),
+    sampleCase: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "sampleCase",
+        id: { workspaceId },
+        tx,
+      }),
+  } satisfies Record<
+    AdvisoryAggregate,
+    (tx: AggregateAcquireTransaction) => Promise<unknown>
+  >;
+};
 
 const advisoryCases = () => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -153,6 +318,39 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("aggregate locks (postgres)", () => {
+    test("skip-locked discovery obeys its statement deadline", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        await withPublicRowFixture({
+          db,
+          workspace: "present",
+          run: async ({ workspaceId }) => {
+            const result = await Result.tryPromise(
+              async () =>
+                await withSkipLockedBatch({
+                  database: db,
+                  limit: 1,
+                  prepare: async (tx) =>
+                    await setSharedStatementTimeout(tx, 10),
+                  select: (tx) =>
+                    tx
+                      .select({ id: workspaces.id, pause: sql`pg_sleep(0.05)` })
+                      .from(workspaces)
+                      .where(eq(workspaces.id, workspaceId)),
+                  run: (_tx, rows) => rows,
+                }),
+            );
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) {
+              expect(getPgErrorCode(result.error)).toBe(
+                PG_ERROR.QUERY_CANCELED,
+              );
+            }
+          },
+        });
+      });
+    });
+
     test("empty selected rows retain ordering without claiming physical coverage", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
@@ -620,6 +818,21 @@ if (!databaseUrl || !enabled) {
           ).toMatchObject({ message: "Aggregate lock rank inversion" });
           expect(statements.length).toBe(countBeforeInversion);
         });
+      });
+    });
+
+    test("every advisory aggregate derives a key PostgreSQL accepts", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        for (const [aggregate, acquire] of Object.entries(
+          advisoryAcquisitions(),
+        )) {
+          const result = await db.transaction(async (tx) => await acquire(tx));
+          expect({ aggregate, result }).toEqual({
+            aggregate,
+            result: { status: "locked" },
+          });
+        }
       });
     });
 

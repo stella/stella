@@ -115,6 +115,7 @@ export const useDecisionAnnotationSurface = ({
         );
       },
       startAnchorId: item.blockAnchorId,
+      targetType: target.type,
       text: item.body ?? "",
       updatedAt: item.updatedAt,
       visibility: item.visibility,
@@ -145,6 +146,7 @@ export const useDecisionAnnotationSurface = ({
           setComposing(null);
         },
         startAnchorId: first.blockAnchorId,
+        targetType: target.type,
       },
     ];
   })();

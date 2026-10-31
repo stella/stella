@@ -33,7 +33,7 @@ import type {
   KnowledgeTool,
   ToolsSource,
 } from "@/features/knowledge/views/tools/tools-seam";
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
@@ -102,7 +102,7 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
   children,
 }: ToolsCatalogueViewProps<TTool>) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const locale = useFormattingLocale();
   const [filter, setFilter] = useState<ToolsCatalogueKind>(
     initialKind ?? "all",
   );

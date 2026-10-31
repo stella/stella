@@ -27,7 +27,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
 import { useAddWorkspaceMember } from "@/lib/workspaces/mutations/workspace-members";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
 
@@ -71,12 +71,10 @@ const AddMemberDialogBody = ({
 }: AddMemberDialogBodyProps) => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const organizationView = useQueryView(
+  const organizationView = queryView(
     useQuery(organizationOptions(activeOrganizationId)),
   );
-  const membersView = useQueryView(
-    useQuery(workspaceMembersOptions(workspaceId)),
-  );
+  const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const candidates = addMemberCandidates(organizationView, membersView);
   const addMember = useAddWorkspaceMember();
   const submitOnce = useSingleFlight();

@@ -21,10 +21,10 @@ template_lookup_formats.created_at       timestamptz         default,not null  t
 One member's own choice among the organization's saved company specification formats, per registry.
 
 ```text
-template_lookup_format_user_defaults.user_id          text                not null          templates.ts:134
-template_lookup_format_user_defaults.organization_id  safeOrganizationId  not null          templates.ts:135
+template_lookup_format_user_defaults.user_id          text                fk,not null       templates.ts:134
+template_lookup_format_user_defaults.organization_id  safeOrganizationId  fk,not null       templates.ts:135
 template_lookup_format_user_defaults.registry         text                not null          templates.ts:136
-template_lookup_format_user_defaults.format_id        safeUuid            not null          templates.ts:137
+template_lookup_format_user_defaults.format_id        safeUuid            fk,not null       templates.ts:137
 template_lookup_format_user_defaults.created_at       timestamptz         default,not null  templates.ts:138
 template_lookup_format_user_defaults.updated_at       timestamptz         default,not null  templates.ts:139
 ```
@@ -93,8 +93,8 @@ template_persistence_requests.completed_at         timestamptz         null     
 
 ```text
 template_versions.id               pUuid                pk,not null       templates.ts:457
-template_versions.organization_id  safeOrganizationId   not null          templates.ts:458
-template_versions.template_id      safeUuid             not null          templates.ts:459
+template_versions.organization_id  safeOrganizationId   fk,not null       templates.ts:458
+template_versions.template_id      safeUuid             fk,not null       templates.ts:459
 template_versions.version          integer              not null          templates.ts:460
 template_versions.s3_key           varchar              not null          templates.ts:461
 template_versions.scanState        storedFileScanState  null              templates.ts:462
@@ -141,8 +141,8 @@ search_documents.updated_at                                timestamptz         d
 search_document_preview_passages.{...entityFeatureGateColumns()}           spread                           templates.ts:585
 search_document_preview_passages.{...entityFeatureWorkspaceGateColumns()}  spread                           templates.ts:586
 search_document_preview_passages.entity_id                                 safeUuid            fk,not null  templates.ts:587
-search_document_preview_passages.organization_id                           safeOrganizationId  not null     templates.ts:590
-search_document_preview_passages.workspace_id                              safeWorkspaceId     not null     templates.ts:591
+search_document_preview_passages.organization_id                           safeOrganizationId  fk,not null  templates.ts:590
+search_document_preview_passages.workspace_id                              safeWorkspaceId     fk,not null  templates.ts:591
 search_document_preview_passages.generation                                uuid                not null     templates.ts:592
 search_document_preview_passages.ordinal                                   integer             not null     templates.ts:593
 search_document_preview_passages.content                                   text                not null     templates.ts:594
@@ -166,7 +166,7 @@ contact_search_documents.updated_at          timestamptz         default,not nul
 
 ```text
 contact_search_document_preview_passages.contact_id       safeUuid            fk,not null  templates.ts:675
-contact_search_document_preview_passages.organization_id  safeOrganizationId  not null     templates.ts:680
+contact_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:680
 contact_search_document_preview_passages.generation       uuid                not null     templates.ts:681
 contact_search_document_preview_passages.ordinal          integer             not null     templates.ts:682
 contact_search_document_preview_passages.content          text                not null     templates.ts:683
@@ -189,7 +189,7 @@ workspace_search_documents.updated_at          timestamptz         default,not n
 
 ```text
 workspace_search_document_preview_passages.workspace_id     safeWorkspaceId     fk,not null  templates.ts:750
-workspace_search_document_preview_passages.organization_id  safeOrganizationId  not null     templates.ts:755
+workspace_search_document_preview_passages.organization_id  safeOrganizationId  fk,not null  templates.ts:755
 workspace_search_document_preview_passages.generation       uuid                not null     templates.ts:756
 workspace_search_document_preview_passages.ordinal          integer             not null     templates.ts:757
 workspace_search_document_preview_passages.content          text                not null     templates.ts:758
@@ -203,7 +203,7 @@ The durable record that a search projection is behind its source.
 ```text
 search_projection_repair_queue.kind             text                not null          templates.ts:821
 search_projection_repair_queue.source_id        uuid                not null          templates.ts:828  Deliberately without a foreign key: a mark whose source is gone is not an error to prevent but work to discard, and the drain discards it on its next pass.
-search_projection_repair_queue.organization_id  safeOrganizationId  not null          templates.ts:835  Unlike the storage-cleanup outboxes in schema/entities.ts, this queue holds no object keys: the drain only rewrites and deletes database rows.
+search_projection_repair_queue.organization_id  safeOrganizationId  fk,not null       templates.ts:835  Unlike the storage-cleanup outboxes in schema/entities.ts, this queue holds no object keys: the drain only rewrites and deletes database rows.
 search_projection_repair_queue.revision         uuid                not null          templates.ts:836
 search_projection_repair_queue.enqueued_at      timestamptz         default,not null  templates.ts:837
 search_projection_repair_queue.attempts         integer             default,not null  templates.ts:838
@@ -217,9 +217,9 @@ One row per entity with extracted plaintext encrypted for search and downstream 
 ```text
 extracted_content.{...entityFeatureGateColumns()}           spread                                templates.ts:875
 extracted_content.{...entityFeatureWorkspaceGateColumns()}  spread                                templates.ts:876
-extracted_content.entity_id                                 safeUuid            pk,not null       templates.ts:877
+extracted_content.entity_id                                 safeUuid            pk,fk,not null    templates.ts:877
 extracted_content.organization_id                           safeOrganizationId  fk,not null       templates.ts:878
-extracted_content.workspace_id                              safeWorkspaceId     not null          templates.ts:883
+extracted_content.workspace_id                              safeWorkspaceId     fk,not null       templates.ts:883
 extracted_content.source_entity_version_id                  safeUuid            fk,null           templates.ts:885  Immutable source identity; null only for pre-provenance rows.
 extracted_content.source_field_id                           safeUuid            fk,null           templates.ts:888
 extracted_content.source_file_id                            uuid                null              templates.ts:892

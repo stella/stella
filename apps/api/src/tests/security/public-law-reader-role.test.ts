@@ -23,7 +23,10 @@ import {
   unredactedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
-import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
+import {
+  readCaseLawCoverageSourcesQuery,
+  readCaseLawCoverageSummaryQuery,
+} from "@/api/handlers/case-law/decisions/coverage";
 import { readCaseLawArrivalsQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
   readDecisionHandler,
@@ -79,7 +82,7 @@ import {
   publicLawDatabaseRolePermissionsSql,
 } from "@/api/lib/public-law-read-db";
 import {
-  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE,
+  CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE,
   CASE_LAW_DECISION_VIEWS,
   caseLawDecisionViewGrantStatements,
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
@@ -1189,6 +1192,11 @@ describe("public-law reader role", () => {
         await readCaseLawCoverageSourcesQuery(tx);
         exercised.add(readCaseLawCoverageSourcesQuery.publicLawSharedQuery);
 
+        expect(await readCaseLawCoverageSummaryQuery(tx)).toEqual({
+          message: "Coverage is unavailable",
+        });
+        exercised.add(readCaseLawCoverageSummaryQuery.publicLawSharedQuery);
+
         await readCaseLawSourceHealthQuery(tx);
         exercised.add(readCaseLawSourceHealthQuery.publicLawSharedQuery);
 
@@ -1344,14 +1352,13 @@ describe("public-law reader role", () => {
     const viewRelations = new Set([
       "case_law_published_decisions",
       "case_law_unredacted_decisions",
+      "case_law_withdrawal_status",
     ]);
     const requiredRelations = declaredColumnPairs
       .filter(({ grant }) => grant === "required")
       .map(({ relation }) => relation);
     const policyRelations = requiredRelations.filter(
-      (relation) =>
-        relation !== "case_law_published_decisions" &&
-        relation !== "case_law_unredacted_decisions",
+      (relation) => !viewRelations.has(relation),
     );
     const declaredRelations = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION);
     expect(
@@ -1467,42 +1474,55 @@ const sortedColumns = (grants: EffectiveSelectGrants) =>
   );
 
 describe("public-law reader migrations", () => {
-  test("committed decision-view grants match the canonical role registry", () => {
-    const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) =>
-        nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
-      )
-      .filter((path) => existsSync(path))
-      .map((path) => readFileSync(path, "utf-8"))
-      .filter((source) =>
-        source.includes("-- generated case-law decision view grants: start"),
-      );
-    expect(migrations).toHaveLength(1);
-    const migration = migrations.at(0) ?? panic("Grant migration not found");
-    const startMarker = "-- generated case-law decision view grants: start";
-    const endMarker = "-- generated case-law decision view grants: end";
-    const start = migration.indexOf(startMarker) + startMarker.length;
-    const end = migration.indexOf(endMarker);
-    expect(end).toBeGreaterThan(start);
-    const statements = migration
-      .slice(start, end)
-      .replaceAll("--> statement-breakpoint", "")
-      .split(";")
-      .map((statement) => statement.trim())
-      .filter(Boolean);
-    const expected = caseLawDecisionViewGrantStatements();
+  test.each(["initial", "later"] as const)(
+    "%s committed decision-view grants match their stage registry",
+    (stage) => {
+      const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) =>
+          nodePath.resolve(DRIZZLE_DIR, entry.name, "migration.sql"),
+        )
+        .filter((path) => existsSync(path))
+        .toSorted()
+        .map((path) => readFileSync(path, "utf-8"))
+        .filter((source) =>
+          source.includes("-- generated case-law decision view grants: start"),
+        );
+      expect(migrations).toHaveLength(2);
+      const migration =
+        migrations.at(stage === "initial" ? 0 : 1) ??
+        panic("Grant migration not found");
+      const startMarker = "-- generated case-law decision view grants: start";
+      const endMarker = "-- generated case-law decision view grants: end";
+      const start = migration.indexOf(startMarker) + startMarker.length;
+      const end = migration.indexOf(endMarker);
+      expect(end).toBeGreaterThan(start);
+      const statements = migration
+        .slice(start, end)
+        .replaceAll("--> statement-breakpoint", "")
+        .split(";")
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      const expected = caseLawDecisionViewGrantStatements(stage);
 
-    expect(statements).toEqual(expected);
-    expect(expected).toHaveLength(
-      Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_ROLE).length,
-    );
-    for (const statement of statements) {
-      for (const view of CASE_LAW_DECISION_VIEWS) {
-        expect(statement).toContain(`"${view}"`);
+      expect(statements).toEqual(expected);
+      expect(statements.join("\n")).not.toContain('"text_state"');
+      if (stage === "initial") {
+        expect(statements.join("\n")).not.toContain('"extraction_warnings"');
+      } else {
+        expect(statements.join("\n")).toContain('"extraction_warnings"');
       }
-    }
-  });
+      expect(expected).toHaveLength(
+        Object.keys(CASE_LAW_DECISION_VIEW_SELECT_GRANTS_BY_STAGE[stage])
+          .length,
+      );
+      for (const statement of statements) {
+        for (const view of CASE_LAW_DECISION_VIEWS) {
+          expect(statement).toContain(`"${view}"`);
+        }
+      }
+    },
+  );
 
   // The attestation's bounds, held against what the migrations grant: every
   // required column, nothing beyond required plus permitted, and no table-wide

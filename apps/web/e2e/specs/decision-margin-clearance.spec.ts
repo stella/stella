@@ -9,6 +9,10 @@ import ar from "../../src/i18n/langs/ar.json" with { type: "json" };
 import en from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
 import {
+  DECISION_READER_BOOT_PATH,
+  openMemberDecision,
+} from "../helpers/decision-reader";
+import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
 } from "../helpers/docked-chat-legal-fixtures";
@@ -125,9 +129,6 @@ const analysis = {
 
 const decision = { ...dockedChatLegalPayloads.decision, documentAst: ast };
 
-// A direct load renders the decision on the server, where page.route cannot
-// answer the decision read; boot on a public page and navigate on the client
-// so the read comes from the browser (as decision-narrow-reader does).
 const openDecision = async (page: Page) => {
   await installDockedLegalFixtures(page);
   await page.route(
@@ -167,20 +168,10 @@ const openDecision = async (page: Page) => {
       await route.fulfill({ json: decision });
     },
   );
-  await page.goto("/law", { waitUntil: "domcontentloaded" });
-  // The router wraps pushState once it mounts; a cold dev server hydrates
-  // slowly, so this and the first reader wait allow for its compile.
-  await page.waitForFunction(
-    () => !history.pushState.toString().includes("[native code]"),
-    undefined,
-    { timeout: 30_000 },
-  );
-  await page.evaluate((target) => {
-    history.pushState(null, "", target);
-  }, DOCKED_CHAT_LEGAL_ROUTES.decision.path);
-  await expect(
-    page.locator('[data-slot="reader-document-column"]'),
-  ).toBeVisible({ timeout: 30_000 });
+  await openMemberDecision(page, {
+    bootPath: DECISION_READER_BOOT_PATH,
+    path: DOCKED_CHAT_LEGAL_ROUTES.decision.path,
+  });
 };
 
 /** The floating row that holds the heading trail and the zoom triad. */

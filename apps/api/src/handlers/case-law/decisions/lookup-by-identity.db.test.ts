@@ -85,6 +85,7 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
+const queryLog: string[] = [];
 
 /** A row as ingestion writes it for a decision of `jurisdiction`. */
 const identifierRow = ({
@@ -111,7 +112,14 @@ const identifierRow = ({
 beforeAll(
   async () => {
     client = await createTestPglite();
-    const db = drizzle({ client });
+    const db = drizzle({
+      client,
+      logger: {
+        logQuery: (query) => {
+          queryLog.push(query);
+        },
+      },
+    });
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -157,6 +165,7 @@ beforeAll(
         language: "cs",
         languageGroupKey: "lookup-supreme",
         slug: "23-cdo-1572-2012",
+        metadata: { keywords: ["nájem", "smlouva"] },
       },
       {
         id: administrativeId,
@@ -171,6 +180,7 @@ beforeAll(
         language: "cs",
         languageGroupKey: "lookup-administrative",
         slug: "8-as-1-2019",
+        metadata: { keywords: [`${"x".repeat(450)}\nSecond line`] },
       },
       {
         id: listingOnlyId,
@@ -578,3 +588,56 @@ test.each(
     }
   },
 );
+
+test("identity candidates carry bounded first-line publisher classifications", async () => {
+  const supreme = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: docketLocator("23 Cdo 1572/2012"),
+  });
+  expect(supreme.at(0)?.subjectSummary).toBe("nájem · smlouva");
+  const administrative = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: docketLocator("8 As 1/2019"),
+  });
+  expect(administrative.at(0)?.subjectSummary).toBe("x".repeat(400));
+});
+
+test("identity response work stays fixed as unrelated corpus rows grow from 10 to 200", async () => {
+  const db = drizzle({ client });
+  const addUnrelated = async (start: number, end: number) => {
+    await db.insert(caseLawDecisions).values(
+      Array.from({ length: end - start }, (_, index) => ({
+        id: createSafeId<"caseLawDecision">(),
+        sourceId: openSourceId,
+        caseNumber: `91 A ${String(start + index + 1)}/2025`,
+        citationKey: citationKeyOf(`91 A ${String(start + index + 1)}/2025`),
+        court: "Krajský soud v Praze",
+        country: "CZE",
+        language: "cs",
+        languageGroupKey: `lookup-growth-${String(start + index)}`,
+      })),
+    );
+  };
+  const measure = async () => {
+    queryLog.length = 0;
+    const rows = await lookupDecisionsByIdentity({
+      caseLawDb,
+      country: "CZE",
+      locator: docketLocator("8 As 1/2019"),
+    });
+    return {
+      statements: queryLog.length,
+      bytes: new TextEncoder().encode(JSON.stringify(rows)).byteLength,
+      rows: rows.length,
+    };
+  };
+  await addUnrelated(0, 10);
+  const small = await measure();
+  await addUnrelated(10, 200);
+  const large = await measure();
+  expect(small.statements).toBeGreaterThan(0);
+  expect(small.rows).toBe(1);
+  expect(large).toEqual(small);
+});

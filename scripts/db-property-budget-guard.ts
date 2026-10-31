@@ -1,5 +1,11 @@
 import path from "node:path";
-import ts from "typescript6";
+
+import {
+  type Node,
+  parseSource,
+  type Program,
+  walk,
+} from "../packages/scripts/src/syntax-tree";
 
 const API_TEST_GLOB = "apps/api/src/**/*.test.ts";
 
@@ -30,113 +36,115 @@ type PropertyBindings = {
 
 const isDatabaseBacked = (
   { relativePath, source }: SourceInput,
-  parsed: ts.SourceFile,
+  program: Program,
 ) =>
   DATABASE_SUITE_NAME.test(relativePath) ||
   DATABASE_SOURCE_MARKERS.some((marker) => source.includes(marker)) ||
-  parsed.statements.some((statement) => {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  program.body.some((statement) => {
+    if (statement.type !== "ImportDeclaration") {
       return false;
     }
-    const specifier = statement.moduleSpecifier.text;
+    const specifier = statement.source.value;
     return DATABASE_PROVIDER_IMPORTS.some((pattern) => pattern.test(specifier));
   });
 
-const collectBindings = (parsed: ts.SourceFile): PropertyBindings => {
+const collectBindings = (program: Program): PropertyBindings => {
   const bindings: PropertyBindings = {
     assertProperty: new Set(),
     propertyConfig: new Set(),
     fastCheck: new Set(),
   };
-  for (const statement of parsed.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !ts.isStringLiteral(statement.moduleSpecifier)
-    ) {
+  for (const statement of program.body) {
+    if (statement.type !== "ImportDeclaration") {
       continue;
     }
-    const clause = statement.importClause;
-    const named = clause?.namedBindings;
-    if (statement.moduleSpecifier.text === "fast-check") {
-      if (clause?.name) {
-        bindings.fastCheck.add(clause.name.text);
+    const specifier = statement.source.value;
+    for (const binding of statement.specifiers) {
+      if (binding.type !== "ImportSpecifier") {
+        if (specifier === "fast-check") {
+          bindings.fastCheck.add(binding.local.name);
+        }
+        continue;
       }
-      if (named && ts.isNamespaceImport(named)) {
-        bindings.fastCheck.add(named.name.text);
+      if (specifier !== "@stll/property-testing") {
+        continue;
       }
-    }
-    if (
-      statement.moduleSpecifier.text !== "@stll/property-testing" ||
-      !named ||
-      !ts.isNamedImports(named)
-    ) {
-      continue;
-    }
-    for (const binding of named.elements) {
-      const imported = binding.propertyName?.text ?? binding.name.text;
+      const imported =
+        binding.imported.type === "Identifier"
+          ? binding.imported.name
+          : binding.imported.value;
       if (imported === "assertProperty") {
-        bindings.assertProperty.add(binding.name.text);
+        bindings.assertProperty.add(binding.local.name);
       } else if (imported === "propertyConfig") {
-        bindings.propertyConfig.add(binding.name.text);
+        bindings.propertyConfig.add(binding.local.name);
       }
     }
   }
   return bindings;
 };
 
-const hasNumRuns = (expression: ts.Expression | undefined) =>
-  expression !== undefined &&
-  ts.isObjectLiteralExpression(expression) &&
+const hasNumRuns = (expression: Node | undefined) =>
+  expression?.type === "ObjectExpression" &&
   expression.properties.some(
     (property) =>
-      (ts.isPropertyAssignment(property) ||
-        ts.isShorthandPropertyAssignment(property)) &&
-      (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
-      property.name.text === "numRuns",
+      property.type === "Property" &&
+      property.kind === "init" &&
+      !property.method &&
+      !property.computed &&
+      ((property.key.type === "Identifier" &&
+        property.key.name === "numRuns") ||
+        (property.key.type === "Literal" && property.key.value === "numRuns")),
   );
 
-const isBudgetedConfigCall = (
-  node: ts.Node,
-  propertyConfig: Set<string>,
-): node is ts.CallExpression =>
-  ts.isCallExpression(node) &&
-  ts.isIdentifier(node.expression) &&
-  propertyConfig.has(node.expression.text) &&
+const isBudgetedConfigCall = (node: Node, propertyConfig: Set<string>) =>
+  node.type === "CallExpression" &&
+  node.callee.type === "Identifier" &&
+  propertyConfig.has(node.callee.name) &&
   hasNumRuns(node.arguments.at(0));
 
 // Top-level config helpers such as `config(40)` that build a budgeted
 // `propertyConfig({ numRuns })` count as an explicit budget.
 const collectBudgetedHelpers = (
-  parsed: ts.SourceFile,
+  program: Program,
   propertyConfig: Set<string>,
 ) => {
-  const buildsBudget = (node: ts.Node): boolean =>
-    isBudgetedConfigCall(node, propertyConfig) ||
-    node.getChildren(parsed).some(buildsBudget);
+  const buildsBudget = (root: Node): boolean => {
+    let found = false;
+    walk(root, (node) => {
+      if (found || isBudgetedConfigCall(node, propertyConfig)) {
+        found = true;
+        return "skip-children";
+      }
+      return undefined;
+    });
+    return found;
+  };
   const helpers = new Set<string>();
-  for (const statement of parsed.statements) {
-    if (ts.isFunctionDeclaration(statement)) {
-      if (statement.name && statement.body && buildsBudget(statement.body)) {
-        helpers.add(statement.name.text);
+  for (const topLevel of program.body) {
+    // `export` wraps the declaration it exports.
+    const statement =
+      topLevel.type === "ExportNamedDeclaration" ||
+      topLevel.type === "ExportDefaultDeclaration"
+        ? topLevel.declaration
+        : topLevel;
+    if (statement?.type === "FunctionDeclaration") {
+      if (statement.id && statement.body && buildsBudget(statement.body)) {
+        helpers.add(statement.id.name);
       }
       continue;
     }
-    if (!ts.isVariableStatement(statement)) {
+    if (statement?.type !== "VariableDeclaration") {
       continue;
     }
-    for (const { name, initializer } of statement.declarationList
-      .declarations) {
+    for (const { id, init } of statement.declarations) {
       if (
-        ts.isIdentifier(name) &&
-        initializer !== undefined &&
-        (ts.isArrowFunction(initializer) ||
-          ts.isFunctionExpression(initializer)) &&
-        buildsBudget(initializer.body)
+        id.type === "Identifier" &&
+        (init?.type === "ArrowFunctionExpression" ||
+          init?.type === "FunctionExpression") &&
+        init.body !== null &&
+        buildsBudget(init.body)
       ) {
-        helpers.add(name.text);
+        helpers.add(id.name);
       }
     }
   }
@@ -146,56 +154,52 @@ const collectBudgetedHelpers = (
 export const inspectDatabasePropertyBudgets = (
   input: SourceInput,
 ): string[] => {
-  const parsed = ts.createSourceFile(
-    input.relativePath,
-    input.source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  if (!isDatabaseBacked(input, parsed)) {
+  const parsed = parseSource(input.relativePath, input.source);
+  const { program } = parsed;
+  if (!isDatabaseBacked(input, program)) {
     return [];
   }
-  const bindings = collectBindings(parsed);
+  const bindings = collectBindings(program);
   const budgetedHelpers = collectBudgetedHelpers(
-    parsed,
+    program,
     bindings.propertyConfig,
   );
 
   // Only a literal budget counts: `{ numRuns }`, `propertyConfig({ numRuns })`
   // or a budgeted helper call.
-  const hasExplicitBudget = (expression: ts.Expression | undefined) =>
+  const hasExplicitBudget = (expression: Node | undefined) =>
     expression !== undefined &&
     (hasNumRuns(expression) ||
       isBudgetedConfigCall(expression, bindings.propertyConfig) ||
-      (ts.isCallExpression(expression) &&
-        ts.isIdentifier(expression.expression) &&
-        budgetedHelpers.has(expression.expression.text)));
+      (expression.type === "CallExpression" &&
+        expression.callee.type === "Identifier" &&
+        budgetedHelpers.has(expression.callee.name)));
 
   const violations: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isCallExpression(node)) {
-      const callee = node.expression;
-      const sharedAssertion =
-        ts.isIdentifier(callee) && bindings.assertProperty.has(callee.text);
-      const fastCheckAssertion =
-        ts.isPropertyAccessExpression(callee) &&
-        ts.isIdentifier(callee.expression) &&
-        bindings.fastCheck.has(callee.expression.text) &&
-        callee.name.text === "assert";
-      if (
-        (sharedAssertion || fastCheckAssertion) &&
-        !hasExplicitBudget(node.arguments.at(sharedAssertion ? 2 : 1))
-      ) {
-        const { line } = parsed.getLineAndCharacterOfPosition(node.getStart());
-        violations.push(
-          `${input.relativePath}:${line + 1}: property in a database-backed test file must configure an explicit numRuns`,
-        );
-      }
+  walk(program, (node) => {
+    if (node.type !== "CallExpression") {
+      return;
     }
-    ts.forEachChild(node, visit);
-  };
-  visit(parsed);
+    const { callee } = node;
+    const sharedAssertion =
+      callee.type === "Identifier" && bindings.assertProperty.has(callee.name);
+    const fastCheckAssertion =
+      callee.type === "MemberExpression" &&
+      !callee.computed &&
+      callee.object.type === "Identifier" &&
+      bindings.fastCheck.has(callee.object.name) &&
+      callee.property.type === "Identifier" &&
+      callee.property.name === "assert";
+    if (
+      (sharedAssertion || fastCheckAssertion) &&
+      !hasExplicitBudget(node.arguments.at(sharedAssertion ? 2 : 1))
+    ) {
+      const { line } = parsed.locate(node.start);
+      violations.push(
+        `${input.relativePath}:${line}: property in a database-backed test file must configure an explicit numRuns`,
+      );
+    }
+  });
   return violations;
 };
 

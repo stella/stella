@@ -115,11 +115,7 @@ type Fixture = {
   pid: number;
   table: string;
   name: string;
-  index: {
-    name: string;
-    tableName: string;
-    definitionBody: string;
-    isUnique: boolean;
+  index: Parameters<typeof ensureOnlineIndexValid>[0]["index"] & {
     createSql: string;
   };
   gate: OnlineIndexGateOptions & {
@@ -186,6 +182,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       );
       await owner.unsafe(`INSERT INTO public.${table} VALUES (1, 2)`);
       const index = {
+        introducedBy: "20261001123000_database_backfill_state",
         name,
         tableName: table,
         definitionBody: `ON public.${table} USING btree (id)`,
@@ -1214,6 +1211,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           await fixture.connection.execute(statement, parameters);
         },
       };
+      let discardFirstProgress = true;
       let clock = fixture.gate.clock();
       let polls = 0;
       const retire = async (
@@ -1224,6 +1222,35 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           index: { name: fixture.name, tableName: fixture.table },
           reserveObserver: async () => ({
             ...fixture.observation,
+            // The gate consumes the lock observation that releases its test barrier.
+            // A separate pg_stat_activity read can precede a transient wait-event edge.
+            query: async (statement, parameters) => {
+              if (!statement.includes("pg_stat_progress_create_index")) {
+                return await fixture.observation.query(statement, parameters);
+              }
+              let progress: readonly unknown[] = [];
+              await waitForExternalState({
+                description:
+                  "the DROP monitor observes its writer lock barrier",
+                intervalMs: 5,
+                read: async () => {
+                  progress = await fixture.observation.query(
+                    statement,
+                    parameters,
+                  );
+                  if (discardFirstProgress) {
+                    discardFirstProgress = false;
+                    return false;
+                  }
+                  return progress.some(
+                    (row) =>
+                      isRecord(row) &&
+                      row["phase"] === "waiting for concurrent index lock",
+                  );
+                },
+              });
+              return progress;
+            },
             release: () => undefined,
           }),
           gate: { ...fixture.gate, clock: () => clock, wait },

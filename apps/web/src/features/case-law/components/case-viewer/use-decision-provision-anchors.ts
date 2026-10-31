@@ -8,6 +8,7 @@ import {
   provisionVersionAsOf,
 } from "@stll/api-contract/provision-version-basis";
 import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import {
   pickVersionAt,
   referencesOutsideVersion,
@@ -48,11 +49,7 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { queryView } from "@/lib/query-view.logic";
 import type { QueryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import {
-  useQueryView,
-  useQueryViewError,
-  useQueryViewErrors,
-} from "@/lib/use-query-view";
+import { useQueryViewError, useQueryViewErrors } from "@/lib/use-query-view";
 
 // The items a read settled with, or undefined while it has none to show.
 const itemsOf = <TData, TError>(
@@ -182,7 +179,7 @@ export const useDecisionProvisionAnchors = ({
 }: UseDecisionProvisionAnchorsOptions) => {
   const renderPart = useProvisionPartRenderer();
   const dataQuery = useQuery(decisionProvisionsForLinkingOptions(decisionId));
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useDecisionProvisionAnchors:query");
   const data = itemsOf(dataView);
   const rows = optionalArray(data?.items);
@@ -238,7 +235,7 @@ export const useDecisionProvisionAnchors = ({
     eli: work.eli,
   }));
   const resolvedQuery = useQuery(statutesResolveOptions(citedWorks));
-  const resolvedView = useQueryView(resolvedQuery);
+  const resolvedView = queryView(resolvedQuery);
   useQueryViewError(resolvedView, "useDecisionProvisionAnchors:query-2");
   const resolved = itemsOf(resolvedView);
   const statutesPending = resolvedQuery.isPending;
@@ -395,7 +392,7 @@ export const useDecisionProvisionAnchors = ({
             row,
             renderPart,
           ),
-          statuteTitle: document.title,
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount,
           versionValidFrom: document.versionValidFrom,
         },
@@ -455,7 +452,7 @@ export const useDecisionProvisionAnchors = ({
             reference.reference,
             renderPart,
           ),
-          statuteTitle: document.title,
+          statuteTitle: statuteDisplayLabel(document).text,
           versionCount: versionsByWork.get(key)?.length ?? 1,
           versionValidFrom: document.versionValidFrom,
         },

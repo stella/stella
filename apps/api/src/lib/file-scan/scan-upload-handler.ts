@@ -55,6 +55,7 @@ export const scanErrorForHandler = (
     ? new HandlerError({ ...error.rejection, status: 422 })
     : new HandlerError({
         status: 503,
+        code: "internal_error",
         message: "File security scan is unavailable",
         hint: retryHint,
         cause: error,

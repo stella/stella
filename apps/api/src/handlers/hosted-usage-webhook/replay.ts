@@ -6,6 +6,7 @@ import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents, usageEntitlements } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
+import { renderIgnoredEventReason } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import { hostedUsageWebhookEventSchema } from "@/api/lib/hosted-usage-provider/event-schemas";
 import type { ProviderEventReplayPerformer } from "@/api/lib/hosted-usage-provider/replay-audit";
@@ -176,7 +177,9 @@ const replayReceiptInTx = async ({
   });
   const newResult = dispatched.kind === "ignored" ? "ignored" : "ok";
   const dispatchReason =
-    dispatched.kind === "ignored" ? dispatched.reason : null;
+    dispatched.kind === "ignored"
+      ? renderIgnoredEventReason(dispatched.reason, dispatched.detail)
+      : null;
   await recordProviderEventReplayAuditInTx({
     tx,
     eventId,

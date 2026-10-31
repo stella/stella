@@ -16,6 +16,8 @@ declare const Command: (props: {
 }) => null;
 declare const matchesComboboxItem: (item: string, query: string) => boolean;
 declare const names: readonly string[];
+declare const stripDiacritics: (text: string) => string;
+declare const foldSearchMatchText: (text: string) => string;
 
 const lowered = query.trim().toLowerCase();
 
@@ -31,9 +33,13 @@ const _helper = containsSearchMatchKey(item.name.toLowerCase(), lowered);
 const _collatorCombobox = <Combobox items={names} />;
 // oxlint-disable-next-line no-case-folded-search-match/no-case-folded-search-match -- fixture proves a filtering command without a filter is reported
 const _collatorCommand = <Command items={names} mode="list" />;
+// oxlint-disable-next-line no-case-folded-search-match/no-case-folded-search-match -- fixture proves a fold assembled from the owner's building blocks is reported
+const _localFold = stripDiacritics(item.name);
 
 // expect-clean: no-case-folded-search-match/no-case-folded-search-match
-const _owned = createSearchQueryMatcher(query)(item.label);
+const _ownedFold = foldSearchMatchText(item.name);
+// expect-clean: no-case-folded-search-match/no-case-folded-search-match
+const _owned =createSearchQueryMatcher(query)(item.label);
 // expect-clean: no-case-folded-search-match/no-case-folded-search-match
 const _extension = fileName.toLowerCase().startsWith(".pdf");
 // expect-clean: no-case-folded-search-match/no-case-folded-search-match

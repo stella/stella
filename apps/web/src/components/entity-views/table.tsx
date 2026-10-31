@@ -127,6 +127,7 @@ export const useEntityViewSortProperties = (): SortableProperty[] => {
       id,
       name: t(COLUMN_MODEL[id].label),
       type,
+      sortKind: ENTITY_VIEW_SORT_KINDS[id],
     });
   }
   return properties;

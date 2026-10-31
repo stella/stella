@@ -3,6 +3,7 @@ import type { RefObject } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { statuteAnchorSchemeFor } from "@stll/api-contract/statute-anchor-schemes";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -11,7 +12,8 @@ import { statuteCitationCountsOptions } from "@/features/statutes/queries/citing
 import type { PublicStatute } from "@/features/statutes/queries/statutes";
 import { provisionCitationCountByBlockAnchor } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead } from "@/features/statutes/statute-reader-blocks";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type StatuteReaderBodyProps = {
   /** Parsed blocks. The caller owns the parse: the page also builds an outline. */
@@ -53,7 +55,7 @@ export const StatuteReaderBody = ({
     enabled:
       citationWork !== null && typeof statute.citationCaseCount === "number",
   });
-  const citationCountsView = useQueryView(citationCounts);
+  const citationCountsView = queryView(citationCounts);
   useQueryViewError(citationCountsView, "StatuteReaderBody:query");
   const countsData =
     citationCountsView.type === "items" ? citationCountsView.items : undefined;
@@ -79,7 +81,7 @@ export const StatuteReaderBody = ({
         masthead={masthead}
         provisionCitationCounts={provisionCitationCounts}
         scrollContainerRef={scrollContainerRef}
-        statuteTitle={statute.title}
+        statuteTitle={statuteDisplayLabel(statute).text}
         versionCount={versionCount}
         versionValidFrom={statute.versionValidFrom}
       />

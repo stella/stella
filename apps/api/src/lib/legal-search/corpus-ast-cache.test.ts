@@ -3,10 +3,14 @@ import fc from "fast-check";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { CorpusMemberTombstonedError } from "@/api/lib/errors/tagged-errors";
 import { createCorpusAstCache } from "@/api/lib/legal-search/corpus-ast-cache";
 import { formatCorpusLocation } from "@/api/lib/legal-search/corpus-location";
 import type { SizedCorpusAst } from "@/api/lib/legal-search/corpus-storage";
+import { currentReadWork } from "@/api/lib/observability/request-work";
 
 const astFor = (storedKey: string): DocumentAst => ({
   version: 1,
@@ -110,12 +114,7 @@ describe("a consolidation read through the AST cache", () => {
       read: store.read,
     });
 
-    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
-    // type-aware lint; capture the rejection explicitly instead.
-    const rejection: unknown = await cache.read(OBJECT_KEY).then(
-      () => null,
-      (error: unknown) => error,
-    );
+    const rejection = await rejectionOf(cache.read(OBJECT_KEY));
     expect(rejection).toBeInstanceOf(Error);
     expect(String(rejection)).toContain("object store unavailable");
     failing.clear();
@@ -210,4 +209,37 @@ test("the cache never holds more than its budget, whatever the read sequence", a
     ),
     propertyConfig(),
   );
+});
+
+test("packed cache reuses bytes only after each read revalidates erasure", async () => {
+  const address = formatCorpusLocation({
+    type: "packed",
+    packKey: "test-pack",
+    offset: 0,
+    length: 1000,
+    sha256: "a".repeat(64),
+  });
+  const store = fakeStore({});
+  const cache = createCorpusAstCache({
+    maxHeapBytes: 1024 * 1024,
+    read: store.read,
+  });
+  let checks = 0;
+  let erased = false;
+  const readTombstones = async () => {
+    checks++;
+    return new Set(erased ? [address] : []);
+  };
+  await cache.read(address, readTombstones);
+  await runWithQueryCounter(async () => {
+    await cache.read(address, readTombstones);
+    expect(currentReadWork()?.cacheHits).toBe(1);
+  });
+  expect(store.readsOf(address)).toBe(1);
+  expect(checks).toBe(2);
+  erased = true;
+  const rejection = await rejectionOf(cache.read(address, readTombstones));
+  expect(rejection).toBeInstanceOf(CorpusMemberTombstonedError);
+  expect(checks).toBe(3);
+  expect(store.readsOf(address)).toBe(1);
 });

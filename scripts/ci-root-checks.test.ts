@@ -180,6 +180,12 @@ const inputCoversFile = (file: string, declared: readonly string[]) =>
   });
 
 const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
+  "ci-checks-rest/Test staging proof readiness": [
+    "scripts/staging-ecs-readiness.ts",
+    "scripts/staging-proof-readiness-cli.test.ts",
+    "scripts/staging-proof-readiness-cli.ts",
+    "scripts/staging-proof-workflow.test.ts",
+  ],
   "ci-checks-rest/Test release image CI gate": [
     "apps/api/scripts/api-test-plan.ts",
     "apps/api/scripts/test-file-shards.ts",
@@ -233,6 +239,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/schema-introspection.ts",
   ],
   "ci-checks-rest/Test capability shard merge and package parity": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/capability-shard-merge.test.ts",
     "scripts/capability-shard-pack.test.ts",
     "scripts/changeset-guard.ts",
@@ -319,6 +326,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/generated-artifacts.ts",
   ],
   "ci-checks-rest/Schema introspection invariants": [
+    "packages/scripts/src/tree-base-revision.ts",
     "packages/scripts/src/typescript-program.ts",
     "scripts/generated-artifacts.ts",
     "scripts/outbound-transport-ownership.ts",
@@ -356,6 +364,7 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/publish-manifest.test.ts",
   ],
   "ci-checks-rest/Test main heavy workflow contracts": [
+    "packages/scripts/src/tree-base-revision.ts",
     "scripts/ci-expression-context.ts",
     "scripts/ci-plan-variables.ts",
     "scripts/main-heavy-plan.test.ts",
@@ -494,10 +503,15 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
     "scripts/typecheck-cache.test.ts",
   ],
   "ci-checks-rest/Test CI check partition": [
+    "apps/api/scripts/api-test-plan.ts",
+    "apps/api/scripts/test-file-shards.ts",
+    "apps/api/scripts/test-timings.ts",
     "packages/property-testing/src/pinned-seeds.ts",
     "packages/scripts/src/generated-file-inventory.ts",
     "packages/scripts/src/generated-input-identity.ts",
     "packages/scripts/src/process-memory.ts",
+    "packages/scripts/src/tree-base-revision.ts",
+    "scripts/api-test-impact.ts",
     "scripts/ci-check-pool-registry.ts",
     "scripts/ci-checks-partition.test.ts",
     "scripts/ci-install-store.ts",
@@ -589,6 +603,12 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-policy/Dependabot group guard (installed packages)": [
     "scripts/dependabot-grouping.test.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census self-test": [
+    "scripts/web-raw-json-api-census.ts",
+  ],
+  "ci-checks-policy/Web raw JSON API census": [
+    "scripts/web-raw-json-api-census.ts",
   ],
 };
 

@@ -10,7 +10,8 @@
 import type {
   ColumnSortKind,
   SortDirection,
-} from "@stll/api-contract/column-sort";
+  SortDirectionLabels,
+} from "@stll/workspace-ui/column-sort";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -35,6 +36,24 @@ export const SORT_DIRECTION_LABEL_KEYS = {
   ColumnSortKind,
   Record<SortDirection, TranslationKey>
 >;
+
+type SortDirectionLabelKey =
+  (typeof SORT_DIRECTION_LABEL_KEYS)[ColumnSortKind][SortDirection];
+
+/**
+ * Every sort item's label in the reader's language: what a header's sort
+ * items and a view's sort chips both say, so the two cannot name one order
+ * differently.
+ */
+export const sortDirectionLabels = (
+  translate: (key: SortDirectionLabelKey) => string,
+): SortDirectionLabels => {
+  const label = (kind: ColumnSortKind) => ({
+    asc: translate(SORT_DIRECTION_LABEL_KEYS[kind].asc),
+    desc: translate(SORT_DIRECTION_LABEL_KEYS[kind].desc),
+  });
+  return { text: label("text"), date: label("date"), number: label("number") };
+};
 
 /** Whether a header may order its column one way, and why not when not. */
 export type SortDirectionAvailability =

@@ -480,6 +480,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       aiHandlerError(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new AIGenerationCancelledError({ message: SENTINEL }),
@@ -494,6 +495,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     name: "a cancellation deeper than the immediate wrapper stays visible",
     error: () =>
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new WorkflowIntegrationError({
@@ -509,6 +511,7 @@ const GRADING_ROWS: readonly GradingRow[] = [
     error: () =>
       classifyFailure(
         new HandlerError({
+          code: "internal_error",
           status: 502,
           message: SENTINEL,
           cause: new ChatEmptyCompletionError({ message: SENTINEL }),
@@ -715,7 +718,10 @@ describe("failure grading", () => {
       "busy",
       "period_exhausted",
       "not_enabled",
-      "unavailable",
+      "store_unavailable",
+      "configuration_incomplete",
+      "organization_state_unreadable",
+      "lease_lost",
     ] as const) {
       const refusal = new ActionAdmissionError({
         reason,
@@ -831,6 +837,7 @@ describe("wrapper properties", () => {
 
   test("a brand deep in the chain does not rescue an outer defect", () => {
     const deep = new HandlerError({
+      code: "internal_error",
       status: 502,
       message: "wrapped",
       cause: new ChatEmptyCompletionError({ message: "x" }),
@@ -1010,6 +1017,7 @@ describe("the observation reads the boundary's decision, not the classifier", ()
   test("a cancelled generation keeps the caller's fallback", () => {
     const answered = aiHandlerError(
       new HandlerError({
+        code: "internal_error",
         status: 502,
         message: SENTINEL,
         cause: new AIGenerationCancelledError({ message: SENTINEL }),
@@ -1096,7 +1104,12 @@ const LEGACY_ROWS: readonly LegacyRow[] = [
   {
     name: "a RUN_ERROR numeric-string code",
     error: () =>
-      new HandlerError({ status: 502, message: "run", cause: { code: "503" } }),
+      new HandlerError({
+        status: 502,
+        code: "provider_error",
+        message: "run",
+        cause: { code: "503" },
+      }),
   },
   {
     name: "a numeric errno and a syscall",
@@ -1388,23 +1401,14 @@ describe("observeFailure channels", () => {
 
     const [line] = metricLines;
     expect(JSON.parse(line ?? "{}")).toMatchObject({
-      _aws: {
-        CloudWatchMetrics: [
-          {
-            Namespace: "Stella/Api",
-            Dimensions: [["sink", "reason"], []],
-            Metrics: [{ Name: "RequestTransientFailures", Unit: "Count" }],
-          },
-        ],
-      },
       sink: "contract.sink",
       reason: "network_reset",
       "service.version": APP_VERSION,
       RequestTransientFailures: 1,
     });
+    expect(JSON.parse(line ?? "{}")).not.toHaveProperty("_aws");
     expect(Object.keys(JSON.parse(line ?? "{}")).toSorted()).toEqual([
       "RequestTransientFailures",
-      "_aws",
       "reason",
       "service.version",
       "sink",
@@ -1504,6 +1508,7 @@ describe("privileged content never leaves the process", () => {
       () =>
         new HandlerError({
           status: 502,
+          code: "provider_error",
           message: SENTINEL,
           cause: {
             error: {

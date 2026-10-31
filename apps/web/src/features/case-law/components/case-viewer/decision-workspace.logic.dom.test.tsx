@@ -112,6 +112,7 @@ const renderVisitorColumn = () =>
               onDelete: () => undefined,
               onToggleVisibility: () => undefined,
               startAnchorId: "p-2",
+              targetType: "decision",
               text: COMMENT_TEXT,
               updatedAt: "2026-09-01T10:00:00.000Z",
               visibility: "private",
@@ -122,6 +123,7 @@ const renderVisitorColumn = () =>
               onCancel: () => undefined,
               onSubmit: () => undefined,
               startAnchorId: "p-3",
+              targetType: "decision",
             },
           ]}
           placement="inline"

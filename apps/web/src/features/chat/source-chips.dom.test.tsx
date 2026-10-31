@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import englishMessages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
@@ -14,18 +22,25 @@ const {
   TEST_OTHER_TREE_DOCUMENT_PATH,
 } = await import("@/lib/workspaces/matter-view-test-router");
 // The chip reads the entity it names; the fixture folder is the only one.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const { pathname } = new URL(new Request(input, init).url);
-      if (pathname.endsWith(`/${TEST_FOLDER_ID}`)) {
-        return Response.json({ kind: "folder", name: "Pleadings", fields: [] });
-      }
-      throw new TypeError(`Unexpected source chip request: ${pathname}`);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+// Each test gets its own fetch spy, restored after it.
+beforeEach(() => {
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const { pathname } = new URL(new Request(input, init).url);
+        if (pathname.endsWith(`/${TEST_FOLDER_ID}`)) {
+          return Response.json({
+            kind: "folder",
+            name: "Pleadings",
+            fields: [],
+          });
+        }
+        throw new TypeError(`Unexpected source chip request: ${pathname}`);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
 const { fireEvent, render, screen, cleanup, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -35,9 +50,13 @@ const { QueryClient, QueryClientProvider } =
 const { RouterProvider } = await import("@tanstack/react-router");
 const { SourceChips } = await import("@/features/chat/source-chips");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // After unmounting, so a request a component makes on its way out still
+  // reaches the spy.
+  mock.restore();
+});
 afterAll(async () => {
-  fetchBoundary.mockRestore();
   await unregisterDomEnvironment();
 });
 

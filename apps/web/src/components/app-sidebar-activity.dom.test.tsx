@@ -1,5 +1,13 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import type { WorkspaceActivity } from "@/components/app-sidebar.logic";
 import messages from "@/i18n/langs/en.json";
@@ -15,35 +23,38 @@ const {
   TEST_OTHER_TREE_DOCUMENT_PATH,
 } = await import("@/lib/workspaces/matter-view-test-router");
 // The matter's recent activity is one folder.
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const { pathname } = new URL(new Request(input, init).url);
-      if (pathname.endsWith(`/workspaces/${TEST_MATTER_ID}/activity`)) {
-        return Response.json({
-          items: [
-            {
-              activityAt: "2026-07-01T12:00:00.000Z",
-              entityKind: "folder",
-              fieldId: null,
-              fileName: null,
-              hasThumbnail: false,
-              id: TEST_FOLDER_ID,
-              listItemType: null,
-              mimeType: null,
-              status: null,
-              title: "Pleadings",
-              type: "entity",
-            } satisfies WorkspaceActivity,
-          ],
-          nextCursor: null,
-        });
-      }
-      throw new TypeError(`Unexpected sidebar activity request: ${pathname}`);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+// Each test gets its own fetch spy, restored after it.
+beforeEach(() => {
+  spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const { pathname } = new URL(new Request(input, init).url);
+        if (pathname.endsWith(`/workspaces/${TEST_MATTER_ID}/activity`)) {
+          return Response.json({
+            items: [
+              {
+                activityAt: "2026-07-01T12:00:00.000Z",
+                entityKind: "folder",
+                fieldId: null,
+                fileName: null,
+                hasThumbnail: false,
+                id: TEST_FOLDER_ID,
+                listItemType: null,
+                mimeType: null,
+                status: null,
+                title: "Pleadings",
+                type: "entity",
+              } satisfies WorkspaceActivity,
+            ],
+            nextCursor: null,
+          });
+        }
+        throw new TypeError(`Unexpected sidebar activity request: ${pathname}`);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
 const { cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -52,9 +63,13 @@ const { RouterProvider } = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { MatterActivityList } = await import("@/components/app-sidebar");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // After unmounting, so a request a component makes on its way out still
+  // reaches the spy.
+  mock.restore();
+});
 afterAll(async () => {
-  fetchBoundary.mockRestore();
   await unregisterDomEnvironment();
 });
 

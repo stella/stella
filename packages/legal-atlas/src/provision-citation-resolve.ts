@@ -1,5 +1,9 @@
 import { panic } from "better-result";
 
+import {
+  statuteGazetteAbbreviation,
+  statuteGazetteEliCollection,
+} from "@stll/api-contract/statute-gazette";
 import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
 import { foldToAscii, normalizeUnicode } from "@stll/text-normalize";
 
@@ -338,7 +342,14 @@ const readGazetteActs = (
     const after = rest.slice(match.index + match[0].length);
     const canonical =
       resolver.collections.find(({ pattern }) => pattern.test(after))
-        ?.canonical ?? statutes?.canonical;
+        ?.canonical ??
+      (statutes === undefined
+        ? undefined
+        : (statuteGazetteAbbreviation(
+            statuteGazetteEliCollection(statutes.canonical) ??
+              panic("Profile statute collection has no ELI collection"),
+            year,
+          ) ?? statutes.canonical));
     if (canonical === undefined) {
       continue;
     }

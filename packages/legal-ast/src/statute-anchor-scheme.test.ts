@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
+import { blocksNestedUnder } from "./provision-preview.js";
 import {
   anchorEndsWithPath,
   anchorListDepth,
@@ -138,6 +142,49 @@ describe("Slov-Lex anchors", () => {
       },
     ];
     expect(relations(SLOV_LEX_ANCHORS, rows)).toEqual(rows);
+  });
+
+  test("a parser-derived table and the following descendants remain in their subdivision", () => {
+    const cited = { anchorId: "paragraf-36.pismeno-a" };
+    const blocks = [
+      cited,
+      { anchorId: "paragraf-36.pismeno-a-table_1" },
+      { anchorId: "paragraf-36.pismeno-a.bod-1" },
+      { anchorId: "paragraf-36.pismeno-b" },
+    ];
+    expect(
+      blocksNestedUnder({ blocks, scheme: SLOV_LEX_ANCHORS }, cited),
+    ).toEqual(blocks.slice(0, 3));
+  });
+
+  test("publisher kinds cannot enter another scheme through a table-child suffix", () => {
+    assertProperty(
+      "publisher kinds cannot enter another scheme through a table-child suffix",
+      fc.property(
+        fc.stringMatching(/^[a-z]{1,12}$/u).filter((kind) => kind !== "table"),
+        fc.integer({ min: 1, max: 10_000 }),
+        (kind, ordinal) => {
+          for (const scheme of [SLOV_LEX_ANCHORS, US_CODE_ANCHORS]) {
+            expect(
+              anchorWithin(scheme, {
+                ancestor: "provision",
+                anchor: `provision-${kind}_${ordinal}`,
+              }),
+            ).toBe(false);
+          }
+        },
+      ),
+      { examples: [["odst", 1]], numRuns: 200 },
+    );
+  });
+
+  test("a sibling whose anchor only shares a prefix is not nested", () => {
+    expect(
+      anchorWithin(SLOV_LEX_ANCHORS, {
+        ancestor: "paragraf-36",
+        anchor: "paragraf-360",
+      }),
+    ).toBe(false);
   });
 
   test("each point in a point opens one more level", () => {

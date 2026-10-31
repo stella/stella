@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import { Temporal } from "@stll/time";
 import {
   CalendarIcon,
@@ -16,6 +15,7 @@ import {
   UserIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import {
   DocumentExtractionStatus,

@@ -73,7 +73,7 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { useAnalysisReaderBreadcrumb } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
+import { useAnalysisReaderOutline } from "@/features/case-law/components/case-viewer/analysis/reader-breadcrumb";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
@@ -81,6 +81,7 @@ import {
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";
+import type { DECISION_AI_MODE } from "@/features/case-law/components/case-viewer/decision-ai-mode";
 import type { ReaderMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { annotationsForMarksFilter } from "@/features/case-law/components/case-viewer/decision-annotation-surface.logic";
 import { useDecisionParagraphLanding } from "@/features/case-law/components/case-viewer/decision-paragraph-landing";
@@ -112,11 +113,10 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { APIError } from "@/lib/errors/api";
+import { APIError, isCancellation } from "@/lib/errors/api";
 import { detachedUserAction, notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import type { SafeId } from "@/lib/safe-id";
-import { useQueryView } from "@/lib/use-query-view";
 import { forceReflow } from "@/lib/utils";
 
 import { useUnresolvedCitationTelemetry } from "./paragraph-citation-telemetry";
@@ -124,13 +124,17 @@ import {
   citedDecisionRead,
   resolveReaderAnswerCitation,
 } from "./reader-answer-citation.logic";
+import { ReaderAnswerLanguagePicker } from "./reader-answer-language-picker";
 import {
   attachReaderAnswerMarkers,
   jumpReaderAnswerCitation,
   openReaderAnswerFromMark,
   readerAnswerAnchors,
 } from "./reader-answer-navigation";
-import { readerAnswerFailureKind } from "./reader-answers.logic";
+import {
+  ReaderAnswerFailure,
+  readerAnswerFailureKind,
+} from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";
 import { useReaderAnswers } from "./use-reader-answers";
 
@@ -156,7 +160,8 @@ type DecisionWorkspaceDecision = Pick<
   | "sourceAttributionUrl"
   | "textFields"
   | "updatedAt"
->;
+> &
+  Partial<Pick<PublicCaseLawDecision, "languageAlternates">>;
 
 type DecisionWorkspaceBaseProps = {
   decision: DecisionWorkspaceDecision;
@@ -168,9 +173,9 @@ type DecisionWorkspaceBaseProps = {
 };
 
 /**
- * A reader without an account, or a member whose own workspace chunk has not
- * arrived yet. The layer is named and offered where it would be drawn instead
- * of being hidden, and the account is asked for on the run.
+ * A reader without an account, or a member whose AI gate (in the member chunk)
+ * has not arrived yet. The layer is named and offered where it would be drawn
+ * instead of being hidden, and the account is asked for on the run.
  *
  * Nothing is read here: the public decision payload deliberately carries no
  * persisted analysis (`case-law-public-route-invariants.test.ts`, "public
@@ -182,16 +187,16 @@ type DecisionWorkspaceBaseProps = {
  * thing this component can decide.
  */
 type GatedDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "gated";
+  aiMode: typeof DECISION_AI_MODE.gated;
   /**
-   * Opens the account gate. Absent while a member's workspace loads: the
+   * Opens the account gate. Absent while a member's AI gate loads: the
    * column then names the layer without offering a run nobody owns yet.
    */
   onRequestAnalysis?: (() => void) | undefined;
 };
 
 type EnabledDecisionWorkspaceProps = DecisionWorkspaceBaseProps & {
-  aiMode: "enabled";
+  aiMode: typeof DECISION_AI_MODE.enabled;
   ensureAIAvailable: () => Promise<boolean>;
 };
 
@@ -299,7 +304,16 @@ export const ReaderStatusNotices = ({
       } else if (kind === "timeout") {
         fallback = t("readerAnswers.timeoutError");
       }
-      notifyUserError(error, fallback);
+      notifyUserError(
+        kind === "network" && isCancellation(error)
+          ? new ReaderAnswerFailure({
+              kind: "request",
+              message: "Reader answer request failed",
+              cause: error,
+            })
+          : error,
+        fallback,
+      );
     }
     if (
       foreignDecisionError !== null &&
@@ -390,7 +404,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // The citation strip's own summary, already cached for this decision: a
   // later-treatment note is drawn only once it shows a later citing decision.
   // The strip reports a failed read; here it only keeps the note hidden.
-  const citationSummary = useQueryView(
+  const citationSummary = queryView(
     useQuery(decisionCitationSummaryOptions(decisionId)),
   );
   const citedLater =
@@ -437,6 +451,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const answers = useReaderAnswers({
     decisionId,
     generationMode: props.aiMode,
+    documentLanguage: decision.language,
   });
   const visibleAnswers = annotationsForMarksFilter(
     answers.answers,
@@ -535,6 +550,23 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     id: answer.id,
     startAnchorId: answer.anchor.spans[0].paragraphId,
     answer,
+    languagePicker: answer.mine ? (
+      <ReaderAnswerLanguagePicker
+        documentLanguage={decision.language}
+        value={answers.languagePreference}
+        disabled={
+          props.aiMode !== "enabled" ||
+          answers.isSavingLanguage ||
+          answers.busyAnswerIds.has(answer.id)
+        }
+        onChange={(language) =>
+          detachedUserAction(answers.setAnswerLanguage(language, answer.id), {
+            context: "reader-answer.regenerate",
+            failureMessage: t("errors.actionFailed"),
+          })
+        }
+      />
+    ) : undefined,
     generationMode: props.aiMode,
     active: answers.activeAnswerId === answer.id,
     openRevision: answers.openRevision,
@@ -614,6 +646,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const explain = async (spans: SelectionAnchor[]) => {
     const selection = explainableSpans(spans);
     if (
+      answers.isSavingLanguage ||
       selection === undefined ||
       props.aiMode !== "enabled" ||
       !(await props.ensureAIAvailable())
@@ -683,8 +716,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   const { hasAnalysis, isAnalyzing, analysisTree, completeAnalysis } =
     decisionAnalysisView(analysisState);
 
-  const fallbackBreadcrumb = useAnalysisReaderBreadcrumb(
-    completeAnalysis?.tree ?? null,
+  // Contents places the sections as they stream in, beside the document's
+  // own headings; with AI notes filtered out it is the headings alone.
+  const analysisContents = useAnalysisReaderOutline(
+    showAiNotes && hasAnalysis ? analysisTree : null,
   );
 
   // The passage the reader was sent to, marked for as long as they are on it.
@@ -894,7 +929,12 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   }[];
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    // A member's reader is gated until its AI gate arrives, then enabled on
+    // the same mounted reader; the mode names which one it is now.
+    <div
+      className="flex h-full flex-col overflow-hidden"
+      data-ai-mode={props.aiMode}
+    >
       {/* The margin's panel holds the toggle. Below `lg` neither is drawn
           and the provisions open under their paragraphs, so the header holds
           it, as the inspector's pane does. */}
@@ -922,7 +962,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
           textScale={textScale}
           blocks={ast === null ? [] : ast.blocks}
           content={contentElement}
-          fallbackBreadcrumb={fallbackBreadcrumb}
+          analysis={analysisContents}
           viewport={viewportElement}
           key={decisionId}
         />
@@ -1083,6 +1123,8 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   {showAiNotes && analysisState.status === "error" && (
                     <AnalysisErrorNotice
                       error={analysisState.error}
+                      languageVersions={decision.languageAlternates}
+                      sourceUrl={decision.sourceAttributionUrl}
                       onRetry={() => {
                         detached(generate(), "decision-workspace.generate");
                       }}
@@ -1232,11 +1274,28 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               ? (spans) => detached(explain(spans), "reader-answer.explain")
               : undefined
           }
-          explainRefusal={(spans) =>
-            explainableSpans(spans) === undefined
-              ? t("readerAnswers.selectionError")
-              : undefined
+          explainLanguagePicker={
+            <ReaderAnswerLanguagePicker
+              documentLanguage={decision.language}
+              value={answers.languagePreference}
+              disabled={answers.isLanguagePending}
+              onChange={(language) =>
+                detachedUserAction(answers.setAnswerLanguage(language), {
+                  context: "reader-answer.explain",
+                  failureMessage: t("errors.actionFailed"),
+                })
+              }
+            />
           }
+          explainRefusal={(spans) => {
+            if (answers.isSavingLanguage) {
+              return t("common.saving");
+            }
+            if (explainableSpans(spans) === undefined) {
+              return t("readerAnswers.selectionError");
+            }
+            return undefined;
+          }}
           onSelectedSpansChange={marginCitations.selectSpans}
           scrollContainerRef={mainRef}
           target={annotationTarget}

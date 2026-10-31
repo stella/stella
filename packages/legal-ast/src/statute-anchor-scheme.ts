@@ -162,20 +162,28 @@ export const statuteAnchorNesting = (
 
 type AnchorWithinOptions = { ancestor: string; anchor: string };
 
+/** A table's owned anchor; publisher subdivision kinds use their scheme. */
+const PARSER_CHILD_SUFFIX = /^-table_\d+(?:$|[.\-/])/u;
+
 /**
  * Whether `anchor` sits under `ancestor`: it continues the ancestor's path by
- * at least one more segment. The separator is part of the test, or `odst_2`
- * would own `odst_20`; a restated `pism_c~2` continues no path, so it is
- * never a child of `pism_c`.
+ * at least one more publisher segment or a parser-derived child suffix such as
+ * `-table_1`. The boundary is part of the test, or `odst_2` would own
+ * `odst_20`; a restated `pism_c~2` continues no path, so it is never a child
+ * of `pism_c`.
  */
 export const anchorWithin = (
   scheme: StatuteAnchorScheme,
   { ancestor, anchor }: AnchorWithinOptions,
 ): boolean => {
   const nesting = statuteAnchorNesting(scheme);
+  if (nesting.type !== "nested") {
+    return false;
+  }
+  const continuation = anchor.slice(ancestor.length);
   return (
-    nesting.type === "nested" &&
-    anchor.startsWith(`${ancestor}${nesting.separator}`)
+    anchor.startsWith(`${ancestor}${nesting.separator}`) ||
+    (anchor.startsWith(ancestor) && PARSER_CHILD_SUFFIX.test(continuation))
   );
 };
 

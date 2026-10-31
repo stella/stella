@@ -3,7 +3,7 @@ import { shouldEnablePostHog } from "@stll/analytics-config";
 import { envBase } from "@/api/env-base";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
-import { createPostHogNodeAnalytics } from "./posthog-node";
+import { createPostHogServerAnalytics } from "./posthog-client";
 import type { ServerAnalytics } from "./server-analytics";
 
 const noop = () => undefined;
@@ -30,7 +30,11 @@ export const getServerAnalytics = (): ServerAnalytics => {
     localDebug: envBase.POSTHOG_LOCAL_DEBUG,
   };
   analytics = shouldEnablePostHog(posthogConfig)
-    ? createPostHogNodeAnalytics(posthogConfig.key, posthogConfig.host)
+    ? createPostHogServerAnalytics(
+        posthogConfig.key,
+        posthogConfig.host,
+        envBase.DEPLOY_ENVIRONMENT,
+      )
     : noopAnalytics;
 
   return analytics;

@@ -1,9 +1,9 @@
-import type { ColumnSortKind } from "@stll/api-contract/column-sort";
 import {
   emptyColor,
   optionColors,
   resolveOptionColor,
 } from "@stll/ui/option-color";
+import type { ColumnSortKind } from "@stll/workspace-ui/column-sort";
 
 import type { CreatableContentType } from "@/components/workspaces/properties/composer-primitives";
 import type { ActionDescriptor } from "@/lib/organization/feature-access/action-capabilities.logic";

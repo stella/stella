@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -17,6 +18,8 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { isServerChatToolCall } from "@stll/api-contract/chat";
+import { CONNECT_CONNECTOR_TOOL_NAME } from "@stll/api-contract/chat-connector";
+import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-connector";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
@@ -85,7 +88,7 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
-  resolveBrowserClientCapability,
+  resolveBrowserExtensionCapability,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -108,6 +111,7 @@ import {
 } from "@/api/handlers/chat/chat-turn-run";
 import type {
   ChatTurnObservation,
+  ChatTurnOwnership,
   ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -185,6 +189,7 @@ import {
   resolveRegisteredDocxEditMode,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
+  buildConnectableMcpConnectorsSystemHint,
   buildExternalMcpSystemHint,
   createLazyExternalMcpToolsLoader,
   loadExternalMcpToolsForUser,
@@ -198,6 +203,7 @@ import {
   PAST_CHAT_SCOPE_TYPE,
   resolvePastChatScope,
 } from "@/api/handlers/chat/tools/past-chat-tools";
+import type { ResolveCurrentChatExecutionContext } from "@/api/handlers/chat/tools/registry-adapter/current-execution-context";
 import {
   hydrateRegistryToolInputRefs,
   resolveRegistryToolInputRefs,
@@ -217,6 +223,7 @@ import {
   restrictChatToolsToScope,
   scopeAllowsTool,
 } from "@/api/handlers/chat/tools/tool-scope";
+import { loadTurnPromptSources } from "@/api/handlers/chat/turn-prompt-sources";
 import type {
   ChatMention,
   ChatMessage,
@@ -233,6 +240,8 @@ import { resolveSkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { SkillBindingScope } from "@/api/lib/agent-skills/binding";
 import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -242,10 +251,8 @@ import {
 } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
@@ -257,6 +264,7 @@ import {
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
+import { resolveCredentialMemberExecutionContext } from "@/api/lib/chat/credential-member-execution-context";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
@@ -283,6 +291,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { loadConnectableMcpConnectorsForUser } from "@/api/lib/mcp-upstream/connections";
 import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provenance";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -504,6 +513,7 @@ type ClaimedChatTurnOwnership =
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
+  ownership?: ChatTurnOwnership;
   startAdmission?: typeof startExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
@@ -675,6 +685,7 @@ const CHAT_SEND_ACTION_KIND = "chat.send";
  */
 export class ChatSendLifecycle {
   private readonly options: ChatSendLifecycleOptions;
+  private readonly ownership: ChatTurnOwnership;
   private admission: ExecutionAdmission | undefined;
   private checkpoint: PersistableChatMessage | undefined;
   private claimedTurn: ClaimedChatTurnOwnership = { status: "unclaimed" };
@@ -690,6 +701,7 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+    this.ownership = options.ownership ?? processChatTurnOwnership;
   }
 
   /** Once accepted durably, a turn belongs to its lease rather than a viewer. */
@@ -753,7 +765,7 @@ export class ChatSendLifecycle {
         ? {}
         : { owningAssistantMessage }),
     };
-    this.releaseClaim = processChatTurnOwnership.holdClaim({
+    this.releaseClaim = this.ownership.holdClaim({
       execution,
       safeDb: this.options.safeDb,
     });
@@ -883,6 +895,7 @@ export class ChatSendLifecycle {
       return panic("Cannot start a run for a turn this send does not hold");
     }
     const run = new ChatTurnRun({
+      ownership: this.ownership,
       admission: this.admission,
       checkpoint: this.checkpoint,
       connectors,
@@ -967,6 +980,9 @@ export class ChatSendLifecycle {
               ...ACTION_ADMISSION_REFUSALS[error.code],
               code: error.code,
               ...(error.hint === undefined ? {} : { hint: error.hint }),
+              ...(error.retryAfterMs === undefined
+                ? {}
+                : { retryAfterMs: error.retryAfterMs }),
               ...(error.contactUrl === undefined
                 ? {}
                 : { contactUrl: error.contactUrl }),
@@ -1676,6 +1692,7 @@ type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
   dependencies: {
+    caseLawDb?: SendMessageDependencies["caseLawDb"];
     loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
     uploadMessageFiles: typeof uploadMessageFilesWithRollback;
   };
@@ -1728,7 +1745,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
-  dependencies: { loadWebSearchProviders, uploadMessageFiles },
+  dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -1850,8 +1867,9 @@ const prepareValidatedIncomingMessage = async ({
       // Validation admits persisted browser calls from any client; the
       // streaming set below registers the tool only when this request's
       // client reports a live extension.
-      browserClient: {
+      browserExtension: {
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "connected",
       },
       editApplyMode,
       docxEditRepresentation,
@@ -1876,6 +1894,7 @@ const prepareValidatedIncomingMessage = async ({
     const validatedMessageResult = await validateMessage({
       message: body.message,
       persistedMessage: validationThreadState.persistedMessage,
+      refRegistry,
       resume,
       safeDb,
       threadId: body.threadId,
@@ -1898,6 +1917,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const thread = yield* Result.await(
       loadThread({
+        caseLawDb,
         initialDataWorkspaceIds:
           activeDraftContext === null
             ? []
@@ -2138,6 +2158,8 @@ type AssembleTurnSystemPromptOptions = {
   };
   /** The connectors the turn may call, after its source chips. */
   externalMcpConnectors: readonly LoadedExternalMcpConnector[];
+  /** Offered only when the turn registers `connect_connector`. */
+  connectableConnectors: ConnectableMcpConnectorCatalog | undefined;
   requestedSkillsPrompt: string;
   sendMode: ChatSendMode;
 };
@@ -2151,6 +2173,7 @@ type AssembleTurnSystemPromptOptions = {
 const assembleTurnSystemPrompt = ({
   chatContext,
   externalMcpConnectors,
+  connectableConnectors,
   requestedSkillsPrompt,
   sendMode,
 }: AssembleTurnSystemPromptOptions) => ({
@@ -2162,6 +2185,7 @@ const assembleTurnSystemPrompt = ({
     chatContext.systemUntrusted,
     [
       buildExternalMcpSystemHint(externalMcpConnectors),
+      buildConnectableMcpConnectorsSystemHint(connectableConnectors),
       requestedSkillsPrompt,
     ].map(chatVolatilePromptSection),
   ),
@@ -2176,10 +2200,10 @@ export type SendMessageDependencies = {
   loadExternalMcpTools: typeof loadExternalMcpToolsForUser;
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
   /**
-   * Reads the caller's membership when an approved write tool runs. Defaults
-   * to the credential-boundary read; tests bind it to their own database.
+   * Rebuilds live authority when a delayed registry tool runs. Defaults to
+   * fresh credential-boundary membership, matter, and database scopes.
    */
-  resolveCurrentMembership?: ResolveCredentialMemberAuthorization;
+  resolveCurrentExecutionContext?: ResolveCurrentChatExecutionContext;
   rollbackSideEffects: typeof rollbackUnpersistedChatSideEffects;
   streamResponse: typeof streamChat;
   uploadMessageFiles: typeof uploadMessageFilesWithRollback;
@@ -2229,10 +2253,9 @@ const settleInternalPreflight = async <T, E>(
   return result;
 };
 
-const currentMembershipReader = (
-  dependencies: SendMessageDependencies,
-): ResolveCredentialMemberAuthorization =>
-  dependencies.resolveCurrentMembership ?? resolveCredentialMemberAuthorization;
+const currentExecutionContextReader = (dependencies: SendMessageDependencies) =>
+  dependencies.resolveCurrentExecutionContext ??
+  resolveCredentialMemberExecutionContext;
 
 export const createSendMessage = (
   dependencies: SendMessageDependencies = SEND_MESSAGE_DEPENDENCIES,
@@ -2258,6 +2281,10 @@ export const createSendMessage = (
       usageLane,
       user,
     }) {
+      if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+        return Result.err(storedAIConfigUnreadableError());
+      }
+
       const body = transportBody.forwardedProps;
       const parentRunId = "parentRunId" in body ? body.parentRunId : undefined;
       const resume = "resume" in body ? body.resume : undefined;
@@ -2480,6 +2507,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          caseLawDb: dependencies.caseLawDb,
           initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
@@ -2569,9 +2597,10 @@ export const createSendMessage = (
             userId: user.id,
           }),
         );
-        const preparedIncomingMessageResult =
-          await prepareValidatedIncomingMessage({
+        const preparedIncomingMessage = yield* Result.await(
+          prepareValidatedIncomingMessage({
             dependencies: {
+              caseLawDb: dependencies.caseLawDb,
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
             },
@@ -2612,10 +2641,8 @@ export const createSendMessage = (
               usageLane,
               validationActiveSkillContext,
             },
-          });
-        if (Result.isError(preparedIncomingMessageResult)) {
-          return Result.err(preparedIncomingMessageResult.error);
-        }
+          }),
+        );
         const {
           chatModelOverride,
           chatReasoningEffort,
@@ -2626,7 +2653,7 @@ export const createSendMessage = (
           turnLane,
           uploadedMessage,
           webSearchProviders,
-        } = preparedIncomingMessageResult.value;
+        } = preparedIncomingMessage;
 
         const modelAdmission = yield* Result.await(
           lifecycle.admitExecution({
@@ -2777,6 +2804,7 @@ export const createSendMessage = (
           ),
         );
         const messagesForContextInput = await selectMessagesForContextInput({
+          caseLawDb: dependencies.caseLawDb,
           messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
@@ -2901,7 +2929,8 @@ export const createSendMessage = (
           pinServerValidatedWorkspaceId,
           requestWorkspaceId: workspaceId,
           refRegistry,
-          resolveCurrentMembership: currentMembershipReader(dependencies),
+          resolveCurrentExecutionContext:
+            currentExecutionContextReader(dependencies),
           toolDefectMemo,
           safeDb,
           scopedDb,
@@ -2920,7 +2949,9 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserClient: resolveBrowserClientCapability(body.browserClient),
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3004,6 +3035,9 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3112,19 +3146,36 @@ export const createSendMessage = (
               : restrictChatToolsToScope(chatTools, body.toolScope),
         });
 
-        const requestedSkillsPrompt = await loadRequestedSkillsPrompt({
-          activeSkillContext: chatContext.activeSkillContext,
-          bindingScope: chatContext.skillBindingScope,
-          catalog: chatContext.skillMetadata,
-          messages: chatContext.hydratedMessages,
-          organizationId: session.activeOrganizationId,
-          recordAuditEvent: recordReadAuditEvent,
-          safeDb,
-          userId: user.id,
+        const promptSources = await loadTurnPromptSources({
+          requestedSkills: {
+            type: "required",
+            load: async () =>
+              loadRequestedSkillsPrompt({
+                activeSkillContext: chatContext.activeSkillContext,
+                bindingScope: chatContext.skillBindingScope,
+                catalog: chatContext.skillMetadata,
+                messages: chatContext.hydratedMessages,
+                organizationId: session.activeOrganizationId,
+                recordAuditEvent: recordReadAuditEvent,
+                safeDb,
+                userId: user.id,
+              }),
+          },
+          connectorCatalog: {
+            type: "optional",
+            load: async () =>
+              streamingTools[CONNECT_CONNECTOR_TOOL_NAME] === undefined
+                ? Promise.resolve(Result.ok(undefined))
+                : loadConnectableMcpConnectorsForUser({
+                    organizationId: session.activeOrganizationId,
+                    safeDb,
+                    userId: user.id,
+                  }),
+          },
         });
-        if (Result.isError(requestedSkillsPrompt)) {
+        if (Result.isError(promptSources)) {
           await lifecycle.failCurrentTurn("internal", true);
-          return Result.err(requestedSkillsPrompt.error);
+          return Result.err(promptSources.error);
         }
         const storedHistory = await loadStoredHistory({
           historyIds: latestMessagePlan.messages.flatMap(({ id }) =>
@@ -3143,11 +3194,12 @@ export const createSendMessage = (
         }
         const { systemSafe, systemUntrusted } = assembleTurnSystemPrompt({
           chatContext,
+          connectableConnectors: promptSources.value.connectableConnectors,
           externalMcpConnectors: scopedExternalConnectors(
             sourceScopes,
             externalConnectors,
           ),
-          requestedSkillsPrompt: requestedSkillsPrompt.value,
+          requestedSkillsPrompt: promptSources.value.requestedSkillsPrompt,
           sendMode: body.sendMode,
         });
 
@@ -3594,6 +3646,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
+  browserExtension: BrowserExtensionCapability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3651,6 +3704,7 @@ const prepareChatContext = async ({
   sendMode,
   threadId,
   toolAvailability,
+  browserExtension,
   userContext,
   userId,
   workspaceId,
@@ -3691,6 +3745,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        browserExtension,
         userContext,
         userId,
         workspaceId,

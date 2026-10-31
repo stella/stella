@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { ciExpressionContext, modelledEvent } from "./ci-expression-context";
@@ -66,7 +68,7 @@ const baselineGit = (args: string[]) => {
   }
   return result.stdout.toString().trim();
 };
-const baselineRevision = baselineGit(["merge-base", "origin/main", "HEAD"]);
+const baselineRevision = treeBaseRevision({ repoRoot: root });
 const original = v.parse(
   workflowSchema,
   Bun.YAML.parse(
@@ -566,6 +568,11 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
+  // The pull request quick-check carrier is the only fast-tier route into
+  // the heavy gate; the standalone quick checks keep their queue policy, so
+  // the queue exclusion below still removes them from pull requests.
+  expect(eventPolicies.jobs["ci.yml/pr-heavy-gate"]).toBe("pr-fast");
+  expect(eventPolicies.jobs["ci.yml/ci-quick-checks"]).toBe("queue");
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {

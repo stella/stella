@@ -42,10 +42,10 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isChatClientRequestActive,
 } from "@/components/chat/chat-ui-tools";
-import { createBrowserClientTool } from "@/features/chat/browser-control/browser-client-tool";
+import { createBrowserExtensionTool } from "@/features/chat/browser-control/browser-client-tool";
 import {
   BrowserBridgeUnmountedError,
-  getBrowserClientCapability,
+  getBrowserExtensionState,
   isBrowserExtensionBridgeMounted,
 } from "@/features/chat/browser-control/browser-extension-bridge";
 import { browserTurnId } from "@/features/chat/browser-control/browser-turn";
@@ -718,7 +718,13 @@ export const createChatRuntime = ({
             messages.slice(-1),
             requestBody,
             abortSignal,
-            runContext,
+            {
+              ...runContext,
+              // The API owns tool schemas and derives browser availability
+              // from browserExtension. Keep local executors registered without
+              // uploading their schemas on every send and continuation.
+              clientTools: [],
+            },
           ),
         ),
         {
@@ -737,7 +743,7 @@ export const createChatRuntime = ({
   // The extension budgets browser commands per chat turn, named by its
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
-  const browserTool = createBrowserClientTool({
+  const browserTool = createBrowserExtensionTool({
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 
@@ -1495,10 +1501,7 @@ export const buildSendRequestBody = ({
     threadId: key.threadId,
   };
 
-  const browserClient = getBrowserClientCapability();
-  if (browserClient) {
-    body.browserClient = browserClient;
-  }
+  body.browserExtension = getBrowserExtensionState();
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;

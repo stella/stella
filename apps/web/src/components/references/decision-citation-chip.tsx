@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -23,15 +24,38 @@ import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import { formatDecisionDate } from "@/lib/decision-date";
 
-export type DecisionCitationChipProps = {
+type DecisionCitationChipShared = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
   /** A complete, lazily mounted preview for surfaces with richer metadata. */
   preview?: ReactNode;
+  onOpen?: (() => void) | undefined;
+};
+
+/**
+ * A reference inside the text of a decision being read. The chip decorates
+ * the court's own characters and draws nothing else into the text flow: no
+ * badge, no case number, no paragraph mark, so the paragraph still reads,
+ * selects and copies as the court wrote it, punctuation included. Who the
+ * reference names is in the trigger's accessible name and its preview.
+ *
+ * Every drawing that adds words is unrepresentable here, not merely unused.
+ */
+type DecisionCitationOverSourceText = {
+  /** The characters of the decision text the reference was found at. */
+  sourceText: ReactNode;
+  presentation?: never;
+  paragraphNumber?: never;
+  label?: never;
+  citingText?: never;
+};
+
+/** A reference drawn on a surface of its own: an answer, a list, a card. */
+type DecisionCitationBesideText = {
+  sourceText?: never;
   presentation?: DecisionCitationPresentation | undefined;
   /** The court's own number on the cited block; null when it printed none. */
   paragraphNumber?: number | null | undefined;
-  onOpen?: (() => void) | undefined;
   /**
    * Prose that already names the decision ("III. ÚS 2429/24"). It becomes
    * the trigger itself, quietly underlined, instead of being followed by a
@@ -39,12 +63,19 @@ export type DecisionCitationChipProps = {
    */
   label?: ReactNode;
   /**
-   * The citing text's own words for the decision, drawn ahead of the badge
-   * inside the same trigger, so the whole reference opens the preview and
-   * not only its badge.
+   * Words for the decision on a surface that is not the decision's text,
+   * drawn ahead of the badge inside the same trigger, so the whole reference
+   * opens the preview and not only its badge.
    */
   citingText?: ReactNode;
 };
+
+/** How a decision chip draws itself: over source text, or beside text. */
+export type DecisionCitationDrawing =
+  DecisionCitationOverSourceText | DecisionCitationBesideText;
+
+export type DecisionCitationChipProps = DecisionCitationChipShared &
+  DecisionCitationDrawing;
 
 const DecisionCitationLabel = ({
   decision,
@@ -106,13 +137,19 @@ const DecisionCitationLabel = ({
   }
 };
 
+const UNDERLINED_TRIGGER_CLASS =
+  "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150";
+
 /** How the trigger sits in its line, by what it draws. */
 const triggerShapeClassName = ({
+  sourceText,
   label,
   citingText,
-}: Pick<DecisionCitationChipProps, "label" | "citingText">): string => {
-  if (label !== undefined) {
-    return "decoration-foreground-placeholder hover:decoration-foreground-muted data-[popup-open]:decoration-foreground-muted rounded-xs underline decoration-dotted underline-offset-2 transition-[text-decoration-color] duration-150";
+}: Pick<DecisionCitationBesideText, "label" | "citingText"> & {
+  sourceText: ReactNode;
+}): string => {
+  if (sourceText !== undefined || label !== undefined) {
+    return UNDERLINED_TRIGGER_CLASS;
   }
   if (citingText !== undefined) {
     // Inline, so a long reference still wraps with the prose.
@@ -127,12 +164,21 @@ const DecisionCitationTriggerContent = ({
   label,
   paragraph,
   presentation,
-}: Pick<DecisionCitationChipProps, "citingText" | "decision" | "label"> & {
-  /** The court's number, already in the reader's formatting locale. */
-  paragraph: string | null;
-  presentation: DecisionCitationPresentation;
-}) => {
+  sourceText,
+}: Pick<DecisionCitationBesideText, "citingText" | "label"> &
+  Pick<DecisionCitationChipShared, "decision"> & {
+    /** The court's number, already in the reader's formatting locale. */
+    paragraph: string | null;
+    presentation: DecisionCitationPresentation;
+    sourceText: ReactNode;
+    // Explicit ReactNode: returning `sourceText` infers a type containing
+    // React 19's Promise<AwaitedReactNode> member, which promise-function-async
+    // would otherwise flag on this sync component.
+  }): ReactNode => {
   const t = useTranslations();
+  if (sourceText !== undefined) {
+    return sourceText;
+  }
   const badge = (
     <DecisionCitationLabel
       decision={decision}
@@ -168,18 +214,17 @@ const DecisionCitationTriggerContent = ({
 
 /**
  * The same decision annotation in answers, provenance cards and reader text.
- * Surfaces render it through `CitationChip`, which owns citation kinds.
+ * Surfaces render it through `CitationChip`, which owns citation kinds. Over
+ * a decision's own text it is drawn with `sourceText`, and the trigger is
+ * then those characters exactly.
  */
-export const DecisionCitationChip = ({
-  decision,
-  passage,
-  preview,
-  presentation = DECISION_CITATION_PRESENTATION.compact,
-  paragraphNumber = null,
-  onOpen,
-  label,
-  citingText,
-}: DecisionCitationChipProps) => {
+export const DecisionCitationChip = (props: DecisionCitationChipProps) => {
+  const { decision, passage, preview, onOpen, sourceText } = props;
+  const label = props.label;
+  const citingText = props.citingText;
+  const presentation =
+    props.presentation ?? DECISION_CITATION_PRESENTATION.compact;
+  const paragraphNumber = props.paragraphNumber ?? null;
   const t = useTranslations();
   const format = useFormatter();
   const [open, setOpen] = useState(false);
@@ -249,13 +294,12 @@ export const DecisionCitationChip = ({
           <a
             className={cn(
               "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-              triggerShapeClassName({ label, citingText }),
+              triggerShapeClassName({ sourceText, label, citingText }),
             )}
             href={sanitizeHref(readerHref)}
             ref={triggerRef}
           />
         }
-        tooltip={false}
       >
         <DecisionCitationTriggerContent
           citingText={citingText}
@@ -263,6 +307,7 @@ export const DecisionCitationChip = ({
           label={label}
           paragraph={paragraph}
           presentation={presentation}
+          sourceText={sourceText}
         />
       </PopoverTrigger>
       <PopoverPanel
@@ -295,7 +340,10 @@ export const DecisionCitationChip = ({
         {passage !== undefined && (
           <ScrollArea axis="vertical" className="max-h-64">
             <div
-              className="text-sm wrap-anywhere whitespace-pre-wrap"
+              className={cn(
+                LEGAL_TEXT_CLASS_NAME,
+                "text-sm whitespace-pre-wrap",
+              )}
               dir="auto"
             >
               {passage}

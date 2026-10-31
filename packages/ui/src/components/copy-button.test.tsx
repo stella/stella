@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import {
   COPIED_RESET_MS,
   CopyButton,
@@ -15,11 +17,7 @@ const { act, cleanup, renderHook } = await import("@testing-library/react");
 
 afterEach(() => {
   cleanup();
-  // Bun discards pending fake timeouts on the switch; fire them first.
-  if (jest.isFakeTimers()) {
-    jest.runOnlyPendingTimers();
-  }
-  jest.useRealTimers();
+  restoreRealTimers();
 });
 afterAll(async () => GlobalRegistrator.unregister());
 

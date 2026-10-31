@@ -18,6 +18,34 @@
  * }} EvidenceClient
  */
 
+import infrastructureDefinitions from "./main-heavy-infrastructure-steps.json" with { type: "json" };
+
+const RUNNER_INFRASTRUCTURE_STEPS = new Set([
+  "Set up job",
+  "Initialize containers",
+  "Complete job",
+  "Post job cleanup",
+]);
+
+/** @param {string} name @param {typeof infrastructureDefinitions} definitions */
+const jobInfrastructureSteps = (name, definitions) => {
+  const normalized = jobName(name);
+  for (const [id, definition] of Object.entries(definitions)) {
+    const { prefix, suffix } = definition.displayName;
+    if (
+      normalized === id ||
+      normalized.startsWith(`${id} (`) ||
+      (normalized.startsWith(prefix) && normalized.endsWith(suffix))
+    ) {
+      return {
+        declaredStepNames: new Set(definition.declaredStepNames),
+        infrastructureSteps: new Set(definition.steps),
+      };
+    }
+  }
+  return { declaredStepNames: new Set(), infrastructureSteps: new Set() };
+};
+
 /** @param {string} name Workflow job display name. */
 const jobName = (name) => name.replace(/^suites \/ /u, "");
 /** @param {Job} job Completed or pending workflow job. */
@@ -34,9 +62,13 @@ const failed = ({ conclusion }) =>
 
 // The jobs API has no task/file selection receipts. Even matching successful
 // steps on the same Git tree cannot prove full versus affected test scope.
-/** @param {{ jobs: Job[], queueJobs: Job[] }} options Main and queue execution evidence. */
-export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
-  jobs.filter(failed).map((job) => {
+/** @param {{ jobs: Job[], queueJobs: Job[], definitions?: typeof infrastructureDefinitions }} options Main and queue execution evidence. */
+export const classifyMainHeavyFailures = ({
+  jobs,
+  queueJobs,
+  definitions = infrastructureDefinitions,
+}) => {
+  return jobs.filter(failed).map((job) => {
     const executed = (job.steps ?? []).filter(
       ({ conclusion }) => conclusion !== "skipped",
     );
@@ -53,6 +85,30 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
           ),
         ),
     );
+    const { declaredStepNames, infrastructureSteps } = jobInfrastructureSteps(
+      job.name,
+      definitions,
+    );
+    const failedSteps = executed.filter(failed);
+    const allInfrastructure =
+      failedSteps.length > 0 &&
+      failedSteps.every(
+        ({ name }) =>
+          (RUNNER_INFRASTRUCTURE_STEPS.has(name) &&
+            !declaredStepNames.has(name)) ||
+          infrastructureSteps.has(name),
+      );
+    if (allInfrastructure) {
+      const firstFailedStep = failedSteps.at(0);
+      if (firstFailedStep === undefined) {
+        throw new TypeError("Missing failed step");
+      }
+      return {
+        name: job.name,
+        type: "INFRA",
+        reason: `The failed step ${firstFailedStep.name} prepares the runner or toolchain.`,
+      };
+    }
     return {
       name: job.name,
       type: "CODE",
@@ -61,6 +117,7 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
         : "No matching merge-group pass proves the same tree and scope.",
     };
   });
+};
 
 /**
  * @param {{ github: EvidenceClient, context: { repo: Repository, runId: number },

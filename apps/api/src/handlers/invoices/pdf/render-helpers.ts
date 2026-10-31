@@ -48,6 +48,8 @@ export type RenderInvoicePdfOptions = {
     buyerPostalCode: string | null;
     buyerCountry: string | null;
     lines: {
+      workspaceId: string;
+      workspaceName: string;
       description: string;
       /** Null only on a line that was never billed by quantity. */
       quantity: string | null;

@@ -1,11 +1,10 @@
 /**
  * Slovakia: Zbierka zákonov, Slov-Lex anchors.
  *
- * Two collections, not one: `Zb.` is the federal Czechoslovak collection an
- * act keeps forever (40/1964 Zb. is still the civil code), `Z. z.` is the
- * Slovak one from 1993. Reading either as the other silently merges two
- * different acts that share a number and a year, so the collection is part of
- * the identity, never a display suffix.
+ * The publication year determines the collection: through 1992, `Zb.`
+ * (including Slovak National Council acts); from 1993, `Z. z.`. Slov-Lex
+ * files both under `/zz/`, so year and number identify the work. An explicit
+ * collection contradicting its year must not resolve to that work.
  *
  * `OZ` means 40/1964 Zb. here and 89/2012 Sb. in Prague. That collision is the
  * reason the alias table is profile data and not a shared dictionary.
@@ -17,6 +16,7 @@ import { SLOV_LEX_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   JurisdictionProfile,
+  TitleHeadSpec,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
@@ -65,6 +65,11 @@ const LABOUR_CODE_SUCCESSION = {
   newer: SVK.labourCode.work,
   on: LABOUR_CODE_RECODIFICATION,
 };
+
+const ACT_HEAD = {
+  nominative: "zákon",
+  forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
+} as const satisfies TitleHeadSpec;
 
 export const SK_PROFILE = {
   jurisdiction: "SVK",
@@ -203,6 +208,7 @@ export const SK_PROFILE = {
       spellings: ["ZP", "Zák. práce"],
       ...LABOUR_CODE_SUCCESSION,
     }),
+    { spellings: ["OSP", "O. s. p."], identifier: zb(99, 1963) },
     { spellings: ["CSP", "C. s. p."], identifier: SVK.civilDisputes.work },
     { spellings: ["CMP", "C. m. p."], identifier: zz(161, 2015) },
     { spellings: ["SSP", "S. s. p."], identifier: zz(162, 2015) },
@@ -220,6 +226,24 @@ export const SK_PROFILE = {
   ],
 
   titles: [
+    // Section 251 of 314/2018 repealed 38/1993 on 1 March 2019.
+    ...succession({
+      spellings: ACT_HEAD.forms.flatMap((head) => [
+        `${head} o ústavnom súde`,
+        `${head} o Ústavnom súde Slovenskej republiky`,
+      ]),
+      older: zz(38, 1993),
+      newer: zz(314, 2018),
+      on: "2019-03-01",
+    }),
+    {
+      spellings: [
+        "Občiansky súdny poriadok",
+        "Občianskeho súdneho poriadku",
+        "Občianskom súdnom poriadku",
+      ],
+      identifier: zb(99, 1963),
+    },
     ...succession({
       spellings: ["Trestný zákon", "Trestného zákona", "Trestnom zákone"],
       ...CRIMINAL_CODE_SUCCESSION,
@@ -332,10 +356,7 @@ export const SK_PROFILE = {
   ],
 
   titleHeads: [
-    {
-      nominative: "zákon",
-      forms: ["zákon", "zákona", "zákonu", "zákonom", "zákone", "zák."],
-    },
+    ACT_HEAD,
     {
       nominative: "zákonník",
       forms: ["zákonník", "zákonníka", "zákonníku", "zákonníkom"],

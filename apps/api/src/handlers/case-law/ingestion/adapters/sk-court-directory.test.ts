@@ -3,10 +3,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   createSkCourtRegistryReader,
   isSkCourtRegistryRecord,
   skCourtDirectoryMetadata,
@@ -21,6 +17,10 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;

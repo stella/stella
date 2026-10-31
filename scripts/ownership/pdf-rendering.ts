@@ -11,6 +11,12 @@ export default {
   enforcement: {
     kind: "literal-pattern",
     pattern: "forms/libreoffice/convert",
-    allowed: [],
+    allowed: [
+      {
+        path: "apps/api/src/lib/files/converter-settings.ts",
+        reason:
+          "Pure endpoint construction is shared with the converter's minimal process configuration; network execution stays in gotenberg.ts.",
+      },
+    ],
   },
 } as const satisfies OwnershipEntry;

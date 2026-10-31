@@ -58,13 +58,13 @@ describe("provision anchor lineage", () => {
   });
 
   test("a jurisdiction no grammar mints anchors for reads them whole", () => {
-    expect(provisionAnchorNesting("SVK")).toEqual({ type: "flat" });
+    expect(provisionAnchorNesting("POL")).toEqual({ type: "flat" });
     expect(
       provisionAnchorLineage({
-        jurisdiction: "SVK",
-        anchor: "paragraf-5.odsek-1",
+        jurisdiction: "POL",
+        anchor: "art_5-ust_1",
       }),
-    ).toEqual(["paragraf-5.odsek-1"]);
+    ).toEqual(["art_5-ust_1"]);
   });
 
   test("a jurisdiction outside the case-law list is a bug", () => {
