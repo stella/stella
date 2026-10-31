@@ -10,6 +10,7 @@ import {
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
 
 import { decisionParagraphLanding } from "./decision-paragraph-landing.logic";
 
@@ -59,13 +60,7 @@ export const applyDecisionParagraphLanding = (
       (candidate) => candidate.dataset["anchor"] === firstAnchorId,
     ) ?? panic("First resolved court paragraph must be rendered");
   for (const paragraph of targets) {
-    for (
-      let disclosure = paragraph.closest("details");
-      disclosure !== null;
-      disclosure = disclosure.parentElement?.closest("details") ?? null
-    ) {
-      disclosure.open = true;
-    }
+    revealEnclosingDisclosures(paragraph);
     paragraph.dataset["readerLanding"] = "";
     paragraph.classList.add("bg-accent", "text-accent-foreground");
   }

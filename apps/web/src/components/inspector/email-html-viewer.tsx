@@ -51,6 +51,7 @@ import {
 import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { formatFullTimestamp } from "@/lib/relative-time";
+import { revealEnclosingDisclosures } from "@/lib/reveal-disclosures";
 
 /** A header field a citation points at wears the active text mark. */
 const ACTIVE_CITATION_CLASS = textMarkClass({
@@ -558,7 +559,7 @@ const scrollToEmailCitation = ({
 
   const headerTarget = findEmailCitationElement(article, blockId);
   if (headerTarget) {
-    openAncestorDetails(headerTarget);
+    revealEnclosingDisclosures(headerTarget);
     headerTarget.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -570,7 +571,7 @@ const scrollToEmailCitation = ({
   if (!bodyTarget) {
     return;
   }
-  openAncestorDetails(bodyTarget);
+  revealEnclosingDisclosures(bodyTarget);
   bodyTarget.dataset["stellaEmailCitationActive"] = "";
   resizeEmailBodyFrame(bodyFrame);
   const articleRect = article?.getBoundingClientRect();
@@ -624,16 +625,6 @@ const resizeEmailBodyFrame = (frame: HTMLIFrameElement | null): void => {
     marginBlockEnd,
     marginBlockStart,
   })}px`;
-};
-
-const openAncestorDetails = (target: HTMLElement): void => {
-  let ancestor = target.parentElement;
-  while (ancestor) {
-    if (ancestor.tagName === "DETAILS") {
-      ancestor.setAttribute("open", "");
-    }
-    ancestor = ancestor.parentElement;
-  }
 };
 
 const findEmailCitationElement = (
