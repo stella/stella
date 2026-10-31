@@ -27,6 +27,7 @@ import {
 const PURE_AUTOFIX = {
   // Emits export lines from committed entry filenames; values stay in their owners.
   "online-migration-entries": "scripts/generate-online-migration-entries.ts",
+  "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
@@ -37,8 +38,6 @@ const PURE_AUTOFIX = {
   // Toolchain pins are read from committed manifests; temporary git state
   // merely exposes those files to the pinned cloud-setup renderer.
   "cloud-setup": "scripts/generate-cloud-setup.ts",
-  // Lists the committed rollout file names; never imports or runs them.
-  "guard-rollout-manifest": "scripts/generate-guard-rollouts.ts",
   // Parses the install tooling import closure and replaces one Docker block.
   "api-image-install-tooling": "scripts/docker-source-closure.ts",
   // Serializes package.json's packageManager pin.

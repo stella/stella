@@ -30,6 +30,7 @@ import {
   projectReleaseDates,
   readPendingChangesets,
   readPreviousRelease,
+  readReleaseManifest,
   refreshMaintenanceReleaseFiles,
   refreshUnpromotedReleases,
   resolveGitHubToken,
@@ -914,6 +915,80 @@ describe("maintenance release preparation", () => {
       "v1.2.2": PUBLISHED.publishedAt,
       "v1.2.3": null,
     });
+  });
+
+  test("the manifest note never reaches the unpromoted refresh and survives the rewrite", async () => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(
+      root,
+      `${JSON.stringify(
+        {
+          _note: "Publication timestamps, keyed by tag.",
+          "v1.2.1": "2026-01-01T00:00:00Z",
+          "v1.2.2": null,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+
+    const manifest = readReleaseManifest(root);
+    expect(manifest).toEqual({
+      note: "Publication timestamps, keyed by tag.",
+      releases: { "v1.2.1": "2026-01-01T00:00:00Z", "v1.2.2": null },
+    });
+    const asked: string[] = [];
+    const refreshed = await refreshUnpromotedReleases({
+      cutVersion: "1.2.4",
+      dates: manifest.releases,
+      previousTag: "v1.2.3",
+      readRelease: async (tag) => {
+        asked.push(tag);
+        return PUBLISHED;
+      },
+    });
+    expect(asked).toEqual(["v1.2.2"]);
+
+    prepareMaintenanceReleaseFiles({
+      previousRelease: PUBLISHED,
+      previousFinalVersion: "1.2.3",
+      refreshedReleases: refreshed,
+      rootDir: root,
+    });
+    expect(
+      readFileSync(
+        nodePath.join(
+          root,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        "utf-8",
+      ),
+    ).toBe(
+      `${JSON.stringify(
+        {
+          _note: "Publication timestamps, keyed by tag.",
+          "v1.2.1": "2026-01-01T00:00:00Z",
+          "v1.2.2": PUBLISHED.publishedAt,
+          "v1.2.3": PUBLISHED.publishedAt,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+  });
+
+  test.each([
+    [{ latest: "2026-01-01T00:00:00Z" }, "invalid stable release ref: latest"],
+    [{ "v1.2": null }, "invalid stable release ref: v1.2"],
+    [{ _note: 3 }, "note must be a string"],
+    [{ "v1.2.1": 1 }, "invalid publication time for v1.2.1"],
+  ])("the manifest reader refuses %j", (entries, message) => {
+    const root = mkdtempSync(nodePath.join(tmpdir(), "stella-release-"));
+    roots.push(root);
+    releaseFixture(root, `${JSON.stringify(entries, null, 2)}\n`);
+
+    expect(() => readReleaseManifest(root)).toThrow(message);
   });
 
   test("a failed lookup stops the cut unless the tag is older than the newest promoted release", async () => {
