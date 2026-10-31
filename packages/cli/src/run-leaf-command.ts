@@ -21,6 +21,7 @@ import {
 } from "./action-admission-refusal.js";
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import { RESOURCE_SCOPE_PREFIX } from "./auth/scopes.js";
+import { parseIds } from "./batch/ids.js";
 import type { Context } from "./context.js";
 import { expandSchemaDefs } from "./expand-schema-defs.js";
 import { flagKey } from "./flag-name.js";
@@ -254,10 +255,10 @@ const parseBoundedNumber = (
 const asFlagString = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
-const coerceArrayFlag = (
+const coerceArrayFlag = async (
   flagSpec: FlagSpec,
   value: unknown,
-): Result<unknown, string> => {
+): Promise<Result<unknown, string>> => {
   const raw: string[] = [];
   for (const element of Array.isArray(value) ? value : []) {
     const asString = asFlagString(element);
@@ -267,6 +268,9 @@ const coerceArrayFlag = (
     raw.push(asString);
   }
   if (flagSpec.kind === "string-array") {
+    if (/(?:^|[._])ids$|Ids$/u.test(flagSpec.prop)) {
+      return parseIds(raw);
+    }
     return Result.ok(raw);
   }
   if (flagSpec.kind === "enum-array") {
@@ -749,7 +753,7 @@ export const classifyToolError = (payload: unknown): ExitCode => {
  * hide `confirm`; after human approval the reserved --yes flow injects
  * `confirm: true` for a leaf marked destructive.
  */
-const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
+export const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
   const properties = spec.inputSchema["properties"];
   return isRecord(properties) && "confirm" in properties;
 };

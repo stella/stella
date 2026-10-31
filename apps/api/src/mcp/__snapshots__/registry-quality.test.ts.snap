@@ -3302,7 +3302,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -3314,7 +3314,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": [
@@ -3438,6 +3438,537 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name prefix"
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Middle name"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name suffix"
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "work",
+                      "personal",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^[\\\\w+-]+(?:\\\\.[\\\\w+-]+)*@[\\\\da-zA-Z]+(?:[.-][\\\\da-zA-Z]+)*\\\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "address",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Email addresses"
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mobile",
+                      "office",
+                      "home",
+                      "fax",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Phone numbers"
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "type",
+                  "line1",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Postal addresses"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "data_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "is_primary"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 20
+                },
+                "custom_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Data boxes and custom fields"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tags"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display color"
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registration number"
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tax identifier"
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT identifier"
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT payer"
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bank accounts"
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Billing address"
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hourly rate in minor currency units"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Currency code"
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Payment term in days"
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Invoice language"
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Originating attorney user ID"
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Responsible attorney user ID"
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
@@ -4101,7 +4632,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -4173,7 +4704,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -4183,7 +4714,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [
@@ -4204,10 +4735,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -9987,7 +10519,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -9999,7 +10531,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": [
@@ -10123,6 +10655,537 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name prefix"
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Middle name"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name suffix"
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "work",
+                      "personal",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^[\\\\w+-]+(?:\\\\.[\\\\w+-]+)*@[\\\\da-zA-Z]+(?:[.-][\\\\da-zA-Z]+)*\\\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "address",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Email addresses"
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "mobile",
+                      "office",
+                      "home",
+                      "fax",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type",
+                  "number",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Phone numbers"
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "required": [
+                  "type",
+                  "line1",
+                  "is_primary"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Postal addresses"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "data_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "is_primary"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 20
+                },
+                "custom_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "label",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Data boxes and custom fields"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tags"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display color"
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registration number"
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tax identifier"
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT identifier"
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT payer"
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bank accounts"
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Billing address"
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hourly rate in minor currency units"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Currency code"
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Payment term in days"
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Invoice language"
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Originating attorney user ID"
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Responsible attorney user ID"
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
@@ -10786,7 +11849,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -10858,7 +11921,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -10868,7 +11931,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [
@@ -10889,10 +11952,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",

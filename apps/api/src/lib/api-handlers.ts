@@ -283,6 +283,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `native_device`: a native app registering the device it runs on (push
+ *   alert delivery). Only the signed-in app holds the device token; an agent
+ *   that could register one could route a person's alerts elsewhere.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -306,7 +309,8 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "native_device";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

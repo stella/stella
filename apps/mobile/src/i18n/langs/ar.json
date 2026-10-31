@@ -140,7 +140,9 @@
     },
     "add": "إضافة",
     "scanDocument": "مسح مستند ضوئيًا",
-    "newTask": "مهمة جديدة"
+    "newTask": "مهمة جديدة",
+    "uploadDocument": "رفع مستند",
+    "uploadFailed": "تعذّر رفع المستند. حاول مرة أخرى."
   },
   "entity": {
     "type": "النوع",
