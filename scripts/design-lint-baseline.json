@@ -1180,6 +1180,7 @@
     "apps/web/src/components/inspector/document-ai-source-bar.tsx": 1,
     "apps/web/src/components/templates/template-ai-conditions.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 1,
+    "apps/web/src/features/case-law/components/search-widened-line.tsx": 1,
     "apps/web/src/routes/_protected.chat/-components/chat-history-page.tsx": 1,
     "apps/web/src/routes/_protected.contacts/index.tsx": 1,
     "apps/web/src/routes/_protected.settings/-components/account/connections/client-setup-groups.tsx": 1,
