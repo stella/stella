@@ -11,6 +11,7 @@ import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   buildDataExport,
   DATA_EXPORT_RECORD_BYTES_CAP,
+  DataExportManifestInvalidError,
   DataExportRecordsTooLargeError,
   planDataExport,
 } from "@/api/handlers/data-exports/build-export";
@@ -312,7 +313,7 @@ const run = async (
     ).unwrap();
   const checkpoints: CompletedPart[] = [];
   let paced = 0;
-  const manifest = await buildDataExport({
+  const built = await buildDataExport({
     exportId: "0f1e2d3c-0000-4000-8000-000000000001",
     organization: { id: "org-1", name: "Kancelář" },
     requestedBy: "user-1",
@@ -332,6 +333,10 @@ const run = async (
     },
     now: () => new Date("2026-10-01T09:00:00.000Z"),
   });
+  if (built.isErr()) {
+    throw built.error;
+  }
+  const manifest = built.value;
   const builtParts = manifest.parts.filter((part) =>
     memory.parts.has(part.fileName),
   );
@@ -407,6 +412,29 @@ const basicWorld = (): FakeWorld => {
     ]),
     organization: organizationFixture(),
     templateFiles: new Map([["tplv-1", encoder.encode("docx")]]),
+  };
+};
+
+const nestedWorld = (): FakeWorld => {
+  const world = basicWorld();
+  const folders = Array.from({ length: 40 }, (_, index) => ({
+    id: `folder-${index}`,
+    parentId: index === 0 ? null : `folder-${index - 1}`,
+    name: "a".repeat(220),
+  }));
+  return {
+    ...world,
+    matters: world.matters.map(({ summary, matter }) => ({
+      summary,
+      matter: {
+        ...matter,
+        folders,
+        documents: matter.documents.map((document) => ({
+          ...document,
+          parentId: "folder-39",
+        })),
+      },
+    })),
   };
 };
 
@@ -1054,32 +1082,79 @@ describe("organisation data export builder", () => {
     expect(checkpoints).toEqual([]);
   });
 
-  test("validates against the Valibot contract and the committed JSON Schema", async () => {
-    const { manifest, partManifests } = await run(basicWorld(), {
-      partTargetBytes: 10,
-    });
-    const committed: unknown = await Bun.file(
-      new URL(
-        "../../../../../docs/data-export/stella-data-export.v1.schema.json",
-        import.meta.url,
-      ),
-    ).json();
-    // Drift guard: the published schema is exactly what the contract derives.
-    expect(committed).toEqual(buildDataExportJsonSchema());
+  test.each([
+    { name: "ordinary folders", world: basicWorld },
+    {
+      name: "nested folders exceeding the complete path limit",
+      world: nestedWorld,
+    },
+  ])(
+    "validates $name against the Valibot contract and the committed JSON Schema",
+    async ({ world }) => {
+      const { manifest, partManifests, zips } = await run(world(), {
+        partTargetBytes: 10,
+      });
+      const committed: unknown = await Bun.file(
+        new URL(
+          "../../../../../docs/data-export/stella-data-export.v1.schema.json",
+          import.meta.url,
+        ),
+      ).json();
+      // Drift guard: the published schema is exactly what the contract derives.
+      expect(committed).toEqual(buildDataExportJsonSchema());
 
-    const ajv = new Ajv({ allowUnionTypes: true, strict: true });
-    addFormats(ajv);
-    const { $schema: _draft, ...schema } = buildDataExportJsonSchema();
-    const validate = ajv.compile(schema);
-    const documents: unknown[] = [manifest, ...partManifests];
-    for (const document of documents) {
-      expect(v.safeParse(dataExportManifestSchema, document).success).toBe(
-        true,
-      );
-      expect(validate(document)).toBe(true);
-    }
-    const broken: PartManifest | undefined = partManifests[0];
-    expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
+      const ajv = new Ajv({ allowUnionTypes: true, strict: true });
+      addFormats(ajv);
+      const { $schema: _draft, ...schema } = buildDataExportJsonSchema();
+      const validate = ajv.compile(schema);
+      const documents: unknown[] = [manifest, ...partManifests];
+      for (const document of documents) {
+        expect(v.safeParse(dataExportManifestSchema, document).success).toBe(
+          true,
+        );
+        expect(validate(document)).toBe(true);
+      }
+      const broken: PartManifest | undefined = partManifests[0];
+      expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
+      for (const [index, part] of partManifests.entries()) {
+        const zip = zips.at(index);
+        for (const matter of part.matters) {
+          for (const document of matter.documents) {
+            for (const version of document.versions) {
+              for (const file of version.files) {
+                expect(zip?.file(file.path)).not.toBeNull();
+              }
+            }
+          }
+        }
+      }
+    },
+  );
+
+  test("refuses a part whose manifest violates the published schema", async () => {
+    const world = basicWorld();
+    world.organization.templateFiles = world.organization.templateFiles.map(
+      (file) => ({ ...file, version: -1 }),
+    );
+    expect(await rejectionOf(run(world))).toBeInstanceOf(
+      DataExportManifestInvalidError,
+    );
+  });
+
+  test("refuses an export manifest with invalid resumed checkpoint values", async () => {
+    const world = basicWorld();
+    const first = await run(world);
+    expect(
+      await rejectionOf(
+        run(world, {
+          plan: first.plan,
+          completedParts: first.checkpoints.map((part) => ({
+            ...part,
+            fileCount: -1,
+          })),
+        }),
+      ),
+    ).toBeInstanceOf(DataExportManifestInvalidError);
   });
 
   test("records a planned matter that can no longer be read instead of dropping it", async () => {

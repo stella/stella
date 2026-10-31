@@ -10,6 +10,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
+import { DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH } from "@/api/lib/data-export/manifest-values";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 /** Stable naming order shared by planning and packing. */
@@ -141,6 +142,9 @@ export class ArchivePathAllocator {
 
   /** Reserve a fixed path (manifest, metadata) that must not be renamed. */
   reserve(path: string): string {
+    if (path.length > DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH) {
+      return panic("Reserved archive path exceeds the manifest limit");
+    }
     const key = archivePathKey(path);
     if (this.#taken.has(key)) {
       return panic(`Archive path already allocated: ${path}`);
@@ -152,7 +156,16 @@ export class ArchivePathAllocator {
   /** Allocate `directory/fileName`, suffixing the file name on collision. */
   allocate(directory: string, fileName: string): string {
     const segment = sanitizeArchiveSegment(fileName);
-    const prefix = directory.length > 0 ? `${directory}/` : "";
+    // Flatten deep descendants to the nearest complete ancestor that leaves
+    // room for a full segment, including its eventual collision suffix.
+    const directoryLimit =
+      DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH - MAX_SEGMENT_BYTES - 1;
+    const ancestorEnd = directory.lastIndexOf("/", directoryLimit);
+    const parent =
+      directory.length <= directoryLimit
+        ? directory
+        : directory.slice(0, Math.max(0, ancestorEnd));
+    const prefix = parent.length > 0 ? `${parent}/` : "";
     const first = `${prefix}${segment}`;
     if (!this.#taken.has(archivePathKey(first))) {
       this.#taken.add(archivePathKey(first));

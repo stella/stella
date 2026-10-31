@@ -2,7 +2,7 @@
 // truth; `docs/data-export/stella-data-export.v1.schema.json` is generated
 // from it (`bun apps/api/scripts/generate-data-export-schema.ts`) and a test
 // fails when the two drift. An importer reads the JSON Schema; stella's own
-// tests parse every manifest it builds through this schema.
+// worker validates every generated manifest through this schema.
 
 import * as v from "valibot";
 

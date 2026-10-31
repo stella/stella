@@ -134,6 +134,7 @@ export const FAILURE_TAGS = [
   "CzUsRosterFetchError",
   "CzUsRosterListingError",
   "CzUsRosterParseError",
+  "DataExportManifestInvalidError",
   "DataExportNotAuthorizedError",
   "DataExportPartTooLargeError",
   "DataExportRecordsTooLargeError",

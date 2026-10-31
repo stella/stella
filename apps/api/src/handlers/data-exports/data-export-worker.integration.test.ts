@@ -136,6 +136,43 @@ const run = async (
 };
 
 describe("organisation data export revocation", () => {
+  test("an invalid part manifest fails the export before publication", async () => {
+    await setRole("admin");
+    let manifestPublished = false;
+    let partCommitted = false;
+    try {
+      const exportId = await queueExport();
+      const { outcome, row } = await run(exportId, {
+        wrapSource: (source) => ({
+          ...source,
+          readFile: async () => ({ type: "missing" }),
+          loadMatter: async (matterId, scope) => {
+            const matter = await source.loadMatter(matterId, scope);
+            return matter === null
+              ? null
+              : {
+                  ...matter,
+                  folders: [{ id: "", parentId: null, name: "Documents" }],
+                };
+          },
+        }),
+        beforePartClose: async () => {
+          partCommitted = true;
+        },
+        beforeManifestWrite: async () => {
+          manifestPublished = true;
+        },
+      });
+      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
+      expect(row?.status).toBe("failed");
+      expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.failed);
+      expect(partCommitted).toBe(false);
+      expect(manifestPublished).toBe(false);
+    } finally {
+      await setRole("member");
+    }
+  });
+
   test("a run stops when its requester no longer has access to the matter", async () => {
     // The requester is an admin when the run starts and is demoted while it
     // plans: they no longer reach the organisation's matters, so no part is

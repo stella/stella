@@ -16,6 +16,7 @@
 // tested without either.
 
 import { panic, Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { createSha256 } from "@stll/sha256/bun";
 import type { Sha256Hasher } from "@stll/sha256/types";
@@ -29,6 +30,7 @@ import {
   DATA_EXPORT_FORMAT,
   DATA_EXPORT_FORMAT_VERSION,
   DATA_EXPORT_SCHEMA_ID,
+  dataExportManifestSchema,
 } from "@/api/handlers/data-exports/manifest-schema";
 import type {
   DataExportVersionScope,
@@ -201,6 +203,10 @@ export class DataExportRecordsTooLargeError extends TaggedError(
   message: string;
   bytes: number;
 }> {}
+
+export class DataExportManifestInvalidError extends TaggedError(
+  "DataExportManifestInvalidError",
+)<{ message: string }> {}
 
 /** Receives one part's bytes, in order. */
 type PartSink = {
@@ -871,6 +877,45 @@ type BuildDataExportArgs = {
   now?: () => Date;
 };
 
+const completeExportManifest = (
+  common: Omit<ExportManifest, "parts" | "totals" | "problems">,
+  parts: readonly CompletedPart[],
+): Result<ExportManifest, DataExportManifestInvalidError> => {
+  const totals = {
+    matters: 0,
+    documents: 0,
+    versions: 0,
+    files: 0,
+    fileBytes: 0,
+  };
+  const problems: ManifestProblem[] = [];
+  for (const part of parts) {
+    totals.matters += part.totals.matters;
+    totals.documents += part.totals.documents;
+    totals.versions += part.totals.versions;
+    totals.files += part.totals.files;
+    totals.fileBytes += part.totals.fileBytes;
+    problems.push(...part.problems);
+  }
+  const manifest: ExportManifest = {
+    ...common,
+    // The manifest entry is the checkpoint without what it sums up.
+    parts: parts.map(
+      ({ totals: _partTotals, problems: _partProblems, ...entry }) => entry,
+    ),
+    totals,
+    problems,
+  };
+  if (!v.safeParse(dataExportManifestSchema, manifest).success) {
+    return Result.err(
+      new DataExportManifestInvalidError({
+        message: "The export does not conform to the manifest schema",
+      }),
+    );
+  }
+  return Result.ok(manifest);
+};
+
 /**
  * Build every part not yet completed and return the export manifest, which
  * covers all parts. A thrown error (including an abort) leaves completed
@@ -892,7 +937,9 @@ export const buildDataExport = async ({
   beforePart,
   onProgress,
   now = () => new Date(),
-}: BuildDataExportArgs): Promise<ExportManifest> => {
+}: BuildDataExportArgs): Promise<
+  Result<ExportManifest, DataExportManifestInvalidError>
+> => {
   const common = {
     $schema: DATA_EXPORT_SCHEMA_ID,
     format: DATA_EXPORT_FORMAT,
@@ -936,6 +983,9 @@ export const buildDataExport = async ({
     const manifestMatters: ManifestMatter[] = [];
     let manifestOrganization: OrganizationRecords | null = null;
     let partBytesDone = 0;
+    const validation: {
+      result: Result<PartManifest, DataExportManifestInvalidError> | null;
+    } = { result: null };
 
     const entries = async function* (): AsyncGenerator<ZipEntryInput> {
       yield bytesEntry(
@@ -995,6 +1045,16 @@ export const buildDataExport = async ({
         matters: manifestMatters,
         problems: context.problems,
       };
+      const parsed = v.safeParse(dataExportManifestSchema, partManifest);
+      if (!parsed.success) {
+        validation.result = Result.err(
+          new DataExportManifestInvalidError({
+            message: "The export part does not conform to the manifest schema",
+          }),
+        );
+        return;
+      }
+      validation.result = Result.ok(partManifest);
       yield bytesEntry(
         planned.paths.manifest,
         jsonBytes(partManifest),
@@ -1010,6 +1070,12 @@ export const buildDataExport = async ({
       hasher.update(chunk);
       sizeBytes += chunk.byteLength;
       await partSink.write(chunk);
+    }
+    if (validation.result === null) {
+      return panic("The completed archive has no manifest validation result");
+    }
+    if (validation.result.isErr()) {
+      return Result.err(validation.result.error);
     }
     await partSink.close();
 
@@ -1035,32 +1101,13 @@ export const buildDataExport = async ({
       done.get(planned.index) ??
       panic(`Part ${planned.index} finished without a checkpoint`),
   );
-  const totals = {
-    matters: 0,
-    documents: 0,
-    versions: 0,
-    files: 0,
-    fileBytes: 0,
-  };
-  const problems: ManifestProblem[] = [];
-  for (const part of parts) {
-    totals.matters += part.totals.matters;
-    totals.documents += part.totals.documents;
-    totals.versions += part.totals.versions;
-    totals.files += part.totals.files;
-    totals.fileBytes += part.totals.fileBytes;
-    problems.push(...part.problems);
-  }
-  return {
-    ...common,
-    kind: "export",
-    completedAt: now().toISOString(),
-    requestedBy,
-    // The manifest entry is the checkpoint without what it sums up.
-    parts: parts.map(
-      ({ totals: _partTotals, problems: _partProblems, ...entry }) => entry,
-    ),
-    totals,
-    problems,
-  };
+  return completeExportManifest(
+    {
+      ...common,
+      kind: "export",
+      completedAt: now().toISOString(),
+      requestedBy,
+    },
+    parts,
+  );
 };

@@ -537,7 +537,7 @@ const buildArchive = async (fixture: DataExportCompletenessFixture) => {
   expect(plan.mattersTotal).toBe(2);
 
   const memory = memorySink();
-  const manifest = await buildDataExport({
+  const built = await buildDataExport({
     exportId: "00000000-0000-4000-8000-000000000001",
     organization: {
       id: fixture.organizationId,
@@ -556,6 +556,7 @@ const buildArchive = async (fixture: DataExportCompletenessFixture) => {
     beforePart: async () => {},
     now: () => new Date("2026-10-29T00:01:00.000Z"),
   });
+  const manifest = built.unwrap();
   expect(manifest.parts).toHaveLength(1);
   const [, chunks] = required([...memory.parts.entries()].at(0), "built part");
   const zip = await JSZip.loadAsync(Buffer.concat(chunks));

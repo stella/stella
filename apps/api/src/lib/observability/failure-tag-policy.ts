@@ -145,6 +145,7 @@ export const TAGGED_FAILURE_REASON = {
   CzUsRosterFetchError: "tagged_failure",
   CzUsRosterListingError: "tagged_failure",
   CzUsRosterParseError: "tagged_failure",
+  DataExportManifestInvalidError: "tagged_failure",
   DataExportNotAuthorizedError: "tagged_failure",
   DataExportPartTooLargeError: "tagged_failure",
   DataExportRecordsTooLargeError: "tagged_failure",

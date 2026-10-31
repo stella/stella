@@ -4,6 +4,7 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 import { normalizeUnicode } from "@stll/text-normalize";
 
+import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   ArchivePathAllocator,
   compressionForMimeType,
@@ -14,6 +15,7 @@ import {
   withSegmentSuffix,
 } from "@/api/handlers/data-exports/archive-paths";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
+import { DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH } from "@/api/lib/data-export/manifest-values";
 
 // ICU collation checks the fixture equivalence independently of the allocation key.
 const filesystemNames = new Intl.Collator("cs", {
@@ -168,6 +170,46 @@ describe("export file-name length", () => {
   // Two-byte characters: 300 of them are 600 UTF-8 bytes but only 300
   // UTF-16 units, so a character-count limit would let them through.
   const longCzech = `${"Žluťoučký kůň úpěl ďábelské ódy ".repeat(10)}.docx`;
+
+  test("deep allocation stays bounded, deterministic and collision-free", () => {
+    assertProperty(
+      "deep allocation stays bounded, deterministic and collision-free",
+      fc.property(
+        fc.integer({ min: 20, max: 60 }),
+        fc.constantFrom("a", "Ž", "😀"),
+        (depth, letter) => {
+          const allocate = () => {
+            const allocator = new ArchivePathAllocator();
+            let directory = "matters/example/documents";
+            const paths: string[] = [];
+            for (let index = 0; index < depth; index++) {
+              directory = allocator.allocate(directory, letter.repeat(220));
+              paths.push(directory);
+              paths.push(
+                allocator.allocate(directory, `${letter.repeat(220)}.pdf`),
+              );
+              paths.push(
+                allocator.allocate(directory, `${letter.repeat(220)}.pdf`),
+              );
+            }
+            return paths;
+          };
+          const paths = allocate();
+          expect(paths).toEqual(allocate());
+          expect(new Set(paths.map(archivePathKey)).size).toBe(paths.length);
+          for (const path of paths) {
+            expect(path.length).toBeLessThanOrEqual(
+              DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH,
+            );
+            expect(path).toBe(path.toWellFormed());
+            for (const segment of path.split("/")) {
+              expect(bytes(segment)).toBeLessThanOrEqual(MAX_SEGMENT_BYTES);
+            }
+          }
+        },
+      ),
+    );
+  });
 
   test("shortens long names by UTF-8 bytes and keeps the extension", () => {
     expect(bytes(longCzech)).toBeGreaterThan(MAX_SEGMENT_BYTES);

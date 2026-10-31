@@ -580,7 +580,7 @@ export const runDataExport = async (
     if (run.plan === null) {
       await heartbeat({ plan });
     }
-    const manifest = await buildDataExport({
+    const built = await buildDataExport({
       exportId,
       organization: { id: organizationId, name: claimed.organizationName },
       requestedBy: userId,
@@ -613,6 +613,16 @@ export const runDataExport = async (
       },
       now: deps.now,
     });
+    if (built.isErr()) {
+      await markFailed(
+        deps.db,
+        ids,
+        run.attempt,
+        DATA_EXPORT_FAILURE_MESSAGE.failed,
+      );
+      return DATA_EXPORT_RUN_OUTCOME.FAILED;
+    }
+    const manifest = built.value;
     await storage.writeManifest(
       new TextEncoder().encode(`${JSON.stringify(manifest, null, 2)}\n`),
     );
