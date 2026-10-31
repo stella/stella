@@ -9,6 +9,7 @@ import {
   metricsFromPlan,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
   summarize,
   sumMetrics,
 } from "./measurement";
@@ -338,6 +339,26 @@ test("median supports odd and even samples and rejects malformed measurements", 
   expect(() => metricsFromPlan({ Plan: {}, "Execution Time": 1 })).toThrow(
     "lacks finite execution time",
   );
+});
+
+test("shared-block sample failures name the owner and every sample", () => {
+  const samples = [
+    { sharedBlocks: 142, executionTimeMs: 1 },
+    { sharedBlocks: 158, executionTimeMs: 2 },
+    { sharedBlocks: 159, executionTimeMs: 3 },
+    { sharedBlocks: 173, executionTimeMs: 4 },
+  ];
+  expect(
+    sharedBlockSampleProblem("scheduled.caseLaw.refreshCoverage", samples),
+  ).toBe(
+    "scheduled.caseLaw.refreshCoverage produced non-deterministic shared-block samples: 142, 158, 159, 173",
+  );
+  expect(
+    sharedBlockSampleProblem(
+      "stable",
+      samples.map((sample) => ({ ...sample, sharedBlocks: 142 })),
+    ),
+  ).toBeUndefined();
 });
 
 test("scheduled runs retain execution time and reject a slow statement within the page budget", () => {

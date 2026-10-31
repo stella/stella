@@ -22,7 +22,8 @@
     "toolUsed": "Usado: {tool}",
     "threadTitle": "Conversa",
     "threadLoadFailed": "Não foi possível carregar esta conversa.",
-    "threadEmptyDescription": "Esta conversa ainda não tem mensagens.",
+    "greeting": "No que você gostaria de trabalhar?",
+    "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "sections": {
       "today": "Hoje",
       "yesterday": "Ontem",
@@ -127,6 +128,22 @@
     "currentVersion": "Versão atual",
     "loadFailed": "Não foi possível carregar este item."
   },
+  "document": {
+    "title": "Documento",
+    "failedTitle": "Não foi possível abrir este documento",
+    "failure": {
+      "offline": "Você está offline. Conecte-se à internet e tente novamente.",
+      "noFile": "Este documento ainda não tem arquivo.",
+      "failed": "Algo deu errado ao abrir. Tente novamente em instantes.",
+      "unsupported": "Atualize o app para abrir documentos.",
+      "android": "Ainda não é possível abrir documentos no app para Android."
+    },
+    "retry": "Tentar novamente",
+    "preview": "Abrir pré-visualização",
+    "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
+    "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
+    "details": "Detalhes"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Clareza para cada caso.",
@@ -151,7 +168,9 @@
   "settings": {
     "accountTitle": "Conta",
     "server": "Servidor",
-    "signOut": "Sair"
+    "signOut": "Sair",
+    "deleteAccount": "Excluir conta",
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
   },
   "header": {
     "search": "Pesquisar"
@@ -161,7 +180,6 @@
     "newest": "Decisões mais recentes",
     "noResults": "Nada corresponde às palavras exigidas por esta pesquisa.",
     "noResultsHint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
-    "unavailable": "A pesquisa está temporariamente indisponível",
     "retry": "Tente novamente",
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
@@ -177,6 +195,14 @@
   "writes": {
     "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
     "signInAgain": "Entrar novamente"
+  },
+  "loads": {
+    "offline": "A stella não conseguiu acessar seu servidor. Verifique sua conexão e tente novamente.",
+    "outdated": "Seu servidor respondeu em um formato que esta versão do app não entende. Atualize o app, ou o servidor se você o administra.",
+    "consent": "Este login não permite que o app leia isto. Entre novamente para conceder o acesso.",
+    "session": "Seu login expirou. Entre novamente.",
+    "server": "Seu servidor teve um problema (erro {status}). Tente novamente em instantes.",
+    "refused": "Seu servidor recusou a solicitação (erro {status})."
   },
   "timers": {
     "title": "Cronômetros",
@@ -199,7 +225,8 @@
     "retry": "Tentar novamente",
     "unavailable": "O controle de horas não está ativado na sua organização.",
     "startFailed": "Não foi possível iniciar o cronômetro. Tente novamente.",
-    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente."
+    "changeFailed": "Não foi possível alterar o cronômetro. Tente novamente.",
+    "more": "{count, plural, one {mais # cronômetro} other {mais # cronômetros}}"
   },
   "scan": {
     "title": "Digitalizar um documento",
@@ -210,7 +237,27 @@
     "matterTitle": "Caso",
     "uploadFailed": "Não foi possível enviar a digitalização. Tente novamente.",
     "failedTitle": "Falha na digitalização",
-    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
+    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente.",
+    "save": "Salvar",
+    "saveTitle": "Salvar em um caso",
+    "share": "Compartilhar",
+    "addPages": "Adicionar páginas",
+    "page": "Página {number}",
+    "rotatePage": "Girar a página {number}",
+    "removePage": "Remover a página {number}",
+    "deletePage": "Apagar",
+    "movePage": "Mover a página {number}",
+    "moveUp": "Mover para cima",
+    "moveDown": "Mover para baixo",
+    "noPages": "Não restam páginas. Digitalize mais em Adicionar páginas.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Não foi possível criar o PDF. Tente novamente.",
+    "shareFailed": "Não foi possível compartilhar o PDF. Tente novamente.",
+    "discardTitle": "Descartar esta digitalização?",
+    "discardMessage": "As páginas não foram salvas em um caso e serão apagadas deste dispositivo.",
+    "discard": "Descartar",
+    "keepEditing": "Continuar editando"
   },
   "shortcuts": {
     "search": "Pesquisar",

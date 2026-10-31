@@ -21,8 +21,8 @@ import {
 
 import { createBackfillRuntime } from "./backfill-runtime";
 import type {
+  MigrationOwnedOnlineRepair,
   OnlineMigrationConnection,
-  OnlineRepair,
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 
@@ -132,7 +132,8 @@ const moveUntilEmpty = async (
 
 export const createContactVatIdRepair = (
   options: RepairRuntimeOptions = {},
-): OnlineRepair => ({
+): MigrationOwnedOnlineRepair => ({
+  introducedBy: "20261019010000_invoice_party_tax_vat_ids",
   name: CONTACT_VAT_ID_REPAIR_NAME,
   readCompletion,
   repair: async (connection) => {
