@@ -1,7 +1,12 @@
 import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
-import type { StellaMcpToolName } from "@stll/api-contract/mcp-tool-names";
+import {
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_SERVER,
+  FAKE_STELLA_STEPS,
+  type FakeStellaCall,
+} from "./fake-stella-turn";
 
 /**
  * A stand-in for `codex app-server` that replays a handwritten transcript
@@ -104,57 +109,12 @@ export const FAKE_MCP_CALL = {
   arguments: { query: "lease" },
 };
 
-/** The server name tests register the stella MCP binding under. */
-export const FAKE_STELLA_SERVER = "stella";
-
 /**
- * Stella tool calls and the output the stella MCP server returns for each:
- * the tool's validated output as `structuredContent`, and its JSON as the
- * one text block (`serializeToolResult`).
+ * A stella tool call as Codex reports it: the tool's validated output as
+ * `structuredContent`, and its JSON as the one text block
+ * (`serializeToolResult`).
  */
-export const FAKE_STELLA_CALLS = [
-  {
-    id: "call-case-law",
-    tool: "search_case_law",
-    arguments: { query: "lease termination", jurisdiction: "CZ" },
-    output: {
-      results: [
-        {
-          title: "Lease termination for unpaid rent",
-          url: "https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024",
-          caseLaw: { decisionId: "dec-1", decisionDate: "2024-03-01" },
-        },
-      ],
-      nextCursor: null,
-    },
-  },
-  {
-    id: "call-save-matter",
-    tool: "save_matter",
-    arguments: { name: "Lease dispute" },
-    output: {
-      applied: true,
-      matter: { ref: "matter-1", name: "Lease dispute" },
-    },
-  },
-] as const satisfies readonly {
-  id: string;
-  tool: StellaMcpToolName;
-  arguments: object;
-  output: object;
-}[];
-
-/** Markdown with a link, as the agent writes its answer. */
-export const FAKE_STELLA_ANSWER = [
-  "One decision matches: [26 Cdo 1/2024](https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024).",
-  "",
-  "- Matter **Lease dispute** saved.",
-].join("\n");
-
-const stellaCall = (
-  call: (typeof FAKE_STELLA_CALLS)[number],
-  phase: "started" | "completed",
-) => ({
+const stellaCall = (call: FakeStellaCall, phase: "started" | "completed") => ({
   type: "mcpToolCall",
   id: call.id,
   server: FAKE_STELLA_SERVER,
@@ -183,12 +143,15 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
 });
 
 export const FAKE_SCENARIOS = {
-  /** Stella tool calls through the stella MCP binding, then an answer. */
+  /**
+   * The shared stella tool calls through the stella MCP binding, step by
+   * step: a step's calls all start, then complete. Then an answer.
+   */
   stella_tools: [
     ...freshTurn(),
-    ...FAKE_STELLA_CALLS.flatMap((call) => [
-      item("started", stellaCall(call, "started")),
-      item("completed", stellaCall(call, "completed")),
+    ...FAKE_STELLA_STEPS.flatMap((step) => [
+      ...step.map((call) => item("started", stellaCall(call, "started"))),
+      ...step.map((call) => item("completed", stellaCall(call, "completed"))),
     ]),
     item("completed", agentMessage("m-stella", FAKE_STELLA_ANSWER)),
     completed(),

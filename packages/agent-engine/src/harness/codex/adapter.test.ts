@@ -27,12 +27,15 @@ import path from "node:path";
 import {
   FAKE_MCP_CALL,
   FAKE_RESUMED_THREAD_ID,
-  FAKE_STELLA_ANSWER,
-  FAKE_STELLA_CALLS,
-  FAKE_STELLA_SERVER,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../../scripts/fake-codex-app-server";
+import {
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_CALLS,
+  FAKE_STELLA_SERVER,
+  FAKE_STELLA_STEPS,
+} from "../../../scripts/fake-stella-turn";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { type HarnessEvent, harnessSessionId } from "../events";
 import { harnessEventsToChunks } from "../stream-chunks";
@@ -155,9 +158,9 @@ const run = async (
   } = {},
 ) => {
   const started = await start(scenario, options.overrides);
-  const collected = collect(started.turn, (event) =>
-    options.onEvent?.(event, started.turn),
-  );
+  const collected = collect(started.turn, async (event) => {
+    await options.onEvent?.(event, started.turn);
+  });
   await collected.done;
   await started.turn.dispose();
   return { ...started, events: collected.events };
@@ -692,11 +695,14 @@ const cloudChatChunks = async () => {
       systemPromptMetadata: undefined,
     },
     async *chatStream({ runId, threadId }) {
+      // One model step per iteration, exactly as the fake harness replays
+      // them; the answer follows the last step's results.
+      const step = FAKE_STELLA_STEPS.at(iteration);
       iteration += 1;
       const ids = { runId: runId ?? "run-1", threadId: threadId ?? "t-1" };
       yield { type: EventType.RUN_STARTED, ...ids, model, timestamp };
-      if (iteration === 1) {
-        for (const call of FAKE_STELLA_CALLS) {
+      if (step !== undefined) {
+        for (const call of step) {
           const args = JSON.stringify(call.arguments);
           yield {
             type: EventType.TOOL_CALL_START,
