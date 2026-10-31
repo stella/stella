@@ -291,6 +291,29 @@
     "placeholder": "Search matters and chats, or run a command",
     "noResults": "Nothing matches “{query}”"
   },
+  "search": {
+    "placeholder": "Search stella",
+    "clear": "Clear search",
+    "cancel": "Cancel",
+    "recent": "Recent searches",
+    "clearRecent": "Clear",
+    "hint": "Search your matters, documents, tasks, chats and case law.",
+    "filters": "Filters",
+    "noResultsTitle": "No results",
+    "noResults": "Nothing matches “{query}”. Try other words, or remove a filter.",
+    "loadFailed": "The search could not be run.",
+    "retry": "Try again",
+    "type": {
+      "document": "Documents",
+      "matter": "Matters",
+      "task": "Tasks",
+      "caseLaw": "Case law",
+      "chat": "Chats",
+      "folder": "Folders",
+      "message": "Emails",
+      "link": "Links"
+    }
+  },
   "pane": {
     "showList": "Show the list",
     "hideList": "Hide the list"

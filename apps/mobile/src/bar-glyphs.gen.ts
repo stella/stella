@@ -14,6 +14,7 @@ export const BAR_GLYPHS = {
   "list-todo": "lucide-list-todo",
   "message-square": "lucide-message-square",
   plus: "lucide-plus",
+  search: "lucide-search",
   share: "lucide-share",
   "sliders-horizontal": "lucide-sliders-horizontal",
   x: "lucide-x",

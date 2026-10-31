@@ -291,6 +291,29 @@
     "placeholder": "Meklējiet lietas un sarunas vai izpildiet komandu",
     "noResults": "Nekas neatbilst “{query}”"
   },
+  "search": {
+    "placeholder": "Meklēt stella",
+    "clear": "Notīrīt meklēšanu",
+    "cancel": "Atcelt",
+    "recent": "Nesenie meklējumi",
+    "clearRecent": "Notīrīt",
+    "hint": "Meklējiet lietās, dokumentos, uzdevumos, sarunās un tiesu praksē.",
+    "filters": "Filtri",
+    "noResultsTitle": "Nav rezultātu",
+    "noResults": "Nekas neatbilst “{query}”. Izmēģiniet citus vārdus vai noņemiet filtru.",
+    "loadFailed": "Meklēšanu neizdevās veikt.",
+    "retry": "Mēģināt vēlreiz",
+    "type": {
+      "document": "Dokumenti",
+      "matter": "Lietas",
+      "task": "Uzdevumi",
+      "caseLaw": "Tiesu prakse",
+      "chat": "Sarunas",
+      "folder": "Mapes",
+      "message": "E-pasti",
+      "link": "Saites"
+    }
+  },
   "pane": {
     "showList": "Rādīt sarakstu",
     "hideList": "Paslēpt sarakstu"

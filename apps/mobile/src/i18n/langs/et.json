@@ -291,6 +291,29 @@
     "placeholder": "Otsi asju ja vestlusi või käivita käsk",
     "noResults": "Päringule „{query}” ei vasta midagi"
   },
+  "search": {
+    "placeholder": "Otsi stellast",
+    "clear": "Tühjenda otsing",
+    "cancel": "Loobu",
+    "recent": "Hiljutised otsingud",
+    "clearRecent": "Tühjenda",
+    "hint": "Otsige toimikutest, dokumentidest, ülesannetest, vestlustest ja kohtupraktikast.",
+    "filters": "Filtrid",
+    "noResultsTitle": "Tulemusi pole",
+    "noResults": "Päringule „{query}” ei vasta midagi. Proovige teisi sõnu või eemaldage filter.",
+    "loadFailed": "Otsingut ei õnnestunud teha.",
+    "retry": "Proovi uuesti",
+    "type": {
+      "document": "Dokumendid",
+      "matter": "Toimikud",
+      "task": "Ülesanded",
+      "caseLaw": "Kohtupraktika",
+      "chat": "Vestlused",
+      "folder": "Kaustad",
+      "message": "E-kirjad",
+      "link": "Lingid"
+    }
+  },
   "pane": {
     "showList": "Näita loendit",
     "hideList": "Peida loend"
