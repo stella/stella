@@ -9,13 +9,13 @@ import {
   caseLawReplayBlocked,
   caseLawSources,
 } from "@/api/db/schema";
-import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_REPLAY_SCOPE,
   selectReplayPage,
   selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
+import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];

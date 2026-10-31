@@ -89,6 +89,7 @@ export const actionDrawsServiceBudget = ({
  * pooled free budget (background kinds through their counted parent).
  */
 export const FREE_WITHOUT_OWN_KEY = {
+  "dictation.transcribe": "counts",
   "chat.send": "counts",
   "chat.span-edit": "counts",
   // The automatic title of a counted chat send rides on that send.
@@ -113,6 +114,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "skills.generate-draft": "counts",
   "skills.propose-from-comments": "counts",
   "time-entries.polish-narrative": "counts",
+  "desktop-time-entries.narrative": "counts",
   "entities.suggest-placements": "off",
   "versions.summarize": "counts",
   "properties.suggest-prompt": "off",
