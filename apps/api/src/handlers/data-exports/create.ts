@@ -30,11 +30,7 @@ const config = {
     "only.",
   permissions: { dataExport: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
-  mcp: {
-    type: "capability",
-    reason: "reporting_export",
-    consumesServices: false,
-  },
+  mcp: { type: "internal", reason: "organization_export" },
   access: "write",
   idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(

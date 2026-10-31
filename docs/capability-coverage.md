@@ -133,8 +133,6 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `data-exports.create` | write | stella:admin_write | — | generic invoke → `stella capability data-exports create` |
-| `data-exports.download` | write | stella:admin_write | — | generic invoke → `stella capability data-exports download` |
 | `data-exports.get` | read | stella:admin_read | — | generic invoke → `stella capability data-exports get` |
 | `data-exports.list` | read | stella:admin_read | — | generic invoke → `stella capability data-exports list` |
 
@@ -756,6 +754,7 @@ mechanics, and similar), not gaps in coverage.
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
+| organization_export | 2 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |

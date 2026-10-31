@@ -48,11 +48,7 @@ const config = {
   permissions: { dataExport: ["read"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
-  mcp: {
-    type: "capability",
-    reason: "reporting_export",
-    consumesServices: false,
-  },
+  mcp: { type: "internal", reason: "organization_export" },
   access: "write",
   idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(
