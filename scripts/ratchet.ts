@@ -109,14 +109,15 @@ const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
 const INTERNAL_MODULE_MOCK_LEDGER_REL =
   "scripts/internal-module-mock-ledger.json";
 
-// The single owners of a transport: callers reach fetch, Bun SQL and SQS
-// clients through them, so their own acquisition is the capability, not a
-// legacy site.
+// The single owners of a transport: callers reach fetch, Bun SQL, SQS and
+// APNs HTTP/2 clients through them, so their own acquisition is the
+// capability, not a legacy site.
 const TRANSPORT_OWNER_MODULES: ReadonlySet<string> = new Set([
   "apps/api/src/lib/safe-outbound-fetch.ts",
   "apps/api/src/lib/observability/operator-endpoint-fetch.ts",
   "apps/api/src/db/sql-client.ts",
   "apps/api/src/lib/email/sns-queue-drain.ts",
+  "apps/api/src/lib/push/apns-client.ts",
 ]);
 
 // Shared source globs + exclusions for the app-source metrics.
@@ -1100,6 +1101,12 @@ const countCodeMatches = ({
   required.test(content)
     ? countMatches(stripComments({ content, file }), pattern)
     : 0;
+
+// A known scope gap is one `gap(` decision in the diff-scoped step census.
+const DIFF_SCOPE_GAP = /\bgap\(\s*"/gu;
+
+const countDiffScopeGaps: FileCounter = (content) =>
+  countMatches(content, DIFF_SCOPE_GAP);
 
 const LEGACY_REALTIME_INVALIDATION_PRODUCER =
   /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcast(?:QueryInvalidationTo(?:Organization|TargetWorkspace)|Invalidation)\s*\()/gu;
@@ -3351,6 +3358,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ALL_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countSuperLinearRegexes,
+  },
+  {
+    scope: "file",
+    id: "diff-scope-gaps",
+    description:
+      "CI steps that read a base revision with a known scope gap (scripts/diff-scoped-steps.ts); fixing one removes its decision",
+    include: ["scripts/diff-scoped-steps.ts"],
+    exclude: isExcludedSource,
+    count: countDiffScopeGaps,
   },
   {
     scope: "file",

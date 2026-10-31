@@ -92,7 +92,13 @@ const mcpMemberCaller = async (
 
   return {
     user: { id: context.userId, email: context.userEmail },
-    session: { id: null, activeOrganizationId: context.organizationId },
+    session: {
+      id: null,
+      activeOrganizationId: context.organizationId,
+      ...(context.sessionCredentialType === undefined
+        ? {}
+        : { credentialType: context.sessionCredentialType }),
+    },
     ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -132,20 +138,25 @@ const mcpMemberCaller = async (
  */
 export const capabilityHandlerContext = async ({
   capabilityId,
+  idempotency,
   context,
   input,
   request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
+  idempotency?: { type: "replay" };
   context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
   const headers = new Headers(rpcRequest.headers);
-  headers.delete("Idempotency-Key");
-  // The RPC body is already decoded; its transport key does not identify a capability call.
+  if (idempotency === undefined) {
+    headers.delete("Idempotency-Key");
+  }
+  // Only a replay-enabled handler can consume a per-call transport key.
+  // Its receipt fingerprints the validated capability input, not the RPC body.
   const request = new Request(rpcRequest.url, {
     method: rpcRequest.method,
     headers,

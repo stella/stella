@@ -4054,7 +4054,7 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84146,
+        "astLength": 84095,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
@@ -4085,7 +4085,7 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84041,
+        "astLength": 83990,
         "retainedPct": 99.1,
         "blockCount": 203,
         "missingWords": ["pl.ús", "sterilizace", "opatrovníka", "dotčeno"],
@@ -4122,8 +4122,8 @@
       ],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84251,
-        "retainedPct": 99.4,
+        "astLength": 84200,
+        "retainedPct": 99.3,
         "blockCount": 205,
         "missingWords": ["pl.ús", "sterilizace"],
         "boundaryWhitespaceWords": [],
@@ -4153,7 +4153,7 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84145,
+        "astLength": 84094,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
@@ -4184,7 +4184,7 @@
       "issues": [],
       "stats": {
         "originalLength": 84792,
-        "astLength": 84146,
+        "astLength": 84095,
         "retainedPct": 99.2,
         "blockCount": 204,
         "missingWords": ["pl.ús", "sterilizace"],
