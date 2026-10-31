@@ -42,6 +42,7 @@ import {
   isPublicKnowledgeEnabled,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { sweepStaleRedirectRequests } from "@/lib/mcp-oauth-channel";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
@@ -129,6 +130,7 @@ function RootComponent() {
   // Public documents reuse server route context during hydration. Re-enter
   // the browser guard after mounting so redirects stay in the router boundary.
   useMountEffect(() => {
+    sweepStaleRedirectRequests();
     const href = pendingHandoffPath();
     if (href) {
       detached(
