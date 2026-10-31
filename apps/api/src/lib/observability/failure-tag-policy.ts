@@ -33,6 +33,8 @@ export const TAGGED_FAILURE_REASON = {
   AuthorizedWorkspaceReadError: "tagged_failure",
   BackfillFailedError: "tagged_failure",
   BackfillHeldError: "tagged_failure",
+  BatchInputError: "request_invalid",
+  BatchSourceError: "request_invalid",
   BenchmarkFetchError: "tagged_failure",
   BenchmarkGenerationError: "tagged_failure",
   BetterAuthAuditCommandError: "tagged_failure",

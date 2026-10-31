@@ -22,6 +22,8 @@ export const FAILURE_TAGS = [
   "AuthorizedWorkspaceReadError",
   "BackfillFailedError",
   "BackfillHeldError",
+  "BatchInputError",
+  "BatchSourceError",
   "BenchmarkFetchError",
   "BenchmarkGenerationError",
   "BetterAuthAuditCommandError",
