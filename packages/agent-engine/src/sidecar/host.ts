@@ -32,21 +32,27 @@ import {
 } from "../harness/events";
 import { harnessEventsToChunks } from "../harness/stream-chunks";
 import { type McpProxy, startMcpProxy } from "./mcp-proxy";
-import {
-  SIDECAR_PROTOCOL,
-  type SidecarHostMessage,
-  type SidecarMessage,
-  type SidecarProbeOutcome,
-  type SidecarRejection,
-  type SidecarRunStart,
+import type {
+  SidecarHostMessage,
+  SidecarHostOutput,
+  SidecarProbeOutcome,
+  SidecarRejection,
+  SidecarRunStart,
 } from "./protocol";
 
 /**
- * The sidecar's command loop: one host, any number of concurrent runs, one
- * harness process per run. Every accepted `run.start` ends with exactly one
+ * The sidecar's command loop: any number of concurrent runs, one harness
+ * process per run. Every accepted `run.start` ends with exactly one
  * `run.finished`, also when the harness never started, so the host's run
- * bookkeeping needs no second failure path.
+ * bookkeeping needs no second failure path. The holder (`holder.ts`) owns the
+ * connection, the handshake and the numbering of what this loop sends.
  */
+
+/** The host messages that act on harnesses and runs. */
+export type SidecarCommand = Exclude<
+  SidecarHostMessage,
+  { type: "hello" | "ack" | "resume" | "drain" | "shutdown" }
+>;
 
 type RunOutcome = (typeof DESKTOP_RUNNER_RUN_OUTCOMES)[number];
 
@@ -63,10 +69,9 @@ export type HarnessLaunch = {
 };
 
 export type SidecarHostOptions = {
-  sidecarVersion: string;
-  /** Writes one message to stdout. */
-  send: (message: SidecarMessage) => void;
-  /** One log line on stderr. Never passed tokens, prompts or outputs. */
+  /** Hands one message to the holder. */
+  send: (message: SidecarHostOutput) => void;
+  /** One line in the holder's log. Never passed tokens, prompts or outputs. */
   log: (line: string) => void;
   /** The harness's environment; `CODEX_HOME` and the like are set per run. */
   environment: Readonly<Record<string, string>>;
@@ -81,7 +86,7 @@ type HeldRun = {
   approvals: Map<string, string>;
 };
 
-type Config = { appVersion: string; proxy: McpProxy };
+type Config = { appVersion: string; apiOrigin: string; proxy: McpProxy };
 
 /** Adapters by harness; `null` until the harness has one. */
 const ADAPTERS = {
@@ -210,39 +215,65 @@ export class SidecarHost {
     });
   }
 
-  /** Handle one parsed host message. Returns `false` once the host is done. */
-  handle(message: SidecarHostMessage): boolean {
-    if (message.type === "hello") {
-      return this.hello(message);
-    }
-    if (this.config === null) {
-      this.reject("hello_required", message.type, null);
+  /**
+   * Take the connected desktop's version and API origin. The MCP proxy
+   * forwards to one origin, so another one is refused while runs use the
+   * proxy; with no run held, the proxy restarts on the new origin.
+   */
+  configure(appVersion: string, apiOrigin: string): boolean {
+    const config = this.config;
+    if (config?.apiOrigin === apiOrigin) {
+      config.appVersion = appVersion;
       return true;
     }
-    const config = this.config;
+    if (config !== null && this.runs.size > 0) {
+      return false;
+    }
+    if (config !== null) {
+      this.detached(config.proxy.stop(), "sidecar.proxy.stop");
+    }
+    this.config = {
+      appVersion,
+      apiOrigin,
+      proxy: startMcpProxy({ apiOrigin }),
+    };
+    return true;
+  }
+
+  /** Whether the run is still going: its `run.finished` is not sent yet. */
+  holds(runId: string) {
+    return this.runs.has(runId);
+  }
+
+  /** How many runs are still going. */
+  get running() {
+    return this.runs.size;
+  }
+
+  /** Handle one command; the holder passes them only after `configure`. */
+  handle(message: SidecarCommand) {
+    const config =
+      this.config ?? panic("The holder passed a command before configure");
     switch (message.type) {
       case "harness.probe":
         this.track(this.probe(message, config));
-        return true;
+        return;
       case "run.start":
         this.start(message, config);
-        return true;
+        return;
       case "run.approval":
         this.withRun(message, (run) => {
           this.approve(run, message.requestId, message.decision);
         });
-        return true;
+        return;
       case "run.interrupt":
         this.withRun(message, (run) => {
           this.stop(run);
         });
-        return true;
+        return;
       case "run.cancel":
-        this.withRun(message, (run) => {
-          run.cancelled = true;
-          this.stop(run);
-        });
-        return true;
+        this.cancel(message.runId);
+        return;
       case "run.token":
         this.withRun(message, () => {
           if (
@@ -255,16 +286,22 @@ export class SidecarHost {
             this.options.log("ignored an MCP token older than the held one");
           }
         });
-        return true;
-      case "shutdown":
-        return false;
+        return;
       default:
         message satisfies never;
-        return panic("Unhandled sidecar host message");
+        panic("Unhandled sidecar command");
     }
   }
 
-  /** A line the host wrote that did not parse. */
+  /** Cancel a run; its `run.finished` reports `cancelled`. */
+  cancel(runId: string) {
+    this.withRun({ type: "run.cancel", runId }, (run) => {
+      run.cancelled = true;
+      this.stop(run);
+    });
+  }
+
+  /** A line the host wrote that the holder refused. */
   reject(
     reason: SidecarRejection,
     messageType: string | null,
@@ -283,27 +320,6 @@ export class SidecarHost {
     }
     await Promise.allSettled([...this.finished]);
     await this.config?.proxy.stop();
-  }
-
-  private hello(message: Extract<SidecarHostMessage, { type: "hello" }>) {
-    if (this.config !== null) {
-      this.reject("hello_repeated", message.type, null);
-      return true;
-    }
-    if (message.protocol !== SIDECAR_PROTOCOL) {
-      this.reject("protocol_mismatch", message.type, null);
-      return false;
-    }
-    this.config = {
-      appVersion: message.appVersion,
-      proxy: startMcpProxy({ apiOrigin: message.apiOrigin }),
-    };
-    this.options.send({
-      type: "hello",
-      protocol: SIDECAR_PROTOCOL,
-      sidecarVersion: this.options.sidecarVersion,
-    });
-    return true;
   }
 
   private track(work: Promise<void>) {

@@ -1,79 +1,59 @@
+import { Result } from "better-result";
+import { parseArgs } from "node:util";
+
 import { harnessEnvironment, sidecarVersion } from "./env";
-import { SidecarHost } from "./host";
 import {
-  encodeSidecarMessage,
-  parseSidecarHostLine,
-  SIDECAR_MAX_LINE_BYTES,
-  type SidecarMessage,
-} from "./protocol";
+  HOLDER_HELLO_TIMEOUT_MS,
+  HOLDER_IDLE_EXIT_MS,
+  HOLDER_RUN_LIMITS,
+  HOLDER_UNACKED_RETENTION_MS,
+} from "./holder";
+import { startHolderServer } from "./holder-server";
 
 /**
- * The harness sidecar the desktop app spawns: `bun build --compile` turns this
- * file into `stella-agent-sidecar-<target triple>`, and debug builds run it
- * with `bun` directly. The protocol is on stdin and stdout (`protocol.ts`);
- * stderr is a log the desktop records. Closing stdin stops every run and
- * exits, so the sidecar never outlives the app that spawned it.
+ * The harness sidecar: `bun build --compile` turns this file into
+ * `stella-agent-sidecar-<target triple>`, and debug builds run it with `bun`
+ * directly. The desktop starts it detached, as the holder of its runs:
+ *
+ *   stella-agent-sidecar --dir <version folder> --endpoint <socket or pipe>
+ *
+ * It serves the protocol (`protocol.ts`) on the endpoint and logs to
+ * `holder.log` in the folder, and keeps running when the desktop goes away;
+ * see `holder.ts` for when it exits. A second start while a holder answers
+ * on the endpoint exits at once.
  */
 
-const log = (line: string) => {
-  process.stderr.write(`${line}\n`);
-};
-const send = (message: SidecarMessage) => {
-  const line = encodeSidecarMessage(message);
-  if (line === null) {
-    log(`dropped an oversized ${message.type} message`);
-    return;
-  }
-  process.stdout.write(line);
-};
+const { values } = parseArgs({
+  options: {
+    dir: { type: "string" },
+    endpoint: { type: "string" },
+  },
+  strict: true,
+});
+if (values.dir === undefined || values.endpoint === undefined) {
+  process.stderr.write(
+    "usage: stella-agent-sidecar --dir <folder> --endpoint <socket>\n",
+  );
+  process.exit(2);
+}
 
-const host = new SidecarHost({
+const started = await startHolderServer({
+  dir: values.dir,
+  endpoint: values.endpoint,
   sidecarVersion: sidecarVersion(),
-  send,
-  log,
   environment: harnessEnvironment(),
+  idleExitMs: HOLDER_IDLE_EXIT_MS,
+  helloTimeoutMs: HOLDER_HELLO_TIMEOUT_MS,
+  unackedRetentionMs: HOLDER_UNACKED_RETENTION_MS,
+  limits: HOLDER_RUN_LIMITS,
 });
-
-/** Feed complete lines to the host until it is done or stdin closes. */
-const readHost = async () => {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  /** Discarding the rest of a line that already exceeded the limit. */
-  let skipping = false;
-  for await (const bytes of Bun.stdin.stream()) {
-    buffer += decoder.decode(bytes, { stream: true });
-    let newline = buffer.indexOf("\n");
-    while (newline !== -1) {
-      const line = buffer.slice(0, newline);
-      buffer = buffer.slice(newline + 1);
-      newline = buffer.indexOf("\n");
-      if (skipping) {
-        skipping = false;
-        continue;
-      }
-      if (line.trim() === "") {
-        continue;
-      }
-      const parsed = parseSidecarHostLine(line);
-      if (parsed.type === "rejected") {
-        host.reject(parsed.reason, parsed.messageType, null);
-        continue;
-      }
-      if (!host.handle(parsed.message)) {
-        return;
-      }
-    }
-    if (buffer.length > SIDECAR_MAX_LINE_BYTES) {
-      host.reject("too_large", null, null);
-      buffer = "";
-      skipping = true;
-    }
-  }
-};
-
-await readHost();
-await host.shutdown();
-await new Promise((resolve) => {
-  process.stdout.write("", resolve);
+if (Result.isError(started)) {
+  process.exit(started.error.reason === "already_running" ? 0 : 1);
+}
+const server = started.value;
+// A session ending (logout) stops the runs instead of orphaning harnesses.
+process.once("SIGTERM", () => {
+  server.holder.stop();
 });
+await server.exited;
 process.exit(0);
