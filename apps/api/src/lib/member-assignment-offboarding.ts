@@ -66,6 +66,7 @@ import {
   lockChatOwnerStoredContentTransitionOnTx,
   tryLockAccountChatOwnerStoredContentTransitionsOnTx,
 } from "@/api/lib/chat/thread-stored-content-egress";
+import { lockAccountRow } from "@/api/lib/db/account-row";
 import {
   lockMatterStewardship,
   lockOpenSigningPage,
@@ -1075,6 +1076,7 @@ export const tryLockAccountMemberCleanup = async (
   tx: Transaction,
   userId: SafeId<"user">,
 ) => {
+  await lockAccountRow(tx, userId);
   // Chat egress fences precede every membership row lock; a compaction in
   // flight for any of the account's organizations is a busy refusal.
   if (

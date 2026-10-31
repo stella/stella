@@ -37,7 +37,6 @@ import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { runConfirmedTransaction } from "@/api/lib/confirmation-otp";
 import {
   anonymizeDeletedAccountRow,
-  lockAccountRow,
   readAccountEmail,
 } from "@/api/lib/db/account-row";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -292,7 +291,6 @@ export const verifyAndDeleteUser = async (
         },
         beforeConsume: async (tx) => {
           await tryLockAccountMemberCleanup(tx, currentUserId);
-          await lockAccountRow(tx, currentUserId);
           await assertUserIsNotSoleOrgOwner(tx, currentUserId);
         },
         afterConsume: async (tx) => {
