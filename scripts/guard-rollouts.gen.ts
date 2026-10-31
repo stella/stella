@@ -10,6 +10,7 @@ import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts"
 import noPlanScanNodeLiterals from "./guard-rollouts/no-plan-scan-node-literals.ts";
 import noWaitForUnderFakeTimers from "./guard-rollouts/no-wait-for-under-fake-timers.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
+import radiusScale from "./guard-rollouts/radius-scale.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import testBaseRevision from "./guard-rollouts/test-base-revision.ts";
 import trackedSymlinks from "./guard-rollouts/tracked-symlinks.ts";
@@ -28,6 +29,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-plan-scan-node-literals": noPlanScanNodeLiterals,
   "no-wait-for-under-fake-timers": noWaitForUnderFakeTimers,
   "portable-path": portablePath,
+  "radius-scale": radiusScale,
   "semantic-controls": semanticControls,
   "test-base-revision": testBaseRevision,
   "tracked-symlinks": trackedSymlinks,

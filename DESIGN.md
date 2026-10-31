@@ -41,14 +41,14 @@ hex values in components; use the semantic tokens below.
 | Token                  | Light                         | Dark                          | Role                      |
 | ---------------------- | ----------------------------- | ----------------------------- | ------------------------- |
 | `--background`         | white                         | neutral-950 / 95% white blend | Page canvas               |
-| `--foreground`         | neutral-800                   | neutral-100                   | Primary text              |
+| `--foreground`         | neutral-900                   | neutral-100                   | Primary text              |
 | `--card`               | white                         | background / 98% white blend  | Card surfaces             |
-| `--card-foreground`    | neutral-800                   | neutral-100                   | Text on cards             |
+| `--card-foreground`    | neutral-900                   | neutral-100                   | Text on cards             |
 | `--primary`            | neutral-800                   | neutral-100                   | Primary actions, headings |
 | `--primary-foreground` | neutral-50                    | neutral-800                   | Text on primary           |
 | `--secondary`          | black / 4%                    | white / 4%                    | Secondary surfaces        |
 | `--muted`              | black / 4%                    | white / 4%                    | Subdued backgrounds       |
-| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-500 / 90% white blend | Secondary text            |
+| `--muted-foreground`   | neutral-500 / 90% black blend | neutral-400                   | Secondary text            |
 | `--accent`             | black / 4%                    | white / 4%                    | Hover/focus highlights    |
 | `--destructive`        | red-500                       | red-500 / 90% white blend     | Destructive actions       |
 | `--info`               | blue-500                      | blue-500                      | Informational status      |
@@ -251,18 +251,25 @@ Tailwind 4's `--spacing()` function with the default 0.25rem
 
 ### Border Radius
 
-Root variable: `--radius: 0.625rem` (10px).
+Tailwind's default scale: 4, 6, 8, 12 and 16px. Name the step: a bare
+`rounded` or a pixel value (`rounded-[7px]`) drifts off the scale, and
+`radius-scale` rejects both.
 
-| Usage           | Class          | Approximate |
-| --------------- | -------------- | ----------- |
-| Small elements  | `rounded-md`   | 6px         |
-| Most containers | `rounded-lg`   | 8px         |
-| Cards, dialogs  | `rounded-xl`   | 12px        |
-| Large dialogs   | `rounded-2xl`  | 16px        |
-| Circular        | `rounded-full` | -           |
+| Usage                                              | Class          | Size |
+| -------------------------------------------------- | -------------- | ---- |
+| Checkboxes, keycaps, inline chips and tags         | `rounded-sm`   | 4px  |
+| Compact buttons, icon buttons, menu rows, tooltips | `rounded-md`   | 6px  |
+| Buttons, inputs, selects, popovers, menus, toasts  | `rounded-lg`   | 8px  |
+| Cards and frames                                   | `rounded-xl`   | 12px |
+| Dialogs and sheets                                 | `rounded-2xl`  | 16px |
+| Pills, avatars, dots                               | `rounded-full` | -    |
+
+`--radius` (0.5rem, equal to `--radius-lg`) is the corner radius generated
+visuals receive; app markup does not read it.
 
 **Concentric radius rule:** outer = inner + gap. Nested rounded
-elements must account for the padding between them.
+elements must account for the padding between them. An inner layer one
+border width in uses `rounded-[calc(var(--radius-lg)-1px)]`.
 
 ### Content Width
 

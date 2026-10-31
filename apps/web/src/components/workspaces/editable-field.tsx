@@ -343,7 +343,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         : content.value.length === 0);
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full truncate rounded-sm px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -435,7 +435,7 @@ const InlineDateEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full truncate rounded-sm px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -513,7 +513,7 @@ const InlineTextEditor = ({
   if (state.status !== "editing") {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full truncate rounded-sm px-2 py-1 text-start text-sm"
         data-open-expanded-cell
         disabled={state.status === "loading"}
         onClick={(event) => {
@@ -622,7 +622,7 @@ const InlineIntEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full min-w-0 rounded-sm px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -779,7 +779,7 @@ const TableFileField = ({
         content={content.fileName}
         render={
           <button
-            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
+            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start"
             onClick={() =>
               openFile({
                 id: fieldId,
@@ -818,7 +818,7 @@ const TableFileField = ({
     <Tooltip
       content={content.fileName}
       render={
-        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded-sm px-1 py-0.5 text-start opacity-60" />
       }
     >
       <DocumentIcon

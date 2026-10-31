@@ -193,7 +193,7 @@ export const AIConfigProvidersEditor = ({
                     />
                   ) : (
                     <div className="flex min-w-0 items-center gap-2">
-                      <span className="bg-muted text-muted-foreground min-w-0 flex-1 truncate rounded border px-2 py-1 font-mono text-xs">
+                      <span className="bg-muted text-muted-foreground min-w-0 flex-1 truncate rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", { key: savedKey })}
                       </span>
                       <Button
@@ -285,7 +285,7 @@ export const AIConfigProvidersEditor = ({
                 <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 sm:pt-6">
                   {hasSavedKey && !providerDraft.replacingKey && (
                     <>
-                      <span className="bg-muted text-muted-foreground min-w-0 truncate rounded border px-2 py-1 font-mono text-xs">
+                      <span className="bg-muted text-muted-foreground min-w-0 truncate rounded-sm border px-2 py-1 font-mono text-xs">
                         {t("aiConfig.apiKeySaved", {
                           key: savedKey,
                         })}

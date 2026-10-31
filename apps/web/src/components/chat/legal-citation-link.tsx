@@ -60,7 +60,7 @@ const LegalCitationView = ({
       "focus-visible:outline-ring cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2",
       appearance === "tray"
         ? "bg-muted/50 hover:bg-muted inline-flex max-w-full shrink-0 items-center rounded-md border px-1.5 py-0.5 text-xs"
-        : "group rounded",
+        : "group rounded-sm",
     )}
     href={sanitizeHref(citation.url)}
     onClick={onClick}

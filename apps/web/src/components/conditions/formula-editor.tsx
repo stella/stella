@@ -424,7 +424,7 @@ const FormulaPreviewToken = ({
 }) => {
   if (isField) {
     return (
-      <span className="bg-accent text-accent-foreground rounded px-1 py-0.5 font-mono text-xs">
+      <span className="bg-accent text-accent-foreground rounded-sm px-1 py-0.5 font-mono text-xs">
         {text}
       </span>
     );

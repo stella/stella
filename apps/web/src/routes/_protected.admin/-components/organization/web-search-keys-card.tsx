@@ -101,7 +101,7 @@ const WebSearchKeyField = ({
 
       {draft.action !== "cleared" && state?.configured === true && (
         <div className="flex items-center justify-between gap-2">
-          <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
+          <div className="bg-muted flex flex-wrap items-center gap-2 rounded-sm border px-3 py-2">
             <span className="text-muted-foreground text-xs">
               {t("translate.settings.currentKey")}:
             </span>

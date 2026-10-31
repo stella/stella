@@ -813,7 +813,7 @@ const OutlineGroupRow = ({
           <button
             aria-expanded={open}
             aria-label={groupTitle}
-            className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
+            className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded-sm p-0.5"
             onClick={() => setOpen((isOpen) => !isOpen)}
             type="button"
           >
@@ -1741,7 +1741,7 @@ const ClauseSlotEditor = ({
         content={t("clauses.renameSlot")}
         render={
           <button
-            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5"
             onClick={() => setEditing(true)}
             type="button"
           />
@@ -1803,7 +1803,7 @@ const FieldPathEditor = ({
         content={t("templates.studio.renameField")}
         render={
           <button
-            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5"
             onClick={() => setEditing(true)}
             type="button"
           />

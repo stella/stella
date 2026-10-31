@@ -55,7 +55,7 @@ export const useChipDefinitions = (): readonly ChipDefinition[] => {
 };
 
 export const COMPOSER_CARD_CLASS =
-  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-[10px] border border-[var(--input)] p-3 ring-4 shadow-sm";
+  "bg-card ring-foreground/6 flex flex-col gap-3 rounded-lg border border-[var(--input)] p-3 ring-4 shadow-sm";
 
 export type ManualChipOption = {
   active: boolean;
@@ -75,7 +75,7 @@ type TypeChipsRowProps<TType extends string> = {
 };
 
 const CHIP_BASE_CLASS =
-  "inline-flex shrink-0 items-center gap-1.5 rounded-[6px] border px-2 py-1 text-xs font-medium";
+  "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium";
 const CHIP_ACTIVE_CLASS =
   "bg-foreground text-background border-foreground shadow-xs/5";
 const CHIP_IDLE_CLASS =

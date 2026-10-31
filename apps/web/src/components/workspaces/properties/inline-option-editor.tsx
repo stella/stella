@@ -123,7 +123,7 @@ export const InlineOptionEditor = ({
   };
 
   return (
-    <div className="bg-muted/64 flex flex-col gap-2 rounded-[9px] border p-3">
+    <div className="bg-muted/64 flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-center gap-1.5">
         <span className="text-muted-foreground text-2xs font-medium tracking-[0.08em] uppercase">
           {t("workspaces.properties.optionsLabel")}
@@ -153,7 +153,7 @@ export const InlineOptionEditor = ({
         </ul>
       )}
 
-      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-[7px] border border-dashed py-1 ps-1 pe-1.5">
+      <label className="hover:bg-muted/40 flex cursor-text items-center gap-1.5 rounded-md border border-dashed py-1 ps-1 pe-1.5">
         <Button
           aria-label={t("workspaces.properties.addOption")}
           className="text-foreground-label size-6 shrink-0"
@@ -222,14 +222,14 @@ const OptionRow = ({
   const [draft, setDraft] = useState(option.value);
 
   return (
-    <li className="bg-card group flex items-center gap-2 rounded-[7px] border py-1 ps-1 pe-1.5">
+    <li className="bg-card group flex items-center gap-2 rounded-md border py-1 ps-1 pe-1.5">
       <Popover modal>
         <PopoverTrigger
           aria-label={t("workspaces.properties.selectColor")}
           render={<Button size="icon-sm" type="button" variant="ghost" />}
         >
           <span
-            className="size-4 rounded-[5px]"
+            className="size-4 rounded-sm"
             style={{ backgroundColor: resolveOptionColor(option.color).color }}
           />
         </PopoverTrigger>
