@@ -11,8 +11,8 @@ import { PDF } from "@libpdf/core";
  */
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
@@ -1385,7 +1385,7 @@ describe("replaying a stored envelope", () => {
       ).arrayBuffer(),
     );
     expect(legacySha256Hex(bytes)).not.toBe(legacySha256Hex(secondBytes));
-    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const $ = load(await pageOf(WITH_RULINGS));
     const decisionCell = $("tr")
       .filter(
         (_, element) => $(element).find("b").first().text() === "Decyzja:",
@@ -1583,7 +1583,7 @@ for (const name of [
 ]) {
   test(`constructed attachment metadata URL filename boundary: ${name}`, async () => {
     const entry = entryOf(await capturedEntries(), WITH_RULINGS);
-    const $ = cheerio.load(await pageOf(WITH_RULINGS));
+    const $ = load(await pageOf(WITH_RULINGS));
     const labels = [PL_UOKIK_LABEL.DECISION_FILES, PL_UOKIK_LABEL.RULINGS];
     $("div.ck-content table tr").each((_, element) => {
       const cells = $(element).children("td");

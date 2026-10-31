@@ -19,7 +19,6 @@
 
 import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { Result } from "better-result";
-import { load } from "cheerio";
 
 import {
   EMAIL_MIME_TYPES,
@@ -28,6 +27,7 @@ import {
 } from "@stll/api-contract/email-mime-types";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
+import { load } from "@stll/html";
 
 import {
   type EmailAttachment,

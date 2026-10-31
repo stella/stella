@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Retention validation moved to the ingestion pipeline; the bounded plaintext load that enforces a source's DOM budget is kept on byte-identical markup, so blocks and rejections are unchanged.
 // parser-output-unchanged: Optional bounded loading is supplied only by KIO; accepted DOM traversal and legacy plaintext normalization are unchanged.
 // parser-output-unchanged: [pl-sn] PDF text becomes escaped paragraphs, so table-row changes are unreachable; exclusions and direct text reads are equivalent.
@@ -20,17 +21,19 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
 import {
   type AnyNode,
-  Element,
+  createElement,
+  type Element,
   hasChildren,
   isComment,
   isTag,
   isText,
-} from "domhandler";
-
-import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 // parser-output-unchanged: imports byte-identical HTML stripping from its pure parser module instead of adapter I/O utilities.
 import type {
@@ -995,7 +998,7 @@ const parseListItemContent = ({
   let start = 0;
   const readInline = (end: number): void => {
     if (end > start) {
-      const segment = new Element(
+      const segment = createElement(
         item.name,
         item.attribs,
         children.slice(start, end),
@@ -1337,7 +1340,7 @@ const enforcePlainTextExpansionBudget = (
 export const parsePlDecisionContent = (
   input: ParsePlDecisionInput,
 ): ParsePlDecisionOutput => {
-  const loadHtml = input.loadHtml ?? cheerio.load;
+  const loadHtml = input.loadHtml ?? load;
   const state = createState({
     superscripts: input.superscripts === true,
     markup: input.markup,

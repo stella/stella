@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 /**
  * CourtListener's HTML columns: `html_with_citations` where it holds HTML,
@@ -11,15 +12,16 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 import {
   type Element,
   hasChildren,
   isTag,
   isText,
   type ParentNode,
-} from "domhandler";
-
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { buildValidationHtml } from "@/api/lib/legal-search/parsers/validate-ast";
@@ -588,7 +590,7 @@ const parseHtml =
     }
     // HTML parsing does not recurse, so the tree is measured before any walk
     // can recurse through it.
-    const $ = cheerio.load(text, { sourceCodeLocationInfo: true });
+    const $ = load(text, { sourceCodeLocationInfo: true });
     const [document] = $.root().toArray();
     const limit =
       document === undefined ? "DOM_NODES" : spendDomNodes(budget, document);

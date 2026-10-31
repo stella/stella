@@ -19,7 +19,8 @@
  */
 
 import { panic, Result } from "better-result";
-import * as cheerio from "cheerio";
+
+import { load } from "@stll/html";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -2663,7 +2664,7 @@ const PL_UOKIK_FILELESS_DETAIL = new URL(
 
 /** The rows of a captured page's table other than the back link, as markup. */
 const plUokikTableRows = (html: string): string[] => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   return $("div.ck-content table")
     .first()
     .find("tr")

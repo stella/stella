@@ -1,4 +1,4 @@
-import { load } from "cheerio";
+import { load } from "@stll/html";
 import * as drizzle from "drizzle-orm";
 import { sql } from "drizzle-orm";
 

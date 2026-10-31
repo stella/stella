@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 // parser-output-unchanged: AST validation reuses the unmodified parsed document; diagnostics and stored parser output remain unchanged.
 /**
@@ -26,11 +27,12 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { isComment, isText } from "domhandler";
-import type { AnyNode } from "domhandler";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+import { load } from "@stll/html";
+import { isComment, isText } from "@stll/html/nodes";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import { closedQuotationParagraphStarts } from "@stll/legal-ast/closed-quotation-paragraphs";
 import { opensWithCourtParagraphMarker } from "@stll/legal-ast/court-paragraph-numbers";
 import {
@@ -89,7 +91,7 @@ type ParseNssDecisionOutput = {
 export const parseNssDecisionHtml = (
   input: ParseNssDecisionInput,
 ): ParseNssDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const chunks = extractChunks($);
   const blocks = courtParagraphNumbers(classifyChunks(chunks), {
     parser: "cz-nss",

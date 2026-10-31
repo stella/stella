@@ -1,10 +1,15 @@
+import { panic, Result } from "better-result";
+
+import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: session-protocol rejection carries explicit failure metadata; accepted sessions and parsed records are unchanged.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 // parser-output-unchanged: [pl-tk] Case-page parsing is reused within each assembly; stored fields, HTML and AST output are unchanged.
 // parser-output-unchanged: [pl-tk] The bench builder is typed to printed names only; the judges it emits are unchanged.
-import { panic, Result } from "better-result";
+import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -46,10 +51,7 @@ import { panic, Result } from "better-result";
  * are the keys a SAOS row and a row from this portal share when they describe
  * the same ruling, stored as `rulingKeys` on the rows of both.
  */
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
-
-import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -626,7 +628,7 @@ export const parsePlTkListingPage = (
   html: string,
   stage: PlTkStage,
 ): PlTkListingPage | null => {
-  const $ = cheerio.load(html);
+  const $ = load(html);
   const body = $('[id="wyszukiwanie:dataTable_data"]');
   if (body.length === 0) {
     return null;

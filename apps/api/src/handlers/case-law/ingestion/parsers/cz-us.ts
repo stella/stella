@@ -1,13 +1,15 @@
-// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import type { AnyNode } from "domhandler";
 
 import type {
   BlockContent as FolioBlockContent,
   Paragraph as FolioParagraph,
   ParagraphContent as FolioParagraphContent,
 } from "@stll/docx-core/model";
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
+import { load } from "@stll/html";
+import type { AnyNode } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 /**
  * Czech Constitutional Court (Ustavni soud) HTML parser.
  *
@@ -129,7 +131,7 @@ type ParseUsDecisionOutput = {
 export const parseUsDecisionHtml = (
   input: ParseUsDecisionInput,
 ): ParseUsDecisionOutput => {
-  const $ = cheerio.load(input.html);
+  const $ = load(input.html);
   const docContent = $(".DocContent");
 
   // Extract metadata from hidden fields

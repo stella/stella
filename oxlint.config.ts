@@ -739,6 +739,12 @@ const noFastXmlParserImport = {
   message: "Read XML with 'saxes'.",
 };
 
+const noCheerioImport = {
+  name: "cheerio",
+  message:
+    "Use @stll/html for string loading or @stll/html/selection for types; the main entry bundles byte decoders (encoding-sniffer and whatwg-encoding).",
+};
+
 const noClassicTypeScriptImport = {
   name: "typescript",
   message:
@@ -2317,6 +2323,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4230,6 +4237,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4252,6 +4260,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4277,6 +4286,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4308,6 +4318,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4464,6 +4475,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4497,6 +4509,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4538,6 +4551,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4752,6 +4766,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4790,6 +4805,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4823,6 +4839,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4864,6 +4881,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4916,6 +4934,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -4966,6 +4985,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5786,6 +5806,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5817,6 +5838,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5852,6 +5874,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5874,6 +5897,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -5899,6 +5923,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6411,6 +6436,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6468,6 +6494,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,
@@ -6543,6 +6570,7 @@ const config = defineConfig({
             paths: [
               noZodImport,
               noFastXmlParserImport,
+              noCheerioImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
               ...noReactEmailImports,

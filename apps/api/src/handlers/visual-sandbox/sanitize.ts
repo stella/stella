@@ -1,6 +1,4 @@
 import { Result, TaggedError } from "better-result";
-import { load } from "cheerio";
-import { isTag } from "domhandler";
 import * as v from "valibot";
 
 import {
@@ -9,6 +7,8 @@ import {
 } from "@stll/api-contract/visual-sandbox";
 import { VISUAL_THEME_VARIABLES } from "@stll/api-contract/visual-theme";
 import { declareFingerprintFields } from "@stll/errors";
+import { load } from "@stll/html";
+import { isTag } from "@stll/html/nodes";
 
 const sanitizedHtmlSchema = v.pipe(v.string(), v.brand("SanitizedVisualHtml"));
 export type SanitizedVisualHtml = v.InferOutput<typeof sanitizedHtmlSchema>;

@@ -1,5 +1,4 @@
 import { panic, Result, TaggedError } from "better-result";
-import { load } from "cheerio";
 import PostalMime, {
   type Address,
   addressParser,
@@ -12,6 +11,7 @@ import type {
   ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import { declareFingerprintFields } from "@stll/errors";
+import { load } from "@stll/html";
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 

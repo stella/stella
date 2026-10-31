@@ -1,5 +1,7 @@
+// parser-output-unchanged: node types and predicates now come from @stll/html/nodes; the whitespace walk and rendering are unchanged.
 // parser-output-unchanged: adds `renderHtmlWhiteSpace` and `isHtmlBlock`, which read a parsed document; `collapseHtmlWhitespace` is unchanged, and only the Polish courts reader calls the new functions.
 import { panic } from "better-result";
+
 import {
   type AnyNode,
   type Element,
@@ -7,8 +9,7 @@ import {
   isTag,
   isText,
   type Text,
-} from "domhandler";
-
+} from "@stll/html/nodes";
 import type { Inline } from "@stll/legal-ast/document-ast";
 
 import { isExcludedHtmlTag } from "@/api/lib/legal-search/parsers/visible-html-text";

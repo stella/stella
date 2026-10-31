@@ -1,11 +1,10 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
-import type { CheerioAPI } from "cheerio";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
@@ -13,6 +12,8 @@ import {
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
+import { load } from "@stll/html";
+import type { CheerioAPI } from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";

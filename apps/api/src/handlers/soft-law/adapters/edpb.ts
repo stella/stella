@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
-import type { CheerioAPI } from "cheerio";
+
+import { load } from "@stll/html";
+import type { CheerioAPI } from "@stll/html/selection";
 
 import {
   excludedSourceField,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: a failed validateAst verdict still fails the parse; only the logging moved to the pipeline.
 /**
  * Reader for the decision XML the data-protection authority's portal serves.
@@ -15,9 +16,16 @@
  */
 
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
+import { load } from "@stll/html";
+import {
+  type AnyNode,
+  type Element,
+  isCDATA,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -530,7 +538,7 @@ const sourceTextsOf = ($: cheerio.CheerioAPI, root: Element): string[] => {
 
 /** What the validator measures a parse against, read from the XML alone. */
 export const plUodoSourceTexts = (xml: string): string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   return root === undefined ? [] : sourceTextsOf($, root);
 };
@@ -538,7 +546,7 @@ export const plUodoSourceTexts = (xml: string): string[] => {
 export const parsePlUodoDecisionXml = (
   input: ParsePlUodoDecisionInput,
 ): Result<ParsePlUodoDecisionOutput, ParseXmlError> => {
-  const $ = cheerio.load(input.xml, { xml: true });
+  const $ = load(input.xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return Result.err(

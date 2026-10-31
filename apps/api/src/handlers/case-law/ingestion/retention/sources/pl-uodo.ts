@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * Retention projection for the data-protection authority's portal.
  *
@@ -12,8 +13,9 @@
  * Court rulings and records stored without a body carry the listing alone:
  * the portal files no text for them.
  */
-import * as cheerio from "cheerio";
-import { type AnyNode, isCDATA, isTag, isText } from "domhandler";
+import { load } from "@stll/html";
+import { type AnyNode, isCDATA, isTag, isText } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 
 import {
   RETENTION_PROJECTION_FAILURE,
@@ -76,7 +78,7 @@ const projectPlUodo = (sourceRaw: string): RetentionProjection => {
   if (xml === undefined) {
     return { type: "no-text", reason: RETENTION_TEXT_ABSENCE.NOT_PUBLISHED };
   }
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const root = $("xPart").get(0);
   if (root === undefined) {
     return {

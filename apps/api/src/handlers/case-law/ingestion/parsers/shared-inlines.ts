@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
 // parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
@@ -46,9 +47,8 @@
  * keeps a thin local alias over one core.
  */
 
-import type * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
-
+import { type AnyNode, type Element, isTag, isText } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
 import { plainTextOf } from "@stll/legal-ast/document-ast";

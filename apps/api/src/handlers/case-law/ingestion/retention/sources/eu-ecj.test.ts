@@ -1,7 +1,7 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 
+import { load } from "@stll/html";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { euEcjAdapter } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -162,12 +162,10 @@ describe("eu-ecj retention projection", () => {
     }
     const text = projection.source.paragraphs.join("\n");
     // The portal's own navigation, header and footer are not the decision.
-    const chrome = cheerio
-      .load(page ?? "")("nav, header, footer")
+    const document = load(page ?? "");
+    const chrome = document("nav, header, footer")
       .toArray()
-      .map((element) =>
-        cheerio.load(element).text().replace(/\s+/gu, " ").trim(),
-      )
+      .map((element) => document(element).text().replace(/\s+/gu, " ").trim())
       .filter((label) => label.length > 20);
     expect(chrome.length).toBeGreaterThan(0);
     for (const label of chrome) {

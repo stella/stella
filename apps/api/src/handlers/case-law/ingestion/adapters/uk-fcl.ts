@@ -1,12 +1,13 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
-import { load } from "cheerio";
 import * as slimdom from "slimdom";
 import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { GBR_EWHC_DIVISIONS } from "@stll/api-contract/decision-docket-grammar";
+import { load } from "@stll/html";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 

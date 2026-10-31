@@ -1,8 +1,7 @@
 import { expect, test } from "bun:test";
-import * as cheerio from "cheerio";
 import fc from "fast-check";
-import { adapter } from "parse5-htmlparser2-tree-adapter";
 
+import { htmlTreeAdapter as adapter, load } from "@stll/html";
 import { assertProperty } from "@stll/property-testing";
 
 import { hasPlKioAttributeBudget } from "./pl-kio-attribute-budget";
@@ -167,7 +166,7 @@ test("pl-kio.attribute-prescan-upper-bound: accepted scans bound parse5 across m
       if (!hasPlKioAttributeBudget(html, limits)) {
         return;
       }
-      cheerio.load(html, {
+      load(html, {
         treeAdapter: {
           ...adapter,
           createElement: (...args) => {

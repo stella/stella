@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: delegates validation text to the shared owner with the same raw digits, text-node newlines, space breaks and zero-width page anchors.
 // parser-output-unchanged: Opt-in publisher-fragment comparison changes retention diagnostics only; parser output and default comparisons are unchanged.
 // parser-output-unchanged: hyphenatedLineBreaks is a new option no parser passes; every existing verdict is computed exactly as before.
@@ -16,9 +17,10 @@
  */
 
 import { panic } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag } from "domhandler";
 
+import { load } from "@stll/html";
+import { type AnyNode, isTag } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { flattenInlineText } from "@stll/legal-ast/inline";
@@ -460,7 +462,7 @@ export const validateAst = (
       }
     }
   } else {
-    const $ = options?.document ?? cheerio.load(source);
+    const $ = options?.document ?? load(source);
     $("div[style*='-aw-headerfooter-type']").remove();
     // <br> is a word boundary in the rendered document, but cheerio's
     // .text() drops it outright, gluing adjacent words ("wraz<br/>z" →

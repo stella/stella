@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 /**
  * The paragraphs a Word file states, read straight from its package.
  *
@@ -10,10 +11,11 @@
  * alternate content, none of which is visible text.
  */
 import { Result } from "better-result";
-import * as cheerio from "cheerio";
-import { type AnyNode, isTag, isText } from "domhandler";
 import { promisify } from "node:util";
 import { inflateRaw } from "node:zlib";
+
+import { load } from "@stll/html";
+import { type AnyNode, isTag, isText } from "@stll/html/nodes";
 
 import { hexValue } from "@/api/handlers/case-law/ingestion/retention/sources/hex-value";
 
@@ -248,7 +250,7 @@ export const docxParagraphs = async (
       if (part === undefined) {
         return [];
       }
-      const $ = cheerio.load(decoder.decode(part), { xml: true });
+      const $ = load(decoder.decode(part), { xml: true });
       return paragraphsOf($.root().children().toArray());
     },
   );

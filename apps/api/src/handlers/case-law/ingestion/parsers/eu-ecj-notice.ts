@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 /**
  * Read the Cellar branch notice the Publications Office serves for one CJEU
  * work, negotiated into one expression's language.
@@ -25,8 +26,9 @@
  * different courts.
  */
 
-import * as cheerio from "cheerio";
-import type { Element } from "domhandler";
+import { load } from "@stll/html";
+import type { Element } from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 
 /** The three scopes a branch notice states facts at. */
 const ECJ_NOTICE_SCOPE = {
@@ -409,7 +411,7 @@ const workExpressions = (
 
 /** Parse one branch notice into the facts a row keeps from it. */
 export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const work = $("NOTICE > WORK");
   const expression = $("NOTICE > EXPRESSION");
   const dossier = work.find("WORK_PART_OF_DOSSIER > EMBEDDED_NOTICE > DOSSIER");
@@ -506,7 +508,7 @@ export const parseEcjNotice = (xml: string): EcjNoticeFacts => {
  * file are accounted for without descending into the cited works' notices.
  */
 export const listEcjNoticeFields = (xml: string): readonly string[] => {
-  const $ = cheerio.load(xml, { xml: true });
+  const $ = load(xml, { xml: true });
   const stated = new Set<string>();
 
   const addChildren = (parent: Selection, prefix: string): void => {

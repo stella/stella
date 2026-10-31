@@ -1,3 +1,4 @@
+// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: The retention check moved to the pipeline; dropping the parser's own validation call leaves its blocks and fulltext unchanged.
 /**
  * Czech Supreme Court (Nejvyšší soud) HTML parser.
@@ -10,9 +11,15 @@
  *      ruling items, tables)
  */
 
-import * as cheerio from "cheerio";
-import { type AnyNode, Element, isTag, isText, Text } from "domhandler";
-
+import { load } from "@stll/html";
+import {
+  type AnyNode,
+  createElement,
+  createText,
+  isTag,
+  isText,
+} from "@stll/html/nodes";
+import type * as cheerio from "@stll/html/selection";
 import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
@@ -66,7 +73,7 @@ type ParseNsDecisionOutput = {
 export const parseNsDecisionHtml = (
   input: ParseNsDecisionInput,
 ): ParseNsDecisionOutput => {
-  const $ = cheerio.load(input.printHtml);
+  const $ = load(input.printHtml);
 
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
@@ -222,9 +229,9 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
       const nodes: AnyNode[] = [];
       for (const [index, part] of parts.entries()) {
         if (index > 0) {
-          nodes.push(new Element("br", {}));
+          nodes.push(createElement("br", {}));
         }
-        nodes.push(new Text(part));
+        nodes.push(createText(part));
       }
       $(node).replaceWith(nodes);
     });
@@ -243,7 +250,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
     ($(td).html() ?? "").split(/<br\s*\/?>/iu).flatMap((s) => {
-      const trimmed = visibleHtmlText(cheerio.load(s).root()).trim();
+      const trimmed = visibleHtmlText(load(s).root()).trim();
       return trimmed ? [trimmed] : [];
     });
 
@@ -252,7 +259,7 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
     // Cheerio's text() omits breaks; keep boundaries without changing the DOM
     // used by the structured value splitter and complaint table walker.
     copy.find("br").each((_, br) => {
-      $(br).replaceWith(new Text("\n"));
+      $(br).replaceWith(createText("\n"));
     });
     return visibleHtmlText(copy).trim();
   };
