@@ -141,7 +141,6 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -162,6 +161,7 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -270,7 +270,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
       }
     }),
   );
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const publicLawEnabled = isPublicLawEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
@@ -283,7 +283,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   });
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
-    includePublicLaw: publicLawPreviewEnabled,
+    includePublicLaw: publicLawEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
