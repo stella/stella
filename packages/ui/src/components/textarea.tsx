@@ -12,6 +12,14 @@ import type { ControlSize } from "../lib/control-size";
 import { cn } from "../lib/utils";
 import { INLINE_FIELD_CLASS_NAME } from "./input-control";
 
+/**
+ * React's `CSSProperties` has no key for a custom property, so the one the
+ * row cap sets is named on a local style type.
+ */
+type TextareaStyle = React.CSSProperties & {
+  "--textarea-max-rows"?: number;
+};
+
 type TextareaProps = React.ComponentProps<"textarea"> & {
   size?: ControlSize | number;
   unstyled?: boolean;
@@ -72,6 +80,10 @@ const Textarea = ({
     }
     onChange?.(event);
   };
+  const textareaStyle: TextareaStyle | undefined =
+    maxRows === undefined
+      ? style
+      : { ...style, "--textarea-max-rows": maxRows };
   return (
     <span
       className={
@@ -113,14 +125,7 @@ const Textarea = ({
             data-slot="textarea"
             {...mergeProps(defaultProps, props, { onChange: handleChange })}
             dir={contentDir.dir}
-            style={
-              maxRows === undefined
-                ? style
-                : ({
-                    ...style,
-                    "--textarea-max-rows": maxRows,
-                  } as React.CSSProperties)
-            }
+            style={textareaStyle}
           />
         )}
       />
