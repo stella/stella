@@ -6,8 +6,21 @@ import { declareFingerprintFields } from "@stll/errors";
 import { env } from "@/api/env";
 import { reframeBoundedRequest } from "@/api/http/request-body";
 import type { BoundedRequest } from "@/api/http/request-body";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import {
+  OWNED_MESSAGE,
+  ownedMessage,
+} from "@/api/lib/observability/owned-message";
+import type { OwnedMessage } from "@/api/lib/observability/owned-message";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
+import { observedResponse } from "@/api/lib/observability/server-error-answer";
+
+/** A deployment whose action size policy is on but not configured. */
+const ACTION_SIZE_UNCONFIGURED = failureSink({
+  event: "action_size.unconfigured",
+  expected: [],
+});
 
 export type ActionSizePolicy = {
   requestBytes: number;
@@ -15,10 +28,19 @@ export type ActionSizePolicy = {
   pageSize: number;
 };
 
+type ActionSizeErrorReason =
+  "configuration" | "request_too_large" | "response_too_large";
+
 export class ActionSizeError extends TaggedError("ActionSizeError")<{
   message: string;
-  reason: "configuration" | "request_too_large" | "response_too_large";
+  reason: ActionSizeErrorReason;
 }> {
+  readonly [OWNED_MESSAGE] = true;
+
+  constructor(args: { message: OwnedMessage; reason: ActionSizeErrorReason }) {
+    super({ ...args });
+  }
+
   static {
     declareFingerprintFields(this, ["reason"]);
   }
@@ -48,7 +70,7 @@ export const getActionSizePolicy = (
   ) {
     return Result.err(
       new ActionSizeError({
-        message: "Action size limits are not configured",
+        message: ownedMessage("Action size limits are not configured"),
         reason: "configuration",
       }),
     );
@@ -77,7 +99,7 @@ export const normalizeTenantPageLimit = (resolvedLimit: number): number => {
 
 const requestTooLarge = () =>
   new ActionSizeError({
-    message: "Request body exceeds the configured byte limit",
+    message: ownedMessage("Request body exceeds the configured byte limit"),
     reason: "request_too_large",
   });
 
@@ -124,10 +146,14 @@ export const actionSizeErrorResponse = (
     maximum !== undefined && Buffer.byteLength(serialized, "utf-8") > maximum
       ? null
       : serialized;
-  return new Response(body, {
-    status,
-    headers: body === null ? {} : { "content-type": "application/json" },
-  });
+  return observedResponse(
+    { sink: ACTION_SIZE_UNCONFIGURED, cause: error },
+    body,
+    {
+      status,
+      headers: body === null ? {} : { "content-type": "application/json" },
+    },
+  );
 };
 
 type ActionResponseOversizeOptions = {
@@ -173,8 +199,9 @@ export const boundActionJsonResponse = async (
     if (size > maximum && effectiveDisposition === "refuse") {
       const refused = actionSizeErrorResponse(
         new ActionSizeError({
-          message:
+          message: ownedMessage(
             "Response exceeds the configured byte limit; request a smaller selection",
+          ),
           reason: "response_too_large",
         }),
         maximum,

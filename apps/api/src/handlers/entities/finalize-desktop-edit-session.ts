@@ -64,6 +64,7 @@ import { createFileKey } from "@/api/lib/files/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   getS3,
@@ -80,6 +81,11 @@ import {
 
 const cleanupFailure = failureSink({
   event: "desktop_edit.finalize_cleanup_failed",
+  expected: [],
+});
+
+const FINALIZE_FAILED = failureSink({
+  event: "desktop_edit.finalize_failed",
   expected: [],
 });
 
@@ -590,6 +596,7 @@ export const finalizeDesktopEditSessionHandler = async ({
               statusCode: organizationFileUsageResponseStatus(
                 fileWrite.error.reason,
               ),
+              cause: fileWrite.error,
             },
           } as const;
         }
@@ -734,10 +741,17 @@ export const finalizeDesktopEditSessionHandler = async ({
     if ("error" in result) {
       await deleteCheckpointKeyIfPresent(checkpointKeyToDelete);
 
-      return status(result.error.statusCode, {
-        ...("code" in result.error && { code: result.error.code }),
-        message: result.error.message,
-      });
+      return observedStatus(
+        {
+          sink: FINALIZE_FAILED,
+          cause: "cause" in result.error ? result.error.cause : result.error,
+        },
+        result.error.statusCode,
+        {
+          ...("code" in result.error && { code: result.error.code }),
+          message: result.error.message,
+        },
+      );
     }
 
     shouldRollbackUploadedKeys = result.outcome !== "finalized";

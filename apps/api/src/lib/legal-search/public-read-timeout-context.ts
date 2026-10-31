@@ -10,6 +10,7 @@ import { detached } from "@/api/lib/analytics/capture";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { rebuildResponse } from "@/api/lib/observability/server-error-answer";
 import { fetchPublicReadRequest } from "@/api/lib/safe-outbound-fetch";
 
 import type {
@@ -265,11 +266,7 @@ const ownedResponse = ({
   if (signal?.aborted) {
     abort();
   }
-  const wrapped = new Response(body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
+  const wrapped = rebuildResponse(response, body);
   Object.defineProperties(wrapped, {
     url: { value: response.url },
     redirected: { value: response.redirected },

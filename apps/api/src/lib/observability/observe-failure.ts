@@ -41,10 +41,13 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import type { LoggerAttributes } from "@/api/lib/observability/logger";
 import { logger } from "@/api/lib/observability/logger";
+import { ownedMessageOf } from "@/api/lib/observability/owned-message";
 import { releaseFailureIdentity } from "@/api/lib/observability/release-failures";
 import {
+  getActiveRequest,
   getRequestContext,
   recordRequestFailure,
+  requireRequestExceptionScope,
 } from "@/api/lib/observability/request-context";
 import { emitFailureMetric } from "@/api/lib/observability/request-metrics";
 
@@ -59,6 +62,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "decisionId",
   "documentId",
   "entityId",
+  "eventId",
   "feature",
   "jobId",
   // Public corpus jurisdiction code.
@@ -86,7 +90,7 @@ export const FAILURE_CONTEXT_KEYS = [
 
 type FailureContextKey = (typeof FAILURE_CONTEXT_KEYS)[number];
 
-type FailureContext = Partial<Record<FailureContextKey, string>>;
+export type FailureContext = Partial<Record<FailureContextKey, string>>;
 
 const MAX_CONTEXT_VALUE_LENGTH = 128;
 
@@ -154,15 +158,30 @@ type ObserveFailureOptions = {
   | { readonly request?: undefined; readonly scope?: ExceptionScope }
 );
 
-const requestFields = (request: Request | undefined): LoggerAttributes => {
-  const requestId =
-    request === undefined ? undefined : getRequestContext()?.requestId;
+const requestFields = (onRequest: boolean): LoggerAttributes => {
+  const requestId = onRequest ? getRequestContext()?.requestId : undefined;
   return requestId === undefined ? {} : { "request.id": requestId };
 };
 
 const observedStoreRequests = new WeakSet<object>();
 
-const observe = (error: unknown, options: ObserveFailureOptions): void => {
+const captureFailure = (
+  error: unknown,
+  options: Parameters<typeof captureObservedError>[1],
+): void => {
+  captureObservedError(error, options);
+};
+
+/**
+ * `onRequest`: the failure belongs to the request in flight, so its record
+ * carries the request id and the request keeps the observation for its
+ * completion record. A request handle implies it.
+ */
+const observe = (
+  error: unknown,
+  options: ObserveFailureOptions,
+  onRequest: boolean,
+): void => {
   const { sink, ctx, request, escalation } = options;
   const evidence = readEvidence(error);
   const grading: FailureGrading = gradeFailure(evidence, sink, {
@@ -180,10 +199,14 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
   }
   const policy = resolvePolicy(sink, grading.grade, escalation);
   const context = acceptFailureContext(ctx);
+  const summary = ownedMessageOf(error);
   const attributes: LoggerAttributes = {
     ...context.accepted,
-    ...requestFields(request),
+    ...requestFields(onRequest),
     ...errorFields(evidence),
+    ...(summary === undefined
+      ? {}
+      : { "cause.summary": sanitizeQueryErrorText(summary) }),
     ...failureFields(grading, sink),
     "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
@@ -191,7 +214,7 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
       : {}),
   };
 
-  if (request !== undefined || grading.reason === "limiter_store_unavailable") {
+  if (onRequest || grading.reason === "limiter_store_unavailable") {
     recordRequestFailure({
       grade: grading.grade,
       reason: grading.reason,
@@ -229,7 +252,7 @@ const observe = (error: unknown, options: ObserveFailureOptions): void => {
             ...capture,
             scope: options.scope ?? capture.scope,
           };
-    captureObservedError(error, captureOptions);
+    captureFailure(error, captureOptions);
   }
 };
 
@@ -243,7 +266,67 @@ export const observeFailure = (
   options: ObserveFailureOptions,
 ): void => {
   const observed = Result.try(() => {
-    observe(error, options);
+    observe(error, options, options.request !== undefined);
+  });
+  if (Result.isError(observed)) {
+    reportEmitFailure("observe", observed.error);
+  }
+};
+
+/** Capture an already-counted unobserved answer through the failure owner. */
+export const captureUnobservedAnswerFailure = (
+  error: unknown,
+  {
+    context,
+    observation,
+    request,
+    scope,
+  }: {
+    readonly context: Record<string, string>;
+    readonly observation: FailureGrading;
+    readonly request: Request;
+    readonly scope: RequestExceptionScope | HandlerExceptionScope;
+  },
+): void => {
+  captureFailure(error, {
+    scope,
+    fingerprintKey: "observability.unobservedServerError",
+    request,
+    context,
+    observation,
+  });
+};
+
+/**
+ * Observe the cause of the answer the request in flight is about to send,
+ * reading the request from its async scope instead of a handle. The record
+ * carries the request id, and the completion record grades the answer by
+ * this observation. Never throws, like {@link observeFailure}.
+ *
+ * Only the answer owner (`server-error-answer.ts`) calls this: the failure
+ * an answer reports is the one it was chosen from.
+ */
+export const observeAnswerFailure = (
+  error: unknown,
+  {
+    sink,
+    ctx,
+  }: { readonly sink: FailureSink; readonly ctx?: FailureContext | undefined },
+): void => {
+  const observed = Result.try(() => {
+    const request = getActiveRequest();
+    observe(
+      error,
+      request === undefined
+        ? { sink, ctx }
+        : {
+            sink,
+            ctx,
+            request,
+            scope: requireRequestExceptionScope(request),
+          },
+      true,
+    );
   });
   if (Result.isError(observed)) {
     reportEmitFailure("observe", observed.error);

@@ -1,8 +1,8 @@
-import { HttpStatusResponse, status } from "@/api/http/status";
+import { HttpStatusResponse } from "@/api/http/status";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { observedStatus } from "@/api/lib/observability/server-error-answer";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -55,12 +55,10 @@ const SEARCH_INDEX_UNAVAILABLE_REFUSAL_SINK = failureSink({
  * returned here or thrown by a scan. The cause is observed, since a returned
  * envelope never reaches the route's error capture.
  */
-export const searchIndexUnavailableResponse = (cause: unknown) => {
-  observeFailure(cause, { sink: SEARCH_INDEX_UNAVAILABLE_REFUSAL_SINK });
-  return status(503, {
+export const searchIndexUnavailableResponse = (cause: unknown) =>
+  observedStatus({ sink: SEARCH_INDEX_UNAVAILABLE_REFUSAL_SINK, cause }, 503, {
     code: SEARCH_INDEX_UNAVAILABLE_CODE,
     message: SEARCH_INDEX_UNAVAILABLE_MESSAGE,
     hint: SEARCH_INDEX_UNAVAILABLE_HINT,
     retryable: true,
   });
-};
