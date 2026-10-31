@@ -2392,10 +2392,12 @@ test("a planned release screenshot check certifies the merge group", () => {
   ).toBe(0);
 });
 
-test("path-scoped platform checks run in the merge group", () => {
+test("path-scoped platform checks run at every required depth", () => {
+  expect(fastRequired).toContain("desktop-rust-tests");
+  expect(heavyJobs).toContain("desktop-rust-tests");
+  expect(fastRequired).not.toContain("windows-scripts");
+  expect(heavyJobs).toContain("windows-scripts");
   for (const job of ["desktop-rust-tests", "windows-scripts"]) {
-    expect(fastRequired, job).not.toContain(job);
-    expect(heavyJobs, job).toContain(job);
     expect(typeof jobScopes[job], job).toBe("string");
   }
 });
@@ -2466,11 +2468,7 @@ test("desktop Rust tests select classified merge-group changes at every queue de
           expect(
             evaluate(jobIf(ciJobs["desktop-rust-tests"]), context),
             `${event}/${file}/${queueDepth}/${runRequired}`,
-          ).toBe(
-            event === EVENT.mergeGroup &&
-              required === "true" &&
-              runRequired === "true",
-          );
+          ).toBe(required === "true" && runRequired === "true");
           const selected = job.strategy.matrix.include;
           expect(selected.map(({ os }) => os)).toEqual(["macos", "windows"]);
           expect(selected).toEqual(lintPlatforms);
@@ -4050,6 +4048,21 @@ test("PR e2e selection schedules its build and shard together", () => {
   expect(runsAtDepth(jobIf(ciJobs["e2e-production-shard"]), selected)).toBe(
     true,
   );
+  expect(
+    evaluate(jobIf(ciJobs["e2e-production-shard"]), {
+      values: {
+        "github.event_name": EVENT.pullRequest,
+        "inputs.pr_depth_only": false,
+        "needs.ci-plan.outputs.run_required": "true",
+        "needs.ci-plan.outputs.trusted": "true",
+        "needs.ci-plan.outputs.coverage_profile": "pilot-fast-v1",
+        "needs.ci-plan.outputs.e2e_production_required": "true",
+        "needs.web-build.result": "success",
+        "needs.heavy-web-build.result": "skipped",
+      },
+      status: { always: true, cancelled: false },
+    }),
+  ).toBe(true);
 
   const values = {
     "github.event_name": EVENT.pullRequest,
@@ -8956,7 +8969,6 @@ test("only the resolver chooses a run's comparison base", () => {
 
 // The jobs that wait on pr-heavy-gate directly; the rest wait through them.
 const GATED_HEAVY_ROOTS = [
-  "ci-browser",
   "ci-tests",
   "e2e-landing",
   "postgres-service-suites",
@@ -8967,7 +8979,6 @@ const GATED_HEAVY_ROOTS = [
 test("the planner derives the PR heavy jobs from everything waiting on the gate", () => {
   expect(PR_HEAVY_JOBS).toEqual([
     "api-test-durations",
-    "ci-browser",
     "ci-tests",
     "e2e-landing",
     "e2e-production-shard",
@@ -8986,7 +8997,7 @@ test("the planner derives the PR heavy jobs from everything waiting on the gate"
     ).toEqual(["ci-plan", "pr-heavy-gate"]);
   }
   expect(fastRequired.filter((job) => PR_HEAVY_JOBS.includes(job))).toEqual(
-    expect.arrayContaining(["ci-tests", "ci-browser", "web-build"]),
+    expect.arrayContaining(["ci-tests", "web-build"]),
   );
 });
 
