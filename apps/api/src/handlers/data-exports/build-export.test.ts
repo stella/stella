@@ -572,6 +572,7 @@ describe("organisation data export archive paths", () => {
     }
     const result = await run(world, { partTargetBytes: 10 });
     expect(result.plan.parts.map((part) => part.matterIds)).toEqual([
+      [],
       ["m-1"],
       ["m-2"],
     ]);
@@ -683,17 +684,24 @@ describe("organisation data export builder", () => {
 
   test("splits parts only at matter boundaries and keeps organisation records in part 1", async () => {
     const world = basicWorld();
-    // Smaller than the first matter's files: every matter gets its own part.
+    // Organization records and each matter exceed this target individually.
     const { manifest, partManifests, zips } = await run(world, {
       partTargetBytes: 10,
     });
-    expect(manifest.parts.map((p) => p.matterIds)).toEqual([["m-1"], ["m-2"]]);
+    expect(manifest.parts.map((p) => p.matterIds)).toEqual([
+      [],
+      ["m-1"],
+      ["m-2"],
+    ]);
     expect(partManifests.map((p) => p.part)).toEqual([
-      { index: 1, count: 2 },
-      { index: 2, count: 2 },
+      { index: 1, count: 3 },
+      { index: 2, count: 3 },
+      { index: 3, count: 3 },
     ]);
     expect(partManifests[0]?.organizationRecords).not.toBeNull();
+    expect(partManifests[0]?.matters).toEqual([]);
     expect(partManifests[1]?.organizationRecords).toBeNull();
+    expect(partManifests[2]?.organizationRecords).toBeNull();
     for (const [index, part] of partManifests.entries()) {
       const zip = zips[index];
       for (const matter of part.matters) {
@@ -794,76 +802,78 @@ describe("organisation data export builder", () => {
     }
   });
 
-  test("resumes after the last checkpoint without rebuilding finished parts", async () => {
-    const originalWorld = basicWorld();
-    const first = await run(originalWorld, { partTargetBytes: 10 });
-    expect(first.checkpoints.map((part) => part.index)).toEqual([1, 2]);
-    expect(first.paced).toBeGreaterThan(0);
-    const firstPart = first.checkpoints.at(0);
-    if (firstPart === undefined) {
-      throw new Error("expected a first part");
-    }
-    const persistedPlan = structuredClone(first.plan);
-    const resumed = await run(originalWorld, {
-      plan: persistedPlan,
-      completedParts: [firstPart],
-    });
-    const secondPart = first.manifest.parts.at(1);
-    if (secondPart === undefined) {
-      throw new Error("expected a second part");
-    }
-    expect([...resumed.memory.parts.keys()]).toEqual([secondPart.fileName]);
-    expect(resumed.checkpoints.map((part) => part.index)).toEqual([2]);
-    expect(resumed.manifest.parts.map((part) => part.sha256)).toEqual(
-      first.manifest.parts.map((part) => part.sha256),
-    );
-    expect(resumed.manifest.totals).toEqual(first.manifest.totals);
+  test.each([
+    { completedCount: 1, remainingIndices: [2, 3] },
+    { completedCount: 2, remainingIndices: [3] },
+  ])(
+    "resumes after $completedCount checkpoints without rebuilding finished parts",
+    async ({ completedCount, remainingIndices }) => {
+      const originalWorld = basicWorld();
+      const first = await run(originalWorld, { partTargetBytes: 10 });
+      expect(first.checkpoints.map((part) => part.index)).toEqual([1, 2, 3]);
+      expect(first.paced).toBeGreaterThan(0);
+      const completedParts = first.checkpoints.slice(0, completedCount);
+      const persistedPlan = structuredClone(first.plan);
+      const resumed = await run(originalWorld, {
+        plan: persistedPlan,
+        completedParts,
+      });
+      const remainingParts = first.manifest.parts.slice(completedCount);
+      expect(completedParts.at(0)?.matterIds).toEqual([]);
+      expect([...resumed.memory.parts.keys()]).toEqual(
+        remainingParts.map((part) => part.fileName),
+      );
+      expect(resumed.checkpoints.map((part) => part.index)).toEqual(
+        remainingIndices,
+      );
+      expect(resumed.manifest.parts.map((part) => part.sha256)).toEqual(
+        first.manifest.parts.map((part) => part.sha256),
+      );
+      expect(resumed.manifest.totals).toEqual(first.manifest.totals);
 
-    const renamedWorld = basicWorld();
-    const renamedMatter = renamedWorld.matters.find(
-      ({ summary }) => summary.id === "m-2",
-    );
-    if (renamedMatter === undefined) {
-      throw new Error("expected second matter in resumed source");
-    }
-    renamedMatter.summary.name = "Renamed matter after checkpoint";
-    renamedMatter.matter.summary.name = renamedMatter.summary.name;
-    const renamedFolder = renamedMatter.matter.folders.at(0);
-    if (renamedFolder !== undefined) {
-      renamedFolder.name = "Renamed folder";
-    }
-    const renamedDocument = renamedMatter.matter.documents.at(0);
-    if (renamedDocument !== undefined) {
-      renamedDocument.name = "Renamed document";
-      for (const version of renamedDocument.versions) {
-        for (const file of version.files) {
-          file.fileName = "renamed-file.pdf";
+      const renamedWorld = basicWorld();
+      const renamedMatter = renamedWorld.matters.find(
+        ({ summary }) => summary.id === "m-2",
+      );
+      if (renamedMatter === undefined) {
+        throw new Error("expected second matter in resumed source");
+      }
+      renamedMatter.summary.name = "Renamed matter after checkpoint";
+      renamedMatter.matter.summary.name = renamedMatter.summary.name;
+      const renamedFolder = renamedMatter.matter.folders.at(0);
+      if (renamedFolder !== undefined) {
+        renamedFolder.name = "Renamed folder";
+      }
+      const renamedDocument = renamedMatter.matter.documents.at(0);
+      if (renamedDocument !== undefined) {
+        renamedDocument.name = "Renamed document";
+        for (const version of renamedDocument.versions) {
+          for (const file of version.files) {
+            file.fileName = "renamed-file.pdf";
+          }
         }
       }
-    }
-    const resumedAfterRename = await run(renamedWorld, {
-      plan: persistedPlan,
-      completedParts: [firstPart],
-    });
-    expect([...resumedAfterRename.memory.parts.keys()]).toEqual([
-      secondPart.fileName,
-    ]);
-    expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual([
-      2,
-    ]);
-    expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
-    const originalSecondZip = first.zips.at(1);
-    const resumedSecondZip = resumedAfterRename.zips.at(0);
-    if (originalSecondZip === undefined || resumedSecondZip === undefined) {
-      throw new Error("expected second part ZIP in both builds");
-    }
-    const filePaths = (zip: JSZip) =>
-      Object.values(zip.files)
-        .filter((entry) => !entry.dir)
-        .map((entry) => entry.name)
-        .toSorted();
-    expect(filePaths(resumedSecondZip)).toEqual(filePaths(originalSecondZip));
-  });
+      const resumedAfterRename = await run(renamedWorld, {
+        plan: persistedPlan,
+        completedParts,
+      });
+      expect([...resumedAfterRename.memory.parts.keys()]).toEqual(
+        remainingParts.map((part) => part.fileName),
+      );
+      expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual(
+        remainingIndices,
+      );
+      expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
+      const filePaths = (zip: JSZip) =>
+        Object.values(zip.files)
+          .filter((entry) => !entry.dir)
+          .map((entry) => entry.name)
+          .toSorted();
+      expect(resumedAfterRename.zips.map(filePaths)).toEqual(
+        first.zips.slice(completedCount).map(filePaths),
+      );
+    },
+  );
 
   test("resumes a current-version plan after the document is promoted", async () => {
     const world = basicWorld();
@@ -1085,7 +1095,9 @@ describe("organisation data export builder", () => {
       }),
     );
     expect(rejection).toBeInstanceOf(DOMException);
-    expect(checkpoints).toEqual([]);
+    expect(
+      checkpoints.map(({ index, matterIds }) => ({ index, matterIds })),
+    ).toEqual([{ index: 1, matterIds: [] }]);
   });
 
   test.each([

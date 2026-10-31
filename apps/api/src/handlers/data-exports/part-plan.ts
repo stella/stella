@@ -23,12 +23,11 @@ type PlanPartsArgs = {
 };
 
 /**
- * Pack matters, in the given order, into consecutive parts of at most
- * `targetBytes` each. A matter is never split: every part holds complete
- * matters and is usable on its own. A matter larger than the target becomes
- * an oversized part (ZIP64 covers it) rather than being cut in two. There is
- * always at least one part, so an organisation with no matters still gets
- * its organisation-level records.
+ * Pack matters, in the given order, into consecutive parts targeting
+ * `targetBytes` each. Matters and organization records are never split:
+ * each unit larger than the target occupies its own oversized part (ZIP64
+ * covers it). Even an organization without matters gets at least one part
+ * containing its organization-level records.
  */
 export const planParts = ({
   matters,
@@ -46,7 +45,7 @@ export const planParts = ({
   };
   for (const matter of matters) {
     const fits = current.estimatedBytes + matter.estimatedBytes <= targetBytes;
-    if (!fits && current.matterIds.length > 0) {
+    if (!fits && (current.matterIds.length > 0 || current.estimatedBytes > 0)) {
       parts.push(current);
       current = {
         index: current.index + 1,
