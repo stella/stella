@@ -46,6 +46,12 @@ export type AdvisoryAssessment = {
   disposition: AuditDisposition;
   acceptance: BaselineEntry | undefined;
   affectedPaths: string[];
+  copies: { path: string; version: string }[];
+  resolutionPaths: {
+    copyPath: string;
+    resolution: string;
+    requirement: string;
+  }[];
   action: string;
 };
 
@@ -292,6 +298,52 @@ const requirementOwners = (
     manifest: true,
   })),
 ];
+
+type ResolutionPathsOptions = {
+  packageName: string;
+  packages: ReturnType<typeof lockPackages>;
+  owners: readonly RequirementOwner[];
+  keys: ReadonlySet<string>;
+};
+const dependencyResolutionPaths = ({
+  packageName,
+  packages,
+  owners,
+  keys,
+}: ResolutionPathsOptions): AdvisoryAssessment["resolutionPaths"] =>
+  packages
+    .filter(({ name }) => name === packageName)
+    .flatMap((node) =>
+      owners.flatMap((parent) => {
+        for (const field of parent.fields) {
+          const dependencies = parent.details[field];
+          const requirement = record(dependencies)
+            ? dependencies[packageName]
+            : undefined;
+          if (
+            typeof requirement === "string" &&
+            resolvedKey({
+              parent: parent.key,
+              dependency: packageName,
+              keys,
+            }) === node.key
+          ) {
+            const parentPackage = packages.find(
+              ({ key }) => key === parent.key,
+            )?.name;
+            return [
+              {
+                copyPath: node.key,
+                resolution: `${parentPackage ?? parent.key}/${packageName}`,
+                requirement,
+              },
+            ];
+          }
+        }
+        return [];
+      }),
+    );
+
 type ManifestPinsOptions = {
   sources: readonly ManifestSource[];
   packageName: string;
@@ -400,6 +452,12 @@ export const assessAdvisories = ({
     );
     const pins = new Set<string>();
     const blockers: string[] = [];
+    const resolutionPaths = dependencyResolutionPaths({
+      packageName: advisory.package,
+      packages,
+      owners,
+      keys,
+    });
     let selectableVersions = patchedVersions;
     const overridden = sources.some(({ manifest: source }) =>
       MANIFEST_REQUIREMENT_FIELDS.some((field) => {
@@ -518,6 +576,10 @@ export const assessAdvisories = ({
       disposition,
       acceptance,
       affectedPaths: vulnerable.map(({ key }) => key),
+      copies: packages
+        .filter(({ name }) => name === advisory.package)
+        .map(({ key: path, version }) => ({ path, version })),
+      resolutionPaths,
       action,
     };
   });

@@ -50,6 +50,8 @@ test("remediation plans pins, quarantine exclusions, and dated blocker acceptanc
     disposition,
     acceptance: undefined,
     affectedPaths: [packageName],
+    copies: [{ path: packageName, version: "1.4.0" }],
+    resolutionPaths: [],
     action: "test action",
   });
   const plan = planDependencyAuditRemediation({
@@ -113,6 +115,8 @@ describe("remediation selects one complete package fix", () => {
     disposition,
     acceptance: undefined,
     affectedPaths: ["pkg"],
+    copies: [{ path: "pkg", version: "1.4.0" }],
+    resolutionPaths: [],
     action: "test action",
   });
   const available = (

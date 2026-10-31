@@ -42,6 +42,9 @@ const acceptanceDraft = (
   affectedPaths: assessment.affectedPaths,
 });
 
+const accepts = (version: string, requirement: string): boolean =>
+  Bun.semver.satisfies(version, requirement);
+
 const candidateVersions = (assessment: AdvisoryAssessment): string[] => {
   switch (assessment.disposition.status) {
     case "fix_available":
@@ -125,7 +128,50 @@ export const planDependencyAuditRemediation = ({
       actionable.length === group.length &&
       selected !== undefined
     ) {
-      pins.set(packageName, selected);
+      const affectedCopies = new Set(
+        actionable.flatMap(({ affectedPaths }) => affectedPaths),
+      );
+      const copies = new Map(
+        group.flatMap(({ copies: assessmentCopies }) =>
+          assessmentCopies.map((copy) => [copy.path, copy] as const),
+        ),
+      );
+      const resolutionPaths = new Map(
+        group.flatMap(({ resolutionPaths: assessmentPaths }) =>
+          assessmentPaths.map((path) => [path.resolution, path] as const),
+        ),
+      );
+      const everyCopyIsVulnerable = [...copies].every(([path]) =>
+        affectedCopies.has(path),
+      );
+      const packageWideIsValid =
+        everyCopyIsVulnerable &&
+        [...resolutionPaths.values()].every(({ requirement }) =>
+          accepts(selected, requirement),
+        );
+      const scopedPaths = [...resolutionPaths.values()].filter(({ copyPath }) =>
+        affectedCopies.has(copyPath),
+      );
+      const scopedWriteIsValid =
+        scopedPaths.length > 0 &&
+        affectedCopies.size ===
+          new Set(scopedPaths.map(({ copyPath }) => copyPath)).size &&
+        scopedPaths.every(({ requirement }) => accepts(selected, requirement));
+
+      if (packageWideIsValid) {
+        pins.set(packageName, selected);
+      } else if (scopedWriteIsValid) {
+        for (const { resolution } of scopedPaths) {
+          pins.set(resolution, selected);
+        }
+      } else {
+        for (const assessment of group) {
+          if (assessment.acceptance === undefined) {
+            acceptanceDrafts.push(acceptanceDraft(assessment, now));
+          }
+        }
+        continue;
+      }
       const quarantinedRelease = quarantined.get(selected);
       if (quarantinedRelease !== undefined) {
         quarantineExclusions.push({

@@ -8,6 +8,7 @@ import {
   installableVersions,
   readReleaseAgePolicy,
 } from "./dependency-audit-assessment";
+import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
 
 const lockfile = await Bun.file(
   new URL("fixtures/dependency-audit/bun-lock.json", import.meta.url),
@@ -478,6 +479,52 @@ test("a compatible security patch in release-age quarantine is actionable", () =
   expect(result?.action).toContain(
     "minimumReleaseAgeExcludes with # quarantine-expires: 2026-11-01T04:44:07.718Z",
   );
+});
+
+test("remediation scopes an older-major fix away from a safe newer-major copy", () => {
+  const assessments = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        newer: ["newer@1.0.0", "", { dependencies: { example: "^2.0.0" } }],
+        example: ["example@1.4.0", "", {}],
+        "newer/example": ["example@2.0.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "newer/example": "2.0.0" } },
+    versions: new Map([["example", ["1.4.0", "1.4.1", "2.0.0"]]]),
+  });
+
+  const plan = planDependencyAuditRemediation({
+    assessments,
+    now: new Date("2026-10-31T12:00:00.000Z"),
+  });
+  expect([...plan.pins]).toEqual([["parent/example", "1.4.1"]]);
+  expect(plan.pins.has("newer/example")).toBe(false);
+});
+
+test("remediation may use a package-wide resolution when every copy accepts it", () => {
+  const assessments = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        one: ["one@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        two: ["two@1.0.0", "", { dependencies: { example: "^1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0", "1.4.1"]]]),
+  });
+
+  const plan = planDependencyAuditRemediation({
+    assessments,
+    now: new Date("2026-10-31T12:00:00.000Z"),
+  });
+  expect([...plan.pins]).toEqual([["example", "1.4.1"]]);
 });
 
 test("a repository resolution can move an exact parent pin to a quarantined patch", () => {
