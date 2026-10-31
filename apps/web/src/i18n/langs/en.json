@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Using defaults"
     },
+    "creationEvaluationLimitReached": "You have used all {limit} organization evaluation periods. Deleting an organization does not restore one. Use an existing organization or contact support for paid access.",
     "creationInvalidName": "Enter a valid organization name (up to {maxLength} characters).",
     "creationNotAllowed": "This account cannot create organizations.",
     "creationOutcomeUnknown": "The request may have created an organization. Retry to check its result.",

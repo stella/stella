@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Naudojami numatytieji nustatymai"
     },
+    "creationEvaluationLimitReached": "Išnaudojote visus {limit} organizacijų bandomuosius laikotarpius. Ištrynus organizaciją, bandomasis laikotarpis neatkuriamas. Naudokite esamą organizaciją arba kreipkitės į pagalbos tarnybą dėl mokamos prieigos.",
     "creationInvalidName": "Įveskite tinkamą organizacijos pavadinimą (iki {maxLength} simbolių).",
     "creationNotAllowed": "Ši paskyra negali kurti organizacijų.",
     "creationOutcomeUnknown": "Užklausa galėjo sukurti organizaciją. Bandykite dar kartą, kad patikrintumėte rezultatą.",

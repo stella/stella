@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Standardeinstellungen aktiv"
     },
+    "creationEvaluationLimitReached": "Sie haben alle {limit} Testzeiträume für Organisationen genutzt. Durch das Löschen einer Organisation wird kein Testzeitraum wieder verfügbar. Nutzen Sie eine bestehende Organisation oder wenden Sie sich für einen kostenpflichtigen Zugang an den Support.",
     "creationInvalidName": "Geben Sie einen gültigen Organisationsnamen ein (höchstens {maxLength} Zeichen).",
     "creationNotAllowed": "Mit diesem Konto können keine Organisationen erstellt werden.",
     "creationOutcomeUnknown": "Die Anfrage hat möglicherweise eine Organisation erstellt. Wiederholen Sie die Anfrage, um das Ergebnis zu prüfen.",

@@ -15,7 +15,7 @@ import type { PermissionInput } from "@stll/permissions";
 import type { RouteAccess, RouteDefinition } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
-import type { AccountAccess } from "@/api/lib/api-handlers";
+import type { AccountAccess, HandlerConfig } from "@/api/lib/api-handlers";
 import type { WorkspaceStatusAccess } from "@/api/lib/auth";
 import { hasAccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
@@ -422,6 +422,7 @@ type EndpointConfig = {
   params?: v.GenericSchema;
   query?: v.GenericSchema;
   permissions?: PermissionInput;
+  idempotency?: HandlerConfig["idempotency"];
   accountAccess?: AccountAccess;
   workspaceStatus?: WorkspaceStatusAccess;
 };
@@ -2481,6 +2482,7 @@ const executeInvoke = async ({
 
   const ctx = await capabilityHandlerContext({
     capabilityId: id,
+    idempotency: endpoint.config.idempotency,
     context,
     input: {
       body: validatedBody,

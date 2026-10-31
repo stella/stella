@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
+    "creationEvaluationLimitReached": "Jūs esat izmantojis visus {limit} organizāciju izmēģinājuma periodus. Organizācijas dzēšana neatjauno izmēģinājuma periodu. Izmantojiet esošu organizāciju vai sazinieties ar atbalsta dienestu, lai saņemtu maksas piekļuvi.",
     "creationInvalidName": "Ievadiet derīgu organizācijas nosaukumu (ne vairāk kā {maxLength} rakstzīmes).",
     "creationNotAllowed": "Ar šo kontu nevar izveidot organizācijas.",
     "creationOutcomeUnknown": "Pieprasījums, iespējams, ir izveidojis organizāciju. Mēģiniet vēlreiz, lai pārbaudītu rezultātu.",

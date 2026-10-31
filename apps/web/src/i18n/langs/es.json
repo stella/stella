@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Se usan los valores predeterminados"
     },
+    "creationEvaluationLimitReached": "Ha utilizado los {limit} periodos de prueba de organizaciones. Eliminar una organización no permite recuperar un periodo de prueba. Utilice una organización existente o contacte con el soporte para obtener acceso de pago.",
     "creationInvalidName": "Introduce un nombre de organización válido (hasta {maxLength} caracteres).",
     "creationNotAllowed": "Esta cuenta no puede crear organizaciones.",
     "creationOutcomeUnknown": "Es posible que la solicitud haya creado una organización. Vuelve a intentarlo para comprobar el resultado.",

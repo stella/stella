@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Používá výchozí nastavení"
     },
+    "creationEvaluationLimitReached": "Využili jste všechna {limit} zkušební období organizací. Smazáním organizace se zkušební období neobnoví. Použijte existující organizaci nebo kontaktujte podporu a domluvte si placený přístup.",
     "creationInvalidName": "Zadejte platný název organizace (nejvýše {maxLength} znaků).",
     "creationNotAllowed": "Tento účet nemůže vytvářet organizace.",
     "creationOutcomeUnknown": "Požadavek už mohl organizaci vytvořit. Zkuste to znovu a ověřte výsledek.",

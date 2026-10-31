@@ -4,6 +4,8 @@ import { and, eq } from "drizzle-orm";
 
 import {
   createOrganizationSlug,
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
   ORGANIZATION_SLUG_RANDOM_BYTES,
 } from "@stll/api-contract/organization-create";
 import { classifyFailure } from "@stll/errors";
@@ -20,8 +22,14 @@ import {
   instrumentSqlTransactionCounts,
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import { recordOrganizationCreationAudit } from "@/api/lib/db/audit-recording";
+import {
+  withAggregateSavepoint,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import {
+  claimOrganizationEvaluation,
+  recordOrganizationCreationAudit,
+} from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
@@ -50,6 +58,7 @@ import type {
   ChangeServiceOAuthClientOptions,
   CreateServiceOAuthClientOptions,
 } from "@/api/lib/db/service-client-operator";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
@@ -284,16 +293,15 @@ export type CreateOrganizationOptions = {
   userId: SafeId<"user">;
   name: string;
   slug?: string;
+  evaluation: "grant" | "none";
   idempotencyKey: string | null;
 };
 
 export type OrganizationCreationDependencies = {
   randomBytes?: () => Uint8Array;
-  database?: Pick<
-    RootDatabase,
-    "insert" | "select" | "delete" | "update" | "transaction"
-  >;
+  database?: Pick<RootDatabase, "transaction">;
   createOrganization: (input: {
+    transaction: Transaction;
     body: {
       name: string;
       slug: string;
@@ -305,7 +313,7 @@ export type OrganizationCreationDependencies = {
 
 type OrganizationProviderDependencies = Required<
   Pick<OrganizationCreationDependencies, "createOrganization" | "randomBytes">
->;
+> & { transaction: Transaction };
 
 const createWithAvailableSlug = async (
   {
@@ -313,65 +321,73 @@ const createWithAvailableSlug = async (
     name,
     slug,
   }: Pick<CreateOrganizationOptions, "userId" | "name" | "slug">,
-  { createOrganization, randomBytes }: OrganizationProviderDependencies,
+  {
+    createOrganization,
+    randomBytes,
+    transaction,
+  }: OrganizationProviderDependencies,
 ) => {
-  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    const candidate = slug ?? createOrganizationSlug(randomBytes());
-    // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before drawing the next random slug.
-    const created = await Result.tryPromise({
-      try: async () =>
-        await createOrganization({
-          body: {
-            name,
-            slug: candidate,
-            userId,
-            keepCurrentActiveOrganization: true,
-          },
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(created)) {
-      if (isSlugConflict(created.error)) {
-        if (slug === undefined) {
-          continue;
-        }
-        return Result.err(slugConflict());
-      }
-      if (
-        created.error instanceof APIError &&
-        created.error.statusCode === 403
-      ) {
-        return Result.err(
-          new HandlerError({
-            status: 403,
-            code: "account_access_unavailable",
-            message: "Organization creation is unavailable for this account.",
-            hint: "Sign in with an unrestricted account.",
-          }),
+  const created = await Result.tryPromise(
+    {
+      try: async () => {
+        const candidate = slug ?? createOrganizationSlug(randomBytes());
+        return await withAggregateSavepoint(
+          transaction,
+          async (tx) =>
+            await createOrganization({
+              transaction: tx,
+              body: {
+                name,
+                slug: candidate,
+                userId,
+                keepCurrentActiveOrganization: true,
+              },
+            }),
         );
-      }
-      // An unknown failure may follow a committed better-auth write. Keep the
-      // claim pending rather than risking a duplicate organization on retry.
-      return Result.err(
-        classifyFailure(
-          new HandlerError({
-            status: 500,
-            code: "internal_error",
-            message: "Organization creation could not be completed.",
-            cause: created.error,
-          }),
-          "tagged_failure",
-        ),
-      );
-    }
+      },
+      catch: (cause) => cause,
+    },
+    {
+      retry: {
+        times: MAX_SLUG_ATTEMPTS - 1,
+        delayMs: 0,
+        backoff: "constant",
+        shouldRetry: (cause) => slug === undefined && isSlugConflict(cause),
+      },
+    },
+  );
+  if (created.isOk()) {
     return created;
   }
-  return Result.err(slugConflict());
+  if (isSlugConflict(created.error)) {
+    return Result.err(slugConflict());
+  }
+  if (created.error instanceof APIError && created.error.statusCode === 403) {
+    return Result.err(
+      new HandlerError({
+        status: 403,
+        code: "account_access_unavailable",
+        message: "Organization creation is unavailable for this account.",
+        hint: "Sign in with an unrestricted account.",
+      }),
+    );
+  }
+  return Result.err(
+    classifyFailure(
+      new HandlerError({
+        status: 500,
+        code: "internal_error",
+        message: "Organization creation could not be completed.",
+        cause: created.error,
+      }),
+      "tagged_failure",
+    ),
+  );
 };
 
-/** Root access is limited to this authenticated account's creation receipts; better-auth owns organization writes. */
+/** Organization, lifecycle defaults, evaluation claim, audit and receipt commit together. */
 export const createOrganizationForAccount = async (
-  { userId, name, slug, idempotencyKey }: CreateOrganizationOptions,
+  { userId, name, slug, evaluation, idempotencyKey }: CreateOrganizationOptions,
   {
     database = rootDb,
     createOrganization,
@@ -387,101 +403,127 @@ export const createOrganizationForAccount = async (
     query: {},
   });
   const key = idempotencyKey;
-  if (key !== null) {
-    if (key.length === 0 || key.length > 128) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          code: "invalid_idempotency_key",
-          message: "Idempotency-Key must contain 1 to 128 characters.",
-        }),
-      );
-    }
-    const claimed = await database
-      .insert(receipts)
-      .values({ userId, key, fingerprint })
-      .onConflictDoNothing()
-      .returning({ key: receipts.key });
-    if (claimed.length === 0) {
-      const receipt = (
-        await database
-          .select()
-          .from(receipts)
-          .where(and(eq(receipts.userId, userId), eq(receipts.key, key)))
-          .limit(1)
-      ).at(0);
-      if (receipt === undefined) {
-        panic("Conflicting organization receipt disappeared");
-      }
-      if (receipt.fingerprint !== fingerprint) {
-        return Result.err(
-          new HandlerError({
-            status: 409,
-            code: "idempotency_key_reused",
-            message: "This key identifies a different creation request.",
-            hint: "Retry the original input, or use a new Idempotency-Key for a new organization.",
-          }),
+  if (key !== null && (key.length === 0 || key.length > 128)) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_idempotency_key",
+        message: "Idempotency-Key must contain 1 to 128 characters.",
+      }),
+    );
+  }
+  return await Result.tryPromise({
+    try: async () =>
+      await withAggregateTransaction(database, async (tx) => {
+        if (key !== null) {
+          const claimed = await tx
+            .insert(receipts)
+            .values({ userId, key, fingerprint })
+            .onConflictDoNothing()
+            .returning({ key: receipts.key });
+          if (claimed.length === 0) {
+            const receipt = (
+              await tx
+                .select()
+                .from(receipts)
+                .where(and(eq(receipts.userId, userId), eq(receipts.key, key)))
+                .limit(1)
+            ).at(0);
+            if (receipt === undefined) {
+              panic("Conflicting organization receipt disappeared");
+            }
+            if (receipt.fingerprint !== fingerprint) {
+              return abortTransaction(
+                new HandlerError({
+                  status: 409,
+                  code: "idempotency_key_reused",
+                  message: "This key identifies a different creation request.",
+                  hint: "Retry the original input, or use a new Idempotency-Key for a new organization.",
+                }),
+              );
+            }
+            if (
+              receipt.organizationId !== null &&
+              receipt.name !== null &&
+              receipt.slug !== null
+            ) {
+              return {
+                organizationId: receipt.organizationId,
+                name: receipt.name,
+                slug: receipt.slug,
+                role: "owner" as const,
+              };
+            }
+            return abortTransaction(
+              new HandlerError({
+                status: 409,
+                code: "idempotency_in_progress",
+                message: "Organization creation is still pending.",
+                hint: "Retry with the same Idempotency-Key later. If it remains pending, contact support; do not create a second organization.",
+              }),
+            );
+          }
+        }
+        switch (evaluation) {
+          case "grant":
+            if (!(await claimOrganizationEvaluation(tx, userId))) {
+              return abortTransaction(
+                new HandlerError({
+                  status: 403,
+                  code: ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+                  message: `This account has used all ${ORGANIZATION_EVALUATION_LIMIT} lifetime organization evaluation periods.`,
+                  hint: "Use an existing organization or contact support to arrange paid access. Deleting an organization does not restore an evaluation period.",
+                }),
+              );
+            }
+            break;
+          case "none":
+            break;
+          default:
+            evaluation satisfies never;
+            return panic("Unhandled organization evaluation request");
+        }
+        const created = await createWithAvailableSlug(
+          { userId, name, ...(slug === undefined ? {} : { slug }) },
+          { createOrganization, randomBytes, transaction: tx },
         );
-      }
-      if (
-        receipt.organizationId !== null &&
-        receipt.name !== null &&
-        receipt.slug !== null
-      ) {
-        return Result.ok({
-          organizationId: receipt.organizationId,
-          name: receipt.name,
-          slug: receipt.slug,
+        if (created.isErr()) {
+          return abortTransaction(created.error);
+        }
+        const result = {
+          organizationId: brandPersistedOrganizationId(created.value.id),
+          name: created.value.name,
+          slug: created.value.slug,
           role: "owner" as const,
-        });
-      }
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          code: "idempotency_in_progress",
-          message: "Organization creation is still pending.",
-          hint: "Retry with the same Idempotency-Key later. If it remains pending, contact support; do not create a second organization.",
-        }),
-      );
-    }
-  }
-  const reject = async (error: HandlerError) => {
-    if (key !== null) {
-      await database
-        .delete(receipts)
-        .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
-    }
-    return Result.err(error);
-  };
-  const created = await createWithAvailableSlug(
-    { userId, name, ...(slug === undefined ? {} : { slug }) },
-    { createOrganization, randomBytes },
-  );
-  if (created.isErr()) {
-    // Unknown failures may follow a committed write; retain the claim.
-    return created.error.status >= 500 ? created : await reject(created.error);
-  }
-  const result = {
-    organizationId: brandPersistedOrganizationId(created.value.id),
-    name: created.value.name,
-    slug: created.value.slug,
-    role: "owner" as const,
-  };
-  await withAggregateTransaction(database, async (tx) => {
-    await recordOrganizationCreationAudit(tx, {
-      userId,
-      organizationId: result.organizationId,
-    });
-    if (key !== null) {
-      await tx
-        .update(receipts)
-        .set({
+        };
+        await recordOrganizationCreationAudit(tx, {
+          userId,
           organizationId: result.organizationId,
-          name: result.name,
-          slug: result.slug,
-        })
-        .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
-    }
+          evaluation,
+        });
+        if (key !== null) {
+          await tx
+            .update(receipts)
+            .set({
+              organizationId: result.organizationId,
+              name: result.name,
+              slug: result.slug,
+            })
+            .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
+        }
+        return result;
+      }),
+    catch: (cause) =>
+      HandlerError.is(cause)
+        ? cause
+        : classifyFailure(
+            new HandlerError({
+              status: 500,
+              code: "internal_error",
+              message: "Organization creation could not be completed.",
+              cause,
+            }),
+            "tagged_failure",
+          ),
   });
-  return Result.ok(result);
 };

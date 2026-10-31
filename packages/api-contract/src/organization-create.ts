@@ -1,6 +1,9 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
+export const ORGANIZATION_EVALUATION_LIMIT = 3;
+export const ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE =
+  "organization_evaluation_limit_reached";
 export const ORGANIZATION_NAME_MAX_LENGTH = 50;
 export const ORGANIZATION_SLUG_MAX_LENGTH = 100;
 export const ORGANIZATION_SLUG_PATTERN = /^[a-z0-9-]+$/u;

@@ -5,7 +5,7 @@ SET statement_timeout = '10s';--> statement-breakpoint
 ALTER TABLE "account_audit_logs" DROP CONSTRAINT IF EXISTS "account_audit_logs_event_type_check";--> statement-breakpoint
 -- Existing rows are validated by ACCOUNT_AUDIT_CONSTRAINT_VALIDATION after this transaction releases its schema lock.
 ALTER TABLE "account_audit_logs" ADD CONSTRAINT "account_audit_logs_event_type_check"
-  CHECK ("event_type" IN ('account.data_export.requested', 'account.data_export.ready', 'account.data_export.downloaded', 'account.data_export.expired', 'account.sign_in_method.disconnected', 'organization.created')) NOT VALID;
+  CHECK ("event_type" IN ('account.data_export.requested', 'account.data_export.ready', 'account.data_export.downloaded', 'account.data_export.expired', 'account.sign_in_method.disconnected', 'organization.created', 'organization.evaluation.started')) NOT VALID;
 --> statement-breakpoint
 CREATE TABLE "organization_creation_requests" (
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE cascade,

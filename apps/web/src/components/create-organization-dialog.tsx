@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { useStore } from "zustand";
 
 import {
+  ORGANIZATION_EVALUATION_LIMIT,
   ORGANIZATION_NAME_MAX_LENGTH,
   organizationCreateOutputSchema,
 } from "@stll/api-contract/organization-create";
@@ -262,6 +263,7 @@ export const CreateOrganizationDialog = ({
                     className="text-destructive text-sm"
                     message={t(view.message, {
                       maxLength: ORGANIZATION_NAME_MAX_LENGTH,
+                      limit: ORGANIZATION_EVALUATION_LIMIT,
                     })}
                     actions={null}
                   />

@@ -173,7 +173,11 @@ export const measureCreateOrganizationTool = async ({
       );
       const response =
         await RESEARCH_ADMIN_TOOL_SET.handlers.create_organization({
-          args: { name: fixture.name, slug: fixture.userId.toLowerCase() },
+          args: {
+            name: fixture.name,
+            slug: fixture.userId.toLowerCase(),
+            confirm: true,
+          },
           context,
         });
       if (

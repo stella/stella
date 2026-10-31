@@ -5538,11 +5538,12 @@
   },
   {
     "cli": {
+      "confirmPassthrough": true,
       "command": ["organization", "create"],
       "scope": "organization_create"
     },
     "name": "create_organization",
-    "description": "Create an organization you own. Then run stella auth login and select the new organization to work in it.",
+    "description": "Create an organization you own after human approval (confirm: true). Each account receives at most 3 evaluation periods over its lifetime; deletion does not restore one. organization_evaluation_limit_reached refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.",
     "inputSchema": {
       "type": "object",
       "required": ["name"],
@@ -5560,6 +5561,10 @@
           "maxLength": 100,
           "pattern": "^[a-z0-9-]+$",
           "description": "Optional URL slug. Omit to generate an opaque organization address."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
         }
       }
     },

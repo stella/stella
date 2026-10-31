@@ -444,6 +444,7 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "admin_write",
     },
     create_organization: {
+      confirmPassthrough: true,
       command: ["organization", "create"],
       scope: "organization_create",
     },

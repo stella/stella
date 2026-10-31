@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "تُستخدم الإعدادات الافتراضية"
     },
+    "creationEvaluationLimitReached": "لقد استخدمت جميع الفترات التجريبية للمؤسسات ({limit}). حذف مؤسسة لا يعيد لك فترة تجريبية. استخدم مؤسسة قائمة أو تواصل مع الدعم للحصول على وصول مدفوع.",
     "creationInvalidName": "أدخل اسمًا صالحًا للمؤسسة (بحد أقصى {maxLength} حرفًا).",
     "creationNotAllowed": "لا يمكن لهذا الحساب إنشاء مؤسسات.",
     "creationOutcomeUnknown": "ربما أنشأ الطلب مؤسسة. أعد المحاولة للتحقق من النتيجة.",

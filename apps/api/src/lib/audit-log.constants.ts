@@ -105,6 +105,9 @@ export const AUDIT_RESOURCE_TYPE = {
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
 
+export const ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE =
+  "organization.evaluation.started";
+
 /** Account events record lifecycle changes without carrying private contents. */
 export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.requested",
@@ -113,6 +116,7 @@ export const ACCOUNT_AUDIT_EVENT_TYPES = [
   "account.data_export.expired",
   "account.sign_in_method.disconnected",
   "organization.created",
+  ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE,
 ] as const;
 
 export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

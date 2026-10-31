@@ -16,9 +16,6 @@ const USER_ID = toSafeId<"user">("creation-error-user");
 const REQUEST_KEY = "creation-error-key";
 const NAME = "Example firm";
 
-type CreationDependencies = NonNullable<
-  Parameters<typeof createOrganizationForAccount>[1]
->;
 type Receipt = typeof organizationCreationRequests.$inferSelect;
 
 const creationFixture = () => {
@@ -32,7 +29,8 @@ const creationFixture = () => {
     expect(params).toEqual([USER_ID, REQUEST_KEY]);
     return REQUEST_KEY;
   };
-  const database = asTestRaw<NonNullable<CreationDependencies["database"]>>({
+  const transaction = asTestRaw<Transaction>({
+    rollback: () => panic("The fixture rolls back by rejecting the callback"),
     insert: (
       table: typeof organizationCreationRequests | typeof accountAuditLogs,
     ) => {
@@ -92,14 +90,30 @@ const creationFixture = () => {
         },
       }),
     }),
-    transaction: async (run: (tx: Transaction) => Promise<unknown>) =>
-      await run(asTestRaw<Transaction>(database)),
+    transaction: async (run: (tx: Transaction) => Promise<unknown>) => {
+      const previousReceipts = new Map(receipts);
+      const previousAuditCount = audits.length;
+      const result = await Result.tryPromise({
+        try: async () => await run(asTestRaw<Transaction>({ ...transaction })),
+        catch: (cause) => cause,
+      });
+      if (result.isErr()) {
+        receipts.clear();
+        for (const [key, receipt] of previousReceipts) {
+          receipts.set(key, receipt);
+        }
+        audits.splice(previousAuditCount);
+        throw result.error;
+      }
+      return result.value;
+    },
   });
   const created = (slug: string) => ({
     id: "created-organization",
     name: NAME,
     slug,
   });
+  const database = { transaction: transaction.transaction };
   return { database, receipts, audits, created };
 };
 
@@ -114,7 +128,12 @@ describe("organization creation provider refusals", () => {
       const attemptedSlugs: string[] = [];
       let entropy = 0;
       const result = await createOrganizationForAccount(
-        { userId: USER_ID, name: NAME, idempotencyKey: null },
+        {
+          userId: USER_ID,
+          evaluation: "none",
+          name: NAME,
+          idempotencyKey: null,
+        },
         {
           database: fixture.database,
           randomBytes: () => new Uint8Array(10).fill(entropy++),
@@ -153,7 +172,13 @@ describe("organization creation provider refusals", () => {
       const fixture = creationFixture();
       const attemptedSlugs: string[] = [];
       const result = await createOrganizationForAccount(
-        { userId: USER_ID, name: NAME, slug: "reserved", idempotencyKey: null },
+        {
+          userId: USER_ID,
+          evaluation: "none",
+          name: NAME,
+          slug: "reserved",
+          idempotencyKey: null,
+        },
         {
           database: fixture.database,
           randomBytes: () =>
@@ -181,7 +206,7 @@ describe("organization creation provider refusals", () => {
   test("a provider 403 returns the documented account refusal", async () => {
     const fixture = creationFixture();
     const result = await createOrganizationForAccount(
-      { userId: USER_ID, name: NAME, idempotencyKey: null },
+      { userId: USER_ID, evaluation: "none", name: NAME, idempotencyKey: null },
       {
         database: fixture.database,
         createOrganization: async () => {
@@ -218,6 +243,7 @@ describe("organization creation provider refusals", () => {
       const fixture = creationFixture();
       const input = {
         userId: USER_ID,
+        evaluation: "none" as const,
         name: NAME,
         slug: "example-firm",
         idempotencyKey: REQUEST_KEY,
@@ -252,13 +278,18 @@ describe("organization creation provider refusals", () => {
     },
   );
 
-  test("an unclassified provider failure retains its receipt and original cause", async () => {
+  test("a failed creation rolls back its receipt and preserves the original cause", async () => {
     const fixture = creationFixture();
     const error = new APIError("INTERNAL_SERVER_ERROR", {
       message: "Creation outcome is uncertain",
     });
     const result = await createOrganizationForAccount(
-      { userId: USER_ID, name: NAME, idempotencyKey: REQUEST_KEY },
+      {
+        userId: USER_ID,
+        evaluation: "none",
+        name: NAME,
+        idempotencyKey: REQUEST_KEY,
+      },
       {
         database: fixture.database,
         createOrganization: async () => {
@@ -277,7 +308,7 @@ describe("organization creation provider refusals", () => {
       "Organization creation could not be completed.",
     );
     expect(result.error.cause).toBe(error);
-    expect(fixture.receipts.get(REQUEST_KEY)?.organizationId).toBeNull();
+    expect(fixture.receipts.has(REQUEST_KEY)).toBe(false);
     expect(fixture.audits).toEqual([]);
   });
 });

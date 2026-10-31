@@ -5,6 +5,7 @@ import type { HandlerContext } from "@/api/http/context";
 import type { RawHeaders } from "@/api/http/route-input";
 import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type {
@@ -135,18 +136,22 @@ export const capabilityHandlerContext = async ({
   capabilityId,
   context,
   input,
+  idempotency,
   request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
+  idempotency: HandlerConfig["idempotency"];
   context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
   const headers = new Headers(rpcRequest.headers);
-  headers.delete("Idempotency-Key");
-  // The RPC body is already decoded; its transport key does not identify a capability call.
+  if (idempotency?.type !== "replay") {
+    headers.delete("Idempotency-Key");
+  }
+  // Only replay-capable handlers accept a call retry key from the transport.
   const request = new Request(rpcRequest.url, {
     method: rpcRequest.method,
     headers,

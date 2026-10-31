@@ -3,7 +3,11 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
-import { organizationCreateOutputSchema } from "@stll/api-contract/organization-create";
+import {
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+  organizationCreateOutputSchema,
+} from "@stll/api-contract/organization-create";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
@@ -859,9 +863,15 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
 const CREATE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "create_organization",
-  description:
-    "Create an organization you own. Then run stella auth login and select the new organization to work in it.",
-  inputSchema: nullAsAbsent(organizationCreateBodySchema),
+  description: `Create an organization you own after human approval (confirm: true). Each account receives at most ${ORGANIZATION_EVALUATION_LIMIT} evaluation periods over its lifetime; deletion does not restore one. ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE} refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.`,
+  inputSchema: nullAsAbsent(
+    v.strictObject({
+      ...organizationCreateBodySchema.entries,
+      confirm: v.optional(
+        v.pipe(v.boolean(), v.description("True after human approval")),
+      ),
+    }),
+  ),
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["trim"],
     reason:
@@ -893,8 +903,9 @@ const handleCreateOrganizationTool: McpToolHandler = async ({
 }) => {
   const { CAPABILITY_TOOL_HANDLERS } =
     await import("@/api/mcp/capability-tools");
+  const { confirm, ...body } = args;
   return await CAPABILITY_TOOL_HANDLERS.write_capability({
-    args: { capability: "organizations.create", input: { body: args } },
+    args: { capability: "organizations.create", input: { body }, confirm },
     context,
   });
 };

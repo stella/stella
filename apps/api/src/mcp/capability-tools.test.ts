@@ -95,8 +95,11 @@ const consumeRateLimitMock = mock(async () => ({
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
-const { featureOmittedCapabilityIds, mapHandlerResult } =
-  await import("@/api/mcp/capability-tools");
+const {
+  featureOmittedCapabilityIds,
+  mapHandlerResult,
+  loadCapabilityEndpoint,
+} = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
 const { capabilityHandlerContext } =
@@ -2295,7 +2298,7 @@ describe("capability executor workspace resolution", () => {
 });
 
 describe("handlerCtx capability authorization lifetime", () => {
-  test("RPC submission headers do not become capability replay keys", async () => {
+  test("non-replay capabilities discard submission keys after the RPC body is consumed", async () => {
     const request = new Request("http://localhost/mcp", {
       method: "POST",
       body: JSON.stringify({ method: "tools/call" }),
@@ -2306,7 +2309,8 @@ describe("handlerCtx capability authorization lifetime", () => {
     });
     expect(await request.json()).toEqual({ method: "tools/call" });
     const handlerCtx = await capabilityHandlerContext({
-      capabilityId: "playbooks.create",
+      idempotency: undefined,
+      capabilityId: "playbooks.list",
       context: createContext(),
       input: { body: {}, params: {}, query: {} },
       request,
@@ -2315,6 +2319,41 @@ describe("handlerCtx capability authorization lifetime", () => {
     expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
     expect(handlerCtx.request.headers.get("X-Request-Id")).toBe("rpc-request");
     expect(request.headers.get("Idempotency-Key")).toBe("rpc-submission");
+  });
+
+  test("every replay-capable create preserves its retry key through the MCP context", async () => {
+    const replayCapabilities: string[] = [];
+    for (const entry of capabilityCatalog.filter(({ id }) =>
+      id.endsWith(".create"),
+    )) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      if (endpoint === null) {
+        continue;
+      }
+      const request = new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Idempotency-Key": "same-submission" },
+      });
+      const handlerCtx = await capabilityHandlerContext({
+        capabilityId: entry.id,
+        idempotency: endpoint.config.idempotency,
+        context: createContext(),
+        input: { body: {}, params: {}, query: {} },
+        request,
+        workspaceId: undefined,
+      });
+      if (endpoint.config.idempotency?.type === "replay") {
+        replayCapabilities.push(entry.id);
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+          "same-submission",
+        );
+      } else {
+        expect(handlerCtx.request.headers.get("Idempotency-Key")).toBeNull();
+      }
+      expect(request.headers.get("Idempotency-Key")).toBe("same-submission");
+    }
+    expect(replayCapabilities.length).toBeGreaterThan(1);
   });
 
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
@@ -2329,6 +2368,7 @@ describe("handlerCtx capability authorization lifetime", () => {
       },
     };
     const handlerCtx = await capabilityHandlerContext({
+      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2376,6 +2416,7 @@ describe("handlerCtx capability authorization lifetime", () => {
       }),
     });
     const handlerCtx = await capabilityHandlerContext({
+      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2403,6 +2444,7 @@ describe("handlerCtx capability authorization lifetime", () => {
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await capabilityHandlerContext({
+      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },

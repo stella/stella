@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "creationEvaluationLimitReached": "Olete kasutanud ära kõik {limit} organisatsioonide prooviperioodi. Organisatsiooni kustutamine ei taasta prooviperioodi. Kasutage olemasolevat organisatsiooni või võtke tasulise ligipääsu saamiseks ühendust klienditoega.",
     "creationInvalidName": "Sisesta sobiv organisatsiooni nimi (kuni {maxLength} märki).",
     "creationNotAllowed": "Selle kontoga ei saa organisatsioone luua.",
     "creationOutcomeUnknown": "Päring võis organisatsiooni luua. Tulemuse kontrollimiseks proovi uuesti.",

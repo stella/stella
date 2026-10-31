@@ -6,7 +6,11 @@ import {
   IDEMPOTENCY_IN_PROGRESS_CODE,
 } from "@stll/api-contract";
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
-import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
+import {
+  ORGANIZATION_EVALUATION_LIMIT,
+  ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+  ORGANIZATION_NAME_MAX_LENGTH,
+} from "@stll/api-contract/organization-create";
 
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
@@ -687,6 +691,11 @@ const TYPED_CREATION_REFUSALS = {
     status: 403,
     messageKey: "organization.creationNotAllowed",
   },
+  evaluationLimit: {
+    code: ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
+    status: 403,
+    messageKey: "organization.creationEvaluationLimitReached",
+  },
   rateLimit: {
     code: "rate_limited",
     status: 429,
@@ -736,6 +745,7 @@ test.each(
     const t = createTranslator({ locale, messages: original.messages });
     const localizedMessage = t(refusal.messageKey, {
       maxLength: ORGANIZATION_NAME_MAX_LENGTH,
+      limit: ORGANIZATION_EVALUATION_LIMIT,
     });
     expect(alert.textContent).toContain(localizedMessage);
     expect(alert.textContent).not.toContain(

@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Usando os padrões"
     },
+    "creationEvaluationLimitReached": "Você já utilizou todos os {limit} períodos de avaliação de organizações. Excluir uma organização não restaura um período de avaliação. Use uma organização existente ou entre em contato com o suporte para obter acesso pago.",
     "creationInvalidName": "Digite um nome de organização válido (até {maxLength} caracteres).",
     "creationNotAllowed": "Esta conta não pode criar organizações.",
     "creationOutcomeUnknown": "A solicitação pode ter criado uma organização. Tente novamente para verificar o resultado.",

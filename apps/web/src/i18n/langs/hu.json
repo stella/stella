@@ -4705,6 +4705,7 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Alapértelmezett beállítások használatban"
     },
+    "creationEvaluationLimitReached": "Már mind a {limit} szervezeti próbaidőszakot felhasználta. Egy szervezet törlése nem tesz újra elérhetővé próbaidőszakot. Használjon meglévő szervezetet, vagy forduljon az ügyfélszolgálathoz fizetős hozzáférésért.",
     "creationInvalidName": "Adjon meg egy érvényes szervezetnevet (legfeljebb {maxLength} karakter).",
     "creationNotAllowed": "Ezzel a fiókkal nem hozhatók létre szervezetek.",
     "creationOutcomeUnknown": "Előfordulhat, hogy a kérés létrehozott egy szervezetet. Próbálja újra az eredmény ellenőrzéséhez.",

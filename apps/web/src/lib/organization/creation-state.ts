@@ -6,6 +6,7 @@ import {
   API_VALIDATION_ERROR_CODE,
   IDEMPOTENCY_IN_PROGRESS_CODE,
 } from "@stll/api-contract";
+import { ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE } from "@stll/api-contract/organization-create";
 import { ownEntry } from "@stll/api-contract/own-key";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -14,6 +15,8 @@ import type { SafeId } from "@/lib/safe-id";
 
 const REFUSAL_MESSAGES = {
   account_access_unavailable: "organization.creationNotAllowed",
+  [ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE]:
+    "organization.creationEvaluationLimitReached",
   rate_limited: "organization.creationRateLimited",
   [API_VALIDATION_ERROR_CODE]: "organization.creationInvalidName",
   organization_slug_conflict: "organization.creationSlugConflict",
