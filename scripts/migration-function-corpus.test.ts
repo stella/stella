@@ -15,6 +15,29 @@ const original = `CREATE FUNCTION proof(p_id text DEFAULT 'x') RETURNS bigint LA
 $body$;`;
 
 describe("current migration function column references", () => {
+  test("preserves punctuation inside quoted parameter type identities", () => {
+    const definition = `CREATE FUNCTION proof(p "Matter . State") RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`;
+    expect(
+      references([definition, `DROP FUNCTION proof("Matter.State");`]),
+    ).toBe(true);
+    expect(
+      references([definition, `DROP FUNCTION proof("Matter . State");`]),
+    ).toBe(false);
+  });
+
+  test("quoted brackets in a type name are distinct from array dimensions", () => {
+    const definition = `CREATE FUNCTION proof(p "Matter[]") RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`;
+    expect(references([definition, `DROP FUNCTION proof("Matter[]"[]);`])).toBe(
+      true,
+    );
+    expect(references([definition, `DROP FUNCTION proof("Matter"[]);`])).toBe(
+      true,
+    );
+    expect(references([definition, `DROP FUNCTION proof("Matter[]");`])).toBe(
+      false,
+    );
+  });
+
   test("counts an SQL-only column in the current function body", () => {
     expect(references([original])).toBe(true);
     expect(references([`CREATE TABLE proofs(transaction_id bigint);`])).toBe(

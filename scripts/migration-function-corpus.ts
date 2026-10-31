@@ -66,8 +66,11 @@ const inputTypeWords = (tokens: Token[], end: number) => {
     }
   }
   return words
-    .join(" ")
-    .replace(/\s*\.\s*/gu, ".")
+    .map((word, index) =>
+      word === "." || words.at(index - 1) === "." ? word : ` ${word}`,
+    )
+    .join("")
+    .trimStart()
     .replace(/^pg_catalog\./u, "");
 };
 
@@ -110,13 +113,13 @@ const argumentType = (
   const start =
     input.at(0)?.index ??
     panic("Migration function argument has no input type");
-  const raw = statement.raw.slice(start, argumentEnd);
   // The statement scanner masks literals/comments; array brackets and '='
   // remain in its keyword view even though relation tokens omit them.
   const equals = statement.text.slice(start, argumentEnd).indexOf("=");
   const typeEnd = equals === -1 ? argumentEnd : start + equals;
   const type = inputTypeWords(input, typeEnd);
-  const arrays = raw.slice(0, typeEnd - start).match(/\[\s*\]/gu)?.length ?? 0;
+  const arrays =
+    statement.text.slice(start, typeEnd).match(/\[\s*\]/gu)?.length ?? 0;
   return `${TYPE_ALIASES[type] ?? type}${arrays > 0 ? "[]" : ""}`;
 };
 
