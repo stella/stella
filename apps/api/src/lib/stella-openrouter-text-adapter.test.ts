@@ -5,6 +5,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -18,7 +19,6 @@ import {
   createStellaOpenRouterText,
   StellaOpenRouterTextAdapter,
 } from "@/api/lib/stella-openrouter-text-adapter";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

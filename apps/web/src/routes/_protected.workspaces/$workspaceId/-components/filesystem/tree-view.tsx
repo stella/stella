@@ -33,7 +33,7 @@ import {
   EyeOffIcon,
   FileIcon,
 } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1165,16 +1165,7 @@ const ColumnHeaderCell = ({
           }}
           open={isContextOpen}
         >
-          <MenuTrigger
-            render={
-              <Button
-                aria-label={t("common.options")}
-                className="sr-only"
-                tabIndex={-1}
-                variant="plain"
-              />
-            }
-          />
+          <MenuAnchor />
           <MenuPopup anchor={contextAnchor ?? undefined}>
             <MenuItem
               onClick={() => {

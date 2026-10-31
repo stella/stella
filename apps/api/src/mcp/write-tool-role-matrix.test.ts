@@ -405,7 +405,7 @@ const REST_ENDPOINTS_BY_OPERATION: Readonly<
   },
   save_clause: { create: ["clauses.create"], update: ["clauses.update"] },
   save_contact: {
-    create: ["contacts.create", "contacts.import"],
+    create: ["contacts.create"],
     update: ["contacts.update"],
   },
   save_matter: {
