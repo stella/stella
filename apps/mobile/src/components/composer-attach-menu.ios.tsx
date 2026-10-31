@@ -3,9 +3,11 @@ import {
   accessibilityLabel,
   contentShape,
   frame,
+  glassEffect,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
-import { StyleSheet, View } from "react-native";
+import { isLiquidGlassAvailable } from "expo-glass-effect";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import type { ComposerAttachMenuProps } from "@/components/composer-attach-menu";
@@ -13,6 +15,9 @@ import { useUiColors } from "@/theme";
 
 /** The round button's inside: 36pt less its border. */
 const MENU_SIZE = 34;
+
+/** A Liquid Glass button has no border to make room for. */
+const GLASS_SIZE = 36;
 
 /**
  * The composer's (+): a tap opens the system menu of what can go into the
@@ -26,17 +31,31 @@ export const ComposerAttachMenu = ({
 }: ComposerAttachMenuProps) => {
   const ui = useUiColors();
   const t = useTranslations("chat");
+  // On iOS 26 the (+) is a Liquid Glass circle, as the platform's own; before
+  // it, the web's bordered round button.
+  const glass = isLiquidGlassAvailable();
+  const size = glass ? GLASS_SIZE : MENU_SIZE;
 
   return (
-    <View className="border-border bg-secondary mb-[3px] size-9 items-center justify-center rounded-full border">
-      <Host style={styles.host}>
+    <View
+      className={`mb-[3px] size-9 items-center justify-center rounded-full ${glass ? "" : "border-border bg-secondary border"}`}
+    >
+      <Host style={{ height: size, width: size }}>
         <Menu
           label={
             <Image color={ui.secondaryForeground} size={16} systemName="plus" />
           }
           modifiers={[
-            frame({ width: MENU_SIZE, height: MENU_SIZE }),
+            frame({ width: size, height: size }),
             contentShape(shapes.circle()),
+            ...(glass
+              ? [
+                  glassEffect({
+                    glass: { variant: "regular", interactive: true },
+                    shape: "circle",
+                  }),
+                ]
+              : []),
             accessibilityLabel(t("composerMenu")),
           ]}
         >
@@ -57,10 +76,3 @@ export const ComposerAttachMenu = ({
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  host: {
-    height: MENU_SIZE,
-    width: MENU_SIZE,
-  },
-});
