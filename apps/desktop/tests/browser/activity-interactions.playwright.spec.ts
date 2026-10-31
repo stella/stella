@@ -15,6 +15,7 @@ import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
 import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
+import { detectDesktopPlatform } from "../../src/shared/shortcut-keys";
 import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
 import {
   ACCOUNT,
@@ -523,6 +524,17 @@ const rejectName = (messages: Messages) =>
 
 const suggestionCard = (page: Page, matter: string) =>
   page.getByRole("region", { name: matter, exact: true });
+
+/** Presses a card shortcut with the primary modifier the window reads from
+ * its own user agent; Playwright's WebKit reports macOS on every host. */
+const pressCardShortcut = async (page: Page, key: "Backspace" | "Enter") => {
+  const platform = detectDesktopPlatform(
+    await page.evaluate(() => navigator.userAgent),
+  );
+  await page.keyboard.press(
+    `${platform === "mac" ? "Meta" : "Control"}+${key}`,
+  );
+};
 
 const openSuggestion = async (page: Page, matter: string) => {
   await page
@@ -2237,7 +2249,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
   await expect(suggestions).toHaveCount(4);
   await expect(suggestions.first()).toHaveClass(/border-dashed/u);
   await openSuggestion(page, "Example matter");
-  await page.keyboard.press("ControlOrMeta+Enter");
+  await pressCardShortcut(page, "Enter");
   await expect(suggestionCard(page, "Second matter")).toBeFocused();
   expect(batchRequests(await tauriInvocations(page))).toEqual([
     {
@@ -2258,7 +2270,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
       ],
     },
   ]);
-  await page.keyboard.press("ControlOrMeta+Backspace");
+  await pressCardShortcut(page, "Backspace");
   await expect(suggestionCard(page, "Third matter")).toBeFocused();
   await expect(suggestions.filter({ hasText: "Second matter" })).toHaveCount(0);
   await expect(suggestions).toHaveCount(2);
@@ -2391,7 +2403,7 @@ test("approving stella AI once sends only that suggestion's titles", async ({
       },
     },
   ]);
-  await page.keyboard.press("ControlOrMeta+Backspace");
+  await pressCardShortcut(page, "Backspace");
   await expect(suggestionCard(page, "Second matter")).toBeFocused();
   await expect(
     page.getByText(enMessages.activity.narrativeAiPrompt),
@@ -2419,7 +2431,7 @@ test("always approving stella AI persists the choice and writes later descriptio
       name: enMessages.activity.entryNarrative,
     }),
   ).toHaveValue(GENERATED_NARRATIVE);
-  await page.keyboard.press("ControlOrMeta+Enter");
+  await pressCardShortcut(page, "Enter");
   const next = suggestionCard(page, "Second matter");
   await expect(next).toBeFocused();
   await expect(
