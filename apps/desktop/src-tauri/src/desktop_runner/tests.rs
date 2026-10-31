@@ -431,6 +431,10 @@ async fn the_upgrade_carries_bearer_fresh_device_proof_and_installation_and_hell
       format!("{}{PATH}", gateway.base_url()).parse().unwrap(),
     );
     checked.headers_mut().insert("dpop", proof.parse().unwrap());
+    checked.headers_mut().insert(
+      "authorization",
+      connection.headers["authorization"].clone(),
+    );
     crate::device_proof::tests::verify_request(
       &checked,
       &setup.device_key.thumbprint().unwrap(),
