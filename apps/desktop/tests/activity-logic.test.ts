@@ -50,7 +50,6 @@ describe("activity contract", () => {
       deletionStatus: "available",
       manualAssignments: [],
       draftedEntries: [],
-      timeBillingEnabled: false,
       earliestDate: "2026-02-09",
       latestDate: "2026-03-10",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],

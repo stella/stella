@@ -23,6 +23,7 @@ import {
   writeDecision,
 } from "../../../scripts/ci-job-classification/decisions";
 import {
+  createDocumentDigest,
   generateClassification,
   readClassificationInputs,
 } from "../../../scripts/ci-job-classification/generate";
@@ -32,6 +33,11 @@ import {
   CLASSIFICATION_INPUT_PATHS,
   decisionPathForKey,
 } from "../../../scripts/ci-job-classification/inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+} from "../../../scripts/ci-job-classification/job-digests";
 import {
   createCandidateMetadataReader,
   PUBLIC_METADATA,
@@ -374,23 +380,20 @@ const fixture = () => {
   const root = manifest.nodes.find((node) => node.id === "root");
   if (root?.type === "metadata") {
     const actionDigest = parseDocument(action);
-    const calleeDigest = parseDocument(callee);
     const parsedRoot = parseDocument(workflow);
-    if (actionDigest.isErr() || calleeDigest.isErr() || parsedRoot.isErr()) {
+    if (actionDigest.isErr() || parsedRoot.isErr()) {
       throw new AdmissionError({ message: "fixture digest parsing failed" });
     }
+    // A reusable-workflow call job binds its call surface alone; only the
+    // job that runs the local action binds that action's document.
     root.jobs = root.jobs.map((job) => {
       const definition = parsedRoot.value.jobs[job.id];
-      if (!definition) {
+      if (!definition || job.id !== "caller") {
         return job;
       }
-      const dependencies =
-        job.id === "caller"
-          ? { "$/.github/actions/local": actionDigest.value.digest }
-          : {
-              "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
-                calleeDigest.value.digest,
-            };
+      const dependencies = {
+        "$/.github/actions/local": actionDigest.value.digest,
+      };
       return {
         ...job,
         digest: sha256(
@@ -1060,25 +1063,34 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
     throw root.error;
   }
   const nodes = new Map(f.manifest.nodes.map((node) => [node.id, node]));
-  const documentDigest = (id: string): string => {
-    const node = nodes.get(id);
-    if (!node || node.type !== "metadata") {
-      return id;
-    }
-    const parsed = parseDocument(f.reader.read(node.repository, node.path));
-    if (parsed.isErr()) {
-      throw parsed.error;
-    }
-    const dependencies = Object.fromEntries(
-      Object.entries(node.edges)
-        .filter(([, target]) => nodes.get(target)?.type === "metadata")
-        .toSorted(([left], [right]) => left.localeCompare(right))
-        .map(([reference, target]) => [reference, documentDigest(target)]),
-    );
-    return Object.keys(dependencies).length
-      ? sha256(JSON.stringify({ digest: parsed.value.digest, dependencies }))
-      : parsed.value.digest;
-  };
+  const parsedDocuments = new Map(
+    f.manifest.nodes.flatMap((node) => {
+      if (node.type !== "metadata") {
+        return [];
+      }
+      const parsed = parseDocument(f.reader.read(node.repository, node.path));
+      if (parsed.isErr()) {
+        throw parsed.error;
+      }
+      return [[node.id, parsed.value] as const];
+    }),
+  );
+  const decisions = Object.fromEntries(
+    f.manifest.nodes.flatMap((node) =>
+      node.type === "metadata"
+        ? Object.keys(parsedDocuments.get(node.id)?.jobs ?? {}).map((id) => [
+            `${node.repository}:${node.path}/${id}`,
+            { kind: ORDINARY },
+          ])
+        : [],
+    ),
+  );
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+  const documentDigest = createDocumentDigest({ nodes, parsedDocuments });
   return {
     decisions: Object.fromEntries(
       f.manifest.nodes.flatMap((node) => {
@@ -1091,46 +1103,32 @@ const fixtureGenerationOptions = (f: ReturnType<typeof fixture>) => {
         ) {
           return [];
         }
-        const parsed = parseDocument(f.reader.read(node.repository, node.path));
-        if (parsed.isErr()) {
-          throw parsed.error;
+        const parsed = parsedDocuments.get(node.id);
+        if (!parsed) {
+          throw new AdmissionError({ message: "parsed metadata missing" });
         }
-        return Object.entries(parsed.value.jobs).map(([id, job]) => [
+        return Object.entries(parsed.jobs).map(([id, job]) => [
           `${node.repository}:${node.path}/${id}`,
           {
             kind: ORDINARY,
             qualifier: "Reviewed checks",
             approvedDigests: [
-              (() => {
-                const dependencies = Object.fromEntries(
-                  Object.keys(job.dependencies)
-                    .toSorted()
-                    .flatMap((reference) => {
-                      let target = node.edges[reference];
-                      const local =
-                        reference.startsWith("./") ||
-                        reference.startsWith("$/");
-                      if (
-                        !target &&
-                        local &&
-                        job.dependencies[reference] === "action"
-                      ) {
-                        target = "action";
-                      } else if (
-                        !target &&
-                        job.dependencies[reference] === "reusable-workflow"
-                      ) {
-                        target = "callee";
-                      }
-                      return target && nodes.get(target)?.type === "metadata"
-                        ? [[reference, documentDigest(target)]]
-                        : [];
-                    }),
-                );
-                return Object.keys(dependencies).length
-                  ? sha256(JSON.stringify({ digest: job.digest, dependencies }))
-                  : job.digest;
-              })(),
+              expectedJobDigest({
+                definition: job,
+                privileged:
+                  jobPrivileges.get(`${node.repository}:${node.path}/${id}`) ??
+                  false,
+                inheritedGrants: inheritedGrants.get(
+                  `${node.repository}:${node.path}/${id}`,
+                ),
+                dependencyDigests: jobDependencyDigests({
+                  definition: job,
+                  edges: node.edges,
+                  isMetadata: (target) =>
+                    nodes.get(target)?.type === "metadata",
+                  documentDigest,
+                }),
+              }),
             ],
           },
         ]);
@@ -1284,9 +1282,12 @@ test("classification generation scopes relative action identity to the caller re
     throw new AdmissionError({ message: "source fixture missing" });
   }
   const reference = "./.github/actions/local";
+  const originalReference = "$/.github/actions/local";
   const workflow = f.reader
     .read("candidate", root.path)
-    .replace("$/.github/actions/local", () => reference);
+    .replace(originalReference, () => reference);
+  root.edges[reference] = root.edges[originalReference] ?? "action";
+  delete root.edges["$/.github/actions/local"];
   f.documents.set(`candidate:${root.path}`, workflow);
   f.documents.set(
     "other:.github/actions/local/action.yml",
@@ -2550,30 +2551,13 @@ test("decisions for removed jobs fail without changing sibling job digests", () 
   if (parsed.isErr()) {
     throw parsed.error;
   }
-  const callee = parseDocument(
-    f.reader.read(
-      "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-      ".github/workflows/reusable.yml",
-    ),
-  );
-  if (callee.isErr()) {
-    throw callee.error;
-  }
   const reusableDecision = options.decisions[`${key}/reusable`];
   if (!reusableDecision) {
     throw new AdmissionError({ message: "reusable decision missing" });
   }
-  expect([
-    sha256(
-      JSON.stringify({
-        digest: parsed.value.jobs["reusable"]?.digest,
-        dependencies: {
-          "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
-            callee.value.digest,
-        },
-      }),
-    ),
-  ]).toEqual(reusableDecision.approvedDigests);
+  expect([parsed.value.jobs["reusable"]?.digest]).toEqual(
+    reusableDecision.approvedDigests,
+  );
   const result = generateClassification(options);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
