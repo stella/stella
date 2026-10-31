@@ -23,6 +23,7 @@ import {
   ASK_USER_TOOL_NAME,
   CREATE_DOCUMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/native-chat-tool-names";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -882,7 +883,7 @@ class ForkFrom implements fc.AsyncCommand<Model, Real> {
         query: {},
         recordAuditEvent: async () => undefined,
         request: new Request("http://localhost/v1/chat/threads/fork"),
-        route: "/v1/chat/threads/:threadId/fork",
+        route: "/v1/chat/threads/:threadId/fork" satisfies ApiRoutePath,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -1211,6 +1212,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "continue-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",
   ),
+  "continue-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
+  ),
   copy: READS_ONLY,
   "delete-thread": notModelled(
     "Deleting the thread ends the conversation; nothing is left to check.",
@@ -1219,14 +1223,23 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "edit-answer": notModelled(
     "Edit and rerun lives in the session hook, which the harness does not render.",
   ),
+  "edit-message": notModelled(
+    "Editing a sent message lives in the session hook, which the harness does not render; edit-user-message.postgres.test.ts covers the stored history and its reload.",
+  ),
   export: READS_ONLY,
   fork: byCommands("ForkFrom", ForkFrom.allows),
+  "hold-queue-for-message-edit": notModelled(
+    "Holding queued prompts while a message editor is open lives in the session queue, which the harness does not render; user-message-edit-session.dom.test.tsx covers it.",
+  ),
   "improve-prompt": PAGE_STATE,
   "load-older": READS_ONLY,
   "move-to-side": PAGE_STATE,
   "new-chat": byCommands("LeaveThread", LeaveThread.allows),
   "open-created-document": READS_ONLY,
   "open-draft": READS_ONLY,
+  "open-message-editor": notModelled(
+    "Opening the editor only stops a running turn, through the same stop the harness models as its own command.",
+  ),
   "open-playbook": READS_ONLY,
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": notModelled(
@@ -1253,6 +1266,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
       SendUserMessage.allows(model) ||
       SupersedeCards.allows(model) ||
       isBusy(model),
+  ),
+  "submit-connector-request": notModelled(
+    "Connector cards submit through their own endpoint, which the harness does not drive.",
   ),
   "submit-private-input": notModelled(
     "Private input cards submit through their own endpoint, which the harness does not drive.",

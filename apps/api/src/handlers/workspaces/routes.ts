@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { apiDateSchema } from "@stll/api-contract/api-date";
-
 import createWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/create";
 import deleteWorkspaceAnonymizationAllowlistEntry from "@/api/handlers/workspaces/anonymization-allowlist/delete";
 import readWorkspaceAnonymizationAllowlist from "@/api/handlers/workspaces/anonymization-allowlist/list";
@@ -33,6 +31,7 @@ import readJustifications from "@/api/handlers/workspaces/justifications/list";
 import readWorkspaces from "@/api/handlers/workspaces/list";
 import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
+import readWorkspaceMembers from "@/api/handlers/workspaces/members/list";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import readWorkspaceActivity from "@/api/handlers/workspaces/read-activity";
@@ -44,11 +43,11 @@ import readSearchPreview from "@/api/handlers/workspaces/search-preview/get";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateWorkspace from "@/api/handlers/workspaces/update";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
+import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import readWorkflow from "@/api/handlers/workspaces/workflow/get";
 import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
-import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { mount, routes } from "@/api/http/route";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -82,16 +81,13 @@ const readOverview = createSafeHandler(
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "covered", by: "list_matters" },
-    query: v.object({
-      agendaFrom: v.optional(apiDateSchema),
-    }),
+    query: v.object({}),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ safeDb, workspaceId, query }) {
+  async function* ({ safeDb, workspaceId }) {
     const response = yield* Result.await(
       readOverviewHandler({
         workspaceId,
         safeDb,
-        agendaFrom: query.agendaFrom,
       }),
     );
 
@@ -115,28 +111,6 @@ const readWorkspaceContacts = createSafeHandler(
   },
 );
 
-const readWorkspaceMembers = createSafeHandler(
-  {
-    contract: "patch",
-    permissions: { workspace: ["read"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
-    mcp: { type: "covered", by: "list_matters" },
-  } satisfies WorkspaceHandlerConfig,
-  async function* ({ scopedDb, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readWorkspaceMembersHandler({
-            workspaceId,
-            scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
 export const workspacesRoute = mount(
   [
     routes({
@@ -152,6 +126,7 @@ export const workspacesRoute = mount(
           POST: updateWorkspace,
           DELETE: deleteWorkspace,
         },
+        "/vocabulary": { GET: readVocabulary },
         "/workflow": { GET: readWorkflow },
         "/workflow/start": { POST: workflowStart },
         "/workflow/target-count": { POST: workflowTargetCount },

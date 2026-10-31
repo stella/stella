@@ -9,7 +9,7 @@ const PACKAGE_JSON_PATTERN = /^packages\/[^/]+\/package\.json$/u;
 const CLI_PACKAGE_PATH = "packages/cli/package.json";
 const CLI_VERSION_PATH = "packages/cli/src/generated/cli-version.ts";
 const DATA_PATH_PATTERNS = [
-  /^\.changeset\/[^/]+\.md$/u,
+  /^\.changeset\/(?!README\.md$)[^/]+\.md$/u,
   /^docs\/changelog\/v[^/]+\.md$/u,
   /^packages\/[^/]+\/CHANGELOG\.md$/u,
 ];
@@ -47,16 +47,28 @@ const refuse = (message) => {
   process.exit(1);
 };
 
-const mainSha = process.argv[2] ?? "";
-const candidateSha = process.argv[3] ?? "";
+const givenMainSha = process.argv[2] ?? "";
+const givenCandidateSha = process.argv[3] ?? "";
 const repository = process.argv[4] ?? "";
-if (!SHA_PATTERN.test(mainSha) || !SHA_PATTERN.test(candidateSha)) {
+if (!SHA_PATTERN.test(givenMainSha) || !SHA_PATTERN.test(givenCandidateSha)) {
   refuse("expected full lowercase main and candidate SHAs");
 }
 const REPOSITORY_PATTERN = /^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/u;
 const repositoryParts = REPOSITORY_PATTERN.exec(repository);
 if (repositoryParts === null) {
   refuse("expected the owner/name repository as the third argument");
+}
+const RELEASE_PR_HEAD_FLAG = "--release-pr-head";
+const releasePrHead = process.argv.length > 5 ? (process.argv[6] ?? "") : null;
+if (
+  releasePrHead !== null &&
+  (process.argv.length !== 7 ||
+    process.argv[5] !== RELEASE_PR_HEAD_FLAG ||
+    !SHA_PATTERN.test(releasePrHead))
+) {
+  refuse(
+    `expected only ${RELEASE_PR_HEAD_FLAG} <full SHA> after the repository`,
+  );
 }
 
 /**
@@ -105,8 +117,35 @@ const isRecord = (value) =>
 const compareCodeUnit = (left, right) =>
   left < right ? -1 : Number(left > right);
 
+/**
+ * The range to verify. Main is squash-only, so a merged version commit carries
+ * every release-branch commit under the merger's name. Given the merged release
+ * pull request head, the version commit must hold exactly that head's tree, and
+ * the range from the version commit's parent to the head is verified, where
+ * each generated file still names the bot that wrote it.
+ * @returns {[string, string]} Main and candidate commits of the verified range.
+ */
+const verifiedRange = () => {
+  if (releasePrHead === null) {
+    return [givenMainSha, givenCandidateSha];
+  }
+  const tree = (/** @type {string} */ sha) =>
+    git("rev-parse", sha.concat("^{tree}")).trim();
+  if (tree(givenCandidateSha) !== tree(releasePrHead)) {
+    refuse(
+      `version commit ${givenCandidateSha} does not hold the tree of its release pull request head ${releasePrHead}`,
+    );
+  }
+  // The head must already contain the version commit's parent (checked below
+  // as for any candidate): otherwise a squash holding the head's tree would
+  // silently revert what main gained after the branch last merged it.
+  return [givenMainSha, releasePrHead];
+};
+const [mainSha, candidateSha] = verifiedRange();
+
 try {
   execFileSync("git", ["merge-base", "--is-ancestor", mainSha, candidateSha], {
+    maxBuffer: 2 ** 30,
     stdio: "ignore",
   });
 } catch {
@@ -332,7 +371,16 @@ if (!VERSION_PATTERN.test(candidateVersion)) {
 
 for (const path of FIXED_DATA_PATHS) {
   if (path.endsWith(".json") && changedPaths.includes(path)) {
-    parseJson(show(candidateSha, path), path);
+    const value = parseJson(show(candidateSha, path), path);
+    if (
+      path === "apps/landing/src/data/changelog-release-dates.json" &&
+      (!isRecord(value) ||
+        Object.values(value).some(
+          (date) => date !== null && typeof date !== "string",
+        ))
+    ) {
+      refuse(`${path} must map release names to timestamps or null`);
+    }
   }
 }
 

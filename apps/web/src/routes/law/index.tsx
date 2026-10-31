@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useDeferredValue, useState } from "react";
 
 import {
   useQuery,
@@ -50,28 +50,31 @@ import {
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
+import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
 import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { useFormatter, useLocale } from "@/i18n/formatting-context";
+import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { optionalFlagSearchSchema } from "@/lib/schema";
 import { formatValidityDate } from "@/lib/statutes/statute-format";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { routeSearchSchema } from "@/route-search-params";
 import {
   lawHomeDescriptor,
@@ -257,10 +260,9 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 );
 
 function LawHome() {
-  const { record: historyRecord } = useLawHistory();
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
@@ -273,7 +275,7 @@ function LawHome() {
     if (!decisionNotFound) {
       return;
     }
-    notifyUserError(undefined, t("caseLaw.decisionNotFound"));
+    notifyUserProblem(t("caseLaw.decisionNotFound"));
     detached(
       routeNavigate({
         replace: true,
@@ -286,6 +288,11 @@ function LawHome() {
   const scope =
     publicCaseLawCountryFromParam(country) ??
     panic("The law route rendered without a launch-ready country.");
+  // The same list Recent shows, so recording and listing share one query.
+  const { record: historyRecord } = useLawHistory({
+    filter: "all",
+    country: scope,
+  });
   const countryParam = toCaseLawCountryParam(scope);
   // The results page reads this jurisdiction's stored excerpt length too, so
   // the lookup below and the list it falls back to share one cached result set.
@@ -305,12 +312,18 @@ function LawHome() {
       ? "all"
       : requestedScope;
 
-  const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
+  // Deferred: the reader's practice languages arrive after the first paint,
+  // and the shelf already drawn stays while it is read again in them, rather
+  // than suspending back to its skeleton.
+  const shelfLanguages = useDeferredValue(readingLanguages);
+  const { data: latest } = useSuspenseQuery(
+    latestDecisionsOptions(scope, shelfLanguages),
+  );
   const shelfQuery = useQuery({
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
   });
-  const shelfView = useQueryView(shelfQuery);
+  const shelfView = queryView(shelfQuery);
   useQueryViewError(shelfView, "LawHome:query");
   const shelf = shelfView.type === "items" ? shelfView.items : undefined;
 
@@ -324,7 +337,7 @@ function LawHome() {
     if (trimmed.length === 0) {
       return;
     }
-    historyRecord.mutate({ kind: "search", query: trimmed });
+    historyRecord.mutate({ kind: "search", query: trimmed, country: scope });
 
     if (
       statuteCountry !== null &&
@@ -351,7 +364,7 @@ function LawHome() {
       navigate,
       queryClient,
       search: { country: countryParam, q: trimmed },
-      uiLocale,
+      readingLanguages,
     });
     if (opened) {
       return;
@@ -512,9 +525,9 @@ function LawHome() {
               })}
               to="/law/$country/statutes/$slug"
             >
-              <LandingItemText
+              <StatuteSignalText
                 meta={signalLine(side, item.versionValidFrom)}
-                title={item.title}
+                statute={item}
               />
             </Link>
           ))
@@ -522,7 +535,7 @@ function LawHome() {
           <LandingEmpty>{t("lawHome.noSignals")}</LandingEmpty>
         )}
       </LandingSection>
-      <LawRecent onSearch={rerunSearch} />
+      <LawRecent country={scope} onSearch={rerunSearch} />
     </LandingLayout>
   );
 }

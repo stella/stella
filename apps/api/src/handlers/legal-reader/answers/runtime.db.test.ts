@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -20,20 +20,24 @@ import {
   type ReaderAnswerSpans,
 } from "@stll/api-contract/reader-answers";
 import { sleep } from "@stll/concurrency/sleep";
+import type { Block } from "@stll/legal-ast/document-ast";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteReaderAnswerHandler } from "@/api/handlers/legal-reader/answers/delete";
 import { listReaderAnswersHandler } from "@/api/handlers/legal-reader/answers/list";
 import { prepareReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import type { ReaderAnswerCommand } from "@/api/handlers/legal-reader/answers/operation";
+import { readerAnswerRequest } from "@/api/handlers/legal-reader/answers/request";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { ReaderAnswerStreamOptions } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readReaderAnswerDecision } from "@/api/lib/case-law/reader-answer-corpus";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -67,6 +71,7 @@ beforeAll(async () => {
   await database.insert(user).values({
     id: userId,
     name: "Reader",
+    readerAnswerLanguage: "en",
     email: `${userId}@example.test`,
     emailVerified: true,
     createdAt: new Date(),
@@ -83,6 +88,8 @@ afterAll(releaseTestDb);
 afterEach(() => setSystemTime());
 
 const scope = (activeDatabase = database) => ({
+  readCopies: async () =>
+    new WithdrawnCopyProjection([], "Withdrawn by publisher"),
   organizationId,
   userId,
   recordAuditEvent: async () => undefined,
@@ -102,6 +109,7 @@ const prepare = async (
         decisionId,
         court: "Test court",
         decisionDate: "2026-01-01",
+        language: "cs",
         paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
       }),
   });
@@ -227,6 +235,7 @@ describe("reader answer turn lifecycle", () => {
             : Result.err(
                 new HandlerError({
                   status: 502,
+                  code: "internal_error",
                   message: "Provider unavailable",
                 }),
               ),
@@ -288,6 +297,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text }],
           }),
       });
@@ -340,6 +350,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs,
         }),
     });
@@ -384,6 +395,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs,
           }),
       });
@@ -391,6 +403,102 @@ describe("reader answer turn lifecycle", () => {
         status: 400,
         code: READER_ANSWER_ANCHOR_MISMATCH_CODE,
       });
+    }
+  });
+
+  test("explains a selection in every block kind the reader anchors, from create through the stream", async () => {
+    const blocks: Block[] = [
+      {
+        type: "heading",
+        id: "heading",
+        anchorId: "h-1",
+        level: 2,
+        inlines: [{ type: "text", text: "Odůvodnění" }],
+        plainText: "Odůvodnění",
+      },
+      {
+        type: "paragraph",
+        id: "footnote",
+        anchorId: "fn-1",
+        note: { type: "footnote", label: "1" },
+        inlines: [{ type: "text", text: "Poznámka soudu." }],
+        plainText: "Poznámka soudu.",
+      },
+      {
+        type: "table",
+        id: "table",
+        anchorId: "t-1",
+        rows: [
+          [
+            {
+              inlines: [{ type: "text", text: "Spisová značka" }],
+              plainText: "Spisová značka",
+            },
+          ],
+        ],
+        plainText: "Spisová značka",
+      },
+    ];
+    // The decision as the reader source returns it, read through the real
+    // corpus mapping rather than a hand-written paragraph list.
+    const readDecision = async () =>
+      await readReaderAnswerDecision(decisionId, {
+        readDecision: async () =>
+          asTestRaw({
+            status: "read",
+            ast: { blocks, metadata: {} },
+            decision: {
+              id: decisionId,
+              caseNumberType: "case-number",
+              court: "Test court",
+              decisionDate: "2026-01-01",
+            },
+          }),
+      });
+    for (const { anchorId, text } of [
+      { anchorId: "h-1", text: "Odůvodnění" },
+      { anchorId: "fn-1", text: "Poznámka soudu." },
+      { anchorId: "table:table:0:0", text: "Spisová značka" },
+    ]) {
+      const quote = text.slice(1);
+      const prepared = await prepareReaderAnswer({
+        ...scope(),
+        command: {
+          type: "create",
+          body: {
+            kind: "explain",
+            decisionId,
+            anchor: {
+              spans: [
+                {
+                  paragraphId: anchorId,
+                  quote,
+                  startOffset: 1,
+                  endOffset: text.length,
+                },
+              ],
+            },
+            locale: "cs-CZ",
+          },
+        },
+        readDecision,
+      });
+      if (Result.isError(prepared)) {
+        throw prepared.error;
+      }
+      const { text: streamed } = await complete(prepared.value, {
+        runModel: async ({ onDelta }) => {
+          onDelta("The explanation");
+          return Result.ok({
+            content: `The explanation [[${decisionId}#${anchorId}]].`,
+            model: "fixture-model",
+            usage: null,
+          });
+        },
+      });
+      expect(terminalEvents(streamed)).toEqual([
+        expect.objectContaining({ type: "complete", invalidCitationCount: 0 }),
+      ]);
     }
   });
 
@@ -416,6 +524,7 @@ describe("reader answer turn lifecycle", () => {
             decisionId,
             court: "Test court",
             decisionDate: "2026-01-01",
+            language: "cs",
             paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
           }),
       });
@@ -473,6 +582,7 @@ describe("reader answer turn lifecycle", () => {
           decisionId,
           court: "Test court",
           decisionDate: "2026-01-01",
+          language: "cs",
           paragraphs: [{ paragraphId: "p-1", text: "The holding follows." }],
         }),
     });
@@ -567,9 +677,18 @@ describe("reader answer turn lifecycle", () => {
     { reason: "busy", code: ACTION_ADMISSION_CODES.concurrencyBusy },
     { reason: "not_enabled", code: ACTION_ADMISSION_CODES.notEnabled },
     {
-      reason: "unavailable",
-      code: ACTION_ADMISSION_CODES.admissionUnavailable,
+      reason: "store_unavailable",
+      code: ACTION_ADMISSION_CODES.storeUnavailable,
     },
+    {
+      reason: "configuration_incomplete",
+      code: ACTION_ADMISSION_CODES.configurationIncomplete,
+    },
+    {
+      reason: "organization_state_unreadable",
+      code: ACTION_ADMISSION_CODES.organizationStateUnreadable,
+    },
+    { reason: "lease_lost", code: ACTION_ADMISSION_CODES.leaseLost },
   ] as const)(
     "admission $reason persists its precise recovery code on stream and reload",
     async ({ reason, code }) => {
@@ -616,12 +735,38 @@ describe("reader answer turn lifecycle", () => {
     },
   );
 
+  test("an unclassified admission failure persists an internal error without claiming a store outage", async () => {
+    const prepared = await create();
+    const { text } = await complete(prepared, {
+      admitModelAction: async () => {
+        throw new HandlerError({
+          status: 500,
+          code: "internal_error",
+          message: "Admission failed",
+        });
+      },
+    });
+    expect(terminalEvents(text).at(0)?.errorCode).toBe("internal");
+    expect(await message(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+    expect(await reload(prepared)).toMatchObject({
+      status: "failed",
+      errorCode: "internal",
+    });
+  });
+
   test("model failures settle streaming messages as failed", async () => {
     const prepared = await create();
     const { text } = await complete(prepared, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     expect(text).toContain('"type":"failed"');
@@ -732,7 +877,11 @@ describe("reader answer turn lifecycle", () => {
           `Related [[${relatedId}#p-7]]. Invented [[${relatedId}#p-99]].`,
         );
         return Result.err(
-          new HandlerError({ status: 502, message: "Provider interrupted" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider interrupted",
+          }),
         );
       },
     });
@@ -779,7 +928,11 @@ describe("reader answer turn lifecycle", () => {
     await complete(first, {
       runModel: async () =>
         Result.err(
-          new HandlerError({ status: 502, message: "Provider unavailable" }),
+          new HandlerError({
+            status: 502,
+            code: "internal_error",
+            message: "Provider unavailable",
+          }),
         ),
     });
     const regenerated = await prepare({
@@ -861,6 +1014,7 @@ describe("reader answer turn lifecycle", () => {
           return Result.err(
             new HandlerError({
               status: 502,
+              code: "internal_error",
               message: "Expired fixture generation",
             }),
           );
@@ -1312,5 +1466,58 @@ describe("reader answer turn lifecycle", () => {
       status: "complete",
       model: "requested-model",
     });
+  });
+  test("an omitted request locale uses the saved account preference before the document language", async () => {
+    const prepared = await prepare({
+      type: "create",
+      body: { kind: "explain", decisionId, anchor },
+    });
+    const slovakPrepared = {
+      ...prepared,
+      decision: { ...prepared.decision, language: "sk" },
+    };
+    const reader =
+      (
+        await database
+          .select({
+            readerAnswerLanguage: user.readerAnswerLanguage,
+          })
+          .from(user)
+          .where(eq(user.id, userId))
+          .limit(1)
+      ).at(0) ?? panic("Reader language fixture is missing");
+    expect(reader.readerAnswerLanguage).toBe("en");
+    expect(slovakPrepared.locale).toBeUndefined();
+    expect(slovakPrepared.decision.language).not.toBe(
+      reader.readerAnswerLanguage,
+    );
+    const streams: ReaderAnswerStreamOptions[] = [];
+    const { safeDb, recordAuditEvent } = scope();
+    const request = readerAnswerRequest(
+      {
+        session: { activeOrganizationId: organizationId },
+        user: { id: userId, readerAnswerLanguage: reader.readerAnswerLanguage },
+        safeDb,
+        recordAuditEvent,
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(markRlsDatabase(database), [], organizationId, userId),
+        ),
+        orgAIConfig: {
+          providers: [{ provider: "openai", apiKey: "fixture-key" }],
+          overrideModels: null,
+          decision: null,
+        },
+        orgAIConfigStatus: "ok",
+        managedAIResidency: "eu",
+        request: new Request("http://localhost/reader-answer"),
+      },
+      (options) => {
+        streams.push(options);
+        return new Response(null);
+      },
+    ).unwrap();
+    request.stream(slovakPrepared);
+    expect(streams).toHaveLength(1);
+    expect(streams.at(0)?.prepared.locale).toBe("en");
   });
 });

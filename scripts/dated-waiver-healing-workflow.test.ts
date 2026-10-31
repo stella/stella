@@ -73,7 +73,8 @@ test("package and probe execution precede conditional write credential minting",
   const token = requiredStep("Mint app token");
   const probe = requiredStep("Probe dated entries");
   const publish = requiredStep("Publish healing results");
-  const condition = "steps.probe.outputs.write_needed == 'true'";
+  const condition =
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true";
   expect(steps.indexOf(requiredStep("Install dependencies"))).toBeLessThan(
     steps.indexOf(probe),
   );
@@ -87,14 +88,19 @@ test("package and probe execution precede conditional write credential minting",
   for (const step of steps.slice(0, steps.indexOf(token))) {
     expect(JSON.stringify(step)).not.toContain("app-token.outputs.token");
   }
-  expect(token.with).toMatchObject({
+  expect(
+    Object.fromEntries(
+      Object.entries(token.with ?? {}).filter(([key]) =>
+        key.startsWith("permission-"),
+      ),
+    ),
+  ).toEqual({
     "permission-contents": "write",
-    "permission-pull-requests": "write",
     "permission-issues": "write",
+    "permission-pull-requests": "write",
   });
   expect(token.with?.["repositories"]).toContain("DATED_WAIVER_FIX_REPOSITORY");
   expect(publish.env?.["GH_READ_TOKEN"]).toBe(`\${{ github.token }}`);
-  expect(publish.env?.["MERGE_HOLD"]).toBe(`\${{ vars.STELLA_MERGE_HOLD }}`);
 });
 
 test("probe evidence stays local and public output does not expose failed probes", () => {
@@ -146,8 +152,42 @@ test("the shared probe deadline preserves a separate publication budget", () => 
     expect(requiredStep(name)["timeout-minutes"]).toBeGreaterThan(0);
   }
   expect(requiredStep("Publish healing results").if).toBe(
-    "steps.probe.outputs.write_needed == 'true'",
+    "steps.probe.outputs.write_needed == 'true' && inputs.dry_run != true",
   );
+});
+
+test("a dispatched dry run probes and checks but never mints a write token", () => {
+  const writeSteps = [
+    "Validate private task configuration",
+    "Mint app token",
+    "Publish healing results",
+  ].map(requiredStep);
+  const runs = (inputs: Record<string, boolean>) =>
+    writeSteps.map(({ if: condition }) =>
+      evaluate(condition ?? "true", {
+        values: {
+          "steps.probe.outputs.write_needed": "true",
+          ...Object.fromEntries(
+            Object.entries(inputs).map(([key, value]) => [
+              `inputs.${key}`,
+              value,
+            ]),
+          ),
+        },
+        fallback: (name) => (name.startsWith("inputs.") ? null : undefined),
+      }),
+    );
+  // A schedule has no inputs; a plain dispatch publishes like the schedule.
+  expect(runs({})).toEqual([true, true, true]);
+  expect(runs({ dry_run: false })).toEqual([true, true, true]);
+  expect(runs({ dry_run: true })).toEqual([false, false, false]);
+  expect(requiredStep("Probe dated entries").if).toBeUndefined();
+  expect(
+    requiredStep("Check every dated waiver on the default branch").if,
+  ).toBe(`\${{ !cancelled() }}`);
+  expect(workflow.on.workflow_dispatch).toMatchObject({
+    inputs: { dry_run: { type: "boolean", default: false } },
+  });
 });
 
 test("every healing job has an explicit main event policy", () => {
@@ -308,7 +348,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
   expect(check?.run).toBe(
     'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files" --changed-files "$DATED_WAIVER_CHANGED_FILES"',
   );
-  for (const step of expiry.steps) {
+  for (const step of guardSteps) {
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
   }

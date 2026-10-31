@@ -62,6 +62,28 @@ describe("tenant action size boundaries", () => {
     }
   });
 
+  test("reuses an actual byte measurement across nested admission boundaries", async () => {
+    const first = await boundActionRequest(
+      requestWithBody("measured once", "0"),
+      64,
+    );
+    if (Result.isError(first)) {
+      panic("The first boundary must admit the body");
+    }
+    const bounded = first.value.request;
+
+    const second = await boundActionRequest(bounded, 64);
+    if (Result.isError(second)) {
+      panic("The nested boundary must admit the measured body");
+    }
+    // The nested boundary reuses the measurement instead of reading again.
+    expect(second.value.request).toBe(bounded);
+    expect(second.value.bytes).toBe(first.value.bytes);
+    expect(bounded.bodyUsed).toBe(false);
+    expect(await bounded.text()).toBe("measured once");
+    expect(Result.isError(await boundActionRequest(bounded, 4))).toBe(true);
+  });
+
   test("bounds complete serialized JSON envelopes including escaping and multibyte text without emitting fragments", async () => {
     for (const text of ["é", "😀", 'line\nquote"slash\\', "\u0000", "plain"]) {
       const serialized = JSON.stringify({

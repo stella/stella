@@ -76,6 +76,8 @@ const golden = ({
     buyerCountry,
     lines: [
       {
+        workspaceId: "matter-one",
+        workspaceName: "Právne poradenstvo",
         description: "Právne poradenstvo k zmluve o dielo",
         quantity: "4.0000",
         unit: "h",

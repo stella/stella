@@ -76,7 +76,7 @@ type RestrictivePolicy = {
   check_expr: string | null;
 };
 
-/** The one restrictive policy allowed to admit rows: the entity feature fence. */
+/** The entity feature fence applies alongside the table's permissive access policy. */
 const ENTITY_FEATURE_POLICY_NAME = "workspace_entity_feature";
 
 const depthChange = (char: string | undefined): number => {
@@ -206,12 +206,57 @@ const isStoredEntityFeatureFence = (policy: RestrictivePolicy): boolean => {
   );
 };
 
-/** Every other restrictive policy is a deny; widening one must fail coverage. */
+// This owner predicate pins both scopes inside its SECURITY DEFINER function.
+const isInvoiceAccessPredicate = (expression: string | null): boolean =>
+  expression
+    ?.replaceAll(/::text\b/gu, "")
+    .replaceAll(/["()\s]/gu, "")
+    .replaceAll("public.", "")
+    .replaceAll("invoices.", "") ===
+  "stella_invoice_accessid,organization_id,workspace_id,client_id,original_invoice_id";
+
+// Rows that belong to one invoice are fenced by that invoice's visibility.
+const INVOICE_CHILD_TABLES: ReadonlySet<string> = new Set([
+  "invoice_lines",
+  "invoice_payments",
+]);
+
+const isCompleteInvoiceFence = (policy: RestrictivePolicy): boolean =>
+  INVOICE_CHILD_TABLES.has(policy.table_name) &&
+  policy.policy_name === `${policy.table_name}_complete_invoice` &&
+  policy.using_expr === policy.check_expr &&
+  policy.using_expr
+    ?.replaceAll(/["()\s]/gu, "")
+    .replaceAll("public.", "")
+    .toLowerCase() ===
+    `existsselect1frominvoicesiwherei.id=${policy.table_name}.invoice_id`;
+
+/** Recorded inserts require both provenance and attribution; tenant policies still apply. */
+const isInvoicePaymentRecordedInsertFence = (
+  policy: RestrictivePolicy,
+): boolean =>
+  policy.table_name === "invoice_payments" &&
+  policy.policy_name === "invoice_payments_recorded_insert" &&
+  policy.command === "a" &&
+  policy.using_expr === null &&
+  policy.check_expr
+    ?.replaceAll(/::text\b/gu, "")
+    .replaceAll(/["()\s]/gu, "")
+    .replaceAll("invoice_payments.", "") ===
+    `origin='${schema.INVOICE_PAYMENT_ORIGIN.RECORDED}'ANDrecorded_byISNOTNULL`;
+
+/** Other restrictive policies deny rows unless their canonical fence is exact. */
 const restrictivePolicyViolation = (
   policy: RestrictivePolicy,
 ): string | undefined => {
   const name = `${policy.table_name}.${policy.policy_name}`;
   const expr = policy.command === "a" ? policy.check_expr : policy.using_expr;
+  if (
+    isCompleteInvoiceFence(policy) ||
+    isInvoicePaymentRecordedInsertFence(policy)
+  ) {
+    return undefined;
+  }
   if (policy.policy_name !== ENTITY_FEATURE_POLICY_NAME) {
     return expr === "false"
       ? undefined
@@ -243,7 +288,42 @@ afterAll(async () => {
 // ════════════════════════════════════════════════════════
 
 describe("policy coverage", () => {
-  test("restrictive policies stay denies unless they are the entity feature fence", () => {
+  test("recorded payment insert classification requires its complete restrictive fence", () => {
+    const policy = {
+      table_name: "invoice_payments",
+      policy_name: "invoice_payments_recorded_insert",
+      command: "a",
+      using_expr: null,
+      check_expr: "((origin = 'recorded'::text) AND (recorded_by IS NOT NULL))",
+    };
+    expect(restrictivePolicyViolation(policy)).toBeUndefined();
+    for (const check_expr of [
+      "origin = 'recorded'::text",
+      "recorded_by IS NOT NULL",
+      "((origin = 'legacy'::text) AND (recorded_by IS NOT NULL))",
+      "((origin = 'recorded'::text) OR (recorded_by IS NOT NULL))",
+      "(((origin = 'recorded'::text) AND (recorded_by IS NOT NULL)) OR true)",
+      "true",
+      null,
+    ]) {
+      expect(
+        restrictivePolicyViolation({ ...policy, check_expr }),
+      ).toBeDefined();
+    }
+    for (const mutation of [
+      { table_name: "invoice_lines" },
+      { policy_name: "different_insert" },
+      { command: "*" },
+      { command: "w" },
+      { using_expr: policy.check_expr },
+    ]) {
+      expect(
+        restrictivePolicyViolation({ ...policy, ...mutation }),
+      ).toBeDefined();
+    }
+  });
+
+  test("restrictive policies stay denies unless their canonical fence is exact", () => {
     const deny = {
       table_name: "entities",
       policy_name: "entities_deny_delete",
@@ -252,6 +332,73 @@ describe("policy coverage", () => {
       check_expr: null,
     };
     expect(restrictivePolicyViolation(deny)).toBeUndefined();
+    const invoiceFence = {
+      table_name: "invoice_lines",
+      policy_name: "invoice_lines_complete_invoice",
+      command: "*",
+      using_expr:
+        "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
+      check_expr:
+        "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_lines.invoice_id)",
+    };
+    expect(restrictivePolicyViolation(invoiceFence)).toBeUndefined();
+    const paymentFence =
+      "EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = invoice_payments.invoice_id)";
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+        using_expr: paymentFence,
+        check_expr: paymentFence,
+      }),
+    ).toBeUndefined();
+    // A fence over another table's invoice column admits nothing it names.
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        table_name: "invoice_payments",
+        policy_name: "invoice_payments_complete_invoice",
+      }),
+    ).toBeDefined();
+    expect(
+      restrictivePolicyViolation({
+        ...invoiceFence,
+        using_expr: "true",
+        check_expr: "true",
+      }),
+    ).toBeDefined();
+    expect(
+      restrictivePolicyViolation({ ...invoiceFence, check_expr: "false" }),
+    ).toBeDefined();
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, organization_id, workspace_id, client_id, original_invoice_id)",
+      ),
+    ).toBe(true);
+    expect(
+      isInvoiceAccessPredicate(
+        'public.stella_invoice_access("invoices"."id", ("invoices"."organization_id")::text, "invoices"."workspace_id", "invoices"."client_id", "invoices"."original_invoice_id")',
+      ),
+    ).toBe(true);
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, organization_id, NULL, client_id, original_invoice_id)",
+      ),
+    ).toBe(false);
+    expect(
+      isInvoiceAccessPredicate(
+        "stella_invoice_access(id, NULL::text, workspace_id, client_id, original_invoice_id)",
+      ),
+    ).toBe(false);
+
+    for (const expression of [
+      "stella_invoice_access(id, organization_id, workspace_id, NULL, original_invoice_id)",
+      "stella_invoice_access(id, organization_id, workspace_id, client_id, NULL)",
+    ]) {
+      expect(isInvoiceAccessPredicate(expression)).toBe(false);
+    }
+
     expect(
       restrictivePolicyViolation({ ...deny, using_expr: "true" }),
     ).toBeDefined();
@@ -416,6 +563,12 @@ describe("policy coverage", () => {
     // Its nullable matter pointer does not admit the row; the dedicated timer
     // assertion covers owner policies and the restrictive membership check.
     "time_timers",
+    // A push device belongs to the person who registered it, wherever they
+    // sign in: re-registering a phone from another organization updates the
+    // same (user, token) row, and signing out removes it from any of them, so
+    // the organization is a routing column for delivery, never a permission.
+    // The dedicated assertion below covers the user-only policies.
+    "push_devices",
     // The entry timer projection has member reads and truth-bound owner/admin
     // INSERT/UPDATE, with identity immutability enforced by its trigger.
     "time_entry_timer_states",
@@ -435,7 +588,12 @@ describe("policy coverage", () => {
     // find. Organization is the real boundary and the org policies pin it.
     "document_reference_counters",
   ]);
-  const APPEND_ONLY = new Set(["audit_logs", "chat_message_revisions"]);
+  const APPEND_ONLY = new Set([
+    "audit_logs",
+    "chat_message_revisions",
+    "document_review_finding_decisions",
+    "legal_list_item_source_decisions",
+  ]);
   const INSERT_ONLY = new Set([
     "entity_deletion_cleanup_requests",
     "template_deletion_cleanup_requests",
@@ -586,6 +744,28 @@ describe("policy coverage", () => {
     }
   });
 
+  test("invoice access pins tenant, membership and every participating matter", async () => {
+    const rows = await testDb.execute<{ definition: string }>(sql`
+      SELECT pg_get_functiondef('public.stella_invoice_access(uuid,text,uuid,uuid,uuid)'::regprocedure) AS definition
+    `);
+    const definition = rows.rows.at(0)?.definition;
+    expect(definition).toBeDefined();
+    for (const boundary of [
+      "SECURITY DEFINER",
+      "org_id = current_setting('app.organization_id'",
+      "m.organization_id = org_id",
+      "m.user_id = current_setting('app.user_id'",
+      "current_setting('app.workspace_access_mode', true) = 'membership'",
+      "l.workspace_id NOT IN",
+      "original.id = source_original_id",
+      "original.client_id IS NOT DISTINCT FROM",
+      "original_line.workspace_id NOT IN",
+      "stella_authorized_workspaces",
+    ]) {
+      expect(definition).toContain(boundary);
+    }
+  });
+
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -618,6 +798,10 @@ describe("policy coverage", () => {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
           expect(restrictivePolicyViolation(pol)).toBeUndefined();
+          continue;
+        }
+        if (table === "invoices") {
+          expect(isInvoiceAccessPredicate(expr)).toBe(true);
           continue;
         }
         expect(expr).toContain("workspace_id");
@@ -665,9 +849,10 @@ describe("policy coverage", () => {
         }
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (
-          expr === null ||
-          !expr.includes("organization_id") ||
-          !expr.includes(SETTING_ORGANIZATION_ID)
+          !isInvoiceAccessPredicate(table === "invoices" ? expr : null) &&
+          (expr === null ||
+            !expr.includes("organization_id") ||
+            !expr.includes(SETTING_ORGANIZATION_ID))
         ) {
           unpinned.push(`${table}.${pol.policy_name}`);
         }
@@ -849,7 +1034,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         if (!pol.permissive) {
-          expect(expr).toBe("false");
+          expect(restrictivePolicyViolation(pol)).toBeUndefined();
           continue;
         }
         expect(expr).toContain("organization_id");
@@ -926,6 +1111,22 @@ describe("policy coverage", () => {
     const updatePolicy = tablePolicies.find((p) => p.command === "w");
     expect(updatePolicy?.check_expr).toContain(SETTING_USER_ID);
     expect(updatePolicy?.check_expr).toContain(SETTING_ORGANIZATION_ID);
+  });
+
+  test("push devices admit only the person who registered them", async () => {
+    const tablePolicies = (await fetchStellaPolicies(testDb)).filter(
+      (p) => p.table_name === "push_devices",
+    );
+    expect(new Set(tablePolicies.map((p) => p.command))).toEqual(
+      new Set(["r", "a", "w", "d"]),
+    );
+    for (const policy of tablePolicies) {
+      expect(policy.permissive).toBe(true);
+      const expr =
+        policy.command === "a" ? policy.check_expr : policy.using_expr;
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
+    }
   });
 
   test("user_files policies derive full scope from the owning thread", async () => {

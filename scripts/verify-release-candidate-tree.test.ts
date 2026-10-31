@@ -87,12 +87,15 @@ const writeCli = ({
 
 const withCandidate = (
   mutate: (directory: string) => void,
-  verify: (result: ReturnType<typeof Bun.spawnSync>) => void,
+  verify: (result: ReturnType<typeof Bun.spawnSync>, directory: string) => void,
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-tree-"));
   try {
     mkdirSync(path.join(directory, "packages/widget"), { recursive: true });
     mkdirSync(path.join(directory, "docs/changelog"), { recursive: true });
+    mkdirSync(path.join(directory, "apps/landing/src/data"), {
+      recursive: true,
+    });
     mkdirSync(path.join(directory, "scripts"), { recursive: true });
     mkdirSync(path.join(directory, "packages/cli/src/generated"), {
       recursive: true,
@@ -109,8 +112,6 @@ const withCandidate = (
     writeFileSync(path.join(directory, "scripts/build.sh"), "echo build\n");
     git(directory, "add", ".");
     git(directory, "commit", "--quiet", "--message", "main");
-    const main = git(directory, "rev-parse", "HEAD");
-
     git(directory, "checkout", "--quiet", "-b", "release");
     writeFileSync(path.join(directory, "VERSION"), "1.2.4\n");
     mutate(directory);
@@ -119,9 +120,19 @@ const withCandidate = (
     const candidate = git(directory, "rev-parse", "HEAD");
 
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
-        cwd: directory,
-      }),
+      Bun.spawnSync(
+        [
+          "node",
+          verifier,
+          git(directory, "merge-base", candidate, "main"),
+          candidate,
+          "stella/stella",
+        ],
+        {
+          cwd: directory,
+        },
+      ),
+      directory,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -149,6 +160,128 @@ test("accepts the regenerated CLI version that matches its package bump", () =>
     },
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
   ));
+
+test("a changelog-only correction after a failed RC keeps the release proof and receives rc.2", () =>
+  withCandidate(
+    (directory) => {
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Initial note\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      git(directory, "tag", "v1.2.4-rc.1");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
+    },
+    (result, directory) => {
+      expect(result.exitCode, stderrText(result)).toBe(0);
+      expect(git(directory, "diff", "--name-only", "HEAD^", "HEAD")).toBe(
+        "docs/changelog/v1.2.4.md",
+      );
+      const receipt = Bun.spawnSync(
+        [
+          "bash",
+          new URL("release-rc-number.sh", import.meta.url).pathname,
+          "1.2.4",
+          git(directory, "rev-parse", "HEAD"),
+        ],
+        { cwd: directory },
+      );
+      expect(receipt.exitCode, stderrText(receipt)).toBe(0);
+      expect(receipt.stdout.toString()).toBe(
+        "tag=v1.2.4-rc.2\nexisting=false\n",
+      );
+    },
+  ));
+
+test("a changelog-only correction cannot hide an executable edit in its release parent", () =>
+  withCandidate(
+    (directory) => {
+      writeFileSync(
+        path.join(directory, "scripts/build.sh"),
+        "echo poisoned\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "executable or unrecognized path changed: scripts/build.sh",
+      );
+    },
+  ));
+
+test("merging a main code fix into the release retains the release data proof", () =>
+  withCandidate(
+    (directory) => {
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "chore: release v1.2.4");
+      git(directory, "checkout", "-q", "main");
+      writeFileSync(
+        path.join(directory, "scripts/build.sh"),
+        "echo main fix\n",
+      );
+      git(directory, "add", ".");
+      git(directory, "commit", "-qm", "fix: build on main");
+      git(directory, "checkout", "-q", "release");
+      git(directory, "merge", "--no-edit", "main");
+      writeFileSync(
+        path.join(directory, "docs/changelog/v1.2.4.md"),
+        "# Corrected note\n",
+      );
+    },
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("accepts release-date notes and nullable publication timestamps", () =>
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"_note":"Published timestamp source","v1.2.4":null}\n',
+      ),
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("rejects changeset README edits and malformed release-date records", () => {
+  withCandidate(
+    (directory) => {
+      mkdirSync(path.join(directory, ".changeset"), { recursive: true });
+      writeFileSync(path.join(directory, ".changeset/README.md"), "changed\n");
+    },
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(".changeset/README.md");
+    },
+  );
+  withCandidate(
+    (directory) =>
+      writeFileSync(
+        path.join(
+          directory,
+          "apps/landing/src/data/changelog-release-dates.json",
+        ),
+        '{"v1.2.4": false}\n',
+      ),
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "must map release names to timestamps or null",
+      );
+    },
+  );
+});
 
 test.each([
   [
@@ -301,10 +434,21 @@ const commitSideMerge = (
   commitAs(directory, commit, "commit", "--quiet", "--message", "merge");
 };
 
+/**
+ * Squash-merges the release branch into main as a person, as the protected
+ * main branch does, and verifies that version commit against the branch head.
+ */
+type SquashMerge = {
+  mutate?: (directory: string) => void;
+  /** Main gains a commit after the branch diverged, before the squash. */
+  advanceMain?: boolean;
+};
+
 /** A release range shaped like the bots' own release branches. */
 const withReleaseRange = (
   commits: readonly ReleaseCommit[],
   verify: (result: ReturnType<typeof Bun.spawnSync>) => void,
+  squash?: SquashMerge,
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "release-range-"));
   try {
@@ -358,8 +502,53 @@ const withReleaseRange = (
       mode: 0o755,
     });
     const { GH_RETRY_SCRIPT: _retry, ...environment } = process.env;
+    const args = [main, candidate, "stella/stella"];
+    if (squash !== undefined) {
+      git(directory, "checkout", "--quiet", "main");
+      if (squash.advanceMain === true) {
+        writeFileSync(path.join(directory, "main-only.md"), "main\n");
+        git(directory, "add", "-A");
+        commitAs(
+          directory,
+          { author: PERSON, committer: GITHUB },
+          "commit",
+          "--quiet",
+          "--message",
+          "main moves on",
+        );
+      }
+      const versionParent = git(directory, "rev-parse", "HEAD");
+      // A squash after main moved is a real merge, which needs an identity.
+      commitAs(
+        directory,
+        { author: PERSON, committer: GITHUB },
+        "merge",
+        "--quiet",
+        "--squash",
+        "release",
+      );
+      squash.mutate?.(directory);
+      git(directory, "add", "-A");
+      commitAs(
+        directory,
+        { author: PERSON, committer: GITHUB },
+        "commit",
+        "--quiet",
+        "--message",
+        "chore: release v1.2.4",
+      );
+      args.splice(
+        0,
+        3,
+        versionParent,
+        git(directory, "rev-parse", "HEAD"),
+        "stella/stella",
+        "--release-pr-head",
+        candidate,
+      );
+    }
     verify(
-      Bun.spawnSync(["node", verifier, main, candidate, "stella/stella"], {
+      Bun.spawnSync(["node", verifier, ...args], {
         cwd: directory,
         env: {
           ...environment,
@@ -406,6 +595,72 @@ test("accepts the bots' own generated release files, as a v0.9.65 range carries 
       { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
     ],
     (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+  ));
+
+test("accepts the bots' generated files in a version commit squash-merged by a person", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+      { author: DEPLOYER, committer: GITHUB, mutate: reshootProductMedia },
+    ],
+    (result) => expect(result.exitCode, stderrText(result)).toBe(0),
+    {},
+  ));
+
+test("refuses a person's Tailwind cache change in a squash-merged version commit", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: PERSON, committer: PERSON, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "Tailwind class cache changed by a commit not made by its bot",
+      );
+    },
+    {},
+  ));
+
+test("refuses a squash-merged version commit whose tree differs from its pull request head", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "does not hold the tree of its release pull request head",
+      );
+    },
+    {
+      mutate: (directory) => {
+        writeFileSync(path.join(directory, "VERSION"), "1.2.5\n");
+      },
+    },
+  ));
+
+test("refuses a squash that holds the head's tree but reverts what main gained after the branch diverged", () =>
+  withReleaseRange(
+    [
+      releaseCut,
+      { author: AUTOFIX, committer: GITHUB, mutate: renameTailwindCache },
+    ],
+    (result) => {
+      expect(result.exitCode).not.toBe(0);
+      expect(stderrText(result)).toContain(
+        "candidate does not contain the current main commit",
+      );
+    },
+    {
+      advanceMain: true,
+      // Resolved to exactly the release head, dropping main's newer file.
+      mutate: (directory) => {
+        rmSync(path.join(directory, "main-only.md"));
+      },
+    },
   ));
 
 test.each([
@@ -494,3 +749,64 @@ test("keeps the 2 MiB bound for release data outside the generated classes", () 
       expect(stderrText(result)).toContain("2 MiB review bound");
     },
   ));
+
+// Every caller, found by scanning rather than listed by hand, passes the
+// verifier its whole contract: main, candidate and the owner/name repository.
+// A workflow step that runs it also carries the token its GitHub reads need.
+test("every caller passes the full contract and a workflow token", async () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const record = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+  const invocation =
+    /\bnode\s+("[^"]*(?:tree_verifier|verify-release-candidate-tree)[^"]*")((?:\s+"[^"]*")*)(\s+--release-pr-head\s+"[^"]*")?/iu;
+  const squashCallers: string[] = [];
+  const files = git(root, "ls-files", ".github", "scripts")
+    .split("\n")
+    .filter((file) => /\.(?:ya?ml|sh)$/u.test(file));
+  const callers: string[] = [];
+  for (const file of files) {
+    const source = await Bun.file(path.join(root, file)).text();
+    for (const [index, line] of source.split("\n").entries()) {
+      const match = invocation.exec(line);
+      if (match === null) {
+        continue;
+      }
+      const label = `${file}:${index + 1}`;
+      callers.push(file);
+      expect(match[2]?.trim().split(/\s+/u), label).toHaveLength(3);
+      if (match[3] !== undefined) {
+        squashCallers.push(file);
+      }
+    }
+    if (!file.startsWith(".github/workflows/")) {
+      continue;
+    }
+    const parsed: unknown = Bun.YAML.parse(source);
+    const jobs = record(parsed) ? parsed["jobs"] : undefined;
+    const workflowEnv = record(parsed) ? parsed["env"] : undefined;
+    for (const [name, job] of Object.entries(record(jobs) ? jobs : {})) {
+      const steps =
+        record(job) && Array.isArray(job["steps"]) ? job["steps"] : [];
+      for (const step of steps.filter(record)) {
+        if (typeof step["run"] !== "string" || !invocation.test(step["run"])) {
+          continue;
+        }
+        const scopes = [
+          step["env"],
+          record(job) ? job["env"] : undefined,
+          workflowEnv,
+        ];
+        expect(
+          scopes.some(
+            (scope) => record(scope) && typeof scope["GH_TOKEN"] === "string",
+          ),
+          `${file}:${name} runs the verifier without GH_TOKEN`,
+        ).toBe(true);
+      }
+    }
+  }
+  expect(callers).toContain(".github/workflows/release.yml");
+  expect(callers).toContain("scripts/verify-release-tree-proof.sh");
+  // Tags stay on the release branch; active callers verify the release range.
+  expect(squashCallers).toEqual([]);
+});

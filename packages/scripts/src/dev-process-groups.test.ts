@@ -14,6 +14,8 @@ import { PassThrough, type Readable } from "node:stream";
 import { json } from "node:stream/consumers";
 import * as v from "valibot";
 
+import { waitForExternalState } from "@stll/property-testing/external-state";
+
 import { down } from "./agent-session";
 import {
   devProcessStartedAt,
@@ -26,6 +28,10 @@ import { devStatePath } from "./dev-runtime";
 
 const fixture = new URL("fixtures/dev-process-tree.ts", import.meta.url)
   .pathname;
+const outputOwnerFixture = new URL(
+  "fixtures/dev-process-tree-output-owner.ts",
+  import.meta.url,
+).pathname;
 const readySchema = v.object({ pid: v.number(), port: v.number() });
 const readTreeReady = async (stream: Readable) =>
   v.parse(readySchema, await json(stream));
@@ -52,6 +58,7 @@ const startTree = async (rootDir: string, termMode: "ignore" | "exit") => {
       cwd: rootDir,
       env: process.env,
       label: "test service",
+      output: "ignore",
       stdin: "ignore",
     }).unwrap("The real process-tree fixture must start successfully");
     return { child, ...(await ready) };
@@ -116,15 +123,65 @@ const disposeTree = async (
     }
   }
   await tree.child.exited;
-  const deadline = performance.now() + 2000;
-  while (
-    liveMembers(tree.child.pid).length > 0 &&
-    performance.now() < deadline
-  ) {
-    await Bun.sleep(20);
-  }
+  await waitForExternalState({
+    description: `every member of process group ${String(tree.child.pid)} exits`,
+    intervalMs: 20,
+    timeoutMs: 2000,
+    read: () => liveMembers(tree.child.pid).length === 0,
+    // The assertion below names the members still alive.
+    onTimeout: () => undefined,
+  });
   expect(liveMembers(tree.child.pid)).toEqual([]);
 };
+
+// timeout: the matrix includes the fixture's deliberate SIGTERM grace period.
+test("process-tree fixtures release a subprocess's output pipes after their leader stops", async () => {
+  for (const termMode of ["exit", "ignore"] as const) {
+    const root = mkdtempSync(path.join(tmpdir(), "dev-group-output-"));
+    const resultPath = path.join(root, "result.json");
+    const owner = Bun.spawn(
+      [process.execPath, outputOwnerFixture, root, resultPath, termMode],
+      { stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+    );
+    try {
+      await waitForExternalState({
+        description: `${termMode} fixture leader to stop`,
+        intervalMs: 20,
+        timeoutMs: 2000,
+        read: () => existsSync(resultPath),
+        onTimeout: () => undefined,
+      });
+      expect(existsSync(resultPath)).toBe(true);
+      expect(await owner.exited).toBe(0);
+
+      const pending = Symbol("output pipe still open");
+      // real-time: pipe EOF must arrive within the regression's two-second contract.
+      const timeout = Bun.sleep(2000).then(() => pending);
+      const [stdout, stderr] = await Promise.all([
+        Promise.race([new Response(owner.stdout).text(), timeout]),
+        Promise.race([new Response(owner.stderr).text(), timeout]),
+      ]);
+      expect(stdout).not.toBe(pending);
+      expect(stderr).not.toBe(pending);
+    } finally {
+      owner.kill("SIGKILL");
+      const session = readDevProcessGroups(root).unwrap(
+        "Output fixture process-group journal must be readable",
+      );
+      if (session) {
+        (
+          await stopDevProcessGroups({
+            rootDir: root,
+            graceMs: 0,
+            runnerPid: session.runnerPid,
+            sessionId: session.sessionId,
+          })
+        ).unwrap("Output fixture group cleanup must succeed");
+      }
+      rmSync(root, { recursive: true, force: true });
+    }
+  }
+}, 20_000);
 
 for (const termMode of ["exit", "ignore"] as const) {
   test(`down stops a group after its parent exited and releases the grandchild port: ${termMode}`, async () => {
@@ -278,6 +335,7 @@ test("an older runner cannot stop or replace another session's journal", async (
       cwd: root,
       env: process.env,
       label: "unowned",
+      output: "ignore",
       stdin: "ignore",
     });
     expect(spawned.isErr()).toBe(true);
@@ -322,6 +380,7 @@ test("stopping closes the session to new services before waiting", async () => {
       cwd: root,
       env: process.env,
       label: "late service",
+      output: "ignore",
       stdin: "ignore",
     });
     expect(spawned.isErr()).toBe(true);
@@ -376,6 +435,7 @@ test("a recycled runner PID cannot adopt a different session identity", async ()
       cwd: root,
       env: process.env,
       label: "unowned",
+      output: "ignore",
       stdin: "ignore",
     });
     expect(spawned.isErr()).toBe(true);

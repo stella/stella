@@ -118,13 +118,14 @@ migrate() {
   # Non-RDS database: online index builds must not wait on EBS metrics or a
   # wall-clock busy window.
   local database_url=${1:-postgres://$database_owner:smoke-only@smoke-postgres:5432/stella}
-  run_probe --env "DATABASE_URL=$database_url" \
+  run_probe --env DEPLOY_ENVIRONMENT=development --env "DATABASE_URL=$database_url" \
     --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
 printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
 api_env=(
+  --env DEPLOY_ENVIRONMENT=development
   --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars
   --env BETTER_AUTH_URL=http://localhost:3001
   --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)"
@@ -255,7 +256,7 @@ if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
 fi
 echo 'PASS: collab reached environment validation'
 
-for entrypoint in /app/document-processing-worker.js /app/backfill-case-law-slugs.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js; do
+for entrypoint in /app/document-processing-worker.js /app/file-derivative-worker.js /app/backfill-case-law-slugs.js /app/complete-sk-us-raw.js /app/import-cz-us-roster.js /app/review-account.js /app/partner-oauth-client.js; do
   output=$(run_probe "$image_id" timeout 20 bun "$entrypoint" 2>&1 || true)
   if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \
     || ! grep -q 'Invalid environment variables' <<< "$output"; then

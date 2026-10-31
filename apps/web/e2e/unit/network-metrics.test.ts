@@ -4,18 +4,52 @@ import { describe, expect, test } from "bun:test";
 
 import { NETWORK_DEPTH_METHOD as SCOPE_NETWORK_DEPTH_METHOD } from "../../../../scripts/network-baseline-scope";
 import {
+  countDuplicateGets,
+  createResponseSizeSample,
   diffNetworkBaseline,
+  isTrackedProtocolRequest,
   mergeNetworkBaseline,
   NETWORK_DEPTH_METHOD,
   type NetworkBaseline,
   normalizeApiPath,
   responseSizeAllowance,
+  type ResponseSizeOutcome,
   type RouteNetworkMetrics,
+  summarizeCapture,
   waitForQuietPeriod,
 } from "../helpers/network";
 
 const UUID = "11111111-2222-4333-8444-555555555555";
 const UUID_UPPER = "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE";
+
+describe("protocol request coverage", () => {
+  test.each([undefined, "Fetch", "XHR", "EventSource"])(
+    "tracks API requests with resource type %s",
+    (type) => {
+      expect(
+        isTrackedProtocolRequest(
+          { type, url: "https://api.example.test/v1/contacts" },
+          "https://api.example.test",
+        ),
+      ).toBe(true);
+    },
+  );
+
+  test("excludes known non-API resource types and other origins", () => {
+    expect(
+      isTrackedProtocolRequest(
+        { type: "Image", url: "https://api.example.test/image" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+    expect(
+      isTrackedProtocolRequest(
+        { type: undefined, url: "https://web.example.test/v1/contacts" },
+        "https://api.example.test",
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("normalizeApiPath", () => {
   test("leaves a plain path untouched", () => {
@@ -34,6 +68,192 @@ describe("normalizeApiPath", () => {
 
   test("matches uppercase hex", () => {
     expect(normalizeApiPath(`/v1/files/${UUID_UPPER}`)).toBe("/v1/files/:id");
+  });
+});
+
+describe("duplicate resource reads", () => {
+  const request = (url: string, startedAt: number, method = "GET") => ({
+    method,
+    url: `http://localhost:3001${url}`,
+    startedAt,
+  });
+
+  test("counts every excess GET in the inclusive two-second window", () => {
+    expect(
+      countDuplicateGets([
+        request("/v1/chat/threads?limit=20", 0),
+        request("/v1/chat/threads?limit=20", 2000),
+        request("/v1/chat/threads?limit=20", 2001),
+        request("/v1/chat/threads?limit=20", 4002),
+      ]),
+    ).toEqual({ "GET /v1/chat/threads?limit=20": 2 });
+  });
+
+  test("normalizes query ordering while keeping resources and query values distinct", () => {
+    expect(
+      countDuplicateGets([
+        request(`/v1/tasks/${UUID}?limit=10&cursor=a`, 0),
+        request(`/v1/tasks/${UUID}?cursor=a&limit=10`, 10),
+        request(`/v1/tasks/${UUID_UPPER}?cursor=a&limit=10`, 20),
+        request(`/v1/tasks/${UUID}?cursor=b&limit=10`, 30),
+        request(`/v1/tasks/${UUID}?cursor=a&limit=20`, 40),
+      ]),
+    ).toEqual({ [`GET /v1/tasks/${UUID}?cursor=a&limit=10`]: 1 });
+  });
+
+  test("capture summaries retain exact duplicate diagnostics", () => {
+    const duplicateGetCounts = countDuplicateGets([
+      request("/v1/organization-settings/ai-availability", 0),
+      request("/v1/organization-settings/ai-availability", 100),
+    ]);
+    expect(
+      summarizeCapture({ requests: [], depthChain: [], duplicateGetCounts })
+        .duplicateGetCounts,
+    ).toEqual({ "GET /v1/organization-settings/ai-availability": 1 });
+  });
+
+  test("does not count writes or reads outside the window", () => {
+    expect(
+      countDuplicateGets([
+        request("/v1/tasks", 0, "POST"),
+        request("/v1/tasks", 1, "POST"),
+        request("/v1/tasks", 2),
+        request("/v1/tasks", 2003),
+      ]),
+    ).toEqual({});
+  });
+});
+
+describe("decoded protocol response sizes", () => {
+  test("sums decoded chunks only after loadingFinished", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    sample.receive(2048);
+    expect(sample.outcome.status).toBe("unreadable");
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 3072 });
+  });
+
+  test("empty completed responses have a measured zero-byte body", () => {
+    const sample = createResponseSizeSample();
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "measured", bytes: 0 });
+  });
+
+  test.each([true, false])(
+    "retains the error and cancellation flag on loadingFailed (%s)",
+    (canceled) => {
+      const sample = createResponseSizeSample();
+      sample.receive(1024);
+      sample.fail({ errorText: "net::ERR_ABORTED", canceled });
+      sample.complete();
+      expect(sample.outcome).toEqual({
+        status: "failed",
+        error: "net::ERR_ABORTED",
+        canceled,
+      });
+    },
+  );
+
+  test("omitted cancellation means a transport failure", () => {
+    const sample = createResponseSizeSample();
+    sample.fail({ errorText: "net::ERR_CONNECTION_RESET" });
+    expect(sample.outcome).toEqual({
+      status: "failed",
+      error: "net::ERR_CONNECTION_RESET",
+      canceled: false,
+    });
+  });
+
+  test("unfinished responses remain unreadable with their reason", () => {
+    const sample = createResponseSizeSample();
+    sample.receive(1024);
+    expect(sample.outcome).toEqual({
+      status: "unreadable",
+      error: "CDP loadingFinished was not observed",
+    });
+  });
+
+  test("streams stay excluded even if they later finish", () => {
+    const sample = createResponseSizeSample();
+    sample.stream();
+    sample.receive(1024);
+    sample.complete();
+    expect(sample.outcome).toEqual({ status: "streamed" });
+  });
+});
+
+const failureSamples = [
+  { status: "failed", error: "diagnostic reason", canceled: true },
+  { status: "unreadable", error: "diagnostic reason" },
+] as const satisfies readonly ResponseSizeOutcome[];
+
+describe("response size outcomes", () => {
+  const key = "GET /v1/contacts";
+  const summarize = (outcomes: ResponseSizeOutcome[]) =>
+    summarizeCapture({
+      requests: outcomes.map((responseSize) => ({
+        method: "GET",
+        pathname: "/v1/contacts",
+        dbQueries: 1,
+        dbQueryHeaderMissing: false,
+        responseSize,
+      })),
+      depthChain: [],
+    });
+  const problemsFor = (outcomes: ResponseSizeOutcome[]) =>
+    diffNetworkBaseline(
+      {
+        "/contacts": {
+          depth: 0,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: [key],
+          requestCounts: { [key]: outcomes.length },
+          responseSizes: { [key]: 1024 },
+        },
+      },
+      new Map([["/contacts", summarize(outcomes)]]),
+    ).problems;
+
+  test("uses the largest completed sample and excludes streams", () => {
+    const result = summarize([
+      { status: "measured", bytes: 0 },
+      { status: "streamed" },
+      { status: "measured", bytes: 512 },
+    ]);
+    expect(result.responseSizes).toEqual({ [key]: 512 });
+    expect(result.responseSizeFailures).toEqual({});
+    expect(result.requestCounts[key]).toBe(3);
+  });
+
+  test.each(failureSamples)(
+    "retains $status samples even beside a measured response",
+    (failure) => {
+      const failures = problemsFor([
+        { status: "measured", bytes: 512 },
+        failure,
+      ]);
+      expect(failures).toHaveLength(1);
+      expect(failures[0]).toContain("Response size missing");
+      expect(failures[0]).toContain(`${failure.status}: diagnostic reason`);
+    },
+  );
+
+  test.each(failureSamples)(
+    "a key with only $status samples fails",
+    (failure) => {
+      expect(problemsFor([failure])).toHaveLength(1);
+    },
+  );
+
+  test("zero-byte completed responses remain measured", () => {
+    expect(problemsFor([{ status: "measured", bytes: 0 }])).toEqual([]);
+  });
+
+  test("completed samples still enforce the existing payload budget", () => {
+    expect(
+      problemsFor([{ status: "measured", bytes: 100_000 }]).join("\n"),
+    ).toContain("Response payload grew");
   });
 });
 
@@ -105,7 +325,7 @@ const metrics = (
   ),
   missingDbQueryCounts: Record<string, number> = {},
   responseSizes: Record<string, number> = {},
-  missingResponseSizeCounts: Record<string, number> = {},
+  responseSizeFailures: RouteNetworkMetrics["responseSizeFailures"] = {},
 ): RouteNetworkMetrics => ({
   requests: [...requests].toSorted(),
   requestCounts,
@@ -114,7 +334,7 @@ const metrics = (
   dbQueries,
   missingDbQueryCounts,
   responseSizes,
-  missingResponseSizeCounts,
+  responseSizeFailures,
 });
 
 describe("diffNetworkBaseline", () => {
@@ -158,7 +378,12 @@ describe("diffNetworkBaseline", () => {
       };
       const depthOnly = diffNetworkBaseline(
         { "/contacts": entry },
-        new Map([["/contacts", metrics(entry.requests, 5)]]),
+        new Map([
+          [
+            "/contacts",
+            metrics(entry.requests, 5, {}, undefined, {}, entry.responseSizes),
+          ],
+        ]),
       );
       expect(depthOnly.problems).toEqual([]);
       expect(depthOnly.notices.join("\n")).toContain(
@@ -187,6 +412,31 @@ describe("diffNetworkBaseline", () => {
       ).toBe(false);
     },
   );
+
+  test("duplicate GETs fail even when endpoint repeat budgets permit them", () => {
+    const key = "GET /v1/contacts";
+    const { problems } = diffNetworkBaseline(
+      {
+        "/contacts": {
+          depth: 2,
+          depthMethod: NETWORK_DEPTH_METHOD,
+          requests: [key],
+          requestCounts: { [key]: 2 },
+        },
+      },
+      new Map([
+        [
+          "/contacts",
+          {
+            ...metrics([key], 2, {}, { [key]: 2 }),
+            duplicateGetCounts: { [key]: 1 },
+          },
+        ],
+      ]),
+    );
+    expect(problems).toHaveLength(1);
+    expect(problems.at(0)).toContain("Duplicate API GET on /contacts");
+  });
 
   test("a new route is a problem", () => {
     const { problems } = diffNetworkBaseline(
@@ -427,7 +677,10 @@ describe("diffNetworkBaseline", () => {
       responseSizes: { "GET /v1/contacts": 1024 },
     },
   };
-  const sizeMetrics = (bytes: number, missing: Record<string, number> = {}) =>
+  const sizeMetrics = (
+    bytes: number,
+    missing: RouteNetworkMetrics["responseSizeFailures"] = {},
+  ) =>
     metrics(
       ["GET /v1/contacts"],
       2,
@@ -499,7 +752,11 @@ describe("diffNetworkBaseline", () => {
             undefined,
             {},
             {},
-            { "GET /v1/contacts": 1 },
+            {
+              "GET /v1/contacts": [
+                { status: "unreadable", error: "body failed" },
+              ],
+            },
           ),
         ],
       ]),
@@ -509,15 +766,14 @@ describe("diffNetworkBaseline", () => {
     );
   });
 
-  test("a request without a measured size is not a missing response-size count", () => {
-    // Mirrors "a request without a response is not a missing db-query count":
-    // no measurement attempt (e.g. a streamed response, excluded entirely by
-    // network.ts's isStreamedResponse) is not the same as a failed one.
+  test("a budgeted request with no measured sample fails", () => {
     const { problems } = diffNetworkBaseline(
       sizeBaseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
     );
-    expect(problems).toEqual([]);
+    expect(
+      problems.some((problem) => problem.includes("Response size missing")),
+    ).toBe(true);
   });
 });
 
@@ -807,7 +1063,14 @@ describe("merge-base scoped comparison", () => {
   );
 
   test("an intentional increase passes only with the declared budget", () => {
-    const observed = metrics(["GET /v1/contacts", "GET /v1/new"], 1);
+    const observed = metrics(
+      ["GET /v1/contacts", "GET /v1/new"],
+      1,
+      {},
+      undefined,
+      {},
+      entry.responseSizes,
+    );
     const results = new Map([["/contacts", observed]]);
     expect(
       diffNetworkBaseline(baseline, results).problems.join("\n"),

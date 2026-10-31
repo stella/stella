@@ -2,16 +2,20 @@ import type { TokenEndpointAuthMethod } from "@better-auth/oauth-provider";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
+
 import { getVerifiedOAuthOrigins } from "@/api/lib/auth/oauth-consent-info";
 import {
   grantableScopes,
   inferredApplicationType,
   NATIVE_REDIRECT_URI_EXCEPTIONS,
-  OAUTH_REGISTRATION_SCOPE_POLICY,
-  OPEN_REGISTRATION_SCOPES,
   registrableScope,
   requiresNativeClientConsent,
 } from "@/api/lib/auth/oauth-registration-policy";
+import {
+  OAUTH_REGISTRATION_SCOPE_POLICY,
+  OPEN_REGISTRATION_SCOPES,
+} from "@/api/lib/db/oauth-scope-policy";
 import { OAUTH_CLIENT_REGISTRATION_FIXTURES } from "@/api/tests/helpers/oauth-client-registration-fixtures";
 
 const AUTHENTICATION_CONSENT_CASES = {
@@ -104,6 +108,9 @@ describe("grantableScopes", () => {
   test("only documented or first-party metadata documents keep every scope", () => {
     for (const [clientId, keeps] of [
       ["https://claude.ai/oauth/claude-code-client-metadata", true],
+      // Verified for the consent screen, but granted what Claude is granted
+      // when it registers its hosted callback.
+      ["https://claude.ai/oauth/mcp-oauth-client-metadata", false],
       ["https://chatgpt.com/oauth/client.json", true],
       ["https://chatgpt.com/oauth/codex/client.json", true],
       ["https://stella.example/oauth/client.json", true],
@@ -121,6 +128,23 @@ describe("grantableScopes", () => {
       expect(grantableScopes(client, ALL_SCOPES, policy), clientId).toEqual(
         expected,
       );
+    }
+  });
+
+  test("self-registered clients never obtain personal data export scopes", () => {
+    const exportScopes = new Set<string>(Object.values(ACCOUNT_EXPORT_SCOPES));
+    const exportGrants = (scopes: string[]) =>
+      scopes.filter((scope) => exportScopes.has(scope));
+    for (const client of [
+      registered(ALL_SCOPES),
+      registered([...exportScopes]),
+      documented("https://connector.example/oauth/client.json", ALL_SCOPES),
+    ]) {
+      for (const requested of [undefined, [...exportScopes], ALL_SCOPES]) {
+        expect(
+          exportGrants(grantableScopes(client, requested, policy)),
+        ).toEqual([]);
+      }
     }
   });
 

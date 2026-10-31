@@ -8,8 +8,8 @@ import {
   isCanonicalIconHostname,
   toRegistrableIconSite,
 } from "@/api/handlers/chat/link-icons/origin";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { validateOutboundFetchTarget } from "@/api/lib/safe-outbound-fetch";
 
 type FetchBytes = typeof safeOutboundFetchBytes;

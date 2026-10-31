@@ -61,7 +61,9 @@ describe("number series preview", () => {
           </IntlProvider>,
         );
         expect(markup).toContain('role="alert"');
-        expect(markup).toContain(messages.errors.actionFailed);
+        expect(markup).toContain(
+          renderToStaticMarkup(messages.errors.actionFailed),
+        );
         expect(markup).not.toContain(error.message);
         expect(markup).not.toContain(
           error.rawMessage ?? "private-raw-response",

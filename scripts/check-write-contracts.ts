@@ -19,11 +19,11 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { SAFE_HANDLER_FACTORIES } from "../apps/api/src/lib/safe-handler-factories";
-import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/write-contract";
+import { RAW_WRITE_CONTRACTS } from "../apps/api/src/lib/write-contract/raw-write-contracts";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const OWNER = "apps/api/src/lib/write-contract.ts";
+const OWNER = "apps/api/src/lib/write-contract/write-contract.ts";
 const BASELINE = BASELINE_PATHS.writeContracts;
 const writeContractBaselineSchema = v.array(
   v.strictObject({
@@ -1415,7 +1415,7 @@ const servedWriteRoutes = async (): Promise<WriteRoute[]> => {
   );
   const { apiRoutes } = await import("../apps/api/src/api-routes");
   const { getWriteContract } =
-    await import("../apps/api/src/lib/write-contract");
+    await import("../apps/api/src/lib/write-contract/write-contract");
   return apiRoutes
     .filter((entry) => MUTATION_METHODS.has(entry.method))
     .map((entry) => {
@@ -1437,7 +1437,7 @@ const comparisonCommit = () => {
   const reference = spawnSync(
     "git",
     ["rev-parse", "--verify", `${requested}^{commit}`],
-    { cwd: ROOT, encoding: "utf-8" },
+    { maxBuffer: 2 ** 30, cwd: ROOT, encoding: "utf-8" },
   );
   if (reference.status !== 0) {
     panic(`Write contract comparison ref unavailable: ${requested}`);
@@ -1446,6 +1446,7 @@ const comparisonCommit = () => {
     process.env["BASE_SHA"] !== undefined
       ? reference
       : spawnSync("git", ["merge-base", "HEAD", reference.stdout.trim()], {
+          maxBuffer: 2 ** 30,
           cwd: ROOT,
           encoding: "utf-8",
         });
@@ -1462,6 +1463,7 @@ if (import.meta.main) {
       ? readFileSync(path.join(ROOT, file), "utf-8")
       : undefined;
   const previousSource = spawnSync("git", ["show", `${commit}:${BASELINE}`], {
+    maxBuffer: 2 ** 30,
     cwd: ROOT,
     encoding: "utf-8",
   });
@@ -1471,7 +1473,7 @@ if (import.meta.main) {
       : undefined;
   const registrations = enumerateWriteContracts({
     routes: await servedWriteRoutes(),
-    raw: RAW_WRITE_CONTRACTS,
+    raw: Object.fromEntries(RAW_WRITE_CONTRACTS),
     load,
   });
   if (process.argv.includes("--generate")) {

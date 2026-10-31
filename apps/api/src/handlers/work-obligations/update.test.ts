@@ -8,6 +8,7 @@ import {
   workObligations,
   workspaceMembers,
 } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -109,7 +110,8 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
-        route: "/v1/work-obligations/:workspaceId/:entityId",
+        route:
+          "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
         session: {
@@ -243,7 +245,8 @@ describe("updateWorkObligation", () => {
         params: { workspaceId, entityId },
         recordAuditEvent,
         request,
-        route: "/v1/work-obligations/:workspaceId/:entityId",
+        route:
+          "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
         safeDb,
         scopedDb,
         session: {
@@ -370,7 +373,8 @@ describe("updateWorkObligation", () => {
           params: { workspaceId, entityId },
           recordAuditEvent,
           request,
-          route: "/v1/work-obligations/:workspaceId/:entityId",
+          route:
+            "/v1/work-obligations/:workspaceId/:entityId" satisfies ApiRoutePath,
           safeDb,
           scopedDb,
           session: {

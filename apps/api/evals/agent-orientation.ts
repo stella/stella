@@ -240,7 +240,7 @@ const CLI_INSTRUCTION =
   "do this, do not invent one: reply with one short sentence explaining " +
   "why, and no code block.";
 
-const MCP_SYSTEM_PROMPT = getMcpInstructions("default");
+const MCP_SYSTEM_PROMPT = await getMcpInstructions("default");
 
 // --- arg checking -----------------------------------------------------------
 

@@ -1,6 +1,14 @@
 import { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -12,6 +20,11 @@ import {
   resolveContactImportRequest,
 } from "@/routes/_protected.contacts/-contact-import-request";
 import type { ImportCommitPayload } from "@/routes/_protected.contacts/-import-candidate";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 const ROW_ID = toSafeId<"contact">("4f1a1a2e-1b23-4c56-9def-0123456789ab");
 

@@ -42,6 +42,7 @@ describe("failure evidence walks the chain once", () => {
     const evidence = readEvidence(
       new UnhandledException({
         cause: new HandlerError({
+          code: "internal_error",
           status: 502,
           message: "wrapped",
           cause: body,
@@ -439,7 +440,9 @@ describe("provider status provenance", () => {
       source: "code",
     });
     expect(
-      readProviderStatus(new HandlerError({ status: 502, message: "x" })),
+      readProviderStatus(
+        new HandlerError({ code: "internal_error", status: 502, message: "x" }),
+      ),
     ).toBeUndefined();
   });
 

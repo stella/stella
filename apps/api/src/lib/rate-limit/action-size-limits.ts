@@ -81,6 +81,10 @@ const requestTooLarge = () =>
     reason: "request_too_large",
   });
 
+// A reframed request carries its metered size, so nested admission
+// boundaries (multipart, then the tenant action) never read a body twice.
+const reframedBytes = new WeakMap<Request, number>();
+
 /**
  * Meters and re-frames a tenant action's request body against the action
  * size policy; an oversized body is refused as `request_too_large`.
@@ -88,10 +92,21 @@ const requestTooLarge = () =>
 export const boundActionRequest = async (
   request: Request,
   maximum: number,
-): Promise<Result<BoundedRequest, ActionSizeError>> =>
-  (await reframeBoundedRequest(request, maximum)).mapError(() =>
+): Promise<Result<BoundedRequest, ActionSizeError>> => {
+  const measured = reframedBytes.get(request);
+  if (measured !== undefined) {
+    return measured <= maximum
+      ? Result.ok({ request, bytes: measured })
+      : Result.err(requestTooLarge());
+  }
+  const bounded = (await reframeBoundedRequest(request, maximum)).mapError(() =>
     requestTooLarge(),
   );
+  if (Result.isOk(bounded)) {
+    reframedBytes.set(bounded.value.request, bounded.value.bytes);
+  }
+  return bounded;
+};
 
 export const actionSizeErrorResponse = (
   error: ActionSizeError,

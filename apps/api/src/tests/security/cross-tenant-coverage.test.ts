@@ -2,19 +2,23 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-// Meta-test: the cross-tenant isolation matrix
-// (`cross-tenant-handlers.test.ts`) hand-enumerates read/list handlers and
-// proves workspace A cannot reach workspace/org B's resources. Nothing stopped
+// Meta-test: the cross-tenant isolation matrices enumerate handlers and prove
+// workspace A cannot reach or mutate workspace/org B's resources. Nothing stopped
 // a *new* handler domain from landing without ever being added to that matrix.
 // This guard fails when a `handlers/<domain>/` directory is neither exercised
 // by the matrix nor carries an explicit, reasoned waiver, so a new domain is a
 // deliberate decision rather than a silent gap.
 
 const handlersDir = path.resolve(import.meta.dir, "../../handlers");
-const crossTenantMatrixPath = path.resolve(
-  import.meta.dir,
-  "cross-tenant-handlers.test.ts",
-);
+const crossTenantMatrixPaths = [
+  path.resolve(import.meta.dir, "cross-tenant-handlers.test.ts"),
+  // Organization mutations cross Better Auth's session boundary and use real
+  // Postgres; their route matrix cannot run through the scoped PGlite fixture.
+  path.resolve(
+    import.meta.dir,
+    "../../handlers/organizations/slug-update.postgres.test.ts",
+  ),
+];
 
 /**
  * Reason a handler domain is intentionally absent from the cross-tenant
@@ -75,6 +79,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
+  // Caller-supplied audio is transient; optional matter access is authorized
+  // through MemberCaller and covered by dictation/transcribe.test.ts.
+  dictation: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -121,6 +128,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "visual-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Relays signed public update manifests from the downloads CDN; no tenant data.
+  "mobile-updates": WAIVER_REASON.noTenantReadSurface,
   // Deployment-owned directory access, independent of tenant membership;
   // credential denial and the projected read are covered by operator/routes.test.ts
   // and lib/db/operator-registrations/read.postgres.test.ts.
@@ -184,7 +193,11 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
-  "desktop-time-entries": {},
+  "desktop-time-entries": {
+    // Writes a narrative from the window titles in the request body; reads no
+    // stored record.
+    narrative: WAIVER_REASON.noTenantReadSurface,
+  },
   chat: {
     // Authenticated public-host icon bytes contain no tenant-owned records.
     "link-icons/get": WAIVER_REASON.noTenantReadSurface,
@@ -204,11 +217,13 @@ const handlerDomains = readdirSync(handlersDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .toSorted();
 
-// A domain is "covered" iff the matrix imports a handler from it. Parsing the
-// import specifiers keeps this in lockstep with the real matrix: a new case
+// A domain is "covered" iff a matrix imports a handler from it. Parsing the
+// import specifiers keeps this in lockstep with the real matrices: a new case
 // drags its `@/api/handlers/<domain>/...` import along, and this set updates
 // with no second list to maintain.
-const matrixSource = readFileSync(crossTenantMatrixPath, "utf-8");
+const matrixSource = crossTenantMatrixPaths
+  .map((matrixPath) => readFileSync(matrixPath, "utf-8"))
+  .join("\n");
 
 const coveredDomains = new Set(
   [...matrixSource.matchAll(/@\/api\/handlers\/([^/"]+)\//gu)]

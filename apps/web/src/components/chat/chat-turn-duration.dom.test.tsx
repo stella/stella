@@ -4,12 +4,20 @@ import {
   afterEach,
   expect,
   jest,
+  mock,
   setSystemTime,
   spyOn,
   test,
 } from "bun:test";
 
+import { restoreRealTimers } from "@stll/property-testing/fake-timers";
+
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 
@@ -28,7 +36,7 @@ const START = "2026-01-01T00:00:00.000Z";
 afterEach(() => {
   cleanup();
   jest.restoreAllMocks();
-  jest.useRealTimers();
+  restoreRealTimers();
   setSystemTime();
 });
 afterAll(async () => {

@@ -4,13 +4,15 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import {
   knowledgeKeys,
   playbooksOptions,
   playbookStartersOptions,
   recentPlaybooksOptions,
 } from "@/lib/knowledge/queries";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 
 type StarterId = Parameters<
   (typeof api.playbooks)["from-starter"]["post"]
@@ -33,7 +35,7 @@ const useRecentPlaybooks = (organizationId: string) => {
     refetchOnWindowFocus: false,
   });
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "useRecentPlaybooks:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
@@ -49,7 +51,7 @@ const usePlaybookStarters = (organizationId: string, enabled: boolean) => {
     enabled,
   });
   const { isLoading } = dataQuery;
-  const dataView = useQueryView(dataQuery);
+  const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "usePlaybookStarters:query");
   const data = dataView.type === "items" ? dataView.items : undefined;
   return {
@@ -70,6 +72,7 @@ export const memberPlaybooksSource = {
  * before; each returns the API response so the caller keeps its own handling.
  */
 const usePlaybookActions = (organizationId: string) => {
+  const submit = useIdempotentSubmit();
   const queryClient = useQueryClient();
 
   return {
@@ -88,7 +91,12 @@ const usePlaybookActions = (organizationId: string) => {
       }),
     createFromStarter: async (starterId: StarterId) =>
       unwrapApiResponse(
-        await api.playbooks["from-starter"].post({ starterId }),
+        await submit.run({
+          operation: "playbook-from-starter",
+          body: { starterId },
+          send: async (creationPayload) =>
+            api.playbooks["from-starter"].post(creationPayload),
+        }),
       ),
   };
 };

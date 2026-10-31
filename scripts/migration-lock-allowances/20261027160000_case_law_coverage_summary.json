@@ -1,0 +1,4 @@
+{
+  "row-level-security": "ENABLE and FORCE RLS apply only to the empty summary table created in the same transaction, under 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "Owner access is installed on the empty summary table created in the same transaction, under 1s lock_timeout and 5s statement_timeout."
+}

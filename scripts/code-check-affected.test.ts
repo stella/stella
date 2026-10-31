@@ -41,6 +41,7 @@ import {
   planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
+  pluginFixtureModules,
   prioritizeWebLint,
   resultBoundaryLintCommand,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -62,8 +63,12 @@ const WORKSPACES = new Set([
   "apps/api",
   "apps/landing",
   "apps/web",
+  "packages/api-contract",
+  "packages/auth-model",
   "packages/errors",
+  "packages/portable-path",
   "packages/scripts",
+  "packages/sha256",
   "packages/typescript-config",
   "packages/ui",
 ]);
@@ -79,6 +84,7 @@ const plan = (
     repositoryPaths: presentChangedPaths,
     affectedWorkspacePaths,
     workspacePaths: WORKSPACES,
+    pluginModulePaths: new Set(),
   });
 
 describe("changed-file result boundary lint", () => {
@@ -512,6 +518,21 @@ describe("affected code-check planning", () => {
     expect(planned.rootChecks).toContain("plugin-fixtures");
   });
 
+  // Lint plugins load the shared syntax reader, so editing it changes what
+  // every workspace lint reports.
+  test("a syntax reader change relints every workspace", () => {
+    const changedPath = "packages/scripts/src/syntax-tree.ts";
+    const planned = plan([changedPath], ["packages/scripts"]);
+    expect(planned.type).toBe("scoped");
+    if (planned.type !== "scoped") {
+      throw new Error("Expected a scoped code-check plan");
+    }
+    expect(planned.lint).toEqual({ type: "all" });
+    expect(matchedLintAllInputs([changedPath])).toContain(
+      `$TURBO_ROOT$/${changedPath}`,
+    );
+  });
+
   test.each([
     "scripts/design-lint-baseline.json",
     "scripts/ownership/status-transition.ts",
@@ -718,6 +739,81 @@ describe("changed lint path selection", () => {
     "packages/ui/node_modules/library/index.js",
   ])("excludes non-source or generated path %s", (changedPath) => {
     expect(isChangedLintPath(changedPath)).toBe(false);
+  });
+});
+
+// The fixture check loads every module the lint configs and plugins load
+// under Node. A module an app owns is no lint cache input, so only the import
+// graph can tell the planner that editing it can break the check.
+describe("plugin fixture selection", () => {
+  const selectsPluginFixtures = (
+    file: string,
+    pluginModulePaths: ReadonlySet<string>,
+  ): boolean => {
+    const owner = /^(?:apps|packages)\/[^/]+/u.exec(file)?.[0];
+    const workspaces = owner === undefined ? [] : [owner];
+    const planned = planCheck({
+      changedPaths: [file],
+      presentChangedPaths: [file],
+      repositoryPaths: [file],
+      affectedWorkspacePaths: workspaces,
+      workspacePaths: new Set(workspaces),
+      pluginModulePaths,
+    });
+    if (planned.type !== "scoped") {
+      throw new Error(`Expected a scoped code-check plan for ${file}`);
+    }
+    return planned.rootChecks.includes("plugin-fixtures");
+  };
+
+  test("a change to any module the lint configs and plugins load selects the fixture check", () => {
+    const modules = pluginFixtureModules(path.resolve(import.meta.dir, ".."));
+    expect(
+      [...modules].filter((file) => file.startsWith("apps/")).length,
+    ).toBeGreaterThan(0);
+    expect(
+      [...modules].filter((file) => !selectsPluginFixtures(file, modules)),
+    ).toEqual([]);
+  });
+
+  test("a module the plugins reach through a path alias selects the fixture check", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "plugin-fixture-graph-"));
+    try {
+      const write = (file: string, text: string) => {
+        mkdirSync(path.dirname(path.join(directory, file)), {
+          recursive: true,
+        });
+        writeFileSync(path.join(directory, file), text);
+      };
+      write("oxlint.config.ts", "export default {};\n");
+      write("oxlint.result-boundary.config.ts", "export default {};\n");
+      write(
+        ".oxlint-plugins/rule.ts",
+        'import { owned } from "../apps/api/src/lib/owned.ts";\nexport default owned;\n',
+      );
+      write(
+        "apps/api/tsconfig.json",
+        JSON.stringify({
+          compilerOptions: { paths: { "@/api/*": ["./src/*"] } },
+        }),
+      );
+      write(
+        "apps/api/src/lib/owned.ts",
+        'import { aliased } from "@/api/lib/aliased";\nexport const owned = aliased;\n',
+      );
+      write("apps/api/src/lib/aliased.ts", "export const aliased = 1;\n");
+      write("apps/api/src/lib/unrelated.ts", "export const unrelated = 1;\n");
+
+      const modules = pluginFixtureModules(directory);
+      expect(
+        selectsPluginFixtures("apps/api/src/lib/aliased.ts", modules),
+      ).toBe(true);
+      expect(
+        selectsPluginFixtures("apps/api/src/lib/unrelated.ts", modules),
+      ).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 
@@ -1018,6 +1114,7 @@ process.exit(childExitStatus(result));
       repositoryPaths: tracked,
       affectedWorkspacePaths: [],
       workspacePaths: workspaces,
+      pluginModulePaths: new Set(),
     });
     if (affected.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -1036,6 +1133,7 @@ process.exit(childExitStatus(result));
       repositoryPaths: trackedFiles(),
       affectedWorkspacePaths: [],
       workspacePaths: WORKSPACES,
+      pluginModulePaths: new Set(),
     });
     if (planned.type !== "scoped") {
       throw new Error("Expected a scoped code-check plan");
@@ -1646,6 +1744,17 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
     expect(
       jobs.get("code-quality-web-rest")?.match(/- name: Result consumption/gu),
     ).toHaveLength(2);
+    // On main the base is the checked tree itself: only a pull request or a
+    // merge group may scan its changed files, every other event scans all.
+    const scopedToChange =
+      'if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then';
+    const scopedSteps = (job: string | undefined) =>
+      (job ?? "")
+        .split("- name: Result consumption")
+        .slice(1)
+        .filter((step) => step.includes(scopedToChange)).length;
+    expect(scopedSteps(jobs.get("code-quality-api"))).toBe(1);
+    expect(scopedSteps(jobs.get("code-quality-web-rest"))).toBe(2);
     for (const leg of ["web", "rest"] as const) {
       const mutated = jobs
         .get("code-quality-web-rest")
@@ -2021,6 +2130,7 @@ test("the CLI stops after failure, reports it, and propagates its exit code", ()
     "ledger-membership.ts",
     "lint-paths.ts",
     "oxlint-config-scopes.ts",
+    "oxlint-module-closure.ts",
     "ratchet.ts",
     "result-boundary-globs.ts",
     "root-script-lint.ts",

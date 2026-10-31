@@ -1,21 +1,20 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
+import { slugify } from "@stll/text-normalize";
 import { Temporal } from "@stll/time";
 
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { requiredTrimmedStringSchema } from "@/lib/schema";
 
-const SLUG_PATTERN = /^[a-z0-9-]+$/u;
-
 export const createSlug = (value: string) =>
-  `${value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/gu, "-")
-    .replace(
-      /^-|-$/gu,
-      "",
-    )}-${String(Math.floor(Temporal.Now.instant().epochMilliseconds / 1000))}`;
+  `${slugify(value, {
+    charset: "ascii",
+    fallback: "",
+    maxLength: Number.MAX_SAFE_INTEGER,
+    separator: "-",
+  })}-${String(Math.floor(Temporal.Now.instant().epochMilliseconds / 1000))}`;
 
 export const getOrganizationSchema = () => {
   const t = getTranslator();
@@ -26,7 +25,11 @@ export const getOrganizationSchema = () => {
       v.string(),
       v.trim(),
       v.nonEmpty(t("validation.slugRequired")),
-      v.regex(SLUG_PATTERN, t("validation.slugFormat")),
+      v.maxLength(
+        ORGANIZATION_SLUG_RULES.maxLength,
+        t("validation.slugFormat"),
+      ),
+      v.regex(ORGANIZATION_SLUG_RULES.pattern, t("validation.slugFormat")),
     ),
   });
 };

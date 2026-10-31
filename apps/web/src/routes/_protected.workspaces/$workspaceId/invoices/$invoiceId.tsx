@@ -12,16 +12,6 @@ import * as v from "valibot";
 
 import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -38,11 +28,17 @@ import {
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
+import {
+  MEDIUM_DATE,
+  plainDateEpoch,
+} from "@/components/billing/format-plain-date";
+import { InvoicePdfDownloadButton } from "@/components/billing/invoice-pdf-download-button";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -63,12 +59,17 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
-import {
-  MEDIUM_DATE,
-  plainDateEpoch,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-plain-date";
+import { ConfirmAction } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/confirm-action";
 import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
-import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
+import { InvoiceLineEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-line-editor";
+import {
+  InvoicePaymentsSection,
+  RecordPaymentDialog,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments";
+import {
+  invoiceTakesPayments,
+  isPartiallyPaid,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-payments.logic";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -220,6 +221,8 @@ const InvoiceDetail = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
+  const [recordPaymentOpen, setRecordPaymentOpen] = useState(false);
+  const canUpdateInvoice = usePermissions({ invoice: ["update"] });
 
   const { data: invoice } = useSuspenseQuery(
     invoiceByIdOptions(workspaceId, invoiceId),
@@ -240,8 +243,7 @@ const InvoiceDetail = ({
     );
   };
 
-  type TransitionAction =
-    "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft";
+  type TransitionAction = "finalize" | "send" | "void" | "revert_to_draft";
 
   const transitionMutation = useMutation({
     mutationFn: async (action: TransitionAction) => {
@@ -321,6 +323,16 @@ const InvoiceDetail = ({
     },
   });
 
+  const matterGroups = new Map<string, typeof invoice.lines>();
+  for (const line of invoice.lines) {
+    const group = matterGroups.get(line.workspaceId);
+    if (group) {
+      group.push(line);
+    } else {
+      matterGroups.set(line.workspaceId, [line]);
+    }
+  }
+
   const invoiceStatus: InvoiceStatus = invoice.status;
 
   return (
@@ -332,8 +344,22 @@ const InvoiceDetail = ({
             <h2 className="text-lg font-semibold">
               {invoice.invoiceNumber ?? t("billing.invoices.statuses.draft")}
             </h2>
-            <InvoiceStatusBadge status={invoiceStatus} />
+            <InvoiceStatusBadge
+              partiallyPaid={isPartiallyPaid(invoice)}
+              status={invoiceStatus}
+            />
           </div>
+          {(invoiceTakesPayments(invoiceStatus) ||
+            invoiceStatus === "paid") && (
+            <p className="text-muted-foreground text-sm tabular-nums">
+              {t("billing.invoices.payments.outstandingAmount", {
+                amount: formatCurrencyAmount(
+                  invoice.outstandingAmount,
+                  invoice.currency,
+                ),
+              })}
+            </p>
+          )}
           {invoice.reference && (
             <p className="text-muted-foreground text-sm">{invoice.reference}</p>
           )}
@@ -389,6 +415,26 @@ const InvoiceDetail = ({
         )}
       </div>
 
+      {(invoiceTakesPayments(invoiceStatus) ||
+        invoiceStatus === "paid" ||
+        invoice.payments.length > 0) && (
+        <InvoicePaymentsSection
+          canUpdate={canUpdateInvoice}
+          invoice={invoice}
+          invoiceId={invoiceId}
+          onRecord={() => setRecordPaymentOpen(true)}
+          workspaceId={workspaceId}
+        />
+      )}
+      <RecordPaymentDialog
+        currency={invoice.currency}
+        invoiceId={invoiceId}
+        onOpenChange={setRecordPaymentOpen}
+        open={recordPaymentOpen}
+        outstandingAmount={invoice.outstandingAmount}
+        workspaceId={workspaceId}
+      />
+
       {/* Notes */}
       {invoice.notes && (
         <div className="rounded-lg border p-4">
@@ -399,166 +445,249 @@ const InvoiceDetail = ({
         </div>
       )}
 
-      {/* Time entries */}
-      <div className="rounded-lg border">
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-sm font-medium">
-            {t("billing.invoices.linkedTimeEntries")}
-          </h3>
-          <span className="text-muted-foreground text-xs">
-            {t("billing.invoices.totalEntries", {
-              count: invoice.timeEntries.length,
-            })}
-          </span>
-        </div>
-        {invoice.timeEntries.length === 0 ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">
-            {t("billing.invoices.noEntries")}
-          </div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b text-start">
-                  <th className="px-4 py-2 font-medium">
-                    {t("chat.composerMenu.context")}
-                  </th>
-                  <th className="px-4 py-2 font-medium">{t("common.date")}</th>
-                  <th className="px-4 py-2 font-medium">
-                    {t("billing.narrative")}
-                  </th>
-                  <th className="px-4 py-2 text-end font-medium">
-                    {t("billing.hours")}
-                  </th>
-                  <th className="px-4 py-2 text-end font-medium">
-                    {t("billing.amount")}
-                  </th>
-                  {invoiceStatus === "draft" && (
-                    <th className="w-10 px-4 py-2" />
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.timeEntries.map((entry) => (
-                  <tr className="border-b last:border-0" key={entry.id}>
-                    <td className="px-4 py-2">
-                      {entry.workItem?.name ?? t("common.matter")}
-                    </td>
-                    <td className="px-4 py-2 whitespace-nowrap tabular-nums">
-                      {format.dateTime(
-                        plainDateEpoch(entry.dateWorked),
-                        MEDIUM_DATE,
-                      )}
-                    </td>
-                    <td className="max-w-xs truncate px-4 py-2">
-                      {entry.invoiceNarrative ?? entry.narrative}
-                    </td>
-                    <td className="px-4 py-2 text-end tabular-nums">
-                      {format.number(entry.billedMinutes / 60, {
-                        style: "unit",
-                        unit: "hour",
-                        unitDisplay: "short",
-                        minimumFractionDigits: 1,
+      {invoice.lines.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {invoice.workspaceId === null && (
+            <p className="text-muted-foreground text-sm">
+              {t("billing.clientComposer.visibility")}
+            </p>
+          )}
+          {[...matterGroups].map(([matterId, lines]) => {
+            const matter = lines.at(0)?.workspace;
+            const amount = lines.reduce(
+              (sum, line) => sum + line.grossAmount,
+              0,
+            );
+            const share =
+              invoice.totalAmount === 0 ? 0 : amount / invoice.totalAmount;
+            return (
+              <section className="rounded-lg border" key={matterId}>
+                <div className="flex items-center gap-2 border-b px-4 py-3">
+                  <MatterIcon
+                    className="size-5"
+                    matter={{ id: matterId, color: matter?.color ?? null }}
+                  />
+                  <h3 className="text-sm font-medium" dir="auto">
+                    {matter?.name ?? t("common.matter")}
+                  </h3>
+                </div>
+                <div className="text-muted-foreground hidden gap-2 px-4 pt-3 text-xs sm:grid sm:grid-cols-[1fr_7rem_9rem_9rem]">
+                  <span>{t("common.description")}</span>
+                  <span>{t("billing.invoices.lineOverrides.quantity")}</span>
+                  <span>{t("billing.invoiceComposer.rate")}</span>
+                  <span className="text-end">{t("billing.amount")}</span>
+                </div>
+                {lines.map((line) => (
+                  <InvoiceLineEditor
+                    key={`${line.id}:${line.description}:${line.quantity}:${line.unitPrice}`}
+                    line={line}
+                    workspaceId={line.workspaceId}
+                    invoiceId={invoiceId}
+                    currency={invoice.currency}
+                    editable={
+                      invoice.status === "draft" &&
+                      invoice.finalizedAt === null &&
+                      canUpdateInvoice
+                    }
+                  />
+                ))}
+                <div className="flex flex-col gap-2 px-4 py-3">
+                  <p className="text-muted-foreground text-end text-xs tabular-nums">
+                    {t("billing.clientComposer.matterSubtotal", {
+                      amount: formatCurrencyAmount(amount, invoice.currency),
+                      share: format.number(share, {
+                        style: "percent",
                         maximumFractionDigits: 1,
-                      })}
-                    </td>
-                    <td className="px-4 py-2 text-end tabular-nums">
-                      {formatCurrencyAmount(
-                        timeEntryAmount(entry),
-                        entry.currency,
-                      )}
-                    </td>
-                    {invoiceStatus === "draft" && (
-                      <td className="px-4 py-2">
-                        <Button
-                          aria-label={t("common.remove")}
-                          className="size-6"
-                          onClick={() => removeEntryMutation.mutate(entry.id)}
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <XCircleIcon className="text-muted-foreground size-3.5" />
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Expenses */}
-      {invoice.expenses.length > 0 && (
-        <div className="rounded-lg border">
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <h3 className="text-sm font-medium">
-              {t("billing.invoices.linkedExpenses")}
-            </h3>
-          </div>
-          <div className="overflow-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-muted-foreground border-b text-start">
-                  <th className="px-4 py-2 font-medium">
-                    {t("common.matter")}
-                  </th>
-                  <th className="px-4 py-2 font-medium">{t("common.date")}</th>
-                  <th className="px-4 py-2 font-medium">
-                    {t("common.description")}
-                  </th>
-                  <th className="px-4 py-2 text-end font-medium">
-                    {t("billing.amount")}
-                  </th>
-                  {invoiceStatus === "draft" && (
-                    <th className="w-10 px-4 py-2" />
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {invoice.expenses.map((expense) => (
-                  <tr className="border-b last:border-0" key={expense.id}>
-                    <td className="px-4 py-2">{expense.matter?.name ?? "—"}</td>
-                    <td className="px-4 py-2 whitespace-nowrap tabular-nums">
-                      {format.dateTime(
-                        plainDateEpoch(expense.dateIncurred),
-                        MEDIUM_DATE,
-                      )}
-                    </td>
-                    <td className="max-w-xs truncate px-4 py-2">
-                      {expense.invoiceDescription ?? expense.description}
-                    </td>
-                    <td className="px-4 py-2 text-end tabular-nums">
-                      {formatCurrencyAmount(
-                        applyMarkupCents({
-                          amountCents: expense.amount,
-                          markupPercent: expense.markup,
-                        }),
-                        expense.currency,
-                      )}
-                    </td>
-                    {invoiceStatus === "draft" && (
-                      <td className="px-4 py-2">
-                        <Button
-                          aria-label={t("common.remove")}
-                          className="size-6"
-                          onClick={() =>
-                            removeExpenseMutation.mutate(expense.id)
-                          }
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <XCircleIcon className="text-muted-foreground size-3.5" />
-                        </Button>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                      }),
+                    })}
+                  </p>
+                  <div className="bg-muted h-1 overflow-hidden rounded-full">
+                    <div
+                      className="bg-foreground h-full"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, share * 100))}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </section>
+            );
+          })}
         </div>
+      )}
+
+      {invoice.lines.length === 0 && (
+        <>
+          {/* Time entries */}
+          <div className="rounded-lg border">
+            <div className="flex items-center justify-between border-b px-4 py-3">
+              <h3 className="text-sm font-medium">
+                {t("billing.invoices.linkedTimeEntries")}
+              </h3>
+              <span className="text-muted-foreground text-xs">
+                {t("billing.invoices.totalEntries", {
+                  count: invoice.timeEntries.length,
+                })}
+              </span>
+            </div>
+            {invoice.timeEntries.length === 0 ? (
+              <div className="text-muted-foreground py-6 text-center text-sm">
+                {t("billing.invoices.noEntries")}
+              </div>
+            ) : (
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground border-b text-start">
+                      <th className="px-4 py-2 font-medium">
+                        {t("chat.composerMenu.context")}
+                      </th>
+                      <th className="px-4 py-2 font-medium">
+                        {t("common.date")}
+                      </th>
+                      <th className="px-4 py-2 font-medium">
+                        {t("billing.narrative")}
+                      </th>
+                      <th className="px-4 py-2 text-end font-medium">
+                        {t("billing.hours")}
+                      </th>
+                      <th className="px-4 py-2 text-end font-medium">
+                        {t("billing.amount")}
+                      </th>
+                      {invoiceStatus === "draft" && (
+                        <th className="w-10 px-4 py-2" />
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.timeEntries.map((entry) => (
+                      <tr className="border-b last:border-0" key={entry.id}>
+                        <td className="px-4 py-2">
+                          {entry.workItem?.name ?? t("common.matter")}
+                        </td>
+                        <td className="px-4 py-2 tabular-nums">
+                          {format.dateTime(
+                            plainDateEpoch(entry.dateWorked),
+                            MEDIUM_DATE,
+                          )}
+                        </td>
+                        <td className="max-w-xs truncate px-4 py-2">
+                          {entry.invoiceNarrative ?? entry.narrative}
+                        </td>
+                        <td className="px-4 py-2 text-end tabular-nums">
+                          {format.number(entry.billedMinutes / 60, {
+                            style: "unit",
+                            unit: "hour",
+                            unitDisplay: "short",
+                            minimumFractionDigits: 1,
+                            maximumFractionDigits: 1,
+                          })}
+                        </td>
+                        <td className="px-4 py-2 text-end tabular-nums">
+                          {formatCurrencyAmount(
+                            timeEntryAmount(entry),
+                            entry.currency,
+                          )}
+                        </td>
+                        {invoiceStatus === "draft" && (
+                          <td className="px-4 py-2">
+                            <Button
+                              aria-label={t("common.remove")}
+                              className="size-6"
+                              onClick={() =>
+                                removeEntryMutation.mutate(entry.id)
+                              }
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <XCircleIcon className="text-muted-foreground size-3.5" />
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Expenses */}
+          {invoice.expenses.length > 0 && (
+            <div className="rounded-lg border">
+              <div className="flex items-center justify-between border-b px-4 py-3">
+                <h3 className="text-sm font-medium">
+                  {t("billing.invoices.linkedExpenses")}
+                </h3>
+              </div>
+              <div className="overflow-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground border-b text-start">
+                      <th className="px-4 py-2 font-medium">
+                        {t("common.matter")}
+                      </th>
+                      <th className="px-4 py-2 font-medium">
+                        {t("common.date")}
+                      </th>
+                      <th className="px-4 py-2 font-medium">
+                        {t("common.description")}
+                      </th>
+                      <th className="px-4 py-2 text-end font-medium">
+                        {t("billing.amount")}
+                      </th>
+                      {invoiceStatus === "draft" && (
+                        <th className="w-10 px-4 py-2" />
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoice.expenses.map((expense) => (
+                      <tr className="border-b last:border-0" key={expense.id}>
+                        <td className="px-4 py-2">
+                          {expense.matter?.name ?? "—"}
+                        </td>
+                        <td className="px-4 py-2 tabular-nums">
+                          {format.dateTime(
+                            plainDateEpoch(expense.dateIncurred),
+                            MEDIUM_DATE,
+                          )}
+                        </td>
+                        <td className="max-w-xs truncate px-4 py-2">
+                          {expense.invoiceDescription ?? expense.description}
+                        </td>
+                        <td className="px-4 py-2 text-end tabular-nums">
+                          {formatCurrencyAmount(
+                            applyMarkupCents({
+                              amountCents: expense.amount,
+                              markupPercent: expense.markup,
+                            }),
+                            expense.currency,
+                          )}
+                        </td>
+                        {invoiceStatus === "draft" && (
+                          <td className="px-4 py-2">
+                            <Button
+                              aria-label={t("common.remove")}
+                              className="size-6"
+                              onClick={() =>
+                                removeExpenseMutation.mutate(expense.id)
+                              }
+                              size="icon"
+                              variant="ghost"
+                            >
+                              <XCircleIcon className="text-muted-foreground size-3.5" />
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
       )}
 
       {/* Edit dialog */}
@@ -596,7 +725,7 @@ const InvoiceActions = ({
 }: {
   invoiceStatus: InvoiceStatus;
   onTransition: (
-    action: "finalize" | "send" | "mark_paid" | "void" | "revert_to_draft",
+    action: "finalize" | "send" | "void" | "revert_to_draft",
   ) => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -675,32 +804,8 @@ const InvoiceActions = ({
           )}
         </>
       );
+    // Payments are recorded in the payments section; paid follows from them.
     case "sent":
-      return (
-        <>
-          {canUpdateInvoice && (
-            <Button
-              onClick={() => onTransition("mark_paid")}
-              size="sm"
-              variant="outline"
-            >
-              <CheckIcon className="size-3.5" />
-              {t("markPaid")}
-            </Button>
-          )}
-          {canUpdateInvoice && (
-            <ConfirmAction
-              description={t("confirmVoid")}
-              onConfirm={() => onTransition("void")}
-            >
-              <Button size="sm" variant="destructive">
-                <XCircleIcon className="size-3.5" />
-                {t("void")}
-              </Button>
-            </ConfirmAction>
-          )}
-        </>
-      );
     case "paid":
       return canUpdateInvoice ? (
         <ConfirmAction
@@ -718,40 +823,6 @@ const InvoiceActions = ({
     default:
       return null;
   }
-};
-
-const ConfirmAction = ({
-  children,
-  description,
-  onConfirm,
-}: {
-  children: React.ReactElement;
-  description: string;
-  onConfirm: () => void;
-}) => {
-  const t = useTranslations("common");
-
-  return (
-    <AlertDialog>
-      <AlertDialogTrigger nativeButton render={children} />
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{t("confirmAction")}</AlertDialogTitle>
-          <AlertDialogDescription>{description}</AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {t("cancel")}
-          </AlertDialogClose>
-          <AlertDialogClose
-            render={<Button onClick={onConfirm} variant="destructive" />}
-          >
-            {t("confirm")}
-          </AlertDialogClose>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
-  );
 };
 
 const editInvoiceSchema = v.strictObject({

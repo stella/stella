@@ -1,3 +1,15 @@
+// parser-output-unchanged: [uk-fcl] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [us-courtlistener] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-ns] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [cz-uohs] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-courts] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-sn] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kio] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-tk] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-ncourt] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [eu-ecj] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-kis] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
+// parser-output-unchanged: [pl-uokik] limiter/admission failure grades only classify telemetry; parsed values and rejection decisions are unchanged.
 // parser-output-unchanged: failure grading and guarded telemetry fingerprint reads preserve parsed values and rejection decisions.
 // Failure vocabulary and classification, shared by every runtime that throws
 // or observes a failure.
@@ -18,6 +30,11 @@ export const FAILURE_GRADES = [
 export type FailureGrade = (typeof FAILURE_GRADES)[number];
 
 export const FAILURE_REASON_GRADE = {
+  public_read_timeout: "transient",
+  limiter_store_unavailable: "transient",
+  organization_state_unreadable: "transient",
+  admission_lease_lost: "transient",
+  admission_configuration_incomplete: "defect",
   upstream_unavailable: "transient",
   work_capacity_unavailable: "transient",
   work_deadline_exceeded: "transient",
@@ -42,6 +59,11 @@ export const FAILURE_REASON_GRADE = {
   // the lock or statement timeout is expected.
   pg_lock_timeout_budgeted: "transient",
   pg_statement_budget_exhausted: "transient",
+  // parser-output-unchanged: a failure grade for budgeted request timeouts; no parser reads it.
+  // Only through a bounded request step: the request answered without the
+  // step, inside a sub-budget of its own latency budget. The counterpart of
+  // `timeout_unbounded`, a wait nobody bounded against the caller's budget.
+  timeout_budgeted: "transient",
   redis_connection: "transient",
   redis_poll_blip: "transient",
   network_reset: "transient",
@@ -75,6 +97,8 @@ export const FAILURE_REASON_GRADE = {
   optional_file_absent: "anticipated",
   // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
   research_index_not_ready: "anticipated",
+  // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
+  document_ocr_unconfigured: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",

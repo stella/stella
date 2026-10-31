@@ -4,7 +4,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
@@ -25,6 +24,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/pl-sn";
 import { publishedCaseLawDecisionIndexPredicateSql } from "@/api/lib/case-law/published-decisions-sql";
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;

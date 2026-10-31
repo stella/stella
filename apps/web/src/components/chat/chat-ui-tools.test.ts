@@ -4,7 +4,10 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
-import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  createChatPastedTextPart,
+} from "@stll/api-contract/chat";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
@@ -16,7 +19,7 @@ import {
   getChatToolTitleKey,
   getCurrentApprovalPendingMessageId,
   getToolApprovalGrant,
-  getUserMessageHtmlHistory,
+  getUserMessageHistory,
   hasApprovalResponseAwaitingModelStep,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalOnceChatToolName,
@@ -24,11 +27,11 @@ import {
   isChatTurnInFlight,
   isExternalInputChatToolName,
   isNonPersistentGrantChatToolName,
-  isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isRunningToolPart,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
+  isUserInputChatToolName,
   projectCanonicalChatUIMessages,
   resolveChatAssistantTurnOutcome,
   sanitizeRunningToolCalls,
@@ -44,6 +47,12 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+test("inherited object keys are not user-input tool names", () => {
+  for (const name of ["constructor", "toString", "__proto__"]) {
+    expect(isUserInputChatToolName(name)).toBe(false);
+  }
+});
 
 describe("playbook save consumption", () => {
   test("a reverse completion refreshes caches without following the older call", () => {
@@ -460,24 +469,15 @@ describe("consumeDocumentDeletionToolCalls", () => {
 });
 
 describe("isApprovalPart", () => {
-  test("distinguishes official public lookup tools from other public tools", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isPublicOfficialChatToolName("infosoud_lookup_case")).toBe(true);
-    expect(isPublicOfficialChatToolName("mcp__salvia__search_decisions")).toBe(
-      false,
-    );
-    // Legacy aliases that pre-date the unified business_registry_lookup
-    // tool should NOT count as currently-registered public-official
-    // tools — they only render in chat history.
-    expect(isPublicOfficialChatToolName("ares_lookup_company")).toBe(false);
-    expect(isPublicOfficialChatToolName("ares_search_companies")).toBe(false);
-  });
-
   test("identifies built-in tools whose external request needs a preview", () => {
     expect(isExternalInputChatToolName("web_search")).toBe(true);
     expect(isExternalInputChatToolName("fetch_url")).toBe(true);
     expect(isExternalInputChatToolName("boe_search_legislation")).toBe(true);
-    expect(isExternalInputChatToolName("boe_get_law")).toBe(false);
+    // Official public registries receive model-chosen arguments too.
+    expect(isExternalInputChatToolName("boe_get_law")).toBe(true);
+    expect(isExternalInputChatToolName("business_registry_lookup")).toBe(true);
+    expect(isExternalInputChatToolName("infosoud_lookup_case")).toBe(true);
+    expect(isExternalInputChatToolName("save_clause")).toBe(false);
   });
 
   test("treats DOCX comment mutation tools as approval parts", () => {
@@ -605,11 +605,6 @@ describe("tool approval grants", () => {
 
   test("keeps the retired save_template card's write summary", () => {
     expect(isRegistryWriteSummaryToolName("save_template")).toBe(true);
-  });
-
-  test("identifies one representative public-official and external-input tool", () => {
-    expect(isPublicOfficialChatToolName("business_registry_lookup")).toBe(true);
-    expect(isExternalInputChatToolName("web_search")).toBe(true);
   });
 
   test("treats external MCP approvals as connector-level grants", () => {
@@ -1380,10 +1375,25 @@ describe("sanitizeRunningToolCalls", () => {
   });
 });
 
-describe("getUserMessageHtmlHistory", () => {
-  test("returns user message HTML from newest to oldest", () => {
+describe("getUserMessageHistory", () => {
+  test("recalls a just-sent message's markup without its pasted texts", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
+        {
+          id: "message-1",
+          parts: [
+            { content: "<p>Review <strong>this</strong></p>", type: "text" },
+            createChatPastedTextPart("Clause 4\nClause 5"),
+          ],
+          role: "user",
+        },
+      ]),
+    ).toEqual(["<p>Review <strong>this</strong></p>"]);
+  });
+
+  test("returns user message texts from newest to oldest", () => {
+    expect(
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Older prompt", type: "text" }],
@@ -1405,7 +1415,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("skips user messages without text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Reusable prompt", type: "text" }],
@@ -1432,7 +1442,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("trims history entries and skips whitespace-only text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "   ", type: "text" }],
@@ -1571,5 +1581,31 @@ describe("getCurrentApprovalPendingMessageId", () => {
         },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("tool names a model or a newer server sends", () => {
+  // A tool name is read off the wire; one that matches a name every object
+  // inherits must read as the unknown tool it is.
+  const INHERITED_NAMES = [
+    ...Object.getOwnPropertyNames(Object.prototype),
+    "__proto__",
+  ];
+
+  test("an inherited object name is no known tool", () => {
+    const unknown = getChatToolTitleKey("no_such_tool");
+    for (const name of INHERITED_NAMES) {
+      expect(getChatToolTitleKey(name)).toBe(unknown);
+      expect(isRegistryWriteSummaryToolName(name)).toBe(false);
+      expect(
+        isRunningToolPart({
+          arguments: "{}",
+          id: "call-inherited",
+          name,
+          state: "input-streaming",
+          type: "tool-call",
+        }),
+      ).toBe(true);
+    }
   });
 });

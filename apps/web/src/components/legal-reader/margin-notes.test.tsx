@@ -85,13 +85,16 @@ const analysisNote: MarginItem = {
 
 const ownComment: MarginItem = {
   author: { image: null, name: "Reader" },
+  createdAt: "2026-09-01T10:00:00.000Z",
   id: "comment-1",
   kind: "comment",
   mine: true,
   onDelete: () => undefined,
   onToggleVisibility: () => undefined,
   startAnchorId: "p-1",
+  targetType: "decision",
   text: "My own words.",
+  updatedAt: "2026-09-01T10:00:00.000Z",
   visibility: "private",
 };
 
@@ -128,7 +131,7 @@ describe("notes drawn in the text's own flow", () => {
 
 const provision = {
   document: {
-    country: "CZ",
+    country: "CZE",
     eli: "/eli/cz/sb/2012/89",
     id: "act-1",
     slug: "civil-code",

@@ -129,6 +129,9 @@ const readCode = (redirectUrl: string): string =>
   new URL(redirectUrl).searchParams.get("code") ??
   panic(`consent redirect carried no code: ${redirectUrl}`);
 
+/** The web sign-in page the provider sends a browser to when it must sign in. */
+export const OAUTH_LOGIN_PAGE_PATH = "/auth";
+
 /** The web page the provider sends a browser to when consent is needed. */
 export const OAUTH_CONSENT_PAGE_PATH = "/consent";
 
@@ -158,6 +161,7 @@ export const authorizeOAuthClient = async (
   client: RegisteredOAuthClient,
   // `null` sends no `scope` parameter at all.
   scope: string | null = GRANTED_SCOPES.join(" "),
+  prompt?: string,
 ): Promise<AuthorizationStart> => {
   const codeVerifier = `${Bun.randomUUIDv7()}${Bun.randomUUIDv7()}`;
   const authorizeUrl = new URL(getAuthEndpointUrl("oauth2/authorize"));
@@ -169,6 +173,7 @@ export const authorizeOAuthClient = async (
     resource: getMcpResourceUrl(),
     response_type: "code",
     ...(scope === null ? {} : { scope }),
+    ...(prompt === undefined ? {} : { prompt }),
     state: Bun.randomUUIDv7(),
   }).toString();
 

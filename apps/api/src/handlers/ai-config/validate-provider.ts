@@ -138,6 +138,7 @@ const validateProvider = createSafeSessionHandler(
           });
           return new HandlerError({
             status: 502,
+            code: "internal_error",
             message: raw,
             cause: error,
           });

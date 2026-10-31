@@ -38,7 +38,7 @@ One row of the bilingual table inside a run: its disposition as confirmed by the
 bilingual_translation_rows.id                  pUuid               pk,not null       bilingual.ts:145
 bilingual_translation_rows.organization_id     safeOrganizationId  fk,not null       bilingual.ts:146
 bilingual_translation_rows.workspace_id        safeWorkspaceId     fk,not null       bilingual.ts:149
-bilingual_translation_rows.run_id              safeUuid            not null          bilingual.ts:154  Named explicitly: the generated name would exceed Postgres's 63-byte identifier limit and be truncated.
+bilingual_translation_rows.run_id              safeUuid            fk,not null       bilingual.ts:154  Named explicitly: the generated name would exceed Postgres's 63-byte identifier limit and be truncated.
 bilingual_translation_rows.row_id              varchar             not null          bilingual.ts:157  The folio row handle: the right-column paragraph's `w14:paraId`, or the paragraph's own id for a paragraph inside a kept table.
 bilingual_translation_rows.ordinal             integer             not null          bilingual.ts:158
 bilingual_translation_rows.kind                text                not null          bilingual.ts:159

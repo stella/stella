@@ -16,6 +16,7 @@ import { READER_BREADCRUMB_CLEARANCE } from "../../src/components/legal-reader/r
 import { createStatuteViewTab } from "../../src/features/statutes/statute-inspector.logic";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { E2E_API_ORIGIN } from "../helpers/api";
+import { expectMemberDecisionReader } from "../helpers/decision-reader";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
   installDockedLegalFixtures,
@@ -341,13 +342,7 @@ for (const view of views) {
     for (const surface of ["inspector", "main"] as const) {
       const root = surface === "inspector" ? inspector : page.locator("body");
       if (surface === "main" && view.kind !== "statute") {
-        // The authenticated workspace replaces the public loading reader.
-        // Its editable composer identifies the reader that owns interactions.
-        await expect(
-          root.locator(
-            '[data-file-viewer-root="true"] [data-slot="docked-chat-composer"] [role="textbox"][contenteditable="true"]',
-          ),
-        ).toBeVisible();
+        await expectMemberDecisionReader(page);
       }
       const breadcrumb = root.locator('[data-slot="reader-breadcrumb"]');
       await expect(breadcrumb).toHaveCount(1);

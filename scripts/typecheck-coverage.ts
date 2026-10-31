@@ -25,11 +25,9 @@ import {
   statSync,
 } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
+import { API } from "tsrs/unstable/async";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
-
-import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const TSC_NATIVE = "packages/scripts/src/tsc-native.ts";
@@ -342,30 +340,20 @@ const readJsonObject = (file: string): Record<string, unknown> => {
   return parsed;
 };
 
-const readCompilerOptions = (project: string): ts.CompilerOptions => {
+const readCompilerOptions = async (project: string) => {
   const configFile = path.join(REPO_ROOT, project);
-  const read = ts.readConfigFile(configFile, (file) => ts.sys.readFile(file));
-  if (read.error) {
-    panic(ts.flattenDiagnosticMessageText(read.error.messageText, "\n"));
+  const compiler = new API({ cwd: path.dirname(configFile) });
+  try {
+    const parsed = await compiler.parseConfigFile(configFile);
+    if (parsed.errors.length > 0) {
+      panic(
+        `${project} is invalid:\n${parsed.errors.map(({ text }) => text).join("\n")}`,
+      );
+    }
+    return parsed.options;
+  } finally {
+    await compiler.close();
   }
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    ts.sys,
-    path.dirname(configFile),
-    undefined,
-    configFile,
-  );
-  const errors = withoutTsgoOnlyOptionDiagnostics(parsed.errors);
-  if (errors.length > 0) {
-    panic(
-      `${project} is invalid:\n${errors
-        .map((error) =>
-          ts.flattenDiagnosticMessageText(error.messageText, "\n"),
-        )
-        .join("\n")}`,
-    );
-  }
-  return parsed.options;
 };
 
 const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
@@ -384,14 +372,14 @@ const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
   return errors;
 };
 
-const incrementalProjectErrors = (projects: string[]): string[] => {
+const incrementalProjectErrors = async (projects: string[]) => {
   const buildInfoFiles: ProjectBuildInfo[] = [];
   const errors: string[] = [];
   for (const project of projects) {
     if (INCREMENTAL_EXEMPT_PROJECTS.has(project)) {
       continue;
     }
-    const options = readCompilerOptions(project);
+    const options = await readCompilerOptions(project);
     if (options.incremental !== true) {
       errors.push(`${project} must enable incremental compilation`);
       continue;
@@ -445,9 +433,9 @@ const turboTypecheckOutputErrors = (
   return errors;
 };
 
-const assertIncrementalProjectConfigs = (projects: string[]): void => {
+const assertIncrementalProjectConfigs = async (projects: string[]) => {
   const errors = [
-    ...incrementalProjectErrors(projects),
+    ...(await incrementalProjectErrors(projects)),
     ...turboTypecheckOutputErrors(),
   ];
   assert(
@@ -1033,14 +1021,14 @@ const main = async (): Promise<void> => {
   // Autofix checks supplied projects without loading the repository cache audit.
   const { typecheckCacheContractIssues } =
     await import("../packages/scripts/src/typecheck-cache-contract");
-  const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
+  const cacheIssues = await typecheckCacheContractIssues(REPO_ROOT);
   if (cacheIssues.length > 0) {
     panic(cacheIssues.join("\n"));
   }
 
   const projects = typecheckProjects();
   assertOxcProjectDiscovery(projects);
-  assertIncrementalProjectConfigs(projects);
+  await assertIncrementalProjectConfigs(projects);
   const repositoryFiles = repositoryTypeScriptFiles();
   const oxcFiles = repositoryOxcFiles();
   const filesByProject = coveredFilesByProject(projects);

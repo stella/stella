@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "@stll/scan-engine becomes a published package and builds its dist with tsdown, the same catalog dev dependency every other tsdown-built published package declares."
+}

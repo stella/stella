@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { member } from "@/api/db/auth-schema";
 import { auditLogs, workspaceMembers } from "@/api/db/schema";
+import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -41,7 +42,7 @@ const createContext = ({
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
     request: recorderBindings.request,
-    route: "/v1/workspaces/:workspaceId/members/:userId",
+    route: "/v1/workspaces/:workspaceId/members/:userId" satisfies ApiRoutePath,
     session: {
       activeOrganizationId: recorderBindings.organizationId,
     },

@@ -1,5 +1,14 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { gfm } from "micromark-extension-gfm";
@@ -42,41 +51,46 @@ type CurrentAnswer = NonNullable<
 const requests: { method: string; body: unknown }[] = [];
 let acceptStatus = 200;
 let answerSource = "old text";
-const boundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      const method = request.method;
-      requests.push({
-        method,
-        body: request.body === null ? undefined : await request.json(),
-      });
-      if (method === "POST") {
-        return Response.json(
-          acceptStatus === 409
-            ? { message: "Changed" }
-            : { revision: 3, edited: true },
-          { status: acceptStatus },
-        );
-      }
-      return Response.json({
-        revision: 2,
-        id: toSafeId<"chatMessage">("message-1"),
-        role: "assistant",
-        edited: true,
-        createdAt: "2026-10-10T10:00:00Z",
-        parts: [{ type: "text", content: answerSource }],
-        content: {
-          version: 3,
-          data: [{ type: "text", content: answerSource }],
-          metadata: { sendMode: "rawOverride" },
-        },
-      } satisfies CurrentAnswer);
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let boundary: Mock<typeof globalThis.fetch>;
+beforeEach(() => {
+  boundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        const method = request.method;
+        requests.push({
+          method,
+          body: request.body === null ? undefined : await request.json(),
+        });
+        if (method === "POST") {
+          return Response.json(
+            acceptStatus === 409
+              ? { message: "Changed" }
+              : { revision: 3, edited: true },
+            { status: acceptStatus },
+          );
+        }
+        return Response.json({
+          revision: 2,
+          id: toSafeId<"chatMessage">("message-1"),
+          role: "assistant",
+          edited: true,
+          createdAt: "2026-10-10T10:00:00Z",
+          parts: [{ type: "text", content: answerSource }],
+          content: {
+            version: 3,
+            data: [{ type: "text", content: answerSource }],
+            metadata: { sendMode: "rawOverride" },
+          },
+        } satisfies CurrentAnswer);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
   requests.length = 0;
   acceptStatus = 200;

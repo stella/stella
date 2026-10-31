@@ -57,6 +57,10 @@ const platform = (module: string, reason: string) =>
   }) as const satisfies SchedulerTaskAuthorityEntry;
 
 export const SCHEDULER_TASK_AUTHORITY = {
+  "caseLaw.reconcilePublisherRemovals": platform(
+    "case-law-publisher-removals.ts",
+    "Reconciles publisher removals in the public legal corpus.",
+  ),
   "actions.sweepCosts": platform(
     "action-cost-retention.ts",
     "Retention sweep of usage records past their window.",
@@ -93,6 +97,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-raw-storage.ts",
     "Public legal corpus storage census.",
   ),
+  "caseLaw.refreshCoverage": platform(
+    "case-law-coverage-refresh.ts",
+    "Precomputes the public legal corpus coverage summary.",
+  ),
   "caseLaw.reportFreshness": platform(
     "case-law-freshness-report.ts",
     "Reports public legal corpus freshness metrics.",
@@ -104,6 +112,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "caseLaw.reconcileRawRows": platform(
     "case-law-raw-storage.ts",
     "Public legal corpus storage reconciliation.",
+  ),
+  "caseLaw.reconcileDecisionIdentifiers": platform(
+    "case-law-decision-identifier-reconciliation.ts",
+    "Public legal corpus identifier reconciliation.",
   ),
   "caseLaw.reconcileRawSweeps": platform(
     "case-law-raw-storage.ts",
@@ -197,6 +209,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "flow-run-orphan-reconcile.ts",
     "Hands stalled flow runs back to their queue.",
   ),
+  "emailDeliverability.receive": platform(
+    "email-deliverability-receive.ts",
+    "Applies the mail provider's bounce and complaint events to the accounts whose addresses they name; stores only whether each address is deliverable.",
+  ),
   "inboundMail.receive": platform(
     "inbound-mail-receive.ts",
     "Drains the platform's inbound mail queue across organizations; each delivery is filed only after its recipient token resolves the matter and the sender's current access is rechecked.",
@@ -250,6 +266,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",
     "Recovers stuck exports and hands queued ones back to their queue, whose worker resolves the requester's run actor.",
+  ),
+  "requests.sweepReceipts": platform(
+    "request-receipt-retention.ts",
+    "Retention sweep of expired technical request receipts under each receipt's organization and user scope.",
   ),
   "sanctions.backfillMonitoring": platform(
     "sanctions-monitoring-backfill.ts",

@@ -13,7 +13,11 @@ export const standaloneCandidate = (match: string): string => {
 // administrative-authority file numbers (letter blocks joined by dashes),
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–][\w/–-]{0,30}\d/u,
+  // Dashes include the non-breaking hyphen (U+2011) some sources print.
+  // Anchored to the case-number prefix: an authority reference that only
+  // follows a court docket ("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ") must
+  // not hide the docket.
+  /^(?:[Ss]p\.\s{0,3}[Zz]n\.|[Ss]en\.\s{0,3}[Zz]n\.|[Ss]ygn\.(?:\s{1,3}akt\.?)?|[ČčCc]\.\s{0,3}[Jj]\.:?)\s{0,3}[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
   /X{2,}/u,
   /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,
@@ -25,9 +29,9 @@ const BENIGN: readonly RegExp[] = [
   /\bKIO\s{0,1}\/?\s{0,1}\d{1,5}\s{0,1}\/\s{0,1}\d{2,4}\b/u,
   // The procurement office's earlier arbitration-panel files
   // ("UZP/ZO/0-1234/05", also written with a letter O, and with a space
-  // or line break after the hyphen): same out-of-corpus quasi-judicial body
-  // under its pre-KIO file format.
-  /\bUZP\/ZO\/[0O]-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // or line break around the slash or hyphen): same out-of-corpus
+  // quasi-judicial body under its pre-KIO file format.
+  /\bUZP\/ZO\/\s{0,2}[0O]\s{0,2}-\s{0,2}\d{1,5}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A case-number prefix ("sp. zn.", "sen. zn.", "sygn.[ akt]", "č. j.")
   // with no digit anywhere in the captured tail is never a real citation:
   // every actual docket carries a number. Covers Polish anonymization
@@ -102,6 +106,12 @@ const BENIGN: readonly RegExp[] = [
   // led by a chamber number or written "Spr."): the agenda of the court's
   // president, not a decision docket the corpus can hold.
   /^sp\.\s{0,3}zn\.\s{0,3}(?:\d{1,3}\s{0,2})?Spr\.?\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
+  // Slovak prosecutor-office file ("sp. zn. VI/2 Pz 123/07", "sp. zn. XV/2
+  // Gn 45/09"): a Roman division and numeric department joined by a slash
+  // lead the reference, where every court docket opens with a plain chamber
+  // number; the prosecution service's files are not decisions the corpus
+  // can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}[IVX]{1,5}\/\d{1,2}\s{1,3}\p{Lu}\p{Ll}{1,3}\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
 ];
 
 export const isBenign = (candidate: string): boolean =>

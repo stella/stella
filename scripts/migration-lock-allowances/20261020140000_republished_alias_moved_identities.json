@@ -1,0 +1,5 @@
+{
+  "create-policy": "The policy is created on the new empty table before it is available to concurrent application traffic.",
+  "create-table-references": "The foreign key is created with its new empty table, avoiding an existing-row scan under the 1s lock_timeout.",
+  "row-level-security": "Row-level security is enabled on the new empty table before it is available to concurrent application traffic."
+}

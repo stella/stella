@@ -1,4 +1,7 @@
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import type {
+  AiCellSettlement,
+  ApiFileSecurityRejectionDetails,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
@@ -63,6 +66,7 @@ import type {
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
+  ImportDocumentSource,
   JustificationContent,
   LinkMetadata,
   SafeId,
@@ -1200,6 +1204,8 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /** Set when the upload imports a file from another system. */
+      importSource?: ImportDocumentSource;
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a
@@ -1497,6 +1503,8 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Durable terminal outcome of the latest AI run for this cell. */
+    aiSettlement: jsonb("ai_settlement").$type<AiCellSettlement>(),
     /** Workflow run that currently owns this non-terminal cell. */
     ownerRunId: p.text("owner_run_id"),
     /** Batch within the workflow run that currently owns this cell. */
@@ -1555,7 +1563,8 @@ export const fields = p.pgTable(
     // immutable projection of the text a cell displays. Partial on the
     // findable types so pending and error placeholders stay out of the GIN
     // pending list; `fields-find-text-index.test.ts` binds that list to
-    // `FIELD_FIND_SUPPORT` and to the migration.
+    // `FIELD_FIND_SUPPORT` and to the migration. No query reads it once the
+    // find folds through `search_fold`.
     p
       .index("fields_find_text_trgm_idx")
       .using("gin", sql`field_find_text(${table.content}) gin_trgm_ops`)

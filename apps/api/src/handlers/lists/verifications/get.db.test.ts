@@ -23,6 +23,7 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { recordVerificationRead } from "@/api/lib/lists/verification/read-audit";
 import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch/lists.verifications.get";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -54,6 +55,10 @@ const seed = async (db: GatedTestDb) => {
     name: "Read audit firm",
     slug: organizationId,
     createdAt: new Date(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: new Date(),
   });
   await db.insert(user).values(
     [actor, otherActor].map((id) => ({
@@ -526,7 +531,7 @@ describe.skipIf(!enabled)("verification point-read audit", () => {
     await withFixture(async (f) => {
       const dispatch =
         await CAPABILITY_DISPATCH["lists.verifications.get"].load();
-      expect(dispatch.default).toBe(get);
+      expect(dispatch["default"]).toBe(get);
       const rest = await f.invoke();
       const mcp = await f.capabilityRead();
       expect(mcp.isError).not.toBe(true);

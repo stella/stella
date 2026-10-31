@@ -3276,7 +3276,9 @@ export const initDocumentProcessingWorker = ({ db }: BullMqWorkerContext) => {
         return undefined;
       }
       if (ocrConfigured) {
-        readiness = startDocumentOcrWorkerReadiness();
+        readiness = startDocumentOcrWorkerReadiness(
+          envDocumentProcessingWorker.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES,
+        );
       }
       return undefined;
     }),

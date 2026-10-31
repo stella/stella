@@ -130,7 +130,10 @@ describe("product media manifest", () => {
   test("hydrates by checksum and repairs a changed local copy from cache", async () => {
     const rootDir = await mkdtemp(nodePath.join(tmpdir(), "product-media-"));
     temporaryDirectories.push(rootDir);
-    execFileSync("git", ["init", "--quiet"], { cwd: rootDir });
+    execFileSync("git", ["init", "--quiet"], {
+      maxBuffer: 2 ** 30,
+      cwd: rootDir,
+    });
     const videoBytes = Buffer.from("video bytes");
     const posterBytes = Buffer.from("poster bytes");
     const videoSha256 = createSha256().update(videoBytes).digest("hex");

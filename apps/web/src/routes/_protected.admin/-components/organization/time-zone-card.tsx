@@ -7,21 +7,14 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Label } from "@stll/ui/label";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { COMMON_TIMEZONES } from "@/lib/timezones";
-import { useQueryView } from "@/lib/use-query-view";
+import { queryView } from "@/lib/query-view.logic";
+import { TimeZonePicker } from "@/lib/time-zone-picker";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -33,18 +26,12 @@ import {
 } from "@/routes/_protected.admin/-components/organization/time-zone-card.logic";
 import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
-/** The curated zones, plus the organization's own when it is not one of them. */
-const zoneOptions = (current: string): readonly string[] => {
-  const common: readonly string[] = COMMON_TIMEZONES;
-  return common.includes(current) ? common : [current, ...common];
-};
-
 export const OrganizationTimeZoneCard = () => {
   const t = useTranslations();
   const selectId = useId();
   const user = useAuthenticatedUser();
   const canEdit = usePermissions({ organizationSettings: ["update"] });
-  const view = useQueryView(
+  const view = queryView(
     useQuery(
       organizationSettingsOptions({
         organizationId: user.activeOrganizationId,
@@ -107,34 +94,30 @@ export const OrganizationTimeZoneCard = () => {
           <Label className="sr-only" htmlFor={selectId}>
             {t("settings.organization.timeZone.title")}
           </Label>
-          <Select
+          <TimeZonePicker
+            id={selectId}
+            label={t("settings.organization.timeZone.title")}
             disabled={!canEdit || mutation.isPending}
+            jurisdictionCountries={settings.practiceJurisdictions.map(
+              ({ countryCode }) => countryCode,
+            )}
+            follow={{
+              value: FOLLOW_JURISDICTION,
+              zone: settings.primaryJurisdictionTimeZone,
+              label: t("settings.organization.timeZone.followingJurisdiction", {
+                timeZone: settings.primaryJurisdictionTimeZone.replace(
+                  /_/gu,
+                  " ",
+                ),
+              }),
+            }}
             onValueChange={(next) => {
-              if (!next || next === selected) {
-                return;
+              if (next !== selected) {
+                mutation.mutate(timeZoneToSave(next));
               }
-              mutation.mutate(timeZoneToSave(next));
             }}
             value={selected}
-          >
-            <SelectTrigger className="w-72" id={selectId}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value={FOLLOW_JURISDICTION}>
-                {selected === FOLLOW_JURISDICTION
-                  ? t("settings.organization.timeZone.followingJurisdiction", {
-                      timeZone: settings.timeZone.replace(/_/gu, " "),
-                    })
-                  : t("settings.organization.timeZone.followJurisdiction")}
-              </SelectItem>
-              {zoneOptions(settings.timeZone).map((zone) => (
-                <SelectItem key={zone} value={zone}>
-                  {zone.replace(/_/gu, " ")}
-                </SelectItem>
-              ))}
-            </SelectPopup>
-          </Select>
+          />
         </div>
       </FramePanel>
     </Frame>

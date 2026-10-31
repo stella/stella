@@ -30,7 +30,9 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
     run: |
-      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+      # Outside a pull request or merge group the base is this tree, so a
+      # changed-file scan would check nothing.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
         bun run check:result-consumption -- --all --leg web
       else
         bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
@@ -102,6 +104,15 @@ checks:
       bun test scripts/db-await-in-loop.test.ts
       bun run check:db-await-in-loop
 
+  - name: Online unique index dependency guard
+    if: ${{ !cancelled() }}
+    env:
+      CI_CHECK_KIND: CONTEXTUAL
+      CI_CHECK_CONTEXT: "Validates the current online index declarations and source dependencies."
+    run: |
+      bun test ./scripts/check-online-index-dependencies.test.ts
+      bun run check:online-index-dependencies
+
   - name: API timeout mutation guard
     if: ${{ !cancelled() }}
     env:
@@ -119,7 +130,9 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
     run: |
-      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+      # Outside a pull request or merge group the base is this tree, so a
+      # changed-file scan would check nothing.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
         bun run check:result-consumption -- --all --leg rest
       else
         bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
