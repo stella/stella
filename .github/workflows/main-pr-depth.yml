@@ -38,6 +38,7 @@ jobs:
       sha: ${{ steps.ancestor.outputs.sha }}
       proof: ${{ steps.reuse.outputs.proof }}
       main-base: ${{ steps.ancestor.outputs.main-base }}
+      green-base: ${{ steps.green-base.outputs.sha }}
       run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
       - name: Checkout network retry helper
@@ -151,6 +152,7 @@ jobs:
           git -C "$directory" show origin/main:scripts/retry.sh > "$RUNNER_TEMP/retry.sh"
           git -C "$directory" show origin/main:scripts/verify-release-candidate-tree.mjs > "$RUNNER_TEMP/verify-release-candidate-tree.mjs"
           git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
+          git -C "$directory" show origin/main:scripts/main-pr-depth-green-base.sh > "$RUNNER_TEMP/main-pr-depth-green-base.sh"
 
       - name: Verify main ancestry
         if: steps.selection.outputs.run == 'true'
@@ -168,6 +170,21 @@ jobs:
           bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Select the last green PR-depth base
+        if: steps.selection.outputs.run == 'true'
+        id: green-base
+        timeout-minutes: 5
+        working-directory: ${{ runner.temp }}/main-pr-depth-validation
+        env:
+          SHA: ${{ inputs.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_RETRY: ${{ runner.temp }}/gh-retry.sh
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          # Without a known green base the code check covers every file.
+          base=$(bash "$RUNNER_TEMP/main-pr-depth-green-base.sh") || base=""
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
     needs: validate
@@ -182,6 +199,7 @@ jobs:
       depth: fast
       pr_depth_only: true
       sha: ${{ needs.validate.outputs.sha }}
+      green_base: ${{ needs.validate.outputs.green-base }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
