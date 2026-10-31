@@ -126,7 +126,9 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               userId,
               createdBy: userId,
               scope: "user",
-              kind: "fact",
+              // A user-scoped memory holds only a scope-free kind; its source
+              // matter is what ties it to the hold.
+              kind: "instruction",
               content: "Held evidence",
               source: "user",
               dedupKey: sha256Hex(heldMemoryId),

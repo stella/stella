@@ -1301,6 +1301,27 @@ export const installPgliteOrganizationMemberCapacity = async (
   }
 };
 
+/** Install the legal-hold delete backstop on matters, items and matter contacts. */
+export const installPgliteLegalHoldDeleteBackstop = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(DRIZZLE_DIR, "20261031151726_legal_holds", "migration.sql"),
+  ).filter((statement) =>
+    /^(?:CREATE FUNCTION|CREATE TRIGGER|REVOKE ALL ON FUNCTION)\s/u.test(
+      executableSql(statement),
+    ),
+  );
+  if (statements.length !== 5) {
+    panic(
+      "Expected the legal-hold backstop function, its revoke and three triggers",
+    );
+  }
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
 /** Install migration-owned timer signals and grants omitted by schema push. */
 /** Install the chat stored-content egress fences on threads and memberships. */
 export const installPgliteChatStoredContentEgress = async (

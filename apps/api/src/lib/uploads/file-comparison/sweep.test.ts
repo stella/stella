@@ -161,7 +161,11 @@ describe("file comparison expiry sweep", () => {
     if (Result.isOk(swept)) {
       throw new Error("Expected ledger failure");
     }
-    expect(swept.error.cause).toBeInstanceOf(OrganizationFileUsageError);
+    expect(swept.error.cause).toBeInstanceOf(DeleteOrganizationFileError);
+    expect(
+      DeleteOrganizationFileError.is(swept.error.cause) &&
+        swept.error.cause.cause,
+    ).toBeInstanceOf(OrganizationFileUsageError);
     expect(swept.error.summary).toEqual({
       scanned: 2,
       sweptUploads: 1,
@@ -225,7 +229,11 @@ test("keeps the first row cause when multiple deletes and row removal fail", asy
   if (Result.isOk(outcome)) {
     throw new Error("Expected partial failure");
   }
-  expect(outcome.error.cause).toBeInstanceOf(OrganizationFileUsageError);
+  expect(outcome.error.cause).toBeInstanceOf(DeleteOrganizationFileError);
+  expect(
+    DeleteOrganizationFileError.is(outcome.error.cause) &&
+      outcome.error.cause.cause,
+  ).toBeInstanceOf(OrganizationFileUsageError);
   expect(outcome.error.summary).toEqual({
     scanned: 2,
     sweptUploads: 0,

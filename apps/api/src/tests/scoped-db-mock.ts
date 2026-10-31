@@ -212,13 +212,18 @@ const fixtureSelect =
       const from = result.from;
       return {
         ...result,
-        from: (table: unknown) =>
-          table === legalHolds ||
-          (table === organization &&
-            columns.length === 1 &&
-            columns.at(0) === organization.id)
-            ? createSelectQueryMock([]).from()
-            : Reflect.apply(from, result, [table]),
+        from: (table: unknown): unknown => {
+          if (
+            table === legalHolds ||
+            (table === organization &&
+              columns.length === 1 &&
+              columns.at(0) === organization.id)
+          ) {
+            return createSelectQueryMock([]).from();
+          }
+          const query: unknown = Reflect.apply(from, result, [table]);
+          return query;
+        },
       };
     }
     return result;

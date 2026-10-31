@@ -47,6 +47,7 @@ import {
   installPgliteEntityFeatureGateMaintenance,
   installPgliteFlowTransitions,
   installPgliteInvoiceObjects,
+  installPgliteLegalHoldDeleteBackstop,
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteListVerificationBudgets,
@@ -881,6 +882,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatStoredContentEgress(db);
   await installPgliteSanctionsMonitoringTriggers(db);
   await installPglitePlaybookDocumentTypeKey(db);
+  await installPgliteLegalHoldDeleteBackstop(db);
 
   return client;
 };
