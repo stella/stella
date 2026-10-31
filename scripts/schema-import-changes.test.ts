@@ -1,6 +1,9 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { schemaEntries, schemaImportsChanged } from "./schema-import-changes";
 
@@ -31,13 +34,73 @@ test("a value the schema imports from outside the migration paths selects the mi
   ).toBe(false);
 });
 
-test("the plan's migration output includes schema import changes", () => {
-  const workflow = readFileSync(
-    path.join(root, ".github/workflows/ci.yml"),
-    "utf-8",
+const MIGRATION_INPUTS = [
+  "MIGRATION_PATHS",
+  "SCHEMA_IMPORTS",
+  "SCHEMA_IMPORTS_FALLBACK",
+] as const;
+
+test("the plan requires the migration jobs when any migration input says so", () => {
+  const workflow = v.parse(
+    v.object({
+      jobs: v.object({
+        "ci-plan": v.object({
+          outputs: v.object({ database_migrations_required: v.string() }),
+          steps: v.array(
+            v.looseObject({
+              id: v.optional(v.string()),
+              run: v.optional(v.string()),
+            }),
+          ),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(path.join(root, ".github/workflows/ci.yml"), "utf-8"),
+    ),
   );
-  expect(workflow).toContain(
-    `database_migrations_required: \${{ (steps.changed-files.outputs.database_migrations_required == 'true' || steps.schema-imports.outputs.changed == 'true') && 'true' || 'false' }}`,
+  const plan = workflow.jobs["ci-plan"];
+  expect(plan.outputs.database_migrations_required).toBe(
+    `\${{ steps.migration-scope.outputs.database_migrations_required }}`,
   );
-  expect(workflow).toContain("bun scripts/schema-import-changes.ts");
+  const script =
+    plan.steps.find((candidate) => candidate.id === "migration-scope")?.run ??
+    panic("Missing the migration-scope step");
+  const directory = mkdtempSync(path.join(tmpdir(), "migration-scope-"));
+  try {
+    // A skipped step leaves its output empty.
+    const answers = ["", "false", "true"];
+    for (const paths of answers) {
+      for (const graph of answers) {
+        for (const fallback of answers) {
+          const values = [paths, graph, fallback];
+          const output = path.join(directory, "output");
+          writeFileSync(output, "");
+          const result = Bun.spawnSync(
+            ["bash", "-euo", "pipefail", "-c", script],
+            {
+              env: {
+                PATH: process.env["PATH"] ?? "",
+                GITHUB_OUTPUT: output,
+                ...Object.fromEntries(
+                  MIGRATION_INPUTS.map((name, index) => [
+                    name,
+                    values[index] ?? "",
+                  ]),
+                ),
+              },
+              stdout: "pipe",
+              stderr: "pipe",
+            },
+          );
+          expect(result.exitCode, result.stderr.toString()).toBe(0);
+          expect(readFileSync(output, "utf-8"), JSON.stringify(values)).toBe(
+            `database_migrations_required=${String(values.includes("true"))}\n`,
+          );
+        }
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

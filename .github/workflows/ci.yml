@@ -241,7 +241,7 @@ jobs:
       dependency_changes_required: ${{ steps.changed-files.outputs.dependency_changes_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
-      database_migrations_required: ${{ (steps.changed-files.outputs.database_migrations_required == 'true' || steps.schema-imports.outputs.changed == 'true') && 'true' || 'false' }}
+      database_migrations_required: ${{ steps.migration-scope.outputs.database_migrations_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -1082,23 +1082,32 @@ jobs:
           steps.completed-depth.outputs.run_required != 'false'
           && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
           && steps.changed-files.outputs.database_migrations_required != 'true'
+          && steps.planner-deps.outcome == 'success'
         timeout-minutes: 3
         env:
           CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
-          PLANNER_DEPENDENCIES: ${{ steps.planner-deps.outcome }}
         # Every failure answers "changed": an unanswered question must not skip
         # the migration jobs, nor fail the plan for every pull request.
         run: |
-          if [[ "$PLANNER_DEPENDENCIES" == success ]]; then
-            if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
-              echo "$answer" >> "$GITHUB_OUTPUT"
-            else
-              echo "changed=true" >> "$GITHUB_OUTPUT"
-            fi
-            exit 0
+          if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
+            echo "$answer" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-          # Without the import graph, any API or package source may reach the
-          # schema. grep exits 1 only for "no match"; a missing list counts.
+
+      - name: Select schema import changes without the import graph
+        id: schema-imports-fallback
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
+          && steps.changed-files.outputs.database_migrations_required != 'true'
+          && steps.planner-deps.outcome != 'success'
+        timeout-minutes: 3
+        env:
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
+        # Any API or package source may reach the schema. grep exits 1 only for
+        # "no match"; a missing list counts as changed.
+        run: |
           status=0
           grep -zEq '^(apps/api|packages)/.*\.tsx?$' "$CHANGED_PATHS" || status=$?
           if [[ "$status" == 1 ]]; then
@@ -1106,6 +1115,22 @@ jobs:
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Combine migration job selection
+        id: migration-scope
+        if: steps.completed-depth.outputs.run_required != 'false'
+        env:
+          MIGRATION_PATHS: ${{ steps.changed-files.outputs.database_migrations_required }}
+          SCHEMA_IMPORTS: ${{ steps.schema-imports.outputs.changed }}
+          SCHEMA_IMPORTS_FALLBACK: ${{ steps.schema-imports-fallback.outputs.changed }}
+        run: |
+          required=false
+          for answer in "$MIGRATION_PATHS" "$SCHEMA_IMPORTS" "$SCHEMA_IMPORTS_FALLBACK"; do
+            if [[ "$answer" == true ]]; then
+              required=true
+            fi
+          done
+          echo "database_migrations_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Require planner dependencies for job derivation
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin')) && steps.planner-deps.outcome != 'success'
