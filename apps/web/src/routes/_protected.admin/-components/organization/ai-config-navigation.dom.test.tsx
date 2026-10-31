@@ -263,7 +263,7 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { organizationSettingsOptions } =
   await import("@/queries/organization-settings");
-const { QueryClient, QueryClientProvider } =
+const { QueryClient, QueryClientProvider, notifyManager } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { AuthenticatedUserProvider } =
@@ -561,6 +561,9 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
         userId: "user",
       }),
     );
+    await new Promise<void>((resolve) => {
+      notifyManager.schedule(resolve);
+    });
   });
   expect(context.text).toBe(draft);
   replace(original);
