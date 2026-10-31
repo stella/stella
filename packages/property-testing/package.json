@@ -30,6 +30,7 @@
     "fast-check": "catalog:"
   },
   "devDependencies": {
+    "@stll/test-state": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
     "oxc-parser": "catalog:"

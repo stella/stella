@@ -2,7 +2,10 @@ import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAst,
+  persistedDocumentAstSchema,
+} from "@stll/legal-ast/document-ast";
 
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import { EMPTY_AST } from "@/api/lib/legal-search/document-types";
@@ -48,7 +51,11 @@ describe("corpus reader schema at persistence boundaries", () => {
   test("stores a canonical AST unchanged, so its content hash and extra fields survive", () => {
     const ast = { ...decisionAst(), parserExtra: { kept: true } };
     const keysBefore = JSON.stringify(ast);
-    const prepared = prepareCorpusAst({ ast, source: "synthetic" });
+    const prepared = prepareCorpusAst({
+      fallbackText: "Decision text.",
+      ast,
+      source: "synthetic",
+    }).unwrap();
     expect(prepared.type).toBe("readable");
     expect(prepared.ast).toBe(ast);
     expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
@@ -57,16 +64,23 @@ describe("corpus reader schema at persistence boundaries", () => {
   test("preserves readable ASTs and explicit absent shapes", () => {
     const ast = decisionAst();
     expect(v.safeParse(persistedDocumentAstSchema, ast).success).toBe(true);
-    expect(prepareCorpusAst({ ast })).toEqual({ type: "readable", ast });
+    expect(
+      prepareCorpusAst({ fallbackText: "Decision text.", ast }).unwrap(),
+    ).toEqual({ type: "readable", ast });
     for (const absent of [null, EMPTY_AST]) {
-      expect(prepareCorpusAst({ ast: absent })).toEqual({
+      expect(
+        prepareCorpusAst({
+          fallbackText: "Decision text.",
+          ast: absent,
+        }).unwrap(),
+      ).toEqual({
         type: "readable",
         ast: absent,
       });
     }
   });
 
-  test("rejects duplicate ids and anchors with actionable source and parser diagnostics", () => {
+  test("repairs duplicate ids and anchors through the shared preparation owner", () => {
     const report = spyOn(logger, "error");
     try {
       for (const identity of ["id", "anchorId"] as const) {
@@ -74,21 +88,24 @@ describe("corpus reader schema at persistence boundaries", () => {
         const first = ast.blocks.at(0) ?? expect.unreachable();
         const second = ast.blocks.at(1) ?? expect.unreachable();
         second[identity] = first[identity];
-        expect(v.safeParse(persistedDocumentAstSchema, ast).success).toBe(
-          false,
+        expect(v.safeParse(persistedDocumentAstSchema, ast).success).toBe(true);
+        const prepared = prepareCorpusAst({
+          ast,
+          fallbackText: "Decision text.",
+          source: "sk-courts",
+          parserVersion: 20,
+        }).unwrap();
+        expect(prepared.type).toBe("readable");
+        if (!isDocumentAst(prepared.ast)) {
+          expect.unreachable("Repaired structure remains a document");
+        }
+        expect(prepared.ast.blocks.map((block) => block.plainText)).toEqual(
+          ast.blocks.map((block) => block.plainText),
         );
         expect(
-          prepareCorpusAst({ ast, source: "sk-courts", parserVersion: 18 }),
-        ).toEqual({ type: "text-only", ast: EMPTY_AST });
-        expect(report).toHaveBeenLastCalledWith(
-          "case_law.ingestion.ast_schema_rejected",
-          expect.objectContaining({
-            source: "sk-courts",
-            parserVersion: 18,
-            checks: ["Block ids and anchorIds must be unique"],
-            "error.type": "IngestedAstRejectedError",
-          }),
-        );
+          new Set(prepared.ast.blocks.map((block) => block[identity])).size,
+        ).toBe(ast.blocks.length);
+        expect(report).not.toHaveBeenCalled();
       }
     } finally {
       report.mockRestore();
@@ -110,9 +127,10 @@ describe("corpus reader schema at persistence boundaries", () => {
       expect(
         prepareCorpusAst({
           ast: invalid,
+          fallbackText: "Decision text.",
           source: "synthetic",
           parserVersion: 1,
-        }),
+        }).unwrap(),
       ).toEqual({ type: "text-only", ast: EMPTY_AST });
       expect(report).toHaveBeenLastCalledWith(
         "case_law.ingestion.ast_schema_rejected",
@@ -131,7 +149,13 @@ describe("corpus reader schema at persistence boundaries", () => {
     try {
       const ast = decisionAst();
       const invalid = { ...ast, version: "synthetic rejected value" };
-      expect(prepareCorpusAst({ ast: invalid, parserVersion: 18 })).toEqual({
+      expect(
+        prepareCorpusAst({
+          fallbackText: "Decision text.",
+          ast: invalid,
+          parserVersion: 18,
+        }).unwrap(),
+      ).toEqual({
         type: "text-only",
         ast: EMPTY_AST,
       });

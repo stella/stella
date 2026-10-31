@@ -30,10 +30,13 @@ export {
   caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_LANGUAGES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  isCaseLawAnalysisLanguage,
 } from "./case-law-analysis";
 export type {
   CaseLawAnalysisFailureCode,
+  CaseLawAnalysisLanguage,
   CaseLawAnalysisKeySource,
   CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
@@ -48,13 +51,14 @@ export {
   BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
   BROWSER_EXTENSION_MESSAGE_SOURCE,
+  BROWSER_EXTENSION_STATUS,
   parseBrowserControlCommand,
   parseBrowserControlResult,
   parseBrowserExtensionRequest,
   parseBrowserExtensionResponse,
 } from "./browser-control";
 export type {
-  BrowserClientCapability,
+  BrowserExtensionCapability,
   BrowserControlCommand,
   BrowserControlErrorCode,
   BrowserControlResult,
@@ -62,6 +66,7 @@ export type {
   BrowserControlTargetMetadata,
   BrowserExtensionRequest,
   BrowserExtensionResponse,
+  BrowserExtensionStatus,
 } from "./browser-control";
 export {
   BILLING_STATUS,
@@ -455,6 +460,7 @@ export {
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
+  ACCOUNT_EXPORT_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_DOCUMENTS_HTTP_PATH,
   MCP_HTTP_PATH,

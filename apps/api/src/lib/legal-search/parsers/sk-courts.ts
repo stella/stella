@@ -1,3 +1,4 @@
+// parser-output-unchanged: the PDF text-layer read moved unchanged into libpdf-utils.ts (readPdfTextPages): the same load, pages and extraction.
 /**
  * Slovak Courts PDF parser.
  *
@@ -36,7 +37,7 @@
  *   Mgr. ...                          (signature)
  */
 
-import { PDF, SecurityError } from "@libpdf/core";
+import { SecurityError } from "@libpdf/core";
 
 import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import {
@@ -61,6 +62,7 @@ import {
   buildBoldRanges,
   isBoldFont,
   normalizeSpanText,
+  readPdfTextPages,
   segmentsToInlines,
 } from "@/api/lib/legal-search/parsers/libpdf-utils";
 import type {
@@ -184,13 +186,10 @@ const ANONYMIZED_PLACEHOLDER = "anonymizované";
  * segments with anonymization markers for redaction gaps.
  */
 const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
-  const pdf = await PDF.load(pdfBytes);
-  const pages = pdf.getPages();
+  const pages = await readPdfTextPages(pdfBytes);
   const lines: PdfLine[] = [];
 
-  for (const [pageIdx, page] of pages.entries()) {
-    const result = page.extractText();
-
+  for (const [pageIdx, result] of pages.entries()) {
     // Detect left margin from most common line start X.
     const leftMargin = detectLeftMargin(result.lines);
 

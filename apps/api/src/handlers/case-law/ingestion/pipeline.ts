@@ -15,7 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   MAX_SYNC_PAGES,
 } from "@/api/handlers/case-law/consts";
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   applyDecisionBatch,
@@ -76,6 +75,7 @@ import type {
   CycleDeadline,
   StartCycleDeadlineOptions,
 } from "@/api/lib/legal-search/cycle-deadline";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
 import { logger } from "@/api/lib/observability/logger";
@@ -581,25 +581,27 @@ const runScopedIngestionPipeline = async ({
     }
     const failures: IngestionFailureRow[] = [];
     for (const supplement of supplements) {
-      const placed = await Result.tryPromise({
-        try: async () =>
-          // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
-          await processSupplement(
-            {
-              supplement,
-              sourceId: source.id,
-              scopedDb,
-              observedAt: new Date(),
-              nextObservationOrder,
-              reparseStoredRaw,
-              readStoredRaw: readStoredRawFromS3,
-              corpus,
-              polarityRules,
-            },
-            resolveSourceContract,
-          ),
-        catch: (cause) => cause,
-      });
+      const placed = (
+        await Result.tryPromise({
+          try: async () =>
+            // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
+            await processSupplement(
+              {
+                supplement,
+                sourceId: source.id,
+                scopedDb,
+                observedAt: new Date(),
+                nextObservationOrder,
+                reparseStoredRaw,
+                readStoredRaw: readStoredRawFromS3,
+                corpus,
+                polarityRules,
+              },
+              resolveSourceContract,
+            ),
+          catch: (cause) => cause,
+        })
+      ).andThen((outcome) => outcome);
       if (Result.isError(placed)) {
         // As a decision's failure is: recorded and stepped over, so one
         // poison supplement cannot pin the source. It is not lost: nothing

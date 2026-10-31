@@ -154,6 +154,7 @@ export const DOC_SOURCES = {
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
       "expo-font",
       "expo-notifications",
@@ -379,6 +380,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "@formatjs/icu-messageformat-parser",
     ["https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt"],
+  ],
+  [
+    "@formatjs/intl-pluralrules",
+    [
+      "https://formatjs.github.io/llms.txt",
+      "https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt",
+    ],
   ],
   [
     "@happy-dom/global-registrator",
@@ -740,6 +748,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
+    checkedAt: "2026-10-30T00:00:00.000Z",
+    dependency: "whatwg-fetch",
+    explanation:
+      "https://github.github.io/fetch/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/JakeChampion/fetch directly; the iOS app's request tests use only its Headers, Request and Response classes, which React Native installs as globals.",
+    expiresAt: "2026-11-27T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
     checkedAt: "2026-10-20T00:00:00.000Z",
     dependency: "lzma1",
     explanation:
@@ -884,11 +900,11 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-30T00:00:00.000Z",
+    checkedAt: "2026-10-30T00:00:00.000Z",
     dependency: "@standard-schema/spec",
     explanation:
       "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
-    expiresAt: "2026-10-30T00:00:00.000Z",
+    expiresAt: "2026-11-29T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

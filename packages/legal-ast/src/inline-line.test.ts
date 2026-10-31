@@ -68,4 +68,173 @@ describe("cutting a line's end", () => {
       rewriteInlineWhitespace(inlines, (text) => text.toUpperCase()),
     ).toEqual(inlines);
   });
+
+  test("a removed newline drops its line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n", "")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("a newline replaced by a space becomes text", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " " },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("a collapsed line break before indented text joins with one space", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: " second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n ", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " second" },
+    ]);
+  });
+
+  test("mixed whitespace collapses to one space", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first  " },
+      { type: "line-break" },
+      { type: "text", text: " \n second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(/\s+/u, " ")),
+    ).toEqual([
+      { type: "text", text: "first " },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("equal whitespace runs consume rather than skip a source character", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: " second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("\n ", "  ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "text", text: " " },
+      { type: "text", text: " second" },
+    ]);
+  });
+
+  test("an untouched newline stays a line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second  " },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace("  ", " ")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second " },
+    ]);
+  });
+
+  test("a removed space before a retained newline keeps its line break", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "first " },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(" \n", "\n")),
+    ).toEqual([
+      { type: "text", text: "first" },
+      { type: "line-break" },
+      { type: "text", text: "second" },
+    ]);
+  });
+
+  test("nested children around a line break keep their offsets", () => {
+    const inlines: Inline[] = [
+      {
+        type: "bold",
+        children: [
+          { type: "text", text: "first" },
+          {
+            type: "italic",
+            children: [
+              { type: "line-break" },
+              { type: "text", text: "  second" },
+            ],
+          },
+        ],
+      },
+      { type: "text", text: "  third" },
+    ];
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replaceAll("  ", " ")),
+    ).toEqual([
+      {
+        type: "bold",
+        children: [
+          { type: "text", text: "first" },
+          {
+            type: "italic",
+            children: [
+              { type: "line-break" },
+              { type: "text", text: " second" },
+            ],
+          },
+        ],
+      },
+      { type: "text", text: " third" },
+    ]);
+  });
+
+  test("a whitespace edit aligns a long paragraph without changing later nodes", () => {
+    const paragraph = "word ".repeat(40_000).split("");
+    for (let index = 399; index < paragraph.length - 1; index += 400) {
+      paragraph[index] = "\n";
+    }
+    const chunks = paragraph.join("").split("\n");
+    const inlines: Inline[] = chunks.flatMap((text, index) =>
+      index === chunks.length - 1
+        ? [{ type: "text", text }]
+        : [{ type: "text", text }, { type: "line-break" }],
+    );
+    const expected: Inline[] = inlines.map((node, index) =>
+      index === 0 && node.type === "text"
+        ? { ...node, text: node.text.replace(" ", "") }
+        : node,
+    );
+
+    expect(
+      rewriteInlineWhitespace(inlines, (text) => text.replace(" ", "")),
+    ).toEqual(expected);
+  });
 });
