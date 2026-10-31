@@ -194,6 +194,7 @@ export const ONLINE_WORK_LIFECYCLE = {
   expenses_external_ref_check: PENDING,
   invoices_external_ref_check: PENDING,
   correspondence_external_ref_check: PENDING,
+  usage_events_action_type_domain: PENDING,
 } as const satisfies Record<string, OnlineWorkLifecycle>;
 
 declare const finalizedWorkBrand: unique symbol;
