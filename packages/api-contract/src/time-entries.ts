@@ -26,6 +26,8 @@ export type {
   TimeEntrySummary,
 } from "./time-entry-types";
 
+export const TIME_ENTRY_RATE_REQUIRED_CODE = "time_entry_rate_required";
+
 type UnknownRecord = Record<string, unknown> & {
   actions?: unknown;
   activeMinutes?: unknown;

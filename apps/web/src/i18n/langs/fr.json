@@ -814,8 +814,10 @@
       "deleteRateTable": "Supprimer le barème",
       "editRateTable": "Modifier le barème",
       "effectiveFrom": "Applicable à partir du",
+      "effectiveRateRequired": "Aucun taux applicable n’est défini pour ce dossier, cette personne et cette date. Ajoutez un taux ou enregistrez ce temps comme non facturable.",
       "effectiveTo": "Applicable jusqu'au",
       "hourlyRate": "Taux horaire",
+      "logNonBillable": "Enregistrer comme non facturable",
       "noRateEntries": "Aucune entrée tarifaire",
       "noRateFound": "Aucun tarif configuré",
       "noRateTables": "Aucun barème",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Aucune décision trouvée. Configurez une source et lancez une synchronisation pour importer la jurisprudence.",
     "filters": {
-      "remove": "Retirer le filtre {filter}"
+      "countryMismatch": "Filtres supprimés car ils ne correspondent pas à {country} : {filters}.",
+      "remove": "Retirer le filtre {filter}",
+      "showInCountry": "Afficher {filter} pour {country}"
     },
     "languages": {
       "count": "{count, plural, one {# langue} other {# langues}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Vue plein écran pas encore disponible"
     },
     "activity": {
+      "newerVersion": "Ce contenu s’affiche dans une version plus récente.",
       "review": "Mise à jour de la révision"
     },
     "aiPrompt": "Champ de message IA",
@@ -2084,8 +2089,6 @@
     "clearFilters": "Effacer les filtres",
     "clearSearch": "Effacer la recherche",
     "close": "Fermer",
-    "closeAll": "Tout fermer",
-    "closeOthers": "Fermer les autres",
     "columns": "Colonnes",
     "comfortable": "Confortable",
     "comingSoon": "Bientôt disponible",
@@ -2359,6 +2362,7 @@
     "unknownUser": "Utilisateur inconnu",
     "unpin": "Désépingler",
     "unsavedChanges": "Modifications non enregistrées",
+    "unsavedChangesClose": "Modifications non enregistrées. Fermez à nouveau pour les abandonner",
     "unsavedChangesEscape": "Modifications non enregistrées. Appuyez à nouveau sur Échap pour les abandonner",
     "unsavedLeaveConfirm": "Vous avez des modifications non enregistrées. Quitter sans enregistrer ?",
     "unverified": "Non vérifié",
@@ -2400,6 +2404,8 @@
     "returnToAgent": "Retournez à votre agent pour continuer.",
     "returnsLocally": "Vous retournerez à {clientName} sur cet ordinateur",
     "returnsTo": "Vous retournerez à {clientName}",
+    "scopeAccountExportRead": "Lire vos exports de données personnelles",
+    "scopeAccountExportWrite": "Demander vos exports de données personnelles",
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
@@ -3674,6 +3680,9 @@
       "unsupportedVisualContent": "Ce fichier contient des images ou des graphiques vectoriels qui ne peuvent pas être vérifiés pour détecter du texte sensible. L’exportation n’est pas disponible.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
+    "closeAllTabs": "Fermer {count, plural, one {# onglet} other {les # onglets}}",
+    "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} other {les # autres onglets}}",
+    "closeTab": "Fermer <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Il s’agit d’un ancien fichier {format}. Enregistrez-le au format {replacementExtension} pour le convertir.",
       "unsupportedEncoding": "Ce document utilise l’encodage {encoding}, qui n’est pas pris en charge, et ne peut donc pas être converti.",
@@ -5012,7 +5021,6 @@
       "beta": "Fonctionnalités bêta",
       "betaAvt": "Vérification de documents AVT",
       "betaAvtDescription": "Vérifier les documents d’un dossier, affirmation par affirmation, au regard des faits d’une liste",
-      "betaCaseLawDescription": "Afficher la recherche et le lecteur de jurisprudence publique dans la barre latérale",
       "betaDescription": "Essayez des fonctionnalités encore en développement",
       "betaInbox": "Boîte de réception et notifications",
       "betaInboxDescription": "Afficher la boîte de réception et la cloche de notifications",
@@ -5048,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop est associé",
       "desktopCardMissingDetail": "Installez-le, ou connectez-le s'il est déjà installé sur cet ordinateur.",
       "desktopCardMissingTitle": "stella desktop n'est pas encore associé",
+      "desktopCardOpeningDetail": "Liaison de cet ordinateur à <bdi>{identity}</bdi> sur {host}. Si votre navigateur le demande, autorisez l’ouverture de stella desktop.",
+      "desktopCardOpeningTitle": "Ouverture de stella desktop...",
       "desktopCardOutdatedDetail": "La version {version} est liée à <bdi>{identity}</bdi>. Installez la dernière version pour que les documents et l'activité continuent de fonctionner.",
       "desktopCardOutdatedTitle": "stella desktop doit être mis à jour",
       "desktopClipboardDescription": "Ouvrez, recherchez, organisez et réutilisez le texte copié depuis n’importe quelle application.",
@@ -5067,6 +5077,7 @@
       "desktopInstallOpenStep": "Ouvrez stella desktop une fois. Le presse-papiers apparaît immédiatement et reste accessible depuis la barre des menus de macOS ou la zone de notification de Windows.",
       "desktopInstallTitle": "Installer et ouvrir",
       "desktopInstallWindowsStep": "Lancez le programme d’installation et suivez les instructions.",
+      "desktopOpenApp": "Ouvrir stella desktop",
       "desktopPrivacyDescription": "L’historique du presse-papiers est chiffré et stocké sur cet appareil.",
       "desktopPrivacyTitle": "Confidentiel par défaut",
       "desktopSelfHostDescription": "Approuvez cette URL stella dans l'application desktop signée afin que les documents de cette installation puissent s'ouvrir localement.",
@@ -5076,6 +5087,15 @@
       "displayNameSaved": "Nom affiché mis à jour",
       "enterOtp": "Code de vérification",
       "otpSentSuccess": "Code de vérification envoyé à votre adresse e-mail.",
+      "personalDataExportDescription": "Demandez une copie téléchargeable des données personnelles détenues dans votre compte. Le téléchargement est disponible pendant une heure.",
+      "personalDataExportExpired": "Cet export a expiré.",
+      "personalDataExportExpiresAt": "Disponible jusqu’au {expiresAt}.",
+      "personalDataExportFailed": "La préparation de votre export a échoué.",
+      "personalDataExportReady": "Votre export est prêt.",
+      "personalDataExportRequest": "Demander un export",
+      "personalDataExportRequestNew": "Demander un nouvel export",
+      "personalDataExportTitle": "Exporter mes données",
+      "personalDataExportWorking": "Préparation de votre export…",
       "preferredName": "Nom préféré",
       "preferredNameDescription": "Utilisé comme auteur pour le suivi des modifications et les commentaires DOCX.",
       "preferredNamePlaceholder": "Votre nom",
@@ -5413,6 +5433,7 @@
     "showCitedPartOnly": "Afficher seulement la partie citée",
     "showFullProvision": "Afficher toute la disposition",
     "showInText": "Afficher dans le texte",
+    "sortNeedsYear": "Choisissez une année dans les filtres pour trier selon cette colonne.",
     "statedWindow": "Dates indiquées par l'éditeur : {range}",
     "status": {
       "current": "En vigueur",
@@ -6510,6 +6531,14 @@
           "started": "A lancé une révision de"
         },
         "empty": "Aucune activité dans ce dossier pour le moment.",
+        "fields": {
+          "dueDate": "échéance",
+          "parentFolder": "dossier parent",
+          "priority": "priorité",
+          "property": "propriété",
+          "schedule": "calendrier",
+          "sortOrder": "ordre"
+        },
         "filterLabel": "Filtrer l’activité",
         "filters": {
           "all": "Toute l’activité",
@@ -6559,6 +6588,7 @@
           "translation": "traduction"
         },
         "title": "Activité",
+        "updatedFields": "Mise à jour : {fields}",
         "views": {
           "list": "Vue en liste",
           "timeline": "Vue chronologique"

@@ -4,9 +4,10 @@ import { Pressable, ScrollView, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useTranslations } from "use-intl";
 
+import { Text } from "@stll/ui/text";
+
 import { screenStyles } from "@/components/empty-state-screen";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
-import { Text } from "@/components/ui/text";
 import { useScan } from "@/components/use-scan";
 import { ChevronRightIcon } from "@/icons.gen";
 import { canScan } from "@/native/document-scanner";
@@ -82,6 +83,7 @@ const MoreScreen = () => {
       style={{ backgroundColor: colors.background, flex: 1 }}
     >
       <ScrollView
+        alwaysBounceVertical={false}
         contentContainerStyle={screenStyles.content}
         // The header is the platform's translucent bar; the list scrolls under it.
         contentInsetAdjustmentBehavior="automatic"
