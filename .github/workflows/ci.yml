@@ -1807,7 +1807,9 @@ jobs:
                 base="$PUSH_BEFORE"
                 git diff --name-only -z "$base" HEAD > "$changed"
               else
-                git ls-files -z > "$changed"
+                # The merge group already checked this change; with no
+                # reachable base the push checks nothing, as a schedule does.
+                : > "$changed"
               fi
               ;;
             *) : > "$changed" ;;

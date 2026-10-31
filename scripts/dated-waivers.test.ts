@@ -766,14 +766,29 @@ const entryFixtures = {
     source: "packages/example/src/dated.test.ts",
     id: "old case",
     render: ({ expiresAt, edited, sibling }) =>
-      `// test-quarantine-expires: ${expiresAt}\ntest.skip("old case", () => { expect(${edited ? "2" : "1"}).toBe(1); });\n${sibling ? '// test-quarantine-expires: 2026-10-20T00:00:00.000Z\ntest.skip("new case", () => {});\n' : ""}`,
+      // The body reads a recursive top-level function: resolving it must not
+      // loop or refuse.
+      `function depth(n) { return n <= 0 ? 0 : depth(n - 1); }\n// test-quarantine-expires: ${expiresAt}\ntest.skip("old case", () => { expect(depth(1) + ${edited ? "2" : "1"}).toBe(1); });\n${sibling ? '// test-quarantine-expires: 2026-10-20T00:00:00.000Z\ntest.skip("new case", () => {});\n' : ""}`,
   },
   "guard-rollout": {
     kind: "guard-rollout",
-    source: "scripts/guard-rollouts/fixture-guard.ts",
+    source: "scripts/guard-rollouts/fixture-guard.json",
     id: "fixture-guard",
+    // One rollout per file: the unrelated change is a reformat of that file.
     render: ({ expiresAt, edited, sibling }) =>
-      `export default ${JSON.stringify({ id: "fixture-guard", type: "changed-lines", expiresAt, check: ["bun", edited ? "scripts/check-edited.ts" : "scripts/check-original.ts"] })};\n${sibling ? 'const unrelated = "new declaration";\n' : ""}`,
+      `${JSON.stringify(
+        {
+          id: "fixture-guard",
+          type: "changed-lines",
+          expiresAt,
+          check: [
+            "bun",
+            edited ? "scripts/check-edited.ts" : "scripts/check-original.ts",
+          ],
+        },
+        null,
+        sibling ? 4 : 2,
+      )}\n`,
   },
   "flaky-test-quarantine": {
     kind: "flaky-test-quarantine",

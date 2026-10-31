@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -37,12 +37,18 @@ const unique = <T>(
 };
 
 const declarationsIn = (ast: ParsedSource) => {
-  const declarations = new Map<string, Expression>();
+  // Top-level constants and function declarations: an entry that reads one
+  // changes when it does.
+  const declarations = new Map<string, Expression | Node>();
   for (const statement of ast.program.body) {
     const declaration =
       statement.type === "ExportNamedDeclaration"
         ? statement.declaration
         : statement;
+    if (declaration?.type === "FunctionDeclaration" && declaration.id) {
+      declarations.set(declaration.id.name, declaration);
+      continue;
+    }
     if (declaration?.type !== "VariableDeclaration") {
       continue;
     }
@@ -138,6 +144,7 @@ const semanticTree = (ast: ParsedSource, node: Node): unknown => {
     value: unknown,
     scope: SemanticScope,
     key?: string,
+    computed = false,
   ): unknown => {
     if (Array.isArray(value)) {
       return value.map((item) => normalize(item, scope));
@@ -168,14 +175,15 @@ const semanticTree = (ast: ParsedSource, node: Node): unknown => {
       value.type === "Identifier" &&
       "name" in value &&
       typeof value.name === "string" &&
-      key !== "key" &&
-      key !== "property" &&
+      // A static key or member name is a spelling; a computed one is a read.
+      (computed || (key !== "key" && key !== "property")) &&
       !current.locals.has(value.name)
     ) {
       const declaration = declarations.get(value.name);
       if (declaration !== undefined) {
         if (current.references.has(value.name)) {
-          return panic(`Cyclic dated waiver constant: ${value.name}`);
+          // Recursion: the declaration is already being compared.
+          return { reference: value.name };
         }
         return normalize(declaration, {
           references: new Set([...current.references, value.name]),
@@ -187,7 +195,15 @@ const semanticTree = (ast: ParsedSource, node: Node): unknown => {
       Object.entries(value)
         .filter(([name]) => !AST_METADATA.has(name))
         .toSorted(([left], [right]) => compareCodeUnit(left, right))
-        .map(([name, field]) => [name, normalize(field, current, name)]),
+        .map(([name, field]) => [
+          name,
+          normalize(
+            field,
+            current,
+            name,
+            "computed" in value && value.computed === true,
+          ),
+        ]),
     );
   };
   return normalize(node, { references: new Set(), locals: new Set() });
@@ -326,7 +342,16 @@ export const waiverEntryFields = (
       }
       return { expiresAt: match.expiresAt, call: semanticTree(ast, call) };
     }
-    case "guard-rollout":
+    case "guard-rollout": {
+      // One rollout per JSON file; the parsed file is the entry.
+      const parsed: unknown = Result.try(() => JSON.parse(source)).unwrapOr(
+        undefined,
+      );
+      if (typeof parsed !== "object" || parsed === null || !("id" in parsed)) {
+        return panic(`Invalid guard rollout: ${entry.source}`);
+      }
+      return parsed.id === entry.id ? parsed : undefined;
+    }
     case "pending-contract-migration":
       return objectEntry(entry, source);
     default:
