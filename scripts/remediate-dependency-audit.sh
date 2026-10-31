@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-fix_branch="${FIX_BRANCH:-automation/dependency-audit-fix}"
 echo "changed=false" >> "$GITHUB_OUTPUT"
 
 # Assess the current tree before deduplication: an existing pull request is
@@ -13,21 +12,14 @@ if (( audit_status > 2 )); then
 fi
 
 # A stable branch makes retries and the six-hour schedule converge on one
-# open fix pull request.
-if [[ "$(gh pr list --state open --head "$fix_branch" --json number --jq length)" != 0 ]]; then
-  echo "An open dependency audit fix pull request already exists; unresolved findings above still require action."
-  exit "$audit_status"
-fi
-
-# `bun audit fix` exits 1 while unfixable advisories remain, even after it
-# updated the lockfile; the lockfile diff decides, and the audit stays the gate.
-if ! bun --no-env-file audit fix; then
-  echo "Advisories remain after bun audit fix."
-fi
+# remediation pull request. The publishing action refreshes that branch when
+# the pull request already exists, so preparation must never refuse a retry.
+bun --no-env-file scripts/dependency-audit.ts --prepare-remediation
+bun --no-env-file install --lockfile-only
 # Runs after the fix so acceptances it resolved are removed in the same pull
 # request; pruning only removes entries, so it never accepts an advisory.
 bun --no-env-file scripts/dependency-audit.ts --prune-baseline
-if ! git diff --quiet -- bun.lock scripts/dependency-audit-baseline.json ':(glob)**/package.json'; then
+if ! git diff --quiet -- bun.lock bunfig.toml scripts/dependency-audit-baseline.json ':(glob)**/package.json'; then
   echo "changed=true" >> "$GITHUB_OUTPUT"
   exit 0
 fi

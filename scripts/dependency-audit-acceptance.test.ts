@@ -25,6 +25,8 @@ import {
   lapsedAcceptances,
   patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
+import type { AdvisoryAssessment } from "./dependency-audit-assessment";
+import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
 
 const testState = createTestState({ file: import.meta.path, config: {} });
 const advisory = { id: "GHSA-aaaa-bbbb-cccc", vulnerableVersions: "<=1.4.0" };
@@ -38,6 +40,59 @@ const currentAdvisory: Advisory = {
   package: "pkg",
   title: "test advisory",
 };
+
+test("remediation plans pins, quarantine exclusions, and dated blocker acceptances", () => {
+  const assessment = (
+    packageName: string,
+    disposition: AdvisoryAssessment["disposition"],
+  ): AdvisoryAssessment => ({
+    advisory: { ...currentAdvisory, package: packageName },
+    disposition,
+    acceptance: undefined,
+    affectedPaths: [packageName],
+    action: "test action",
+  });
+  const plan = planDependencyAuditRemediation({
+    now: new Date("2026-10-31T12:00:00.000Z"),
+    assessments: [
+      assessment("available", {
+        status: "fix_available",
+        patchedVersions: ["1.4.1"],
+      }),
+      assessment("quarantined", {
+        status: "fix_in_quarantine",
+        patchedVersions: ["1.4.1"],
+        package: "quarantined",
+        version: "1.4.1",
+        installableSince: "2026-11-01T04:44:07.718Z",
+      }),
+      assessment("blocked", {
+        status: "upstream_blocked",
+        blockers: ["no forward patched release"],
+        patchedVersions: [],
+      }),
+    ],
+  });
+  expect([...plan.pins]).toEqual([
+    ["available", "1.4.1"],
+    ["quarantined", "1.4.1"],
+  ]);
+  expect(plan.quarantineExclusions).toEqual([
+    {
+      package: "quarantined",
+      version: "1.4.1",
+      quarantineExpires: "2026-11-01T04:44:07.718Z",
+    },
+  ]);
+  expect(plan.acceptanceDrafts).toEqual([
+    expect.objectContaining({
+      package: "blocked",
+      owner: "supply-chain",
+      expiresOn: "2026-11-14",
+      affectedPaths: ["blocked"],
+    }),
+  ]);
+});
 
 test("newer patched releases preserve the first installable patch deadline", () => {
   const patchReleases = [

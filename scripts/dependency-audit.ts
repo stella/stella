@@ -58,9 +58,10 @@ import {
   type InstallableRelease,
   printAssessments,
   readInstallableReleases,
-  readInstallableVersions,
   readReleaseAgePolicy,
+  readReleaseAgeReleases,
 } from "./dependency-audit-assessment";
+import { planDependencyAuditRemediation } from "./dependency-audit-remediation";
 import { auditablePackages, dependencyChanges } from "./dependency-audit-scope";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -372,7 +373,7 @@ const formatAcceptanceTerm = (acceptance: BaselineEntry): string => {
   return acceptance.untilPatched === true ? "until patched" : "accepted";
 };
 
-const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
+const assessCurrent = async (advisories: Advisory[]) => {
   const [baseline, lockfile, manifest, policy] = await Promise.all([
     readBaseline(),
     Bun.file(path.resolve(REPO_ROOT, "bun.lock")).text(),
@@ -380,23 +381,43 @@ const assessCurrent = async (advisories: Advisory[]): Promise<void> => {
     readRootReleaseAgePolicy(),
   ]);
   const now = new Date();
-  const versions = new Map(
+  const releases = new Map(
     await Promise.all(
       [...new Set(advisories.map(({ package: name }) => name))].map(
         async (name) =>
-          [name, await readInstallableVersions(name, policy, now)] as const,
+          [name, await readReleaseAgeReleases(name, policy)] as const,
       ),
     ),
   );
-  printAssessments(
-    assessAdvisories({
-      advisories,
-      accepted: baseline.accepted,
-      lockfile,
-      manifest,
-      versions,
-    }),
+  const versions = new Map(
+    [...releases].map(([name, entries]) => [
+      name,
+      entries
+        .filter(
+          ({ installableSince }) =>
+            Date.parse(installableSince) <= now.getTime(),
+        )
+        .map(({ version }) => version),
+    ]),
   );
+  const quarantinedReleases = new Map(
+    [...releases].map(([name, entries]) => [
+      name,
+      entries.filter(
+        ({ installableSince }) => Date.parse(installableSince) > now.getTime(),
+      ),
+    ]),
+  );
+  const assessments = assessAdvisories({
+    advisories,
+    accepted: baseline.accepted,
+    lockfile,
+    manifest,
+    versions,
+    quarantinedReleases,
+  });
+  printAssessments(assessments);
+  return assessments;
 };
 
 const saveBaseline = async (
@@ -404,6 +425,60 @@ const saveBaseline = async (
   baselinePath: string = BASELINE_PATH,
 ): Promise<void> => {
   await Bun.write(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
+};
+
+const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
+  const assessments = await assessCurrent(advisories);
+  const plan = planDependencyAuditRemediation({ assessments, now: new Date() });
+  const manifestPath = path.resolve(REPO_ROOT, "package.json");
+  const manifest: unknown = await Bun.file(manifestPath).json();
+  if (!isRecord(manifest)) {
+    panic("Dependency remediation requires a package.json object");
+  }
+  const currentResolutions = manifest["resolutions"];
+  const resolutions = isRecord(currentResolutions)
+    ? { ...currentResolutions }
+    : {};
+  for (const [name, version] of plan.pins) {
+    resolutions[name] = version;
+  }
+  if (plan.pins.size > 0) {
+    await Bun.write(
+      manifestPath,
+      `${JSON.stringify({ ...manifest, resolutions }, null, 2)}\n`,
+    );
+  }
+
+  if (plan.quarantineExclusions.length > 0) {
+    const bunfigPath = path.resolve(REPO_ROOT, "bunfig.toml");
+    let bunfig = await Bun.file(bunfigPath).text();
+    for (const exclusion of plan.quarantineExclusions) {
+      const entry = `  "${exclusion.package}", # quarantine-expires: ${exclusion.quarantineExpires}`;
+      if (!bunfig.includes(`"${exclusion.package}"`)) {
+        bunfig = bunfig.replace(
+          "minimumReleaseAgeExcludes = [",
+          () => `minimumReleaseAgeExcludes = [\n${entry}`,
+        );
+      }
+    }
+    await Bun.write(bunfigPath, bunfig);
+  }
+
+  if (plan.acceptanceDrafts.length > 0) {
+    const baseline = await readBaseline();
+    const existing = new Set(
+      baseline.accepted.map(({ id, package: name }) => `${id}/${name}`),
+    );
+    await saveBaseline({
+      ...baseline,
+      accepted: [
+        ...baseline.accepted,
+        ...plan.acceptanceDrafts.filter(
+          ({ id, package: name }) => !existing.has(`${id}/${name}`),
+        ),
+      ],
+    });
+  }
 };
 
 // Drops only the acceptances whose advisory is no longer reported; it never
@@ -1021,6 +1096,11 @@ const main = async (): Promise<number> => {
   }
 
   const advisories = await collectGatedAdvisories();
+
+  if (arg === "--prepare-remediation") {
+    await prepareRemediation(advisories);
+    return 0;
+  }
 
   await assessCurrent(advisories);
   if (arg === "--check" || arg === "--assess") {

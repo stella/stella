@@ -437,6 +437,72 @@ test("a patch on an older release line is no upgrade for a newer locked copy", (
   ).toBe("upstream_blocked");
 });
 
+test("a compatible security patch in release-age quarantine is actionable", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T04:44:07.718Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition).toEqual({
+    status: "fix_in_quarantine",
+    package: "example",
+    version: "1.4.1",
+    installableSince: "2026-11-01T04:44:07.718Z",
+    patchedVersions: ["1.4.1"],
+  });
+  expect(result?.action).toContain(
+    "minimumReleaseAgeExcludes with # quarantine-expires: 2026-11-01T04:44:07.718Z",
+  );
+});
+
+test("a repository resolution can move an exact parent pin to a quarantined patch", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "<=1.4.0" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { example: "1.4.0" } },
+    versions: new Map([["example", ["1.4.0"]]]),
+    quarantinedReleases: new Map([
+      [
+        "example",
+        [{ version: "1.4.1", installableSince: "2026-11-01T04:44:07.718Z" }],
+      ],
+    ]),
+  });
+  expect(result?.disposition.status).toBe("fix_in_quarantine");
+});
+
+test("an advisory without any patched release remains upstream blocked", () => {
+  const [result] = assessAdvisories({
+    advisories: [{ ...sdk, package: "example", vulnerableVersions: "*" }],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: { example: ["example@1.4.0", "", {}] },
+    }),
+    manifest: {},
+    versions: new Map([["example", ["1.4.0"]]]),
+  });
+  expect(result?.disposition.status).toBe("upstream_blocked");
+});
+
 test("a pinned disposition keeps the upstream blockers of other copies", () => {
   const [result] = assessAdvisories({
     advisories: [

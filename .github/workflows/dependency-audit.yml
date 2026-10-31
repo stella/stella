@@ -205,8 +205,9 @@ jobs:
           base: main
           paths: |
             bun.lock
+            bunfig.toml
             scripts/dependency-audit-baseline.json
             :(glob)**/package.json
           commit-message: "chore(deps): update dependency audit state"
           pr-title: "chore(deps): update dependency audit state"
-          pr-body: "Updates resolved dependencies and removes acceptances whose advisory is no longer reported."
+          pr-body: "Pins available patched releases, adds temporary release-age exclusions when a security fix is still quarantined, drafts dated acceptances for remaining upstream blockers, and removes stale acceptances."

@@ -176,6 +176,6 @@ test("remediation commits use the shared signed action and app identity", () => 
   expect(commit.with?.["branch"]).toBe(prepare.env?.["FIX_BRANCH"]);
   expect(commit.with?.["base"]).toBe("main");
   expect(commit.with?.["paths"]).toBe(
-    "bun.lock\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
+    "bun.lock\nbunfig.toml\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
   );
 });
