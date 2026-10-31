@@ -7,12 +7,13 @@ import {
   redirect,
   useLocation,
 } from "@tanstack/react-router";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 import { ConsentCard } from "@/components/oauth-consent/consent-card";
+import { consentCompletion } from "@/components/oauth-consent/consent-completion.logic";
 import {
   ConsentAccountRows,
   ConsentDecisionBar,
@@ -231,11 +232,22 @@ function ConsentPage() {
       return;
     }
 
-    if (!accept) {
-      window.location.assign(redirectUrl);
-      return;
+    const completion = consentCompletion({
+      accept,
+      redirectUrl,
+      organizationName,
+    });
+    switch (completion.status) {
+      case "redirect":
+        window.location.assign(completion.redirectUrl);
+        return;
+      case "connected":
+        setSubmission(completion);
+        return;
+      default:
+        completion satisfies never;
+        return panic("Unhandled consent completion");
     }
-    setSubmission({ status: "connected", redirectUrl });
   };
 
   if (submission.status === "connected") {

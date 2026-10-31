@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Base64Url } from "../sha256.js";
 import { startLoopbackListener } from "./loopback-listener.js";
 
 describe("startLoopbackListener", () => {
@@ -109,6 +110,114 @@ describe("startLoopbackListener", () => {
         throw new Error("expected a LoopbackTimeoutError");
       }
       expect(result.name).toBe("LoopbackTimeoutError");
+    } finally {
+      listener.close();
+    }
+  });
+});
+
+const textContent = async (html: string, selector: string) => {
+  let content = "";
+  await new HTMLRewriter()
+    .on(selector, {
+      text: (chunk) => {
+        content += chunk.text;
+      },
+    })
+    .transform(new Response(html))
+    .text();
+  return content;
+};
+
+describe("browser sign-in completion", () => {
+  test("shows one branded success screen with the organization escaped as text", async () => {
+    const listener = await startLoopbackListener();
+    expect(listener).toBeDefined();
+    if (!listener) {
+      return;
+    }
+    try {
+      const organizationName = `Novák & Partners <script>alert("x")</script> 'Legal'`;
+      const url = new URL(listener.redirectUri);
+      url.searchParams.set("code", "authorization-code");
+      url.searchParams.set("state", "expected-state");
+      url.searchParams.set("organization_name", organizationName);
+      const response = await fetch(url, { signal: AbortSignal.timeout(1000) });
+      const html = await response.text();
+      expect(await textContent(html, "title")).toBe("Signed in to stella");
+      expect(await textContent(html, "h1")).toBe("Signed in to stella");
+      expect(await textContent(html, ".wordmark")).toBe("stella");
+      expect(await textContent(html, "section")).toContain(
+        "Return to your terminal to continue with stella CLI.",
+      );
+      expect(await textContent(html, "script")).toBe("");
+      expect(html).toContain(
+        "<bdi>Novák &amp; Partners &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &#39;Legal&#39;</bdi>",
+      );
+      expect(await listener.waitForCallback(1000)).toEqual({
+        kind: "success",
+        code: "authorization-code",
+        state: "expected-state",
+      });
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      const styles = await textContent(html, "style");
+      const hash = sha256Base64Url(styles);
+      expect(response.headers.get("content-security-policy")).toBe(
+        `default-src 'none'; style-src 'sha256-${hash}'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+      );
+      expect(styles).toContain("prefers-color-scheme: dark");
+      expect(html).not.toContain('style="');
+      expect(html).not.toContain('src="');
+    } finally {
+      listener.close();
+    }
+  });
+
+  test("shows success without an organization when none is known", async () => {
+    const listener = await startLoopbackListener();
+    expect(listener).toBeDefined();
+    if (!listener) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${listener.redirectUri}?code=code&state=state`,
+        {
+          signal: AbortSignal.timeout(1000),
+        },
+      );
+      const html = await response.text();
+      expect(await textContent(html, "h1")).toBe("Signed in to stella");
+      expect(html).not.toContain('<p class="organization">');
+    } finally {
+      listener.close();
+    }
+  });
+
+  test("shows the failure variant and sends the error to the terminal", async () => {
+    const listener = await startLoopbackListener();
+    expect(listener).toBeDefined();
+    if (!listener) {
+      return;
+    }
+    try {
+      const response = await fetch(
+        `${listener.redirectUri}?error=access_denied&error_description=Declined&state=state`,
+        { signal: AbortSignal.timeout(1000) },
+      );
+      const html = await response.text();
+      expect(await textContent(html, "title")).toBe("Sign-in failed");
+      expect(await textContent(html, "h1")).toBe("Sign-in failed");
+      expect(await textContent(html, "section > p")).toBe(
+        "Return to your terminal for details, then try signing in to stella CLI again.",
+      );
+      expect(await textContent(html, ".wordmark")).toBe("stella");
+      expect(await listener.waitForCallback(1000)).toEqual({
+        kind: "error",
+        error: "access_denied",
+        errorDescription: "Declined",
+        state: "state",
+      });
     } finally {
       listener.close();
     }

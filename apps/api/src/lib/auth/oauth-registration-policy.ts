@@ -12,6 +12,7 @@ import { createAuthMiddleware } from "better-auth/api";
 import { panic } from "better-result";
 
 import { mayMetadataDocumentClientHoldElevatedScopes } from "@/api/lib/auth/oauth-consent-info";
+import { createOAuthRegistrationNameHook } from "@/api/lib/auth/oauth-registration-name-hooks";
 import { createAuthRequestBudgetHook } from "@/api/lib/auth/request-budget-hooks";
 import {
   OAUTH_REGISTRATION_SCOPE_POLICY,
@@ -565,6 +566,11 @@ export const createStellaOAuthProvider = (
           handler: createAuthMiddleware(enforceRequestBudget),
         },
         ...provider.hooks.before,
+        {
+          matcher: (ctx: HookEndpointContext) =>
+            ctx.path === OAUTH_CLIENT_REGISTRATION_PATH,
+          handler: createOAuthRegistrationNameHook(),
+        },
         {
           matcher: (ctx: HookEndpointContext) =>
             OAUTH_SCOPE_POLICY_PATHS.has(ctx.path ?? ""),

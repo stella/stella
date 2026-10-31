@@ -10,6 +10,7 @@ import type {
   VerifiedOAuthClientBrand,
 } from "@stll/api-contract";
 import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+import { cliClientMetadataUrl } from "@stll/cli/client-metadata-document";
 
 import { CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL } from "@/api/http/cache";
 import type { OAUTH_REGISTRATION_SCOPE_POLICY } from "@/api/lib/db/oauth-scope-policy";
@@ -19,7 +20,7 @@ type HttpsUrl = `https://${string}`;
 /** The brands only stella's own origins can verify. */
 type FirstPartyBrand = Extract<
   VerifiedOAuthClientBrand,
-  "stella" | "stella_ios"
+  "stella" | "stella_ios" | "stella_cli"
 >;
 
 /**
@@ -206,11 +207,17 @@ export const mayMetadataDocumentClientHoldElevatedScopes = (
 const firstPartyRedirectBrand = (): FirstPartyBrand => "stella";
 
 /**
- * A first-party metadata document names the iOS app when it is the mobile
- * client's document, and stella otherwise.
+ * First-party native documents name their product; other documents name stella.
  */
-const firstPartyDocumentBrand = (url: URL): FirstPartyBrand =>
-  url.href === mobileClientMetadataUrl(url.origin) ? "stella_ios" : "stella";
+const firstPartyDocumentBrand = (url: URL): FirstPartyBrand => {
+  if (url.href === mobileClientMetadataUrl(url.origin)) {
+    return "stella_ios";
+  }
+  if (url.href === cliClientMetadataUrl(url.origin)) {
+    return "stella_cli";
+  }
+  return "stella";
+};
 
 /**
  * The brand a location verifies, or `null` when it verifies none. Stella's own

@@ -130,6 +130,7 @@ describe("registerLoopbackClient", () => {
     }
     // A CLI login is a public native client: no secret, loopback redirect, and
     // the negotiated scopes are documented in the request body.
+    expect(sent?.["client_name"]).toBe("stella CLI");
     expect(sent?.["token_endpoint_auth_method"]).toBe("none");
     expect(sent?.["application_type"]).toBe("native");
     expect(sent?.["resources"]).toEqual([MCP_RESOURCE]);

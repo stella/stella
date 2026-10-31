@@ -10,11 +10,8 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { apiFetch } from "../api-fetch.js";
-import {
-  AUTH_FETCH_TIMEOUT_MS,
-  CLIENT_NAME,
-  LOOPBACK_REDIRECT_URI,
-} from "./constants.js";
+import { CLI_LOOPBACK_CLIENT_METADATA } from "./client-metadata-document.js";
+import { AUTH_FETCH_TIMEOUT_MS, CLIENT_NAME } from "./constants.js";
 import { ClientRegistrationError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 
@@ -38,14 +35,10 @@ export const registerLoopbackClient = async (
   }
 
   const body = {
+    ...CLI_LOOPBACK_CLIENT_METADATA,
     client_name: CLIENT_NAME,
-    grant_types: ["authorization_code", "refresh_token"],
-    redirect_uris: [LOOPBACK_REDIRECT_URI],
-    response_types: ["code"],
     resources: [resource],
     scope: scopes.join(" "),
-    token_endpoint_auth_method: "none",
-    application_type: "native",
   };
 
   return await Result.tryPromise({
