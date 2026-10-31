@@ -157,6 +157,27 @@ export const DIFF_SCOPED_STEPS = {
   "main-pr-depth.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
+  "merge-group-hold.yml:merge-group-hold#Check out the trusted target-branch resolver":
+    operational("Checks out the target branch's base resolver; no verdict."),
+  "merge-group-hold.yml:merge-group-hold#Resolve comparison base": operational(
+    "Resolves the merge group's comparison base for the hold check.",
+  ),
+  "merge-group-hold.yml:merge-group-hold#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the resolved base; no verdict.",
+    ),
+  "merge-group-hold.yml:merge-group-hold#Refuse held pull requests":
+    diffComplete(
+      "Checks exactly the pull requests between the group's base and head.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the pull request's base; no verdict.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
+    operational(
+      "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
+    ),
   "main-heavy.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
