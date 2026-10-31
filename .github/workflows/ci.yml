@@ -2103,7 +2103,7 @@ jobs:
 
       - name: Turbo remote cache
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2180,35 +2180,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The contracts and single-file bundles are derived before use, never
         # committed. Build them from source, check the bundle budgets, and fail
-        # when output is missing, required content is empty, or generated files
-        # are tracked again.
+        # when an output is missing or tracked again. Per-app CSS may be empty
+        # when all of its styles are shared with the runtime.
         run: |
           (cd apps/api && bun run generate:mcp-app-contracts)
           (cd packages/mcp-apps && bun run build)
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --mcp-apps --check
-          outputs=(
-            packages/mcp-apps/src/shared/generated/schemas.json
-            packages/mcp-apps/src/shared/generated/contracts.js
-            packages/mcp-apps/src/shared/generated/contracts.d.ts
-            packages/mcp-apps/src/shared/generated/messages.json
-            packages/mcp-apps/src/shared/generated/reader-messages.json
-            packages/mcp-apps/src/shared/generated/reader-inputs.json
-            packages/mcp-apps/src/shared/generated/style.css
-            packages/mcp-apps/src/generated/bundles.ts
-            packages/mcp-apps/src/generated/runtime.js.txt
-            packages/mcp-apps/src/generated/runtime.css.txt
-            packages/mcp-apps/src/*/generated/app.html.txt
-            packages/mcp-apps/src/*/generated/app.js.txt
-            packages/mcp-apps/src/*/generated/app.css.txt
-          )
-          for output in "${outputs[@]}"; do
-            # An app can use only shared CSS, leaving its own stylesheet empty.
-            if [[ "$output" == */generated/app.css.txt ]]; then
-              test -f "$output" || { echo "::error::$output was not generated"; exit 1; }
-              continue
-            fi
-            test -s "$output" || { echo "::error::$output was not generated"; exit 1; }
-          done
+          bun scripts/check-mcp-app-outputs.ts
           bun scripts/check-mcp-generated-tracking.ts
 
       - name: Visual sandbox document tests
@@ -2440,7 +2418,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2982,7 +2960,7 @@ jobs:
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3473,7 +3451,7 @@ jobs:
 
       - name: Turbo remote cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3608,7 +3586,7 @@ jobs:
         # code-quality runs cacheable workspace and root checks. Restore the
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github

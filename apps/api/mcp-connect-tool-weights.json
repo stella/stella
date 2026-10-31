@@ -440,10 +440,10 @@
     {
       "name": "resolve_law_citation",
       "nameChars": 20,
-      "descriptionChars": 740,
-      "inputSchemaChars": 1789,
-      "totalChars": 2549,
-      "estimatedTokens": 999
+      "descriptionChars": 746,
+      "inputSchemaChars": 1802,
+      "totalChars": 2568,
+      "estimatedTokens": 1007
     },
     {
       "name": "resolve_rate",
@@ -472,10 +472,10 @@
     {
       "name": "save_contact",
       "nameChars": 12,
-      "descriptionChars": 303,
-      "inputSchemaChars": 2200,
-      "totalChars": 2515,
-      "estimatedTokens": 1022
+      "descriptionChars": 172,
+      "inputSchemaChars": 2256,
+      "totalChars": 2440,
+      "estimatedTokens": 1002
     },
     {
       "name": "save_document",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127396,
-    "estimatedTokens": 50508
+    "characters": 127340,
+    "estimatedTokens": 50496
   }
 }

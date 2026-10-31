@@ -1,0 +1,18 @@
+{
+  "id": "no-plan-scan-node-literals",
+  "rules": ["no-plan-scan-node-literals/no-plan-scan-node-literals"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-06T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-plan-scan-node-literals/no-plan-scan-node-literals",
+    "apps/api"
+  ]
+}
