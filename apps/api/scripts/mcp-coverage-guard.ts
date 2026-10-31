@@ -225,13 +225,13 @@ export const classifyCoverage = ({
       if (!registry.has(exposure.name)) {
         unknownToolNames.push({ id, name: exposure.name });
       }
-    } else if (
-      exposure.type === "covered" ||
-      (exposure.type === "capability" && exposure.by !== undefined)
-    ) {
-      referencedTools.add(exposure.by);
-      if (!registry.has(exposure.by)) {
-        unknownToolNames.push({ id, name: exposure.by });
+    } else if (exposure.type === "covered" || exposure.type === "capability") {
+      const { by } = exposure;
+      if (by !== undefined) {
+        referencedTools.add(by);
+        if (!registry.has(by)) {
+          unknownToolNames.push({ id, name: by });
+        }
       }
     }
   }
