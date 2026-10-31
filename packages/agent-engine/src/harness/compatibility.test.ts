@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
@@ -14,6 +16,21 @@ import {
 } from "./compatibility";
 
 const DESKTOP_VERSION = "0.0.1";
+
+/**
+ * The managed CLI releases the desktop installs and the desktop's own
+ * version. The policy must support and recommend each pinned release, so a
+ * pin bump or a policy edit cannot leave the installed CLI refused.
+ */
+const DESKTOP_DIR = path.join(import.meta.dir, "../../../../apps/desktop");
+const MANAGED_RELEASES_PATH = path.join(
+  DESKTOP_DIR,
+  "src-tauri/harness/releases.gen.json",
+);
+const DESKTOP_PACKAGE_PATH = path.join(DESKTOP_DIR, "package.json");
+const ManagedReleasesSchema = v.object({
+  harnesses: v.record(v.string(), v.object({ version: v.string() })),
+});
 
 const epochMs = (iso: string) => Temporal.Instant.from(iso).epochMilliseconds;
 
@@ -74,6 +91,37 @@ describe("bundled harness compatibility", () => {
         desktopVersion: DESKTOP_VERSION,
       });
       expect(HARNESS_COMPATIBILITY_DISPOSITION[resolved.status]).toBe("launch");
+    }
+  });
+
+  test("supports and recommends exactly the release the desktop installs for each harness", async () => {
+    const releases = v.parse(
+      ManagedReleasesSchema,
+      await Bun.file(MANAGED_RELEASES_PATH).json(),
+    );
+    const desktop = v.parse(
+      v.object({ version: v.string() }),
+      await Bun.file(DESKTOP_PACKAGE_PATH).json(),
+    );
+    const pinned = Object.entries(releases.harnesses);
+    expect(pinned.length).toBeGreaterThan(0);
+    for (const [harness, { version }] of pinned) {
+      if (!isAgentHarness(harness)) {
+        throw new Error(`The desktop installs unknown harness ${harness}`);
+      }
+      expect({
+        harness,
+        ...resolveHarnessCompatibility({
+          manifest: bundledHarnessCompatibility(),
+          harness,
+          harnessVersion: version,
+          desktopVersion: desktop.version,
+        }),
+      }).toMatchObject({
+        harness,
+        status: "supported",
+        recommendedVersion: version,
+      });
     }
   });
 });
