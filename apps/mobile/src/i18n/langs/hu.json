@@ -89,7 +89,14 @@
     "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
     "pickTitle": "Válasszon feladatot",
     "pickDescription": "Válasszon feladatot a listából, hogy itt lássa.",
-    "openMatter": "Ügy megnyitása"
+    "openMatter": "Ügy megnyitása",
+    "assignedTo": "Felelős",
+    "nobody": "Nincs hozzárendelve",
+    "assign": "Hozzárendelés",
+    "doneAssigning": "Kész",
+    "someone": "Valaki",
+    "membersFailed": "Az ügy tagjait nem sikerült betölteni.",
+    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
@@ -133,7 +140,9 @@
     },
     "add": "Hozzáadás",
     "scanDocument": "Dokumentum szkennelése",
-    "newTask": "Új feladat"
+    "newTask": "Új feladat",
+    "uploadDocument": "Dokumentum feltöltése",
+    "uploadFailed": "A dokumentumot nem sikerült feltölteni. Próbálja újra."
   },
   "entity": {
     "type": "Típus",
@@ -197,6 +206,7 @@
     "headnote": "Jogi tétel",
     "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
     "openSource": "Eredeti forrás megnyitása",
+    "openFailed": "A hivatkozást nem sikerült megnyitni.",
     "loadFailed": "Az ítélkezési gyakorlatot nem sikerült betölteni.",
     "share": "Megosztás"
   },

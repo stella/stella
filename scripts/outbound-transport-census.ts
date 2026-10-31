@@ -643,6 +643,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:jose"],
   },
   {
+    path: "apps/api/src/lib/push/apns-client.ts",
+    class: "third-party",
+    reason:
+      "Sends push alerts over HTTP/2 to the two fixed Apple Push Notification service gateways.",
+    transports: ["module:node:http2"],
+  },
+  {
     path: "apps/api/src/lib/redis-client.ts",
     class: "operator-configured-infrastructure",
     reason:
