@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, it } from "bun:test";
 
+import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
+
 import { parseRisDecisionXml } from "./at-ris";
 
 const FIXTURE_URL = new URL(
@@ -101,4 +103,135 @@ describe("Austrian RIS XML parser", () => {
 
     expect(parsed.fulltext).toContain("Unbekannter strukturierter Inhalt");
   });
+});
+
+it("keeps publisher summaries before the body and publisher notes after it", () => {
+  const metadata = [
+    ["ecli", "ECLI:AT:OGH0002:2026:0010OB00001.26A.0115.000"],
+    ["norm", "ABGB §1295"],
+    ["leitsatz", "Leitsatz"],
+    ["betreff", "Betreff"],
+    ["rechtssatz", "Rechtssatz"],
+  ] as const;
+  const xml = `<risdok><nutzdaten><abschnitt>
+    <ueberschrift>Leitsatz</ueberschrift><absatz ct="leitsatz">Vor der Entscheidung</absatz>
+    <ueberschrift>Spruch</ueberschrift><absatz ct="spruch">Die Revision wird zurückgewiesen.</absatz>
+    ${metadata.map(([kind, text]) => `<ueberschrift>${kind}</ueberschrift><absatz ct="${kind}">${text}</absatz>`).join("")}
+    </abschnitt></nutzdaten></risdok>`;
+  const { documentAst } = parseRisDecisionXml({
+    sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+    caseNumber: "1 Ob 1/26a",
+    ecli: undefined,
+    court: "OGH",
+    decisionDate: "2026-01-15",
+    decisionType: "beschluss",
+    sourceUrl: undefined,
+    xml,
+  }).unwrap();
+  expect(documentAst.blocks.at(0)).toMatchObject({
+    type: "heading",
+    role: "publisher-heading",
+  });
+  const paragraphs = documentAst.blocks.filter(
+    (block) => block.type === "paragraph",
+  );
+  expect(paragraphs.map(({ role }) => role)).toEqual([
+    "syllabus",
+    "holding",
+    ...metadata.map(() => "publisher-note" as const),
+  ]);
+  expect(headMatterPrecedesBody(documentAst.blocks)).toBe(true);
+});
+
+it("a publisher heading looks past a break to the paragraph it titles", () => {
+  const xml = `<risdok><nutzdaten><abschnitt>
+    <ueberschrift>Leitsatz</ueberschrift><abstand/><absatz ct="leitsatz">Vor der Entscheidung</absatz>
+    <ueberschrift>Spruch</ueberschrift><absatz ct="spruch">Die Revision wird zurückgewiesen.</absatz>
+    </abschnitt></nutzdaten></risdok>`;
+  const { documentAst } = parseRisDecisionXml({
+    sourceDocumentId: "JJT_20260115_OGH0002_0010OB00001_26A0000_000",
+    caseNumber: "1 Ob 1/26a",
+    ecli: undefined,
+    court: "OGH",
+    decisionDate: "2026-01-15",
+    decisionType: "beschluss",
+    sourceUrl: undefined,
+    xml,
+  }).unwrap();
+  expect(documentAst.blocks.at(0)).toMatchObject({
+    type: "heading",
+    role: "publisher-heading",
+  });
+  expect(
+    documentAst.blocks.find((block) => block.type === "paragraph"),
+  ).toMatchObject({ role: "syllabus" });
+});
+
+const bodyParagraphs = (body: string): string[] =>
+  parseRisDecisionXml({
+    sourceDocumentId: "doc",
+    caseNumber: "1",
+    ecli: undefined,
+    court: "court",
+    decisionDate: undefined,
+    decisionType: undefined,
+    sourceUrl: undefined,
+    xml: `<risdok><nutzdaten><abschnitt>${body}</abschnitt></nutzdaten></risdok>`,
+  })
+    .unwrap()
+    .documentAst.blocks.flatMap((block) =>
+      block.type === "paragraph" ? [block.plainText] : [],
+    );
+
+it.each([
+  [
+    "a short line before a lowercase line",
+    '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt, dass die Projektwerber die Verfügungsbefugnis für die zu nehmenden</absatz><absatz typ="erltext" ct="text">Grundstücksflächen</absatz><absatz typ="erltext" ct="text">erhalten.</absatz>',
+  ],
+  [
+    "an abstand before a lowercase line",
+    '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt, dass die Projektwerber die Verfügungsbefugnis für die</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">nötigen Grundstücksflächen erhalten.</absatz>',
+  ],
+  [
+    "a short line before a digit-led line",
+    '<absatz typ="erltext" ct="text">nach Kinscher/Paliege-Barfuß, Kommentar zur GewO Anmerkung 67 zu</absatz><absatz typ="erltext" ct="text">§ 74 GewO</absatz><absatz typ="erltext" ct="text">1994, mit weiteren Nachweisen.</absatz>',
+  ],
+  [
+    "a wrapped section reference",
+    '<absatz typ="erltext" ct="text">Von der Forderung nach Messungen ist abzusehen, wenn die Feststellung nach Nummer</absatz><absatz typ="erltext" ct="text">5.3.3 oder Nummer 5.3.4 erfolgt.</absatz>',
+  ],
+  [
+    "a list item the closing text finishes",
+    '<liste><strichliste ebene="1"><listelem ct="text"><symbol stellen="1">-</symbol>Aufgrund eines aktuellen Auszugs des KSV wird die Zahlweise</listelem></strichliste><schluss typ="Abs" ct="text">vom KSV mit 250 bewertet.</schluss></liste>',
+  ],
+  [
+    "wrapped closing lines",
+    '<schluss typ="Abs" ct="text">Bei der Vorschreibung von Vorkehrungen ist weiters auf die Erfordernisse einer</schluss><schluss typ="Abs" ct="text">zeitgemäßen Land- und Forstwirtschaft Bedacht zu nehmen.</schluss>',
+  ],
+])(
+  "a sentence wrapped across printed lines stays one paragraph: %s",
+  (_, body) => {
+    expect(bodyParagraphs(body)).toHaveLength(1);
+  },
+);
+
+it("an abstand before a capitalised line still ends the paragraph", () => {
+  expect(
+    bodyParagraphs(
+      '<absatz typ="erltext" ct="text">Die Genehmigung erfolgt unter dem Vorbehalt der zivilrechtlichen Verfügungsbefugnis</absatz><abstand ct="text"/><absatz typ="erltext" ct="text">Die Auflage wird abgeändert.</absatz>',
+    ),
+  ).toHaveLength(2);
+});
+
+it("a numbered point and a capitalised closing text still open their own paragraphs", () => {
+  expect(
+    bodyParagraphs(
+      '<absatz typ="erltext" ct="text">Die Behörde hat folgende Auflagen vorgeschrieben, die einzuhalten sind:</absatz><absatz typ="erltext" ct="text">5. Die Anlage ist jährlich zu prüfen.</absatz>',
+    ),
+  ).toHaveLength(2);
+  expect(
+    bodyParagraphs(
+      '<liste><strichliste ebene="1"><listelem ct="text"><symbol stellen="1">-</symbol>Aufgrund eines aktuellen Auszugs des KSV wird die Zahlweise</listelem></strichliste><schluss typ="Abs" ct="text">Die Zahlungen erfolgen fristgerecht.</schluss></liste>',
+    ),
+  ).toHaveLength(2);
 });

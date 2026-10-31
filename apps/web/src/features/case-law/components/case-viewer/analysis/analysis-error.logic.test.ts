@@ -26,7 +26,9 @@ import sk from "@/i18n/langs/sk.json";
 
 import {
   ANALYSIS_KEYED_FAILURE_MESSAGE,
+  ANALYSIS_UNAVAILABLE_MESSAGE,
   analysisErrorMessage,
+  analysisLanguageVersion,
   analysisRetryAt,
   providerLabel,
 } from "./analysis-error.logic";
@@ -129,6 +131,72 @@ describe("analysis error messages", () => {
     });
   });
 
+  test("each reason the server will never analyse a decision reads as its own sentence", () => {
+    const keys = CASE_LAW_ANALYSIS_UNAVAILABLE_CODES.map((code) => {
+      const message = analysisErrorMessage({ kind: "unavailable", code });
+      if (message.kind !== "unavailable") {
+        throw new Error(`expected an unavailable message for ${code}`);
+      }
+      return message.key;
+    });
+    expect(keys).toEqual(
+      CASE_LAW_ANALYSIS_UNAVAILABLE_CODES.map(
+        (code) => ANALYSIS_UNAVAILABLE_MESSAGE[code],
+      ),
+    );
+    expect(new Set(keys).size).toBe(CASE_LAW_ANALYSIS_UNAVAILABLE_CODES.length);
+  });
+
+  for (const { locale, messages } of catalogs) {
+    test(`an unsupported language names the analysis languages in ${locale}`, () => {
+      const t = createTranslator({ locale, messages });
+      const text = t("caseLaw.analysis.errors.languageUnsupported", {
+        languages: "Czech, Slovak, German, English, and Polish",
+      });
+      expect(text).toContain("Czech, Slovak, German, English, and Polish");
+      expect(text).not.toContain("{");
+      const offer = t("caseLaw.analysis.errors.openLanguageVersion", {
+        language: "English",
+      });
+      expect(offer).toContain("English");
+      expect(offer).not.toContain("{");
+    });
+  }
+
+  test("the version offered for analysis is the reader's preferred one an analysis can be made in", () => {
+    const versions = [
+      { id: "bg", language: "bg" },
+      { id: "cs", language: "cs" },
+      { id: "de", language: "de" },
+      { id: "el", language: "el" },
+      { id: "en", language: "en" },
+      { id: "fr", language: "fr" },
+    ];
+    // English UI, practising in Czechia: English first.
+    expect(analysisLanguageVersion(versions, ["en", "cs", "fr"])?.id).toBe(
+      "en",
+    );
+    // A French UI: French has no prompt, so the next reading language does.
+    expect(analysisLanguageVersion(versions, ["fr", "cs"])?.id).toBe("cs");
+    // No reading language has a version an analysis can be made in: the
+    // first such version still opens the way.
+    expect(
+      analysisLanguageVersion(
+        versions.filter(({ language }) => language !== "cs"),
+        ["el", "fr"],
+      )?.id,
+    ).toBe("de");
+    expect(
+      analysisLanguageVersion(
+        [
+          { id: "el", language: "el" },
+          { id: "fr", language: "fr" },
+        ],
+        ["en"],
+      ),
+    ).toBeNull();
+  });
+
   for (const { locale, messages } of catalogs) {
     test(`unavailable reasons remain distinct and readable in ${locale}`, () => {
       const t = createTranslator({ locale, messages });
@@ -137,7 +205,9 @@ describe("analysis error messages", () => {
         if (message.kind !== "unavailable") {
           return panic("Unavailable analysis must preserve its reason");
         }
-        const text = t(message.key);
+        const text = t(message.key, {
+          languages: "Czech, Slovak, German, English, and Polish",
+        });
         expect(text).not.toBe(message.key);
         expect(text.length).toBeGreaterThan(20);
         return text;

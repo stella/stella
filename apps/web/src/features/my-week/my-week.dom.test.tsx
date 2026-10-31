@@ -82,6 +82,7 @@ const draftEntry = (overrides: Partial<ClientEntry> = {}): ClientEntry =>
     narrative: "Review lease schedule",
     narrativeLanguage: null,
     billable: true,
+    activityCode: null,
     status: "draft",
     source: "manual",
     timerStartedAt: null,
@@ -145,8 +146,14 @@ const serveWeek = ({
   pageSize = 200,
   failLaterPages = false,
   failSubmitDates = [],
+  failCreate = false,
+  noRate = false,
+  rejectRate = false,
 }: {
   entries: MyTimeEntry[];
+  failCreate?: boolean;
+  noRate?: boolean;
+  rejectRate?: boolean;
   /** Drafts the fake API refuses to submit, with the reason it gives. */
   refusals?: Record<string, TimeSubmitRefusal>;
   /** Submitted entries waiting for the signed-in approver. */
@@ -365,6 +372,13 @@ const serveWeek = ({
         search: url.searchParams,
         body,
       });
+      if (request.method === "GET" && /^\/rates\/[^/]+\/resolve$/u.test(path)) {
+        return json(
+          noRate
+            ? { hourlyRate: null, currency: null }
+            : { hourlyRate: 10_000, currency: "EUR" },
+        );
+      }
       const start =
         url.searchParams.get("date") ?? url.searchParams.get("startDate") ?? "";
       const end = url.searchParams.get("endDate") ?? start;
@@ -382,6 +396,42 @@ const serveWeek = ({
         /^\/time-entries\/([^/]+)\/suggestions\/decisions$/u.exec(path);
       if (request.method === "POST" && decision?.[1] && isRecord(body)) {
         return decide(decision[1], body);
+      }
+      const create = /^\/time-entries\/([^/]+)\/?$/u.exec(path);
+      if (request.method === "PUT" && create?.[1] && isRecord(body)) {
+        if (rejectRate && body["billable"] === true) {
+          return new Response(
+            JSON.stringify({
+              code: "time_entry_rate_required",
+              message: "Changed server diagnostic",
+            }),
+            { status: 400, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (failCreate) {
+          return new Response("unavailable", { status: 503 });
+        }
+        const matter = [LEASE_MATTER, SUPPLY_MATTER].find(
+          ({ id }) => id === create[1],
+        );
+        if (
+          !matter ||
+          typeof body["dateWorked"] !== "string" ||
+          typeof body["narrative"] !== "string"
+        ) {
+          return new Response("invalid entry", { status: 400 });
+        }
+        const entry = draftEntry({
+          id: toSafeId<"timeEntry">(`manual-${entries.length + 1}`),
+          workspaceId: matter.id,
+          workspaceName: matter.name,
+          dateWorked: body["dateWorked"],
+          durationMinutes: Number(body["durationMinutes"]),
+          narrative: body["narrative"],
+          billable: body["billable"] === true,
+        });
+        entries.push(entry);
+        return json({ id: entry.id });
       }
       if (
         request.method === "PATCH" &&
@@ -460,6 +510,36 @@ const mount = (initialDate = MONDAY, role: "owner" | "member" = "owner") => {
   return client;
 };
 
+const seedMatters = (client: InstanceType<typeof QueryClient>) => {
+  // The matters the picker offers, as the sidebar already holds them.
+  client.setQueryData(
+    workspacesNavigationOptions({
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
+    }).queryKey,
+    {
+      workspaces: [LEASE_MATTER, SUPPLY_MATTER].map((matter) => ({
+        ...matter,
+        client: null,
+        clientId: null,
+        color: null,
+        defaultViewId: null,
+        lastActivityAt: new Date(`${MONDAY}T08:00:00.000Z`),
+        status: "active" as const,
+      })),
+      features: { timeBilling: true },
+    },
+  );
+  const history = groupedChatThreadsOptions({
+    activeOrganizationId: ORGANIZATION_ID,
+    userId: USER_ID,
+  });
+  client.setQueryData(history.queryKey, {
+    pageParams: [history.initialPageParam],
+    pages: [{ global: [], nextCursor: null, workspaces: [] }],
+  });
+};
+
 const weekTotalsText = (logged: string, billable: string) =>
   messages.timesheets.week.totals
     .replace("{logged}", () => logged)
@@ -467,7 +547,295 @@ const weekTotalsText = (logged: string, billable: string) =>
 
 const acceptLabel = `${messages.common.accept}: ${THREAD_TITLE}`;
 
+const pickCreateMatter = async (dialog: HTMLElement) => {
+  const picker = within(dialog).getByLabelText(messages.common.matter);
+  await act(async () => {
+    picker.focus();
+    fireEvent.keyDown(picker, { key: "ArrowDown" });
+  });
+  const option = await screen.findByRole("option", {
+    name: SUPPLY_MATTER.name,
+  });
+  await act(async () => {
+    fireEvent.click(option);
+  });
+};
+
+const submitCreateForm = (dialog: HTMLElement) => {
+  const form = within(dialog)
+    .getByRole("button", { name: messages.common.save })
+    .closest("form");
+  if (form === null) {
+    throw new TypeError("Expected the time entry form");
+  }
+  fireEvent.submit(form);
+};
+
+const fillCreateEntry = async (dialog: HTMLElement) => {
+  await act(async () => {
+    fireEvent.change(within(dialog).getByLabelText(messages.billing.minutes), {
+      target: { value: "45" },
+    });
+    fireEvent.change(
+      within(dialog).getByLabelText(messages.common.description),
+      {
+        target: { value: "  Príprava žaloby – skúšobný spis  " },
+      },
+    );
+    fireEvent.click(
+      within(dialog).getByRole("checkbox", { name: messages.billing.billable }),
+    );
+  });
+};
+
 describe("my week", () => {
+  test("creates from the header in the chosen matter and refreshes day entries and week totals", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const client = mount();
+    seedMatters(client);
+    const logTime = await screen.findByRole("button", {
+      name: messages.common.logTime,
+    });
+    await act(async () => {
+      fireEvent.click(logTime);
+    });
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).queryByRole("button", { name: messages.common.save }),
+    ).toBeNull();
+    await pickCreateMatter(dialog);
+    await fillCreateEntry(dialog);
+    await act(async () => {
+      submitCreateForm(dialog);
+      submitCreateForm(dialog);
+    });
+    expect(
+      await screen.findByText("Príprava žaloby – skúšobný spis"),
+    ).toBeTruthy();
+    expect(
+      await screen.findByText(weekTotalsText("1 hr 15 min", "1 hr 15 min")),
+    ).toBeTruthy();
+    const writes = calls.filter(({ method }) => method === "PUT");
+    expect(writes).toHaveLength(1);
+    expect(writes.at(0)).toMatchObject({
+      path: `/time-entries/${SUPPLY_MATTER.id}`,
+      body: {
+        dateWorked: MONDAY,
+        durationMinutes: 45,
+        narrative: "Príprava žaloby – skúšobný spis",
+        billable: true,
+        timezoneId: "UTC",
+      },
+    });
+  });
+
+  test("selects a matter with the keyboard and submits the native form", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const client = mount();
+    seedMatters(client);
+    const logTime = await screen.findByRole("button", {
+      name: messages.common.logTime,
+    });
+    await act(async () => {
+      fireEvent.click(logTime);
+    });
+    const dialog = await screen.findByRole("dialog");
+    const picker = within(dialog).getByLabelText(messages.common.matter);
+    await act(async () => {
+      picker.focus();
+      fireEvent.change(picker, { target: { value: SUPPLY_MATTER.name } });
+      fireEvent.keyDown(picker, { key: "ArrowDown" });
+    });
+    await screen.findByRole("option", { name: SUPPLY_MATTER.name });
+    await act(async () => {
+      fireEvent.keyDown(picker, { key: "ArrowDown" });
+    });
+    await act(async () => {
+      fireEvent.keyDown(picker, { key: "Enter" });
+    });
+    await fillCreateEntry(dialog);
+    await act(async () => {
+      submitCreateForm(dialog);
+    });
+    await screen.findByText("Príprava žaloby – skúšobný spis");
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
+  });
+
+  test.each([10, 100])(
+    "create refresh requests stay bounded with %i existing entries",
+    async (count) => {
+      const entries = Array.from({ length: count }, (_, index) =>
+        draftEntry({ id: toSafeId<"timeEntry">(`existing-${index}`) }),
+      );
+      const calls = serveWeek({ entries, suggestions: [], pageSize: 10 });
+      const client = mount();
+      seedMatters(client);
+      const logTime = await screen.findByRole("button", {
+        name: messages.common.logTime,
+      });
+      await act(async () => {
+        fireEvent.click(logTime);
+      });
+      const dialog = await screen.findByRole("dialog");
+      await pickCreateMatter(dialog);
+      await fillCreateEntry(dialog);
+      await act(async () => {
+        submitCreateForm(dialog);
+      });
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+      for (const path of ["/time-entries/me", "/time-entries/me/suggestions"]) {
+        expect(
+          calls.filter((call) => call.method === "GET" && call.path === path),
+        ).toHaveLength(2);
+      }
+      expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
+    },
+  );
+
+  test("the empty-day action prefills the selected day", async () => {
+    const calls = serveWeek({ entries: [], suggestions: [] });
+    const day = Temporal.PlainDate.from(MONDAY)
+      .subtract({ weeks: 1 })
+      .add({ days: 2 })
+      .toString();
+    const client = mount(day);
+    seedMatters(client);
+    await screen.findByText(messages.timesheets.week.noActivity);
+    const daySection = document.querySelector(
+      "section[aria-labelledby='my-week-day-title']",
+    );
+    if (!(daySection instanceof HTMLElement)) {
+      throw new TypeError("Expected day section");
+    }
+    await act(async () => {
+      fireEvent.click(
+        within(daySection).getByRole("button", {
+          name: messages.common.logTime,
+        }),
+      );
+    });
+    const dialog = await screen.findByRole("dialog");
+    await pickCreateMatter(dialog);
+    await fillCreateEntry(dialog);
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: messages.common.save }),
+      );
+    });
+    await screen.findByText("Príprava žaloby – skúšobný spis");
+    expect(calls.find(({ method }) => method === "PUT")?.body).toMatchObject({
+      dateWorked: day,
+    });
+  });
+
+  test("refuses empty description and zero duration without creating time", async () => {
+    const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
+    const client = mount();
+    seedMatters(client);
+    const logTime = await screen.findByRole("button", {
+      name: messages.common.logTime,
+    });
+    await act(async () => {
+      fireEvent.click(logTime);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await pickCreateMatter(dialog);
+    const save = within(dialog).getByRole("button", {
+      name: messages.common.save,
+    });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.change(
+        within(dialog).getByLabelText(messages.common.description),
+        {
+          target: { value: "Skúšobný spis" },
+        },
+      );
+    });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    for (const duration of ["0", "0.5", "0,5", "-1"]) {
+      await act(async () => {
+        fireEvent.change(
+          within(dialog).getByLabelText(messages.billing.minutes),
+          {
+            target: { value: duration },
+          },
+        );
+        submitCreateForm(dialog);
+      });
+      expect(save.hasAttribute("disabled")).toBe(true);
+      expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
+    }
+    await act(async () => {
+      fireEvent.change(
+        within(dialog).getByLabelText(messages.billing.minutes),
+        {
+          target: { value: "15" },
+        },
+      );
+    });
+    expect(save.hasAttribute("disabled")).toBe(false);
+    await act(async () => {
+      fireEvent.change(
+        within(dialog).getByLabelText(messages.common.description),
+        {
+          target: { value: "   " },
+        },
+      );
+    });
+    await act(async () => {
+      submitCreateForm(dialog);
+    });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
+  });
+
+  test("keeps the create form and its values after a server failure and shows an error toast", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      failCreate: true,
+    });
+    const client = mount();
+    seedMatters(client);
+    const toasts = spyOn(stellaToast, "add");
+    try {
+      const logTime = await screen.findByRole("button", {
+        name: messages.common.logTime,
+      });
+      await act(async () => {
+        fireEvent.click(logTime);
+      });
+      const dialog = await screen.findByRole("dialog");
+      await pickCreateMatter(dialog);
+      await fillCreateEntry(dialog);
+      await act(async () => {
+        fireEvent.click(
+          within(dialog).getByRole("button", { name: messages.common.save }),
+        );
+      });
+      await waitFor(() => {
+        expect(
+          toasts.mock.calls.some(([toast]) => toast.type === "error"),
+        ).toBe(true);
+      });
+      expect(screen.getByRole("dialog")).toBe(dialog);
+      const narrative = within(dialog).getByLabelText(
+        messages.common.description,
+      );
+      if (!(narrative instanceof HTMLTextAreaElement)) {
+        throw new TypeError("Expected narrative textarea");
+      }
+      expect(narrative.value).toBe("  Príprava žaloby – skúšobný spis  ");
+      expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
+      expect(screen.getByText(weekTotalsText("30 min", "30 min"))).toBeTruthy();
+    } finally {
+      toasts.mockRestore();
+    }
+  });
+
   test("moves between weeks and loads each week's entries and suggestions", async () => {
     const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
     mount();
@@ -617,33 +985,7 @@ describe("my week", () => {
   test("a draft entry moves to another matter from its edit dialog", async () => {
     const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
     const client = mount();
-    // The matters the picker offers, as the sidebar already holds them.
-    client.setQueryData(
-      workspacesNavigationOptions({
-        organizationId: ORGANIZATION_ID,
-        userId: USER_ID,
-      }).queryKey,
-      {
-        workspaces: [LEASE_MATTER, SUPPLY_MATTER].map((matter) => ({
-          ...matter,
-          client: null,
-          clientId: null,
-          color: null,
-          defaultViewId: null,
-          lastActivityAt: new Date(`${MONDAY}T08:00:00.000Z`),
-          status: "active" as const,
-        })),
-        features: { timeBilling: true },
-      },
-    );
-    const history = groupedChatThreadsOptions({
-      activeOrganizationId: ORGANIZATION_ID,
-      userId: USER_ID,
-    });
-    client.setQueryData(history.queryKey, {
-      pageParams: [history.initialPageParam],
-      pages: [{ global: [], nextCursor: null, workspaces: [] }],
-    });
+    seedMatters(client);
     // Both matters' time and invoice data, opened earlier.
     for (const matter of [LEASE_MATTER, SUPPLY_MATTER]) {
       client.setQueryData(timeEntriesKeys.all(matter.id), { items: [] });
@@ -1085,5 +1427,143 @@ describe("my week", () => {
         ),
       ),
     ).toBeTruthy();
+  });
+});
+
+describe("missing effective rate", () => {
+  const openCreate = async () => {
+    const client = mount();
+    seedMatters(client);
+    const trigger = await screen.findByRole("button", {
+      name: messages.common.logTime,
+    });
+    await act(async () => {
+      fireEvent.click(trigger);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await pickCreateMatter(dialog);
+    await fillCreateEntry(dialog);
+    return dialog;
+  };
+
+  test("blocks billable save without a rate and explicitly saves non-billable time", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      noRate: true,
+    });
+    const dialog = await openCreate();
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    const save = within(dialog).getByRole("button", {
+      name: messages.common.save,
+    });
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      submitCreateForm(dialog);
+    });
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
+    expect(
+      within(dialog)
+        .getByRole("link", { name: messages.billing.rates.addRate })
+        .getAttribute("href"),
+    ).toContain("rates=manage");
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await waitFor(() =>
+      expect(calls.find(({ method }) => method === "PUT")?.body).toMatchObject({
+        billable: false,
+      }),
+    );
+  });
+
+  test("maps a typed API 400 to the same inline rate error", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      rejectRate: true,
+    });
+    const dialog = await openCreate();
+    const save = within(dialog).getByRole("button", {
+      name: messages.common.save,
+    });
+    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
+    expect(save.hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(save);
+    });
+    await waitFor(() =>
+      expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(2),
+    );
+    expect(
+      calls.filter(({ method }) => method === "PUT").at(1)?.body,
+    ).toMatchObject({
+      billable: false,
+    });
+  });
+
+  test("blocks a billable edit without an effective rate", async () => {
+    const calls = serveWeek({
+      entries: [draftEntry()],
+      suggestions: [],
+      noRate: true,
+    });
+    mount();
+    const edit = await screen.findByRole("button", {
+      name: `${messages.common.edit}: Review lease schedule`,
+    });
+    await act(async () => {
+      fireEvent.click(edit);
+    });
+    const dialog = await screen.findByRole("dialog");
+    await within(dialog).findByText(
+      messages.billing.rates.effectiveRateRequired,
+    );
+    expect(
+      within(dialog)
+        .getByRole("button", { name: messages.common.save })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(0);
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", {
+          name: messages.billing.rates.logNonBillable,
+        }),
+      );
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(dialog).getByRole("button", { name: messages.common.save }),
+      );
+    });
+    await waitFor(() =>
+      expect(
+        calls.find(({ method }) => method === "PATCH")?.body,
+      ).toMatchObject({ billable: false }),
+    );
   });
 });

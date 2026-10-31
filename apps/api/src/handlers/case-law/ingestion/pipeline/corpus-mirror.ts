@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -16,7 +16,11 @@ import {
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
-import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
+import {
+  prepareCorpusAst,
+  type PreparedCorpusAst,
+} from "@/api/lib/legal-search/corpus-ast";
 import {
   corpusMirrorColumns,
   corpusPayloadDisposition,
@@ -152,6 +156,7 @@ const REFRESH_COMPARED_COLUMN_TYPES = {
   sourceUrl: "text",
   documentUrl: "text",
   parserVersion: "smallint",
+  extractionWarnings: "jsonb",
   fulltext: "text",
   sections: "jsonb",
   documentAst: "jsonb",
@@ -250,7 +255,7 @@ type PendingMirrorPayload = Pick<
   CorpusWritePayload,
   "ast" | "sections" | "text"
 > & {
-  astStatus: ReturnType<typeof prepareCorpusAst>["type"];
+  astStatus: PreparedCorpusAst["type"];
   sourceObservationHash: string | null;
   sourceObservationOrder: bigint | null;
 };
@@ -258,7 +263,7 @@ type PendingMirrorPayload = Pick<
 export const loadPendingMirrorPayload = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
-): Promise<PendingMirrorPayload> => {
+): Promise<Result<PendingMirrorPayload, StoredCorpusValidationError>> => {
   const row = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
       where: { id: { eq: decisionId } },
@@ -277,16 +282,20 @@ export const loadPendingMirrorPayload = async (
   }
   const prepared = prepareCorpusAst({
     ast: row.documentAst,
+    fallbackText: row.fulltext,
     parserVersion: row.parserVersion ?? undefined,
   });
-  return {
-    astStatus: prepared.type,
-    ast: prepared.ast,
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  return Result.ok({
+    astStatus: prepared.value.type,
+    ast: prepared.value.ast,
     sections: row.sections,
     sourceObservationHash: row.sourceObservationHash,
     sourceObservationOrder: row.sourceObservationOrder,
     text: row.fulltext,
-  };
+  });
 };
 
 /**

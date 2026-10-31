@@ -71,6 +71,7 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { externalRefSchema } from "@/api/lib/imports/external-ref";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -714,67 +715,66 @@ export const deriveContactDisplayName = ({
 const saveContactArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      contact_id: v.optional(
-        uuidInputSchema("Contact ID to update; omit to create"),
-      ),
+      contact_id: v.optional(uuidInputSchema("Update ID; omit to create")),
       type: v.optional(
-        v.pipe(
-          v.picklist(CONTACT_TYPES),
-          v.description("Contact kind; required when creating"),
-        ),
+        v.pipe(v.picklist(CONTACT_TYPES), v.description("Create kind")),
       ),
       display_name: v.optional(
         v.pipe(
           v.string(),
           v.minLength(1),
           v.maxLength(512),
-          v.description(
-            "Display name; when creating it defaults to first + last name " +
-              "(person) or organization name (organization); non-empty when " +
-              "updating",
-          ),
+          v.description("Defaults to person or organization name"),
         ),
       ),
       first_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(256))),
-          v.description("First name; pass null to clear"),
+          v.description("Given name"),
         ),
       ),
       last_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(256))),
-          v.description("Last name; pass null to clear"),
+          v.description("Family name"),
         ),
       ),
       organization_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(512))),
-          v.description("Organization name; pass null to clear"),
+          v.description("Organization"),
         ),
       ),
-      notes: v.optional(
-        v.pipe(
-          v.nullable(v.string()),
-          v.description("Free-text notes; pass null to clear"),
-        ),
-      ),
+      notes: v.optional(v.pipe(v.nullable(v.string()), v.description("Notes"))),
       date_of_birth: v.optional(
         v.pipe(
           v.nullable(dateOfBirthInputSchema),
-          v.description(
-            "Date of birth with known year, month, or day precision; pass null to clear",
-          ),
+          v.description("Birth year, month or date"),
         ),
       ),
       nationality_codes: v.optional(
         v.pipe(
           v.array(countryInputSchema("Nationality country")),
           v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
-          v.description("Nationality countries; pass [] to clear"),
+          v.description("Countries; [] clears"),
+        ),
+      ),
+      external: v.optional(
+        v.pipe(
+          externalRefSchema,
+          v.description("Create only; unique source/id."),
         ),
       ),
     }),
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["external"]],
+        ({ contact_id, external }) =>
+          contact_id === undefined || external === undefined,
+        "external can only be set when creating a contact",
+      ),
+      ["external"],
+    ),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
       v.partialCheck(
@@ -891,6 +891,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.nationality_codes === undefined
             ? {}
             : { nationalityCodes: input.nationality_codes }),
+          ...(input.external === undefined ? {} : { external: input.external }),
         },
       }),
     );
@@ -2538,11 +2539,8 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a contact (a person or organization in the address " +
-      "book, shared across the whole organization). Omit contact_id to create " +
-      "(type required, plus display_name or the name parts it is derived " +
-      "from); pass contact_id to update. String fields other than " +
-      "display_name accept null to clear them.",
+      "Save a contact in the organization address book. Set contact_id to update; otherwise " +
+      "type and display_name or name parts create it. Null clears strings except display_name.",
     inputSchema: saveContactArgsSchema,
     inputNormalization: {
       "nationality_codes[]": countryNormalization({

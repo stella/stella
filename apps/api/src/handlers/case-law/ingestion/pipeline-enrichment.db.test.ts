@@ -437,7 +437,7 @@ test("legacy content proof adopts a corrected weak date on its original row", as
       language: input.language,
       decisionDate: "2025-04-18",
       fulltext: input.fulltext,
-      contentHash: corpusContentHash(caseLawCanonicalPayload(input)),
+      contentHash: corpusContentHash(caseLawCanonicalPayload(input).unwrap()),
     });
     const result = await processDecision({
       input,
@@ -786,7 +786,9 @@ test.each(["ecli", "sheet-number"] as const)(
           fallbackPublicationHash: null,
           fallbackDocumentHash: null,
           contentHash: corpusContentHash(
-            caseLawCanonicalPayload(observation("1", "First member document.")),
+            caseLawCanonicalPayload(
+              observation("1", "First member document."),
+            ).unwrap(),
           ),
         })
         .where(eq(caseLawDecisions.id, original.id));

@@ -411,6 +411,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // and we avoid calling hooks inside the pdfTabs.map.
   const ribbonContextMenu = useTabContextMenu({
     tabId: activeTab?.id ?? "",
+    tabLabel: activeTab?.label ?? "",
     onClose: () => {
       if (activeTab) {
         handleCloseTab(activeTab.id);
@@ -541,6 +542,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         {!minimized && activeTab && isGenericInspectorTab(activeTab) && (
           <GenericInspectorView
             onClose={() => handleCloseTab(activeTab.id)}
+            onMoveToMain={() =>
+              useInspectorTabsStore
+                .getState()
+                .closeTab(activeTab.id, { movedToMain: true })
+            }
             tab={activeTab}
           />
         )}
@@ -709,6 +715,7 @@ const CurrentFileFieldSync = ({
 type GenericInspectorViewProps = {
   tab: GenericTab;
   onClose: () => void;
+  onMoveToMain: () => void;
 };
 
 /**
@@ -720,7 +727,11 @@ type GenericInspectorViewProps = {
  * synced in from a peer browser tab where the registering route
  * hasn't been visited yet.
  */
-const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
+const GenericInspectorView = ({
+  tab,
+  onClose,
+  onMoveToMain,
+}: GenericInspectorViewProps) => {
   const registration = getInspectorView(tab.viewType);
   if (registration === undefined) {
     return null;
@@ -736,6 +747,7 @@ const GenericInspectorView = ({ tab, onClose }: GenericInspectorViewProps) => {
   return (
     <Renderer
       onClose={onClose}
+      onMoveToMain={onMoveToMain}
       tab={{
         id: tab.id,
         label: tab.label,

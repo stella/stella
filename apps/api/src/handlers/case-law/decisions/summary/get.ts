@@ -85,6 +85,7 @@ const UNSELECTED_SUMMARY_COLUMNS = [
   "sections",
   "documentAst",
   "analysis",
+  "extractionWarnings",
   "parserVersion",
   "sourceRaw",
   "sourceRawS3Key",

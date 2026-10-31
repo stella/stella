@@ -1,3 +1,6 @@
+import { Result } from "better-result";
+
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { prepareCorpusAst } from "@/api/lib/legal-search/corpus-ast";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
@@ -20,14 +23,19 @@ export const caseLawCanonicalPayload = (
     IngestionResult,
     "sections" | "fulltext" | "documentAst" | "parserVersion"
   >,
-): CorpusPayload => {
+): Result<CorpusPayload, StoredCorpusValidationError> => {
   const sections = decisionSections(result);
-  return {
-    ast: prepareCorpusAst({
-      ast: result.documentAst,
-      parserVersion: result.parserVersion,
-    }).ast,
+  const prepared = prepareCorpusAst({
+    ast: result.documentAst,
+    fallbackText: result.fulltext,
+    parserVersion: result.parserVersion,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
+  return Result.ok({
+    ast: prepared.value.ast,
     sections: sections.length > 0 ? sections : null,
     text: result.fulltext ?? null,
-  };
+  });
 };

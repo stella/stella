@@ -17,6 +17,7 @@ import {
   payloadCarriesDocument,
   rowHoldsDocumentFor,
 } from "@/api/lib/case-law/stored-payload";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-content-hash";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-content-hash";
 import {
@@ -443,16 +444,25 @@ export type DecisionStorageIdentity =
 /** Publisher ids avoid hashing payloads; fallback evidence also carries canonical content proof. */
 export const decisionStorageIdentity = (
   result: IngestionResult,
-): DecisionStorageIdentity => {
+): Result<DecisionStorageIdentity, StoredCorpusValidationError> => {
   if (result.sourceDocumentId) {
-    return { type: "document", sourceDocumentId: result.sourceDocumentId };
+    return Result.ok({
+      type: "document",
+      sourceDocumentId: result.sourceDocumentId,
+    });
   }
   const identity = fallbackDecisionIdentity(result);
   const key = fallbackDecisionIdentityKey(identity);
   if (key === null || identity.type === "unidentifiable") {
-    return { type: "unkeyable", identity };
+    return Result.ok({ type: "unkeyable", identity });
   }
   const publicationHash = scopedPublicationHash(identity, "");
+  // Read once: the corpus reader reports every rejected structure it reads.
+  const canonical = caseLawCanonicalPayload(result);
+  if (canonical.isErr()) {
+    return canonical;
+  }
+  const payload = canonical.value;
   if (identity.type === "decision") {
     const sheetIdentity = fallbackDecisionIdentity({
       ...result,
@@ -467,24 +477,20 @@ export const decisionStorageIdentity = (
     ) {
       aliases.push({ identity: sheetIdentity, key: sheetKey });
     }
-    return {
+    return Result.ok({
       type: "strong",
-      publishedContentHash: payloadCarriesDocument(
-        caseLawCanonicalPayload(result),
-      )
-        ? corpusContentHash(caseLawCanonicalPayload(result))
+      publishedContentHash: payloadCarriesDocument(payload)
+        ? corpusContentHash(payload)
         : null,
       identity,
       key,
       aliases,
       publicationHash,
       publicationFields: publicationFields(result),
-    };
+    });
   }
-  const publishedContentHash = corpusContentHash(
-    caseLawCanonicalPayload(result),
-  );
-  const documentState = payloadCarriesDocument(caseLawCanonicalPayload(result))
+  const publishedContentHash = corpusContentHash(payload);
+  const documentState = payloadCarriesDocument(payload)
     ? "document"
     : "metadata-only";
   // The nonunique scope stays stable as publication fields and document content arrive.
@@ -508,7 +514,7 @@ export const decisionStorageIdentity = (
           evidence: publicationEvidence(result),
           publishedContentHash,
         });
-  return {
+  return Result.ok({
     type: "content",
     identity,
     cohortKey: key,
@@ -517,7 +523,7 @@ export const decisionStorageIdentity = (
     publicationHash,
     publicationFields: publicationFields(result),
     documentState,
-  };
+  });
 };
 
 type StoredInlineDocument = {
@@ -533,7 +539,14 @@ const storedInlineDocumentProof = (stored: StoredInlineDocument) => {
     sections: stored.sections ?? undefined,
     documentAst: stored.documentAst ?? EMPTY_AST,
   });
-  return payloadCarriesDocument(payload) ? corpusContentHash(payload) : null;
+  // A stored structure the corpus reader rejects without text carries no
+  // document, so it proves none.
+  if (payload.isErr()) {
+    return null;
+  }
+  return payloadCarriesDocument(payload.value)
+    ? corpusContentHash(payload.value)
+    : null;
 };
 
 export const decisionStoredDocumentMatches = (

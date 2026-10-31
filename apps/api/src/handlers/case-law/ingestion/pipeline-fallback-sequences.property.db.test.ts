@@ -113,7 +113,7 @@ test(
                 fulltext: input.fulltext || null,
                 contentHash:
                   initial === "legacy-full"
-                    ? corpusContentHash(caseLawCanonicalPayload(input))
+                    ? corpusContentHash(caseLawCanonicalPayload(input).unwrap())
                     : null,
               });
             }
@@ -257,7 +257,7 @@ test("legacy inline fulltext without persisted proof is adopted before sibling i
     expect(row.fallbackPublicationHash).not.toBeNull();
     expect(row.fallbackContentHash).not.toBeNull();
     expect(row.fallbackDocumentHash).toBe(
-      corpusContentHash(caseLawCanonicalPayload(input)),
+      corpusContentHash(caseLawCanonicalPayload(input).unwrap()),
     );
     // Different weak documents are siblings once the contract release removes the docket index.
     await db.execute(
@@ -365,7 +365,7 @@ test(
                 sourceId,
                 contentHash:
                   legacy === "legacy-full"
-                    ? corpusContentHash(caseLawCanonicalPayload(first))
+                    ? corpusContentHash(caseLawCanonicalPayload(first).unwrap())
                     : null,
               });
               ids.set(0, id);
