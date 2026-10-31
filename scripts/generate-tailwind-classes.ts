@@ -53,7 +53,11 @@ export const tailwindFailureMessages = (
     ),
   ].toSorted();
 
-/** Lints every Tailwind entry point and returns why its rules did not run. */
+/**
+ * Lints every Tailwind entry point and returns why its rules did not run. The
+ * pass runs only the Tailwind rules (oxlint.tailwind.config.ts), which ask the
+ * design system for the same classes as the repository lint.
+ */
 const tailwindFailures = async (env: Record<string, string | undefined>) => {
   const child = Bun.spawn(
     [
@@ -61,7 +65,7 @@ const tailwindFailures = async (env: Record<string, string | undefined>) => {
       "--bun",
       "oxlint",
       "-c",
-      "oxlint.config.ts",
+      "oxlint.tailwind.config.ts",
       "--format",
       "json",
       ...lintTargets,
@@ -161,8 +165,10 @@ const answersOf = (text: string | undefined) => {
 /**
  * Why the committed cache cannot serve lint, decided without compiling. The
  * plugin names each snapshot by the hash of what compiles it (the stylesheet
- * and its imports, their package versions, the Tailwind engine and the
- * plugin's precompute script), so a committed file of that name is current.
+ * and its imports, including workspace stylesheets imported by package name
+ * such as `@stll/ui/theme.css`, the installed packages' versions, the Tailwind
+ * engine and the plugin's precompute script), so a committed file of that name
+ * is current.
  * A class without an answer fails every read-only lint that meets it.
  */
 export const snapshotProblems = (committed: ReadonlySet<string>) =>

@@ -222,6 +222,7 @@ describe("wrapped provider message evidence", () => {
           new HandlerError({
             message: "Adapter failed",
             status: 502,
+            code: "internal_error",
             cause: classified,
           }),
           new WorkflowIntegrationError({

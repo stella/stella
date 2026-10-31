@@ -25,7 +25,7 @@ import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids"
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
-  useLocale as useFormattingLocale,
+  useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -151,7 +151,7 @@ const withDefaultAnswers = (
 ): Record<number, string> => {
   const seeded = { ...answers };
   for (const [index, question] of input.questions.entries()) {
-    if (question.default && !(index in seeded)) {
+    if (question.default && !Object.hasOwn(seeded, index)) {
       seeded[index] = question.default;
     }
   }

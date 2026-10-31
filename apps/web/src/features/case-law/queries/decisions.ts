@@ -2,8 +2,10 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import type { Query, QueryKey } from "@tanstack/react-query";
 import { Result } from "better-result";
 
+import type { CaseLawScopedFilters } from "@stll/api-contract/case-law-filter-scope";
 import type { PublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
 import {
+  type DecisionListSort,
   SEARCH_PAGE_REACH,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_TOTAL_NOT_COUNTED,
@@ -23,6 +25,7 @@ import {
   unwrapApiResponse,
 } from "@/lib/errors/api";
 import {
+  PUBLIC_LAW_READ_TIMEOUT_MS,
   type PublicLawData,
   unwrapPublicLawResponse,
 } from "@/lib/public-law-api";
@@ -38,7 +41,26 @@ type CaseLawQueryAlternatives = NonNullable<
   Parameters<typeof api.case.decisions.search.post>[0]["alternatives"]
 >;
 
-export type DecisionListFilters = {
+/**
+ * One result set: a search of some words, in one of the search's orders, or
+ * the browse listing, in one of the listing's. A union so an order can only
+ * travel with the request that serves it.
+ */
+export type DecisionListFilters = DecisionListScope &
+  (
+    | {
+        search: string;
+        /** How the search orders its hits; absent for the default. */
+        sort?: SearchSort;
+      }
+    | {
+        search?: undefined;
+        /** Which way the listing walks the decision dates. */
+        sort: DecisionListSort;
+      }
+  );
+
+type DecisionListScope = {
   /**
    * Words ORed in beside the reader's own. Present only when there are some,
    * so a search without them keeps the key the route loader primed.
@@ -56,9 +78,6 @@ export type DecisionListFilters = {
    */
   excerpt: SearchExcerpt;
   language?: string;
-  search?: string;
-  /** How a search orders its hits; absent while there is nothing to rank. */
-  sort?: SearchSort;
   sourceId?: SafeId<"caseLawSource">;
   /**
    * Require every word the query carries, function words included. Present
@@ -71,7 +90,7 @@ export type DecisionListFilters = {
 /** Root segment every cached read of a public decision shares. */
 const DECISION_KEY_ROOT = "case-law-decisions";
 
-const caseLawDecisionKeys = {
+export const caseLawDecisionKeys = {
   all: [DECISION_KEY_ROOT],
   coverage: () => [...caseLawDecisionKeys.all, "coverage"],
   facets: (country: string | undefined) => [
@@ -112,7 +131,10 @@ const caseLawDecisionKeys = {
       strict: key.strict,
     } satisfies Record<keyof DecisionListKey, unknown>,
   ],
-  byId: (decisionId: string) => [...caseLawDecisionKeys.all, decisionId],
+  byId: (decisionId: string, caseFileCursor?: string) =>
+    caseFileCursor === undefined
+      ? [...caseLawDecisionKeys.all, decisionId]
+      : [...caseLawDecisionKeys.all, decisionId, { caseFileCursor }],
   summary: (decisionId: string) => [
     ...caseLawDecisionKeys.all,
     "summary",
@@ -121,7 +143,12 @@ const caseLawDecisionKeys = {
   bySlug: (key: DecisionBySlugKey) => [
     ...caseLawDecisionKeys.all,
     "slug",
-    { country: key.country, language: key.language, slug: key.slug },
+    {
+      country: key.country,
+      language: key.language,
+      slug: key.slug,
+      caseFileCursor: key.caseFileCursor,
+    } satisfies Record<keyof DecisionBySlugKey, unknown>,
   ],
 };
 
@@ -136,6 +163,7 @@ type DecisionListKey = DecisionListFilters & {
 };
 
 type DecisionBySlugKey = {
+  caseFileCursor?: string | undefined;
   country: PublicCaseLawCountry;
   language?: string;
   slug: string;
@@ -169,6 +197,25 @@ export const decisionFacetsOptions = (country: string) =>
       const data = unwrapPublicLawResponse(response, "listPublicCaseLawFacets");
 
       return data;
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    retry: shouldRetryAPIRequest,
+  });
+
+type DecisionFilterValidationOptions = CaseLawScopedFilters & {
+  country: string;
+};
+export const decisionFilterValidationOptions = (
+  filters: DecisionFilterValidationOptions,
+) =>
+  queryOptions({
+    queryKey: ["case-law", "filter-validation", filters],
+    queryFn: async ({ signal }) => {
+      const response = await api.case.decisions["filter-validation"].get({
+        query: filters,
+        fetch: { signal },
+      });
+      return unwrapPublicLawResponse(response, "validatePublicCaseLawFilters");
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
     retry: shouldRetryAPIRequest,
@@ -250,13 +297,17 @@ export const decisionsPageOptions = ({
   queryOptions({
     queryKey: caseLawDecisionKeys.page({ ...filters, page, pageSize }),
     queryFn: async ({ signal }) => {
-      const { search, ...listFilters } = filters;
       const offset = (page - 1) * pageSize;
 
-      if (search) {
+      if (filters.search !== undefined) {
+        const { search, ...listFilters } = filters;
         const response = await api.case.decisions.search.post(
           {
             query: search,
+            facets:
+              page === 1
+                ? ["court", "year", "decisionType", "language", "source"]
+                : [],
             limit: pageSize,
             ...(offset > 0 && { offset }),
             ...(listFilters.court !== undefined && {
@@ -287,7 +338,14 @@ export const decisionsPageOptions = ({
               alternatives: listFilters.alternatives,
             }),
           },
-          { fetch: { signal } },
+          {
+            fetch: {
+              signal: AbortSignal.any([
+                signal,
+                AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+              ]),
+            },
+          },
         );
 
         const data = unwrapPublicLawResponse(
@@ -311,9 +369,11 @@ export const decisionsPageOptions = ({
             languageAlternates: h.languageAlternates,
             decisionDate: h.decisionDate,
             decisionType: h.decisionType,
+            decisionTypeKind: h.decisionTypeKind,
             sourceUrl: h.sourceUrl,
             headnote: h.headnote,
             headline: h.headline,
+            textAvailability: h.textAvailability,
             match: h.match,
             anchorId: h.anchorId,
             citationCount: h.citationCount,
@@ -339,27 +399,33 @@ export const decisionsPageOptions = ({
         query: {
           limit: pageSize,
           ...(offset > 0 && { offset }),
-          ...(listFilters.court !== undefined && {
-            court: listFilters.court,
+          sort: filters.sort,
+          ...(filters.court !== undefined && {
+            court: filters.court,
           }),
-          country: listFilters.country,
-          ...(listFilters.sourceId !== undefined && {
-            sourceId: listFilters.sourceId,
+          country: filters.country,
+          ...(filters.sourceId !== undefined && {
+            sourceId: filters.sourceId,
           }),
-          ...(listFilters.dateFrom !== undefined && {
-            dateFrom: listFilters.dateFrom,
+          ...(filters.dateFrom !== undefined && {
+            dateFrom: filters.dateFrom,
           }),
-          ...(listFilters.dateTo !== undefined && {
-            dateTo: listFilters.dateTo,
+          ...(filters.dateTo !== undefined && {
+            dateTo: filters.dateTo,
           }),
-          ...(listFilters.decisionType !== undefined && {
-            decisionType: listFilters.decisionType,
+          ...(filters.decisionType !== undefined && {
+            decisionType: filters.decisionType,
           }),
-          ...(listFilters.language !== undefined && {
-            language: listFilters.language,
+          ...(filters.language !== undefined && {
+            language: filters.language,
           }),
         },
-        fetch: { signal },
+        fetch: {
+          signal: AbortSignal.any([
+            signal,
+            AbortSignal.timeout(PUBLIC_LAW_READ_TIMEOUT_MS),
+          ]),
+        },
       });
 
       const data = unwrapPublicLawResponse(
@@ -509,13 +575,16 @@ export const caseLawQueryExpansionOptions = ({
     retry: false,
   });
 
-export const decisionOptions = (decisionId: string) =>
+export const decisionOptions = (decisionId: string, caseFileCursor?: string) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.byId(decisionId),
+    queryKey: caseLawDecisionKeys.byId(decisionId, caseFileCursor),
     queryFn: async ({ signal }) => {
       const response = await api.case
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
-        .get({ fetch: { signal } });
+        .get({
+          query: caseFileCursor === undefined ? {} : { caseFileCursor },
+          fetch: { signal },
+        });
 
       const data = unwrapPublicLawResponse(
         response,
@@ -567,17 +636,22 @@ const holdsDecision = (data: unknown, decisionId: string): boolean =>
   data.id === decisionId;
 
 export const decisionBySlugOptions = ({
+  caseFileCursor,
   country,
   language,
   slug,
 }: DecisionBySlugKey) =>
   queryOptions({
-    queryKey: caseLawDecisionKeys.bySlug(
-      language === undefined ? { country, slug } : { country, language, slug },
-    ),
+    queryKey: caseLawDecisionKeys.bySlug({
+      caseFileCursor,
+      country,
+      ...(language === undefined ? {} : { language }),
+      slug,
+    }),
     queryFn: async ({ signal }) => {
       const response = await api.case.decisions["by-slug"]({ slug }).get({
         query: {
+          ...(caseFileCursor === undefined ? {} : { caseFileCursor }),
           country,
           ...(language !== undefined && { language }),
         },

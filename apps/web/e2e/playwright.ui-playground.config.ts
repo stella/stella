@@ -1,5 +1,7 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import path from "node:path";
+
+import { devices } from "@stll/playwright-tools/devices";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../..");
 const UI_PLAYGROUND_BASE_URL = "http://127.0.0.1:4175";

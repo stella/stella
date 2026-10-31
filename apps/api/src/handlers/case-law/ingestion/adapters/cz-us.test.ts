@@ -15,11 +15,6 @@ import {
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   czUsAdapter,
   openNalusSession,
   parseNalusDetail,
@@ -38,6 +33,11 @@ import {
   READ_OUTCOME_METADATA_KEY,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   faultedResponse,
   READ_FAULTS,
@@ -2381,6 +2381,31 @@ describe("the record card the court prints beside a decision", () => {
     // A label the court prints with nothing in it is a field with no values,
     // never a value that happens to be blank.
     expect(fields?.note).toEqual([]);
+  });
+
+  test("reads each listed act as its own provision value", async () => {
+    const fields = parseNalusDetail(
+      await recordCardFixture("cz-us-record-card-dissents.html.gz"),
+    );
+
+    expect(fields?.otherProvisions.slice(0, 4)).toEqual([
+      "111/2006 Sb., § 18a, § 61 odst.4",
+      "116/2012 Sb.",
+      "182/1993 Sb., § 71 odst.2, § 35 odst.2",
+      "20/1966 Sb., § 67c, § 11 odst.1",
+    ]);
+    expect(fields?.constitutionalProvisions.slice(0, 2)).toEqual([
+      "1/1993 Sb., čl. 15, čl. 5, čl. 6, čl. 1 odst.1",
+      "115/2001 Sb./Sb.m.s., čl. 5",
+    ]);
+    // The card lists one act per item, so a value naming a second act is
+    // two items run together.
+    for (const value of [
+      ...(fields?.otherProvisions ?? []),
+      ...(fields?.constitutionalProvisions ?? []),
+    ]) {
+      expect(value.match(/\d+\/\d{4} Sb\./gu)).toHaveLength(1);
+    }
   });
 
   test("states no dissent where the court printed none", async () => {

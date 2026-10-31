@@ -13,8 +13,8 @@ import type {
   HeadingLevel,
   Inline,
   ParagraphBlock,
-  ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import type { PreviewBlock } from "@stll/legal-ast/statute-list";
 
 export type StatuteMasthead = {
   anchorId: string;
@@ -369,51 +369,6 @@ const withLinkedFootnotes = (blocks: readonly Block[]): Block[] => {
   });
 };
 
-const listDepthFromAnchor = (anchorId: string): ParagraphListDepth | null => {
-  if (/(?:^|-)bod_[^-]+/u.test(anchorId)) {
-    return 2;
-  }
-  if (/(?:^|-)pism_[^-]+/u.test(anchorId)) {
-    return 1;
-  }
-  return null;
-};
-
-/** e-Sbírka stores a flat block stream, but its stable anchor path retains
- * the list hierarchy: `pism` is nested once and `bod` twice. */
-const withStatuteListDepth = (blocks: readonly Block[]): Block[] =>
-  blocks.map((block) => {
-    if (block.type !== "paragraph" || block.listDepth !== undefined) {
-      return block;
-    }
-    const listDepth = listDepthFromAnchor(block.anchorId);
-    return listDepth === null ? block : { ...block, listDepth };
-  });
-
-export type PreviewBlock = { anchorId: string; id: string; text: string };
-
-/**
- * A provision read's block as a paragraph the reader can render. The read
- * carries text without kinds or inline formatting; its anchor still states
- * the list nesting, so the letters and points indent as the reader sets them.
- */
-export const paragraphFromPreview = ({
-  anchorId,
-  id,
-  text,
-}: PreviewBlock): ParagraphBlock => {
-  const listDepth = listDepthFromAnchor(anchorId);
-
-  return {
-    anchorId,
-    id,
-    inlines: [{ text, type: "text" }],
-    plainText: text,
-    type: "paragraph",
-    ...(listDepth === null ? {} : { listDepth }),
-  };
-};
-
 export type PreviewHeading = PreviewBlock & { level: HeadingLevel };
 
 /**
@@ -487,7 +442,7 @@ export const prepareStatuteReader = ({
 
   return {
     blocks: withLinkedFootnotes(
-      withStatuteListDepth(withInferredCzechSignatureRoles(preambleRepaired)),
+      withInferredCzechSignatureRoles(preambleRepaired),
     ),
     masthead,
   };

@@ -17,13 +17,23 @@ export type PendingContractMigration = {
   name: string;
   /** Last UTC day on which the step may stay pending (YYYY-MM-DD). */
   expiresAt: string;
-  /** Relations whose reader grants and policies the step removes. */
+  /** Relations whose schema contract the step changes. */
   relations: readonly string[];
 };
 
 export const PENDING_CONTRACT_MIGRATIONS_DIR = import.meta.dir;
 
 export const PENDING_CONTRACT_MIGRATIONS = [
+  {
+    name: "20261029141600_case_law_coverage_summary_v1_contract",
+    expiresAt: "2026-11-12",
+    relations: ["case_law_coverage_summaries"],
+  },
+  {
+    name: "20261028061200_mcp_oauth_current_state_contract",
+    expiresAt: "2026-11-03",
+    relations: ["mcp_oauth_state"],
+  },
   {
     name: "20261015060000_case_law_decisions_base_table_contract",
     expiresAt: "2026-10-29",

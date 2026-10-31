@@ -66,9 +66,11 @@ export {
   PersonFieldValue,
 } from "./field-value";
 export { getClipFieldValueLabel } from "./field-value-logic";
+export { WorkspaceUiFormattingProvider } from "./formatting";
+export type { WorkspaceUiFormattingProviderProps } from "./formatting";
 export { PropertyIcon } from "./property-icon";
 export type { PropertyIconType } from "./property-icon";
-export { SortChips, sortDirectionHint } from "./sorts";
+export { SortChips } from "./sorts";
 export type {
   SortChipsLabels,
   SortChipsProps,

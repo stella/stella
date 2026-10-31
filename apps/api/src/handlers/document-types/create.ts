@@ -11,10 +11,12 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add one document type to the organization's classification list. Its " +
     "key is slugified from the label and de-duplicated automatically, and " +
@@ -113,6 +115,7 @@ const createDocumentType = createSafeRootHandler(
 
     return Result.ok(outcome.row);
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createDocumentType;
