@@ -52,6 +52,7 @@ import {
  * them, and nothing here merges or deletes either side.
  */
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: The retention check moved from this adapter to the pipeline; no stored field or AST changes.
@@ -111,6 +112,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -2143,6 +2145,7 @@ const fetchUnreadableWindow = async (
     return Result.ok({
       decisions: [],
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         window: Math.ceil(cursor.window / 2),
@@ -2161,6 +2164,7 @@ const fetchUnreadableWindow = async (
   return Result.ok({
     decisions: [buildPlNcourtQuarantine(quarantine.value)],
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor({
       ...cursor,
       offset: cursor.offset + 1,
@@ -2264,6 +2268,7 @@ const plNcourtFetchPage = async (
   if (lapStart && parsed.from >= today()) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodePlNcourtCursor(parsed),
     });
   }
@@ -2285,6 +2290,7 @@ const plNcourtFetchPage = async (
     return Result.ok({
       decisions: [],
       sourceUrl: listed.value.url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlNcourtCursor({
         ...cursor,
         offset: Math.max(0, cursor.offset - PL_NCOURT_REWIND),
@@ -2321,6 +2327,7 @@ const plNcourtFetchPage = async (
         }),
     ...(supplements.length === 0 ? {} : { supplements }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlNcourtCursor(afterWindow({ cursor, listing, read })),
   });
 };

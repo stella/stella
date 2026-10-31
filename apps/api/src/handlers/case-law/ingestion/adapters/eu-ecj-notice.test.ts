@@ -69,6 +69,7 @@ import type {
 import {
   decodeSourceRawEnvelope,
   encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/lib/legal-search/ingestion-types";
@@ -477,7 +478,11 @@ describe("notice publication outcomes", () => {
           observations.push(event);
         },
         fetchPage: async () =>
-          Result.ok({ decisions: [refused], nextCursor: null }),
+          Result.ok({
+            decisions: [refused],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          }),
       });
       expect(observations.at(-1)).toMatchObject({
         filled: 1,

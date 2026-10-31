@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: legacy wrappers nested by deferred capture produce the same metadata as their original raw shape; existing raw shapes are unchanged.
 // parser-output-unchanged: Deferred document raw storage is declared without changing metadata or document parsing.
@@ -91,6 +92,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -1656,6 +1658,7 @@ const collectFrontierPage = async (
   if (day === null) {
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
       nextCursor: encodeFrontierCursor({
         verifiedThrough: frontier.verifiedThrough,
         page: 0,
@@ -1726,6 +1729,7 @@ const collectFrontierPage = async (
     decisions,
     itemBuildFailures: { type: "item_build_failed", count: failed },
     ...(unreadItems.length === 0 ? {} : { unreadItems }),
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({

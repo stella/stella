@@ -1,3 +1,4 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -54,6 +55,7 @@ import {
   encodeSourceRawEnvelope,
   excludedSourceField,
   excludedSourceSurface,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -1662,6 +1664,7 @@ export const czNsAdapter = defineSourceAdapter({
                   type: "item_build_failed",
                   count: refused,
                 },
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: String(start + i),
                 sourceUrl: listPage.url,
               };
@@ -1680,6 +1683,7 @@ export const czNsAdapter = defineSourceAdapter({
                   type: "item_build_failed",
                   count: refused,
                 },
+                publisherRequest: PUBLISHER_REQUEST.ANSWERED,
                 nextCursor: String(start + i),
                 sourceUrl: listPage.url,
               };
@@ -1701,6 +1705,7 @@ export const czNsAdapter = defineSourceAdapter({
 
         return {
           decisions,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           sourceUrl: listPage.url,
           itemBuildFailures: { type: "item_build_failed", count: refused },

@@ -1,4 +1,5 @@
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Bounded crawl retries and cursor encoding change fetch control without changing parsed decision output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -82,6 +83,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
   sourceTotalProbeFailed,
@@ -3373,7 +3375,11 @@ export const czNssAdapter = defineSourceAdapter({
         // only re-check today on the next cycle (never null —
         // null restarts from DEFAULT_LOOKBACK_DAYS ago).
         if (date > today) {
-          return { decisions: [], nextCursor: cursorFor(today, 0) };
+          return {
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.NONE,
+            nextCursor: cursorFor(today, 0),
+          };
         }
 
         // 1. Get or reuse session
@@ -3393,6 +3399,7 @@ export const czNssAdapter = defineSourceAdapter({
             });
             return {
               decisions: [],
+              publisherRequest: PUBLISHER_REQUEST.FAILED,
               nextCursor: encodeCursor({
                 date,
                 page,
@@ -3411,6 +3418,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions: [],
             itemBuildFailures: { type: "item_build_failed", count: 1 },
+            publisherRequest: PUBLISHER_REQUEST.FAILED,
             nextCursor: encodeCursor({
               date: next <= today ? next : today,
               page: 0,
@@ -3431,6 +3439,7 @@ export const czNssAdapter = defineSourceAdapter({
           const next = nextDay(date);
           return {
             decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(next <= today ? next : today, 0),
           };
         }
@@ -3530,6 +3539,7 @@ export const czNssAdapter = defineSourceAdapter({
           return {
             decisions,
             itemBuildFailures: { type: "item_build_failed", count: failed },
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: cursorFor(date, page + 1),
           };
         }
@@ -3539,6 +3549,7 @@ export const czNssAdapter = defineSourceAdapter({
         return {
           decisions,
           itemBuildFailures: { type: "item_build_failed", count: failed },
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: cursorFor(next <= today ? next : today, 0),
         };
       },

@@ -57,6 +57,7 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
  * publisher gate spaces requests two seconds apart.
  */
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { load } from "@stll/html";
@@ -114,6 +115,7 @@ import {
   excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
   readStoredRawListing,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -2476,7 +2478,11 @@ const plUokikFetchPage = async (
     position.parkedOn !== undefined &&
     position.parkedOn >= todayUtc()
   ) {
-    return Result.ok({ decisions: [], nextCursor: encoded });
+    return Result.ok({
+      decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+      nextCursor: encoded,
+    });
   }
   const located = await readPastAnchor(position, encoded, signal);
   if (Result.isError(located)) {
@@ -2489,6 +2495,7 @@ const plUokikFetchPage = async (
     });
     return Result.ok({
       decisions: [],
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encodePlUokikCursor({
         phase: position.phase,
         read: Math.max(0, position.read - LOST_ANCHOR_REWIND_ROWS),
@@ -2541,6 +2548,7 @@ const plUokikFetchPage = async (
             },
           }),
       sourceUrl: url,
+      publisherRequest: PUBLISHER_REQUEST.ANSWERED,
       nextCursor: encoded,
     });
   }
@@ -2569,6 +2577,7 @@ const plUokikFetchPage = async (
           },
         }),
     sourceUrl: url,
+    publisherRequest: PUBLISHER_REQUEST.ANSWERED,
     nextCursor: encodePlUokikCursor(
       reachedTop
         ? {

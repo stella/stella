@@ -89,7 +89,14 @@
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
     "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
-    "openMatter": "Atvērt lietu"
+    "openMatter": "Atvērt lietu",
+    "assignedTo": "Piešķirts",
+    "nobody": "Nav piešķirts",
+    "assign": "Piešķirt",
+    "doneAssigning": "Gatavs",
+    "someone": "Kāds",
+    "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
