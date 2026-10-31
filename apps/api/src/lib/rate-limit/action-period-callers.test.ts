@@ -177,6 +177,7 @@ describe("period identity coverage", () => {
       "handlers/clauses/rewrite.ts",
       "handlers/clauses/versions/summarize.ts",
       "handlers/contacts/extract-procuracao.ts",
+      "handlers/dictation/transcribe.ts",
       "handlers/document-reviews/create-run.ts",
       "handlers/document-reviews/propose-positions.ts",
       "handlers/document-translations/runs/create.ts",

@@ -21,6 +21,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import { requireReconciliation } from "@/api/tests/helpers/case-law-adapter-test-utils";
+import { replayCapturedSkDocument } from "@/api/tests/helpers/sk-document-raw-storage";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -97,7 +98,7 @@ describe("court registry enrichment", () => {
         if (decision === null) {
           continue;
         }
-        const replay = await skCourtsAdapter.reparseStoredRaw?.({
+        const replay = await replayCapturedSkDocument({
           raw: new TextEncoder().encode(decision.sourceRaw),
           contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
           caseNumber: listedItem.spisovaZnacka,
@@ -111,8 +112,8 @@ describe("court registry enrichment", () => {
           documentUrl: null,
           metadata: {},
         });
-        expect(replay?.type).toBe("parsed");
-        if (replay?.type !== "parsed") {
+        expect(replay.type).toBe("parsed");
+        if (replay.type !== "parsed") {
           continue;
         }
         expect(replay.result.parserVersion).toBe(
@@ -560,7 +561,7 @@ describe("court registry enrichment", () => {
       expect(
         JSON.parse(parts?.["court-registry-unavailable"] ?? "null"),
       ).toEqual(observation);
-      const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+      const outcome = await replayCapturedSkDocument({
         raw: new TextEncoder().encode(decision.sourceRaw),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: item.spisovaZnacka,
@@ -574,8 +575,8 @@ describe("court registry enrichment", () => {
         documentUrl: null,
         metadata: {},
       });
-      expect(outcome?.type).toBe("parsed");
-      if (outcome?.type !== "parsed") {
+      expect(outcome.type).toBe("parsed");
+      if (outcome.type !== "parsed") {
         return;
       }
       expect(
@@ -609,7 +610,7 @@ describe("court registry enrichment", () => {
           "null",
       ),
     ).toEqual(record);
-    const outcome = await skCourtsAdapter.reparseStoredRaw?.({
+    const outcome = await replayCapturedSkDocument({
       raw: new TextEncoder().encode(decision.sourceRaw),
       contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
       caseNumber: item.spisovaZnacka,
@@ -623,8 +624,8 @@ describe("court registry enrichment", () => {
       documentUrl: null,
       metadata: {},
     });
-    expect(outcome?.type).toBe("parsed");
-    if (outcome?.type !== "parsed") {
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
       return;
     }
     expect(outcome.result.metadata["courtSuccession"]).toMatchObject({

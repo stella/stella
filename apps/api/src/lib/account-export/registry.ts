@@ -317,6 +317,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  push_devices: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
   rate_entries: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,

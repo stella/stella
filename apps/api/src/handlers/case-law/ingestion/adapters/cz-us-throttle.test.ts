@@ -18,6 +18,7 @@ import { isReadRefusal } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { withDocumentStageWindow } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { rejectionOf } from "@/api/tests/helpers/case-law-adapter-test-utils";
 import { createTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -115,7 +116,11 @@ describe("the NALUS publisher budget", () => {
             { fetchStage },
           );
           expect(Result.isError(result)).toBe(true);
-          return Result.ok({ decisions: [], nextCursor: null });
+          return Result.ok({
+            decisions: [],
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            nextCursor: null,
+          });
         },
       });
       if (fetchStage === "document") {

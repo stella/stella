@@ -512,6 +512,10 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
@@ -813,6 +817,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -821,6 +828,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [

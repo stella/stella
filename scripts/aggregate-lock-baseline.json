@@ -643,9 +643,9 @@
   },
   {
     "file": "apps/api/src/db/migration-runner.ts",
-    "fingerprint": "0d651bda270af10866783d5f6e36490898c8916e6e23dc18befa4af50485e706",
+    "fingerprint": "21acaeb917d61bb9faf3d85bcaed9099760b3ff6ed6a221f96c66ab1f07db5f5",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/db/migration-runner.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
+    "reason": "The existing preflight transaction uses a per-attempt lock timeout instead of a fixed timeout. Same transaction boundary and ledger table lock, with no additional acquisition."
   },
   {
     "file": "apps/api/src/db/migration-runner.ts",
@@ -741,7 +741,7 @@
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "07022d20d5cca0acfb3575d8afa2cefebffc1d933be57d1ba457cd88cdd71c66",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "The existing verification transaction now rechecks a paused checkpoint under its row lock before processing the page; the transaction boundary and lock order are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
@@ -789,7 +789,7 @@
     "file": "apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts",
     "fingerprint": "e8375d15241c6b4c861f6576c2301a8178b0c7429ed4f3fa66a159d2e06112d5",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/handlers/case-law/ingestion/decision-identifier-backfill.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
+    "reason": "The existing restart transaction now names its reset as a new pass so completed repair counts reset only at that boundary; the transaction and checkpoint row lock are unchanged."
   },
   {
     "file": "apps/api/src/handlers/case-law/ingestion/eu-completion-runner.ts",
@@ -1894,18 +1894,6 @@
     "fingerprint": "642fcee9b9cd7ed2502ae0778a3751280dd37f2833352faf36e0d1ea0f073044",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/workspaces/correspondence/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/create.ts",
-    "fingerprint": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/workspaces/create.ts",
-    "fingerprint": "f21f8abbda2d4e934f9c2ddc7114c5a90c995bf62dda71ab3ad2b811f8f94b0c",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/workspaces/duplicate.ts",
@@ -3591,13 +3579,13 @@
     "file": "apps/api/src/lib/scheduler/runner.ts",
     "fingerprint": "942f29f7268da8a644f825633d4d9f2d840d0885fc74800e5053dedb3690740e",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/runner.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
+    "reason": "The due-job claim transaction gains an optional exclusion of jobs the sweep already ran; same table, same row lock, same count."
   },
   {
     "file": "apps/api/src/lib/scheduler/runner.ts",
     "fingerprint": "ff61d45e5f412ae87867734c370b6cca2376169183c4076f355fc3d547ecabdf",
     "count": 1,
-    "reason": "builder-for in apps/api/src/lib/scheduler/runner.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "The due-job claim's FOR UPDATE SKIP LOCKED select gains an optional exclusion of jobs the sweep already ran; same table, same row lock, same count."
   },
   {
     "file": "apps/api/src/lib/scheduler/tasks/agent-client-storage-backfill.ts",

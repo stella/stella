@@ -25,7 +25,12 @@ import {
   type PreCutGate,
   preCutGates,
 } from "./prepare-maintenance-release-gates";
-import { selectPromotedReleaseBelow } from "./promoted-release-policy";
+import {
+  parseReleaseManifest,
+  type ReleaseManifest,
+  selectPromotedReleaseBelow,
+  serializeReleaseManifest,
+} from "./promoted-release-policy";
 import { heavyVerdict } from "./release-heavy-verdict";
 
 // Computed filesystem reads retain these repository Markdown inputs.
@@ -405,27 +410,18 @@ export const parseMaintenanceReleaseOptions = (
 // A `null` value records a stable tag that was built but never promoted; the
 // landing changelog omits it. Preserved as written: a maintenance release
 // after an unpromoted one must not turn that record into a publication date.
-const readReleaseDates = (rootDir: string): Record<string, string | null> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+export const readReleaseManifest = (rootDir: string): ReleaseManifest => {
+  const parsed = parseReleaseManifest(
+    JSON.parse(
+      readFileSync(nodePath.join(rootDir, RELEASE_DATES_PATH), "utf-8"),
+    ),
   );
-  if (
-    !isRecord(parsed) ||
-    Object.values(parsed).some(
-      (value) => typeof value !== "string" && value !== null,
-    )
-  ) {
+  if (parsed.status === "invalid") {
     throw new MaintenanceReleaseError(
-      `${RELEASE_DATES_PATH} must be an object of string or null values`,
+      `${RELEASE_DATES_PATH}: ${parsed.message}`,
     );
   }
-  const releaseDates: Record<string, string | null> = {};
-  for (const [key, value] of Object.entries(parsed)) {
-    if (typeof value === "string" || value === null) {
-      releaseDates[key] = value;
-    }
-  }
-  return releaseDates;
+  return parsed.manifest;
 };
 
 const atomicWriteFile: ReleaseFileWriter = (path, contents) => {
@@ -646,8 +642,9 @@ export const prepareMaintenanceReleaseFiles = ({
   }
 
   const releaseDatesPath = nodePath.join(rootDir, RELEASE_DATES_PATH);
+  const recordedManifest = readReleaseManifest(rootDir);
   const releaseDates = projectReleaseDates({
-    dates: readReleaseDates(rootDir),
+    dates: recordedManifest.releases,
     previousRelease,
     previousTag,
     refreshed: refreshedReleases,
@@ -688,7 +685,13 @@ export const prepareMaintenanceReleaseFiles = ({
       if (supersededChangelog !== null) {
         rmSync(absolutePreviousChangelogPath);
       }
-      writeFile(releaseDatesPath, `${JSON.stringify(releaseDates, null, 2)}\n`);
+      writeFile(
+        releaseDatesPath,
+        serializeReleaseManifest({
+          note: recordedManifest.note,
+          releases: releaseDates,
+        }),
+      );
       writeFile(versionPath, `${next.value}\n`);
       return {
         changelogPath,
@@ -1695,13 +1698,14 @@ const postCutNote = (): string =>
 export const assertPreCutGates = async ({
   allowUnprovenMain,
   context,
+  gates = preCutGates(MAINTENANCE_CUT_GATES),
   runGate,
 }: {
   allowUnprovenMain: boolean;
   context: CutGateContext;
+  gates?: readonly PreCutGate[];
   runGate: CutGateRunner;
 }): Promise<void> => {
-  const gates = preCutGates(MAINTENANCE_CUT_GATES);
   const failures: string[] = [];
   for (const gate of gates) {
     // One at a time: each gate prints its own output.
@@ -1775,7 +1779,7 @@ export const cutMaintenanceRelease = async (
   // records as unpromoted, read before any gate: the npm gate checks against
   // the manifest the release PR will carry, which the preparation writes.
   const previousRelease = await effects.readPreviousRelease(previousFinalTag);
-  const recordedDates = readReleaseDates(rootDir);
+  const recordedDates = readReleaseManifest(rootDir).releases;
   const refreshedReleases = await refreshUnpromotedReleases({
     cutVersion: nextPatchVersion(current).value,
     dates: recordedDates,
@@ -1853,11 +1857,26 @@ export const cutMaintenanceRelease = async (
   );
 };
 
-const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+/** Resolve the last final tag for a checked-out snapshot, including rehearsals. */
+export const readLatestFinalVersion = (rootDir: string): string => {
+  const tags = spawnOutput([
+    "git",
+    "-C",
+    rootDir,
+    "tag",
+    "--list",
+    "v*",
+    "--sort=-creatordate",
+  ]);
+  const latest = newestFinalTag(tags?.split("\n") ?? []);
+  if (!latest) {
+    throw new MaintenanceReleaseError("No final release tag exists");
+  }
+  return latest.slice(1);
+};
+
+export const productionCutGateEffects = (rootDir: string) => ({
   rootDir,
-  assertCleanWorktree: () => {
-    assertCleanWorktree(rootDir);
-  },
   resolveHeadSha: () => resolveHeadSha(rootDir),
   latestFinalVersion: () => {
     run(["git", "fetch", "origin", "main", "--tags"]);
@@ -1868,18 +1887,18 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
         "Cut releases from the fetched main commit",
       );
     }
-    const tags = spawnOutput([
-      "git",
-      "tag",
-      "--list",
-      "v*",
-      "--sort=-creatordate",
-    ]);
-    const latest = newestFinalTag(tags?.split("\n") ?? []);
-    if (!latest) {
-      throw new MaintenanceReleaseError("No final release tag exists");
-    }
-    return latest.slice(1);
+    return readLatestFinalVersion(rootDir);
+  },
+  runGate: runCutGate,
+  write: (text: string) => {
+    process.stdout.write(text);
+  },
+});
+
+const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
+  ...productionCutGateEffects(rootDir),
+  assertCleanWorktree: () => {
+    assertCleanWorktree(rootDir);
   },
   assertNoOpenRelease: () => {
     const listing = spawnOutput([
@@ -1940,7 +1959,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
       `Release v${version}.`,
     ]);
   },
-  runGate: runCutGate,
   queueHistoryWarning: (baseSha) =>
     releaseQueueHistoryWarning(() => ({ baseSha })),
   readPreviousRelease,
@@ -1949,9 +1967,6 @@ const productionCutEffects = (rootDir: string): MaintenanceCutEffects => ({
   checkPreparedRelease: (version) => {
     run(["bash", "scripts/check-release-changelog.sh", "--version", version]);
     run(["bun", "run", "marketing:provenance", "--strict"]);
-  },
-  write: (text) => {
-    process.stdout.write(text);
   },
 });
 

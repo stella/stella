@@ -40,6 +40,19 @@
     "answerNeedsInput": "Esta respuesta necesita tu intervención. Continúala en stella en la web.",
     "answerFailed": "No se pudo completar la respuesta.",
     "composerMenu": "Abrir el menú de archivos adjuntos y herramientas",
+    "attachFile": "Adjuntar archivo",
+    "attachment": "Adjunto",
+    "fileTooLarge": "El archivo supera el límite de {maxSize}",
+    "maxAttachmentsReached": "Máximo {count} archivos por mensaje",
+    "unsupportedFileType": "Tipo de archivo no compatible",
+    "uploadFailed": "Error al procesar el archivo",
+    "scanDocument": "Escanear un documento",
+    "removeAttachment": "Quitar {name}",
+    "attachmentReading": "Preparando…",
+    "attachmentUploading": "Subiendo…",
+    "pickFailed": "No se pudo abrir el selector de archivos. Inténtalo de nuevo.",
+    "sendFileRefused": "No se pudo enviar un archivo, así que el mensaje no se envió. Quita el archivo e inténtalo de nuevo.",
+    "sendFileNotAnonymizable": "Esta conversación está anonimizada y stella no pudo anonimizar uno de los archivos, así que no se envió nada. Quita el archivo e inténtalo de nuevo.",
     "pickTitle": "Elija una conversación",
     "pickDescription": "Elija un hilo de la lista o empiece uno nuevo con +."
   },
@@ -76,7 +89,14 @@
     "statusFailed": "No se pudo cambiar la tarea. Inténtelo de nuevo.",
     "pickTitle": "Elija una tarea",
     "pickDescription": "Elija una tarea de la lista para verla aquí.",
-    "openMatter": "Abrir asunto"
+    "openMatter": "Abrir asunto",
+    "assignedTo": "Asignada a",
+    "nobody": "Sin asignar",
+    "assign": "Asignar",
+    "doneAssigning": "Hecho",
+    "someone": "Alguien",
+    "membersFailed": "No se pudieron cargar los miembros del asunto.",
+    "assignFailed": "No se pudo asignar la tarea. Inténtelo de nuevo."
   },
   "matters": {
     "emptyTitle": "Aún no hay asuntos",
@@ -120,7 +140,9 @@
     },
     "add": "Añadir",
     "scanDocument": "Escanear un documento",
-    "newTask": "Nueva tarea"
+    "newTask": "Nueva tarea",
+    "uploadDocument": "Subir documento",
+    "uploadFailed": "No se pudo subir el documento. Inténtelo de nuevo."
   },
   "entity": {
     "type": "Tipo",
@@ -184,6 +206,7 @@
     "headnote": "Sumario",
     "textUnavailable": "No hay texto disponible para esta resolución",
     "openSource": "Abrir fuente original",
+    "openFailed": "No se pudo abrir el enlace.",
     "loadFailed": "No se pudo cargar la jurisprudencia.",
     "share": "Compartir"
   },

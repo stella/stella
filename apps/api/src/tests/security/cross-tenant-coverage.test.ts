@@ -75,6 +75,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
+  // Caller-supplied audio is transient; optional matter access is authorized
+  // through MemberCaller and covered by dictation/transcribe.test.ts.
+  dictation: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,

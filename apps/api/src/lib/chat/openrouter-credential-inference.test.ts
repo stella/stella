@@ -4,7 +4,6 @@ import type { AnyTextAdapter } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
 
@@ -346,30 +345,10 @@ describe("federated OpenRouter 401 recovery at the inference boundary", () => {
       expect(telemetry).not.toContain(JWT);
       expect(telemetry).not.toContain(FIRST_TOKEN);
       expect(telemetry).not.toContain(NEXT_TOKEN);
-      const metricSchema = v.object({
-        _aws: v.object({
-          CloudWatchMetrics: v.array(
-            v.object({
-              Dimensions: v.array(v.array(v.string())),
-            }),
-          ),
-        }),
-      });
-      const dimensions = metricLines.flatMap((line) =>
-        v
-          .parse(metricSchema, JSON.parse(line))
-          ._aws.CloudWatchMetrics.map((metric) => metric.Dimensions),
-      );
-      expect(dimensions.length).toBeGreaterThan(0);
-      expect(
-        dimensions.every((value) =>
-          value.every(
-            (dimension) =>
-              JSON.stringify(dimension) === JSON.stringify(["outcome"]) ||
-              dimension.length === 0,
-          ),
-        ),
-      ).toBe(true);
+      expect(metricLines.length).toBeGreaterThan(0);
+      for (const line of metricLines) {
+        expect(JSON.parse(line)).not.toHaveProperty("_aws");
+      }
     } finally {
       logger.restore();
     }
