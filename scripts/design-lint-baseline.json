@@ -21,7 +21,6 @@
     "apps/web/src/components/chat/chat-context-meter.tsx": 1,
     "apps/web/src/components/chat/chat-image-attachment.tsx": 1,
     "apps/web/src/components/chat/chat-matter-picker.tsx": 15,
-    "apps/web/src/components/chat/chat-message-actions-menu.tsx": 1,
     "apps/web/src/components/chat/chat-model-options-menu.tsx": 7,
     "apps/web/src/components/chat/chat-model-selector.tsx": 7,
     "apps/web/src/components/chat/chat-prompt-improve-button.tsx": 3,

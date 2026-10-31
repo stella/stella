@@ -11,7 +11,7 @@ type ContextMenuEventLike = Pick<MouseEvent, "defaultPrevented" | "target"> & {
 };
 
 /** Hides the webview's menu for one right-click the page left unhandled. */
-export const suppressBrowserContextMenu = (event: ContextMenuEventLike) => {
+const suppressBrowserContextMenu = (event: ContextMenuEventLike) => {
   if (event.defaultPrevented || nativeTextContextMenuReason(event) !== null) {
     return;
   }

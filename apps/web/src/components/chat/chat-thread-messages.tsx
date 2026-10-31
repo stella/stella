@@ -355,139 +355,147 @@ export const ChatThreadMessages = ({
   // Rendered per message in both the flat and sticky layouts, so the message
   // body markup stays identical across surfaces; only the surrounding turn
   // grouping differs when `stickyUserMessages` is on.
-  const renderMessageNode = (message: ChatUIMessage, index: number) => (
-    <ChatRenderErrorBoundary
-      fallback={<MessageRenderFallback message={message} />}
-      key={message.id}
-      resetOn={message.parts}
-      surface="chat-message"
-    >
-      <Message
-        className={cn(
-          "transition-opacity duration-200",
-          approvalPendingMessageId &&
-            approvalPendingMessageId !== message.id &&
-            "opacity-40",
-        )}
-        from={message.role}
-        data-chat-message-id={message.id}
+  const renderMessageNode = (message: ChatUIMessage, index: number) => {
+    // Only an answer offers message actions. Its whole box, gaps between its
+    // parts included, is the right-click target for what its "…" opens.
+    const canFork =
+      CHAT_MESSAGE_RENDER_POLICY[message.role] === "assistant" &&
+      canForkAssistantMessage({
+        isGenerating: generationActive,
+        messageId: message.id,
+        messages,
+      });
+    return (
+      <ChatRenderErrorBoundary
+        fallback={<MessageRenderFallback message={message} />}
+        key={message.id}
+        resetOn={message.parts}
+        surface="chat-message"
       >
-        <MessageContent
+        <Message
           className={cn(
-            message.parts.some(
-              (part) =>
-                part.type === "ui-resource" &&
-                uiResourceRenderer(part.resource.mimeType) ===
-                  "generated-visual",
-            ) && "w-full",
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
           )}
+          from={message.role}
+          data-chat-message-id={message.id}
         >
-          <MessageBodyRender
-            render={() => {
-              const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
-              switch (policy) {
-                case "activity":
-                  return renderActivityMessage(message.parts);
-                case "assistant": {
-                  const canFork = canForkAssistantMessage({
-                    isGenerating: generationActive,
-                    messageId: message.id,
-                    messages,
-                  });
-                  return (
-                    <ChatAnswerDecisionProvider
-                      message={message}
-                      isAwaitingUser={awaitedAssistantMessageId === message.id}
-                    >
-                      {/* The whole answer is the right-click target for the
-                          actions its "…" button opens. */}
-                      <ChatMessageActionsScope
-                        canExport={getMessageText(message) !== ""}
-                        canFork={canFork}
-                        contextMatterIds={branchSource?.contextMatterIds}
-                        exportArtifact={findCreateDocumentArtifactForMessage(
-                          messages,
-                          index,
-                        )}
-                        message={message}
-                        threadRef={threadRef}
-                      >
-                        <AssistantMessageParts
-                          activeFileName={activeFileName}
-                          activeOrganizationId={activeOrganizationId}
-                          assistantTextDensity={assistantTextDensity}
+          <ChatMessageActionsScope
+            canExport={getMessageText(message) !== ""}
+            canFork={canFork}
+            contextMatterIds={branchSource?.contextMatterIds}
+            exportArtifact={
+              canFork
+                ? findCreateDocumentArtifactForMessage(messages, index)
+                : null
+            }
+            message={message}
+            threadRef={threadRef}
+          >
+            <MessageContent
+              className={cn(
+                message.parts.some(
+                  (part) =>
+                    part.type === "ui-resource" &&
+                    uiResourceRenderer(part.resource.mimeType) ===
+                      "generated-visual",
+                ) && "w-full",
+              )}
+            >
+              <MessageBodyRender
+                render={() => {
+                  const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+                  switch (policy) {
+                    case "activity":
+                      return renderActivityMessage(message.parts);
+                    case "assistant":
+                      return (
+                        <ChatAnswerDecisionProvider
+                          message={message}
                           isAwaitingUser={
                             awaitedAssistantMessageId === message.id
                           }
-                          isGenerating={generationActive}
-                          isLatestAssistantMessage={
-                            message.id === retryableAssistantMessageId
-                          }
-                          message={message}
-                          onAskUserEditAndRerun={onAskUserEditAndRerun}
-                          onAskUserEditingChange={onAskUserEditingChange}
-                          onAskUserSubmit={onAskUserSubmit}
-                          onCreateDocumentResolve={onCreateDocumentResolve}
-                          onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-                          onOpenCreatedDocument={onOpenCreatedDocument}
-                          onOpenPlaybook={onOpenPlaybook}
-                          shouldShowToolCalls={shouldShowToolCalls}
-                          streamdownComponents={streamdownComponents}
-                          workspaceId={workspaceId}
-                          threadRef={threadRef}
-                        />
-                        <ChatTurnDuration
-                          timing={message.metadata?.turnTiming}
-                        />
-                        <div
-                          className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-                          data-chat-answer-footer
-                          data-chat-copy-exclude
                         >
-                          <AssistantMessageActions
-                            canFork={canFork}
-                            canRetry={canRetryAssistantMessage({
-                              error,
-                              isGenerating: generationActive,
-                              messageId: message.id,
-                              messages,
-                            })}
+                          <AssistantMessageParts
+                            activeFileName={activeFileName}
+                            activeOrganizationId={activeOrganizationId}
+                            assistantTextDensity={assistantTextDensity}
+                            isAwaitingUser={
+                              awaitedAssistantMessageId === message.id
+                            }
+                            isGenerating={generationActive}
+                            isLatestAssistantMessage={
+                              message.id === retryableAssistantMessageId
+                            }
                             message={message}
-                            onResend={onResend}
+                            onAskUserEditAndRerun={onAskUserEditAndRerun}
+                            onAskUserEditingChange={onAskUserEditingChange}
+                            onAskUserSubmit={onAskUserSubmit}
+                            onCreateDocumentResolve={onCreateDocumentResolve}
+                            onOpenCreateDocumentDraft={
+                              onOpenCreateDocumentDraft
+                            }
+                            onOpenCreatedDocument={onOpenCreatedDocument}
+                            onOpenPlaybook={onOpenPlaybook}
+                            shouldShowToolCalls={shouldShowToolCalls}
+                            streamdownComponents={streamdownComponents}
+                            workspaceId={workspaceId}
                             threadRef={threadRef}
                           />
-                          <AssistantAnswerMetadata
-                            message={message}
-                            workspaceId={workspaceId}
-                            threadId={threadRef?.threadId}
-                            disabled={
-                              generationActive || !!awaitedAssistantMessageId
-                            }
-                            onAnswerEdited={onAnswerEdited}
+                          <ChatTurnDuration
+                            timing={message.metadata?.turnTiming}
                           />
-                        </div>
-                      </ChatMessageActionsScope>
-                    </ChatAnswerDecisionProvider>
-                  );
-                }
-                case "text":
-                  return (
-                    <TextMessageParts
-                      message={message}
-                      messages={messages}
-                      index={index}
-                    />
-                  );
-                default:
-                  policy satisfies never;
-                  return panic("Unhandled chat message render policy");
-              }
-            }}
-          />
-        </MessageContent>
-      </Message>
-    </ChatRenderErrorBoundary>
-  );
+                          <div
+                            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                            data-chat-answer-footer
+                            data-chat-copy-exclude
+                          >
+                            <AssistantMessageActions
+                              canFork={canFork}
+                              canRetry={canRetryAssistantMessage({
+                                error,
+                                isGenerating: generationActive,
+                                messageId: message.id,
+                                messages,
+                              })}
+                              message={message}
+                              onResend={onResend}
+                              threadRef={threadRef}
+                            />
+                            <AssistantAnswerMetadata
+                              message={message}
+                              workspaceId={workspaceId}
+                              threadId={threadRef?.threadId}
+                              disabled={
+                                generationActive || !!awaitedAssistantMessageId
+                              }
+                              onAnswerEdited={onAnswerEdited}
+                            />
+                          </div>
+                        </ChatAnswerDecisionProvider>
+                      );
+                    case "text":
+                      return (
+                        <TextMessageParts
+                          message={message}
+                          messages={messages}
+                          index={index}
+                        />
+                      );
+                    default:
+                      policy satisfies never;
+                      return panic("Unhandled chat message render policy");
+                  }
+                }}
+              />
+            </MessageContent>
+          </ChatMessageActionsScope>
+        </Message>
+      </ChatRenderErrorBoundary>
+    );
+  };
 
   return (
     // Sent messages persist a same-matter mention without its matter; the

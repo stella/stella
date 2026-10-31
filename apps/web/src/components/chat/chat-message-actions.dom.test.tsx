@@ -163,3 +163,36 @@ test("Shift + right-click on the answer keeps the native menu", async () => {
   await act(async () => {});
   expect(popupItems("entity-actions-context-popup")).toEqual([]);
 });
+
+test("right-clicking a gap between the answer's parts opens its actions", async () => {
+  const view = renderAnswer();
+  await waitFor(() => view.getByText(ANSWER));
+  // A right-click in the gap between flex children lands on the answer box:
+  // the message's own content box, directly inside the actions boundary.
+  const message = view.container.querySelector("[data-chat-message-id]");
+  const box = message?.querySelector(
+    ':scope > [data-slot="entity-actions"] > div',
+  );
+  if (!(box instanceof HTMLElement)) {
+    throw new Error("Expected the answer box directly inside its actions");
+  }
+  expect(box.children.length).toBeGreaterThan(1);
+  const event = new MouseEvent("contextmenu", {
+    bubbles: true,
+    button: 2,
+    cancelable: true,
+    clientX: 20,
+    clientY: 40,
+  });
+  act(() => {
+    box.dispatchEvent(event);
+  });
+  expect(event.defaultPrevented).toBe(true);
+  await waitFor(() => {
+    expect(popupItems("entity-actions-context-popup")).toEqual([
+      messages.chat.forkFromHere,
+      messages.chat.forkInSidePanel,
+      messages.common.export.title,
+    ]);
+  });
+});

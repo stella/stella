@@ -45,6 +45,26 @@ const elementOf = (target: EventTarget | null): Element | null => {
   return null;
 };
 
+/**
+ * What a `contenteditable` value means under the HTML standard: its keywords
+ * match ASCII case-insensitively, the empty string means "true", and an
+ * invalid value inherits from the parent.
+ */
+const contentEditableState = (
+  value: string | null,
+): "editable" | "inherit" | "not-editable" => {
+  switch (value?.toLowerCase()) {
+    case "":
+    case "true":
+    case "plaintext-only":
+      return "editable";
+    case "false":
+      return "not-editable";
+    default:
+      return "inherit";
+  }
+};
+
 /** The element is, or sits inside, text the user can edit. */
 export const isEditableContextMenuTarget = (element: Element): boolean => {
   const field = element.closest("input, textarea");
@@ -55,12 +75,19 @@ export const isEditableContextMenuTarget = (element: Element): boolean => {
     }
     return !NON_TEXT_INPUT_TYPES.has(type);
   }
-  // The nearest `contenteditable` decides: an island marked "false" inside an
-  // editor (a node view, a chip) is not editable text.
-  const editable = element.closest("[contenteditable]");
-  return (
-    editable !== null && editable.getAttribute("contenteditable") !== "false"
-  );
+  // The nearest valid `contenteditable` decides: an island marked "false"
+  // inside an editor (a node view, a chip) is not editable text.
+  for (
+    let current = element.closest("[contenteditable]");
+    current !== null;
+    current = current.parentElement?.closest("[contenteditable]") ?? null
+  ) {
+    const state = contentEditableState(current.getAttribute("contenteditable"));
+    if (state !== "inherit") {
+      return state === "editable";
+    }
+  }
+  return false;
 };
 
 /** The element is, or sits inside, a link with a destination. */
