@@ -68,12 +68,15 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       writeFileSync(
         path.join(fixtureScripts, "build-pglite-snapshot.ts"),
         `
+        import { renameSync } from "node:fs";
         const descendant = Bun.spawn(["sh", "-c", 'trap "" INT TERM; sleep 300 & echo "$!"; wait'], {
           stdout: "pipe", stderr: "ignore",
         });
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
-        await Bun.write(${JSON.stringify(marker)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid + "\\n");
+        // The test reads the marker as soon as it exists: publish it whole.
+        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        renameSync(${JSON.stringify(`${marker}.partial`)}, ${JSON.stringify(marker)});
         setInterval(() => {}, 1000);
       `,
       );
@@ -102,13 +105,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
           description:
             "snapshot builder announces itself, its descendant and the leaf",
           path: marker,
-          // The builder ends its announcement with a newline; without it the
-          // content may stop inside a pid. Once complete, the assertions below
-          // judge it, so a malformed announcement fails at once.
-          parse: (content) =>
-            content.endsWith("\n")
-              ? content.trim().split(" ").map(Number)
-              : undefined,
+          // The builder publishes the marker whole (written aside, then
+          // renamed), so the assertions below judge the first content read
+          // and a malformed announcement fails at once.
+          parse: (content) => content.trim().split(" ").map(Number),
         });
         expect(announced).toHaveLength(3);
         expect(
