@@ -69,7 +69,7 @@ for (const [adapter, parse] of Object.entries(parsers)) {
       documentAst: parsed.documentAst,
       fulltext: parsed.fulltext,
       sections: segmentDecision(parsed.fulltext),
-    });
+    }).unwrap("Parsed Slovak fixture must pass corpus validation");
     const astText = parsed.documentAst.blocks
       .flatMap((block) =>
         block.type === "heading" || block.type === "paragraph"
