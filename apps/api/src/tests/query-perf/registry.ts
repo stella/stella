@@ -11,7 +11,9 @@ import type { LegislationReadTransaction } from "@/api/lib/legislation-public-re
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
 import { REPORT_CASE_LAW_FRESHNESS_TASK } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import { BACKFILL_CASE_LAW_PROVISION_STATE_TASK } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
 import { REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK } from "@/api/lib/scheduler/tasks/case-law-sitemap-shard-refresh";
+import { BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import { SWEEP_REQUEST_RECEIPTS_TASK } from "@/api/lib/scheduler/tasks/request-receipt-retention";
 import { buildDocumentSearchQueries } from "@/api/lib/search/pg-fts-search-query";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -139,6 +141,14 @@ export const SCHEDULED_JOB_MEASUREMENTS: Readonly<
       },
     ],
   },
+  [SCHEDULER_BACKFILL_IDS.provisionState]: {
+    task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+    scenarios: [],
+  },
+  [SCHEDULER_BACKFILL_IDS.expressionIds]: {
+    task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+    scenarios: [],
+  },
   "caseLaw.refreshSitemapShards.hourly": {
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
     prepare: seedSitemapReadBudget,
@@ -210,6 +220,8 @@ export const scheduledJobMeasurementViolations = (
 
 /** Which profile measures each budget; every budget has exactly one. */
 export const READ_BUDGET_PROFILES = {
+  "scheduled.caseLaw.backfillProvisionState": "corpus",
+  "scheduled.legislation.backfillExpressionIds": "corpus",
   "scheduled.caseLaw.refreshCoverage": "corpus",
   "statement.caseLaw.globalSearchHits": "case-law",
   "scheduled.caseLaw.refreshSitemapShards": "corpus",

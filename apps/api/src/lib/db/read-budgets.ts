@@ -57,6 +57,22 @@ export const READ_BUDGETS = {
     reason:
       "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
+  "scheduled.caseLaw.backfillProvisionState": {
+    surface: "scheduled-job",
+    pages: 13_200,
+    reason:
+      "A governed run checks the shared backfill checkpoint and processes at most 200 bounded provision-state units; a completed pass reads only the checkpoint. 13,200 pages is the target for a run with pending units.",
+    overBudget: {
+      reason:
+        "A run with pending units measures more than 110,000 pages at both source sizes (about 556 pages per unit), so one unit's lookups are far wider than its bounded work needs; the per-unit read is being narrowed.",
+    },
+  },
+  "scheduled.legislation.backfillExpressionIds": {
+    surface: "scheduled-job",
+    pages: 1600,
+    reason:
+      "A completed pass checks the shared backfill checkpoint and scans one bounded expression-id page. The production-shape corpus fixture measures 1,057 pages; 1,600 pages leaves 50% headroom for production-height indexes.",
+  },
   "statement.caseLaw.coverageSources": {
     surface: "statement",
     pages: 256,
