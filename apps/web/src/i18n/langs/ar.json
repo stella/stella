@@ -4530,7 +4530,8 @@
       "flowRunFailed": "فشل مسار العمل <bdi>{flowName}</bdi>",
       "mention": "ذكرك <bdi>{actorName}</bdi> في تعليق",
       "reportExportFailed": "فشل تصدير تقريرك",
-      "reportExportSucceeded": "تقريرك جاهز"
+      "reportExportSucceeded": "تقريرك جاهز",
+      "taskAssigned": "أسند إليك <bdi>{actorName}</bdi> مهمة"
     },
     "loadOlder": "تحميل الأقدم",
     "markAllRead": "تعليم الكل كمقروء",

@@ -4530,7 +4530,8 @@
       "flowRunFailed": "El flujo de trabajo <bdi>{flowName}</bdi> ha fallado",
       "mention": "<bdi>{actorName}</bdi> te ha mencionado en un comentario",
       "reportExportFailed": "Error al exportar tu informe",
-      "reportExportSucceeded": "Tu informe está listo"
+      "reportExportSucceeded": "Tu informe está listo",
+      "taskAssigned": "<bdi>{actorName}</bdi> te ha asignado una tarea"
     },
     "loadOlder": "Cargar anteriores",
     "markAllRead": "Marcar todo como leído",

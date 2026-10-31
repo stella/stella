@@ -2129,6 +2129,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
       addAssigneeHandler({
         safeDb: context.safeDb,
         workspaceId,
+        actorUserId: context.userId,
         recordAuditEvent,
         body: { taskId, userId },
       }),
