@@ -197,6 +197,7 @@
     "headnote": "Právna veta",
     "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text",
     "openSource": "Otvoriť originál",
+    "openFailed": "Odkaz sa nepodarilo otvoriť.",
     "loadFailed": "Judikatúru sa nepodarilo načítať.",
     "share": "Zdieľať"
   },

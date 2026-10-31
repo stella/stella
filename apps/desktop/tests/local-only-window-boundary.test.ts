@@ -170,7 +170,9 @@ describe("local-only data stays in the feature's own windows", () => {
 
   test("every granted local-only command belongs to a feature's owner module", async () => {
     const prefixes = LOCAL_ONLY_FEATURES.flatMap((feature) =>
-      feature.commandOwners.map(({ prefix }) => permissionPrefix(prefix)),
+      feature.commandOwners.flatMap((owner) =>
+        owner.prefixes.map(permissionPrefix),
+      ),
     );
     const owned = new Set(
       (await Promise.all(LOCAL_ONLY_FEATURES.map(featureCommands)))
@@ -234,7 +236,10 @@ describe("local-only data stays in the feature's own windows", () => {
           manifestCommands.toSorted(),
         );
         for (const { name, parameters } of commands) {
-          expect(name.startsWith(owner.prefix), name).toBe(true);
+          expect(
+            owner.prefixes.some((prefix) => name.startsWith(prefix)),
+            name,
+          ).toBe(true);
           expect(parameters, name).toMatch(caller);
         }
       }
