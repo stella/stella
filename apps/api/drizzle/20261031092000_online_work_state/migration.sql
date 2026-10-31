@@ -5,6 +5,7 @@ CREATE TABLE "online_work_state" (
   "name" text PRIMARY KEY NOT NULL,
   "state" text NOT NULL,
   "attempts" integer DEFAULT 0 NOT NULL,
+  "attempt_token" uuid DEFAULT gen_random_uuid() NOT NULL,
   "last_error" text,
   "started_at" timestamp with time zone,
   "finished_at" timestamp with time zone,

@@ -298,10 +298,13 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             expect(first.type).toBe("claimed");
             const firstAttempt = await store.markBuilding({
               name: index.name,
-              attempts: 1,
+              expected: undefined,
               at: TICK,
             });
-            expect(firstAttempt).toBe(1);
+            expect(firstAttempt.type).toBe("building");
+            if (firstAttempt.type !== "building") {
+              panic("Expected the first attempt to be recorded");
+            }
             const backend = await firstSession.unsafe<{ pid: number }[]>(
               "SELECT pg_backend_pid() AS pid",
             );
@@ -320,13 +323,22 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
               expect(second.type).toBe("claimed");
               const secondAttempt = await store.markBuilding({
                 name: index.name,
-                attempts: 2,
+                expected: {
+                  attempts: firstAttempt.attempt,
+                  attemptToken: firstAttempt.attemptToken,
+                },
                 at: new Date(TICK.getTime() + 1),
               });
-              expect(secondAttempt).toBe(2);
+              expect(secondAttempt.type).toBe("building");
+              if (secondAttempt.type !== "building") {
+                panic("Expected the successor attempt to be recorded");
+              }
+              expect(secondAttempt.attemptToken).not.toBe(
+                firstAttempt.attemptToken,
+              );
               const readCheckpoint = async () =>
                 await main.sql.unsafe(
-                  "SELECT state, attempts, last_error, started_at, finished_at, updated_at FROM online_work_state WHERE name = $1",
+                  "SELECT state, attempts, attempt_token, last_error, started_at, finished_at, updated_at FROM online_work_state WHERE name = $1",
                   [index.name],
                 );
               const building = [...(await readCheckpoint())];
@@ -342,23 +354,27 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
                 checkpoint === "failed"
                   ? await store.markFailed({
                       name: index.name,
-                      attempt: firstAttempt,
+                      attempt: firstAttempt.attempt,
+                      attemptToken: firstAttempt.attemptToken,
                       error: "the terminated attempt failed",
                     })
                   : await store.markFinalized({
                       name: index.name,
-                      attempt: firstAttempt,
+                      attempt: firstAttempt.attempt,
+                      attemptToken: firstAttempt.attemptToken,
                     });
               expect([...(await readCheckpoint())]).toEqual(building);
               expect(stale).toEqual({
                 type: "stale-attempt",
                 name: index.name,
                 attempt: 1,
+                attemptToken: firstAttempt.attemptToken,
               });
               expect(
                 await store.markFinalized({
                   name: index.name,
-                  attempt: secondAttempt,
+                  attempt: secondAttempt.attempt,
+                  attemptToken: secondAttempt.attemptToken,
                 }),
               ).toEqual({ type: "updated" });
               expect([...(await readCheckpoint())]).toMatchObject([
@@ -378,6 +394,164 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
               [index.name],
             );
             await secondSession.release();
+          }
+        },
+        { closeMode: "force" },
+      );
+    },
+  );
+
+  test.each(["absent", "existing"] as const)(
+    "a terminated claimant cannot overwrite a successor after its %s second snapshot",
+    async (initial) => {
+      if (databaseUrl === undefined) {
+        panic("DATABASE_URL is required");
+      }
+      const index = pendingIndex();
+      await withGatedTestClients(
+        databaseUrl,
+        async ({ openClient }) => {
+          const main = openClient({ max: 2 });
+          const oldSession = await openClient().sql.reserve();
+          const successorSession = await openClient().sql.reserve();
+          const oldConnection = adapter(oldSession);
+          const successorConnection = adapter(successorSession);
+          const lifecycle = {
+            ...allFinalizedOnlineWork(),
+            [index.name]: PENDING,
+          };
+          const store = createDrizzleOnlineWorkStateStore(
+            asTestRaw<SchedulerDb>(main.db),
+          );
+          const beforeWrite = Promise.withResolvers<undefined>();
+          const resumeWrite = Promise.withResolvers<undefined>();
+          const successorWalk = Promise.withResolvers<undefined>();
+          const work: Promise<unknown>[] = [];
+          const walked: string[] = [];
+          const released: string[] = [];
+          const claims: Extract<
+            Awaited<ReturnType<typeof claimOnlineWorkUnit>>,
+            { type: "claimed" }
+          >[] = [];
+          const claimAs = (session: "old" | "successor") => async () => {
+            const connection =
+              session === "old" ? oldConnection : successorConnection;
+            const claim = await claimOnlineWorkUnit(
+              { reserve: async () => connection },
+              {
+                name: index.name,
+                lifecycle,
+                repairs: [],
+                indexGate: healthyGate(),
+                reserveObserver: async () => connection,
+              },
+            );
+            if (claim.type !== "claimed") {
+              return claim;
+            }
+            claims.push(claim);
+            const release = async () => {
+              released.push(session);
+              await claim.release();
+            };
+            return {
+              type: "claimed" as const,
+              release,
+              run: async (record: Parameters<typeof claim.run>[0]) => {
+                walked.push(session);
+                try {
+                  await successorWalk.promise;
+                  return await record(Result.ok({ type: "complete" }));
+                } finally {
+                  await release();
+                }
+              },
+            };
+          };
+          const oldRunner = createOnlineWorkRunner({
+            names: ONLINE_WORK_NAMES,
+            lifecycle,
+            store: {
+              ...store,
+              markBuilding: async (options) => {
+                beforeWrite.resolve(undefined);
+                await resumeWrite.promise;
+                return await store.markBuilding(options);
+              },
+            },
+            claim: claimAs("old"),
+            detach: () => panic("A stale claimant must never start its walk"),
+          });
+          const successor = createOnlineWorkRunner({
+            names: ONLINE_WORK_NAMES,
+            lifecycle,
+            store,
+            claim: claimAs("successor"),
+            detach: (unit) => {
+              work.push(unit);
+            },
+          });
+          try {
+            if (initial === "existing") {
+              expect(
+                (
+                  await store.markBuilding({
+                    name: index.name,
+                    expected: undefined,
+                    at: TICK,
+                  })
+                ).type,
+              ).toBe("building");
+            }
+            const backend = await oldSession.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            );
+            const pid =
+              backend.at(0)?.pid ?? panic("Expected an old claimant backend");
+            const oldTick = oldRunner(TICK);
+            await beforeWrite.promise;
+            expect(
+              (
+                await main.sql.unsafe<{ terminated: boolean }[]>(
+                  "SELECT pg_terminate_backend($1, 5000) AS terminated",
+                  [pid],
+                )
+              ).at(0)?.terminated,
+            ).toBe(true);
+            await oldConnection.terminate();
+            expect((await successor(TICK)).unwrap()).toEqual({
+              type: "started",
+              name: index.name,
+            });
+            const checkpoint = async () => [
+              ...(await main.sql.unsafe(
+                "SELECT state, attempts, attempt_token, started_at, updated_at FROM online_work_state WHERE name = $1",
+                [index.name],
+              )),
+            ];
+            const successorState = await checkpoint();
+            expect(successorState).toMatchObject([
+              { state: "building", attempts: initial === "existing" ? 2 : 1 },
+            ]);
+            resumeWrite.resolve(undefined);
+            expect((await oldTick).unwrap()).toEqual({ type: "idle" });
+            expect(await checkpoint()).toEqual(successorState);
+            expect(walked).toEqual(["successor"]);
+            expect(released).toEqual(["old"]);
+            successorWalk.resolve(undefined);
+            expect(await Promise.all(work)).toEqual([Result.ok(undefined)]);
+          } finally {
+            resumeWrite.resolve(undefined);
+            successorWalk.resolve(undefined);
+            await Promise.allSettled(work);
+            for (const claim of claims) {
+              await claim.release();
+            }
+            await main.sql.unsafe(
+              "DELETE FROM online_work_state WHERE name = $1",
+              [index.name],
+            );
+            await successorSession.release();
           }
         },
         { closeMode: "force" },

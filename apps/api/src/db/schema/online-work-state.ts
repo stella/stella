@@ -9,6 +9,8 @@ export const onlineWorkState = p.pgTable(
     name: p.text().primaryKey(),
     state: p.text({ enum: ONLINE_WORK_STATES }).notNull(),
     attempts: p.integer().notNull().default(0),
+    /** Identifies the attempt permitted to checkpoint this unit. */
+    attemptToken: p.uuid("attempt_token").notNull().defaultRandom(),
     lastError: p.text("last_error"),
     startedAt: timestamptz("started_at"),
     finishedAt: timestamptz("finished_at"),

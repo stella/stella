@@ -59,6 +59,7 @@ export type OnlineWorkStateSnapshot = {
   name: string;
   state: (typeof ONLINE_WORK_STATES)[number];
   attempts: number;
+  attemptToken: string;
   finishedAt: Date | null;
 };
 
@@ -91,7 +92,11 @@ const isEligibleForAttempt = (
   }
 };
 
-type OnlineWorkAttempt = { name: OnlineWorkName; attempt: number };
+type OnlineWorkAttempt = {
+  name: OnlineWorkName;
+  attempt: number;
+  attemptToken: string;
+};
 
 export type OnlineWorkCheckpointOutcome =
   { type: "updated" } | ({ type: "stale-attempt" } & OnlineWorkAttempt);
@@ -104,9 +109,13 @@ export type OnlineWorkStateStore = {
   readStates: () => Promise<readonly OnlineWorkStateSnapshot[]>;
   markBuilding: (options: {
     name: OnlineWorkName;
-    attempts: number;
+    expected:
+      Pick<OnlineWorkStateSnapshot, "attempts" | "attemptToken"> | undefined;
     at: Date;
-  }) => Promise<number>;
+  }) => Promise<
+    | { type: "building"; attempt: number; attemptToken: string }
+    | { type: "ineligible" }
+  >;
   markFinalized: (
     attempt: OnlineWorkAttempt,
   ) => Promise<OnlineWorkCheckpointOutcome>;
@@ -183,7 +192,7 @@ export const createOnlineWorkRunner = ({
   });
 
   const finishUnit = async (
-    { name, attempt }: OnlineWorkAttempt,
+    { name, attempt, attemptToken }: OnlineWorkAttempt,
     run: ClaimedUnit["run"],
   ): Promise<UnitResult> => {
     try {
@@ -192,6 +201,7 @@ export const createOnlineWorkRunner = ({
           const checkpoint = await store.markFailed({
             name,
             attempt,
+            attemptToken,
             error: redactedError(outcome.error),
           });
           switch (checkpoint.type) {
@@ -212,7 +222,11 @@ export const createOnlineWorkRunner = ({
         }
         switch (outcome.value.type) {
           case "complete": {
-            const checkpoint = await store.markFinalized({ name, attempt });
+            const checkpoint = await store.markFinalized({
+              name,
+              attempt,
+              attemptToken,
+            });
             switch (checkpoint.type) {
               case "updated":
                 return Result.ok(undefined);
@@ -274,12 +288,11 @@ export const createOnlineWorkRunner = ({
         if (!isEligibleForAttempt(current, now)) {
           return { type: "ineligible" } as const;
         }
-        const attempt = await store.markBuilding({
+        return await store.markBuilding({
           name,
-          attempts: (current?.attempts ?? 0) + 1,
+          expected: current,
           at: now,
         });
-        return { type: "building", attempt } as const;
       },
       catch: (cause: unknown) => cause,
     });
@@ -297,7 +310,16 @@ export const createOnlineWorkRunner = ({
       return Result.ok(IDLE);
     }
     build = { type: "building", name };
-    detach(finishUnit({ name, attempt: marked.value.attempt }, claimed.run));
+    detach(
+      finishUnit(
+        {
+          name,
+          attempt: marked.value.attempt,
+          attemptToken: marked.value.attemptToken,
+        },
+        claimed.run,
+      ),
+    );
     return Result.ok({ type: "started", name });
   };
   return tick;
@@ -325,6 +347,7 @@ export const createDrizzleOnlineWorkStateStore = (
                 name: onlineWorkState.name,
                 state: onlineWorkState.state,
                 attempts: onlineWorkState.attempts,
+                attemptToken: onlineWorkState.attemptToken,
                 finishedAt: onlineWorkState.finishedAt,
               })
               .from(onlineWorkState)
@@ -338,6 +361,7 @@ export const createDrizzleOnlineWorkStateStore = (
                   name: state.name,
                   state: state.state,
                   attempts: state.attempts,
+                  attemptToken: state.attemptToken,
                   finishedAt: state.finishedAt,
                 })
                 .from(
@@ -360,41 +384,67 @@ export const createDrizzleOnlineWorkStateStore = (
         return panic("Unknown online work snapshot outcome");
     }
   },
-  markBuilding: async ({ name, attempts, at }) => {
+  markBuilding: async ({ name, expected, at }) => {
+    const attempts = (expected?.attempts ?? 0) + 1;
+    const attemptToken = Bun.randomUUIDv7();
     const building = {
-      state: "building",
       attempts,
+      attemptToken,
       lastError: null,
       startedAt: at,
       finishedAt: null,
       updatedAt: at,
     } as const;
-    await withAggregateTransaction(db, async (tx) => {
-      await transitionUpsertBatch({
+    const changed = await withAggregateTransaction(db, async (tx) => {
+      const audit = async (count: number) => {
+        await recordSystemAudit(tx, "system:online-work", {
+          subject: auditSubject,
+          counts: { transitions: count },
+        });
+      };
+      if (expected === undefined) {
+        const inserted = await transitionUpsertBatch({
+          tx,
+          spec: ONLINE_WORK_STATE_TRANSITIONS,
+          values: [{ name, state: "building", ...building }],
+          onConflict: "ignore",
+          recordTransitionAuditEvent: async (_auditTx, rows) =>
+            await audit(rows.length),
+        });
+        return inserted.length;
+      }
+      return await transitionScopedCount({
         tx,
         spec: ONLINE_WORK_STATE_TRANSITIONS,
-        values: [{ name, ...building }],
-        recordTransitionAuditEvent: async (auditTx, rows) => {
-          await recordSystemAudit(auditTx, "system:online-work", {
-            subject: auditSubject,
-            counts: { transitions: rows.length },
-          });
+        where: sql`${onlineWorkState.name} = ${name}
+          AND ${onlineWorkState.attempts} = ${expected.attempts}
+          AND ${onlineWorkState.attemptToken} = ${expected.attemptToken}`,
+        options: {
+          from: ["building", "failed"],
+          to: "building",
+          set: building,
         },
+        recordTransitionAuditEvent: async (_auditTx, count) =>
+          await audit(count),
       });
     });
-    return attempts;
+    return changed === 0
+      ? { type: "ineligible" }
+      : { type: "building", attempt: attempts, attemptToken };
   },
-  markFinalized: async ({ name, attempt }) =>
+  markFinalized: async ({ name, attempt, attemptToken }) =>
     await finishOnlineWork(db, auditSubject, {
       name,
       attempt,
+      attemptToken,
       state: "finalized",
       lastError: null,
     }),
-  markFailed: async ({ name, attempt, error }) =>
+  markFailed: async ({ name, attempt, attemptToken, error }) =>
     await finishOnlineWork(db, auditSubject, {
       name,
       attempt,
+      attemptToken,
       state: "failed",
       lastError: error,
     }),
@@ -409,7 +459,7 @@ type FinishOnlineWorkOptions = OnlineWorkAttempt & {
 const finishOnlineWork = async (
   db: SchedulerDb,
   auditSubject: SafeId<"schedulerJobRun"> | SafeId<"systemScriptRun">,
-  { name, attempt, state, lastError }: FinishOnlineWorkOptions,
+  { name, attempt, attemptToken, state, lastError }: FinishOnlineWorkOptions,
 ): Promise<OnlineWorkCheckpointOutcome> => {
   const changed = await withAggregateTransaction(
     db,
@@ -417,7 +467,7 @@ const finishOnlineWork = async (
       await transitionScopedCount({
         tx,
         spec: ONLINE_WORK_STATE_TRANSITIONS,
-        where: sql`${onlineWorkState.name} = ${name} AND ${onlineWorkState.attempts} = ${attempt}`,
+        where: sql`${onlineWorkState.name} = ${name} AND ${onlineWorkState.attemptToken} = ${attemptToken}`,
         options: {
           from: ["building"],
           to: state,
@@ -432,7 +482,7 @@ const finishOnlineWork = async (
       }),
   );
   return changed === 0
-    ? { type: "stale-attempt", name, attempt }
+    ? { type: "stale-attempt", name, attempt, attemptToken }
     : { type: "updated" };
 };
 

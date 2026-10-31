@@ -9,11 +9,12 @@ One line per column: `table.column  builder  flags  file:line  first sentence of
 Progress of pending online work, written only by the post-deploy runner.
 
 ```text
-online_work_state.name         text         pk,not null       online-work-state.ts:9
-online_work_state.state        text         not null          online-work-state.ts:10
-online_work_state.attempts     integer      default,not null  online-work-state.ts:11
-online_work_state.last_error   text         null              online-work-state.ts:12
-online_work_state.started_at   timestamptz  null              online-work-state.ts:13
-online_work_state.finished_at  timestamptz  null              online-work-state.ts:14
-online_work_state.updated_at   timestamptz  default,not null  online-work-state.ts:15
+online_work_state.name           text         pk,not null       online-work-state.ts:9
+online_work_state.state          text         not null          online-work-state.ts:10
+online_work_state.attempts       integer      default,not null  online-work-state.ts:11
+online_work_state.attempt_token  uuid         default,not null  online-work-state.ts:13  Identifies the attempt permitted to checkpoint this unit.
+online_work_state.last_error     text         null              online-work-state.ts:14
+online_work_state.started_at     timestamptz  null              online-work-state.ts:15
+online_work_state.finished_at    timestamptz  null              online-work-state.ts:16
+online_work_state.updated_at     timestamptz  default,not null  online-work-state.ts:17
 ```
