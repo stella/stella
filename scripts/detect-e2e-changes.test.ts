@@ -533,7 +533,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
+        "!cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -2041,7 +2041,12 @@ test("every workflow browser command uses the pinned image and no reachable brow
       );
       const runs =
         isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
-      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
+      // Only composite actions have steps to inherit; a node action runs one
+      // entry point and reaches no further workflow steps.
+      const reached =
+        runs["using"] === "composite"
+          ? reachableSteps(stepsOf(runs["steps"], step.uses))
+          : [];
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });

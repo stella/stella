@@ -92,6 +92,9 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
       - name: Scan flake evidence
         id: scan
         timeout-minutes: 30
