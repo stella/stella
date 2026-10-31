@@ -31,7 +31,7 @@ export const PropertyName = ({ type }: PropertyHelperProps) => {
   const labelKeys = {
     text: t("workspaces.properties.text"),
     file: t("workspaces.properties.file"),
-    error: t("common.error"),
+    error: t("common.failed"),
     "single-select": t("workspaces.properties.singleSelect"),
     "multi-select": t("workspaces.properties.multiSelect"),
     unsupported: t("workspaces.properties.unsupported"),

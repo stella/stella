@@ -10,7 +10,7 @@ Governed operational state for a task entity.
 
 ```text
 work_obligations.{...entityFeatureGateColumns()}  spread                             workflow.ts:169
-work_obligations.entity_id                        safeUuid         pk,not null       workflow.ts:170
+work_obligations.entity_id                        safeUuid         pk,fk,not null    workflow.ts:170
 work_obligations.workspace_id                     safeWorkspaceId  fk,not null       workflow.ts:171
 work_obligations.type                             text             default,not null  workflow.ts:174
 work_obligations.status                           text             default,not null  workflow.ts:178
@@ -34,8 +34,8 @@ Human-readable, immutable operational history.
 ```text
 work_obligation_events.{...entityFeatureGateColumns()}  spread                             workflow.ts:290
 work_obligation_events.id                               pUuid            pk,not null       workflow.ts:291
-work_obligation_events.workspace_id                     safeWorkspaceId  not null          workflow.ts:292
-work_obligation_events.obligation_entity_id             safeUuid         not null          workflow.ts:293
+work_obligation_events.workspace_id                     safeWorkspaceId  fk,not null       workflow.ts:292
+work_obligation_events.obligation_entity_id             safeUuid         fk,not null       workflow.ts:293
 work_obligation_events.actor_user_id                    text             fk,null           workflow.ts:294
 work_obligation_events.type                             text             not null          workflow.ts:297
 work_obligation_events.details                          jsonb            not null          workflow.ts:298

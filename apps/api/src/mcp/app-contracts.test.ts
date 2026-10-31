@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 import * as v from "valibot";
 
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import {
   APP_RESOLVE_FIXTURE,
@@ -605,6 +606,25 @@ describe("MCP app registry and contracts", () => {
       "invalid",
     );
   });
+  test.each(Object.values(DECISION_TEXT_AVAILABILITY))(
+    "browser validation preserves %s decision text availability",
+    (textAvailability) => {
+      const view = createCaseLawParser()(
+        {
+          ...APP_SEARCH_FIXTURE,
+          results: APP_SEARCH_FIXTURE.results.map((row) => ({
+            ...row,
+            textAvailability,
+          })),
+        },
+        { country: "CZE" },
+      );
+      expect(view).toMatchObject({
+        type: "search",
+        results: [{ type: "search", textAvailability }],
+      });
+    },
+  );
   test("browser validation strips fields the app does not render", () => {
     const parse = createCaseLawParser();
     const view = parse(

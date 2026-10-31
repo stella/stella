@@ -1,3 +1,7 @@
+import createDocumentAnnotation from "@/api/handlers/entities/annotations/create";
+import deleteDocumentAnnotation from "@/api/handlers/entities/annotations/delete";
+import listDocumentAnnotations from "@/api/handlers/entities/annotations/list";
+import updateDocumentAnnotation from "@/api/handlers/entities/annotations/update";
 import createBilingualEntity from "@/api/handlers/entities/bilingual/create";
 import createBlankDocument from "@/api/handlers/entities/blank-document/create";
 import checkpointFolioCollabRoom from "@/api/handlers/entities/checkpoint-folio-collab-room";
@@ -118,6 +122,14 @@ const entities = routes({
     DELETE: deleteVersion,
   },
   "/entity/:entityId/field/:fieldId/file": { GET: readFieldFile },
+  "/entity/:entityId/field/:fieldId/annotations": {
+    GET: listDocumentAnnotations,
+    POST: createDocumentAnnotation,
+  },
+  "/entity/:entityId/annotations/:annotationId": {
+    PATCH: updateDocumentAnnotation,
+    DELETE: deleteDocumentAnnotation,
+  },
   "/entity/:entityId/ocr": { POST: requestOcr },
   "/entity/:entityId/versions/:versionId/diff": { GET: versionDiff },
   "/entity/:entityId/versions/:versionId/summarize": {

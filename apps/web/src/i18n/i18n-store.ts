@@ -304,8 +304,9 @@ export const buildFormattingLocale = ({
 };
 
 // Locale-aware formatter for non-React code (utilities, store logic), mirroring
-// getTranslator. React components should use use-intl's useFormatter, which
-// reads the same locale from the provider. Both are kept in sync by the store.
+// getTranslator. React components use useFormatter from
+// @/i18n/formatting-context, which reads the same locale from the provider.
+// Both are kept in sync by the store.
 let formatter = createFormatter({
   locale: "en",
   timeZone: SERVER_I18N_TIME_ZONE,
@@ -561,7 +562,7 @@ export const useI18nStore = create<State & Actions>()(
 /**
  * The current formatting locale for non-React code (region plus calendar,
  * number-system, and first-day-of-week extensions). React reads the same value
- * through use-intl's useLocale().
+ * through useFormattingLocale from @/i18n/formatting-context.
  */
 export const getFormattingLocale = (): string => {
   const state = useI18nStore.getState();

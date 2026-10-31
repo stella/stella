@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  CHECK_BUDGETS_PATH,
   CHECK_POOL_JOBS,
   checkPoolRegistryPath,
 } from "./ci-check-pool-registry";
@@ -734,6 +735,8 @@ case "$1" in
   run) if [[ "$2" == typegen ]]; then exec '${process.execPath}' "$@"; fi ;;
   *check-tauri-package-alignment.ts) printf false ;;
   scripts/*|apps/*|packages/*|test|fmt|--bun|--no-install) ;;
+  # Offline checks load the network preload ahead of their entry.
+  --preload) [[ "$2" == ./scripts/offline-network-preload.ts ]] || { echo "Unexpected fixture preload: $2" >&2; exit 127; } ;;
   *) echo "Unexpected fixture Bun command: $1" >&2; exit 127 ;;
 esac
 printf '%s executed' "$TEST_ENTRY" > "$TEST_ENTRY_RECEIPT"
@@ -776,6 +779,10 @@ exit 0
                   path.join(fixture, checkPoolRegistryPath(job)),
                 );
               }
+              copyFileSync(
+                path.join(root, CHECK_BUDGETS_PATH),
+                path.join(fixture, CHECK_BUDGETS_PATH),
+              );
               continue;
             }
             writeFileSync(
@@ -821,6 +828,10 @@ exit 0
             JSON.stringify({
               scripts: { typegen: "bun scripts/fixture-typegen.ts" },
             }),
+          );
+          copyFileSync(
+            path.join(root, "bun.lock"),
+            path.join(fixture, "bun.lock"),
           );
           writeFileSync(
             path.join(fixture, "scripts/fixture-typegen.ts"),
@@ -905,6 +916,7 @@ exit 0
                 HOME: home,
                 PATH: bin,
                 CI: ci,
+                GITHUB_WORKSPACE: undefined,
                 TEST_ENTRY: entry,
                 TEST_ENTRY_RECEIPT: path.join(fixture, `${entry}-receipt`),
                 TEST_INSTALL_RECEIPT: path.join(fixture, "install-receipt"),

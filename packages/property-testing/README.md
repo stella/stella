@@ -77,7 +77,9 @@ test("search shows the newest query's results", async () => {
 ```
 
 A run fails as misconfigured when it never had two responses in flight or
-asserts while a response is still held.
+asserts while a response is still held or its delivery is still pending.
+React scenarios must also await async `act` around interactions and unmounts;
+a scheduler cannot observe work that has not issued a held request yet.
 
 ## Seeds and failures
 

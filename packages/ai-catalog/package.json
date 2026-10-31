@@ -64,6 +64,7 @@
     "@tanstack/ai-openrouter": "catalog:",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "tsrs": "catalog:"
   }
 }

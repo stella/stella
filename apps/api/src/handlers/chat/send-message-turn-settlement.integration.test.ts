@@ -1,8 +1,15 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { sleep } from "@stll/concurrency/sleep";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
@@ -38,6 +45,11 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+beforeEach(() => {
+  streamChatMock.mockReset();
+  streamChatMock.mockImplementation(streamChatDefault);
+});
+
 type StreamResponse = NonNullable<
   Parameters<typeof createSendMessage>[0]
 >["streamResponse"];
@@ -59,8 +71,8 @@ const invalidAskUserInput = {
  * later tick and hands the test what `onFinish` threw.
  */
 let finishFailure: Promise<unknown> = Promise.resolve(undefined);
-const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
-  finishFailure = sleep(0)
+const streamChatDefault: StreamResponse = async ({ onFinish }) => {
+  finishFailure = Promise.resolve()
     .then(async () => {
       await onFinish({
         outcome: { type: "completed" },
@@ -91,7 +103,8 @@ const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
       headers: { "Content-Type": "text/event-stream" },
     }),
   };
-});
+};
+const streamChatMock = mock<StreamResponse>(streamChatDefault);
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
   return {

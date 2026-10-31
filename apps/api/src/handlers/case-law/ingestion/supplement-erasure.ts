@@ -33,10 +33,6 @@ import {
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 import type { RedactCaseLawDecisionOutcome } from "@/api/handlers/case-law/erasure";
-import type {
-  SourceAdapter,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -49,7 +45,12 @@ import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdra
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type {
+  SourceAdapter,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
+import type { RemovalEvidence } from "@/api/lib/legal-search/removal-evidence";
 
 /** How long a run waits for a crawl to release the source's lease. */
 const HOLDER_LEASE_WAIT_MS = 2 * 60 * 1000;
@@ -72,6 +73,7 @@ export type RedactWithSupplementHoldersOutcome = {
 };
 
 type RedactWithSupplementHoldersOptions = {
+  evidence?: RemovalEvidence | undefined;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   /** Test seam; production reads the documents bucket. */
@@ -80,6 +82,8 @@ type RedactWithSupplementHoldersOptions = {
   leaseWaitMs?: number;
   /** Test seam; production rebuilds through the source's own adapter. */
   reparseStoredRaw?: NonNullable<SourceAdapter["reparseStoredRaw"]>;
+  /** Storage boundary injection for synthetic erasure runs. */
+  redactDecision?: typeof redactCaseLawDecision;
 };
 
 /** Live judgments whose composed document still holds the given row. */
@@ -236,10 +240,19 @@ const recomposeHolder = async ({
           sourceId,
         }),
       });
-      if (written.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+      if (written.isErr()) {
         return {
           type: "withheld" as const,
-          reason: `retryable: ${written.reason}`,
+          reason:
+            written.error instanceof Error
+              ? written.error.message
+              : "the rebuild failed",
+        };
+      }
+      if (written.value.status !== PROCESS_DECISION_STATUS.COMPLETE) {
+        return {
+          type: "withheld" as const,
+          reason: `retryable: ${written.value.reason}`,
         };
       }
       // A write can complete without landing (a newer observation owns the
@@ -293,14 +306,19 @@ export const redactCaseLawDecisionWithSupplementHolders = async ({
   readStoredRaw = readStoredRawFromS3,
   leaseWaitMs = HOLDER_LEASE_WAIT_MS,
   reparseStoredRaw,
+  redactDecision = redactCaseLawDecision,
+  evidence,
 }: RedactWithSupplementHoldersOptions): Promise<
   Result<RedactWithSupplementHoldersOutcome, DatabaseError>
 > => {
-  const redaction = await redactCaseLawDecision({ decisionId, scopedDb });
+  const redaction = await redactDecision({ decisionId, scopedDb, evidence });
   if (Result.isError(redaction)) {
     return redaction;
   }
-  if (redaction.value.type === "not-found") {
+  if (
+    redaction.value.type === "not-found" ||
+    redaction.value.type === "superseded"
+  ) {
     return Result.ok({ redaction: redaction.value, holders: [] });
   }
   // One at a time: each takes the citation graph lock and the source lease.

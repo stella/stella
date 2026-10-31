@@ -1,0 +1,3 @@
+{
+  "unresolved-execute": "The block only revokes TEMPORARY from PUBLIC on current_database(), quoting the database identifier with %I. It updates database ACL metadata without scanning rows or changing existing application relations, under 1s lock_timeout and 5s statement_timeout."
+}

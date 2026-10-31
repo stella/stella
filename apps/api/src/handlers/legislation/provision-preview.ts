@@ -115,8 +115,11 @@ export const readProvisionPreviewHandler = async ({
     return status(404, { message: "Provision not found" });
   }
 
-  return {
-    ...projectProvisionPreview(preview),
+  return projectProvisionPreview({
+    ...preview,
+    // The publisher's anchor grammar is the country's: a client reads the
+    // blocks' list nesting off their anchors through it.
+    country: version.country,
     url: buildLegislationDocumentAppUrl({
       country: version.country,
       documentId: version.id,
@@ -125,7 +128,7 @@ export const readProvisionPreviewHandler = async ({
       version: version.versionValidFrom,
       anchor: citedAnchor ?? anchor,
     }),
-  };
+  });
 };
 
 const readProvisionPreview = createSafeBoundedPublicHandler(

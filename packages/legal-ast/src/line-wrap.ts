@@ -7,9 +7,12 @@
  * Paragraphs are rebuilt at ingestion. A parser joins a wrapped source's
  * lines into real paragraphs and stores those; the raw payload stays the
  * verbatim published record. `classifyLineWrap` is the single decision of
- * whether a text is fixed-width wrapped and at which column, and parsers
- * call it (see `apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts`)
- * rather than detecting wrapping themselves.
+ * whether a text is fixed-width wrapped and at which column, and
+ * `lineJoinOf` reads one line boundary of such a text: whether the line
+ * continues the one before it. Parsers call them (see
+ * `apps/api/src/lib/legal-search/parsers/hard-wrapped-lines.ts` and the
+ * Slovak general courts' PDF parser) rather than detecting wrapping
+ * themselves.
  *
  * The planning below (`planLineWrap`, `planBlockLineWrap`) is a fallback for
  * rows stored before their parser rebuilt paragraphs: a reader draws such a
@@ -35,6 +38,7 @@
  * marks it soft or spells the joined word elsewhere.
  */
 
+// parser-output-unchanged: [cz-us] that parser reads only `classifyLineWrap`, which is unchanged; the date rule is in `lineJoinOf`, which it does not call.
 import type { Block, ParagraphBlock, ParagraphRole } from "./document-ast.js";
 
 export const LINE_WRAP_TYPE = {
@@ -42,7 +46,7 @@ export const LINE_WRAP_TYPE = {
   UNWRAPPED: "unwrapped",
 } as const;
 
-type LineWrapClassification =
+export type LineWrapClassification =
   | {
       type: typeof LINE_WRAP_TYPE.FIXED_WIDTH_WRAPPED;
       /** The wrap column: the longest line that is not an outlier. */
@@ -234,6 +238,23 @@ const isHeadingLike = (line: string, width: number): boolean =>
 
 /** A numeric date ("12. 3. 1998", "1.2.1999") continues a sentence. */
 const NUMERIC_DATE_START_RE = /^\d{1,2}\.\s?\d{1,2}\.\s?\d{2,4}\b/u;
+/**
+ * A day number ending a line after a word that introduces a date: "dňa 22.",
+ * "zo 22.", "od 22.", "do 22." (Slovak, Czech and Polish). A bare number
+ * ("v bode 22.") is not a day: the next line may open the next point.
+ */
+const DAY_END_RE =
+  /(?:^|\s)(?:dňa|dna|dne|dnia|od|do|zo|ze|z|k|ku)\s+(?:0?[1-9]|[12]\d|3[01])\.$/iu;
+/** A month and a year opening a line: "10. 2003". */
+const MONTH_YEAR_START_RE = /^(?:0?[1-9]|1[0-2])\.\s?\d{4}\b/u;
+
+/**
+ * A numeric date the wrapper split after its day ("dňa 22." / "10. 2003"):
+ * the month opens the next line like a numbered point would, but a point is
+ * not introduced by "dňa" and followed by a year.
+ */
+export const splitsDate = (previous: string, next: string): boolean =>
+  DAY_END_RE.test(previous) && MONTH_YEAR_START_RE.test(next);
 
 const startsStructurally = (line: string): boolean =>
   !NUMERIC_DATE_START_RE.test(line) &&
@@ -254,17 +275,23 @@ const startsStructurally = (line: string): boolean =>
  *   sentence-final punctuation, or the next starts lowercase, or the
  *   previous ends with a short abbreviation ("č.", "odst.") and the next
  *   with a digit, or with an academic title ("JUDr.") and the next with a
- *   letter.
+ *   letter, or the previous ends with a day number and the next opens with
+ *   the month and year of that date.
+ * A line opening with an academic title ("JUDr. A. B.") inside a sentence
+ * continues it like any other capitalised word: only a line the author
+ * ended (short of the column, or after a full stop) puts a signature on a
+ * line of its own.
  * A letter-hyphen line end followed by a letter joins without a space and
  * keeps the hyphen.
  */
 const joinAt = (previous: string, next: string, width: number): LineJoin => {
+  const dateGoesOn = splitsDate(previous, next);
   if (
     previous.length > width ||
     next.length > width ||
     isHeadingLike(previous, width) ||
     isHeadingLike(next, width) ||
-    startsStructurally(next)
+    (!dateGoesOn && startsStructurally(next))
   ) {
     return LINE_JOIN.BREAK;
   }
@@ -289,11 +316,29 @@ const joinAt = (previous: string, next: string, width: number): LineJoin => {
     return LINE_JOIN.HYPHEN;
   }
   const continues =
+    dateGoesOn ||
     isMidSentence(previous, next) ||
     (ABBREVIATION_END_RE.test(previous) && DIGIT_START_RE.test(next)) ||
     (TITLE_END_RE.test(previous) && LETTER_START_RE.test(next));
   return continues ? LINE_JOIN.SPACE : LINE_JOIN.BREAK;
 };
+
+/**
+ * How `next` follows `previous`, two adjacent lines of a document
+ * `classifyLineWrap` read: a break unless the document is fixed-width
+ * wrapped and the wrapper, not the author, ended `previous` (see `joinAt`).
+ * A null or blank line always breaks.
+ */
+export const lineJoinOf = (
+  classification: LineWrapClassification,
+  previous: WrapLine,
+  next: WrapLine,
+): LineJoin =>
+  classification.type === LINE_WRAP_TYPE.UNWRAPPED ||
+  isBlank(previous) ||
+  isBlank(next)
+    ? LINE_JOIN.BREAK
+    : joinAt(previous, next, classification.width);
 
 /**
  * The display plan for a sequence of lines: every boundary a break unless
@@ -304,14 +349,12 @@ export const planLineWrap = (lines: readonly WrapLine[]): LineWrapPlan => {
   const classification = classifyLineWrap(lines);
   const joins: LineJoin[] = [];
   for (let index = 0; index + 1 < lines.length; index += 1) {
-    const previous = lines[index] ?? null;
-    const next = lines[index + 1] ?? null;
     joins.push(
-      classification.type === LINE_WRAP_TYPE.UNWRAPPED ||
-        isBlank(previous) ||
-        isBlank(next)
-        ? LINE_JOIN.BREAK
-        : joinAt(previous, next, classification.width),
+      lineJoinOf(
+        classification,
+        lines[index] ?? null,
+        lines[index + 1] ?? null,
+      ),
     );
   }
   return { classification, joins };
@@ -338,6 +381,7 @@ const WRAP_ROLE_DISPOSITION = {
   parties: "fixed",
   "front-matter": "fixed",
   apparatus: "fixed",
+  "publisher-note": "fixed",
   syllabus: "fixed",
   headnotes: "fixed",
   summary: "fixed",

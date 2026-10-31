@@ -7,8 +7,8 @@ import { useTranslations } from "use-intl";
 
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { DAY_IN_MS, Temporal } from "@stll/time";
-import { BidiText } from "@stll/ui/bidi-text";
 import { FileIcon } from "@stll/ui/icons";
+import { IdentityText } from "@stll/ui/identity-text";
 import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   PreviewCard,
@@ -27,8 +27,8 @@ import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { draggable } from "@/lib/drag-and-drop/element-registration";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
+import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { useQueryView } from "@/lib/use-query-view";
 import { overviewOptions } from "@/lib/workspaces/queries";
 import type { Workspace } from "@/lib/workspaces/types";
 import { toMatterCardDragData } from "@/routes/_protected.workspaces/-components/matter-client-drop.logic";
@@ -70,7 +70,7 @@ export const MatterCard = ({
     ...overviewOptions(workspace.id),
     enabled: previewEnabled,
   });
-  const previewView = useQueryView(previewQuery);
+  const previewView = queryView(previewQuery);
   const preview = previewView.type === "items" ? previewView.items : undefined;
 
   const hasPreviewContent =
@@ -178,7 +178,7 @@ export const MatterCard = ({
                     params={{ workspaceId: workspace.id }}
                     to="/workspaces/$workspaceId"
                   >
-                    {workspace.name}
+                    <IdentityText>{workspace.name}</IdentityText>
                   </Link>
                 )}
               </h2>
@@ -205,7 +205,7 @@ export const MatterCard = ({
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
                 >
-                  <BidiText>{workspace.client.displayName}</BidiText>
+                  <IdentityText>{workspace.client.displayName}</IdentityText>
                 </Link>
               ) : (
                 <span className="text-muted-foreground -mt-1 truncate text-xs italic">
@@ -386,7 +386,7 @@ const PreviewPopupContent = ({
             ) : (
               <FileIcon className="text-muted-foreground size-3.5 shrink-0" />
             )}
-            <span className="min-w-0 flex-1 truncate">{entity.name}</span>
+            <IdentityText className="flex-1">{entity.name}</IdentityText>
             {entity.updatedAt && (
               <Tooltip
                 content={formatFullTimestamp(entity.updatedAt)}
