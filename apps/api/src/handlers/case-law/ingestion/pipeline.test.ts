@@ -36,12 +36,6 @@ import {
   caseLawSources,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  EMPTY_AST,
-  PUBLISHER_REQUEST,
-  SOURCE_DOCUMENT_ID_MAX_LENGTH,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import {
@@ -85,9 +79,15 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import { defineSourceAdapter } from "@/api/lib/legal-search/ingestion-types";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionJudgeInput,
+  IngestionResult,
   RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
@@ -205,7 +205,7 @@ describe("publisher document role persistence", () => {
           publisherField: "REASONS",
         },
       };
-      const stored = sanitizeResult(input);
+      const stored = sanitizeResult(input).unwrap();
       expect(
         stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY] === documentRole,
       ).toBe(true);
@@ -221,7 +221,7 @@ describe("publisher document role persistence", () => {
         sanitizeResult({
           ...stored,
           ...splitStoredDecisionTextMetadata(stored.metadata),
-        }),
+        }).unwrap(),
       ).toEqual(stored);
     },
   );
@@ -234,7 +234,7 @@ describe("publisher document role persistence", () => {
         [DECISION_DOCUMENT_ROLE_METADATA_KEY]: DECISION_DOCUMENT_ROLE.RULING,
       },
     };
-    const stored = sanitizeResult(input);
+    const stored = sanitizeResult(input).unwrap();
     expect(stored.documentRole).toBeUndefined();
     expect(
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
@@ -244,7 +244,7 @@ describe("publisher document role persistence", () => {
       sanitizeResult({
         ...stored,
         ...splitStoredDecisionTextMetadata(stored.metadata),
-      }),
+      }).unwrap(),
     ).toEqual(stored);
   });
 });
@@ -257,7 +257,7 @@ describe("sanitizeResult — decision text fields", () => {
         ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
         summary: presentTextField("Published summary"),
       },
-    });
+    }).unwrap();
 
     expect(sanitized.metadata["summary"] === "Published summary").toBe(true);
     expect(
@@ -276,7 +276,7 @@ describe("sanitizeResult — decision text fields", () => {
           ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
           summary: absentTextField(reason),
         },
-      });
+      }).unwrap();
 
       expect(sanitized.metadata["summary"]).toBeUndefined();
       expect(
@@ -302,7 +302,7 @@ describe("sanitizeResult — adapter-supplied sections", () => {
           text: "Text\u0000with\u200Bcontrol\uFEFFchars.",
         },
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sections?.at(0)?.title).toBe("Vyrok");
     expect(sanitized.sections?.at(0)?.text).toBe("Textwithcontrolchars.");
@@ -312,7 +312,7 @@ describe("sanitizeResult — adapter-supplied sections", () => {
     const sanitized = sanitizeResult({
       ...baseResult(EMPTY_AST),
       sections: [{ index: 0, type: "ruling", title: null, text: "Text." }],
-    });
+    }).unwrap();
 
     expect(sanitized.sections?.at(0)?.title).toBeNull();
   });
@@ -328,7 +328,7 @@ describe("sanitizeResult — decision identifiers", () => {
           value: "12 Test Reporter 34",
         },
       ],
-    });
+    }).unwrap();
 
     expect(
       decisionIdentifiersFromStoredMetadata({
@@ -373,7 +373,7 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumber,
       removed: raw.slice(raw.indexOf(caseNumber) + caseNumber.length),
     });
-    const sanitized = sanitizeResult(input);
+    const sanitized = sanitizeResult(input).unwrap();
     expect(sanitized.caseNumber === caseNumber).toBe(true);
     expect(sanitized.metadata["caseNumber"] === raw).toBe(true);
   });
@@ -384,7 +384,9 @@ describe("sanitizeResult — docket grammar", () => {
     ["a docket as written", "33 Cdo 1751/2023"],
   ])("the stored reference of %s is the one the write stores", (_, raw) => {
     const input = observed("CZE", raw);
-    expect(storedCaseNumberOf(input)).toBe(sanitizeResult(input).caseNumber);
+    expect(storedCaseNumberOf(input)).toBe(
+      sanitizeResult(input).unwrap().caseNumber,
+    );
   });
 
   test("a docket keyed row keeps its tail and is reported unkeyed", () => {
@@ -397,9 +399,9 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumber: "33 Cdo 1751/2023",
       removed: "- II.",
     });
-    expect(sanitizeResult(input).caseNumber === "33 Cdo 1751/2023- II.").toBe(
-      true,
-    );
+    expect(
+      sanitizeResult(input).unwrap().caseNumber === "33 Cdo 1751/2023- II.",
+    ).toBe(true);
   });
 
   test.each<[string, string, ObservedDocket["type"]]>([
@@ -410,7 +412,7 @@ describe("sanitizeResult — docket grammar", () => {
   ])("%s: %s is stored as written (%s)", (country, raw, type) => {
     const input = observed(country, raw);
     expect(observedDocketOf(input).type).toBe(type);
-    expect(sanitizeResult(input).caseNumber === raw).toBe(true);
+    expect(sanitizeResult(input).unwrap().caseNumber === raw).toBe(true);
   });
 
   test("a placeholder docket is never read against the grammar", () => {
@@ -430,7 +432,9 @@ describe("sanitizeResult — docket grammar", () => {
       caseNumberType: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     });
     expect(observedDocketOf(input)).toEqual({ type: "kept" });
-    expect(sanitizeResult(input).caseNumber === "347 U.S. 483.").toBe(true);
+    expect(sanitizeResult(input).unwrap().caseNumber === "347 U.S. 483.").toBe(
+      true,
+    );
   });
 });
 
@@ -444,14 +448,14 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2944-04-30",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
 
     expect(
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "0001-01-01",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
   });
 
@@ -460,7 +464,7 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-02-30",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBeUndefined();
   });
 
@@ -469,19 +473,21 @@ describe("sanitizeResult — decision date bounds", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-04-15",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBe("2026-04-15");
 
     expect(
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         decisionDate: "2026-04-15T00:00:00Z",
-      }).decisionDate,
+      }).unwrap().decisionDate,
     ).toBe("2026-04-15");
   });
 
   test("leaves an absent date absent", () => {
-    expect(sanitizeResult(baseResult(EMPTY_AST)).decisionDate).toBeUndefined();
+    expect(
+      sanitizeResult(baseResult(EMPTY_AST)).unwrap().decisionDate,
+    ).toBeUndefined();
   });
 });
 
@@ -490,7 +496,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
     const refused = sanitizeResult({
       ...baseResult(EMPTY_AST),
       observationDetail: "secondary-refused",
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(refused.metadata)).toEqual({
       caseNumberIsPlaceholder: false,
       detail: "secondary-refused",
@@ -508,7 +514,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
       ...baseResult(EMPTY_AST),
       caseNumberIsPlaceholder: true,
       isListingOnly: true,
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(partial.metadata)).toEqual({
       caseNumberIsPlaceholder: true,
       detail: "listing-only",
@@ -520,7 +526,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
       observationDetail: "complete",
-    });
+    }).unwrap();
     expect(partialObservationFromMetadata(recovered.metadata)).toEqual({
       caseNumberIsPlaceholder: false,
       detail: "complete",
@@ -541,7 +547,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:repair",
         "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:fallback"]);
     expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
@@ -554,7 +560,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-      }),
+      }).unwrap(),
     ).toThrow("Publisher document identity exceeds storage limits");
   });
 
@@ -567,7 +573,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
         "publisher:repair\u200Bchanged",
         "publisher:repair-clean",
       ],
-    });
+    }).unwrap();
 
     expect(sanitized.sourceDocumentIdAliases).toEqual(["publisher:ab"]);
     expect(sanitized.sourceDocumentIdRepairAliases).toEqual([
@@ -580,7 +586,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
       sanitizeResult({
         ...baseResult(EMPTY_AST),
         sourceDocumentId: "publisher:a\u200Bb",
-      }),
+      }).unwrap(),
     ).toThrow("Publisher document identity cannot be sanitized");
   });
 
@@ -605,7 +611,7 @@ describe("sanitizeResult — shared publisher identity limits", () => {
   ])("parks as an unpersistable %s, not a TypeError", (field, overrides) => {
     const thrown = ((): unknown => {
       try {
-        sanitizeResult({ ...baseResult(EMPTY_AST), ...overrides });
+        sanitizeResult({ ...baseResult(EMPTY_AST), ...overrides }).unwrap();
         return undefined;
       } catch (error: unknown) {
         return error;
@@ -675,7 +681,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -718,7 +724,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       writable: true,
     });
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -770,7 +776,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -812,7 +818,7 @@ describe("sanitizeResult — documentAst text fields", () => {
       ],
     };
 
-    const sanitized = sanitizeResult(baseResult(ast));
+    const sanitized = sanitizeResult(baseResult(ast)).unwrap();
     if (!("blocks" in sanitized.documentAst)) {
       throw new Error("sanitized documentAst should be a DocumentAst");
     }
@@ -1840,23 +1846,27 @@ describe("processDecision — corpus storage off", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/1/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/1/2026",
+          court: "Test Court",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     expect(outcome.inserted).toBe(true);
     expect(updated).toMatchObject({
@@ -1943,23 +1953,25 @@ describe("processDecision — the decision's judges", () => {
       }
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        ...baseResult(EMPTY_AST),
-        fulltext: "Ústavní soud rozhodl o návrhu.",
-        ...(judges === undefined ? {} : { judges }),
-      }),
-      judges: {
-        replace: async (_tx, { decisionId, judges: written }) => {
-          replaced.push({ decisionId, judges: written, inTransaction });
-          await Promise.resolve();
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          ...baseResult(EMPTY_AST),
+          fulltext: "Ústavní soud rozhodl o návrhu.",
+          ...(judges === undefined ? {} : { judges }),
+        }),
+        judges: {
+          replace: async (_tx, { decisionId, judges: written }) => {
+            replaced.push({ decisionId, judges: written, inTransaction });
+            await Promise.resolve();
+          },
         },
-      },
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     return replaced;
   };
@@ -2091,24 +2103,26 @@ describe("processDecision — fields on an existing row", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/1/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        decisionDate,
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields,
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-07-31T12:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/1/2026",
+          court: "Test Court",
+          country: "SVK",
+          language: "sk",
+          decisionDate,
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields,
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      })
+    ).unwrap();
 
     return updated;
   };
@@ -2232,24 +2246,28 @@ describe("processDecision — source raw upload failure", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    const outcome = await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/2/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-        sourceRaw,
-      }),
-      observationOrder: 1n,
-      sourceId,
-      scopedDb,
-      observedAt: new Date("2026-08-03T00:00:00.000Z"),
-    });
+    const outcome = (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/2/2026",
+          court: "Test Court",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+          sourceRaw,
+        }),
+        observationOrder: 1n,
+        sourceId,
+        scopedDb,
+        observedAt: new Date("2026-08-03T00:00:00.000Z"),
+      })
+    ).unwrap();
 
     if (outcome.status !== "retryable") {
       throw new Error(`expected a retryable outcome, got ${outcome.status}`);
@@ -2318,24 +2336,28 @@ describe("processDecision — source raw upload failure", () => {
       return await callback(tx as unknown as Transaction);
     };
 
-    await processDecision({
-      input: plainTextIngestionResult({
-        caseNumber: "X/3/2026",
-        court: "Test Court",
-        country: "SVK",
-        language: "sk",
-        fulltext: "Rozhodnutie o veci samej.",
-        metadata: {},
-        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-        rawHash: "new-hash",
-        documentAst: EMPTY_AST,
-        sourceRaw: "<html></html>",
-      }),
-      observationOrder: 1n,
-      sourceId: createSafeId<"caseLawSource">(),
-      scopedDb,
-      observedAt: new Date("2026-08-05T00:00:00.000Z"),
-    });
+    (
+      await processDecision({
+        input: plainTextIngestionResult({
+          caseNumber: "X/3/2026",
+          court: "Test Court",
+          country: "SVK",
+          language: "sk",
+          fulltext: "Rozhodnutie o veci samej.",
+          metadata: {},
+          textFields: absentDecisionTextFields(
+            TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+          ),
+          rawHash: "new-hash",
+          documentAst: EMPTY_AST,
+          sourceRaw: "<html></html>",
+        }),
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-08-05T00:00:00.000Z"),
+      })
+    ).unwrap();
 
     const failure = logs.at("ERROR").at(0);
     expect(failure?.attributes?.["error.code"]).toBe("AccessDenied");

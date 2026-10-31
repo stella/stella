@@ -11,7 +11,9 @@ import {
   resolveDocumentAnchor,
 } from "@stll/legal-ast/document-ast";
 import { provisionBlocks } from "@stll/legal-ast/provision-preview";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { Skeleton } from "@stll/ui/skeleton";
+import { cn } from "@stll/ui/utils";
 
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -104,7 +106,10 @@ export const ProvisionWording = ({
   return (
     <SourceLinkPolicyProvider urls={[statute.documentUrl, statute.sourceUrl]}>
       <article
-        className="reader-paper reader-statute text-card-foreground text-start"
+        className={cn(
+          LEGAL_TEXT_CLASS_NAME,
+          "reader-paper reader-statute text-card-foreground text-start",
+        )}
         lang={statute.language}
         ref={containerRef}
         style={READER_STYLE}

@@ -189,8 +189,9 @@ const createEditionReads = ({
 
 /**
  * Loads editions into the matcher one at a time in the background, apart from
- * request deadlines: a slow edition finishes, and each loaded one stays loaded
- * and keeps screening while another loads or fails.
+ * request deadlines: a slow edition finishes and each loaded one stays loaded.
+ * Loaded lists keep screening during database reads; requests answer `warming`
+ * while an indexing lease holds the matcher.
  */
 const createEditionWarmer = ({
   pool,
@@ -200,13 +201,13 @@ const createEditionWarmer = ({
 }: Required<PublicScreeningOptions>) => {
   const { now } = clock;
   const targets = new Map<SanctionsSource, WarmTarget>();
+  const durations = new Map<SanctionsSource, number>();
   const state = initialEditionWarmerState();
   const detached = createDetached((error) => {
     reportFailure({ stage: "public-warmup", reason: "operation", error });
   });
   const readEdition = createEditionReads({ loadEntries, clock });
-  // The read runs outside any lease: loaded lists keep screening meanwhile.
-  // Only the transfer and index hold the matcher.
+  // Database reads run outside matcher leases so loaded lists keep screening.
   const warm = async (
     db: SanctionsReadDb,
     source: SanctionsSource,
@@ -232,6 +233,8 @@ const createEditionWarmer = ({
         value: Result.err({ reason: "short-read" }),
       };
     }
+    // The database read runs outside a matcher lease, so loaded editions keep
+    // screening while this edition is fetched.
     state.holdsMatcher = true;
     try {
       return await pool.run(
@@ -254,10 +257,12 @@ const createEditionWarmer = ({
           if (indexed !== "indexed") {
             return Result.err({ reason: "matcher-unavailable" });
           }
+          const durationMs = Math.round(now() - startedAt);
+          durations.set(source, durationMs);
           logger.info("sanctions.edition_warmed", {
             source,
             entries: edition.entryCount,
-            durationMs: Math.round(now() - startedAt),
+            durationMs,
           });
           return Result.ok(undefined);
         },
@@ -328,8 +333,9 @@ const createEditionWarmer = ({
   };
 
   return {
-    /** The warmup is indexing an edition; the matcher answers nothing else. */
+    /** A warm lease is active; requests bypass the matcher until it ends. */
     holdsMatcher: () => state.holdsMatcher,
+    durations: () => Object.fromEntries(durations),
     /** Like `want`, without asking for the edition: a request that cannot check it. */
     status: (
       source: SanctionsSource,
@@ -555,6 +561,7 @@ export const createPublicSanctionsScreening = ({
   };
   return Object.assign(screenPublic, {
     warmupSettled: warmer.settled,
+    warmupDurations: warmer.durations,
     warmupStartupState: warmer.startupState,
     warmupTerminalize: warmer.terminalize,
     /** Test seam: ask for an edition the way a request does, synchronously. */

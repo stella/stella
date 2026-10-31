@@ -4,10 +4,6 @@ import JSZip from "jszip";
 import { writeZipEntry } from "@stll/docx-utils";
 
 import {
-  decodeSourceRawEnvelope,
-  PUBLISHER_REQUEST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assembleAtFindokDecision,
   atFindokNextSlice,
   atFindokPreviousSlice,
@@ -16,6 +12,10 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/lib/legal-search/ingestion-types";
 
 import { PublisherPageError } from "./publisher-page";
 

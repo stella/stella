@@ -1,5 +1,37 @@
 # @stll/workspace-ui
 
+## 0.15.0
+
+### Minor Changes
+
+- [#7347](https://github.com/stella/stella/pull/7347) [`d75e2c0`](https://github.com/stella/stella/commit/d75e2c0cca2ee7a0e9411a2a8754a046110cdad7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add nonfocusable context-menu anchors and full-name disclosure for clipped identity text. Preserve nested sidebar action boundaries and give sort controls a dedicated accessible label contract.
+
+### Patch Changes
+
+- Updated dependencies [[`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05), [`d75e2c0`](https://github.com/stella/stella/commit/d75e2c0cca2ee7a0e9411a2a8754a046110cdad7), [`e2e9d3d`](https://github.com/stella/stella/commit/e2e9d3d9718707b190c09db77c63f1c9ee9136a8)]:
+  - @stll/ui@0.58.0
+
+## 0.14.4
+
+### Patch Changes
+
+- Updated dependencies [[`414be5f`](https://github.com/stella/stella/commit/414be5f89e3e8e8b8c2b53cc91e8417329418f4f)]:
+  - @stll/ui@0.57.0
+
+## 0.14.3
+
+### Patch Changes
+
+- Updated dependencies [[`5f8488b`](https://github.com/stella/stella/commit/5f8488bae2460f50d2be4f5023849d65bdb27f1e), [`5cd5fc7`](https://github.com/stella/stella/commit/5cd5fc79a4bd906e988f470b2ce47dd94f52e103), [`cd9dee0`](https://github.com/stella/stella/commit/cd9dee042a40d9994f2a1bc909631f67b161935d), [`ac83ccd`](https://github.com/stella/stella/commit/ac83ccdf2a88f07a256c125556577059e39a93a5), [`58dfdd9`](https://github.com/stella/stella/commit/58dfdd95556ac4cd2a8b4ea8fb7255f465077564), [`d40c675`](https://github.com/stella/stella/commit/d40c675550c00678dd3763c2a0a6faf953276377), [`43aa0c5`](https://github.com/stella/stella/commit/43aa0c584bf62fc2805627eb6ae8dfb39395051d), [`de3dbc9`](https://github.com/stella/stella/commit/de3dbc9c40e2cd37da7a2fe7251009ad64340f20)]:
+  - @stll/ui@0.56.0
+
+## 0.14.2
+
+### Patch Changes
+
+- Updated dependencies [[`9c0ea0e`](https://github.com/stella/stella/commit/9c0ea0e95c1e9f9edc9ffaa84cb18e4c43a85d8b), [`df53905`](https://github.com/stella/stella/commit/df5390529e1e6bc783d2e442b57bb959ad8acadd), [`b1db339`](https://github.com/stella/stella/commit/b1db33914f1bd2cb04d1760ffd8ff1a222c806c2), [`5e31c64`](https://github.com/stella/stella/commit/5e31c6433b4bf3400ebb7d137d137e81e419b236), [`cd78348`](https://github.com/stella/stella/commit/cd7834897fba75056fa30f8351ccc42dd46a16a0)]:
+  - @stll/ui@0.55.0
+
 ## 0.14.1
 
 ### Patch Changes

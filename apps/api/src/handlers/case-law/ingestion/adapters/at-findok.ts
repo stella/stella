@@ -1,6 +1,7 @@
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
@@ -14,30 +15,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  PUBLISHER_REQUEST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  sourceTotalRead,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  SyncPage,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
@@ -68,8 +45,33 @@ import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  sourceTotalRead,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+} from "@/api/lib/legal-search/ingestion-types";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -940,6 +942,19 @@ export const assembleAtFindokDecision = (
     return buildListingOnly(payload, "detail-xml-unparseable", documentXml);
   }
   const parsed = parseResult.value;
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: ADAPTER_KEYS.AT_FINDOK,
+      caseNumber: item.gz,
+      language: LANGUAGE,
+      url: artifactUrl(item.pathPdf),
+      codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
+    });
+  }
   const headnotes =
     headnoteXml === undefined ? undefined : parseFindokHeadnoteXml(headnoteXml);
   return plainTextIngestionResult({
@@ -983,6 +998,7 @@ export const assembleAtFindokDecision = (
       headnoteNumbers: headnotes?.headnoteNumbers,
       headnoteStatutes: headnotes?.statutes,
       sourceAttribution: "Findok, Austrian Federal Ministry of Finance, CC0",
+      textFidelity: parsed.textFidelity,
     },
     rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,

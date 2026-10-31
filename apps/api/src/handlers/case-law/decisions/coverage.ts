@@ -42,12 +42,16 @@ import {
   readCaseLawCourtActivityQuery,
   readCaseLawCourtCountQuery,
 } from "@/api/handlers/case-law/decisions/status-courts";
-import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
+import { coverageSnapshotSchema } from "@/api/handlers/case-law/public-response-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  type CaseLawCoverageFreshness,
+  caseLawCoverageFreshness,
+} from "@/api/lib/case-law/coverage-freshness";
 import {
   readProvisionPendingCounts,
   unavailableProvisionPendingCounts,
@@ -336,17 +340,27 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
             SELECT f.value AS court, f.total AS decisions
-            FROM ${caseLawBrowseFacetCounts} AS f
-            WHERE f.kind = 'court' AND f.source_id = case_law_sources.id
+            FROM LATERAL (
+              SELECT source_facets.value, source_facets.total
+              FROM ${caseLawBrowseFacetCounts} AS source_facets
+              WHERE source_facets.source_id = case_law_sources.id
+                AND source_facets.kind = 'court'
+              ORDER BY source_facets.value, source_facets.total
+            ) AS f
             UNION ALL
             SELECT d.court, 1 AS decisions
             FROM ${publishedCaseLawDecisions} AS d
             WHERE d.source_id = case_law_sources.id
               AND NOT EXISTS (
-                SELECT 1 FROM ${caseLawBrowseFacetCounts} AS source_facets
-                WHERE source_facets.kind = 'court'
-                  AND source_facets.source_id = case_law_sources.id
-                LIMIT 1
+                SELECT 1
+                FROM LATERAL (
+                  SELECT source_facets.value
+                  FROM ${caseLawBrowseFacetCounts} AS source_facets
+                  WHERE source_facets.source_id = case_law_sources.id
+                    AND source_facets.kind = 'court'
+                  ORDER BY source_facets.value
+                  LIMIT 1
+                ) AS source_facets
               )
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
@@ -738,13 +752,39 @@ export const loadCaseLawCoverage = async ({
   });
 };
 
+/** The answer the scheduler computes and stores. */
+type CaseLawCoverageSnapshot = CaseLawCoverage & {
+  provisionProcessing: Awaited<ReturnType<typeof readProvisionPendingCounts>>;
+};
+
+type CaseLawCoverageUnavailable = { message: string };
+
 type CaseLawCoverageAnswer =
-  | (CaseLawCoverage & {
-      provisionProcessing: Awaited<
-        ReturnType<typeof readProvisionPendingCounts>
-      >;
-    })
-  | { message: string };
+  CaseLawCoverageSnapshot | CaseLawCoverageUnavailable;
+
+const COVERAGE_UNAVAILABLE = {
+  message: "Coverage is unavailable",
+} as const satisfies CaseLawCoverageUnavailable;
+
+/**
+ * The stored answer as the versioned summary function serves it: refused
+ * (null) while it counts a source that is no longer redistributable,
+ * otherwise returned with whether it was computed under the redistribution
+ * policy now in force. The original function stays for releases still
+ * rolling out, which parse its result as the bare answer.
+ */
+const storedCoverageSchema = v.object({
+  answer: coverageSnapshotSchema,
+  policyCurrent: v.boolean(),
+});
+
+type StoredCaseLawCoverage =
+  v.InferOutput<typeof storedCoverageSchema> | CaseLawCoverageUnavailable;
+
+/** What a reader receives: the stored figures and how fresh they are. */
+type CaseLawCoverageResponse =
+  | (CaseLawCoverageSnapshot & { freshness: CaseLawCoverageFreshness })
+  | CaseLawCoverageUnavailable;
 
 /**
  * One computed answer and whether every part of it was read. `complete` is
@@ -759,29 +799,51 @@ export type CaseLawCoverageComputation = {
 /** One bounded snapshot read; policy revocation is enforced inside the SQL function. */
 export const readCaseLawCoverageSummaryQuery = definePublicLawSharedQuery(
   PUBLIC_LAW_SHARED_QUERY.caseLawCoverageSummary,
-  async (tx: CaseLawPublicReadTransaction): Promise<CaseLawCoverageAnswer> => {
+  async (tx: CaseLawPublicReadTransaction): Promise<StoredCaseLawCoverage> => {
     const row = executedRows(
       await tx.execute(
-        sql`SELECT public.stella_case_law_coverage_summary() AS answer`,
+        sql`SELECT public.stella_case_law_coverage_summary_v2() AS summary`,
       ),
     ).at(0);
-    if (!isRecord(row) || row["answer"] === null) {
-      return { message: "Coverage is unavailable" };
+    if (!isRecord(row) || row["summary"] === null) {
+      return COVERAGE_UNAVAILABLE;
     }
-    const parsed = v.safeParse(coverageResponseSchema, row["answer"]);
+    const parsed = v.safeParse(storedCoverageSchema, row["summary"]);
     if (!parsed.success) {
       logger.warn("case_law.coverage.summary_invalid");
-      return { message: "Coverage is unavailable" };
+      return COVERAGE_UNAVAILABLE;
     }
     return parsed.output;
   },
 );
 
-/** Cold replicas read the same stored answer; requests never rebuild the corpus summary. */
+/**
+ * Cold replicas read the same stored answer; requests never rebuild the
+ * corpus summary. The last answer the policy still permits is served with its
+ * age, so a refresh that has not landed yet reads as pending, not as absent.
+ */
 export const readCaseLawCoverageHandler = async (
   caseLawDb: CaseLawPublicReadDb,
-): Promise<CaseLawCoverageAnswer> =>
-  await caseLawDb(readCaseLawCoverageSummaryQuery);
+  now: Date = new Date(),
+): Promise<CaseLawCoverageResponse> => {
+  const stored = await caseLawDb(readCaseLawCoverageSummaryQuery);
+  if ("message" in stored) {
+    return stored;
+  }
+  const generatedAt = new Date(stored.answer.generatedAt);
+  if (Number.isNaN(generatedAt.getTime())) {
+    logger.warn("case_law.coverage.summary_invalid");
+    return COVERAGE_UNAVAILABLE;
+  }
+  return {
+    ...stored.answer,
+    freshness: caseLawCoverageFreshness({
+      generatedAt,
+      now,
+      policyCurrent: stored.policyCurrent,
+    }),
+  };
+};
 
 type CoverageAssembly = {
   load: Omit<CoverageLoad, "onPartialFailure">;
@@ -813,10 +875,7 @@ export const assembleCaseLawCoverageAnswer = async ({
     logger.warn("case_law.coverage.unavailable", {
       "error.type": errorTag(result.error),
     });
-    return {
-      answer: { message: "Coverage is unavailable" },
-      complete: false,
-    };
+    return { answer: COVERAGE_UNAVAILABLE, complete: false };
   }
 
   const provisionProcessing = await Result.tryPromise({
@@ -929,7 +988,7 @@ export const computeCaseLawCoverageAnswer = async (
     return computation;
   }
   return {
-    answer: projectResponseText(computation.answer, coverageResponseSchema),
+    answer: projectResponseText(computation.answer, coverageSnapshotSchema),
     complete: true,
   };
 };

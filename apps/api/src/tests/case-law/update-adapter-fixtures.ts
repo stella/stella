@@ -17,12 +17,12 @@ import { Temporal } from "@stll/time";
  *   bun run apps/api/src/tests/case-law/update-adapter-fixtures.ts --adapter sk-courts
  */
 
-import type { SyncPage } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   listAdapterKeys,
   loadAdapterByKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry-lazy";
 import { encodeGzipJson } from "@/api/lib/gzip-json";
+import type { SyncPage } from "@/api/lib/legal-search/ingestion-types";
 import {
   formatProvenance,
   provenancePathOf,

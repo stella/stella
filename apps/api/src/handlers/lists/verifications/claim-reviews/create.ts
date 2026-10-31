@@ -72,6 +72,7 @@ const bodySchema = v.object({
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   featureAccess: { featureId: LIST_VERIFICATION_FEATURE_ID, type: "required" },
   description:
     "Record one reviewer action on a claim of a list verification and return " +

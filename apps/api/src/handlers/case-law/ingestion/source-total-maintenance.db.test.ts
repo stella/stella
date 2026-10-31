@@ -29,6 +29,7 @@ import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import { installPgliteDecisionDocketFilingYear } from "@/api/tests/pglite-schema";
 
 import { czNsAdapter } from "./adapters/cz-ns";
 import { runIngestionPipeline } from "./pipeline";
@@ -49,6 +50,8 @@ const installCorpusTables = async (
   sourceDatabaseUrl: string,
 ) => {
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
+  // Generated coverage indexes depend on this committed immutable function.
+  await installPgliteDecisionDocketFilingYear(db);
   const { generateDrizzleJson, generateMigration } =
     await import("drizzle-kit/api-postgres");
   const empty = await generateDrizzleJson({});

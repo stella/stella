@@ -9,6 +9,7 @@ import { apiRoutes } from "@/api/api-routes";
 import { readRootPoolReport } from "@/api/db/root";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import { startFeatureAccessGrantsRefresh } from "@/api/env-feature-access";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
@@ -203,6 +204,8 @@ const startServer = async (): Promise<void> => {
   }
 
   startMemoryPressureHandler();
+  const stopFeatureAccessGrantsRefresh =
+    await startFeatureAccessGrantsRefresh();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
   // first, before any awaited setup below, so its connection timing
@@ -280,6 +283,7 @@ const startServer = async (): Promise<void> => {
     logger.info("api.shutdown_started", { signal });
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: async () => {
+        await stopFeatureAccessGrantsRefresh?.();
         await backgroundWorkers.close();
       },
       closeManagedProviderChecks,

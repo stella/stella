@@ -547,6 +547,14 @@
     },
     "approve": "اعتماد",
     "approveSelected": "اعتماد المحدد",
+    "arrangement": {
+      "alertThreshold": "حد التنبيه (%)",
+      "amountCap": "الحد الأقصى للأتعاب",
+      "flatFee": "أتعاب ثابتة",
+      "invalidCap": "أدخل حدودًا موجبة وحد تنبيه بين 0.01% و100%.",
+      "minuteCap": "الحد الزمني (بالدقائق)",
+      "title": "اتفاق الأتعاب"
+    },
     "batchActions": "إجراءات جماعية",
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
@@ -806,8 +814,10 @@
       "deleteRateTable": "حذف جدول الأسعار",
       "editRateTable": "تعديل جدول الأسعار",
       "effectiveFrom": "ساري من",
+      "effectiveRateRequired": "لا يوجد سعر سارٍ لهذا الملف القانوني وهذا الشخص وهذا التاريخ. أضف سعرًا أو سجّل الوقت كغير قابل للفوترة.",
       "effectiveTo": "ساري حتى",
       "hourlyRate": "السعر بالساعة",
+      "logNonBillable": "تسجيل كغير قابل للفوترة",
       "noRateEntries": "لا توجد إدخالات أسعار بعد",
       "noRateFound": "لم يُضبط أي سعر",
       "noRateTables": "لا توجد جداول أسعار بعد",
@@ -933,12 +943,16 @@
         "reasoning": "التسبيب"
       },
       "errors": {
+        "analysisDisabled": "إنشاء التحليل بالذكاء الاصطناعي معطل على هذا الخادم. اقرأ نص الحكم أو حاول لاحقًا.",
         "answerIncomplete": "{source, select, organization {أعاد مفتاح {provider} الخاص بمؤسستك إجابة غير مكتملة.} other {أعاد نموذج الذكاء الاصطناعي إجابة غير مكتملة.}}",
+        "decisionNotFound": "تعذر العثور على هذا الحكم. افتحه مجددًا من البحث.",
+        "documentUnparseable": "نص الحكم غير جاهز للتحليل. اقرأ المصدر الأصلي.",
+        "languageUnsupported": "لا يدعم التحليل بالذكاء الاصطناعي لغة هذا الحكم بعد. اقرأ نص الحكم أو المصدر الأصلي.",
         "providerRefused": "{source, select, organization {رفض {provider} الطلب المُرسل بمفتاح مؤسستك. تحقّق من المفتاح وحصّته والفوترة في إعدادات المؤسسة.} other {رفض مزوّد الذكاء الاصطناعي الطلب.}}",
         "providerUnavailable": "{source, select, organization {{provider} غير متاح حالياً لمفتاح مؤسستك.} other {مزوّد الذكاء الاصطناعي غير متاح حالياً.}}",
         "retryAfter": "يمكنك المحاولة مرة أخرى بعد {time}.",
-        "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}",
-        "unavailable": "تحليل الذكاء الاصطناعي غير متاح لهذا الحكم."
+        "sourceRestricted": "لا يسمح المصدر بالتحليل بالذكاء الاصطناعي. اقرأ نص الحكم أو المصدر الأصلي.",
+        "timedOut": "{source, select, organization {لم يُجب {provider} في الوقت المحدد باستخدام مفتاح مؤسستك.} other {لم يُجب نموذج الذكاء الاصطناعي في الوقت المحدد.}}"
       },
       "generate": "توليد خلاصات الحكم بالذكاء الاصطناعي",
       "invitation": "مع حساب مجاني، يُعِدّ الذكاء الاصطناعي ملاحظات عمل حول هذا الحكم.",
@@ -1079,7 +1093,9 @@
     },
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد الاجتهاد القضائي.",
     "filters": {
-      "remove": "إزالة عامل التصفية {filter}"
+      "countryMismatch": "أُزيلت عوامل التصفية لأنها لا تخص البلد المحدد ({country}): {filters}.",
+      "remove": "إزالة عامل التصفية {filter}",
+      "showInCountry": "عرض {filter} في {country}"
     },
     "languages": {
       "count": "{count, plural, zero {لا توجد لغات} one {لغة واحدة} two {لغتان} few {# لغات} many {# لغة} other {# لغة}}",
@@ -1144,7 +1160,7 @@
     "reader": {
       "documentUpdated": "تم تحديث المستند.",
       "expandProvisions": "توسيع الأحكام",
-      "headMatter": "الديباجة",
+      "headMatter": "معلومات القضية",
       "sourceAttribution": "بيانات المصدر متاحة بحرية على <link>{source}</link>."
     },
     "research": {
@@ -1276,7 +1292,8 @@
       "versionAtDecisionDateInferred": "الصيغة في تاريخ القرار (مستنتجة)",
       "versionBasisInferredCompact": "تاريخ القرار · مستنتج",
       "versionBasisInferredExplanation": "تُستنتج النسخة من تاريخ القرار. لا يحدد القرار الصياغة التي تنطبق."
-    }
+    },
+    "withdrawnByPublisher": "سحبه الناشر"
   },
   "catalogue": {
     "addCustom": "إضافة مخصص",
@@ -1334,6 +1351,7 @@
       "toastTitle": "العرض الكامل غير متاح بعد"
     },
     "activity": {
+      "newerVersion": "يُعرض هذا المحتوى في إصدار أحدث.",
       "review": "تحديث المراجعة"
     },
     "aiPrompt": "أداة تحرير رسائل الذكاء الاصطناعي",
@@ -1573,6 +1591,12 @@
     "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
     "loadingEarlierMessages": "جارٍ تحميل الرسائل السابقة…",
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
+    "mcpReconnect": {
+      "additional": "{count, plural, zero {+# اتصالات إضافية} one {+# اتصال إضافي} two {+# اتصالان إضافيان} few {+# اتصالات إضافية} many {+# اتصالًا إضافيًا} other {+# اتصال إضافي}}",
+      "dismiss": "إخفاء إشعار الاتصال",
+      "stoppedWorking": "توقف اتصالك بـ <name>{server}</name> عن العمل.",
+      "waitingApproval": "اتصالك بـ <name>{server}</name> بانتظار الموافقة."
+    },
     "mention": {
       "category": {
         "entities": "في هذا الملف القانوني",
@@ -2066,8 +2090,6 @@
     "clearFilters": "مسح عوامل التصفية",
     "clearSearch": "مسح البحث",
     "close": "إغلاق",
-    "closeAll": "إغلاق الكل",
-    "closeOthers": "إغلاق الأخرى",
     "columns": "الأعمدة",
     "comfortable": "مريح",
     "comingSoon": "قريبًا",
@@ -2341,6 +2363,7 @@
     "unknownUser": "مستخدم غير معروف",
     "unpin": "إلغاء التثبيت",
     "unsavedChanges": "تغييرات غير محفوظة",
+    "unsavedChangesClose": "تغييرات غير محفوظة. أغلق مرة أخرى لتجاهلها",
     "unsavedChangesEscape": "تغييرات غير محفوظة. اضغط على Esc مرة أخرى لتجاهلها",
     "unsavedLeaveConfirm": "لديك تغييرات غير محفوظة. هل تغادر دون حفظ؟",
     "unverified": "غير مُتحقَّق منه",
@@ -2382,6 +2405,8 @@
     "returnToAgent": "ارجع إلى وكيلك للمتابعة.",
     "returnsLocally": "ستعود إلى {clientName} على هذا الكمبيوتر",
     "returnsTo": "ستعود إلى {clientName}",
+    "scopeAccountExportRead": "قراءة صادرات بياناتك الشخصية",
+    "scopeAccountExportWrite": "طلب صادرات بياناتك الشخصية",
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
@@ -2852,6 +2877,8 @@
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "hostedCheckoutOpen": "توجد عملية دفع مفتوحة بالفعل لهذه المؤسسة. أكملها، أو ابدأ عملية جديدة بعد انتهاء صلاحيتها.",
       "hostedSubscriptionLive": "لدى هذه المؤسسة اشتراك بالفعل. غيّره من «إدارة الاستخدام المُستضاف».",
+      "idempotencyInProgress": "لا يزال هذا الطلب قيد المعالجة. انتظر قليلًا ثم حاول مرة أخرى.",
+      "idempotencyKeyReused": "تغيّرت البيانات منذ المحاولة السابقة. أعد تعيين النموذج ثم حاول مرة أخرى.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "legalSourceEntityLimitReached": "بلغ هذا الملف القانوني الحد الأقصى للعناصر، لذا تعذّر إنشاء المستند.",
       "legalSourceFilePropertyMissing": "يفتقر هذا الملف القانوني إلى خاصية ملف، لذا تعذر إنشاء المستند.",
@@ -3654,6 +3681,9 @@
       "unsupportedVisualContent": "يحتوي هذا الملف على صور أو رسومات متجهة يتعذر فحصها بحثًا عن نص حساس. التصدير غير متاح.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
+    "closeAllTabs": "{count, plural, zero {إغلاق # علامة تبويب} one {إغلاق علامة تبويب واحدة} two {إغلاق علامتَي التبويب} few {إغلاق جميع علامات التبويب (#)} many {إغلاق جميع علامات التبويب (#)} other {إغلاق جميع علامات التبويب (#)}}",
+    "closeOtherTabs": "{count, plural, zero {إغلاق # علامة تبويب أخرى} one {إغلاق علامة تبويب أخرى} two {إغلاق علامتَي تبويب أخريين} few {إغلاق # علامات تبويب أخرى} many {إغلاق # علامة تبويب أخرى} other {إغلاق # علامة تبويب أخرى}}",
+    "closeTab": "إغلاق <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
       "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
@@ -4872,7 +4902,9 @@
     "viewOnGithub": "العرض على GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "لغة الإجابة",
     "budgetError": "نفدت الميزانية المخصصة للإجابات.",
+    "documentLanguage": "لغة المستند ({language})",
     "expand": "توسيع الإجابة",
     "explain": "شرح",
     "followUp": "طرح سؤال متابعة",
@@ -4990,7 +5022,6 @@
       "beta": "ميزات تجريبية",
       "betaAvt": "التحقق من المستندات (AVT)",
       "betaAvtDescription": "تحقق من مستندات الملف القانوني ادعاءً تلو الآخر مقابل وقائع قائمة",
-      "betaCaseLawDescription": "إظهار البحث العام في الاجتهاد القضائي والقارئ في الشريط الجانبي",
       "betaDescription": "جرّب ميزات لا تزال قيد التطوير",
       "betaInbox": "صندوق الوارد والإشعارات",
       "betaInboxDescription": "إظهار صندوق الوارد وجرس الإشعارات",
@@ -5026,6 +5057,8 @@
       "desktopCardConnectedTitle": "تم ربط stella desktop",
       "desktopCardMissingDetail": "ثبّته، أو اربطه إذا كان مثبتًا بالفعل على هذا الكمبيوتر.",
       "desktopCardMissingTitle": "لم يُربط stella desktop بعد",
+      "desktopCardOpeningDetail": "جارٍ ربط هذا الكمبيوتر بـ <bdi>{identity}</bdi> على {host}. إذا طلب المتصفح ذلك، فاسمح له بفتح stella desktop.",
+      "desktopCardOpeningTitle": "جارٍ فتح stella desktop...",
       "desktopCardOutdatedDetail": "الإصدار {version} مرتبط بـ <bdi>{identity}</bdi>. ثبّت أحدث إصدار لتستمر المستندات والنشاط في العمل.",
       "desktopCardOutdatedTitle": "يحتاج stella desktop إلى تحديث",
       "desktopClipboardDescription": "افتح النص المنسوخ من أي تطبيق وابحث فيه ونظّمه وأعد استخدامه.",
@@ -5045,6 +5078,7 @@
       "desktopInstallOpenStep": "افتح stella desktop مرة واحدة. تظهر الحافظة فورًا وتبقى متاحة من شريط القوائم في macOS أو منطقة الإعلام في Windows.",
       "desktopInstallTitle": "التثبيت والفتح",
       "desktopInstallWindowsStep": "شغّل برنامج التثبيت واتبع التعليمات.",
+      "desktopOpenApp": "فتح stella desktop",
       "desktopPrivacyDescription": "يُشفَّر سجل الحافظة ويُخزَّن على هذا الجهاز.",
       "desktopPrivacyTitle": "خاص تلقائيًا",
       "desktopSelfHostDescription": "ثق بعنوان URL الخاص بهذه stella في تطبيق سطح المكتب الموقع كي يمكن فتح مستندات هذا التثبيت محليا.",
@@ -5054,11 +5088,30 @@
       "displayNameSaved": "تم تحديث الاسم الظاهر",
       "enterOtp": "رمز التحقق",
       "otpSentSuccess": "تم إرسال رمز التحقق إلى بريدك الإلكتروني.",
+      "personalDataExportDescription": "اطلب نسخة قابلة للتنزيل من البيانات الشخصية المحفوظة في حسابك. يتوفر التنزيل لمدة ساعة واحدة.",
+      "personalDataExportExpired": "انتهت صلاحية هذا التصدير.",
+      "personalDataExportExpiresAt": "متاح حتى {expiresAt}.",
+      "personalDataExportFailed": "تعذّر إعداد التصدير.",
+      "personalDataExportReady": "التصدير جاهز.",
+      "personalDataExportRequest": "طلب التصدير",
+      "personalDataExportRequestNew": "طلب تصدير جديد",
+      "personalDataExportTitle": "تصدير بياناتي",
+      "personalDataExportWorking": "جارٍ إعداد التصدير…",
       "preferredName": "الاسم المفضّل",
       "preferredNameDescription": "يُستخدَم كمؤلِّف للتغييرات المتعقَّبة والتعليقات في DOCX.",
       "preferredNamePlaceholder": "اسمك",
       "profileDescription": "إدارة تفضيلاتك الشخصية",
       "sendOtpCode": "إرسال رمز التحقق",
+      "signInMethods": {
+        "confirmDescription": "أدخل رمزًا جديدًا أُرسل إلى بريدك الإلكتروني لإلغاء ربط طريقة تسجيل الدخول هذه.",
+        "confirmTitle": "إلغاء ربط {provider}؟",
+        "description": "اربط الحسابات التي تستخدم عنوان البريد الإلكتروني نفسه بعد التحقق منه.",
+        "emailCode": "رمز البريد الإلكتروني",
+        "emailCodeDescription": "يمكنك دائمًا تسجيل الدخول باستخدام رمز يُرسل إلى بريدك الإلكتروني.",
+        "lastMethod": "اربط حسابًا آخر قبل فصل هذا الحساب.",
+        "title": "طرق تسجيل الدخول",
+        "unavailable": "يجب إعداد خدمة إرسال البريد الإلكتروني لإلغاء ربط طرق تسجيل الدخول."
+      },
       "timezone": "المنطقة الزمنية",
       "timezoneDescription": "تُستخدَم للطوابع الزمنية في الإشعارات ورسائل البريد الإلكتروني",
       "timezoneSaved": "تم تحديث المنطقة الزمنية",
@@ -5349,7 +5402,7 @@
     },
     "inForceSince": "نافذ منذ {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "القرارات الرائدة",
+    "leadingDecision": "قرار رائد",
     "leadingDecisionsExplanation": "أول إشارة في كل قرار، مرتبة حسب حجية الاستشهاد: الاستشهادات الواردة الموزونة، مع مراعاة مرتبة المحكمة ودلالة الاستشهاد وحداثته.",
     "noVersionInForce": "لم تكن أي نسخة من هذا النص نافذة في التاريخ المحدد.",
     "openEnded": "الآن",
@@ -5360,15 +5413,11 @@
     "pendingChanges": "التعديلات المرتقبة",
     "pendingChangesIncomplete": "قد لا تتضمن بيانات الجهة الناشرة جميع التعديلات المرتقبة.",
     "provisionAskContextPrompt": "\n\nمقاطع تطبّق هذا الحكم في أكثر القرارات حجية:\n{passages}\n\nاستخدم أدوات السوابق القضائية لقراءة أي من هذه القرارات كاملاً أو للعثور على قرارات أخرى تستشهد بهذا الحكم.",
-    "provisionAskPlaceholder": "اسأل عن هذه المادة",
-    "provisionAskQuestionPrompt": "بخصوص {subject}: {question}",
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
     "provisionEffectiveFrom": "نافذ منذ {date}",
-    "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
-    "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
     "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
@@ -5381,6 +5430,7 @@
     "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
     "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
+    "sortNeedsYear": "اختر سنة في عوامل التصفية للفرز حسب هذا العمود.",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
       "current": "نافذ",
@@ -6478,6 +6528,14 @@
           "started": "بدأ مراجعة المستند"
         },
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
+        "fields": {
+          "dueDate": "تاريخ الاستحقاق",
+          "parentFolder": "المجلد الأصل",
+          "priority": "الأولوية",
+          "property": "الخاصية",
+          "schedule": "الجدول الزمني",
+          "sortOrder": "الترتيب"
+        },
         "filterLabel": "تصفية النشاط",
         "filters": {
           "all": "كل النشاط",
@@ -6527,6 +6585,7 @@
           "translation": "ترجمة"
         },
         "title": "النشاط",
+        "updatedFields": "تم تحديث {fields}",
         "views": {
           "list": "عرض القائمة",
           "timeline": "عرض الخط الزمني"

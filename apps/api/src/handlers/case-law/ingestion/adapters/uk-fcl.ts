@@ -1,4 +1,5 @@
 // parser-output-unchanged: Page publisher-request status affects ingestion freshness, not decision fields parsed from stored XML.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 import { load } from "cheerio";
 import * as slimdom from "slimdom";
@@ -10,6 +11,7 @@ import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   defineSourceAdapter,
   excludedSourceSurface,
@@ -18,15 +20,14 @@ import {
   sourceTotalProbeFailed,
   sourceTotalRead,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
   IngestionResult,
   SourceFieldDisposition,
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/legal-search/ingestion-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 import { publisherRequestIntervalMs } from "./publisher-policy";
