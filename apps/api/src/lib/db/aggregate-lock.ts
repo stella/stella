@@ -2890,6 +2890,7 @@ export const lockMatterStewardship = async ({
           code: MEMBER_REMOVAL_BUSY_CODE,
           retryable: true,
           message: "Other work is in progress. Please try again shortly.",
+          cause: result.error.cause,
         }),
       );
     }
