@@ -53,6 +53,7 @@ const decision = {
   languageAlternates: [],
   decisionDate: "2025-05-01",
   decisionType: "rozsudek",
+  decisionTypeKind: "judgment",
   sourceUrl: null,
   headnote: {
     type: TEXT_FIELD_TYPE.ABSENT,
