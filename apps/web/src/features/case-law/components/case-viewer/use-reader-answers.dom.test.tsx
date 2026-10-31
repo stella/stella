@@ -1304,66 +1304,71 @@ test("persisted streaming answers poll to completion and release mutations", asy
   expect(hook.result.current.answers).toEqual([]);
 });
 
+test("persisted claims stop polling at timeout when the server is never", async () => {
+  await expectPersistedClaimTimeout("never");
+});
+
+test("persisted claims stop polling at timeout when the server is hanging", async () => {
+  await expectPersistedClaimTimeout("hanging");
+});
+
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are test server behaviors, not API domain values.
-test.each(["never", "hanging"] as const)(
-  "persisted claims stop polling at timeout when the server is %s",
-  async (settlement) => {
-    const server = pollingServer(settlement);
-    const { wrapper } = setup();
-    jest.useFakeTimers();
-    Object.defineProperty(AbortSignal, "timeout", {
-      configurable: true,
-      value: (milliseconds: number) => {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), milliseconds);
-        return controller.signal;
-      },
-    });
-    const hook = renderHook(
-      () =>
-        useReaderAnswers({
-          decisionId: "decision-1",
-          generationMode: "enabled",
-        }),
-      { wrapper },
-    );
-    await waitFor(() =>
-      expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
-        "streaming",
-      ),
-    );
-    server.releaseRecovery();
-    await advanceClock(300);
-    await advanceClock(5000);
-    await advanceClock(0);
-    expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
-      status: "failed",
-      errorCode: "timeout",
-    });
-    restoreRealTimers();
-    const settledReads = server.reads();
-    await act(async () => {
-      await sleep(50);
-    });
-    expect(server.reads()).toBe(settledReads);
-    expect(
-      readerAnswerErrorCodeKind(
-        hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
-      ),
-    ).toBe("timeout");
-    expect(hook.result.current.failureNotices).toContainEqual(
-      expect.objectContaining({
-        type: "message",
-        messageId: hook.result.current.answers.at(0)?.messages.at(-1)?.id,
-        error: expect.objectContaining({ code: "timeout" }),
+const expectPersistedClaimTimeout = async (settlement: "never" | "hanging") => {
+  const server = pollingServer(settlement);
+  const { wrapper } = setup();
+  jest.useFakeTimers();
+  Object.defineProperty(AbortSignal, "timeout", {
+    configurable: true,
+    value: (milliseconds: number) => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), milliseconds);
+      return controller.signal;
+    },
+  });
+  const hook = renderHook(
+    () =>
+      useReaderAnswers({
+        decisionId: "decision-1",
+        generationMode: "enabled",
       }),
-    );
-    await act(async () => {
-      await hook.result.current.remove("answer-1");
-    });
-    expect(server.deletions()).toBe(1);
-  },
-);
+    { wrapper },
+  );
+  await waitFor(() =>
+    expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
+      "streaming",
+    ),
+  );
+  server.releaseRecovery();
+  await advanceClock(300);
+  await advanceClock(5000);
+  await advanceClock(0);
+  expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
+    status: "failed",
+    errorCode: "timeout",
+  });
+  restoreRealTimers();
+  const settledReads = server.reads();
+  await act(async () => {
+    await sleep(50);
+  });
+  expect(server.reads()).toBe(settledReads);
+  expect(
+    readerAnswerErrorCodeKind(
+      hook.result.current.answers.at(0)?.messages.at(-1)?.errorCode ?? null,
+    ),
+  ).toBe("timeout");
+  expect(hook.result.current.failureNotices).toContainEqual(
+    expect.objectContaining({
+      type: "message",
+      messageId: hook.result.current.answers.at(0)?.messages.at(-1)?.id,
+      error: expect.objectContaining({ code: "timeout" }),
+    }),
+  );
+  await act(async () => {
+    await hook.result.current.remove("answer-1");
+  });
+  expect(server.deletions()).toBe(1);
+};
 
 // oxlint-disable-next-line require-contract-domains/require-contract-domains -- These are fake recovery HTTP outcomes, not API domain values.
 test.each([
