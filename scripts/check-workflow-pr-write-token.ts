@@ -156,21 +156,69 @@ const TARGET_BASE_STEP_ID = "target-base";
 const TARGET_BASE_ACTION = "./.github/actions/merge-target-base";
 const TARGET_BASE_RUN = 'bash "$RUNNER_TEMP/merge-target-base.sh"';
 
-const trustedTargetBase = (steps: readonly unknown[]): boolean =>
-  steps.some(
-    (step) =>
-      record(step) &&
-      step["id"] === TARGET_BASE_STEP_ID &&
-      (step["uses"] === TARGET_BASE_ACTION ||
-        (typeof step["run"] === "string" &&
-          step["run"].trim() === TARGET_BASE_RUN)),
-  );
+const TARGET_BASE_SCRIPT = "merge-target-base.sh";
+const stagedResolverSource = (command: string): string | undefined => {
+  const prefix = 'cp "$GITHUB_WORKSPACE/';
+  const suffix = `/scripts/${TARGET_BASE_SCRIPT}" "$RUNNER_TEMP/${TARGET_BASE_SCRIPT}"`;
+  const trimmed = command.trim();
+  return trimmed.startsWith(prefix) && trimmed.endsWith(suffix)
+    ? trimmed.slice(prefix.length, -suffix.length)
+    : undefined;
+};
 
-type TrustedCheckoutValueOptions = {
-  value: unknown;
-  trigger: string;
-  field: "ref" | "repository";
+type TrustedTargetBaseOptions = {
   steps: readonly unknown[];
+  trigger: string;
+  controlledDirectories: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
+// The run form is trusted only when the script it runs was staged by exactly
+// one earlier step, copied from a checkout this trigger does not control.
+const trustedTargetBase = ({
+  steps,
+  trigger,
+  controlledDirectories,
+}: TrustedTargetBaseOptions): boolean => {
+  const index = steps.findIndex(
+    (step) => record(step) && step["id"] === TARGET_BASE_STEP_ID,
+  );
+  const resolver = steps[index];
+  if (!record(resolver)) {
+    return false;
+  }
+  if (resolver["uses"] === TARGET_BASE_ACTION) {
+    return true;
+  }
+  if (
+    typeof resolver["run"] !== "string" ||
+    resolver["run"].trim() !== TARGET_BASE_RUN
+  ) {
+    return false;
+  }
+  const writers = steps
+    .slice(0, index)
+    .filter(
+      (step): step is Record<string, unknown> =>
+        record(step) &&
+        typeof step["run"] === "string" &&
+        step["run"].includes(TARGET_BASE_SCRIPT),
+    );
+  const [writer] = writers;
+  if (writers.length !== 1 || writer === undefined) {
+    return false;
+  }
+  const source =
+    typeof writer["run"] === "string"
+      ? stagedResolverSource(writer["run"])
+      : undefined;
+  const controlled =
+    source === undefined ? undefined : controlledDirectories.get(source);
+  return controlled !== undefined && !controlled.has(trigger);
+};
+
+type TrustedCheckoutValueOptions = TrustedTargetBaseOptions & {
+  value: unknown;
+  field: "ref" | "repository";
 };
 
 const trustedCheckoutValue = ({
@@ -178,8 +226,10 @@ const trustedCheckoutValue = ({
   trigger,
   field,
   steps,
+  controlledDirectories,
 }: TrustedCheckoutValueOptions): boolean => {
-  if (value === undefined) {
+  // actions/checkout treats an empty input like an omitted one.
+  if (value === undefined || value === "") {
     return field === "repository" || trigger !== "pull_request";
   }
   if (typeof value !== "string") {
@@ -202,7 +252,7 @@ const trustedCheckoutValue = ({
   }
   return (
     checkoutExpression === `steps.${TARGET_BASE_STEP_ID}.outputs.base_sha` &&
-    trustedTargetBase(steps)
+    trustedTargetBase({ steps, trigger, controlledDirectories })
   );
 };
 
@@ -374,13 +424,23 @@ const checkoutDirectory = (value: unknown): string => {
   return value.replace(/^\.\//u, "").replace(/\/$/u, "");
 };
 
-const stepRunsDirectory = (
-  step: Record<string, unknown>,
-  directory: string,
-): boolean => {
+type StepRunsDirectoryOptions = {
+  step: Record<string, unknown>;
+  directory: string;
+  // `defaults.run.working-directory` of the job, else of the workflow.
+  inheritedWorkingDirectory: unknown;
+};
+
+const stepRunsDirectory = ({
+  step,
+  directory,
+  inheritedWorkingDirectory,
+}: StepRunsDirectoryOptions): boolean => {
   const command = typeof step["run"] === "string" ? step["run"] : "";
   const uses = typeof step["uses"] === "string" ? step["uses"] : "";
-  const workingDirectory = checkoutDirectory(step["working-directory"]);
+  const workingDirectory = checkoutDirectory(
+    step["working-directory"] ?? inheritedWorkingDirectory,
+  );
   if (directory === ".") {
     return command !== "" || uses.startsWith("./");
   }
@@ -394,6 +454,12 @@ const stepRunsDirectory = (
     "u",
   );
   return repositoryPath.test(command) || repositoryPath.test(uses);
+};
+
+const runDefaultDirectory = (owner: Record<string, unknown>): unknown => {
+  const defaults = owner["defaults"];
+  const run = record(defaults) ? defaults["run"] : undefined;
+  return record(run) ? run["working-directory"] : undefined;
 };
 
 const stepsOf = (job: Record<string, unknown>): unknown[] =>
@@ -505,6 +571,8 @@ export const checkWorkflowPrivilegeSource = (
     const condition = stringField(rawJob["if"]);
     const excludesDependabot = excludesActor(condition, "dependabot[bot]");
     const controlledDirectories = new Map<string, Set<string>>();
+    const inheritedWorkingDirectory =
+      runDefaultDirectory(rawJob) ?? runDefaultDirectory(parsed);
     for (const rawStep of steps) {
       if (!record(rawStep)) {
         continue;
@@ -522,12 +590,14 @@ export const checkWorkflowPrivilegeSource = (
                   trigger,
                   field: "ref",
                   steps,
+                  controlledDirectories,
                 }) ||
                 !trustedCheckoutValue({
                   value: withValue["repository"],
                   trigger,
                   field: "repository",
                   steps,
+                  controlledDirectories,
                 }),
             ),
           ),
@@ -543,7 +613,11 @@ export const checkWorkflowPrivilegeSource = (
             [...controlledDirectories].some(
               ([directory, controlled]) =>
                 controlled.has(trigger) &&
-                stepRunsDirectory(rawStep, directory),
+                stepRunsDirectory({
+                  step: rawStep,
+                  directory,
+                  inheritedWorkingDirectory,
+                }),
             ),
           );
       if (controlledTriggers.length === 0) {

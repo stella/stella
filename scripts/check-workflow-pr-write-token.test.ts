@@ -80,6 +80,27 @@ describe("privileged workflow policy", () => {
       expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
     }
   });
+  test("treats an empty checkout ref like an omitted one", () => {
+    const body = `    env:\n      KEY: \${{ secrets.KEY }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ''\n      - run: bash scripts/x.sh`;
+    expect(
+      check(workflow("pull_request", body, "contents: read")).some(
+        (item) => item.class === "class 2",
+      ),
+    ).toBeTrue();
+  });
+  test("follows defaults.run.working-directory into a head checkout", () => {
+    const body = `    defaults:\n      run:\n        working-directory: untrusted\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
+  test("refuses a resolver script staged by an untrusted step", () => {
+    const checkout = `      - id: target-base\n        run: bash "$RUNNER_TEMP/merge-target-base.sh"\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ steps.target-base.outputs.base_sha }}\n      - run: bash scripts/x.sh`;
+    const impostor = `    steps:\n      - run: printf 'echo base_sha=x >> "$GITHUB_OUTPUT"' > "$RUNNER_TEMP/merge-target-base.sh"\n${checkout}`;
+    expect(check(workflow("pull_request_target", impostor))).not.toHaveLength(
+      0,
+    );
+    const staged = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n          path: .workflow-tooling\n      - run: cp "$GITHUB_WORKSPACE/.workflow-tooling/scripts/merge-target-base.sh" "$RUNNER_TEMP/merge-target-base.sh"\n${checkout}`;
+    expect(check(workflow("pull_request_target", staged))).toHaveLength(0);
+  });
   test("compares event names case-insensitively, as Actions does", () => {
     const body = `    if: github.event_name == 'PULL_REQUEST_TARGET'\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
