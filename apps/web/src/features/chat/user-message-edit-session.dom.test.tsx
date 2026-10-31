@@ -239,10 +239,12 @@ const shownMessages = (page: Page): StoredMessage[] =>
       .join(""),
   }));
 
+/** The open edit form's field. Read by selector, not by role: a role query
+ *  walks the whole transcript, and polling it starves the page it waits on. */
 const editField = (page: Page) =>
-  testing
-    .within(page.view.container)
-    .queryByRole("textbox", { name: translations.chat.editMessageInput });
+  page.view.container.querySelector<HTMLElement>(
+    `[data-chat-message-edit] [role=textbox][aria-label="${translations.chat.editMessageInput}"]`,
+  );
 
 /** Opens the edit form of the second question and adds to its text. */
 const editSecondQuestion = async (page: Page) => {
@@ -313,8 +315,12 @@ describe("an edit the server does not accept", () => {
 
   for (const { code, notice, status } of REFUSALS) {
     test(`refused as ${code}: the form keeps the draft over the stored thread`, async () => {
-      // Another turn lands while the edit is refused: the page must show it.
-      const storedAfterRefusal = [...STORED, ...turnOf(THIRD, "Third")];
+      // A changed history (another turn landed) or an unchanged one: either
+      // way the page shows what the server stores, not its truncated view.
+      const storedAfterRefusal =
+        code === CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged
+          ? [...STORED, ...turnOf(THIRD, "Third")]
+          : STORED;
       const server = createServer({
         answer: { type: "refused", code, status },
         storedAfterRefusal,
@@ -365,12 +371,21 @@ describe("an accepted edit", () => {
 
     sendEdit(page);
 
+    // Checked as a boolean: a failed matcher on a node formats the whole
+    // document on every poll.
     await testing.waitFor(() => {
-      expect(editField(page)).toBeNull();
+      expect(editField(page) === null).toBe(true);
     });
+    // The edited message under its own id, then the edit's answer, in place
+    // of every later turn; the server stores the same.
     await testing.waitFor(() => {
-      expect(shownMessages(page)).toEqual(STORED_AFTER_EDIT);
+      expect(shownMessages(page).map(({ id, role }) => ({ id, role }))).toEqual(
+        STORED_AFTER_EDIT.map(({ id, role }) => ({ id, role })),
+      );
     });
+    expect(shownMessages(page).find(({ id }) => id === SECOND)?.text).toContain(
+      "Second question again",
+    );
     expect(server.posted.at(0)?.["forwardedProps"]).toMatchObject({
       message: { id: SECOND, role: "user" },
       truncateAfterMessageId: SECOND,

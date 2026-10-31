@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { Extension } from "@tiptap/core";
@@ -174,6 +174,9 @@ const UserMessageEditForm = ({
   // Sending stays in this form until the server answers: an accepted edit
   // closes it, any other outcome leaves the draft here with its notice.
   const [sending, setSending] = useState(false);
+  // Read by the editor's key handler, which can run before a render commits:
+  // a second Enter while an edit is in flight never sends it twice.
+  const inFlight = useRef(false);
   const [failure, setFailure] = useState<UserMessageEditFailure | null>(null);
   // While the form is open the session holds its queued prompts.
   useMountEffect(onHold);
@@ -183,15 +186,17 @@ const UserMessageEditForm = ({
       attachments: attachments.map(({ part }) => part),
       html: chatComposerHtml(current),
     };
-    if (!hasUserMessageEditContent(edit) || isGenerating || sending) {
+    if (!hasUserMessageEditContent(edit) || isGenerating || inFlight.current) {
       return;
     }
+    inFlight.current = true;
     setSending(true);
     setFailure(null);
     detached(
       (async () => {
         const outcome = await onSubmit(edit);
         if (outcome.type !== "accepted") {
+          inFlight.current = false;
           setSending(false);
           setFailure(outcome);
         }

@@ -18,7 +18,7 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
-const { cleanup, fireEvent, render, waitFor } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
@@ -179,8 +179,13 @@ describe("editing a sent message", () => {
     // the sent copy takes the message's place.
     await waitFor(() => {
       expect(
-        view.queryByRole("textbox", { name: en.chat.editMessageInput }),
-      ).toBeNull();
+        view.queryByRole("textbox", { name: en.chat.editMessageInput }) ===
+          null,
+      ).toBe(true);
+    });
+    // The closed form's effects run once React flushes them.
+    await act(async () => {
+      await Promise.resolve();
     });
     expect(holding).toEqual([]);
   });
@@ -262,9 +267,11 @@ describe("editing a sent message", () => {
     fireEvent.keyDown(openEditor(view), { key: "Enter" });
 
     expect(submitted).toEqual([]);
-    expect(warning.mock.calls.map(([title]) => title)).toEqual([
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith(
       en.chat.credentialSendTitle,
-    ]);
+      expect.anything(),
+    );
     expect(
       view.getByRole("textbox", { name: en.chat.editMessageInput }),
     ).toBeDefined();
