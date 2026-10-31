@@ -570,7 +570,8 @@ jobs:
           "$RUNNER_TEMP/autofix-lint-paths"
           "${{ needs.regenerate-scope.outputs.run }}"
           "${{ steps.preflight-oxlint.outcome == 'success' }}"
-          "${{ steps.preflight-oxlint.outputs.bin }}" >> "$GITHUB_OUTPUT"
+          "${{ steps.preflight-oxlint.outputs.bin }}"
+          "${{ needs.regenerate-scope.outputs.prune != 'false' }}" >> "$GITHUB_OUTPUT"
 
       - name: Align Tauri counterparts
         if: steps.preflight.outputs.run == 'true'

@@ -9,6 +9,7 @@ type PreflightChecks = {
 
 type PreflightInput = {
   generatorSelected: boolean;
+  pruneRequested: boolean;
   toolReady: boolean;
   formatPaths: readonly string[];
   lintPaths: readonly string[];
@@ -18,7 +19,7 @@ export const decideAutofixPreflight = (
   input: PreflightInput,
   checks: PreflightChecks,
 ): "run" | "skip" => {
-  if (input.generatorSelected || !input.toolReady) {
+  if (input.generatorSelected || input.pruneRequested || !input.toolReady) {
     return "run";
   }
   try {
@@ -50,6 +51,9 @@ if (import.meta.main) {
   const decision = decideAutofixPreflight(
     {
       generatorSelected: process.argv[4] === "true",
+      // Baseline pruning runs behind the preflight, so a requested prune
+      // must keep the fix pipeline running even for clean files.
+      pruneRequested: process.argv[7] !== "false",
       toolReady: process.argv[5] !== "false",
       formatPaths,
       lintPaths,

@@ -8,6 +8,7 @@ import { decideAutofixPreflight } from "./autofix-preflight";
 
 type DecisionFixture = {
   generatorSelected?: boolean;
+  pruneRequested?: boolean;
   formatClean?: boolean;
   lintClean?: boolean;
   lintPaths?: string[];
@@ -16,6 +17,7 @@ type DecisionFixture = {
 
 const decide = ({
   generatorSelected = false,
+  pruneRequested = false,
   formatClean = true,
   lintClean = true,
   lintPaths = [],
@@ -24,6 +26,7 @@ const decide = ({
   decideAutofixPreflight(
     {
       generatorSelected,
+      pruneRequested,
       toolReady: true,
       formatPaths: ["./README.md"],
       lintPaths,
@@ -64,11 +67,19 @@ test("a selected generator runs the fixers", () => {
   expect(decide({ generatorSelected: true })).toBe("run");
 });
 
+test("a requested baseline prune runs the pipeline even for clean files", () => {
+  expect(decide({ pruneRequested: true })).toBe("run");
+  expect(decide({ pruneRequested: true, lintPaths: ["./source.ts"] })).toBe(
+    "run",
+  );
+});
+
 test("an unavailable integrity-verified linter runs the full job", () => {
   expect(
     decideAutofixPreflight(
       {
         generatorSelected: false,
+        pruneRequested: false,
         toolReady: false,
         formatPaths: [],
         lintPaths: [],
@@ -99,6 +110,10 @@ test("the CLI emits only its GitHub output decision when a child writes stdout",
       path.join(import.meta.dir, "autofix-preflight.ts"),
       formatPaths,
       lintPaths,
+      "false",
+      "true",
+      "",
+      "false",
     ],
     { env: { ...process.env, PATH: `${root}:${process.env["PATH"] ?? ""}` } },
   );
