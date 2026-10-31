@@ -20,6 +20,7 @@ import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
 import { createRandomValue } from "@/lib/uuid";
 
 import { devQuickStartRuntime } from "./dev-quick-start-runtime";
@@ -152,6 +153,8 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
       return listed.data;
     },
     createOrganization: async ({ organizationName, organizationSlug }) => {
+      const intent = createSubmitIntent(() => organizationSlug);
+      const replayRequest = intent.request();
       const created = await invokeCapability(
         "organizations.create",
         async (request) =>
@@ -161,7 +164,7 @@ const createOrganization = async (identity: DevQuickStartIdentity) => {
               {
                 ...request,
                 headers: {
-                  "Idempotency-Key": organizationSlug,
+                  "Idempotency-Key": replayRequest.headers["Idempotency-Key"],
                   ...request.headers,
                 },
               },

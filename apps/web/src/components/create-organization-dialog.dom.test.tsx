@@ -419,6 +419,34 @@ test.each(
   },
 );
 
+test("closing an edited draft requires confirmation and discards it before reopening", async () => {
+  const { messages, openDialog } = await renderCreationSurface();
+  const dialog = await openDialog();
+  fillName(messages);
+  await act(async () => {
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await drainReactScheduler();
+  });
+  expect(screen.getByRole("dialog")).toBe(dialog);
+  expect(
+    screen
+      .getByRole("textbox", { name: messages.common.organizationName })
+      .getAttribute("value"),
+  ).toBe("New firm");
+  await act(async () => {
+    fireEvent.keyDown(dialog, { key: "Escape", code: "Escape" });
+    await drainReactScheduler();
+  });
+  await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  await openDialog();
+  expect(
+    screen
+      .getByRole("textbox", { name: messages.common.organizationName })
+      .getAttribute("value"),
+  ).toBe("");
+  expect(creationKeys).toHaveLength(0);
+});
+
 test("a refused creation stays open and can be retried without switching", async () => {
   createOutcome = "refused";
   const { messages, openDialog } = await renderCreationSurface();

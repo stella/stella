@@ -15,6 +15,7 @@ import {
   Dialog,
   DialogDescription,
   DialogFooter,
+  DialogFormState,
   DialogHeader,
   DialogPanel,
   DialogPopup,
@@ -167,6 +168,10 @@ export const CreateOrganizationDialog = ({
           details.cancel();
           return;
         }
+        // The host unmounts on close, before a deferred onDiscard can run.
+        if (!nextOpen) {
+          owner.setName("");
+        }
         onOpenChange(nextOpen);
       }}
     >
@@ -174,6 +179,7 @@ export const CreateOrganizationDialog = ({
         size="sm"
         showCloseButton={!view.pending && state.status !== "confirm_restart"}
       >
+        <DialogFormState dirty={view.editable && view.name.trim().length > 0} />
         {state.status === "confirm_restart" ? (
           <>
             <DialogHeader>
