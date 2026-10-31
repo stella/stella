@@ -43,6 +43,9 @@ const checkpoint = {
 const casToken = "2026-08-07 09:00:00.123456+00";
 const boundaryId = "row-id";
 const pgTimestampCursorBoundary = (value: string) => sql`${value}::timestamptz`;
+const timestampCasToken = (column: unknown) => sql`${column}::text`;
+const timestampMatchesCasToken = (column: unknown, token: string) =>
+  sql`${column} IS NOT DISTINCT FROM ${token}::timestamptz`;
 
 // --- Family A: raw SQL templates the rule MUST flag ---
 
@@ -212,7 +215,27 @@ const _conditionalClock = gt(
   cursor.id === boundaryId ? cursor.createdAt : new Date(),
 );
 
+// A timestamp compared as text: the text depends on the session TimeZone and
+// DateStyle, so a token read in one session can miss in another.
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastCasGuard = sql`${decisions.updatedAt}::text = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastNamedColumn = sql`WHERE updated_at::varchar <> ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastReversed = sql`${casToken} IS NOT DISTINCT FROM ${decisions.updatedAt}::text`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastCall = eq(timestampCasToken(decisions.updatedAt), casToken);
+
 // --- Cases the rule MUST NOT flag ---
+
+// The shared helper compares the instant, not its printed text.
+const _casHelper = timestampMatchesCasToken(decisions.updatedAt, casToken);
+
+// A text cast of a column that is not a timestamp prints the same everywhere.
+const _nonTimestampTextCast = sql`${decisions.id}::text = ${boundaryId}`;
+
+// Selecting the token as text compares nothing.
+const _textCastSelect = sql`${decisions.updatedAt}::text`;
 
 // An explicit cast keeps the operand at the column's precision whatever
 // produced it: this is what `timestampMatchesCasToken` emits.
@@ -311,6 +334,13 @@ export const __noTruncatedTimestampComparisonFixture = {
   _columnOnRight,
   _nestedBoundDate,
   _conditionalClock,
+  _textCastCasGuard,
+  _textCastNamedColumn,
+  _textCastReversed,
+  _textCastCall,
+  _casHelper,
+  _nonTimestampTextCast,
+  _textCastSelect,
   _castCasGuard,
   _castComparison,
   _castTuple,

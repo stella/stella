@@ -44,3 +44,18 @@ function before(cutoff:Date) {return gt(rows.createdAt,cutoff);}`,
     ),
   ).toEqual([3]);
 });
+
+test("rejects timestamp text comparisons and allows the CAS helper", async () => {
+  expect(
+    await lintSingleRule(
+      "no-truncated-timestamp-comparison",
+      `import {eq,sql} from "drizzle-orm";
+sql\`\${rows.updatedAt}::text = \${token}\`;
+sql\`\${token} = \${rows.updatedAt}::text\`;
+eq(timestampCasToken(rows.updatedAt), token);
+timestampMatchesCasToken(rows.updatedAt, token);
+sql\`\${rows.id}::text = \${token}\`;
+sql\`\${rows.updatedAt}::text\`;`,
+    ),
+  ).toEqual([2, 3, 4]);
+});

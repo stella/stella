@@ -50,6 +50,12 @@ import type { AstNode } from "./utils.ts";
 //   sql`${t.createdAt} <= ${cutoff}`
 //   sql`created_at > ${cursor.createdAt}`     // column named in the SQL text
 //
+// Flagged — a timestamp compared as text, whatever the operand (its own
+// message points at timestampMatchesCasToken):
+//   sql`${t.updatedAt}::text = ${token}`
+//   sql`${token} = ${t.updatedAt}::text`
+//   eq(timestampCasToken(t.updatedAt), token)
+//
 // Flagged — Drizzle comparison calls:
 //   gt(docxSuggestions.createdAt, cursor.createdAt)
 //   lt(apikey.createdAt, cursor.createdAt)
@@ -247,6 +253,13 @@ const EXPLICIT_TIMESTAMP_CAST = new RegExp(
 );
 const EXPLICIT_NON_TIMESTAMP_CAST = /^\s*::\s*interval\b/iu;
 
+// A cast to a character type. `timestamptz::text` prints the instant in the
+// session's TimeZone and DateStyle, so a comparison of that text can refuse
+// the very instant it was read from once either setting differs.
+const TEXT_TYPE = String.raw`(?:"?pg_catalog"?\s*\.\s*)?"?(?:text|varchar|bpchar|char|character(?:\s+varying)?)\b"?(?:\s*\(\s*\d+\s*\))?`;
+const TRAILING_TEXT_CAST = new RegExp(String.raw`::\s*${TEXT_TYPE}\s*$`, "iu");
+const LEADING_TEXT_CAST = new RegExp(String.raw`^\s*::\s*${TEXT_TYPE}`, "iu");
+
 // A quasi's `value` is a plain `{ raw, cooked }` record, not an AST node, so
 // it carries no `type` to narrow on. Prefer the cooked text: an escape like
 // `\n` reaches the SQL tag as a real newline, which `\s` matches.
@@ -426,6 +439,29 @@ const isFreshClockRead = (
 // codebase applies it to a timestamp column — add it here if that changes.
 const DRIZZLE_COMPARISONS = new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
 
+// A Drizzle comparison argument that is a timestamp column's text:
+// `timestampCasToken(t.updatedAt)` or sql`${t.updatedAt}::text`.
+const isTimestampTextOperand = (node: unknown): boolean => {
+  if (calleeName(node) === "timestampCasToken") {
+    return true;
+  }
+  if (!isSqlTaggedTemplate(node) || !isAstNode(node)) {
+    return false;
+  }
+  const { quasi } = node;
+  if (!isAstNode(quasi) || quasi.type !== "TemplateLiteral") {
+    return false;
+  }
+  const expressions = Array.isArray(quasi.expressions) ? quasi.expressions : [];
+  const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+  return (
+    expressions.length === 1 &&
+    isTimestampColumnExpression(expressions[0]) &&
+    stripSqlComments(rawTextOf(quasis[0])).trim() === "" &&
+    LEADING_TEXT_CAST.test(stripSqlComments(rawTextOf(quasis[1])))
+  );
+};
+
 const configuredAllowedOperandCalls = (options: unknown): unknown[] => {
   if (
     typeof options !== "object" ||
@@ -457,6 +493,13 @@ export default eslintCompatPlugin({
             "or imported Temporal.Now.instant().epochMilliseconds) " +
             "is exempt; anything else that is sound needs a disable comment " +
             "saying why.",
+          timestampTextComparison:
+            "Do not compare a timestamp column as text. `::text` prints the " +
+            "instant in the session's TimeZone and DateStyle, so a token read " +
+            "in one session can fail to match the same instant in another. " +
+            "Select the token with timestampCasToken(column) and compare it " +
+            "with timestampMatchesCasToken(column, token) from " +
+            "apps/api/src/lib/db/timestamp-cas.ts.",
         },
         schema: [
           {
@@ -708,6 +751,46 @@ export default eslintCompatPlugin({
           });
         };
 
+        // ── Family A0: a timestamp compared as text ──────────────────────
+        //
+        // True when the comparison just before the interpolation at `index`
+        // casts a timestamp column to text on either side:
+        // `${t.updatedAt}::text = ${token}`, `updated_at::text = ${token}`, or
+        // `${token} = ${t.updatedAt}::text`. No operand form makes this safe,
+        // so the operand is not inspected.
+        const isTimestampTextComparison = (
+          quasis: unknown[],
+          expressions: unknown[],
+          index: number,
+          precedingSql: string,
+        ): boolean => {
+          const before = stripSqlComments(rawTextOf(quasis[index]));
+          const match = findComparisonOperator(before);
+          if (
+            match === undefined ||
+            (match.operator === "=" && isAssignmentClause(precedingSql))
+          ) {
+            return false;
+          }
+          const head = before.slice(0, match.index);
+          if (TRAILING_TEXT_CAST.test(head)) {
+            const column = head.replace(TRAILING_TEXT_CAST, "");
+            if (
+              column.trim() === ""
+                ? isTimestampColumnExpression(expressions[index - 1])
+                : trailingNameIsTimestampColumn(column)
+            ) {
+              return true;
+            }
+          }
+          return (
+            isTimestampColumnExpression(expressions[index]) &&
+            LEADING_TEXT_CAST.test(
+              stripSqlComments(rawTextOf(quasis[index + 1])),
+            )
+          );
+        };
+
         // ── Family A: raw SQL templates ──────────────────────────────────
         //
         // True when the operand interpolated at `index` sits on the right of
@@ -772,6 +855,21 @@ export default eslintCompatPlugin({
             let precedingSql = "";
             for (const [index, expression] of expressions.entries()) {
               precedingSql += stripSqlComments(rawTextOf(quasis[index]));
+
+              if (
+                isTimestampTextComparison(
+                  quasis,
+                  expressions,
+                  index,
+                  precedingSql,
+                )
+              ) {
+                context.report({
+                  node: expression,
+                  messageId: "timestampTextComparison",
+                });
+                continue;
+              }
 
               // `${boundary} < ${table.createdAt}`: the timestamp column is
               // on the right, so the unsafe operand is the previous
@@ -866,6 +964,16 @@ export default eslintCompatPlugin({
               right.type === "SpreadElement"
             ) {
               return;
+            }
+
+            for (const side of [left, right]) {
+              if (isTimestampTextOperand(side)) {
+                context.report({
+                  node: side,
+                  messageId: "timestampTextComparison",
+                });
+                return;
+              }
             }
 
             // The column can be written on either side; the other argument is
