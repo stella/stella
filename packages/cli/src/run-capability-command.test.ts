@@ -1,8 +1,15 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import type { Context } from "./context.js";
+import {
+  capabilityCommandPath,
+  deriveCapabilityLeaf,
+} from "./generate-capability-tree.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
@@ -11,7 +18,10 @@ type RecordedCall = { name: string; args: Record<string, unknown> };
 
 type ServerResponse =
   | { kind: "echo" }
+  | { kind: "payload"; payload: unknown }
+  | { kind: "error"; error: Record<string, unknown> }
   | { kind: "confirm-gate" }
+  | { kind: "receipt"; requestId: string }
   | { kind: "pages"; pages: readonly Record<string, unknown>[] };
 
 /**
@@ -51,6 +61,24 @@ const startServer = (response: ServerResponse) => {
             structuredContent: { result: payload },
           },
         });
+      if (response.kind === "payload") {
+        return text(response.payload);
+      }
+      if (response.kind === "error") {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          result: {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({ error: response.error }),
+              },
+            ],
+            isError: true,
+          },
+        });
+      }
       if (response.kind === "confirm-gate") {
         if (args["confirm"] === true) {
           return text({ done: true });
@@ -73,6 +101,9 @@ const startServer = (response: ServerResponse) => {
             isError: true,
           },
         });
+      }
+      if (response.kind === "receipt") {
+        return text({ ok: true, meta: { requestId: response.requestId } });
       }
       if (response.kind === "pages") {
         const page = response.pages[pageIndex] ?? {
@@ -751,6 +782,125 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("personal export commands dispatch every generated capability and preserve declared response shapes", async () => {
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      panic("Expected the committed capability catalog");
+    }
+    const exportId = "0199d851-071b-7000-8000-000000000001";
+    const cases = [
+      {
+        capabilityId: "account-exports.create",
+        flags: { output: "json" },
+        output: {
+          id: exportId,
+          status: "requested",
+          nextCall: {
+            capability: "account-exports.status.get",
+            input: { params: { exportId } },
+          },
+        },
+      },
+      {
+        capabilityId: "account-exports.get",
+        flags: { output: "json" },
+        output: { latest: { id: exportId, status: "requested" } },
+      },
+      {
+        capabilityId: "account-exports.status.get",
+        flags: { exportId, output: "json" },
+        output: { id: exportId, status: "requested" },
+      },
+      {
+        capabilityId: "account-exports.download.get",
+        flags: { exportId, output: "json" },
+        output: {
+          id: exportId,
+          download: {
+            downloadUrl: `https://api.example.test/v1/me/data-exports/${exportId}/download`,
+            expiresAt: "2030-01-01T12:00:00Z",
+          },
+        },
+      },
+    ] as const;
+    for (const item of cases) {
+      const entry = catalog.find(({ id }) => id === item.capabilityId);
+      if (entry === undefined) {
+        panic(`Expected capability ${item.capabilityId}`);
+      }
+      const { spec } = deriveCapabilityLeaf(entry);
+      expect(spec.commandPath).toEqual(capabilityCommandPath(entry.id));
+      const server = startServer({ kind: "payload", payload: item.output });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+        token: makeToken([
+          "read",
+          entry.access === "write"
+            ? "account_export_write"
+            : "account_export_read",
+        ]),
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: item.flags,
+        spec,
+      });
+      expect(server.calls.at(-1)).toEqual({
+        name: `${entry.access}_capability`,
+        args: {
+          capability: entry.id,
+          input: "exportId" in item.flags ? { params: { exportId } } : {},
+        },
+      });
+      expect(JSON.parse(tty.stdoutText())).toEqual(item.output);
+      expect(tty.exitCode()).toBeUndefined();
+      server.stop();
+    }
+  });
+
+  test("personal export commands cannot choose another account and preserve ownership refusals", async () => {
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const entry = catalog?.find(
+      ({ id }) => id === "account-exports.status.get",
+    );
+    if (entry === undefined) {
+      panic("Expected the account export status capability");
+    }
+    const otherExportId = "0199d851-071b-7000-8000-000000000002";
+    const refusal = {
+      code: "not_found",
+      message: "Export not found.",
+      hint: "Call account-exports.get for your latest export ID or account-exports.create to request one.",
+    };
+    const server = startServer({ kind: "error", error: refusal });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+      token: makeToken(["read", "account_export_read"]),
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { exportId: otherExportId, output: "json" },
+      spec: deriveCapabilityLeaf(entry).spec,
+    });
+    expect(server.calls).toEqual([
+      {
+        name: "read_capability",
+        args: {
+          capability: "account-exports.status.get",
+          input: { params: { exportId: otherExportId } },
+        },
+      },
+    ]);
+    expect(tty.stderrText()).toContain(refusal.message);
+    expect(tty.stderrText()).toContain(refusal.hint);
+    expect(tty.exitCode()).toBe(EXIT_CODES.notFound);
+    server.stop();
+  });
+
   test("JSON output preserves full and partial case-law matches and their warning", async () => {
     const payload = {
       results: [
@@ -931,5 +1081,194 @@ describe("runCapabilityCommand: output contract", () => {
     // A clean single page: JSON payload on stdout, nothing on stderr.
     expect(tty.stdoutText()).toContain('"items"');
     expect(tty.stderrText()).toBe("");
+  });
+});
+
+describe("bulk ID command execution", () => {
+  const idsSpec = (property = "ids"): CapabilityLeafSpec =>
+    capSpec({
+      capabilityId: "contacts.bulk.delete",
+      access: "write",
+      flags: [
+        {
+          flag: property === "ids" ? "--ids" : "--claim-ids",
+          prop: `body.${property}`,
+          part: "body",
+          partPath: property,
+          kind: "string-array",
+          required: true,
+          repeatable: true,
+        },
+      ],
+      inputSchema: {
+        type: "object",
+        properties: {
+          body: {
+            type: "object",
+            properties: { [property]: { type: "array", maxItems: 2 } },
+          },
+        },
+      },
+    });
+
+  test("comma-separated IDs chunk at the schema maximum and produce one JSON result", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [" a,b,a, c,d,e "], json: true, yes: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.map((call) => call.args)).toEqual([
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["a", "b"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["c", "d"] } },
+          confirm: true,
+        },
+        {
+          capability: "contacts.bulk.delete",
+          input: { body: { ids: ["e"] } },
+          confirm: true,
+        },
+      ]);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: server.calls.map((call) => ({
+          status: "ok",
+          result: { received: call.args },
+        })),
+      });
+      expect(tty.exitCode() ?? 0).toBe(0);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("the IDs alias reaches a domain-named ID collection without changing other body fields", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: {
+          ids: ["claim-a,claim-b,claim-c"],
+          input: JSON.stringify({ body: { runId: "run" } }),
+          json: true,
+        },
+        spec: {
+          ...idsSpec("claimIds"),
+          capabilityId: "lists.verifications.claim-reviews.bulk.create",
+        },
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["claim-a", "claim-b"], runId: "run" } },
+        { body: { claimIds: ["claim-c"], runId: "run" } },
+      ]);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("an omitted IDs alias preserves the canonical flag and conflicting aliases are rejected", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: [], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.map((call) => call.args["input"])).toEqual([
+        { body: { claimIds: ["canonical"] } },
+      ]);
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["alias"], claimIds: ["canonical"], json: true },
+        spec: idsSpec("claimIds"),
+      });
+      expect(server.calls.length).toBe(1);
+      expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+      expect(tty.stderrText()).toContain("Use either --ids or --claim-ids");
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("failed chunks remain visible and make the command exit nonzero", async () => {
+    const server = startServer({
+      kind: "error",
+      error: { code: "validation_error", message: "Rejected chunk" },
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(JSON.parse(tty.stdoutText())).toEqual({
+        chunks: [
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+          {
+            status: "error",
+            error: {
+              error: { code: "validation_error", message: "Rejected chunk" },
+            },
+          },
+        ],
+      });
+      expect(tty.exitCode()).toBe(EXIT_CODES.server);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("a bulk dry run validates every chunk without executing its operation", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    try {
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { ids: ["a,b,c"], dryRun: true, json: true },
+        spec: idsSpec(),
+      });
+      expect(server.calls.length).toBe(2);
+      expect(
+        server.calls.every((call) => call.args["validate_only"] === true),
+      ).toBe(true);
+    } finally {
+      server.stop();
+    }
   });
 });

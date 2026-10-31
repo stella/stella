@@ -19,6 +19,7 @@ import {
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
+import { loadThreadOrRedirect } from "@/routes/_protected.chat/-thread-scope-redirect-boundary";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
   loader: async ({ context, params }) => {
@@ -93,12 +94,23 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // only fills a cold cache.
     // A thread that is not saved yet is a valid draft: /chat/new and
     // "Build with AI" navigate to fresh ids before the first message.
-    // Only malformed or inaccessible ids become not-found.
+    // Only malformed or inaccessible ids become not-found; a matter thread
+    // opened at the global URL redirects to its matter-scoped route.
     await loadRouteResource({
       ids: [params.threadId],
-      load: async () =>
-        context.queryClient.getQueryData(threadQueryOptions.queryKey) ??
-        (await ensureRouteQueryData(context.queryClient, threadQueryOptions)),
+      load: async () => {
+        if (
+          context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
+          undefined
+        ) {
+          return;
+        }
+        await loadThreadOrRedirect(
+          async () =>
+            await ensureRouteQueryData(context.queryClient, threadQueryOptions),
+          params.threadId,
+        );
+      },
     });
   },
   staticData: {

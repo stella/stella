@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import type { DoctrineTreatment } from "@stll/api-contract/case-law-doctrine";
+import { extractionWarningsSchema } from "@stll/api-contract/case-law-extraction-warnings";
 import {
   DECISION_TEXT_FIELD,
   DECISION_TEXT_SOURCE,
@@ -319,6 +320,10 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
  */
 export const READ_CONTACT_PROJECTION = v.strictObject({
   contactId: chatRef("contact"),
+  /** Source system and id when the contact was imported; else null. */
+  external: v.nullable(
+    v.strictObject({ source: v.string(), id: passthroughId() }),
+  ),
   type: v.string(),
   displayName: v.string(),
   firstName: v.nullable(v.string()),
@@ -1468,6 +1473,17 @@ const CASE_LAW_COVERAGE_COUNTRIES_PROJECTION = projectionBranch(
           v.strictObject({
             adapterKey: v.string(),
             name: v.string(),
+            // `snapshot` sources hold one fixed release: nothing after
+            // `snapshotDate` can arrive, whatever `lastSyncAt` says.
+            edition: v.variant("type", [
+              projectionBranch(v.strictObject({ type: v.literal("live") })),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("snapshot"),
+                  snapshotDate: v.string(),
+                }),
+              ),
+            ]),
             lastSyncAt: v.nullable(v.string()),
             decisionYearFrom: v.nullable(v.number()),
             decisionYearTo: v.nullable(v.number()),
@@ -1672,6 +1688,7 @@ const caseLawCitationSummaryProjection = v.strictObject({
 });
 
 const caseLawDecisionProjection = v.strictObject({
+  extractionWarnings: extractionWarningsSchema,
   // The shared link contract: `url` is the reader's page (the publisher's
   // when the app has none) and `source_url` the publisher's, beside it only
   // when `url` is the reader's.

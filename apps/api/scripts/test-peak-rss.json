@@ -16576,14 +16576,6 @@
         "job": "measure-3"
       }
     },
-    "src/lib/markdown/html-to-markdown.test.ts": {
-      "peakMb": 202,
-      "baselineMb": 202,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-1"
-      }
-    },
     "src/lib/matter-membership-invariant.db.test.ts": {
       "peakMb": 764,
       "baselineMb": 216,
@@ -21822,14 +21814,6 @@
       "source": {
         "runId": "40155324346",
         "job": "measure-1"
-      }
-    },
-    "src/tests/helpers/test-state.test.ts": {
-      "peakMb": 216,
-      "baselineMb": 216,
-      "source": {
-        "runId": "40155324346",
-        "job": "measure-2"
       }
     },
     "src/tests/helpers/transaction-interleaving.postgres.test.ts": {
