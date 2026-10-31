@@ -128,7 +128,7 @@ test("the nearest ancestor whose newest status is a covered success is the base"
     [covered, { state: "failure", run: {} }],
     [covered],
   ]);
-  expect(printed).toBe(ancestors[1]);
+  expect<string | undefined>(printed).toBe(ancestors[1]);
 });
 
 test("a newer failure replaces an older success", () => {
@@ -136,7 +136,7 @@ test("a newer failure replaces an older success", () => {
     [{ state: "failure", run: {} }, covered],
     [covered],
   ]);
-  expect(printed).toBe(ancestors[1]);
+  expect<string | undefined>(printed).toBe(ancestors[1]);
 });
 
 test("a success without the coverage marker, from another creator or without a matching run is no base", () => {
