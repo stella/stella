@@ -27,7 +27,11 @@ import { REPORT_LABELS } from "./report-labels";
 import { type ReportFilter, timeReportOptions } from "./report-query";
 import { ReportSummary } from "./report-summary";
 import { ReportTable } from "./report-table";
-import { type ReportPeriod, shiftReportRange } from "./report.logic";
+import {
+  isReportPeriod,
+  type ReportPeriod,
+  shiftReportRange,
+} from "./report.logic";
 
 export const ReportPage = ({
   organizationId,
@@ -77,7 +81,7 @@ export const ReportLayout = ({
           <Tabs
             value={period}
             onValueChange={(value) => {
-              if (value === "week" || value === "month" || value === "custom") {
+              if (isReportPeriod(value)) {
                 onChange(
                   { ...filter, bucket: value === "week" ? "day" : "week" },
                   value,

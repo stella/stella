@@ -43,7 +43,8 @@ export const ReportTable = ({
   const format = useFormatter();
   const [expanded, setExpanded] = useState(new Set<string>());
   const columns = reportColumns(filter, filter.bucket);
-  const pivot = buildPivot(data?.rows ?? [], columns);
+  // While loading the pivot has no rows; the skeleton rows stand in.
+  const pivot = buildPivot(data === undefined ? [] : data.rows, columns);
   const visible = pivot.rows.filter(
     ({ row }) => row.parentId === null || expanded.has(row.parentId),
   );

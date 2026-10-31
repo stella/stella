@@ -1,5 +1,7 @@
+import { panic } from "better-result";
+
+import { TIME_ENTRY_REPORT_PERIODS } from "@stll/api-contract/time-entry-report";
 import type {
-  TIME_ENTRY_REPORT_PERIODS,
   TimeEntryReportBucket,
   TimeEntryReportRow,
 } from "@stll/api-contract/time-entry-report";
@@ -28,8 +30,14 @@ export const reportRange = (
     }
     case "custom":
       return custom ?? { from: date, to: date };
+    default:
+      period satisfies never;
+      return panic("Unhandled report period");
   }
 };
+
+export const isReportPeriod = (value: unknown): value is ReportPeriod =>
+  TIME_ENTRY_REPORT_PERIODS.some((period) => period === value);
 
 export const shiftReportRange = (
   range: ReportRange,
