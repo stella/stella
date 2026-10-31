@@ -34,6 +34,7 @@ import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 import { stellaToast } from "@stll/ui/toast";
 
+import { useCredentialPasteNotice } from "@/components/chat-composer-paste";
 import {
   chatComposerHtml,
   createChatComposerSchemaExtensions,
@@ -51,10 +52,6 @@ import {
   createChatComposerDocument,
   userMessageComposerContent,
 } from "@/components/chat-editor-markdown.logic";
-import {
-  insertCredentialPasteRequest,
-  readChatPaste,
-} from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
@@ -768,22 +765,7 @@ export const useChatEditor = ({
     isEmptyRef.current = nextIsEmpty;
     setIsEmpty(nextIsEmpty);
   });
-  const showCredentialPasteNotice = useLatestCallback(
-    (targetEditor: Editor) => {
-      stellaToast.warning(t("chat.credentialPasteTitle"), {
-        description: t("chat.credentialPasteDescription"),
-        action: {
-          label: t("chat.credentialPasteAction"),
-          onClick: () => {
-            insertCredentialPasteRequest(
-              targetEditor,
-              t("chat.credentialPasteRequest"),
-            );
-          },
-        },
-      });
-    },
-  );
+  const showCredentialPasteNotice = useCredentialPasteNotice();
   const pastedTextAttachmentsRef = useRef<unknown>(null);
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
@@ -1014,35 +996,6 @@ export const useChatEditor = ({
     [],
   );
 
-  // Everything passed to `useEditor` below (except event handlers) must keep
-  // a stable identity across renders: the react binding shallow-compares the
-  // options on every render and re-applies them to the live editor
-  // (`setOptions` -> `view.setProps` + `view.updateState`) whenever any value
-  // differs. Re-applying view props while ProseMirror's DOMObserver holds
-  // pending input mutations makes the observer flush re-parse the redrawn DOM
-  // as a fresh doc-changing transaction; with the draft store re-rendering
-  // this hook per keystroke, that feedback loop sustains itself until React
-  // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
-  // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
-  // excludes them from the comparison and always calls the latest one.
-  // oxlint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
-  const [extensions] = useState(() => [
-    // The composer's content; a sent message reopened for an edit uses the
-    // same schema (`createChatComposerSchemaExtensions`).
-    ...createChatComposerSchemaExtensions(),
-    ChatComposerLinks,
-    Placeholder.configure({
-      placeholder: () => placeholderRef.current,
-    }),
-    UndoRedo,
-    ChatPastedTextAttachments,
-    // Decorates nothing until a chat surface's anonymization layer
-    // stores pairs via `setChatAnonDecorationPairs`. Installed here
-    // unconditionally so every surface sharing this editor gets
-    // consistent in-editor highlights without a per-mount install.
-    ChatAnonDecorations,
-  ]);
-
   const addPastedTextAttachment = useLatestCallback((text: string) => {
     const targetEditor = editorRef.current;
     if (!isUsableEditor(targetEditor)) {
@@ -1062,6 +1015,38 @@ export const useChatEditor = ({
     targetEditor.view.dispatch(closeHistory(targetEditor.state.tr));
     markDraftStarted();
   });
+
+  // Everything passed to `useEditor` below (except event handlers) must keep
+  // a stable identity across renders: the react binding shallow-compares the
+  // options on every render and re-applies them to the live editor
+  // (`setOptions` -> `view.setProps` + `view.updateState`) whenever any value
+  // differs. Re-applying view props while ProseMirror's DOMObserver holds
+  // pending input mutations makes the observer flush re-parse the redrawn DOM
+  // as a fresh doc-changing transaction; with the draft store re-rendering
+  // this hook per keystroke, that feedback loop sustains itself until React
+  // throws "Maximum update depth exceeded" and drops in-flight keystrokes.
+  // Event handlers (`onCreate`, `onUpdate`, ...) are exempt: the binding
+  // excludes them from the comparison and always calls the latest one.
+  // oxlint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
+  const [extensions] = useState(() => [
+    // The composer's content; a sent message reopened for an edit uses the
+    // same schema (`createChatComposerSchemaExtensions`).
+    ...createChatComposerSchemaExtensions({
+      onChip: addPastedTextAttachment,
+      onCredential: showCredentialPasteNotice,
+    }),
+    ChatComposerLinks,
+    Placeholder.configure({
+      placeholder: () => placeholderRef.current,
+    }),
+    UndoRedo,
+    ChatPastedTextAttachments,
+    // Decorates nothing until a chat surface's anonymization layer
+    // stores pairs via `setChatAnonDecorationPairs`. Installed here
+    // unconditionally so every surface sharing this editor gets
+    // consistent in-editor highlights without a per-mount install.
+    ChatAnonDecorations,
+  ]);
 
   const [editorProps] = useState<EditorProps>(() => ({
     attributes: (state) => ({
@@ -1083,42 +1068,6 @@ export const useChatEditor = ({
         // reference chip clamps itself to the line (`InlinePill`).
         "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm wrap-anywhere focus-visible:outline-none",
     }),
-    handlePaste: (_view, event) => {
-      // Consume every paste before ProseMirror can parse clipboard HTML.
-      // File uploads still bubble to the React handler on the input surface.
-      event.preventDefault();
-      const paste = readChatPaste(event.clipboardData);
-      const targetEditor = editorRef.current;
-      if (targetEditor === null) {
-        return true;
-      }
-      switch (paste.type) {
-        case "ignore":
-        case "files":
-          return true;
-        case "decision":
-          targetEditor.commands.insertContent(
-            decisionPassageContent(paste.passage),
-          );
-          return true;
-        case "chip":
-          addPastedTextAttachment(paste.text);
-          return true;
-        case "credential":
-          showCredentialPasteNotice(targetEditor);
-          return true;
-        case "text":
-          targetEditor.commands.insertContent(paste.content, {
-            applyInputRules: false,
-            applyPasteRules: false,
-          });
-          return true;
-        default: {
-          paste satisfies never;
-          return panic("Unhandled chat paste");
-        }
-      }
-    },
     handleKeyDown: (view, event) => {
       if (handleMessageHistoryKeyDown(view.state, event)) {
         return true;

@@ -8,10 +8,14 @@ import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
-import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import {
+  createChatPastedTextPart,
+  isChatPastedTextPart,
+} from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
 
+import { useCredentialPasteNotice } from "@/components/chat-composer-paste";
 import {
   chatComposerHtml,
   createChatComposerSchemaExtensions,
@@ -120,8 +124,21 @@ const UserMessageEditForm = ({
   const cancel = useLatestCallback(() => {
     onCancel();
   });
+  // A long paste travels as a pasted-text attachment, as from the composer.
+  const addPastedText = useLatestCallback((text: string) => {
+    setAttachments((current) => [
+      ...current,
+      { id: createUuid(), part: createChatPastedTextPart(text) },
+    ]);
+  });
+  const warnCredential = useCredentialPasteNotice();
   const [extensions] = useState(() => [
-    ...createChatComposerSchemaExtensions(),
+    // The composer's schema and its paste pipeline: a paste lands here as it
+    // lands in a new message.
+    ...createChatComposerSchemaExtensions({
+      onChip: addPastedText,
+      onCredential: warnCredential,
+    }),
     UndoRedo,
     UserMessageEditKeys.configure({ onCancel: cancel, onSubmit: submitFrom }),
   ]);
@@ -133,16 +150,6 @@ const UserMessageEditForm = ({
       dir: "auto",
       class:
         "field-sizing-content min-h-10 text-sm wrap-anywhere focus-visible:outline-none",
-    },
-    // Like the composer, a paste never brings clipboard markup into the
-    // message: it is inserted as the text it is.
-    handlePaste: (view, event) => {
-      event.preventDefault();
-      const text = event.clipboardData?.getData("text/plain") ?? "";
-      if (text.length > 0) {
-        view.dispatch(view.state.tr.insertText(text));
-      }
-      return true;
     },
   }));
   const editor = useEditor({

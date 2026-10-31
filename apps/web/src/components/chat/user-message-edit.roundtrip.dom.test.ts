@@ -22,7 +22,10 @@ afterAll(async () => {
   await unregisterDomEnvironment();
 });
 
-const extensions = createChatComposerSchemaExtensions();
+const extensions = createChatComposerSchemaExtensions({
+  onChip: () => undefined,
+  onCredential: () => undefined,
+});
 
 // A message the composer can hold: paragraphs of lines (a line break between
 // lines), each line words, bold words, reference chips and skill chips. The

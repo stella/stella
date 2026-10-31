@@ -1,6 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { createChatPastedTextPart } from "@stll/api-contract/chat";
+import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
+
+import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -225,5 +229,55 @@ describe("editing a sent message", () => {
       assistant.queryByRole("button", { name: en.chat.editMessage }),
     ).toBeNull();
     expect(assistant.getByText(SENT_BODY)).toBeDefined();
+  });
+});
+
+/** A clipboard holding plain text, as a browser hands it to a paste. */
+const plainTextClipboard = (text: string) => ({
+  getData: (type: string) => (type === "text/plain" ? text : ""),
+  items: [],
+  types: ["text/plain"],
+});
+
+describe("pasting into the edit form", () => {
+  // A message with no text, so the paste is all the edit holds.
+  const attachmentOnly: EditableUserMessageProps["message"] = {
+    id: MESSAGE_ID,
+    parts: [ndaDocument],
+    role: "user",
+  };
+
+  test("pasted lines stay lines through the request and the stored Markdown", () => {
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions, target: attachmentOnly });
+
+    fireEvent.paste(openEditor(view), {
+      clipboardData: plainTextClipboard("First\nSecond"),
+    });
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+    const edit = submitted.at(0)?.[1];
+    expect(edit?.html).toBe("<p>First<br>Second</p>");
+    // What the server stores for it: the two lines, a line break between.
+    expect(htmlToMarkdown(edit?.html ?? "")).toBe("First  \nSecond\n");
+  });
+
+  test("a long paste travels as a pasted-text attachment, as from the composer", () => {
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions, target: attachmentOnly });
+    const long = Array.from(
+      { length: PASTED_TEXT_CHIP_MAX_LINES + 1 },
+      (_, line) => `Clause ${String(line + 1)}`,
+    ).join("\n");
+
+    fireEvent.paste(openEditor(view), {
+      clipboardData: plainTextClipboard(long),
+    });
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+    expect(submitted.at(0)?.[1]).toEqual({
+      attachments: [ndaDocument, createChatPastedTextPart(long)],
+      html: "",
+    });
   });
 });
