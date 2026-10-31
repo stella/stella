@@ -892,6 +892,21 @@
       "title": "Javaslatok a tevékenysége alapján",
       "unnamedRecord": "Ügyirat"
     },
+    "timeReport": {
+      "billableHours": "Számlázható órák",
+      "billableShare": "Számlázható arány",
+      "change": "Változás: {value}",
+      "collapse": "{name} összecsukása",
+      "empty": "Rögzítsen időt a jelentés kitöltéséhez.",
+      "expand": "{name} kibontása",
+      "internal": "Belső",
+      "pendingEntries": "Jóváhagyásra vár",
+      "period": "Időszak",
+      "privacy": "Ez a jelentés csak a rögzített időbejegyzéseket használja. Az asztali tevékenység minden eszközön helyben marad.",
+      "title": "Csapatmunkaidő-jelentés",
+      "total": "Összesen",
+      "unbilledValue": "Ki nem számlázott számlázható érték"
+    },
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",

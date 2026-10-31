@@ -892,6 +892,21 @@
       "title": "Suggested from your activity",
       "unnamedRecord": "Matter record"
     },
+    "timeReport": {
+      "billableHours": "Billable hours",
+      "billableShare": "Billable share",
+      "change": "Change: {value}",
+      "collapse": "Collapse {name}",
+      "empty": "Record time to fill this report.",
+      "expand": "Expand {name}",
+      "internal": "Internal",
+      "pendingEntries": "Awaiting approval",
+      "period": "Period",
+      "privacy": "This report uses recorded time entries only. Desktop activity stays on each device.",
+      "title": "Team time report",
+      "total": "Total",
+      "unbilledValue": "Unbilled billable value"
+    },
     "timerActive": "Timer running",
     "timesheets": "Timesheets",
     "total": "Total",

@@ -892,6 +892,21 @@
       "title": "Sugestie na podstawie Twojej aktywności",
       "unnamedRecord": "Wpis w sprawie"
     },
+    "timeReport": {
+      "billableHours": "Godziny podlegające rozliczeniu",
+      "billableShare": "Udział godzin podlegających rozliczeniu",
+      "change": "Zmiana: {value}",
+      "collapse": "Zwiń {name}",
+      "empty": "Rejestruj czas, aby wypełnić ten raport.",
+      "expand": "Rozwiń {name}",
+      "internal": "Wewnętrzne",
+      "pendingEntries": "Oczekuje na zatwierdzenie",
+      "period": "Okres",
+      "privacy": "Ten raport obejmuje tylko zarejestrowane wpisy czasu. Aktywność na komputerze pozostaje na każdym urządzeniu.",
+      "title": "Raport czasu zespołu",
+      "total": "Razem",
+      "unbilledValue": "Nierozliczona wartość godzin podlegających rozliczeniu"
+    },
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",

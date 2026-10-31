@@ -892,6 +892,21 @@
       "title": "Sugestões a partir da sua atividade",
       "unnamedRecord": "Registro do caso"
     },
+    "timeReport": {
+      "billableHours": "Horas faturáveis",
+      "billableShare": "Percentual faturável",
+      "change": "Variação: {value}",
+      "collapse": "Recolher {name}",
+      "empty": "Registre horas para preencher este relatório.",
+      "expand": "Expandir {name}",
+      "internal": "Interno",
+      "pendingEntries": "Aguardando aprovação",
+      "period": "Período",
+      "privacy": "Este relatório usa somente lançamentos de horas registrados. A atividade no computador permanece em cada dispositivo.",
+      "title": "Relatório de horas da equipe",
+      "total": "Total geral",
+      "unbilledValue": "Valor faturável não faturado"
+    },
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",

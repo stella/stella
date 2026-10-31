@@ -892,6 +892,21 @@
       "title": "Vorschläge aus Ihrer Aktivität",
       "unnamedRecord": "Akteneintrag"
     },
+    "timeReport": {
+      "billableHours": "Abrechenbare Stunden",
+      "billableShare": "Anteil abrechenbarer Stunden",
+      "change": "Änderung: {value}",
+      "collapse": "{name} einklappen",
+      "empty": "Erfassen Sie Zeit, damit dieser Bericht ausgefüllt wird.",
+      "expand": "{name} ausklappen",
+      "internal": "Intern",
+      "pendingEntries": "Wartet auf Freigabe",
+      "period": "Zeitraum",
+      "privacy": "Dieser Bericht enthält nur erfasste Zeiteinträge. Desktop-Aktivitäten bleiben auf dem jeweiligen Gerät.",
+      "title": "Team-Zeitbericht",
+      "total": "Gesamt",
+      "unbilledValue": "Nicht abgerechneter abrechenbarer Wert"
+    },
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",

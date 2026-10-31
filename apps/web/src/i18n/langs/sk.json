@@ -892,6 +892,21 @@
       "title": "Návrhy z vašej aktivity",
       "unnamedRecord": "Záznam v spise"
     },
+    "timeReport": {
+      "billableHours": "Fakturovateľné hodiny",
+      "billableShare": "Podiel fakturovateľného času",
+      "change": "Zmena: {value}",
+      "collapse": "Zbaliť {name}",
+      "empty": "Zaznamenávajte čas, aby sa prehľad naplnil.",
+      "expand": "Rozbaliť {name}",
+      "internal": "Interné",
+      "pendingEntries": "Čaká na schválenie",
+      "period": "Obdobie",
+      "privacy": "Tento prehľad zahŕňa iba zaznamenané časové záznamy. Aktivita na počítači zostáva v zariadení.",
+      "title": "Prehľad času tímu",
+      "total": "Spolu",
+      "unbilledValue": "Nevyfakturovaná fakturovateľná suma"
+    },
     "timerActive": "Časovač beží",
     "timesheets": "Výkaz práce",
     "total": "Celkom",
