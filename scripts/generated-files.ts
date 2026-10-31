@@ -1073,6 +1073,7 @@ const GENERATOR_DECLARATIONS = [
       "scripts/migration-lock-census.ts",
       "scripts/migration-lock-allowances/*.json",
       "scripts/online-ddl-lock-census.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/db/online-ddl.ts",
       "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
       "apps/api/drizzle/**/*.sql",

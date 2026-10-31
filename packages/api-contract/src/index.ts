@@ -30,10 +30,13 @@ export {
   caseLawAnalysisProgressSchema,
   CASE_LAW_ANALYSIS_FAILURE_CODES,
   CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_LANGUAGES,
   CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+  isCaseLawAnalysisLanguage,
 } from "./case-law-analysis";
 export type {
   CaseLawAnalysisFailureCode,
+  CaseLawAnalysisLanguage,
   CaseLawAnalysisKeySource,
   CaseLawAnalysisProgressResponse,
   CaseLawAnalysisUnavailableCode,
