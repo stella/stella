@@ -32,16 +32,16 @@ describe("updateOrganizationSettingsHandler", () => {
       "𐐀".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH / 2),
     ]) {
       expect(
-        Value.Check(updateOrganizationSettings.config.body, { aiInstructions }),
+        v.is(updateOrganizationSettings.config.body, { aiInstructions }),
       ).toBe(true);
     }
     expect(
-      Value.Check(updateOrganizationSettings.config.body, {
+      v.is(updateOrganizationSettings.config.body, {
         aiInstructions: "a".repeat(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH + 1),
       }),
     ).toBe(false);
     expect(
-      Value.Check(updateOrganizationSettings.config.body, {
+      v.is(updateOrganizationSettings.config.body, {
         aiInstructions: null,
       }),
     ).toBe(false);

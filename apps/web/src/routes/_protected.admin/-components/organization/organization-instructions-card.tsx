@@ -14,8 +14,8 @@ import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
-import { useQueryView } from "@/lib/use-query-view";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { queryView } from "@/lib/query-view.logic";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -27,7 +27,7 @@ import { SettingsLeaveGuard } from "../settings-leave-guard";
 
 export const OrganizationInstructionsCard = () => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const view = useQueryView(
+  const view = queryView(
     useQuery(
       organizationSettingsOptions({
         organizationId: activeOrganizationId,
@@ -83,8 +83,14 @@ const OrganizationInstructionsEditor = ({
     isDirty: canEdit && dirty,
   });
   const mutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "OrganizationInstructionsEditor.save",
+    },
     mutationFn: async (aiInstructions: string) =>
-      unwrapEden(await api["organization-settings"].post({ aiInstructions })),
+      unwrapApiResponse(
+        await api["organization-settings"].post({ aiInstructions }),
+      ),
     invalidate: organizationSettingsKeys.all,
     successToast: { title: t("common.saved") },
     errorToast: { title: t("errors.actionFailed") },
