@@ -183,7 +183,7 @@ test("racing initializers cannot issue a second deadline statement", async () =>
   const tx = {
     execute: async () => {
       executions += 1;
-      return await pending.promise;
+      await pending.promise;
     },
   };
   const firstBudget = AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe;

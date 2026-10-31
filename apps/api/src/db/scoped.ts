@@ -266,7 +266,7 @@ const initializeScopedBudget = ({
   switch (state.kind) {
     case "transaction":
       inheritTransactionBudget(state.parent, tx);
-      return;
+      return undefined;
     case "database":
       return prepareTransactionBudgetSetting(
         tx,

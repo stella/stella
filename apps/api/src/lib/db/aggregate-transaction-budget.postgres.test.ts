@@ -145,7 +145,7 @@ if (!databaseUrl || !enabled) {
             AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
           );
           if (setting === undefined) {
-            return panic("A capped fixture requires a timer setting");
+            panic("A capped fixture requires a timer setting");
           }
           expect(
             await tx.execute(
@@ -171,7 +171,7 @@ if (!databaseUrl || !enabled) {
             AGGREGATE_TRANSACTION_BUDGETS.scopedRequest,
           );
           if (setting === undefined) {
-            return panic("A capped fixture requires a timer setting");
+            panic("A capped fixture requires a timer setting");
           }
           expect(
             await tx.execute(
@@ -200,7 +200,7 @@ if (!databaseUrl || !enabled) {
               AGGREGATE_TRANSACTION_BUDGETS.deadlineProbe,
             );
             if (setting === undefined) {
-              return panic("A capped fixture requires a timer setting");
+              panic("A capped fixture requires a timer setting");
             }
             await tx.execute(
               budgetedSetupRead({

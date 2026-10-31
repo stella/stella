@@ -314,7 +314,7 @@ test("every transaction owner uses its registered budget classification", async 
             );
       for (
         let ancestor = expression.parent;
-        ancestor;
+        !ts.isSourceFile(ancestor);
         ancestor = ancestor.parent
       ) {
         if (!ts.isFunctionLike(ancestor)) {
