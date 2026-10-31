@@ -76,7 +76,10 @@ import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures"
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // One batch application behind two callers: a crawl page and a caller that
 // hands over records it already holds. Whatever stops a batch short of every
@@ -90,8 +93,7 @@ let scopedDb: ScopedDb;
 beforeAll(async () => {
   client = await createTestPglite();
   db = drizzle({ client, relations: { ...relations, ...authRelationsPart } });
-  scopedDb = async (callback) =>
-    await db.transaction(async (tx) => await callback(asTestRaw(tx)));
+  scopedDb = createIngestionRoleScopedDb(db);
 }, propertyTestTimeout(120_000));
 
 afterAll(async () => {
