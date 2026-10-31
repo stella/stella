@@ -10,6 +10,7 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = pg_catalog, public, pg_temp
+SET plan_cache_mode = force_generic_plan
 AS $$
   SELECT w.id, w.status::text
   FROM public.member m

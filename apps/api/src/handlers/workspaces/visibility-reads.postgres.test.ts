@@ -387,7 +387,9 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
             lastActiveWorkspaceId: workspaceId,
           });
           const definitions = v.parse(
-            v.array(v.object({ proconfig: v.array(v.string()) })),
+            v.array(
+              v.object({ proname: v.string(), proconfig: v.array(v.string()) }),
+            ),
             executedRows(
               await db.execute(
                 sql`SELECT proname, proconfig FROM pg_catalog.pg_proc WHERE pronamespace = 'public'::regnamespace AND prosecdef AND proname IN ('stella_authorized_workspace_ids', 'stella_create_workspace', 'stella_lock_matter_stewardship', 'enforce_member_role_keeps_matter_leads', 'enforce_workspace_keeps_matter_lead', 'enforce_inserted_workspace_keeps_matter_lead', 'enforce_assignment_keeps_matter_lead')`,
@@ -400,6 +402,14 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
               "search_path=pg_catalog, public, pg_temp",
             );
           }
+          const authorizationFunctions = definitions.filter(
+            (definition) =>
+              definition.proname === "stella_authorized_workspace_ids",
+          );
+          expect(authorizationFunctions).toHaveLength(1);
+          expect(authorizationFunctions.at(0)?.proconfig).toContain(
+            "plan_cache_mode=force_generic_plan",
+          );
         } finally {
           await db
             .delete(organization)
