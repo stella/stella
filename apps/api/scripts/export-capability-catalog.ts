@@ -64,6 +64,8 @@ import {
 import type { RouteGate } from "../src/lib/route-gates";
 import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
+import type { PersonApprovedEffect } from "../src/mcp/person-approved-effect";
+import { isPersonApprovedEffect } from "../src/mcp/person-approved-effect";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
@@ -484,6 +486,8 @@ type CapabilityEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  /** The handler's declared effect that only a person may authorize. */
+  personApprovedEffect?: PersonApprovedEffect;
   consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
@@ -769,6 +773,7 @@ type BuildCatalogEntryOptions = {
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
+  personApprovedEffect: PersonApprovedEffect | undefined;
   hasPermissions: boolean;
   permissions: unknown;
   /**
@@ -804,6 +809,7 @@ const buildCatalogEntry = ({
   scope,
   additionalScopes,
   requestTimeoutMs,
+  personApprovedEffect,
   hasPermissions,
   permissions,
   compactedInputSchema,
@@ -822,6 +828,7 @@ const buildCatalogEntry = ({
   ...(exposure.type === "capability" && exposure.confirmation === "required"
     ? { confirmation: exposure.confirmation }
     : {}),
+  ...(personApprovedEffect === undefined ? {} : { personApprovedEffect }),
   consumesServices:
     typeof consumesServices === "function"
       ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
@@ -1233,7 +1240,16 @@ const buildCatalog = async (): Promise<BuildResult> => {
         `capability "${id}" declares invalid access ${JSON.stringify(declaredAccessValue)}; expected "read" or "write"`,
       );
     }
-    return { requestTimeoutMs, declaredAccess } as const;
+    const effectValue = endpoint.config["personApprovedEffect"];
+    const personApprovedEffect = isPersonApprovedEffect(effectValue)
+      ? effectValue
+      : undefined;
+    if (effectValue !== undefined && personApprovedEffect === undefined) {
+      errors.push(
+        `capability "${id}" declares invalid personApprovedEffect ${JSON.stringify(effectValue)}`,
+      );
+    }
+    return { requestTimeoutMs, declaredAccess, personApprovedEffect } as const;
   };
 
   /** Compile one discovered handler into its catalog and dispatch projections. */
@@ -1297,7 +1313,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (metadata === undefined) {
       return;
     }
-    const { requestTimeoutMs, declaredAccess } = metadata;
+    const { requestTimeoutMs, declaredAccess, personApprovedEffect } = metadata;
     const verbs = extractVerbs(permissions);
     const inferredAccess = resolveAccess({
       id,
@@ -1529,6 +1545,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         scope,
         additionalScopes,
         requestTimeoutMs,
+        personApprovedEffect,
         hasPermissions,
         permissions,
         compactedInputSchema,

@@ -17,6 +17,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /**
@@ -240,6 +241,7 @@ const config = {
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",
   permissions: { timeEntry: ["approve"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

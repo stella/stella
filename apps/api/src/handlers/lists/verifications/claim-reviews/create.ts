@@ -30,6 +30,7 @@ import {
   EMPTY_CLAIM_REVIEW,
   rejectReviewEvent,
 } from "@/api/lib/lists/verification/review-fold";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 // `v.picklist` over the const tuples keeps the literal unions in the
 // inferred body type, which the web client reads its types from.
@@ -85,6 +86,7 @@ const config = {
     "conflict withdraw an earlier status and override.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
   mcp: {
     type: "capability",
     reason: "document_processing",

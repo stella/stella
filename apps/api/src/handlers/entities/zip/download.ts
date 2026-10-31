@@ -32,6 +32,7 @@ import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const downloadZipParamsSchema = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -332,6 +333,7 @@ const config = {
     "Refused when the entity is not a folder; the grant is recorded in the " +
     "audit trail.",
   permissions: { workspace: ["read"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

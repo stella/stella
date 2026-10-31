@@ -24,7 +24,7 @@ import {
   READ_TOOL_REF_FIELD_MAP,
   WRITE_TOOL_REF_FIELD_MAP,
 } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
-import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
+import readTimeEntries from "@/api/handlers/time-entries/list";
 import { HttpStatusResponse } from "@/api/http/status";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -49,6 +49,11 @@ import {
 } from "@/api/lib/rate-limit/action-kinds";
 import { isRecord } from "@/api/lib/type-guards";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
+import {
+  AGENT_ACCESS_KIND,
+  AGENT_ACCESS_TARGET,
+  describeAgentAccess,
+} from "@/api/mcp/agent-access";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -421,6 +426,13 @@ describe("list verification access grants across MCP tools", () => {
       body: { filePropertyName: "Documents" },
     },
   } as const;
+  // Recording a person's review needs their approval in stella: MCP refuses
+  // these before any lookup, granted or not.
+  const personApproves = (capability: string) =>
+    describeAgentAccess({
+      target: { type: AGENT_ACCESS_TARGET.capability, id: capability },
+      context: { toolConfirmation: TOOL_CONFIRMATION.caller },
+    }).access.kind === AGENT_ACCESS_KIND.personApproves;
   // Irreversible capabilities only run, or validate, once the human confirmed.
   const confirmation = (capability: string) =>
     capability === "lists.verifications.claim-comments.delete"
@@ -916,6 +928,10 @@ describe("list verification access grants across MCP tools", () => {
           ...confirmation(capability),
         },
       });
+      if (personApproves(capability)) {
+        expect(errorEnvelope(result).code).toBe("person_approval_required");
+        continue;
+      }
       expect(
         parseToolPayload<{ valid: boolean; capability: string }>(result),
       ).toEqual({ valid: true, capability });
@@ -984,12 +1000,10 @@ describe("list verification access grants across MCP tools", () => {
         context: fixture.context,
         args: { capability, input, ...confirmation(capability) },
       });
-      if (capability === "lists.items.sources.verification.update") {
-        expect(result.isError).not.toBe(true);
-        expect(parseToolPayload<{ id: string }>(result)).toEqual({
-          id: resourceId,
-        });
-        expect(fixture.mutations()).toBe(1);
+      if (personApproves(capability)) {
+        expect(errorEnvelope(result).code).toBe("person_approval_required");
+        expect(fixture.resourceLookups()).toBe(0);
+        expect(fixture.mutations()).toBe(0);
         continue;
       }
       expect(fixture.resourceLookups()).toBeGreaterThan(0);
@@ -2071,7 +2085,7 @@ describe("capability executor gates", () => {
   test("invalid input -> validation_error with dot-path issues", async () => {
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" }, query: { status: "bogus" } },
       },
       context: createContext(),
@@ -2121,7 +2135,7 @@ describe("capability executor names the container matterId", () => {
 
   test("the internal spelling alone is refused, not silently accepted", async () => {
     const issues = await invokeIssues({
-      capability: "time-entries.csv.export",
+      capability: "time-entries.list",
       input: { params: { workspaceId: "ws_1" } },
     });
     expect(issues).toEqual([
@@ -2142,7 +2156,7 @@ describe("capability executor names the container matterId", () => {
       { workspaceId: "ws_2", matterId: "ws_1" },
     ]) {
       const issues = await invokeIssues({
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params },
       });
       expect(issues.map((issue) => issue.path)).toEqual(["params.matterId"]);
@@ -2250,7 +2264,7 @@ describe("capability executor workspace resolution", () => {
   test("inaccessible workspace -> not_found", async () => {
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_nope" } },
       },
       context: createContext(),
@@ -2264,7 +2278,7 @@ describe("capability executor workspace resolution", () => {
     const pinnedWorkspaceIds: string[] = [];
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_arch" } },
       },
       context: createContext({
@@ -2453,14 +2467,12 @@ describe("capability executor execution", () => {
   test("runs a read capability end-to-end (workspace-resolved)", async () => {
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
     });
-    const payload = parseToolPayload<string>(result);
-    expect(typeof payload).toBe("string");
-    expect(payload).toContain("Date,");
+    expect(parseToolPayload(result)).toMatchObject({ items: [] });
     expect(loadOrgSettingsMock).toHaveBeenCalled();
   });
 
@@ -2999,7 +3011,7 @@ describe("capability executor rate limit (fix-3)", () => {
     });
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -3034,13 +3046,13 @@ describe("capability executor rate limit (fix-3)", () => {
   test("the limiter is consulted per (organization, capability)", async () => {
     await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
     });
     expect(consumeRateLimitMock).toHaveBeenCalledWith(
-      expect.objectContaining({ capabilityId: "time-entries.csv.export" }),
+      expect.objectContaining({ capabilityId: "time-entries.list" }),
     );
   });
 });
@@ -3096,12 +3108,12 @@ describe("capability executor archived-workspace gate (fix-4)", () => {
 
 describe("capability executor validate_only ordering (fix-5)", () => {
   test("validate_only on a workspace capability fails when the workspace is missing", async () => {
-    // time-entries.csv.export declares no params schema, so pre-fix validate_only
+    // time-entries.list declares no params schema, so pre-fix validate_only
     // returned { valid: true } before any workspace check. Now resolution runs
     // first, so a missing workspaceId surfaces as it would on a real invoke.
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: {},
         validate_only: true,
       },
@@ -3115,7 +3127,7 @@ describe("capability executor validate_only ordering (fix-5)", () => {
   test("validate_only succeeds once the workspace resolves, still without executing", async () => {
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
@@ -3125,7 +3137,7 @@ describe("capability executor validate_only ordering (fix-5)", () => {
       parseToolPayload<{ valid: boolean; capability: string }>(result),
     ).toEqual({
       valid: true,
-      capability: "time-entries.csv.export",
+      capability: "time-entries.list",
     });
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
@@ -3744,12 +3756,12 @@ describe("capability executor input normalization", () => {
     // for configs that do not declare it (raw-params read).
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(parseToolPayload(result)).toMatchObject({ items: [] });
   });
 });
 
@@ -3760,7 +3772,7 @@ describe("capability executor deployment feature gate", () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
@@ -3775,7 +3787,7 @@ describe("capability executor deployment feature gate", () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
         validate_only: true,
       },
@@ -3787,7 +3799,7 @@ describe("capability executor deployment feature gate", () => {
   test("describe_capability refuses a gated-off entry (no schema leak)", async () => {
     disabledFeatures.add("FEATURE_TIME_BILLING");
     const result = await call("describe_capability", {
-      capability: "time-entries.csv.export",
+      capability: "time-entries.list",
     });
     expect(errorEnvelope(result).code).toBe("feature_disabled");
   });
@@ -3805,12 +3817,12 @@ describe("capability executor deployment feature gate", () => {
   test("the same capability works again once the flag is on", async () => {
     const result = await handleCapabilityCall({
       args: {
-        capability: "time-entries.csv.export",
+        capability: "time-entries.list",
         input: { params: { matterId: "ws_1" } },
       },
       context: createContext(),
     });
-    expect(parseToolPayload<string>(result)).toContain("Date,");
+    expect(parseToolPayload(result)).toMatchObject({ items: [] });
   });
 
   test("discovery omits deployment-disabled and ungranted verification capabilities", async () => {
@@ -3869,7 +3881,7 @@ describe("capability executor deployment feature gate", () => {
 
   test("describe exposes the feature flag on an enabled entry", async () => {
     const result = await call("describe_capability", {
-      capability: "time-entries.csv.export",
+      capability: "time-entries.list",
     });
     const payload = parseToolPayload<{ feature: string | null }>(result);
     expect(payload.feature).toBe("FEATURE_TIME_BILLING");
@@ -4111,10 +4123,10 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       ]),
     });
     const previous = Object.getOwnPropertyDescriptor(
-      exportTimeEntriesCsv.config,
+      readTimeEntries.config,
       "featureAccess",
     );
-    Object.defineProperty(exportTimeEntriesCsv.config, "featureAccess", {
+    Object.defineProperty(readTimeEntries.config, "featureAccess", {
       configurable: true,
       value: {
         type: "conditional",
@@ -4132,7 +4144,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
         const result = await handleCapabilityCall({
           context,
           args: {
-            capability: "time-entries.csv.export",
+            capability: "time-entries.list",
             validate_only,
             input: {
               params: { matterId: workspaceId },
@@ -4147,7 +4159,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
               parseToolPayload<{ valid: boolean; capability: string }>(result),
             ).toEqual({
               valid: true,
-              capability: "time-entries.csv.export",
+              capability: "time-entries.list",
             });
           }
         } else {
@@ -4172,7 +4184,7 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       const ordinary = await handleCapabilityCall({
         context,
         args: {
-          capability: "time-entries.csv.export",
+          capability: "time-entries.list",
           validate_only: false,
           input: {
             params: { matterId: workspaceId },
@@ -4185,10 +4197,10 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       expect(insert).not.toHaveBeenCalled();
     } finally {
       if (previous === undefined) {
-        Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");
+        Reflect.deleteProperty(readTimeEntries.config, "featureAccess");
       } else {
         Object.defineProperty(
-          exportTimeEntriesCsv.config,
+          readTimeEntries.config,
           "featureAccess",
           previous,
         );

@@ -95,6 +95,8 @@ import {
   normalizeInputAtBoundary,
 } from "@/api/mcp/input-normalization";
 import { plainRecord } from "@/api/mcp/input-schemas";
+import { isPersonApprovedEffect } from "@/api/mcp/person-approved-effect";
+import type { PersonApprovedEffect } from "@/api/mcp/person-approved-effect";
 import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
@@ -163,6 +165,8 @@ type CatalogEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  /** The handler's declared effect that only a person may authorize. */
+  personApprovedEffect?: PersonApprovedEffect;
   scope: string;
   additionalScopes?: readonly string[];
   /**
@@ -301,6 +305,8 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   typeof value["destructive"] === "boolean" &&
   (value["confirmation"] === undefined ||
     value["confirmation"] === "required") &&
+  (value["personApprovedEffect"] === undefined ||
+    isPersonApprovedEffect(value["personApprovedEffect"])) &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&

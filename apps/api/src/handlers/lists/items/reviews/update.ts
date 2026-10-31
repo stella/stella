@@ -16,6 +16,7 @@ import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { includes } from "@/api/lib/type-guards";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const bodySchema = v.object({
   listId: resourceIdSchema("legalList"),
@@ -33,6 +34,7 @@ const config = {
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: legalListRealtimeUpdates,
+  personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

@@ -13,12 +13,14 @@ import {
 } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getMcpBaseUrl } from "@/api/mcp/constants";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const personalDataExportDownloadLink = createSafeSessionHandler(
   {
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "read",
+    personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
     mcp: {
       type: "capability",
       reason: "reporting_export",

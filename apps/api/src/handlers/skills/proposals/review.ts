@@ -19,6 +19,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const reviewSkillProposalParamsSchema = v.object({
   skillId: resourceIdSchema("agentSkill"),
@@ -41,6 +42,7 @@ const config = {
   permissions: { agentSkill: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: skillRealtimeUpdates,
+  personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
   mcp: {
     type: "capability",
     reason: "agent_tool_authoring",

@@ -10,6 +10,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import * as agentAccess from "@/api/mcp/agent-access";
 import {
   AGENT_ACCESS_KIND,
+  AGENT_ACCESS_TARGET,
   AGENT_CALL_SURFACE,
   decideAgentCall,
   describeAgentAccess,
@@ -23,6 +24,9 @@ import type {
   McpRequestResources,
 } from "@/api/mcp/context";
 import { listGatewayMcpToolDefinitions } from "@/api/mcp/gateway/list-tools";
+import type { CAPABILITY_DISPATCH } from "@/api/mcp/generated/capability-dispatch";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
+import type { PersonApprovedEffect } from "@/api/mcp/person-approved-effect";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -94,8 +98,99 @@ const toolTarget = (name: string): AgentAccessTarget => {
   return { type: "tool", name, access: definition.access };
 };
 
-const kindOf = (target: AgentAccessTarget) =>
-  describeAgentAccess({ target, context: CALLER }).access.kind;
+const accessOf = (target: AgentAccessTarget) =>
+  describeAgentAccess({ target, context: CALLER }).access;
+
+const kindOf = (target: AgentAccessTarget) => accessOf(target).kind;
+
+type CatalogCapabilityId = keyof typeof CAPABILITY_DISPATCH;
+type CatalogEntry = (typeof capabilityCatalog)[number];
+
+/** Reads a person approves, each with the effect its handler declares. */
+const READS_A_PERSON_APPROVES = [
+  {
+    id: "account-exports.download.get",
+    reason: PERSON_APPROVED_EFFECT.exportsRecords,
+  },
+  { id: "clauses.export", reason: PERSON_APPROVED_EFFECT.exportsRecords },
+  { id: "contacts.export", reason: PERSON_APPROVED_EFFECT.exportsRecords },
+  {
+    id: "entities.zip.download",
+    reason: PERSON_APPROVED_EFFECT.exportsRecords,
+  },
+  {
+    id: "time-entries.csv.export",
+    reason: PERSON_APPROVED_EFFECT.exportsRecords,
+  },
+  {
+    id: "time-entries.ledes.export",
+    reason: PERSON_APPROVED_EFFECT.exportsRecords,
+  },
+  {
+    id: "time-entries.pdf.export",
+    reason: PERSON_APPROVED_EFFECT.exportsRecords,
+  },
+  { id: "views.table.export", reason: PERSON_APPROVED_EFFECT.exportsRecords },
+] as const satisfies readonly {
+  id: CatalogCapabilityId;
+  reason: PersonApprovedEffect;
+}[];
+
+/**
+ * What in a capability's catalog metadata needs a person's approval: a
+ * declared effect, or on a write an approve or review permission (the
+ * permission names the attestation) or the anonymization domain (every
+ * anonymization write changes what masking hides).
+ */
+const PERSON_APPROVAL_CLASS = {
+  ...PERSON_APPROVED_EFFECT,
+  attestingPermission: "approve-or-review-permission",
+  anonymizationWrite: "anonymization-write",
+} as const;
+
+type PersonApprovalClass =
+  (typeof PERSON_APPROVAL_CLASS)[keyof typeof PERSON_APPROVAL_CLASS];
+
+const ATTESTING_PERMISSION_ACTIONS: ReadonlySet<string> = new Set([
+  "approve",
+  "review",
+]);
+const ANONYMIZATION_DOMAIN = "anonymization_admin";
+const READ_ONLY_REASON = "reads-only";
+
+const permissionsOf = (entry: CatalogEntry) =>
+  v.parse(
+    v.optional(v.record(v.string(), v.array(v.string())), {}),
+    entry.permissions,
+  );
+
+// A read behind an approver permission records nothing; it needs a person
+// only when it hands out records, which its declared effect says.
+const personApprovalClassesOf = (
+  entry: CatalogEntry,
+): PersonApprovalClass[] => {
+  const classes: PersonApprovalClass[] = [];
+  if (entry.personApprovedEffect !== undefined) {
+    classes.push(entry.personApprovedEffect);
+  }
+  if (entry.access !== "write") {
+    return classes;
+  }
+  if (
+    Object.values(permissionsOf(entry)).some((actions) =>
+      actions.some((action) => ATTESTING_PERMISSION_ACTIONS.has(action)),
+    )
+  ) {
+    classes.push(PERSON_APPROVAL_CLASS.attestingPermission);
+  }
+  if (
+    entry.mcp.type === "capability" &&
+    entry.mcp.reason === ANONYMIZATION_DOMAIN
+  ) {
+    classes.push(PERSON_APPROVAL_CLASS.anonymizationWrite);
+  }
+  return classes;
+};
 
 describe("agent access is resolved in one place", () => {
   test("the module exposes only the resolver's entry points", () => {
@@ -148,7 +243,7 @@ describe("classification", () => {
     }
   });
 
-  test("read tools and capabilities stay open except approved bulk account downloads", () => {
+  test("reads stay open outside the typed list of reads a person approves", () => {
     for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
       if (tool.access === "read") {
         expect({
@@ -157,20 +252,85 @@ describe("classification", () => {
         }).toEqual({ tool: tool.name, kind: AGENT_ACCESS_KIND.open });
       }
     }
+    const reads = new Set<string>();
     for (const entry of capabilityCatalog) {
-      if (entry.access === "read") {
-        expect({
-          id: entry.id,
-          kind: kindOf({ type: "capability", id: entry.id }),
-        }).toEqual({
-          id: entry.id,
-          kind:
-            entry.id === "account-exports.download.get"
-              ? AGENT_ACCESS_KIND.personApproves
-              : AGENT_ACCESS_KIND.open,
-        });
+      if (entry.access !== "read") {
+        continue;
+      }
+      reads.add(entry.id);
+      const reason = READS_A_PERSON_APPROVES.find(
+        ({ id }) => id === entry.id,
+      )?.reason;
+      expect({
+        id: entry.id,
+        kind: kindOf({ type: "capability", id: entry.id }),
+        effect: entry.personApprovedEffect ?? null,
+      }).toEqual({
+        id: entry.id,
+        kind:
+          reason === undefined
+            ? AGENT_ACCESS_KIND.open
+            : AGENT_ACCESS_KIND.personApproves,
+        effect: reason ?? null,
+      });
+    }
+    expect(
+      READS_A_PERSON_APPROVES.filter(({ id }) => !reads.has(id)).map(
+        ({ id }) => id,
+      ),
+    ).toEqual([]);
+  });
+
+  test("an open write names why it is open and an open read is read-only", () => {
+    const operations = [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => ({
+        name: tool.name,
+        access: tool.access,
+        target: toolTarget(tool.name),
+      })),
+      ...capabilityCatalog.map((entry) => ({
+        name: entry.id,
+        access: entry.access,
+        target: { type: AGENT_ACCESS_TARGET.capability, id: entry.id },
+      })),
+    ];
+    const mislabelled: string[] = [];
+    for (const { name, access, target } of operations) {
+      const classified = accessOf(target);
+      if (
+        classified.kind === AGENT_ACCESS_KIND.open &&
+        (classified.reason === READ_ONLY_REASON) === (access === "write")
+      ) {
+        mislabelled.push(`${access} ${name}: ${classified.reason}`);
       }
     }
+    expect(mislabelled).toEqual([]);
+  });
+
+  test("catalog metadata that needs a person makes a capability person-approves", () => {
+    const members = new Map<PersonApprovalClass, number>();
+    const misclassified: string[] = [];
+    for (const entry of capabilityCatalog) {
+      const classes = personApprovalClassesOf(entry);
+      for (const personApprovalClass of classes) {
+        members.set(
+          personApprovalClass,
+          (members.get(personApprovalClass) ?? 0) + 1,
+        );
+      }
+      const kind = kindOf({ type: "capability", id: entry.id });
+      if (classes.length > 0 && kind !== AGENT_ACCESS_KIND.personApproves) {
+        misclassified.push(`${entry.id} (${classes.join(", ")}): ${kind}`);
+      }
+    }
+    expect(misclassified).toEqual([]);
+    // Every class has members, so a parser or exporter change that drops the
+    // metadata fails here instead of emptying the census.
+    expect(
+      Object.values(PERSON_APPROVAL_CLASS).filter(
+        (personApprovalClass) => (members.get(personApprovalClass) ?? 0) === 0,
+      ),
+    ).toEqual([]);
   });
 
   test("no destructive capability is open", () => {
@@ -267,7 +427,9 @@ describe("classification", () => {
           context: CALLER,
         }).access;
         expect(access.kind, entry.id).toBe(
-          settings || financialAuthority
+          settings ||
+            financialAuthority ||
+            personApprovalClassesOf(entry).length > 0
             ? AGENT_ACCESS_KIND.personApproves
             : AGENT_ACCESS_KIND.callerConfirms,
         );

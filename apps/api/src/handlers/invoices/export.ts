@@ -24,6 +24,7 @@ import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const EXPORT_URL_TTL_SECONDS = 300;
 
@@ -59,6 +60,7 @@ export const createInvoicesExport = (writeObject = writeS3ObjectWithRetry) =>
       accountAccess: ACCOUNT_ACCESS.sandbox,
       featureAccess: { featureId: "time-billing", type: "required" },
       access: "write",
+      personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
       mcp: {
         type: "capability",
         reason: "billing_admin",

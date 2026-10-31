@@ -239,6 +239,12 @@ Who may run an operation when an agent calls it is its agent access
 
 Every write tool and every catalog capability is classified in two total maps
 inside `agent-access.ts`; a new one fails typecheck until it is classified.
+An open write names why it is open (`OPEN_READ` is for reads only). The
+suite derives what a capability must be from its catalog metadata: reads stay
+open outside a typed exception list, and a capability whose handler declares
+a `personApprovedEffect` (it changes a compliance control, records a person's
+review or approval, or exports many records), or a write with an `approve` or
+`review` permission or in the anonymization domain, must be `person-approves`.
 The maps are private: `decideAgentCall` (dispatch, chat) and
 `describeAgentAccess` (listings, the CLI registry export) read them through one
 resolver, and `agent-access.test.ts` asserts no other module gates on

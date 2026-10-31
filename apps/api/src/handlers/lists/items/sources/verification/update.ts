@@ -22,6 +22,7 @@ import {
   sourceHasDecisionHistory,
 } from "@/api/lib/lists/source-decision-history";
 import { includes } from "@/api/lib/type-guards";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const bodySchema = v.object({
   id: resourceIdSchema("legalListItemSource"),
@@ -39,6 +40,7 @@ const config = {
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: legalListRealtimeUpdates,
+  personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

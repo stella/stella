@@ -16,6 +16,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 export const exportCsvHandler = async ({
   scopedDb,
@@ -116,6 +117,7 @@ const config = {
     "range, status, and work item. Unlike the LEDES export this includes " +
     "non-billable and written-off entries; the row count is capped.",
   permissions: { timeEntry: ["approve"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",

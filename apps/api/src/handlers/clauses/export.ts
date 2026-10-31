@@ -18,6 +18,7 @@ import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 import { isRecord } from "@/api/lib/type-guards";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 import { buildClauseCategoryPath } from "./category-path";
 import { deriveClauseSlug, serializeClauseTags } from "./clause-csv";
@@ -223,6 +224,7 @@ const config = {
     "comma-separated list to export a subset; the number of rows is capped. " +
     "The JSON form is exactly what clauses.import reads back.",
   permissions: { workspace: ["read"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     readClass: "tenant",
