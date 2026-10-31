@@ -157,6 +157,7 @@ import type {
   SessionMemberCaller,
   WorkspaceCaller,
 } from "@/api/lib/auth/member-caller";
+import { createMemberInvitationSectionsPlugin } from "@/api/lib/auth/member-invitation-sections";
 import { sendNewDeviceNotice } from "@/api/lib/auth/new-device-notice";
 import {
   createOAuthConsentInfoPlugin,
@@ -2507,6 +2508,10 @@ export const createAuth = (
       // actually receives.
       socialSignInOutcomePlugin,
       organizationPlugin,
+      createMemberInvitationSectionsPlugin(
+        createAuthMiddleware,
+        () => new Date(),
+      ),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {

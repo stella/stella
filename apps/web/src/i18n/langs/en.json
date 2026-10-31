@@ -4720,6 +4720,7 @@
       "statuses": {
         "accepted": "Accepted",
         "canceled": "Canceled",
+        "expired": "Expired",
         "pending": "Pending",
         "rejected": "Rejected"
       }
@@ -5263,6 +5264,7 @@
         "title": "Memory extraction",
         "toggleLabel": "Suggest memories from chat history in the background"
       },
+      "pastInvitations": "Past invitations",
       "pendingInvitations": "Pending invitations",
       "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",

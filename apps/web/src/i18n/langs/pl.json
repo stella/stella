@@ -4720,6 +4720,7 @@
       "statuses": {
         "accepted": "Zaakceptowane",
         "canceled": "Anulowane",
+        "expired": "Wygasłe",
         "pending": "Oczekujące",
         "rejected": "Odrzucone"
       }
@@ -5263,6 +5264,7 @@
         "title": "Wyodrębnianie pamięci",
         "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
       },
+      "pastInvitations": "Poprzednie zaproszenia",
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
