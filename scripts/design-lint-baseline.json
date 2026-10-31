@@ -691,7 +691,6 @@
     "scripts/migration-catalog.ts": 2,
     "scripts/network-baseline-scope.ts": 1,
     "scripts/oxlint-rule-ids.ts": 1,
-    "scripts/prepare-maintenance-release.ts": 1,
     "scripts/publish-manifest.ts": 4,
     "scripts/ratchet.ts": 11,
     "scripts/rc-bailouts.ts": 1,
