@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import ts from "typescript6";
 
+import {
+  isObjectLiteralProperty,
+  parseSource,
+  walk,
+} from "../../packages/scripts/src/syntax-tree.ts";
 import {
   isCaseLawPublicReadModule,
   moduleRestrictedSchemaReads,
@@ -35,6 +39,39 @@ const lint = async (
   });
 
 describe.serial("public-law relation scan", () => {
+  test("withdrawal verdicts are read through their owner", async () => {
+    const cases = [
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema"; void caseLawWithdrawalStatus;',
+      'import { sql } from "drizzle-orm"; export const query = sql`select decision_id from case_law_withdrawal_status`;',
+    ];
+    const results = await Promise.all(
+      cases.map(
+        async (read) =>
+          await lint(
+            [
+              'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db"; void caseLawPublicReadDb;',
+              read,
+            ].join("\n"),
+            "apps/api/src/lib/case-law/other-read.ts",
+          ),
+      ),
+    );
+    for (const result of results) {
+      expect(result).toHaveLength(1);
+    }
+  });
+
+  test("withdrawal status is readable through the public boundary", async () => {
+    const source = [
+      'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
+      'import { caseLawWithdrawalStatus } from "@/api/db/schema/case-law";',
+      "export const read = () => caseLawPublicReadDb((tx) => tx.select({ decisionId: caseLawWithdrawalStatus.decisionId, status: caseLawWithdrawalStatus.status, withdrawnAt: caseLawWithdrawalStatus.withdrawnAt }).from(caseLawWithdrawalStatus));",
+    ].join("\n");
+    expect(
+      await lint(source, "apps/api/src/lib/case-law/withdrawn-copies.ts"),
+    ).toEqual([]);
+  });
+
   test("public case-law reads cannot name the base decision table", async () => {
     const source = [
       'import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";',
@@ -175,41 +212,41 @@ describe.serial("public-law relation scan", () => {
   test("decision-surface config covers each mixed public-law module", () => {
     const configPath = path.resolve(import.meta.dir, "../../oxlint.config.ts");
     const configSource = readFileSync(configPath, "utf-8");
-    const config = ts.createSourceFile(
-      configPath,
-      configSource,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TS,
-    );
+    const config = parseSource(configPath, configSource);
     let mixedModuleListReferences = 0;
     let decisionSurfaceOption = false;
-    const visit = (node: ts.Node) => {
-      if (ts.isPropertyAssignment(node)) {
-        const name = node.name.getText(config);
-        if (
-          (name === "files" || name === "excludeFiles") &&
-          ts.isArrayLiteralExpression(node.initializer) &&
-          node.initializer.elements.some(
-            (element) =>
-              ts.isSpreadElement(element) &&
-              ts.isIdentifier(element.expression) &&
-              element.expression.text === "PUBLIC_LAW_MIXED_MODULES",
-          )
-        ) {
-          mixedModuleListReferences += 1;
-        }
-        if (
-          name === "scope" &&
-          ts.isStringLiteral(node.initializer) &&
-          node.initializer.text === "decision-surface"
-        ) {
-          decisionSurfaceOption = true;
-        }
+    walk(config.program, (node, ancestors) => {
+      if (
+        !isObjectLiteralProperty(node, ancestors.at(-1)) ||
+        node.computed ||
+        node.shorthand ||
+        node.method ||
+        node.kind !== "init"
+      ) {
+        return;
       }
-      ts.forEachChild(node, visit);
-    };
-    visit(config);
+      const name = configSource.slice(node.key.start, node.key.end);
+      const { value } = node;
+      if (
+        (name === "files" || name === "excludeFiles") &&
+        value.type === "ArrayExpression" &&
+        value.elements.some(
+          (element) =>
+            element?.type === "SpreadElement" &&
+            element.argument.type === "Identifier" &&
+            element.argument.name === "PUBLIC_LAW_MIXED_MODULES",
+        )
+      ) {
+        mixedModuleListReferences += 1;
+      }
+      if (
+        name === "scope" &&
+        value.type === "Literal" &&
+        value.value === "decision-surface"
+      ) {
+        decisionSurfaceOption = true;
+      }
+    });
 
     expect(PUBLIC_LAW_MIXED_MODULES).toHaveLength(7);
     expect(new Set(PUBLIC_LAW_MIXED_MODULES).size).toBe(
@@ -231,7 +268,13 @@ describe.serial("public-law relation scan", () => {
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-namespace-helper.fixture",
       ),
-    ).toEqual(new Set(["caseLawDecisions", "unredactedCaseLawDecisions"]));
+    ).toEqual(
+      new Set([
+        "caseLawDecisions",
+        "unredactedCaseLawDecisions",
+        "caseLawWithdrawalStatus",
+      ]),
+    );
     expect(
       moduleRestrictedSchemaReads(
         ".oxlint-plugins/__fixtures__/case-law-reexport-helper.fixture",
@@ -484,35 +527,27 @@ describe.serial("public-law relation scan", () => {
         continue;
       }
       const sourcePath = `apps/api/src/${filename}`;
-      const sourceFile = ts.createSourceFile(
+      const { module } = parseSource(
         sourcePath,
         readFileSync(path.join(apiRoot, filename), "utf-8"),
-        ts.ScriptTarget.Latest,
-        true,
-        filename.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
       );
       const importedModules = new Set<string>();
+      for (const { entries } of module.staticExports) {
+        for (const { moduleRequest } of entries) {
+          if (moduleRequest !== null) {
+            importedModules.add(
+              canonicalModuleId(moduleRequest.value, sourcePath),
+            );
+          }
+        }
+      }
       let importsReadSurface = false;
-      for (const statement of sourceFile.statements) {
-        const moduleSpecifier =
-          ts.isImportDeclaration(statement) || ts.isExportDeclaration(statement)
-            ? statement.moduleSpecifier
-            : undefined;
-        if (!moduleSpecifier || !ts.isStringLiteral(moduleSpecifier)) {
-          continue;
-        }
-        const moduleId = canonicalModuleId(moduleSpecifier.text, sourcePath);
+      for (const { entries, moduleRequest } of module.staticImports) {
+        const moduleId = canonicalModuleId(moduleRequest.value, sourcePath);
         importedModules.add(moduleId);
-        const namedBindings =
-          ts.isImportDeclaration(statement) && statement.importClause
-            ? statement.importClause.namedBindings
-            : undefined;
-        if (!namedBindings || !ts.isNamedImports(namedBindings)) {
-          continue;
-        }
         const importedNames = new Set(
-          namedBindings.elements.map(
-            ({ propertyName, name }) => propertyName?.text ?? name.text,
+          entries.flatMap(({ importName }) =>
+            importName.name === null ? [] : [importName.name],
           ),
         );
         if (
@@ -554,45 +589,41 @@ describe.serial("public-law relation scan", () => {
         "void readHandle;",
         "export const query = sql`select id from case_law_decisions`;",
       ].join("\n");
-    const typeNames = ["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"];
-    const typeResults = await Promise.all(
-      typeNames.map(async (typeName) => ({
-        typeName,
-        reported: (
-          await lint(
-            caseLawReadTypeSource(typeName),
-            `apps/api/src/handlers/case-law/${typeName}.ts`,
-          )
-        ).length,
+    const cases = [
+      ...["CaseLawPublicReadDb", "CaseLawPublicReadTransaction"].map(
+        (typeName) => ({
+          source: caseLawReadTypeSource(typeName),
+          sourcePath: `apps/api/src/handlers/case-law/${typeName}.ts`,
+        }),
+      ),
+      {
+        source: [
+          'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
+          'import { sql } from "drizzle-orm";',
+          "export const query = definePublicLawSharedQuery(",
+          "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
+          "  async () => await sql`select id from case_law_decisions`,",
+          ");",
+        ].join("\n"),
+        sourcePath: "apps/api/src/handlers/case-law/registered-query.ts",
+      },
+      {
+        source: [
+          'import { sql } from "drizzle-orm";',
+          "export const query = sql`select id from case_law_decisions`;",
+        ].join("\n"),
+        sourcePath: "apps/api/src/lib/public-law-shared-query.ts",
+      },
+    ];
+    const results = await Promise.all(
+      cases.map(async ({ source, sourcePath }) => ({
+        sourcePath,
+        reported: (await lint(source, sourcePath)).length,
       })),
     );
-    expect(typeResults).toEqual(
-      typeNames.map((typeName) => ({ typeName, reported: 1 })),
+    expect(results).toEqual(
+      cases.map(({ sourcePath }) => ({ sourcePath, reported: 1 })),
     );
-    const registeredQuery = [
-      'import { definePublicLawSharedQuery, PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";',
-      'import { sql } from "drizzle-orm";',
-      "export const query = definePublicLawSharedQuery(",
-      "  PUBLIC_LAW_SHARED_QUERY.caseLawAnalysis,",
-      "  async () => await sql`select id from case_law_decisions`,",
-      ");",
-    ].join("\n");
-    expect(
-      await lint(
-        registeredQuery,
-        "apps/api/src/handlers/case-law/registered-query.ts",
-      ),
-    ).toHaveLength(1);
-    const sharedQueryRegistry = [
-      'import { sql } from "drizzle-orm";',
-      "export const query = sql`select id from case_law_decisions`;",
-    ].join("\n");
-    expect(
-      await lint(
-        sharedQueryRegistry,
-        "apps/api/src/lib/public-law-shared-query.ts",
-      ),
-    ).toHaveLength(1);
   });
 
   test("covers a legislation read", async () => {

@@ -37,6 +37,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
                 "parts": [
@@ -53,6 +57,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-1",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000001",
                 "parts": [
@@ -291,6 +299,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -357,6 +369,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-2",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -710,6 +726,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-3",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {
@@ -819,6 +839,10 @@
               "threadId": "00000000-0000-7000-8000-000000000002",
               "runId": "run-recorded-3",
               "sendMode": "rawOverride",
+              "browserExtension": {
+                "protocolVersion": 5,
+                "status": "unsupported-browser"
+              },
               "message": {
                 "id": "00000000-0000-7000-8000-000000000003",
                 "metadata": {

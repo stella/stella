@@ -1,9 +1,15 @@
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
+/** A third party's cross-site form POST to one fixed path. */
+type CrossSiteFormPost = { origin: string; pathname: string };
+
 type BrowserOriginGuardInput = {
   allowedOrigins: readonly (string | RegExp)[];
+  /** Admitted by origin and path only; every other mutation is held to `allowedOrigins`. */
+  crossSiteFormPosts: readonly CrossSiteFormPost[];
   method: string;
   origin: string | null;
+  pathname: string;
   secFetchSite: string | null;
 };
 
@@ -21,15 +27,24 @@ export const isAllowedBrowserOrigin = (
  */
 export const shouldRejectBrowserMutation = ({
   allowedOrigins,
+  crossSiteFormPosts,
   method,
   origin,
+  pathname,
   secFetchSite,
 }: BrowserOriginGuardInput): boolean => {
-  if (SAFE_METHODS.has(method.toUpperCase())) {
+  const normalizedMethod = method.toUpperCase();
+  if (SAFE_METHODS.has(normalizedMethod)) {
     return false;
   }
   if (origin !== null) {
-    return !isAllowedBrowserOrigin(origin, allowedOrigins);
+    const admittedFormPost =
+      normalizedMethod === "POST" &&
+      crossSiteFormPosts.some(
+        (formPost) =>
+          formPost.origin === origin && formPost.pathname === pathname,
+      );
+    return !admittedFormPost && !isAllowedBrowserOrigin(origin, allowedOrigins);
   }
   return secFetchSite === "same-site" || secFetchSite === "cross-site";
 };

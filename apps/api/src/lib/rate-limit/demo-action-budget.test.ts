@@ -236,7 +236,7 @@ describe("demo account daily action budget", () => {
       run: async () => await Promise.resolve("unreachable"),
     });
     expect(unavailable).toMatchObject({
-      error: { reason: "unavailable" },
+      error: { reason: "store_unavailable" },
     });
     expect(completions).toBe(1);
   });

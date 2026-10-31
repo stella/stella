@@ -7,6 +7,7 @@ import {
   GUEST_ANNOTATIONS_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
   LEGACY_GUEST_ANNOTATIONS_STORAGE_KEY,
+  MCP_OAUTH_REQUEST_STORAGE_KEY,
   READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
@@ -199,6 +200,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
     owner: "scoped",
     retention: "cleared",
   },
+  // Dismissed connection breaks belong to the signed-in user's integrations.
+  {
+    area: "local",
+    prefix: "stella:mcp-reconnect-dismissed:",
+    restoration: "data",
+    owner: "scoped",
+    retention: "cleared",
+  },
   // Tools the user approved for every chat: a standing grant.
   {
     area: "local",
@@ -337,6 +346,14 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
   {
     area: "session",
     prefix: "stella.desktop-account-link",
+    restoration: "data",
+    owner: "carried",
+    retention: "cleared",
+  },
+  // One popup's authorization request, consumed when its callback returns.
+  {
+    area: "session",
+    prefix: MCP_OAUTH_REQUEST_STORAGE_KEY,
     restoration: "data",
     owner: "carried",
     retention: "cleared",

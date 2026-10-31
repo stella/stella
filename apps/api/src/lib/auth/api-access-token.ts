@@ -51,6 +51,10 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * phone must not be able to keep itself connected.
  */
 export const API_OAUTH_ROUTES = {
+  "GET /v1/workspaces/:workspaceId/vocabulary": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
+  },
   "GET /v1/workspaces": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/list.ts",
@@ -138,6 +142,11 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/older-messages/list.ts",
   },
+  // A message goes up with the files attached to it, as the web sends them:
+  // each file rides in the message as a data URL part, and the handler scans
+  // and stores it (`uploadMessageFiles`) under the thread, matter and
+  // membership checks a browser session gets. Attaching opens no route of
+  // its own.
   "POST /v1/chat": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/chat/send-message.ts",

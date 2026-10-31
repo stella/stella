@@ -29,6 +29,7 @@ import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import type { CitationOccurrences } from "@/components/legal-reader/citation-occurrences.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { CitationChip } from "@/components/references/citation-chip";
+import type { DecisionCitationDrawing } from "@/components/references/citation-chip";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
@@ -87,21 +88,21 @@ type CitationOccurrenceNavigation = {
 
 type CitedDecisionChipProps = CitedDecisionPreviewProps & {
   decision: CitedDecisionTarget;
-  presentation?: DecisionCitationPresentation | undefined;
   occurrences?: CitationOccurrenceNavigation | undefined;
-  /**
-   * Text that already names the decision, drawn as the trigger itself in
-   * place of a court badge that would repeat it.
-   */
-  label?: ReactNode;
-  /** The citing text's own words, opened together with the court badge. */
-  citingText?: ReactNode;
+} & DecisionCitationDrawing;
+
+type CitedDecisionLinkProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  occurrences?: CitationOccurrenceNavigation | undefined;
+  presentation?: DecisionCitationPresentation | undefined;
+  children: ReactNode;
+  className?: string | undefined;
 };
 
-type CitedDecisionLinkProps = Omit<
-  CitedDecisionChipProps,
-  "label" | "citingText"
-> & {
+type CitedDecisionSourceTextProps = CitedDecisionPreviewProps & {
+  decision: CitedDecisionTarget;
+  occurrences?: CitationOccurrenceNavigation | undefined;
+  /** The decision text's own characters the reference was found at. */
   children: ReactNode;
   className?: string | undefined;
 };
@@ -167,19 +168,36 @@ const CitingPassage = ({
 };
 
 /**
- * The source wording stays in the document and, together with its court
- * chip, opens the shared preview: the reader points at the reference they
- * are reading, not at a badge beside it.
+ * A cited decision in a list of citations: its label and, with it, the court
+ * chip, which together open the shared preview.
  */
 export const CitedDecisionLink = ({
   children,
   className,
+  presentation,
   ...chip
 }: CitedDecisionLinkProps) => (
   <CitedDecisionChip
     {...chip}
     citingText={<span className={className}>{children}</span>}
-    label={undefined}
+    presentation={presentation}
+  />
+);
+
+/**
+ * A reference in the text of the decision being read. The court's own
+ * characters are the trigger and nothing is drawn beside them in the line,
+ * so the paragraph keeps every character it printed; the reader points at
+ * the reference they are reading and the preview says which decision it is.
+ */
+export const CitedDecisionSourceText = ({
+  children,
+  className,
+  ...chip
+}: CitedDecisionSourceTextProps) => (
+  <CitedDecisionChip
+    {...chip}
+    sourceText={<span className={className}>{children}</span>}
   />
 );
 
@@ -187,15 +205,16 @@ export const CitedDecisionLink = ({
  * The shared decision chip, wired to open the decision beside the text on a
  * wide screen and in the main view on a narrow one.
  */
-export const CitedDecisionChip = ({
-  decision,
-  label,
-  citingText,
-  passage,
-  treatment,
-  presentation,
-  occurrences,
-}: CitedDecisionChipProps) => {
+export const CitedDecisionChip = (props: CitedDecisionChipProps) => {
+  const { decision, passage, treatment, occurrences } = props;
+  const drawing: DecisionCitationDrawing =
+    props.sourceText === undefined
+      ? {
+          label: props.label,
+          citingText: props.citingText,
+          presentation: props.presentation,
+        }
+      : { sourceText: props.sourceText };
   const isMobile = useIsMobile();
   const inspector = useInspectorView();
   const navigate = useNavigate();
@@ -250,8 +269,7 @@ export const CitedDecisionChip = ({
         readerUrl,
         originalUrl: decision.sourceUrl ?? null,
       }}
-      label={label}
-      citingText={citingText}
+      {...drawing}
       onOpen={openDecision}
       preview={
         <>
@@ -267,7 +285,6 @@ export const CitedDecisionChip = ({
           <CitedDecisionPreview passage={passage} />
         ) : undefined
       }
-      presentation={presentation}
     />
   );
 };

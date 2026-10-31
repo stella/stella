@@ -187,6 +187,7 @@ type HandlerErrorBaseProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  workspaceId?: string | undefined;
   retryable?: boolean | undefined;
   retryAfterMs?: number | undefined;
 };
@@ -222,6 +223,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
@@ -239,6 +241,7 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    this.workspaceId = props.workspaceId;
   }
 }
 
@@ -430,6 +433,17 @@ export class StoredAstDegradedError extends TaggedError(
 )<{
   message: string;
   degradations: readonly PersistedAstDegradation[];
+}> {}
+
+export const STORED_CORPUS_VALIDATION_CODE = "stored_corpus_invalid";
+
+/** Stored JSON failed its reader contract; contains diagnostics only, never payloads. */
+export class StoredCorpusValidationError extends TaggedError(
+  "StoredCorpusValidationError",
+)<{
+  message: string;
+  code: typeof STORED_CORPUS_VALIDATION_CODE;
+  paths: readonly string[];
 }> {}
 
 /** Validation/domain-layer errors: no valid inputs, invalid config. */

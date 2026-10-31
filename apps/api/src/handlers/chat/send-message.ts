@@ -7,6 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserExtensionCapability,
   CHAT_TURN_INTENT,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
   RESOURCE_TYPE,
@@ -88,7 +89,7 @@ import {
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   parseMessage,
   requireUserMessageContent,
-  resolveBrowserClientCapability,
+  resolveBrowserExtensionCapability,
   validateMessage,
   validateToolCallParts,
 } from "@/api/handlers/chat/chat-schema";
@@ -1692,6 +1693,7 @@ type ChatToolsInput = Parameters<typeof getChatTools>[0];
 
 type PrepareValidatedIncomingMessageOptions = {
   dependencies: {
+    caseLawDb?: SendMessageDependencies["caseLawDb"];
     loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
     uploadMessageFiles: typeof uploadMessageFilesWithRollback;
   };
@@ -1744,7 +1746,7 @@ type PrepareValidatedIncomingMessageOptions = {
 
 /** Validates the provider-facing message and adopts thread/file rollback ownership. */
 const prepareValidatedIncomingMessage = async ({
-  dependencies: { loadWebSearchProviders, uploadMessageFiles },
+  dependencies: { caseLawDb, loadWebSearchProviders, uploadMessageFiles },
   authorization: {
     accessibleWorkspaceIds,
     memberRole,
@@ -1866,8 +1868,9 @@ const prepareValidatedIncomingMessage = async ({
       // Validation admits persisted browser calls from any client; the
       // streaming set below registers the tool only when this request's
       // client reports a live extension.
-      browserClient: {
+      browserExtension: {
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "connected",
       },
       editApplyMode,
       docxEditRepresentation,
@@ -1927,6 +1930,7 @@ const prepareValidatedIncomingMessage = async ({
 
     const thread = yield* Result.await(
       loadThread({
+        caseLawDb,
         initialDataWorkspaceIds:
           activeDraftContext === null
             ? []
@@ -2291,7 +2295,7 @@ export const createSendMessage = (
       user,
     }) {
       if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-        return Result.err(storedAIConfigUnreadableError(undefined));
+        return Result.err(storedAIConfigUnreadableError());
       }
 
       const body = transportBody.forwardedProps;
@@ -2516,6 +2520,7 @@ export const createSendMessage = (
             };
       const validationThreadState = yield* Result.await(
         readThreadValidationState({
+          caseLawDb: dependencies.caseLawDb,
           initialActiveSkill: body.activeSkill,
           messageId: body.message.id,
           organizationId: session.activeOrganizationId,
@@ -2608,6 +2613,7 @@ export const createSendMessage = (
         const preparedIncomingMessage = yield* Result.await(
           prepareValidatedIncomingMessage({
             dependencies: {
+              caseLawDb: dependencies.caseLawDb,
               loadWebSearchProviders: dependencies.loadWebSearchProviders,
               uploadMessageFiles: dependencies.uploadMessageFiles,
             },
@@ -2811,6 +2817,7 @@ export const createSendMessage = (
           ),
         );
         const messagesForContextInput = await selectMessagesForContextInput({
+          caseLawDb: dependencies.caseLawDb,
           messages: authorizedHistory,
           safeDb,
           skipCheckpoint: replayTargetMessageId !== undefined,
@@ -2955,7 +2962,9 @@ export const createSendMessage = (
           hasActiveDocxEditClient,
           hasActiveDocxFileClient,
           docxSuggestionSurface,
-          browserClient: resolveBrowserClientCapability(body.browserClient),
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           editApplyMode,
           docxEditRepresentation,
           webSearchEnabled: thread.data.webSearchEnabled,
@@ -3039,6 +3048,9 @@ export const createSendMessage = (
               toolScope: body.toolScope,
             }),
           },
+          browserExtension: resolveBrowserExtensionCapability(
+            body.browserExtension,
+          ),
           userContext: body.userContext,
           userId: user.id,
           workspaceId,
@@ -3647,6 +3659,7 @@ type PrepareChatContextProps = {
   sendMode: ChatSendMode;
   threadId: SafeId<"chatThread">;
   toolAvailability: ChatToolAvailability;
+  browserExtension: BrowserExtensionCapability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -3704,6 +3717,7 @@ const prepareChatContext = async ({
   sendMode,
   threadId,
   toolAvailability,
+  browserExtension,
   userContext,
   userId,
   workspaceId,
@@ -3744,6 +3758,7 @@ const prepareChatContext = async ({
         skillBindingScope,
         threadId,
         toolAvailability,
+        browserExtension,
         userContext,
         userId,
         workspaceId,
