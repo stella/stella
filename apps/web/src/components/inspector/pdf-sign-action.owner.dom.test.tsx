@@ -198,3 +198,24 @@ test("a document change after placement and before confirmation starts no handof
   expect(handoffCalls).toBe(0);
   expect(usePdfSignPlacementStore.getState().session).toBeNull();
 });
+
+test("a flow ending its session leaves another flow's placement in place", () => {
+  const first = mountOwner();
+  first.transfer(oldFieldId);
+  const second = renderHook(() => usePdfSignFlow(identity(otherFieldId)), {
+    wrapper,
+  });
+  const request = first.owner.beginRequest(first.owner.operation);
+  expect(
+    second.result.current.transferToSigning(request, target(otherFieldId)),
+  ).toBe(true);
+
+  first.hook.rerender({ fieldId: savedFieldId });
+  expect(usePdfSignPlacementStore.getState().session?.fieldId).toBe(
+    otherFieldId,
+  );
+  first.hook.unmount();
+  expect(usePdfSignPlacementStore.getState().session?.fieldId).toBe(
+    otherFieldId,
+  );
+});

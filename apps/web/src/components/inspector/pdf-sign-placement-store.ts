@@ -92,6 +92,14 @@ export const endPdfSignPlacement = () => {
   session?.cancel();
 };
 
+/** End the placement only while it is still the one `cancel` was registered with. */
+export const endOwnedPdfSignPlacement = (cancel: () => void) => {
+  if (usePdfSignPlacementStore.getState().session?.cancel !== cancel) {
+    return;
+  }
+  endPdfSignPlacement();
+};
+
 /** Finish placement with `stamp` (or none) and hand it to whoever started it. */
 export const confirmPdfSignPlacement = (stamp: PdfSigningStamp | undefined) => {
   const { session } = usePdfSignPlacementStore.getState();

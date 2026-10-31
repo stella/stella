@@ -216,13 +216,24 @@ export const useDesktopPdfSign = ({
     { authority, cancelAuthority, stamp, target }: PdfSignRequest,
     toastId: string,
   ) => {
-    if (authority?.() === false) {
+    // A revoked signing action stops quietly and takes its loading toast along.
+    const isRevoked = () => {
+      if (authority?.() !== false) {
+        return false;
+      }
+      stellaToast.close(toastId);
+      return true;
+    };
+    if (isRevoked()) {
       return;
     }
     const started = await Result.tryPromise(
       async () => await createPdfSigningHandoff({ ...target, stamp }),
     );
     if (Result.isError(started)) {
+      if (isRevoked()) {
+        return;
+      }
       getAnalytics().captureError(started.error.cause, {
         fingerprintKey: "useDesktopPdfSign.signWithToast:cause",
         scope: {
@@ -238,7 +249,7 @@ export const useDesktopPdfSign = ({
       return;
     }
 
-    if (authority?.() === false) {
+    if (isRevoked()) {
       return;
     }
 
@@ -269,7 +280,7 @@ export const useDesktopPdfSign = ({
       });
     };
 
-    if (authority?.() === false) {
+    if (isRevoked()) {
       return;
     }
     launchPdfSigningDeepLink(started.value.deepLinkUrl);

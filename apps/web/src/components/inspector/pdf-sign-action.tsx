@@ -8,6 +8,7 @@ import { ToolbarIconAction } from "@stll/ui/toolbar-icon-action";
 import { openInspectorFilePreview } from "@/components/inspector/inspector-actions";
 import {
   beginPdfSignPlacement,
+  endOwnedPdfSignPlacement,
   endPdfSignPlacement,
   usePdfSignPlacementStore,
 } from "@/components/inspector/pdf-sign-placement-store";
@@ -90,7 +91,7 @@ export const usePdfSignFlow = (
     if (session !== null && !acceptsIdentity(session, activeIdentity)) {
       session.cancelled = true;
       sessionRef.current = null;
-      endPdfSignPlacement();
+      endSessionPlacement(session);
     }
   }, [activeIdentity]);
   useLayoutEffect(
@@ -100,7 +101,7 @@ export const usePdfSignFlow = (
       if (ownedSession !== null) {
         ownedSession.cancelled = true;
         sessionRef.current = null;
-        endPdfSignPlacement();
+        endSessionPlacement(ownedSession);
       }
     },
     [],
@@ -127,6 +128,7 @@ export const usePdfSignFlow = (
         sessionRef.current = null;
       }
     };
+    authority.cancelPlacement = cancel;
     beginPdfSignPlacement({
       cancel,
       confirm: (stamp) => {
@@ -202,6 +204,8 @@ export const usePdfSignFlow = (
 
 type SigningAuthority = {
   allowedNextFieldId?: string;
+  /** The placement this session registered; another flow's placement is never ended for it. */
+  cancelPlacement?: () => void;
   cancelled: boolean;
   entityId: string;
   fieldId: string;
@@ -215,6 +219,12 @@ const createAuthority = (target: PdfSignIdentity): SigningAuthority => ({
   id: Symbol("pdf-signing-session"),
   workspaceId: target.workspaceId,
 });
+
+const endSessionPlacement = (authority: SigningAuthority) => {
+  if (authority.cancelPlacement !== undefined) {
+    endOwnedPdfSignPlacement(authority.cancelPlacement);
+  }
+};
 
 const acceptsIdentity = (
   authority: SigningAuthority,
