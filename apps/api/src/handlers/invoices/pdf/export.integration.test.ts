@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
 import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+import { Temporal } from "@stll/time";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import {
@@ -12,20 +13,25 @@ import {
   INVOICE_ATTACHMENT,
   INVOICE_STATUS,
   invoiceLines,
+  invoicePayments,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import recordInvoicePayment from "@/api/handlers/invoices/payments/create";
+import voidInvoicePayment from "@/api/handlers/invoices/payments/void";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
+import type { RenderInvoicePdfOptions } from "@/api/handlers/invoices/pdf/render-helpers";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -35,6 +41,7 @@ import {
 // Selected by the STELLA_RUN_POSTGRES_TESTS gate because the fixture exercises RLS.
 let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
 const invoiceId = createSafeId<"invoice">();
+const settlementInvoiceIds: SafeId<"invoice">[] = [];
 beforeAll(async () => {
   fixture = await getRlsFixture();
 
@@ -87,6 +94,17 @@ beforeAll(async () => {
   });
 });
 afterAll(async () => {
+  if (settlementInvoiceIds.length > 0) {
+    await fixture.testDb
+      .delete(invoicePayments)
+      .where(inArray(invoicePayments.invoiceId, settlementInvoiceIds));
+    await fixture.testDb
+      .delete(invoiceLines)
+      .where(inArray(invoiceLines.invoiceId, settlementInvoiceIds));
+    await fixture.testDb
+      .delete(invoices)
+      .where(inArray(invoices.id, settlementInvoiceIds));
+  }
   await fixture.testDb
     .delete(invoiceLines)
     .where(eq(invoiceLines.invoiceId, invoiceId));
@@ -153,6 +171,106 @@ const context = (
 };
 
 describe("invoice document export", () => {
+  test("exports payment instructions for each ledger settlement state", async () => {
+    const settlementInvoiceId = createSafeId<"invoice">();
+    settlementInvoiceIds.push(settlementInvoiceId);
+    const { testDb, ids } = fixture;
+    await testDb.insert(invoices).values({
+      id: settlementInvoiceId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceNumber: `INV-SETTLEMENT-${settlementInvoiceId}`,
+      invoiceDate: "2026-09-30",
+      status: INVOICE_STATUS.FINALIZED,
+      currency: "CZK",
+      language: "cs",
+      netAmount: cents(500_000),
+      vatAmount: cents(105_000),
+      totalAmount: cents(605_000),
+    });
+    await testDb.insert(invoiceLines).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      invoiceId: settlementInvoiceId,
+      position: 0,
+      description: "Settlement export line",
+      quantity: "1",
+      unit: "h",
+      unitPrice: cents(500_000),
+      vatRateBps: 2100,
+      vatTreatment: "domestic_vat",
+      netAmount: cents(500_000),
+      vatAmount: cents(105_000),
+      grossAmount: cents(605_000),
+      source: INVOICE_LINE_SOURCE.MANUAL,
+    });
+
+    const settlements: RenderInvoicePdfOptions["settlement"][] = [];
+    const writtenKeys: string[] = [];
+    const handler = createInvoicePdfExport(
+      async ({ key }) => {
+        writtenKeys.push(key);
+        return S3_OBJECT_WRITE_CERTAINTY.CONFIRMED;
+      },
+      async ({ invoice }) => {
+        settlements.push(invoice.settlement);
+        return Result.ok({
+          status: "rendered" as const,
+          pdf: new Uint8Array([37, 80, 68, 70]),
+          compileMs: 1,
+          peakRssBytes: 1,
+        });
+      },
+    );
+    const exportPdf = () =>
+      handler.handler(context("own", [], settlementInvoiceId));
+    const pay = async (amount: number) =>
+      recordInvoicePayment.handler(
+        asTestRaw<Parameters<typeof recordInvoicePayment.handler>[0]>({
+          ...context("own", [], settlementInvoiceId),
+          route: "/v1/invoices/:workspaceId/:invoiceId/payments",
+          body: {
+            amount,
+            paidOn: Temporal.Now.plainDateISO("UTC")
+              .subtract({ days: 1 })
+              .toString(),
+            method: "bank_transfer",
+            reference: null,
+            note: null,
+          },
+        }),
+      );
+
+    await exportPdf();
+    const partialPayment = await pay(200_000);
+    if (!isRecord(partialPayment) || typeof partialPayment.id !== "string") {
+      throw new Error("the payment ledger did not return a payment id");
+    }
+    await exportPdf();
+    await pay(405_000);
+    await exportPdf();
+    await voidInvoicePayment.handler(
+      asTestRaw<Parameters<typeof voidInvoicePayment.handler>[0]>({
+        ...context("own", [], settlementInvoiceId),
+        route: "/v1/invoices/:workspaceId/:invoiceId/payments/:paymentId/void",
+        params: {
+          ...context("own", [], settlementInvoiceId).params,
+          paymentId: partialPayment.id,
+        },
+      }),
+    );
+    await exportPdf();
+
+    expect(settlements).toEqual([
+      { status: "due", amountMinor: cents(605_000) },
+      { status: "due", amountMinor: cents(405_000) },
+      { status: "settled" },
+      { status: "due", amountMinor: cents(200_000) },
+    ]);
+    expect(writtenKeys).toHaveLength(4);
+    expect(new Set(writtenKeys).size).toBe(4);
+  });
+
   test("returns an expiring scoped artifact and records its download", async () => {
     const events: AuditEvent[] = [];
     const writes: Parameters<

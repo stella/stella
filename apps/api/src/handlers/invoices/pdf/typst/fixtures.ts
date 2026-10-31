@@ -75,6 +75,7 @@ export const invoiceFixture = (lineCount: number) =>
         },
       ],
     },
+    settlement: { status: "due", amountMinor: cents(756_250 * lineCount) },
     originalNumber: null,
   }) satisfies RenderInvoicePdfOptions;
 
