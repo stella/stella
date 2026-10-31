@@ -360,7 +360,7 @@ export const seedProvisionBackfillRows = async (
       const caseNumber = `provision-${String(n)}`;
       return {
         id: toSafeId<"caseLawDecision">(
-          `01990000-00c4-7000-8000-${n.toString(16).padStart(12, "0")}`,
+          `01990000-00b0-7000-8000-${n.toString(16).padStart(12, "0")}`,
         ),
         sourceId: PROVISION_SOURCE_ID,
         ...decisionDocketColumns({

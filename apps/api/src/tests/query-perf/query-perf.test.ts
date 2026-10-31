@@ -758,6 +758,16 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                     count,
                     `${jobId} fixture must grow to ${String(rows)} source rows`,
                   ).toBe(rows);
+                  if (jobId === SCHEDULER_BACKFILL_IDS.provisionState) {
+                    const firstPage =
+                      await db.execute(sql`SELECT source_id::text AS source
+                      FROM case_law_decisions ORDER BY id LIMIT 50`);
+                    expect(executedRows(firstPage)).toEqual(
+                      Array.from({ length: 50 }, () => ({
+                        source: "01990000-00c3-7000-8000-000000000001",
+                      })),
+                    );
+                  }
                   return await runMetrics(jobId, measurement.task);
                 },
               );
