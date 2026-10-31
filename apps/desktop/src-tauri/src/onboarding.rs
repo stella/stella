@@ -709,7 +709,7 @@ pub async fn onboarding_restart(app: AppHandle) -> Result<(), String> {
 /// Opens the main window's settings from the last step.
 #[tauri::command]
 pub async fn onboarding_open_settings(app: AppHandle) -> Result<(), String> {
-  crate::ensure_main_window(&app, "general");
+  crate::ensure_main_window(&app, crate::PreferencesTab::General);
   Ok(())
 }
 
