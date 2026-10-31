@@ -280,7 +280,6 @@ export const apiRoutes = mount([
       workObligationsRoute,
       myWorkRoute,
       accountExportsRoute,
-      organizationsRoute,
       meRoute,
       servedIfLoaded(localDevRoutes?.devRoute),
       verifyAuthRoute,

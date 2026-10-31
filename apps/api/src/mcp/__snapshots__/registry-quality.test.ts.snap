@@ -6465,7 +6465,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -6578,7 +6578,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -6642,7 +6642,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -6652,7 +6652,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -6718,7 +6718,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Create organization is additive and does not overwrite or remove existing state.",
       "openWorldHint": "Create organization is confined to the private workspace or a bounded computation."
     },
-    "description": "Create an organization you own after human approval (confirm: true). Each account receives at most 3 evaluation periods over its lifetime; deletion does not restore one. organization_evaluation_limit_reached refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.",
+    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
     "annotations": {
       "title": "Create organization",
       "readOnlyHint": false,
@@ -6744,7 +6744,10 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "minLength": 1,
           "maxLength": 100,
           "pattern": "^[a-z0-9-]+$",
-          "description": "Optional URL slug. Omit to generate an opaque organization address."
+          "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
+          "x-stella-agent-input": {
+            "kind": "slug"
+          }
         },
         "confirm": {
           "type": "boolean",
@@ -13726,7 +13729,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List audit log does not change state.",
       "openWorldHint": "List audit log is confined to the private workspace or a bounded computation."
     },
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \\"visible\\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Change detail is null unless changesStatus is \\"visible\\". Filter and paginate with the fields below. Requires audit-log access.",
     "annotations": {
       "title": "List audit log",
       "destructiveHint": false,
@@ -13839,7 +13842,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "annotations": {
       "title": "Remove matter member",
       "readOnlyHint": false,
@@ -13903,7 +13906,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -13913,7 +13916,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",

@@ -264,8 +264,8 @@ export const CreateOrganizationDialog = ({
                   <RecoverableErrorStatus
                     className="text-destructive text-sm"
                     message={t(view.message, {
-                      maxLength: ORGANIZATION_NAME_MAX_LENGTH,
-                      limit: ORGANIZATION_EVALUATION_LIMIT,
+                      maxLength: String(ORGANIZATION_NAME_MAX_LENGTH),
+                      limit: String(ORGANIZATION_EVALUATION_LIMIT),
                     })}
                     actions={null}
                   />
