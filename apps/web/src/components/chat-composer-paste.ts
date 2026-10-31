@@ -48,6 +48,11 @@ export const ChatComposerPaste = Extension.create<ChatComposerPasteOptions>({
             // File uploads still bubble to the React handler on the input
             // surface; nothing else reaches the editor's default parser.
             event.preventDefault();
+            // A read-only editor (a draft being sent) takes no paste: plugin
+            // handlers run whether or not the view is editable.
+            if (!editor.isEditable) {
+              return true;
+            }
             const paste = readChatPaste(event.clipboardData);
             switch (paste.type) {
               case "ignore":

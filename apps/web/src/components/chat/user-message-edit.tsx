@@ -354,6 +354,12 @@ const UserMessageEditForm = ({
   useExternalSyncEffect(() => {
     session.mirror({ attachments: attachments.map(({ part }) => part), html });
   }, [attachments, html, session]);
+  // While a send is out the draft is read-only, as the composer is while it
+  // sends: what goes to the server is what the user sees, and an accepted
+  // edit closes nothing the user changed since. A refusal hands it back.
+  useExternalSyncEffect(() => {
+    editor.setEditable(!sending);
+  }, [editor, sending]);
   // A changed edit is unsaved work: closing the tab asks first. The markup
   // compares formatting and chips too, not only the text.
   const [openedHtml] = useState(html);
@@ -379,24 +385,29 @@ const UserMessageEditForm = ({
             const pasted = isChatPastedTextPart(attachment.part);
             return (
               <AttachmentChip
-                actions={[
-                  {
-                    type: "remove",
-                    label: t("chat.editMessageRemoveAttachment", {
-                      name: title,
-                    }),
-                    icon: ({ className }) => (
-                      <XIcon aria-hidden="true" className={className} />
-                    ),
-                    onClick: () => {
-                      setAttachments(
-                        attachments.filter(
-                          (candidate) => candidate.id !== attachment.id,
-                        ),
-                      );
-                    },
-                  },
-                ]}
+                // A sent draft is read-only until the server answers.
+                actions={
+                  sending
+                    ? []
+                    : [
+                        {
+                          type: "remove",
+                          label: t("chat.editMessageRemoveAttachment", {
+                            name: title,
+                          }),
+                          icon: ({ className }) => (
+                            <XIcon aria-hidden="true" className={className} />
+                          ),
+                          onClick: () => {
+                            setAttachments(
+                              attachments.filter(
+                                (candidate) => candidate.id !== attachment.id,
+                              ),
+                            );
+                          },
+                        },
+                      ]
+                }
                 icon={({ className }) =>
                   pasted ? (
                     <TextIcon aria-hidden="true" className={className} />

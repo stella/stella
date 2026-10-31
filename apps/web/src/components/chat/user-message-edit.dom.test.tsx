@@ -14,7 +14,10 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 
 import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
-import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
+import type {
+  UserMessageEdit,
+  UserMessageEditOutcome,
+} from "@/components/chat/user-message-edit.logic";
 import { createUuid } from "@/lib/uuid";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -199,6 +202,81 @@ describe("editing a sent message", () => {
       await Promise.resolve();
     });
     expect(holding).toEqual([]);
+  });
+
+  describe("while a sent edit waits for the server", () => {
+    /** Sends the edit through actions the test answers itself, and checks
+     *  that the draft cannot change while the answer is out. */
+    const sendAndWait = async (outcome: UserMessageEditOutcome) => {
+      const { actions, submitted } = createActions();
+      const answered = Promise.withResolvers<undefined>();
+      const view = renderMessage({
+        actions: {
+          ...actions,
+          onSubmit: async (...call) => {
+            await actions.onSubmit(...call);
+            await answered.promise;
+            return outcome;
+          },
+        },
+      });
+      const field = openEditor(view);
+      fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+
+      await waitFor(() => {
+        expect(field.getAttribute("contenteditable")).toBe("false");
+      });
+      fireEvent.paste(field, { clipboardData: plainTextClipboard(" more") });
+      fireEvent.keyDown(field, { key: "Enter" });
+      expect(field.textContent).toBe("Review the draft NDA");
+      expect(view.queryByRole("button", { name: REMOVE_NDA }) === null).toBe(
+        true,
+      );
+      const send = view.getByRole("button", { name: en.chat.sendPrompt });
+      expect(
+        send.hasAttribute("disabled") ||
+          send.getAttribute("aria-disabled") === "true",
+      ).toBe(true);
+      expect(submitted).toHaveLength(1);
+
+      await act(async () => {
+        answered.resolve(undefined);
+        await answered.promise;
+      });
+      return { field, submitted, view };
+    };
+
+    test("an accepted answer closes the form on the draft that was sent", async () => {
+      const { submitted, view } = await sendAndWait({ type: "accepted" });
+
+      await waitFor(() => {
+        expect(
+          view.queryByRole("textbox", { name: en.chat.editMessageInput }) ===
+            null,
+        ).toBe(true);
+      });
+      expect(submitted.map(([, edit]) => edit)).toEqual([
+        {
+          attachments: [ndaDocument],
+          html: "<p>Review the <strong>draft</strong> NDA</p>",
+        },
+      ]);
+    });
+
+    test("a refusal hands the draft back, editable and intact", async () => {
+      const { field, view } = await sendAndWait({
+        code: CHAT_MESSAGE_EDIT_ERROR_CODE.turnRunning,
+        type: "edit-refused",
+      });
+
+      await waitFor(() => {
+        expect(field.getAttribute("contenteditable")).toBe("true");
+      });
+      expect(field.textContent).toBe("Review the draft NDA");
+      expect(view.getByRole("button", { name: REMOVE_NDA })).toBeDefined();
+      fireEvent.paste(field, { clipboardData: plainTextClipboard(" again") });
+      expect(field.textContent).toBe("Review the draft NDA again");
+    });
   });
 
   test("a refused edit keeps the form open on the draft and says why", async () => {
