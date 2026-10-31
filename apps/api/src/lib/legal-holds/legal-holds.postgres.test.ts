@@ -10,7 +10,10 @@ import {
   contacts,
   entities,
   entityDeletionCleanupRequests,
+  entityVersions,
+  folioCollabRooms,
   legalHolds,
+  properties,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -21,7 +24,10 @@ import { moveEntities } from "@/api/handlers/entities/move";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { createFileKey } from "@/api/lib/files/utils";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -49,6 +55,8 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         const workspaceId = createSafeId<"workspace">();
         const folderId = createSafeId<"entity">();
         const entityId = createSafeId<"entity">();
+        const folderVersionId = createSafeId<"entityVersion">();
+        const entityVersionId = createSafeId<"entityVersion">();
         const contactId = createSafeId<"contact">();
         const cleanupId = createSafeId<"entityDeletionCleanupRequest">();
         const recordAuditEvent = createAuditRecorder({
@@ -126,6 +134,131 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               name: "Evidence",
             },
           ]);
+          await db.insert(entityVersions).values([
+            {
+              id: folderVersionId,
+              entityId: folderId,
+              workspaceId,
+              versionNumber: 1,
+            },
+            {
+              id: entityVersionId,
+              entityId,
+              workspaceId,
+              versionNumber: 1,
+            },
+          ]);
+          const propertyOneId = createSafeId<"property">();
+          const propertyTwoId = createSafeId<"property">();
+          const propertyThreeId = createSafeId<"property">();
+          await db.insert(properties).values([
+            {
+              id: propertyOneId,
+              workspaceId,
+              name: "Collaboration file 1",
+              status: "fresh",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              kinds: ["document"],
+            },
+            {
+              id: propertyTwoId,
+              workspaceId,
+              name: "Collaboration file 2",
+              status: "fresh",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              kinds: ["document"],
+            },
+            {
+              id: propertyThreeId,
+              workspaceId,
+              name: "Collaboration file 3",
+              status: "fresh",
+              content: { type: "file", version: 1 },
+              tool: { type: "manual-input", version: 1 },
+              kinds: ["document"],
+            },
+          ]);
+          const collabFileOne = {
+            yjsSnapshotFileId: createSafeId<"userFile">(),
+            docxCheckpointFileId: createSafeId<"userFile">(),
+          };
+          const collabFileTwo = {
+            yjsSnapshotFileId: createSafeId<"userFile">(),
+            docxCheckpointFileId: createSafeId<"userFile">(),
+          };
+          const collabFileThree = {
+            yjsSnapshotFileId: createSafeId<"userFile">(),
+            docxCheckpointFileId: createSafeId<"userFile">(),
+          };
+          const collabFileFour = {
+            yjsSnapshotFileId: createSafeId<"userFile">(),
+            docxCheckpointFileId: createSafeId<"userFile">(),
+          };
+          const collabFiles = [
+            collabFileOne,
+            collabFileTwo,
+            collabFileThree,
+            collabFileFour,
+          ];
+          const persistedAt = new Date();
+          const collabRoom = (
+            targetEntityId: typeof folderId,
+            versionId: typeof folderVersionId,
+            propertyId: typeof propertyOneId,
+            files: (typeof collabFiles)[number],
+            index: number,
+          ) =>
+            ({
+              id: createSafeId<"folioCollabRoom">(),
+              workspaceId,
+              entityId: targetEntityId,
+              propertyId,
+              baseVersionId: versionId,
+              sourceVersionId: versionId,
+              fileName: `collaboration-${index + 1}.docx`,
+              ...files,
+              yjsSnapshotRevision: 1,
+              yjsSnapshotSizeBytes: 1,
+              yjsSnapshotUpdatedAt: persistedAt,
+              docxCheckpointUpdatedAt: persistedAt,
+              seedState: "seeded",
+              seedClaimedAt: persistedAt,
+              seededAt: persistedAt,
+            }) satisfies typeof folioCollabRooms.$inferInsert;
+          await db
+            .insert(folioCollabRooms)
+            .values([
+              collabRoom(
+                entityId,
+                entityVersionId,
+                propertyOneId,
+                collabFileOne,
+                0,
+              ),
+              collabRoom(
+                entityId,
+                entityVersionId,
+                propertyTwoId,
+                collabFileTwo,
+                1,
+              ),
+              collabRoom(
+                entityId,
+                entityVersionId,
+                propertyThreeId,
+                collabFileThree,
+                2,
+              ),
+              collabRoom(
+                folderId,
+                folderVersionId,
+                propertyOneId,
+                collabFileFour,
+                3,
+              ),
+            ]);
           await db.insert(entityDeletionCleanupRequests).values({
             id: cleanupId,
             organizationId,
@@ -436,6 +569,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           });
           const deletedFolder = await Result.gen(() =>
             deleteEntitiesHandler({
+              enqueueCleanup: async () => {},
               safeDb,
               organizationId,
               workspaceId,
@@ -450,6 +584,38 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               .from(entities)
               .where(inArray(entities.id, [folderId, entityId])),
           ).toEqual([]);
+          expect(
+            await db
+              .select({ id: folioCollabRooms.id })
+              .from(folioCollabRooms)
+              .where(inArray(folioCollabRooms.entityId, [folderId, entityId])),
+          ).toEqual([]);
+          const cleanupKeys = (
+            await db
+              .select({ s3Keys: entityDeletionCleanupRequests.s3Keys })
+              .from(entityDeletionCleanupRequests)
+              .where(eq(entityDeletionCleanupRequests.workspaceId, workspaceId))
+          ).flatMap(({ s3Keys }) => s3Keys);
+          expect(cleanupKeys).toEqual(
+            expect.arrayContaining(
+              collabFiles.flatMap(
+                ({ yjsSnapshotFileId, docxCheckpointFileId }) => [
+                  createFileKey({
+                    organizationId,
+                    workspaceId,
+                    fileId: yjsSnapshotFileId,
+                    mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                  }),
+                  createFileKey({
+                    organizationId,
+                    workspaceId,
+                    fileId: docxCheckpointFileId,
+                    mimeType: DOCX_MIME_TYPE,
+                  }),
+                ],
+              ),
+            ),
+          );
           await scopedDb(
             async (tx) =>
               await completeWorkspaceDeletion({

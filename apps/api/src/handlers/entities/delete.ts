@@ -163,7 +163,7 @@ export const deleteEntitiesHandler = async function* ({
           ),
         )
         .orderBy(asc(folioCollabRooms.id))
-        .limit(Math.max(1, deletionEntityIds.length));
+        .limit(Math.max(1, deletionEntityIds.length * LIMITS.propertiesCount));
       for (const room of collabRoomCandidates) {
         // db-await-in-loop: aggregate room locks acquire in primary-key order.
         await withAggregateLock({
