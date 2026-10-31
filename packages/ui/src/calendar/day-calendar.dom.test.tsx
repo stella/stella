@@ -363,6 +363,36 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
+  test("a block shorter than one label line draws no text but keeps its label", async () => {
+    const block = (id: string, minutes: number) =>
+      ({
+        accessibleLabel: `${id} label`,
+        caption: `${id} caption`,
+        endMs: at(12) + minutes * MINUTE_MS,
+        id,
+        kind: "mixed",
+        startMs: at(12),
+        title: `${id} title`,
+        tone: { type: "neutral" },
+      }) as const;
+    // At the 15-minute grid a slot is 22 px: 10 minutes is under one line.
+    const tooShort = block("brief", 10);
+    const oneLine = {
+      ...block("line", 15),
+      startMs: at(13),
+      endMs: at(13, 15),
+    };
+    const { cleanup, container } = await renderCalendar({
+      columns: [{ ...activityColumn, blocks: [tooShort, oneLine] }],
+    });
+    const surface = (label: string) =>
+      container.querySelector<HTMLElement>(`[aria-label="${label}"]`);
+
+    expect(surface("brief label")?.textContent).toBe("");
+    expect(surface("line label")?.textContent).toBe("line titleline caption");
+    await cleanup();
+  });
+
   test("a column without range selection takes no focus and ignores drags", async () => {
     const { cleanup, container, selected } = await renderCalendar();
     const surface = surfaceOf(container, "entries");

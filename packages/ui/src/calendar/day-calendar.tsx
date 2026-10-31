@@ -15,6 +15,7 @@ import { resolveMatterColor } from "../lib/matter-colors";
 import { cn } from "../lib/utils";
 import {
   boundsHeight,
+  DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX,
   DAY_CALENDAR_SLOT_HEIGHT_PX,
   extendRange,
   getDayBounds,
@@ -613,18 +614,19 @@ const DayCalendarBlockView = ({
     block.tone.type === "matter" && "border-s-[3px]",
     block.tone.type === "neutral" && "bg-muted",
   );
-  const content = (
-    <>
-      <span className="min-w-0 shrink-0 truncate font-medium">
-        {block.title}
-      </span>
-      {block.caption === undefined ? null : (
-        <span className="text-muted-foreground min-w-0 truncate tabular-nums">
-          {block.caption}
+  const content =
+    blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
+      <>
+        <span className="min-w-0 shrink-0 truncate font-medium">
+          {block.title}
         </span>
-      )}
-    </>
-  );
+        {block.caption === undefined ? null : (
+          <span className="text-muted-foreground min-w-0 truncate tabular-nums">
+            {block.caption}
+          </span>
+        )}
+      </>
+    );
   const shared = {
     "aria-label": block.accessibleLabel,
     className,
