@@ -399,7 +399,7 @@ const expectedPrSelection = ({
     expect(DECLARED_PR_PLAN_CHANGES.has(job)).toBe(true);
     return (
       value.needs["ci-plan"]?.outputs["run_required"] !== "false" &&
-      value.needs["ci-plan"].outputs["trusted"] === "true" &&
+      value.needs["ci-plan"]?.outputs["trusted"] === "true" &&
       value.needs["ci-plan"].outputs["coverage_profile"] === "normal-v1" &&
       value.needs["ci-plan"].outputs["desktop_rust_checks_required"] === "true"
     );

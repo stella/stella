@@ -2393,8 +2393,9 @@ test("a planned release screenshot check certifies the merge group", () => {
 });
 
 test("path-scoped platform checks run at every required depth", () => {
+  // Desktop Rust tests run at fast depth too, so no heavy-only gate holds them.
   expect(fastRequired).toContain("desktop-rust-tests");
-  expect(heavyJobs).toContain("desktop-rust-tests");
+  expect(heavyJobs).not.toContain("desktop-rust-tests");
   expect(fastRequired).not.toContain("windows-scripts");
   expect(heavyJobs).toContain("windows-scripts");
   for (const job of ["desktop-rust-tests", "windows-scripts"]) {
