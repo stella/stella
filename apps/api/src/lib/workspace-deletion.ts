@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
+import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import {
   lockLegalHoldOrganization,
   requireNoHold,
@@ -68,7 +69,8 @@ type TransactionWorkspaceDeletionOutcome =
   | {
       cleanupRequestIds: SafeId<"entityDeletionCleanupRequest">[];
       status: "deleted";
-    };
+    }
+  | { error: LegalHoldActiveError; status: "legal-hold" };
 
 const lockAuthorizedActorRole = async ({
   actorUserId,
@@ -229,7 +231,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
           target: { type: "matter", workspaceId },
         });
         if (hold.isErr()) {
-          throw hold.error;
+          // Refused before any write: the locks taken so far end with the
+          // transaction.
+          return { error: hold.error, status: "legal-hold" } as const;
         }
         if (workspace.status !== "active") {
           return { status: "workspace-unavailable" } as const;
@@ -305,6 +309,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
     return Result.err(transactionResult.error);
   }
 
+  if (transactionResult.value.status === "legal-hold") {
+    return Result.err(transactionResult.value.error);
+  }
   if (transactionResult.value.status !== "deleted") {
     return Result.ok(transactionResult.value);
   }

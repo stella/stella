@@ -37,6 +37,7 @@ import {
   preserveBufferObjectCleanupIntents,
   releaseObjectCleanupIntentsForLifecycle,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { desktopEditMimeTypeForFileType } from "@/api/lib/desktop-edit-file-types";
 import {
   createFileKey,
@@ -876,7 +877,7 @@ export const recordOrganizationStorageTeardown = async ({
     target: { type: "organization" },
   });
   if (hold.isErr()) {
-    throw hold.error;
+    abortTransaction(hold.error);
   }
 
   // Exact-key writers share this advisory lock while reserving storage. Taking
@@ -1014,7 +1015,7 @@ export const completeWorkspaceDeletion = async ({
     target: { type: "matter", workspaceId },
   });
   if (hold.isErr()) {
-    throw hold.error;
+    abortTransaction(hold.error);
   }
   const teardown = await recordWorkspaceStorageTeardown({
     organizationId,

@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "lib/legal-holds is the single owner of hold placement, release, the deletion refusal and its predicates; every deletion path imports the check from it instead of restating hold queries."
+}
