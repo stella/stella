@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
   APPARATUS_ROLES,
   getDocumentAstMetadata,
   hasUsableAst,
   HEADING_ROLES,
+  headMatterOrderDegradations,
   headMatterPrecedesBody,
   isApparatusRole,
   isDocumentAst,
@@ -13,6 +15,7 @@ import {
   parseDocumentAst,
   parseUsableDocumentAst,
   persistedAstDegradations,
+  persistedDocumentAstWriteSchema,
   resolveDocumentAnchor,
   resolveDocumentHeadingAnchor,
   withProjectedPlainText,
@@ -1046,7 +1049,7 @@ describe("head matter ordering", () => {
   });
 
   for (const role of APPARATUS_ROLES) {
-    test(`${role} cannot interrupt or follow any substantive body role`, () => {
+    test(`${role} cannot be written to interrupt or follow any substantive body role`, () => {
       for (const bodyRole of [
         "argumentation",
         "holding",
@@ -1064,8 +1067,21 @@ describe("head matter ordering", () => {
         expect(headMatterPrecedesBody([head, body])).toBe(true);
         expect(headMatterPrecedesBody(invalid.blocks)).toBe(false);
         expect(isDocumentAst(invalid)).toBe(false);
-        expect(parseDocumentAst(invalid)).toBeNull();
-        expect(parseDocumentAst(JSON.stringify(invalid))).toBeNull();
+        expect(
+          v.safeParse(persistedDocumentAstWriteSchema, invalid).success,
+        ).toBe(false);
+        // A row stored before the rule reads in its stored order.
+        for (const stored of [invalid, JSON.stringify(invalid)]) {
+          const read = parseDocumentAst(stored);
+          expect(read?.blocks.map(({ id }) => id)).toEqual([
+            "head",
+            "body",
+            "late",
+          ]);
+          expect(headMatterOrderDegradations(read?.blocks ?? [])).toEqual([
+            { kind: "head-matter-order", blockId: "late" },
+          ]);
+        }
       }
     });
   }
