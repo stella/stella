@@ -1611,13 +1611,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -4344,7 +4354,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -5959,7 +5969,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -8272,13 +8282,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -11005,7 +11025,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -12620,7 +12640,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max entries to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
@@ -15399,13 +15419,23 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "template_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Template id to describe its fields in detail; omit to list templates"
+          "description": "Template id for field details; omit to list"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Page size (list mode). Use a JSON number; a value outside the range is clamped to it.",
+          "x-stella-agent-input": {
+            "kind": "number",
+            "range": "clamp"
+          }
         },
         "cursor": {
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page"
+          "description": "Next-page cursor from list_templates"
         }
       }
     }
@@ -15797,7 +15827,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 200,
+          "maximum": 100,
           "description": "Max clauses to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
