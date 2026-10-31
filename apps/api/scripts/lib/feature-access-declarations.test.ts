@@ -139,18 +139,21 @@ describe("feature source declarations", () => {
       { message: "source ownership requires featureAccess fixture" },
     ]);
   });
-  test.each(["registry", "admitted"] as const)(
-    "%s dispatch boundaries preserve direct-access ownership enforcement",
-    (type) => {
+  test.each([
+    ["registry", "export const TOOL_SETS = [core];"],
+    ["registry", "export const TOOL_SETS = { a: core };"],
+    [
+      "admitted",
+      'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();',
+    ],
+  ] as const)(
+    "%s dispatch boundaries preserve direct-access ownership enforcement: %s",
+    (type, declaration) => {
       const module = "apps/api/src/dispatch/tools.ts";
       const boundary =
         type === "registry"
           ? { type, module, registry: "TOOL_SETS" }
           : { type, module, admission: "isMcpDescriptorFeatureEnabled" };
-      const declaration =
-        type === "registry"
-          ? "export const TOOL_SETS = [core];"
-          : 'import { isMcpDescriptorFeatureEnabled as admit } from "@/api/mcp/feature-access"; export const run = () => admit({}) && core();';
       const sources = new Map([
         ...baseSources,
         [
@@ -556,6 +559,8 @@ export const ${name} = { run: { featureId: "fixture", ${target} } };`;
       'import * as tables from "../db/schema/layout"; const rows = Object.values(tables);',
       'import * as tables from "../db/schema/layout"; const key = "layouts"; const rows = tables[key];',
       "const rows = sql`select * from fixture_layouts`;",
+      // An instantiation expression still evaluates its expression.
+      "export const rows = db.query.layouts<Row>;",
     ]) {
       sources.set(file, read);
       expect(
