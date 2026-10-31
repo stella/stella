@@ -964,6 +964,11 @@ const monitorLegacyStream = ({
   request.signal.addEventListener("abort", abortExchange, {
     once: true,
   });
+  // A client that left while the stream was being set up never fires the
+  // listener above, and nothing would read the body to end it.
+  if (request.signal.aborted) {
+    abortExchange();
+  }
 
   // Consumer cancellation closes the controller while a pull may still be
   // awaiting its upstream read or teardown. Track ownership before those
@@ -1542,13 +1547,11 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
-      const freshness = getMcpToolFreshnessRegistry();
-      const generation = freshness.generation;
-      const initialTools = await listMcpTools(context, mode, session.scopes);
-      unregisterFreshness = freshness.register({
-        // Ending the stream makes the host reconnect and list again.
+      // Registration projects the tools off the request path, so a failing
+      // projection is reported there and never costs the client its stream.
+      const registration = getMcpToolFreshnessRegistry().register({
+        // Ending the stream makes the host reconnect.
         close: teardown,
-        generation,
         id: Bun.randomUUIDv7(),
         notifyToolsChanged: async () => await server.sendToolListChanged(),
         organizationId: session.organizationId,
@@ -1558,9 +1561,9 @@ export const createMcpHttpRequestHandler = ({
           });
           return await listMcpTools(freshContext, mode, session.scopes);
         },
-        tools: initialTools,
         userId: session.userId,
       });
+      unregisterFreshness = registration.unregister;
 
       const monitoredBody = monitorLegacyStream({
         body: response.body,

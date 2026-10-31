@@ -1,5 +1,8 @@
 import type { Tool } from "@modelcontextprotocol/server";
+import { Result } from "better-result";
 
+import { mapWithConcurrency } from "@stll/concurrency";
+import { createCoalescedDrain } from "@stll/concurrency/coalesced-drain";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -13,7 +16,7 @@ import { mcpRegistryVersion } from "@/api/mcp/tool-versions";
 
 const MAX_NOTIFICATION_FAN_OUT = 16;
 const MAX_LIVE_TOOL_SESSIONS = 1024;
-/** How long one session's reprojection and notification may hold its batch. */
+/** How long one session's reprojection and notification may hold a publish. */
 const SESSION_REPROJECTION_DEADLINE_MS = 10_000;
 
 /** Whose tool projection can have changed: a whole organisation or one member. */
@@ -29,16 +32,32 @@ export type ReportMcpToolFreshnessError = (
   operation: McpToolFreshnessOperation,
 ) => void;
 
+type Reprojection = ReturnType<typeof createCoalescedDrain>;
+
 type LiveToolSession = {
   readonly close: () => Promise<void> | void;
   readonly notifyToolsChanged: () => Promise<void> | void;
   readonly organizationId: string;
   readonly projectTools: () => Promise<readonly Tool[]>;
+  /**
+   * Runs at most one projection for this session at a time. A request made
+   * while one runs queues a single rerun, so the newest change is always
+   * projected after it.
+   */
+  readonly reproject: Reprojection;
   readonly userId: string;
-  /** Version of the projection this client was last shown or told about. */
-  projectionVersion: string;
-  /** Sequence of the newest reprojection started for this session. */
-  reprojection: number;
+  /**
+   * Version of the projection this client was last told about. Unknown until
+   * the first projection after the stream opened lands: the client may hold a
+   * list from before its stream existed.
+   */
+  projectionVersion: string | undefined;
+};
+
+export type McpToolFreshnessRegistration = {
+  /** Settles once the opening projection has landed or missed its deadline. */
+  opened: Promise<void>;
+  unregister: () => void;
 };
 
 /**
@@ -52,7 +71,6 @@ export class McpToolFreshnessRegistry {
   readonly #notificationFanOut: number;
   readonly #reprojectionDeadlineMs: number;
   readonly #reportError: ReportMcpToolFreshnessError;
-  #generation = 0;
 
   constructor({
     capacity = MAX_LIVE_TOOL_SESSIONS,
@@ -72,35 +90,27 @@ export class McpToolFreshnessRegistry {
   }
 
   /**
-   * Advances when a publish starts. A caller reads it before projecting the
-   * tools it registers with, so `register` can tell whether a publish ran
-   * while that session was not yet visible to it.
+   * Registers a client's notification stream and projects its tools once.
+   * The client may have listed its tools before the stream opened, and a
+   * change can land in between, so that first projection always tells the
+   * client to list again.
    */
-  get generation(): number {
-    return this.#generation;
-  }
-
   register({
     close,
-    generation,
     id,
     notifyToolsChanged,
     organizationId,
     projectTools,
-    tools,
     userId,
   }: {
-    /** Ends the client's stream so its host reconnects and lists again. */
+    /** Ends the client's stream so its host reconnects. */
     close: LiveToolSession["close"];
-    /** `generation` as read before `tools` were projected. */
-    generation: number;
     id: string;
     notifyToolsChanged: LiveToolSession["notifyToolsChanged"];
     organizationId: string;
     projectTools: LiveToolSession["projectTools"];
-    tools: readonly Tool[];
     userId: string;
-  }): () => void {
+  }): McpToolFreshnessRegistration {
     if (this.#sessions.size >= this.#capacity) {
       const oldest = this.#sessions.entries().next().value;
       if (oldest !== undefined) {
@@ -110,28 +120,31 @@ export class McpToolFreshnessRegistry {
         detached(this.#close(evicted), "mcp.tool-freshness-evict");
       }
     }
+    const reproject: Reprojection = createCoalescedDrain(async () => {
+      const current = this.#sessions.get(id);
+      if (current?.reproject === reproject) {
+        await this.#reproject(id, current);
+      }
+    });
     const session: LiveToolSession = {
       close,
       notifyToolsChanged,
       organizationId,
-      projectionVersion: mcpRegistryVersion(tools),
+      projectionVersion: undefined,
       projectTools,
-      reprojection: 0,
+      reproject,
       userId,
     };
     this.#sessions.set(id, session);
-    if (generation !== this.#generation) {
-      // A publish started while `tools` were projected and could not see this
-      // session yet, so `tools` can predate the change it announced.
-      detached(
-        this.#reprojectWithinDeadline(id, session),
-        "mcp.tool-freshness-register",
-      );
-    }
-    return () => {
-      if (this.#sessions.get(id) === session) {
-        this.#sessions.delete(id);
-      }
+    const opened = this.#reprojectWithinDeadline(session);
+    detached(opened, "mcp.tool-freshness-register");
+    return {
+      opened,
+      unregister: () => {
+        if (this.#sessions.get(id) === session) {
+          this.#sessions.delete(id);
+        }
+      },
     };
   }
 
@@ -142,72 +155,79 @@ export class McpToolFreshnessRegistry {
     organizationId: string;
     userId?: string | undefined;
   }): Promise<void> {
-    this.#generation += 1;
-    const entries = [...this.#sessions.entries()].filter(
-      ([, session]) =>
+    const sessions = [...this.#sessions.values()].filter(
+      (session) =>
         session.organizationId === organizationId &&
         (userId === undefined || session.userId === userId),
     );
-    for (
-      let offset = 0;
-      offset < entries.length;
-      offset += this.#notificationFanOut
-    ) {
-      const batch = entries.slice(offset, offset + this.#notificationFanOut);
-      await Promise.all(
-        batch.map(
-          async ([id, session]) =>
-            await this.#reprojectWithinDeadline(id, session),
-        ),
-      );
-    }
+    // A pool rather than fixed batches: a session stalled up to its deadline
+    // holds one slot, not the start of every session queued behind it.
+    await mapWithConcurrency({
+      items: sessions,
+      limit: this.#notificationFanOut,
+      operation: async (session) =>
+        await this.#reprojectWithinDeadline(session),
+    });
   }
 
   async #close(session: LiveToolSession): Promise<void> {
-    try {
-      await session.close();
-    } catch (error) {
-      this.#reportError(error, "close_session");
+    const closed = await Result.tryPromise({
+      try: async () => {
+        await session.close();
+      },
+      catch: (cause) => cause,
+    });
+    if (Result.isError(closed)) {
+      this.#reportError(closed.error, "close_session");
     }
   }
 
   /**
    * Never rejects and never holds its caller past the deadline. A session
-   * that misses it is reported and left to finish on its own; a stale late
-   * result is still discarded by the reprojection sequence.
+   * that misses it is reported and keeps its projection running; a change
+   * published meanwhile is projected once that projection settles.
    */
-  async #reprojectWithinDeadline(
-    id: string,
-    session: LiveToolSession,
-  ): Promise<void> {
-    try {
-      await withTimeout(async () => await this.#reproject(id, session), {
-        label: "MCP session tool reprojection",
-        timeoutMs: this.#reprojectionDeadlineMs,
-      });
-    } catch (error) {
-      this.#reportError(error, "reproject_session");
+  async #reprojectWithinDeadline(session: LiveToolSession): Promise<void> {
+    const { completion } = session.reproject();
+    const settled = await Result.tryPromise({
+      try: async () =>
+        await withTimeout(async () => await completion, {
+          label: "MCP session tool reprojection",
+          timeoutMs: this.#reprojectionDeadlineMs,
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(settled)) {
+      this.#reportError(settled.error, "reproject_session");
     }
   }
 
   async #reproject(id: string, session: LiveToolSession): Promise<void> {
-    session.reprojection += 1;
-    const reprojection = session.reprojection;
-    const tools = await session.projectTools();
-    // Overlapping publishes can resolve out of order; only the newest
-    // reprojection of a still-registered session may move its version.
-    if (
-      reprojection !== session.reprojection ||
-      this.#sessions.get(id) !== session
-    ) {
+    const projected = await Result.tryPromise({
+      try: async () => await session.projectTools(),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(projected)) {
+      this.#reportError(projected.error, "reproject_session");
       return;
     }
-    const nextVersion = mcpRegistryVersion(tools);
+    if (this.#sessions.get(id) !== session) {
+      return;
+    }
+    const nextVersion = mcpRegistryVersion(projected.value);
     if (nextVersion === session.projectionVersion) {
       return;
     }
     session.projectionVersion = nextVersion;
-    await session.notifyToolsChanged();
+    const notified = await Result.tryPromise({
+      try: async () => {
+        await session.notifyToolsChanged();
+      },
+      catch: (cause) => cause,
+    });
+    if (Result.isError(notified)) {
+      this.#reportError(notified.error, "reproject_session");
+    }
   }
 
   /** Test-only visibility for lifecycle assertions. */
@@ -253,6 +273,8 @@ registerMcpToolProjectionDelivery((identity) => {
 export const publishMcpToolProjectionChange = async (
   identity: McpToolProjectionIdentity,
 ): Promise<void> => {
-  announceMcpToolProjectionChange(identity);
-  await getMcpToolFreshnessRegistry().publish(identity);
+  await Promise.all([
+    announceMcpToolProjectionChange(identity),
+    getMcpToolFreshnessRegistry().publish(identity),
+  ]);
 };

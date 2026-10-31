@@ -7,6 +7,8 @@ import type {
   WorkspaceRealtimeEvent,
 } from "@stll/api-contract";
 import { SSE_HEARTBEAT_FRAME } from "@stll/api-contract/sse-heartbeat";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 
 import {
   CACHE_CONTROL_HEADER,
@@ -1127,19 +1129,53 @@ export const registerMcpToolProjectionDelivery = (
 };
 
 /**
- * Announce a projection change to the other replicas. The caller reprojects
- * its own sessions; its looped-back copy is ignored.
+ * Publish attempts for one projection change. Nothing else re-announces a
+ * change, so a publish lost to a brief Redis outage would leave the other
+ * replicas' clients on a stale list until they reconnect.
  */
-export const announceMcpToolProjectionChange = (
+const MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS = 3;
+const MCP_TOOL_PROJECTION_RETRY_BASE_MS = 250;
+
+const publishMcpToolProjectionAttempt = async (
   change: McpToolProjectionChange,
-): void => {
-  activePublisher()
-    .publishMcpToolProjectionChange(change, { originInstanceId: INSTANCE_ID })
-    .catch((error: unknown) => {
-      logger.warn("sse.redis_publish_failed", {
-        "error.type": errorTag(error),
+  attempt: number,
+): Promise<void> => {
+  const published = await Result.tryPromise({
+    try: async () => {
+      await activePublisher().publishMcpToolProjectionChange(change, {
+        originInstanceId: INSTANCE_ID,
       });
+    },
+    catch: (cause) => cause,
+  });
+  if (!Result.isError(published)) {
+    return;
+  }
+  if (attempt + 1 >= MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS) {
+    logger.error("sse.mcp_tool_projection_publish_failed", {
+      "error.type": errorTag(published.error),
+      "publish.attempts": MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS,
     });
+    return;
+  }
+  logger.warn("sse.redis_publish_failed", {
+    "error.type": errorTag(published.error),
+  });
+  await sleep(
+    backoffDelay(attempt, { baseMs: MCP_TOOL_PROJECTION_RETRY_BASE_MS }),
+  );
+  await publishMcpToolProjectionAttempt(change, attempt + 1);
+};
+
+/**
+ * Announce a projection change to the other replicas, retrying a failed
+ * publish with backoff. Never rejects. The caller reprojects its own
+ * sessions; its looped-back copy is ignored.
+ */
+export const announceMcpToolProjectionChange = async (
+  change: McpToolProjectionChange,
+): Promise<void> => {
+  await publishMcpToolProjectionAttempt(change, 0);
 };
 
 // ── Desktop-edit session events ─────────────────────────
