@@ -11,7 +11,24 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 
+/** The firm binds one guideline file; `billing_guideline_files_firm_uidx`
+ * holds the database to it. */
+export const BILLING_GUIDELINE_MAX_FIRM_FILES = 1;
+/** The most guideline files one client binds. */
 export const BILLING_GUIDELINE_MAX_FILES_PER_CLIENT = 10;
+
+/** The most files one scope binds: the firm without a client, else that
+ * client. Every write and every bounded read derives its cap from these. */
+export const billingGuidelineScopeCap = (clientId: string | undefined) =>
+  clientId === undefined
+    ? BILLING_GUIDELINE_MAX_FIRM_FILES
+    : BILLING_GUIDELINE_MAX_FILES_PER_CLIENT;
+
+/** The most bindings a read of the firm's files plus `clientCount` clients'
+ * files can return: every scope full. */
+export const billingGuidelineFileCap = (clientCount: number) =>
+  BILLING_GUIDELINE_MAX_FIRM_FILES +
+  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT * clientCount;
 
 export const extractBillingGuidelineSections = (content: string) => {
   // Text before the first heading is independently citable. Scan each line once:
@@ -122,7 +139,7 @@ export const loadBillingGuidelines = async ({
                 ),
           ),
         ),
-      1 + clientIds.length * BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+      billingGuidelineFileCap(clientIds.length),
     );
     if (read.type === "overflow") {
       return panic("Billing guideline bindings exceed their configured cap", {

@@ -20,7 +20,11 @@ import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { BILLING_GUIDELINE_MAX_FILES_PER_CLIENT } from "@/api/lib/billing/billing-guidelines";
+import {
+  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  BILLING_GUIDELINE_MAX_FIRM_FILES,
+  billingGuidelineScopeCap,
+} from "@/api/lib/billing/billing-guidelines";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, uniqueItems } from "@/api/lib/custom-schema";
@@ -113,7 +117,7 @@ const loadBillingFileBindings = async ({
             : isNull(billingGuidelineFiles.clientId),
         ),
       ),
-    BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+    billingGuidelineScopeCap(clientId),
   );
   return bindings.type === "complete"
     ? bindings.rows
@@ -222,7 +226,7 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
     if (
       !body.clientId &&
-      ((body.resourceIds?.length ?? 0) > 1 ||
+      ((body.resourceIds?.length ?? 0) > BILLING_GUIDELINE_MAX_FIRM_FILES ||
         body.timeBillingFormat !== undefined)
     ) {
       return Result.err(
