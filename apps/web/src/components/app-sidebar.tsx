@@ -140,7 +140,10 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import {
+  useTimeBillingPreviewEnabled,
+  useTimeChromeVisible,
+} from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -273,6 +276,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
+  const timeChromeVisible = useTimeChromeVisible();
   const canReadTimeEntries = usePermissions({ timeEntry: ["read"] });
   const canReadInvoices = usePermissions({ workspace: ["read"] });
   const matterBillingLinks = getMatterBillingLinks({
@@ -286,7 +290,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
-    includeTimesheets: timeBillingPreviewEnabled && canReadTimeEntries,
+    includeTimesheets: timeChromeVisible,
     publicKnowledge: isPublicKnowledgeEnabled(),
   });
   const user = useAuthenticatedUser();
