@@ -389,6 +389,53 @@ describe("no-unreasoned-timeout", () => {
   });
 });
 
+describe("no-file-existence-wait", () => {
+  const lintExistence = lintWith("no-file-existence-wait");
+  const imports = [
+    'import { existsSync } from "node:fs";',
+    'import * as fs from "fs";',
+    'import { waitForExternalState as waitFor } from "@stll/property-testing/external-state";',
+  ];
+
+  test("reports an external-state wait whose read returns existsSync", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'await waitFor({ description: "a", read: () => existsSync("x") });',
+          'await waitFor({ description: "b", read: () => fs.existsSync("x") });',
+          "await waitFor({",
+          '  description: "c",',
+          "  read() {",
+          '    return existsSync("x");',
+          "  },",
+          "});",
+        ].join("\n"),
+      ),
+    ).toEqual([4, 5, 6]);
+  });
+
+  test("accepts content waits, other predicates and unrelated helpers", async () => {
+    expect(
+      await lintExistence(
+        [
+          ...imports,
+          'import { readFileSync } from "node:fs";',
+          'import { waitForFileContent } from "@stll/property-testing/external-state";',
+          "const existsSyncLocal = (path: string) => path.length > 0;",
+          "const waitForExternalState = (options: unknown) => options;",
+          'await waitFor({ description: "a", read: () => readFileSync("x", "utf-8") === "done" });',
+          'await waitFor({ description: "b", read: () => !existsSync("x") });',
+          'await waitFor({ description: "c", read: () => existsSyncLocal("x") });',
+          'await waitFor({ description: "d", read: () => () => existsSync("x") });',
+          'waitForExternalState({ read: () => existsSync("x") });',
+          'await waitForFileContent({ description: "e", path: "x", parse: () => true });',
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+});
+
 describe("tagged reasons", () => {
   test("a tagged reason needs the tag and a word", () => {
     const reason = taggedComment(["real-time"]);

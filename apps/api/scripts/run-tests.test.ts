@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,7 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { waitForExternalState } from "@stll/property-testing/external-state";
+import {
+  waitForExternalState,
+  waitForFileContent,
+} from "@stll/property-testing/external-state";
 
 const apiRoot = path.resolve(import.meta.dirname, "..");
 
@@ -96,18 +98,18 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
       );
       const pids: number[] = [];
       try {
-        await waitForExternalState({
-          description: "snapshot builder announces its descendant",
-          read: () => existsSync(marker),
+        const announced = await waitForFileContent({
+          description:
+            "snapshot builder announces itself, its descendant and the leaf",
+          path: marker,
+          parse: (content) => {
+            const announcedPids = content.trim().split(" ").map(Number);
+            return announcedPids.length === 3 &&
+              announcedPids.every((pid) => Number.isSafeInteger(pid) && pid > 1)
+              ? announcedPids
+              : undefined;
+          },
         });
-        const announced = readFileSync(marker, "utf-8")
-          .trim()
-          .split(" ")
-          .map(Number);
-        expect(announced).toHaveLength(3);
-        expect(
-          announced.every((pid) => Number.isSafeInteger(pid) && pid > 1),
-        ).toBe(true);
         pids.push(...announced);
         expect(
           pids.every((pid) => Result.try(() => process.kill(pid, 0)).isOk()),

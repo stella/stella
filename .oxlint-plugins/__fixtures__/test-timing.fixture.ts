@@ -6,9 +6,11 @@
 // comment directly above a wait counts as its reason.
 
 import { setDefaultTimeout, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { setTimeout as wait } from "node:timers/promises";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { waitForExternalState } from "@stll/property-testing/external-state";
 
 declare const page: { waitForTimeout: (ms: number) => Promise<void> };
 
@@ -94,3 +96,13 @@ test("bounded case", () => undefined, 2000);
 // timeout: the case starts a real database cluster
 // expect-clean: test-timing/no-unreasoned-timeout
 test("reasoned case", () => undefined, 30_000);
+
+// an external-state wait that ends when a file exists, before its content
+
+// oxlint-disable-next-line test-timing/no-file-existence-wait
+await waitForExternalState({ description: "marker", read: () => existsSync("marker") });
+
+// an external-state wait on something other than the file's existence
+
+// expect-clean: test-timing/no-file-existence-wait
+await waitForExternalState({ description: "marker gone", read: () => !existsSync("marker") });
