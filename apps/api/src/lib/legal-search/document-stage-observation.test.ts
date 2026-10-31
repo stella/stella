@@ -6,7 +6,6 @@ import {
   type DocumentStageObservation,
 } from "@stll/legal-atlas/document-fetch-diagnostics";
 
-import { PUBLISHER_REQUEST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -16,6 +15,7 @@ import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   EMPTY_AST,
   type IngestionResult,
+  PUBLISHER_REQUEST,
   type SyncPage,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
