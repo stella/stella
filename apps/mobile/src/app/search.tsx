@@ -392,7 +392,7 @@ const SearchResults = ({
       ListHeaderComponent={
         view.status === "loading" ? (
           <ActivityIndicator className="py-2" color={colors.muted} />
-        ) : null
+        ) : undefined
       }
       renderItem={({ item: result }) => (
         <SearchResultRow
