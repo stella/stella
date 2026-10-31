@@ -24,7 +24,7 @@ import {
 
 const MIGRATION_PATHS = [
   "../../drizzle/20261003122400_organization_file_usage/migration.sql",
-  "../../drizzle/20261030180334_file_reservation_reconciliation_state/migration.sql",
+  "../../drizzle/20261031151134_file_reservation_reconciliation_state/migration.sql",
 ];
 const migrationSql = MIGRATION_PATHS.map((path) =>
   readFileSync(nodePath.resolve(import.meta.dir, path), "utf-8")

@@ -274,7 +274,7 @@ export type ExecutableOnlineUniqueIndex = OnlineIndexDeclaration &
 
 export const EXECUTABLE_ONLINE_UNIQUE_INDEXES = [
   {
-    introducedBy: "20261030180734_mcp_oauth_current_state_index",
+    introducedBy: "20261031151534_mcp_oauth_current_state_index",
     createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "mcp_oauth_state_org_connector_user_uidx" ON public."mcp_oauth_state" USING btree ("organization_id", "connector_id", "user_id")',
     definitionBody:
