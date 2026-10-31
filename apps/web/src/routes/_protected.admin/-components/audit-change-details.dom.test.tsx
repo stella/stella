@@ -57,13 +57,15 @@ test("visible entries without changes keep their empty marker", () => {
   ).toBeNull();
 });
 
-test("visible changes keep their text and tooltip", () => {
+test("visible changes keep their whole text in one cut line", () => {
   const changes = { amount: { old: 100, new: 200 } };
   const view = mount({ changes, changesStatus: AUDIT_CHANGES_STATUS.visible });
-  expect(view.getByRole("cell").textContent).toBe(JSON.stringify(changes));
-  expect(view.getByRole("cell").getAttribute("title")).toBe(
-    JSON.stringify(changes),
-  );
+  const cell = view.getByRole("cell");
+  expect(cell.textContent).toBe(JSON.stringify(changes));
+  // The cut line shows the whole text on hover itself, not a native title.
+  const line = cell.querySelector('[data-slot="truncated-text"]');
+  expect(line?.textContent).toBe(JSON.stringify(changes));
+  expect(cell.getAttribute("title")).toBeNull();
 });
 
 test("unavailable label uses the selected locale", () => {

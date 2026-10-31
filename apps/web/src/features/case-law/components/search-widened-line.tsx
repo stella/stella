@@ -33,7 +33,8 @@ export const SearchWidenedLine = ({
         isolated, because it is the reader's text and may run the other way.
         Isolating the whole line instead would let a Latin query set the
         direction of an Arabic sentence. A long query ends in an ellipsis on
-        one line rather than wrapping the toolbar row; the title keeps it whole.
+        one line rather than wrapping the toolbar row, and shows whole on
+        hover.
       */}
       <TruncatedText render={<p />}>
         {t.rich(line.messageKey, {
