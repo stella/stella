@@ -70,6 +70,22 @@ import type {
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
+// A rejected entry never reaches the batch, so no reservation or transfer was
+// made and the row stays eligible for the next run.
+const reportRejectedRow = (
+  decisionId: SafeId<"caseLawDecision">,
+  error: unknown,
+): number => {
+  captureError(
+    error,
+    handlerErrorContext("scripts.reportRejectedRow.enqueue_error", {
+      decisionId,
+      step: "backfillCorpusStorage",
+    }),
+  );
+  return 1;
+};
+
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 await runScriptWithErrorOutput(async () => {
@@ -131,14 +147,14 @@ await runScriptWithErrorOutput(async () => {
   const enqueueBackfillRow = (
     batch: CorpusPackBatch,
     row: BackfillRow,
-  ): void => {
+  ): ReturnType<CorpusPackBatch["enqueue"]> => {
     const ownerPredicate = and(
       eq(caseLawDecisions.id, row.id),
       isNull(caseLawDecisions.redactedAt),
       sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
       timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
     );
-    batch.enqueue({
+    return batch.enqueue({
       decisionId: row.id,
       jurisdiction: row.country,
       payload: {
@@ -275,7 +291,10 @@ await runScriptWithErrorOutput(async () => {
       // its own fence once that pack is durable.
       const batch = openCorpusPackBatch({ scopedDb: ingestionDb });
       for (const row of chunk) {
-        enqueueBackfillRow(batch, row);
+        const enqueued = enqueueBackfillRow(batch, row);
+        if (Result.isError(enqueued)) {
+          failed += reportRejectedRow(row.id, enqueued.error);
+        }
       }
       const settled = await batch.flush();
       if (Result.isError(settled)) {
