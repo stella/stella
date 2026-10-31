@@ -19,7 +19,9 @@ import {
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
+  announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
+  registerMcpToolProjectionDelivery as RegisterMcpToolProjectionDelivery,
   revokeWorkspaceSseAccess as RevokeWorkspaceSseAccess,
   SseSessionLivenessReader,
   startSse as StartSse,
@@ -28,6 +30,7 @@ import type {
 } from "@/api/lib/sse";
 import {
   createSseBroadcastPublisher,
+  INSTANCE_ID,
   SSEBroadcastError,
   type SseBroadcastPublisher,
 } from "@/api/lib/sse-broadcast";
@@ -40,8 +43,15 @@ beforeEach(async () => {
   const clientsBeforeImport = createdClients.length;
   const redisClientCallsBeforeImport = createRedisClientMock.mock.calls.length;
   const intervalCallsBeforeImport = setIntervalSpy.mock.calls.length;
-  ({ broadcast, revokeWorkspaceSseAccess, startSse, stopSse, subscribe } =
-    await import("@/api/lib/sse"));
+  ({
+    announceMcpToolProjectionChange,
+    broadcast,
+    registerMcpToolProjectionDelivery,
+    revokeWorkspaceSseAccess,
+    startSse,
+    stopSse,
+    subscribe,
+  } = await import("@/api/lib/sse"));
   clientsCreatedDuringImport = createdClients.length - clientsBeforeImport;
   redisClientsCreatedDuringImport =
     createRedisClientMock.mock.calls.length - redisClientCallsBeforeImport;
@@ -157,7 +167,9 @@ const createRedisClientMock = mock(() => makeFakeRedisClient());
 let setIntervalSpy: Mock<typeof globalThis.setInterval>;
 let clearIntervalSpy: Mock<typeof globalThis.clearInterval>;
 
+let announceMcpToolProjectionChange: typeof AnnounceMcpToolProjectionChange;
 let broadcast: typeof Broadcast;
+let registerMcpToolProjectionDelivery: typeof RegisterMcpToolProjectionDelivery;
 let revokeWorkspaceSseAccess: typeof RevokeWorkspaceSseAccess;
 let startSse: typeof StartSse;
 let stopSse: typeof StopSse;
@@ -324,6 +336,111 @@ const LIFECYCLE_INTERVALS_MS = [20_000, LIMITS.sseCredentialRecheckMs].toSorted(
  *  An omitted delay is 0, as the timer itself reads it. */
 const startedIntervals = () =>
   setIntervalSpy.mock.calls.map(([, ms]) => ms ?? 0).toSorted(ascending);
+
+describe("MCP tool projection changes", () => {
+  test("a change from another replica reaches this replica and its own echo does not", async () => {
+    createdClients.length = 0;
+    const delivered: unknown[] = [];
+    registerMcpToolProjectionDelivery((change) => {
+      delivered.push(change);
+    });
+    startTestSse();
+    await settlePendingWork();
+    try {
+      const deliver = createdClients[0]?.messageHandler;
+      expect(deliver).toBeFunction();
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: "api:another-replica",
+          scope: "mcp-tool-projection",
+          userId: "user_1",
+        }),
+      );
+      deliver?.(
+        JSON.stringify({
+          id: "org_1",
+          originInstanceId: INSTANCE_ID,
+          scope: "mcp-tool-projection",
+        }),
+      );
+      expect(delivered).toEqual([
+        { organizationId: "org_1", userId: "user_1" },
+      ]);
+    } finally {
+      stopSse();
+      await settlePendingWork();
+    }
+  });
+
+  /**
+   * Announces one change through a publisher whose first `failures` publishes
+   * fail, recording the backoff each retry asked for.
+   */
+  const announceThroughFailingPublisher = async (failures: number) => {
+    let failuresRemaining = failures;
+    const published: unknown[] = [];
+    const publishMcpToolProjectionChange = mock(async (change: unknown) => {
+      if (failuresRemaining > 0) {
+        failuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
+      published.push(change);
+    });
+    createdClients.length = 0;
+    startSse(
+      {
+        sessions: holdAllSessions,
+        user: authorizeAllUserConnections,
+        workspace: authorizeAllWorkspaceConnections,
+      },
+      {
+        createClient: createRedisClientMock,
+        publisher: { ...testPublisher, publishMcpToolProjectionChange },
+      },
+    );
+    await settlePendingWork();
+    // The retry waits fire on the next macrotask; the spy keeps the delay
+    // each one asked for.
+    const realSetTimeout = globalThis.setTimeout;
+    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
+      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+      immediateSetTimeout,
+    );
+    let delays: number[] = [];
+    try {
+      await announceMcpToolProjectionChange({ organizationId, userId });
+      delays = timeoutSpy.mock.calls.map(([, delayMs]) => delayMs ?? 0);
+    } finally {
+      timeoutSpy.mockRestore();
+      stopSse();
+      await settlePendingWork();
+    }
+    return {
+      attempts: publishMcpToolProjectionChange.mock.calls.length,
+      delays,
+      published,
+    };
+  };
+
+  test("a failed cross-replica announcement is retried with backoff until it lands", async () => {
+    const { attempts, delays, published } =
+      await announceThroughFailingPublisher(2);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([{ organizationId, userId }]);
+  });
+
+  test("an announcement that keeps failing stops after its last attempt and never rejects", async () => {
+    const { attempts, delays, published } =
+      await announceThroughFailingPublisher(Number.POSITIVE_INFINITY);
+    expect(attempts).toBe(3);
+    expect(delays).toEqual([250, 500]);
+    expect(published).toEqual([]);
+  });
+});
 
 describe("startSse / stopSse lifecycle", () => {
   test("startSse starts the keep-alive and credential sweep timers and connects the Redis subscriber", async () => {

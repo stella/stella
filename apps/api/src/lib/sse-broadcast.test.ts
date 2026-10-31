@@ -159,3 +159,39 @@ test("the publisher constructs a cache client with bounded connection options", 
   ]);
   expect(published).toHaveLength(2);
 });
+
+test("an MCP tool projection change round-trips for an organisation or one member", async () => {
+  const published: string[] = [];
+  const publisher = createSseBroadcastPublisher({
+    createClient: () => ({
+      publish: async (_channel, message) => {
+        published.push(String(message));
+        return 0;
+      },
+    }),
+  });
+  await publisher.publishMcpToolProjectionChange(
+    {
+      organizationId: toSafeId<"organization">("org_1"),
+      userId: toSafeId<"user">("user_1"),
+    },
+    { originInstanceId: "api:origin" },
+  );
+  await publisher.publishMcpToolProjectionChange({
+    organizationId: toSafeId<"organization">("org_1"),
+  });
+  expect(published.map((message) => parseRedisPayload(message))).toEqual([
+    {
+      scope: "mcp-tool-projection",
+      id: "org_1",
+      userId: "user_1",
+      originInstanceId: "api:origin",
+    },
+    { scope: "mcp-tool-projection", id: "org_1", originInstanceId: undefined },
+  ]);
+  expect(
+    parseRedisPayload(
+      JSON.stringify({ scope: "mcp-tool-projection", id: "org_1", userId: 7 }),
+    ),
+  ).toBeNull();
+});

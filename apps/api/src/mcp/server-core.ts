@@ -120,6 +120,8 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
+import { getMcpToolFreshnessRegistry } from "@/api/mcp/tool-freshness";
+import { withMcpRegistryVersionHeader } from "@/api/mcp/tool-freshness-response";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -136,6 +138,7 @@ import {
   serializeToolResult,
   structuredErrorResult,
 } from "@/api/mcp/tool-utils";
+import { mcpRegistryVersion } from "@/api/mcp/tool-versions";
 import {
   MCP_WEB_HANDOFF_TOOL,
   withWebHandoffLinks,
@@ -624,6 +627,7 @@ const withCappedRequestBody = async (
  */
 type McpFactoryState = {
   context: McpRequestResources;
+  registryVersion?: string;
   session: McpSession;
 };
 
@@ -861,6 +865,170 @@ const boundMcpToolResult = async ({
   return omittedWriteToolResult();
 };
 
+type AuthenticateMcpStreamOptions = {
+  authenticateMcpRequest: McpServerDependencies["authenticateMcpRequest"];
+  session: McpSession;
+  token: string;
+  mode: McpMode;
+};
+
+const authenticatedMcpStream = ({
+  authenticateMcpRequest,
+  session,
+  token,
+  mode,
+}: AuthenticateMcpStreamOptions): McpAuthenticated => ({
+  session,
+  stream: {
+    kind: "credential",
+    revalidate: async () => {
+      const again = await authenticateMcpRequest(token, {
+        mode,
+        resolveApiKeySession: revalidateMachineApiKeySession,
+      });
+      if (Result.isOk(again)) {
+        return true;
+      }
+      return again.error instanceof McpAuthenticationError
+        ? false
+        : await Promise.reject(again.error);
+    },
+  },
+});
+
+type ReportLegacyTransportErrorOptions = {
+  captureError: McpServerDependencies["captureError"];
+  mode: McpMode;
+  operation:
+    "close_transport" | "close_server" | "cancel_stream" | "read_stream";
+};
+
+const reportLegacyTransportError = (
+  error: unknown,
+  { captureError, mode, operation }: ReportLegacyTransportErrorOptions,
+): void => {
+  captureError(
+    error,
+    handlerErrorContext(`mcp.legacyTransport.${operation}`, {
+      mode,
+      operation,
+      phase: "transport",
+      source: "mcp",
+    }),
+  );
+};
+
+type MonitorLegacyStreamOptions = {
+  body: ReadableStream<Uint8Array>;
+  request: Request;
+  teardown: () => Promise<void>;
+  captureError: McpServerDependencies["captureError"];
+  mode: McpMode;
+};
+
+const monitorLegacyStream = ({
+  body,
+  request,
+  teardown,
+  captureError,
+  mode,
+}: MonitorLegacyStreamOptions): ReadableStream<Uint8Array> => {
+  const reader = takeStreamReaderOwnership(body);
+  let readerReleased = false;
+  const completeExchange = async () => {
+    request.signal.removeEventListener("abort", abortExchange);
+    if (!readerReleased) {
+      reader.releaseLock();
+      readerReleased = true;
+    }
+    await teardown();
+  };
+  const abortExchange = () => {
+    detached(
+      (async () => {
+        try {
+          await reader.cancel(request.signal.reason);
+        } catch (error) {
+          reportLegacyTransportError(error, {
+            captureError,
+            mode,
+            operation: "cancel_stream",
+          });
+        } finally {
+          await completeExchange();
+        }
+      })(),
+      "mcp.legacy-stream-teardown",
+    );
+  };
+  request.signal.addEventListener("abort", abortExchange, {
+    once: true,
+  });
+  // A client that left while the stream was being set up never fires the
+  // listener above, and nothing would read the body to end it.
+  if (request.signal.aborted) {
+    abortExchange();
+  }
+
+  // Consumer cancellation closes the controller while a pull may still be
+  // awaiting its upstream read or teardown. Track ownership before those
+  // awaits so the resumed pull never writes to the cancelled controller.
+  let bodyState: "open" | "closed" = "open";
+  const closeMonitoredBody = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ): void => {
+    if (bodyState === "open") {
+      bodyState = "closed";
+      controller.close();
+    }
+  };
+
+  return new ReadableStream<Uint8Array>({
+    pull: async (controller) => {
+      if (readerReleased) {
+        closeMonitoredBody(controller);
+        return;
+      }
+      try {
+        const readResult: unknown = await reader.read();
+        if (!isByteStreamReadResult(readResult)) {
+          panic("MCP transport returned a non-byte stream");
+        }
+        if (readResult.done) {
+          await completeExchange();
+          closeMonitoredBody(controller);
+          return;
+        }
+        if (bodyState === "open") {
+          controller.enqueue(readResult.value);
+        }
+      } catch (error) {
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "read_stream",
+        });
+        await completeExchange();
+        controller.error(error);
+      }
+    },
+    cancel: async (reason) => {
+      bodyState = "closed";
+      try {
+        await reader.cancel(reason);
+      } catch (error) {
+        reportLegacyTransportError(error, {
+          captureError,
+          mode,
+          operation: "cancel_stream",
+        });
+      } finally {
+        await completeExchange();
+      }
+    },
+  });
+};
+
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
@@ -1086,10 +1254,16 @@ export const createMcpHttpRequestHandler = ({
     context,
     mode,
     session,
+    toolListChanges,
   }: {
     context: McpRequestResources;
     mode: McpMode;
     session: McpSession;
+    /**
+     * Whether this connection receives `notifications/tools/list_changed`.
+     * Only a connection that does may advertise `tools.listChanged`.
+     */
+    toolListChanges: "signalled" | "not_signalled";
   }) => {
     const serverBuildStartedAt = performance.now();
     // The low-level Server API accepts JSON Schema directly, which keeps the
@@ -1102,7 +1276,11 @@ export const createMcpHttpRequestHandler = ({
         version: MCP_SERVER_VERSION,
       },
       {
-        capabilities: { prompts: {}, resources: {}, tools: {} },
+        capabilities: {
+          prompts: {},
+          resources: {},
+          tools: toolListChanges === "signalled" ? { listChanged: true } : {},
+        },
         instructions: await getMcpInstructions(mode, context),
       },
     );
@@ -1113,6 +1291,10 @@ export const createMcpHttpRequestHandler = ({
         "tool_projection",
         async () => await listMcpTools(context, mode, session.scopes),
       );
+      const state = factoryState.getStore();
+      if (state !== undefined) {
+        state.registryVersion = mcpRegistryVersion(tools);
+      }
       return {
         tools,
         _meta: {
@@ -1212,8 +1394,16 @@ export const createMcpHttpRequestHandler = ({
       return existing;
     }
 
+    // Modern subscription streams are fed by the SDK's handler-wide event bus,
+    // whose listeners carry no caller identity, so a per-session tool change
+    // has no way onto them and they are not promised one.
     const handler = createMcpHandler(
-      async () => await createMcpServer({ ...readFactoryState(), mode }),
+      async () =>
+        await createMcpServer({
+          ...readFactoryState(),
+          mode,
+          toolListChanges: "not_signalled",
+        }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1257,7 +1447,12 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = await createMcpServer({ context, mode, session });
+    const server = await createMcpServer({
+      context,
+      mode,
+      session,
+      toolListChanges: "signalled",
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1311,37 +1506,33 @@ export const createMcpHttpRequestHandler = ({
       }
     };
     Reflect.set(transport, "onmessage", observeHandshake);
-    const reportTransportError = (
-      error: unknown,
-      operation:
-        "close_transport" | "close_server" | "cancel_stream" | "read_stream",
-    ) => {
-      captureError(
-        error,
-        handlerErrorContext(`mcp.legacyTransport.${operation}`, {
-          mode,
-          operation,
-          phase: "transport",
-          source: "mcp",
-        }),
-      );
-    };
 
     let toreDown = false;
+    let unregisterFreshness: (() => void) | undefined;
     const teardown = async () => {
       if (toreDown) {
         return;
       }
       toreDown = true;
+      unregisterFreshness?.();
+      unregisterFreshness = undefined;
       const [transportResult, serverResult] = await Promise.allSettled([
         transport.close(),
         server.close(),
       ]);
       if (transportResult.status === "rejected") {
-        reportTransportError(transportResult.reason, "close_transport");
+        reportLegacyTransportError(transportResult.reason, {
+          captureError,
+          mode,
+          operation: "close_transport",
+        });
       }
       if (serverResult.status === "rejected") {
-        reportTransportError(serverResult.reason, "close_server");
+        reportLegacyTransportError(serverResult.reason, {
+          captureError,
+          mode,
+          operation: "close_server",
+        });
       }
     };
 
@@ -1356,93 +1547,30 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
-      const reader = takeStreamReaderOwnership(response.body);
-      let readerReleased = false;
-      const completeExchange = async () => {
-        request.signal.removeEventListener("abort", abortExchange);
-        if (!readerReleased) {
-          reader.releaseLock();
-          readerReleased = true;
-        }
-        await teardown();
-      };
-      const abortExchange = () => {
-        detached(
-          (async () => {
-            try {
-              await reader.cancel(request.signal.reason);
-            } catch (error) {
-              reportTransportError(error, "cancel_stream");
-            } finally {
-              await completeExchange();
-            }
-          })(),
-          "mcp.legacy-stream-teardown",
-        );
-      };
-      request.signal.addEventListener("abort", abortExchange, {
-        once: true,
+      // Registration projects the tools off the request path, so a failing
+      // projection is reported there and never costs the client its stream.
+      const registration = getMcpToolFreshnessRegistry().register({
+        // Ending the stream makes the host reconnect.
+        close: teardown,
+        id: Bun.randomUUIDv7(),
+        notifyToolsChanged: async () => await server.sendToolListChanged(),
+        organizationId: session.organizationId,
+        projectTools: async () => {
+          const freshContext = await resolveMcpSessionContext(session, {
+            request,
+          });
+          return await listMcpTools(freshContext, mode, session.scopes);
+        },
+        userId: session.userId,
       });
+      unregisterFreshness = registration.unregister;
 
-      // A pull is suspended across the upstream read and the teardown that
-      // follows it, and the consumer can cancel `monitoredBody` during either
-      // await. Cancelling closes the controller, so the close/enqueue that
-      // resumes afterwards throws, and the catch below would report that as a
-      // failed transport read. A cancelled body is a normal end of the
-      // exchange, so absorb the closed-controller throw here, the way the SSE
-      // connection registries do, and leave the catch for real read failures.
-      const closeMonitoredBody = (
-        controller: ReadableStreamDefaultController<Uint8Array>,
-      ): void => {
-        try {
-          controller.close();
-        } catch {
-          // Already closed by a concurrent cancel.
-        }
-      };
-      const enqueueMonitoredChunk = (
-        controller: ReadableStreamDefaultController<Uint8Array>,
-        chunk: Uint8Array,
-      ): void => {
-        try {
-          controller.enqueue(chunk);
-        } catch {
-          // Already closed by a concurrent cancel.
-        }
-      };
-
-      const monitoredBody = new ReadableStream<Uint8Array>({
-        pull: async (controller) => {
-          if (readerReleased) {
-            closeMonitoredBody(controller);
-            return;
-          }
-          try {
-            const readResult: unknown = await reader.read();
-            if (!isByteStreamReadResult(readResult)) {
-              panic("MCP transport returned a non-byte stream");
-            }
-            if (readResult.done) {
-              await completeExchange();
-              closeMonitoredBody(controller);
-              return;
-            }
-            enqueueMonitoredChunk(controller, readResult.value);
-          } catch (error) {
-            reportTransportError(error, "read_stream");
-            await completeExchange();
-            controller.error(error);
-          }
-        },
-        cancel: async (reason) => {
-          try {
-            await reader.cancel(reason);
-          } catch (error) {
-            reportTransportError(error, "cancel_stream");
-          } finally {
-            await completeExchange();
-          }
-        },
+      const monitoredBody = monitorLegacyStream({
+        body: response.body,
+        request,
+        teardown,
+        captureError,
+        mode,
       });
 
       return new Response(monitoredBody, {
@@ -1591,24 +1719,12 @@ export const createMcpHttpRequestHandler = ({
               // An event-stream answer holds while this token still authenticates:
               // a genuine rejection ends it, a verification outage leaves it to
               // the next sweep.
-              const accepted: McpAuthenticated = {
+              const accepted = authenticatedMcpStream({
+                authenticateMcpRequest,
                 session,
-                stream: {
-                  kind: "credential",
-                  revalidate: async () => {
-                    const again = await authenticateMcpRequest(token, {
-                      mode,
-                      resolveApiKeySession: revalidateMachineApiKeySession,
-                    });
-                    if (Result.isOk(again)) {
-                      return true;
-                    }
-                    return again.error instanceof McpAuthenticationError
-                      ? false
-                      : await Promise.reject(again.error);
-                  },
-                },
-              };
+                token,
+                mode,
+              });
 
               // Refuse session termination only after the token is accepted, so an
               // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
@@ -1664,34 +1780,38 @@ export const createMcpHttpRequestHandler = ({
               };
               const legacyRequest = await isLegacyRequest(request, parsedBody);
               setMcpMetricProtocolPath(legacyRequest ? "legacy" : "modern");
+              const requestFactoryState: McpFactoryState = { context, session };
               const dispatch = async () =>
-                responseDisposition.run(envelopeDisposition, async () =>
-                  legacyRequest
-                    ? await serveLegacyRequest({
-                        authInfo,
-                        context,
-                        mode,
-                        parsedBody,
-                        request,
-                        session,
-                      })
-                    : await factoryState.run(
-                        { context, session },
-                        async () =>
-                          await handlerForMode(mode).fetch(request, {
-                            authInfo,
-                            parsedBody,
-                          }),
-                      ),
+                factoryState.run(requestFactoryState, async () =>
+                  responseDisposition.run(envelopeDisposition, async () =>
+                    legacyRequest
+                      ? await serveLegacyRequest({
+                          authInfo,
+                          context,
+                          mode,
+                          parsedBody,
+                          request,
+                          session,
+                        })
+                      : await handlerForMode(mode).fetch(request, {
+                          authInfo,
+                          parsedBody,
+                        }),
+                  ),
                 );
               const response =
                 policy === undefined
                   ? await dispatch()
                   : await withTenantActionSizePolicy(policy, dispatch);
 
+              const versionedResponse = withMcpRegistryVersionHeader(
+                response,
+                requestFactoryState.registryVersion,
+              );
+
               // `createMcpHandler` owns and catches modern exchange failures. Restore
               // the public retry contract the outer catch provides on the legacy leg.
-              if (!legacyRequest && response.status >= 500) {
+              if (!legacyRequest && versionedResponse.status >= 500) {
                 return policy === undefined
                   ? retryableServerErrorResponse(requestId)
                   : await completeResponse(
@@ -1700,7 +1820,7 @@ export const createMcpHttpRequestHandler = ({
                     );
               }
 
-              return await completeResponse(response, accepted);
+              return await completeResponse(versionedResponse, accepted);
             } catch (error) {
               return failureResponse({
                 error,
@@ -1709,6 +1829,11 @@ export const createMcpHttpRequestHandler = ({
                 requestId,
               });
             }
+            // Modern requests are stateless unless they open the SDK's separate
+            // subscription transport. Freshness signals therefore reach only the
+            // stateful legacy SSE sessions registered above, and only those
+            // advertise `tools.listChanged`; do not synthesize a notification
+            // for a request that has no long-lived session.
             // No teardown here on purpose. The handler owns instance lifetime and a
             // response body may still be streaming when this returns; closing it here
             // is what truncated the notification stream under the hand-wired transport.
