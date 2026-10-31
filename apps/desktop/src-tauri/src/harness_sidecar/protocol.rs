@@ -1,22 +1,28 @@
-//! Serde types for the harness sidecar's stdio protocol, mirroring
+//! Serde types for the harness sidecar's socket protocol, mirroring
 //! `packages/agent-engine/src/sidecar/protocol.ts`.
 //!
 //! Values the runner socket already defines (harnesses, decisions, outcomes,
-//! policies, MCP tokens) are the runner protocol's own types, so the host
-//! relays them without a translation table. The tests round-trip every
+//! policies, MCP tokens, acks) are the runner protocol's own types, so the
+//! host relays them without a translation table. The tests round-trip every
 //! message in the sidecar's fixture file and compare each closed list with it.
+
+use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::runner_protocol::{
-  ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunApproval,
+  Ack, ApprovalKind, Harness, HarnessCapability, JsonObject, McpBinding, RunApproval,
   RunOutcome, RunPolicy, RunRef, RunTokenRefresh,
 };
 
-pub(crate) const SIDECAR_PROTOCOL: u32 = 1;
+pub(crate) const SIDECAR_PROTOCOL: u32 = 2;
 /// Largest line either side writes or accepts, in UTF-8 bytes.
 pub(crate) const MAX_LINE_BYTES: usize = 8 * 1024 * 1024;
+/// Runs one `hello` may resume or list.
+pub(crate) const MAX_HELD_RUNS: usize = 1000;
+/// Hex characters of the holder's secret.
+pub(crate) const SECRET_HEX_LENGTH: usize = 64;
 
 /// A closed string value whose variant list is also its `ALL` list.
 macro_rules! wire_values {
@@ -47,11 +53,18 @@ wire_values!(Rejection {
   NotJson => "not_json",
   UnknownType => "unknown_type",
   Invalid => "invalid",
-  HelloRequired => "hello_required",
   HelloRepeated => "hello_repeated",
   ProtocolMismatch => "protocol_mismatch",
   UnknownRun => "unknown_run",
   DuplicateRun => "duplicate_run",
+  Draining => "draining",
+  AtCapacity => "at_capacity",
+  OriginMismatch => "origin_mismatch",
+});
+
+wire_values!(HolderMode {
+  Serving => "serving",
+  Draining => "draining",
 });
 
 wire_values!(ProbeFailure {
@@ -60,13 +73,46 @@ wire_values!(ProbeFailure {
   Unsupported => "unsupported",
 });
 
+/// The secret the holder writes next to its socket. `Debug` never prints it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub(crate) struct HolderSecret(pub(crate) String);
+
+impl HolderSecret {
+  /// The secret as read from its file; `None` unless it is 32 bytes of hex.
+  pub(crate) fn parse(text: &str) -> Option<Self> {
+    let text = text.trim();
+    (text.len() == SECRET_HEX_LENGTH
+      && text
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    .then(|| Self(text.to_owned()))
+  }
+}
+
+impl std::fmt::Debug for HolderSecret {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    formatter.write_str("HolderSecret(..)")
+  }
+}
+
+/// Where the host's copy of a run ends; the holder sends what follows.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResumePoint {
+  pub(crate) run_id: String,
+  pub(crate) after_seq: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct HostHello {
   pub(crate) protocol: u32,
+  pub(crate) secret: HolderSecret,
   pub(crate) app_version: String,
   /// The only upstream the sidecar's MCP proxy forwards to.
   pub(crate) api_origin: String,
+  pub(crate) resume: Vec<ResumePoint>,
 }
 
 /// Which managed CLI to run and the stella-owned home it runs with.
@@ -96,7 +142,7 @@ pub(crate) struct SidecarRunStart {
   pub(crate) mcp: McpBinding,
 }
 
-/// What the desktop writes to the sidecar's stdin.
+/// What the desktop writes to the holder.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum HostMessage {
@@ -114,6 +160,13 @@ pub(crate) enum HostMessage {
   RunCancel(RunRef),
   #[serde(rename = "run.token")]
   RunToken(RunTokenRefresh),
+  /// The API stored the run's messages up to `seq`; cumulative.
+  #[serde(rename = "ack")]
+  Ack(Ack),
+  #[serde(rename = "resume")]
+  Resume(ResumePoint),
+  #[serde(rename = "drain")]
+  Drain,
   #[serde(rename = "shutdown")]
   Shutdown,
 }
@@ -128,8 +181,21 @@ impl HostMessage {
     "run.interrupt",
     "run.cancel",
     "run.token",
+    "ack",
+    "resume",
+    "drain",
     "shutdown",
   ];
+}
+
+/// A run the holder holds: running, or finished and not yet acked.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct HeldRun {
+  pub(crate) run_id: String,
+  pub(crate) harness: Harness,
+  /// The run's latest `seq`; 0 before its first message.
+  pub(crate) last_seq: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -137,6 +203,8 @@ impl HostMessage {
 pub(crate) struct SidecarHello {
   pub(crate) protocol: u32,
   pub(crate) sidecar_version: String,
+  pub(crate) mode: HolderMode,
+  pub(crate) runs: Vec<HeldRun>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -205,6 +273,7 @@ impl From<Chunk> for JsonObject {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarRunEvent {
   pub(crate) run_id: String,
+  pub(crate) seq: NonZeroU32,
   pub(crate) chunk: Chunk,
 }
 
@@ -212,6 +281,7 @@ pub(crate) struct SidecarRunEvent {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarApprovalRequest {
   pub(crate) run_id: String,
+  pub(crate) seq: NonZeroU32,
   pub(crate) request_id: String,
   pub(crate) kind: ApprovalKind,
   pub(crate) summary: String,
@@ -221,6 +291,7 @@ pub(crate) struct SidecarApprovalRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SidecarRunFinished {
   pub(crate) run_id: String,
+  pub(crate) seq: NonZeroU32,
   pub(crate) outcome: RunOutcome,
   pub(crate) harness_session_id: Option<String>,
 }
@@ -233,7 +304,7 @@ pub(crate) struct Rejected {
   pub(crate) run_id: Option<String>,
 }
 
-/// What the sidecar writes to its stdout.
+/// What the holder writes to the desktop.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub(crate) enum SidecarMessage {
@@ -340,6 +411,10 @@ mod tests {
         "probeFailures",
         names(ProbeFailure::ALL.iter().map(|value| value.wire_name())),
       ),
+      (
+        "holderModes",
+        names(HolderMode::ALL.iter().map(|value| value.wire_name())),
+      ),
     ];
     for (name, rust) in cases {
       assert_eq!(rust, listed(&fixtures, name), "{name}");
@@ -363,24 +438,46 @@ mod tests {
   }
 
   #[test]
-  fn protocol_and_line_limit_match_the_contract() {
+  fn protocol_and_limits_match_the_contract() {
     let fixtures = fixtures();
     assert_eq!(fixtures["vocabulary"]["protocol"], SIDECAR_PROTOCOL);
     assert_eq!(
       fixtures["vocabulary"]["maxLineBytes"].as_u64(),
       u64::try_from(MAX_LINE_BYTES).ok()
     );
+    assert_eq!(
+      fixtures["vocabulary"]["maxHeldRuns"].as_u64(),
+      u64::try_from(MAX_HELD_RUNS).ok()
+    );
   }
 
   #[test]
-  fn tokens_stay_out_of_debug_output() {
+  fn tokens_and_the_secret_stay_out_of_debug_output() {
     let fixtures = fixtures();
+    let secret = "ab".repeat(32);
     for message in entries(&fixtures, "/valid/host") {
       let parsed: HostMessage = serde_json::from_value(message.clone()).unwrap();
       let debug = format!("{parsed:?}");
-      for token in ["run-token-1", "run-token-2"] {
+      for token in ["run-token-1", "run-token-2", secret.as_str()] {
         assert!(!debug.contains(token), "{debug}");
       }
+    }
+  }
+
+  #[test]
+  fn a_secret_is_read_only_as_32_bytes_of_lowercase_hex() {
+    let secret = "ab".repeat(32);
+    assert_eq!(
+      HolderSecret::parse(&format!("{secret}\n")),
+      Some(HolderSecret(secret.clone()))
+    );
+    for refused in [
+      String::new(),
+      "ab".repeat(31),
+      "AB".repeat(32),
+      format!("{}zz", "ab".repeat(31)),
+    ] {
+      assert_eq!(HolderSecret::parse(&refused), None, "{refused}");
     }
   }
 }
