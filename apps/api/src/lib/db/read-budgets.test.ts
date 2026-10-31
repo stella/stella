@@ -6,6 +6,7 @@ import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
+  readBudgetPages,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
@@ -60,7 +61,7 @@ describe("read budget declarations", () => {
         return [];
       }
       // Widened: the check holds for every budget a job may declare later.
-      const pages: number = READ_BUDGETS[job.reads.budget].pages;
+      const pages = readBudgetPages(job.reads.budget);
       const ceiling: number = UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING;
       return pages <= ceiling
         ? []
@@ -169,7 +170,9 @@ describe("read budget declarations", () => {
         expect(["statement", "scheduled-job"], id).toContain(budget.surface);
         expect(budget.overBudget.reason.trim().length, id).toBeGreaterThan(0);
       }
-      expect(Number.isInteger(budget.pages) && budget.pages > 0, id).toBe(true);
+      const pages =
+        budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
+      expect(Number.isInteger(pages) && pages > 0, id).toBe(true);
     }
   });
 });

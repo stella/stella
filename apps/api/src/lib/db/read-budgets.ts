@@ -17,10 +17,9 @@
  * `read-budgets.test.ts`.
  */
 
-type ReadBudget = {
+type BudgetMetadata = {
   surface: "scheduled-job" | "statement";
   /** Shared buffers (hit plus read) per call or per run. */
-  pages: number;
   reason: string;
   /**
    * Set only while a measured statement or job is over its budget and a change to
@@ -34,10 +33,38 @@ type ReadBudget = {
   runBudgetMs?: number;
 };
 
+type StatementReadBudget = BudgetMetadata & {
+  surface: "statement";
+  pages: number;
+};
+
+type ScheduledJobBudget = BudgetMetadata & {
+  surface: "scheduled-job";
+  reads: { pages: number };
+  /** An existing whole-run envelope retained across read/write classification. */
+  combinedPagesPerRun?: number;
+  writes?: {
+    pagesPerWrittenRow: number;
+    ceilingPagesPerRun: number;
+    reason: string;
+  };
+};
+
+type ReadBudget = StatementReadBudget | ScheduledJobBudget;
+
+const REQUEST_RECEIPT_RUN_PAGES = 20_000;
+const SITEMAP_RUN_PAGES = 18_000;
+
 export const READ_BUDGETS = {
   "scheduled.caseLaw.refreshCoverage": {
     surface: "scheduled-job",
-    pages: 150,
+    reads: { pages: 150 },
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: 150,
+      reason:
+        "The measured refresh writes its bounded summary and audit rows within the existing 150-page run envelope.",
+    },
     reason:
       "A governed coverage refresh reads the source policy, computes the bounded coverage snapshot, and writes its summary and audit record. The production-shape corpus fixture measures 89 pages; 150 pages leaves more than 50% headroom for production-height indexes.",
     overBudget: {
@@ -53,23 +80,42 @@ export const READ_BUDGETS = {
   },
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
-    pages: 20_000,
+    reads: { pages: REQUEST_RECEIPT_RUN_PAGES },
+    combinedPagesPerRun: REQUEST_RECEIPT_RUN_PAGES,
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: REQUEST_RECEIPT_RUN_PAGES,
+      reason:
+        "Thirty pages per deleted receipt cover indexed deletion and constraints; the run retains the existing 20,000-page envelope.",
+    },
     reason:
       "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
   "scheduled.caseLaw.backfillProvisionState": {
     surface: "scheduled-job",
-    pages: 13_200,
+    reads: { pages: 13_200 },
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: 300_000,
+      reason:
+        "A 200-unit measured run writes 10,000 state rows and touches about 242,000-249,000 write pages. 300,000 pages leaves roughly 20% headroom; the load governor remains the runtime brake.",
+    },
     reason:
       "A governed run checks the shared backfill checkpoint and processes at most 200 bounded provision-state units; a completed pass reads only the checkpoint. 13,200 pages is the target for a run with pending units.",
     overBudget: {
       reason:
-        "A run with pending units measures more than 110,000 pages at both source sizes (about 556 pages per unit), so one unit's lookups are far wider than its bounded work needs; the per-unit read is being narrowed.",
+        "Typed measurement attributes the nested state inserts to writes, but the remaining primary-key lock reads measure about 26,900 pages at both fixture sizes, above the 13,200-page read target.",
     },
   },
   "scheduled.legislation.backfillExpressionIds": {
     surface: "scheduled-job",
-    pages: 1600,
+    reads: { pages: 1600 },
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: 64,
+      reason:
+        "The measured bounded pass writes only its checkpoint rows, at 18 write pages per run; 64 pages leaves headroom for production-height indexes.",
+    },
     reason:
       "A completed pass checks the shared backfill checkpoint and scans one bounded expression-id page. The production-shape corpus fixture measures 1,057 pages; 1,600 pages leaves 50% headroom for production-height indexes.",
   },
@@ -88,13 +134,20 @@ export const READ_BUDGETS = {
   },
   "scheduled.caseLaw.reportFreshness": {
     surface: "scheduled-job",
-    pages: 12_500,
+    reads: { pages: 12_500 },
     reason:
       "One walk of the serving generation's queue index, capped at CASE_LAW_FRESHNESS_SCAN_CAP + 1 entries with at most one heap page each (about 10,200 pages when every entry sits on its own heap page), plus the source ages, the serving generation and three single-row queue probes. The run reads the same pages whatever the generation's size.",
   },
   "scheduled.caseLaw.refreshSitemapShards": {
     surface: "scheduled-job",
-    pages: 18_000,
+    reads: { pages: SITEMAP_RUN_PAGES },
+    combinedPagesPerRun: SITEMAP_RUN_PAGES,
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: SITEMAP_RUN_PAGES,
+      reason:
+        "Thirty pages per changed row cover bounded shard, cursor and retirement writes; the run retains the existing 18,000-page envelope.",
+    },
     statementDeadlineMs: 30_000,
     runBudgetMs: 15 * 60 * 1000,
     reason:
@@ -118,6 +171,11 @@ export const READ_BUDGETS = {
   },
 } as const satisfies Record<string, ReadBudget>;
 
+export const readBudgetPages = (id: ReadBudgetId) => {
+  const budget = READ_BUDGETS[id];
+  return budget.surface === "scheduled-job" ? budget.reads.pages : budget.pages;
+};
+
 export type ReadBudgetId = keyof typeof READ_BUDGETS;
 
 export type ScheduledJobReadBudgetId = {
@@ -125,6 +183,12 @@ export type ScheduledJobReadBudgetId = {
     Id in ReadBudgetId
   ]: (typeof READ_BUDGETS)[Id]["surface"] extends "scheduled-job" ? Id : never;
 }[ReadBudgetId];
+
+/** SELECT-callable routines whose effects make their whole statement a write. */
+export const QUERY_PERF_WRITING_FUNCTIONS: ReadonlySet<string> = new Set([
+  "ensure_case_law_provision_extraction_state",
+  "run_case_law_provision_scope_transition_page",
+]);
 
 /**
  * Pages one run of a scheduled job may read outside the shared load governor.

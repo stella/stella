@@ -5,7 +5,12 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { TransactionOf } from "@/api/db/scoped";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { READ_BUDGETS, type ReadBudgetId } from "@/api/lib/db/read-budgets";
+import {
+  READ_BUDGETS,
+  type ReadBudgetId,
+  readBudgetPages,
+  type ScheduledJobReadBudgetId,
+} from "@/api/lib/db/read-budgets";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   explainAsStella,
@@ -139,25 +144,81 @@ const pageBudgetProblem = (
   sharedBlocks: number,
 ): string | undefined => {
   const budget = READ_BUDGETS[id];
-  const over = sharedBlocks > budget.pages;
+  const pages = readBudgetPages(id);
+  const over = sharedBlocks > pages;
   if ("overBudget" in budget) {
-    const removalLine = budget.pages * (1 - OVER_BUDGET_REMOVAL_BAND);
+    const removalLine = pages * (1 - OVER_BUDGET_REMOVAL_BAND);
     return sharedBlocks <= removalLine
       ? `${id} is marked over budget but measured ${String(sharedBlocks)} <= removal line ${String(removalLine)}; remove its overBudget marker`
       : undefined;
   }
   return over
-    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(budget.pages)}`
+    ? `${id}: ${String(sharedBlocks)} pages > budget ${String(pages)}`
     : undefined;
 };
 
 export const budgetProblem = (id: ReadBudgetId, measured: QueryPerfMetrics) => {
-  const hang = budgetViolations(measured, READ_BUDGETS[id].pages).find(
+  const hang = budgetViolations(measured, readBudgetPages(id)).find(
     (violation) => violation.kind === "execution-time-hang-guard",
   );
   return hang === undefined
     ? pageBudgetProblem(id, measured.sharedBlocks)
     : `${id}: ${hang.message}`;
+};
+
+export const scheduledJobBudgetProblems = (
+  id: ScheduledJobReadBudgetId,
+  measured: {
+    readMetrics: QueryPerfMetrics;
+    writeMetrics: QueryPerfMetrics;
+    writtenRows: number;
+  },
+) => {
+  const budget = READ_BUDGETS[id];
+  const problems: string[] = [];
+  const hang = budgetViolations(
+    sumMetrics([measured.readMetrics, measured.writeMetrics]),
+    readBudgetPages(id),
+  ).find((violation) => violation.kind === "execution-time-hang-guard");
+  if (hang !== undefined) {
+    problems.push(`${id}: ${hang.message}`);
+  }
+  const readProblem = pageBudgetProblem(id, measured.readMetrics.sharedBlocks);
+  if (readProblem !== undefined) {
+    problems.push(readProblem);
+  }
+  if ("combinedPagesPerRun" in budget) {
+    const combined =
+      measured.readMetrics.sharedBlocks + measured.writeMetrics.sharedBlocks;
+    if (combined > budget.combinedPagesPerRun) {
+      problems.push(
+        `${id}: ${String(combined)} combined pages per run > budget ${String(budget.combinedPagesPerRun)}`,
+      );
+    }
+  }
+  const writes = "writes" in budget ? budget.writes : undefined;
+  if (
+    (measured.writtenRows > 0 || measured.writeMetrics.sharedBlocks > 0) &&
+    writes === undefined
+  ) {
+    problems.push(`${id}: measured writes but declares no write budget`);
+    return problems;
+  }
+  if (writes === undefined) {
+    return problems;
+  }
+  const perRow = measured.writeMetrics.sharedBlocks / measured.writtenRows;
+  if (measured.writtenRows > 0 && perRow > writes.pagesPerWrittenRow) {
+    problems.push(
+      `${id}: ${String(perRow)} write pages per row > budget ${String(writes.pagesPerWrittenRow)}`,
+    );
+  }
+  if (measured.writeMetrics.sharedBlocks > writes.ceilingPagesPerRun) {
+    problems.push(
+      `${id}: ${String(measured.writeMetrics.sharedBlocks)} write pages per run > budget ${String(writes.ceilingPagesPerRun)}`,
+    );
+  }
+  return problems;
 };
 
 /**

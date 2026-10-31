@@ -29,7 +29,7 @@ import {
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
 
-const SEED_CHUNK_ROWS = 20_000;
+const SEED_CHUNK_ROWS = 5000;
 const COVERAGE_BUDGET_ID = "statement.caseLaw.coverageSources";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
