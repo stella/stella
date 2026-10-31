@@ -674,6 +674,7 @@ const rootOnlyRlsState = (sources: readonly string[]) => {
   const revoked = new Set<string>();
   const policies = new Map<string, Map<string, boolean>>();
   const privileged = new Set<string>();
+  const columnPrivileged = new Set<string>();
   const created = new Set<string>();
   for (const source of sources) {
     for (const statement of parseMigrationStatements(source)) {
@@ -713,6 +714,13 @@ const rootOnlyRlsState = (sources: readonly string[]) => {
       if (grant?.type === "tables") {
         for (const table of grant.tables) {
           privileged.add(table);
+          if (
+            normalized
+              .slice(0, sqlKeywordIndex({ keyword: " ON ", sql: normalized }))
+              .includes("(")
+          ) {
+            columnPrivileged.add(table);
+          }
         }
       } else if (grant?.schemas.includes("public")) {
         for (const table of created) {
@@ -788,7 +796,9 @@ const rootOnlyRlsState = (sources: readonly string[]) => {
       )
       .map(([table]) => table),
   );
-  const invalid = [...tables].filter((table) => privileged.has(table));
+  const invalid = [...tables].filter(
+    (table) => privileged.has(table) || columnPrivileged.has(table),
+  );
   return { tables, invalid };
 };
 
@@ -893,6 +903,15 @@ describe("RLS table grants", () => {
         ),
       ).toBe(false);
     }
+    expect(
+      valid(
+        source.replace(
+          "REVOKE ALL",
+          () =>
+            `GRANT SELECT(id) ON TABLE public.${table} TO stella; REVOKE ALL`,
+        ),
+      ),
+    ).toBe(false);
     expect(
       valid(
         source.replace(
