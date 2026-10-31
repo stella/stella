@@ -1,4 +1,17 @@
 // parser-output-unchanged: span styles are read only under the opt-in `parseSpanStyle` option, which only cz-nss passes and cz-nss bumps its own version; every other walk is unchanged.
+// parser-output-unchanged: [cz-uohs] its reader supplies text directly and retains the same footnote inlines; replay fixture fields are unchanged.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
 // parser-output-unchanged: `<sup>` becomes a superscript only under the opt-in `superscripts` option; every walk without it unwraps it as before.
 // parser-output-unchanged: exports the existing script/style exclusion as a selector so pl-tk can clean its owned DOM clone once; other parsers keep using the unchanged tag predicate.
@@ -39,7 +52,8 @@ import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { flattenInlineText } from "@stll/legal-ast/inline";
 // parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
 import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
@@ -160,7 +174,17 @@ export type WalkInlinesOptions = {
    * the reader should show opts in.
    */
   superscripts?: boolean;
+  /** Publisher classes that mark raised text on a span. */
+  superscriptClasses?: readonly string[];
 };
+
+const isSuperscriptElement = (
+  element: cheerio.Cheerio<AnyNode>,
+  { superscripts, superscriptClasses }: WalkInlinesOptions,
+): boolean =>
+  (superscripts === true && element.is("sup")) ||
+  (element.is("span") &&
+    superscriptClasses?.some((name) => element.hasClass(name)) === true);
 
 type InlinePageAnchor = Extract<Inline, { type: "page-anchor" }>;
 
@@ -263,7 +287,7 @@ export const walkInlines = (
         return;
       }
 
-      if (options.superscripts === true && tag === "sup") {
+      if (isSuperscriptElement($child, options)) {
         const children = walk($child, childAnon);
         if (children.length > 0) {
           inlines.push({ type: "superscript", children });
@@ -337,19 +361,7 @@ export const walkInlines = (
   return walk(el, options.anonymized ?? false);
 };
 
-export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += "\n";
-    } else if (hasInlineChildren(node)) {
-      text += inlinesToPlainText(node.children);
-    }
-  }
-  return text;
-};
+export const inlinesToPlainText = flattenInlineText;
 
 /**
  * Strip a leading run of presentational page furniture, matched by `pattern`
@@ -367,7 +379,7 @@ export const stripFurniturePrefix = (
   inlines: readonly Inline[],
   pattern: RegExp,
 ): Inline[] => {
-  const text = inlinesToPlainText(inlines);
+  const text = plainTextOf(inlines);
   const lead = text.length - text.trimStart().length;
   const match = pattern.exec(text.slice(lead))?.at(0);
 

@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "PL_TK",
   "key": "pl-tk",
-  "parserVersion": 11,
+  "parserVersion": 12,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage. Read inline style declarations with CSS cascade semantics."
+    "reason": "Recompute canonical paragraph text and inline projections from captured source material, preserving numeric superscript indices with caret delimiters. Read inline style declarations with CSS cascade semantics."
   }
 }
