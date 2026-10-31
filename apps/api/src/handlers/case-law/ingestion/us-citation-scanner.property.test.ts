@@ -312,15 +312,16 @@ test(
         fc.integer({ min: 1000, max: 12_000 }),
         (fragment, count) => {
           const text = `${fragment.repeat(count)}; 410 U.S. 113`;
-          const started = performance.now();
           const { result, budget } = scan(text);
-          expect(performance.now() - started).toBeLessThan(2000);
+          expect(budget.spent).toBeGreaterThan(0);
           expect(budget.spent).toBeLessThanOrEqual(US_CITATION_WORK_LIMIT + 1);
           if (Result.isError(result)) {
             expect(result.error._tag).toBe("UsCitationWorkBudgetError");
-            expect(budget.spent).toBeGreaterThan(US_CITATION_WORK_LIMIT);
+            expect(result.error.limit).toBe(US_CITATION_WORK_LIMIT);
+            expect(budget.spent).toBe(US_CITATION_WORK_LIMIT + 1);
             return;
           }
+          expect(budget.spent).toBeLessThanOrEqual(US_CITATION_WORK_LIMIT);
           expect(
             result.value.events.some(
               (event) =>

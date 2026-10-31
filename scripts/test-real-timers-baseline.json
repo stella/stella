@@ -29,11 +29,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/db/case-law-provision-extraction-state.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/db/entity-feature-gate-maintenance.postgres.test.ts": {
     "count": 4,
     "owner": "api",
@@ -120,7 +115,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.test.ts": {
-    "count": 3,
+    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -539,11 +534,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/collab/src/server.test.ts": {
     "count": 10,
     "owner": "collab",
@@ -557,11 +547,6 @@
   "apps/desktop/tests/desktop-events.test.ts": {
     "count": 1,
     "owner": "desktop",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/extension/e2e/containment.spec.ts": {
-    "count": 1,
-    "owner": "extension",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/extension/src/lib/download-guard.test.ts": {
@@ -580,7 +565,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/extension/src/lib/tab-executor.test.ts": {
-    "count": 4,
+    "count": 3,
     "owner": "extension",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

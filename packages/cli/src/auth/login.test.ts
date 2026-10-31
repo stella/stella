@@ -13,7 +13,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 
 import { CLI_CLIENT_METADATA_PATH } from "./client-metadata-document.js";
-import { CLI_IDENTITY_SCOPES, LOGIN_TIMEOUT_MS } from "./constants.js";
+import { CLI_IDENTITY_SCOPES } from "./constants.js";
 import { readCredentialFile } from "./credential-store.js";
 import { login } from "./login.js";
 import type { LoginBoundaries } from "./login.js";
@@ -390,18 +390,37 @@ describe("login orchestration", () => {
     browserLaunchStatus = "failed";
     const provider = startProvider();
 
+    let callbackWaits = 0;
+    let listenerCloses = 0;
+    const failedBrowserBoundaries = {
+      ...boundaries,
+      startLoopbackListener: async () => ({
+        port: 12_345,
+        redirectUri: "http://127.0.0.1:12345/callback",
+        waitForCallback: async () => {
+          callbackWaits += 1;
+          return {
+            kind: "success",
+            code: "unexpected-loopback",
+            state: "unused",
+          } as const;
+        },
+        close: () => {
+          listenerCloses += 1;
+        },
+      }),
+    } satisfies LoginBoundaries;
     try {
-      const startedAt = Date.now();
       const result = await login(
         makeProcess("manual-code-xyz\n"),
         baseOptions(configDir, provider.url),
-        boundaries,
+        failedBrowserBoundaries,
       );
 
       expect(Result.isOk(result)).toBe(true);
       expect(provider.counts.token).toBe(1);
-      // Nowhere near the 5-minute loopback wait the old code would have taken.
-      expect(Date.now() - startedAt).toBeLessThan(LOGIN_TIMEOUT_MS);
+      expect(callbackWaits).toBe(0);
+      expect(listenerCloses).toBe(1);
     } finally {
       provider.close();
     }
