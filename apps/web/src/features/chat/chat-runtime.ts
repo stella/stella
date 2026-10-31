@@ -219,7 +219,7 @@ export const sendThreadChatMessage = async (
  * accepted the turn (whose answer then streams on), or the request failed
  * before it did, with the failure it reported.
  */
-export type ChatSendAcceptance =
+type ChatSendAcceptance =
   { status: "accepted" } | { status: "failed"; error: Error };
 
 type ChatThreadSendUntilAccepted = (
@@ -442,6 +442,8 @@ export const createChatRuntime = ({
    *  request the send posts answers it (see `turnObservingFetchClient`). */
   let awaitedSendAcceptance:
     PromiseWithResolvers<ChatSendAcceptance> | undefined;
+  /** TanStack's delivery of the page's latest send, until it has finished. */
+  let clientDelivery: Promise<void> | undefined;
   /** A new message starts a new turn. Stop waits for its response headers
    *  to name the turn; a stop of the previous turn is over. */
   const startTurn = (): void => {
@@ -1134,7 +1136,12 @@ export const createChatRuntime = ({
     supersedePendingInterrupts();
     const requestWasActive =
       snapshot.isLoading || isChatClientRequestActive(snapshot.status);
-    const stream = client.sendMessage(message, options?.body);
+    // TanStack would queue a send made while it is busy and post it later on
+    // its own; the session's queue retries a refused send itself, so a busy
+    // client refuses it instead of sending it twice.
+    const stream = client.sendMessage(message, options?.body, {
+      whenBusy: "drop",
+    });
     if (!hasUserMessage(snapshot.messages, message.id)) {
       return {
         messageId: message.id,
@@ -1156,10 +1163,34 @@ export const createChatRuntime = ({
     }
     startTurn();
     sendTiming.started(options?.timingSurface, message.id);
+    const delivered = stream.then(
+      () => undefined,
+      () => undefined,
+    );
+    clientDelivery = delivered;
+    detached(
+      (async () => {
+        await delivered;
+        if (clientDelivery === delivered) {
+          clientDelivery = undefined;
+        }
+      })(),
+      "chat-runtime.client-delivery",
+    );
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
+    // A turn reads ready a few ticks before TanStack has finished delivering
+    // it; a send in that window would be refused as busy, so it waits for
+    // the delivery to end. A request still running is refused as before.
+    if (
+      clientDelivery !== undefined &&
+      !snapshot.isLoading &&
+      !isChatClientRequestActive(snapshot.status)
+    ) {
+      await clientDelivery;
+    }
     const started = startClientSend(message, options);
     const outcome = await Result.tryPromise({
       try: async () => await started.stream,
@@ -1198,6 +1229,12 @@ export const createChatRuntime = ({
     const answer = await Promise.race([acceptance.promise, delivered]);
     if (awaitedSendAcceptance === acceptance) {
       awaitedSendAcceptance = undefined;
+    }
+    if (answer.status === "failed") {
+      // A refused request is over only once TanStack has handled it: it puts
+      // back the messages it showed before the send, so a caller that shows
+      // other messages afterwards must not race that rollback.
+      await delivered;
     }
     return answer;
   };
@@ -1318,6 +1355,9 @@ export const createChatRuntime = ({
   const closeRequest = (): void => {
     const turnWasActive = isTurnActive();
     client.detach();
+    // The detached delivery is over for this page; a later send never waits
+    // on it.
+    clientDelivery = undefined;
     if (turnWasActive) {
       setSnapshot({ turnAbandoned: true });
       reloadThread();

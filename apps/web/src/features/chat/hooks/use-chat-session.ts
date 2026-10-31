@@ -379,6 +379,7 @@ export const useChatSession = ({
   );
   const {
     error: runtimeError,
+    isLoading: clientLoading,
     sessionGenerating,
     reconnecting,
     status,
@@ -1717,9 +1718,16 @@ export const useChatSession = ({
       stopState.status,
     ],
   );
+  // The queue sends its next prompt only once the client's request has
+  // ended: TanStack can report a turn ready while it still loads, and a send
+  // then would be refused as busy with no later turn end to retry it on.
+  const queueTurnRunning = isGenerating || clientLoading;
   useExternalSyncEffect(() => {
-    applySendQueueEvent({ type: "generation-status-synced", isGenerating });
-  }, [applySendQueueEvent, isGenerating]);
+    applySendQueueEvent({
+      type: "generation-status-synced",
+      isGenerating: queueTurnRunning,
+    });
+  }, [applySendQueueEvent, queueTurnRunning]);
   useChatTurnNotifications({
     conversationId,
     phase: getChatTurnPhase({
@@ -1786,7 +1794,7 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     const dispatched = applySendQueueEvent({
       type: "turn-boundary-checked",
-      isGenerating,
+      isGenerating: queueTurnRunning,
       status,
     });
     if (!dispatched) {
@@ -1805,7 +1813,7 @@ export const useChatSession = ({
   }, [
     applySendQueueEvent,
     dispatchQueuedMessage,
-    isGenerating,
+    queueTurnRunning,
     // Not read in the body — `sendQueueRef` is always current — but kept
     // as a dependency so this effect still re-runs on every queue change,
     // matching the original effect's re-run cadence 1:1.
