@@ -1355,6 +1355,7 @@
         "$TURBO_ROOT$/packages/template-packs/**",
         "$TURBO_ROOT$/packages/text-normalize/**",
         "$TURBO_ROOT$/packages/uuid-codec/**",
+        "$TURBO_ROOT$/scripts/**",
         "$TURBO_ROOT$/types/**",
         "**",
         "$TURBO_ROOT$/.npmrc",

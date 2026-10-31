@@ -35,27 +35,23 @@ test.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         );
         const workspaceId =
           workspaceIds.at(0) ?? panic("Missing matter fixture");
-        await db
-          .insert(organization)
-          .values({
-            id: organizationId,
-            name: "Recovery firm",
-            slug: organizationId,
-            createdAt: new Date(),
-          });
+        await db.insert(organization).values({
+          id: organizationId,
+          name: "Recovery firm",
+          slug: organizationId,
+          createdAt: new Date(),
+        });
         await recordNewOrganizationAccessState(db, {
           organizationId,
           now: new Date(),
         });
-        await db
-          .insert(user)
-          .values(
-            [userId, stewardUserId].map((id) => ({
-              id,
-              name: "Recovery member",
-              email: `${id}@example.test`,
-            })),
-          );
+        await db.insert(user).values(
+          [userId, stewardUserId].map((id) => ({
+            id,
+            name: "Recovery member",
+            email: `${id}@example.test`,
+          })),
+        );
         try {
           await db.insert(member).values([
             {
@@ -73,17 +69,15 @@ test.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               createdAt: new Date(),
             },
           ]);
-          await db
-            .insert(workspaces)
-            .values(
-              workspaceIds.map((id) => ({
-                id,
-                organizationId,
-                name: "Recovery matter",
-                reference: id,
-                visibility: MATTER_VISIBILITY.adminsAndAssigned,
-              })),
-            );
+          await db.insert(workspaces).values(
+            workspaceIds.map((id) => ({
+              id,
+              organizationId,
+              name: "Recovery matter",
+              reference: id,
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
+            })),
+          );
           const context = asTestRaw<
             Parameters<typeof matterStewardRecoveryScalingScenario.measure>[0]
           >({
