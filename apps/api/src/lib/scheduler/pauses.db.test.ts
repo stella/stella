@@ -7,6 +7,7 @@ import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { wildcardSchedulerTablesForTask } from "@/api/tests/helpers/scheduler-table-declarations";
 
 import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
 import { acquireNextDueJob, runJob } from "./runner";
@@ -318,6 +319,7 @@ if (!databaseUrl || !runPostgresTests) {
         const registry = new Map([[taskName, task]]);
         const job =
           (await acquireNextDueJob({
+            tablesForTask: wildcardSchedulerTablesForTask,
             db,
             leaseMs: LEASE_MS,
             now: () => CLOCK_MS,
@@ -384,6 +386,7 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(schedulerJobs.id, jobId));
         const task: SchedulerTask = () => panic("Disabled job must not run");
         const job = await acquireNextDueJob({
+          tablesForTask: wildcardSchedulerTablesForTask,
           db,
           leaseMs: LEASE_MS,
           now: () => CLOCK_MS,
@@ -411,6 +414,7 @@ if (!databaseUrl || !runPostgresTests) {
         const registry = new Map([[taskName, task]]);
         const job =
           (await acquireNextDueJob({
+            tablesForTask: wildcardSchedulerTablesForTask,
             db,
             leaseMs: LEASE_MS,
             now: () => CLOCK_MS,
@@ -459,6 +463,7 @@ if (!databaseUrl || !runPostgresTests) {
           .where(eq(schedulerJobs.id, jobId));
         const task: SchedulerTask = () => {};
         const options = {
+          tablesForTask: wildcardSchedulerTablesForTask,
           db,
           leaseMs: LEASE_MS,
           now: () => clockMs,
@@ -505,6 +510,7 @@ if (!databaseUrl || !runPostgresTests) {
           const registry = new Map([[taskName, task]]);
           const job =
             (await acquireNextDueJob({
+              tablesForTask: wildcardSchedulerTablesForTask,
               db,
               leaseMs: LEASE_MS,
               now: () => CLOCK_MS,
@@ -560,6 +566,7 @@ if (!databaseUrl || !runPostgresTests) {
           const registry = new Map([[taskName, task]]);
           const job =
             (await acquireNextDueJob({
+              tablesForTask: wildcardSchedulerTablesForTask,
               db,
               leaseMs: LEASE_MS,
               now: () => CLOCK_MS,
@@ -643,6 +650,7 @@ if (!databaseUrl || !runPostgresTests) {
         const registry = new Map([[taskName, task]]);
         const job =
           (await acquireNextDueJob({
+            tablesForTask: wildcardSchedulerTablesForTask,
             db,
             leaseMs: LEASE_MS,
             now: () => CLOCK_MS,
@@ -683,6 +691,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(persisted?.lockedBy).toBeNull();
           expect(
             await acquireNextDueJob({
+              tablesForTask: wildcardSchedulerTablesForTask,
               db,
               leaseMs: LEASE_MS,
               now: () => CLOCK_MS,
@@ -726,6 +735,7 @@ if (!databaseUrl || !runPostgresTests) {
         const registry = new Map([[taskName, task]]);
         const job =
           (await acquireNextDueJob({
+            tablesForTask: wildcardSchedulerTablesForTask,
             db,
             leaseMs: LEASE_MS,
             now: () => CLOCK_MS,

@@ -55,7 +55,10 @@ import {
   refreshStaleCorpusS3,
   refreshStaleS3,
 } from "@/api/lib/s3";
-import { ensureDefaultSchedulerJobs } from "@/api/lib/scheduler/jobs";
+import {
+  ensureDefaultSchedulerJobs,
+  tablesForSchedulerTask,
+} from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { startSchedulerLoop } from "@/api/lib/scheduler/runner";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -369,6 +372,7 @@ const startServer = async (): Promise<void> => {
     ensureDefaultJobs: ensureDefaultSchedulerJobs,
     startLoop: () =>
       startSchedulerLoop({
+        tablesForTask: tablesForSchedulerTask,
         registry: createSchedulerTaskRegistry(
           createReapOwnerlessChatTurnsTask(reapOwnerlessChatTurnOnTx),
           createCaseLawCoverageRefreshTask({

@@ -511,7 +511,9 @@ export const installPgliteEntityFeatureGateMaintenance = async (
 const installPgliteGeneratedEntityFeatureGates = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const migrations = readdirSync(DRIZZLE_DIR)
+  const migrations = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map(({ name }) => name)
     .filter((name) => name.endsWith("_entity_feature_gate_registry"))
     .toSorted();
   for (const migration of migrations) {
@@ -872,7 +874,9 @@ const statuteCitationProjectionMigrations = (): string[] => {
     STATUTE_CITATION_PROJECTION_MIGRATIONS.flatMap(definedFunctionsOf),
   );
   const last = STATUTE_CITATION_PROJECTION_MIGRATIONS.at(-1) ?? "";
-  const later = readdirSync(DRIZZLE_DIR)
+  const later = readdirSync(DRIZZLE_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map(({ name }) => name)
     .filter((name) => /^\d{14}_/u.test(name) && name > last)
     .toSorted()
     .filter((name) =>

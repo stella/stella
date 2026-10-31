@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { SQL } from "bun";
 import {
   afterAll,
@@ -7,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { desc, DrizzleQueryError, eq } from "drizzle-orm";
+import { desc, DrizzleQueryError, eq, getTableName, like } from "drizzle-orm";
 
 import {
   BackfillFailedError,
@@ -20,10 +21,16 @@ import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerpr
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { wildcardSchedulerTablesForTask } from "@/api/tests/helpers/scheduler-table-declarations";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import {
+  schedulerTableLeaseProtocol,
+  schedulerTableLeases,
+} from "../../db/schema/table-leases";
+import { TABLE_LEASE_PROTOCOL } from "../../db/table-lease-protocol";
 import {
   acquireNextDueJob,
   finishRunFailure,
@@ -146,6 +153,7 @@ test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () 
       throw new DrizzleQueryError("query failed", [], driver);
     });
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -191,6 +199,7 @@ test.each([
       // A void callback may return an incidental value, including an object
       // whose method happens to have the same name as a Result method.
       const result = await runSchedulerOnce({
+        tablesForTask: () => [],
         db,
         leaseMs: LEASE_MS,
         registry: registryOf(taskName, () => returned),
@@ -257,6 +266,7 @@ test.each(["expression", "provision"] as const)(
     const recording = installRecordingLogger();
     try {
       const result = await runSchedulerOnce({
+        tablesForTask: () => [],
         db,
         leaseMs: LEASE_MS,
         registry: registryOf(taskName, task),
@@ -307,6 +317,7 @@ test("a genuine expression hold keeps success semantics and omits an absent held
   const recording = installRecordingLogger();
   try {
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: registryOf("test.expression.held", task),
@@ -355,17 +366,83 @@ const abortSignalWhenRunInserted = (
     },
   });
 
+test("the first claim attempt activates the protocol even with no runnable work", async () => {
+  await testDb.delete(schedulerTableLeaseProtocol);
+  const emptyRegistry: SchedulerTaskRegistry = new Map();
+  expect(
+    await acquireNextDueJob({
+      tablesForTask: wildcardSchedulerTablesForTask,
+      db,
+      leaseMs: LEASE_MS,
+      registry: emptyRegistry,
+      runnerId: "idle-protocol-runner",
+    }),
+  ).toBeNull();
+  const first =
+    (await testDb.select().from(schedulerTableLeaseProtocol)).at(0) ??
+    panic("Expected the protocol marker");
+  expect(first.protocol).toBe(TABLE_LEASE_PROTOCOL);
+  expect(first.firstSeenAt).toBeInstanceOf(Date);
+  expect(
+    await acquireNextDueJob({
+      tablesForTask: wildcardSchedulerTablesForTask,
+      db,
+      leaseMs: LEASE_MS,
+      registry: emptyRegistry,
+      runnerId: "another-idle-runner",
+    }),
+  ).toBeNull();
+  expect(await testDb.select().from(schedulerTableLeaseProtocol)).toEqual([
+    first,
+  ]);
+});
+
+test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
+  "execution reservations include lifecycle tables once for $taskTables",
+  async ({ taskTables }) => {
+    const id = await seedJob();
+    const job =
+      (await acquireNextDueJob({
+        db,
+        leaseMs: LEASE_MS,
+        registry: noopRegistry,
+        runnerId: "infrastructure-reservation",
+        tablesForTask: () => taskTables,
+      })) ?? panic("Expected a scheduler claim");
+    const holderId = `${id}:${job.lockedBy ?? panic("Expected a claim holder")}`;
+    try {
+      const leases = await testDb
+        .select({ tableName: schedulerTableLeases.tableName })
+        .from(schedulerTableLeases)
+        .where(eq(schedulerTableLeases.holderId, holderId));
+      expect(leases.map(({ tableName }) => tableName).toSorted()).toEqual(
+        [
+          getTableName(schedulerJobs),
+          getTableName(schedulerJobRuns),
+          getTableName(schedulerTableLeaseProtocol),
+        ].toSorted(),
+      );
+    } finally {
+      await testDb
+        .delete(schedulerTableLeases)
+        .where(eq(schedulerTableLeases.holderId, holderId));
+    }
+  },
+);
+
 describe("acquireNextDueJob claim exclusivity", () => {
   test("two interleaved passes never claim the same job", async () => {
     await seedJob();
 
     const first = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
       runnerId: "runner-a",
     });
     const second = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -388,6 +465,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "foreign.job", task: "test.unregistered" });
 
     const claimed = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -413,6 +491,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "own.job", task: "test.noop" });
 
     const claimed = await acquireNextDueJob({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -426,6 +505,7 @@ describe("acquireNextDueJob task registration", () => {
     await seedJob({ id: "foreign.job", task: "test.unregistered" });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -457,6 +537,7 @@ describe("bounded scheduler sweeps", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -480,6 +561,7 @@ describe("bounded scheduler sweeps", () => {
     }
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -509,6 +591,7 @@ describe("bounded scheduler sweeps", () => {
     ]);
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -539,6 +622,7 @@ describe("bounded scheduler sweeps", () => {
       currentTime = 100;
     });
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxSweepDurationMs: 50,
@@ -559,6 +643,7 @@ describe("bounded scheduler sweeps", () => {
 
   test("reports a fully drained sweep", async () => {
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -580,6 +665,7 @@ describe("lease expiry", () => {
     await seedJob({ lockedBy: "dead-runner", lockedUntil: PAST });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -598,6 +684,7 @@ describe("lease expiry", () => {
     await seedJob({ lockedBy: "live-runner", lockedUntil: future });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry: noopRegistry,
@@ -616,6 +703,7 @@ describe("failure accounting", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -645,6 +733,7 @@ describe("task-requested continuation", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       registry,
@@ -678,6 +767,7 @@ describe("per-job runtime ceiling", () => {
     );
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -698,6 +788,17 @@ describe("per-job runtime ceiling", () => {
     const timedOutRun = await readLatestRun("hanging.job");
     expect(timedOutRun.status).toBe("failed");
     expect(timedOutRun.error).toBe("SchedulerJobTimeoutError");
+    const retained = await testDb
+      .select({ tableName: schedulerTableLeases.tableName })
+      .from(schedulerTableLeases)
+      .where(like(schedulerTableLeases.holderId, "hanging.job:%"));
+    expect(retained.map(({ tableName }) => tableName).toSorted()).toEqual(
+      [
+        getTableName(schedulerJobs),
+        getTableName(schedulerJobRuns),
+        getTableName(schedulerTableLeaseProtocol),
+      ].toSorted(),
+    );
 
     // The zombie task finishes late and attempts to record success. The
     // lease-token (lockedBy) and run-generation (status) guards must reject it.
@@ -724,16 +825,18 @@ describe("per-job runtime ceiling", () => {
 
     let signalAborted = false;
     // The task hangs past the ceiling; a cooperative task observes the abort on
-    // its signal instead of running blind past its lease release. The promise
-    // stays pending so the timeout (not a synchronous resolve) settles the race.
+    // its signal instead of running blind past scheduler completion.
     const registry = registryOf("test.cooperative", async ({ signal }) => {
-      signal.addEventListener("abort", () => {
-        signalAborted = true;
+      await new Promise<void>((resolve) => {
+        signal.addEventListener("abort", () => {
+          signalAborted = true;
+          resolve();
+        });
       });
-      await new Promise<void>(() => {});
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -766,6 +869,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -802,6 +906,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 25,
@@ -849,6 +954,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const runPromise = runSchedulerOnce({
+      tablesForTask: () => [],
       db,
       leaseMs: LEASE_MS,
       maxRuntimeMs: 60_000,
@@ -900,6 +1006,7 @@ describe("per-job runtime ceiling", () => {
     });
 
     const result = await runSchedulerOnce({
+      tablesForTask: () => [],
       db: abortingDb,
       leaseMs: LEASE_MS,
       registry,
@@ -1190,6 +1297,7 @@ test("scheduled job ownership scopes the same nested failure by persisted defini
     }
   });
   const result = await runSchedulerOnce({
+    tablesForTask: () => [],
     db,
     leaseMs: LEASE_MS,
     registry,

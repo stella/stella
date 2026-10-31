@@ -81,7 +81,9 @@ const CHAT_DATA_MIGRATIONS: readonly string[] = [
 /** Migrations newer than `since` that write rows of a chat table and are
  *  missing from `CHAT_DATA_MIGRATIONS`. */
 export const findUnlistedChatDataMigrations = (since: string): string[] =>
-  readdirSync(MIGRATIONS_DIR)
+  readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map(({ name }) => name)
     .filter((name) => name > since && !CHAT_DATA_MIGRATIONS.includes(name))
     .filter((name) =>
       statementsOf(name).some((statement) =>

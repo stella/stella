@@ -21,7 +21,10 @@ export const transitionMigrationName = (directories: readonly string[]) => {
 
 export const transitionMigrationDirectory = () => {
   const root = new URL("../drizzle/", import.meta.url);
-  return new URL(`${transitionMigrationName(readdirSync(root))}/`, root);
+  const directories = readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map(({ name }) => name);
+  return new URL(`${transitionMigrationName(directories)}/`, root);
 };
 
 if (import.meta.main) {

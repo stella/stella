@@ -6,7 +6,10 @@ import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";
-import { envDbLoadGate } from "../env-db-load-gate";
+import {
+  envDbLoadGate,
+  readMigrationDrainConfirmation,
+} from "../env-db-load-gate";
 import {
   requireEbsConfiguration,
   resolveEbsConfiguration,
@@ -29,17 +32,29 @@ if (!url) {
   );
 }
 
+const confirmation = readMigrationDrainConfirmation();
+if (confirmation.isErr()) {
+  printError(
+    "[migrate] invalid manual drain confirmation:",
+    confirmation.error,
+  );
+  process.exit(1);
+}
+
 await runScriptWithErrorOutput(async () => {
   const client = createSqlClient({ url, max: 1 });
   // The loose source and single-file bundle both resolve drizzle from this file.
   const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
   const connection = await client.reserve();
   try {
+    // Registered scheduler history requires the durable protocol marker or a manual drain.
+    // Non-scheduler readers and ingestion rely on lock_timeout and transaction budgets.
     const result = await runMigrationsUntilSettled({
       connection,
       databaseUrl: url,
       migrationsFolder,
       ebs: ebs.value,
+      manualDrainConfirmation: confirmation.value,
     });
     if (result.status === "applied") {
       // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface

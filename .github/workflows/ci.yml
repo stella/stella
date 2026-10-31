@@ -4448,6 +4448,7 @@ jobs:
           mkdir "$probe_folder"
           trap 'rm -rf "$probe_folder"' EXIT
           printf '%s\n' 'CREATE TABLE public.__migration_history_smoke_probe (id integer PRIMARY KEY);' >"$probe_folder/migration.sql"
+          bun scripts/generate-migration-lock-manifest.ts --write
           if [[ -n "$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc "SELECT to_regclass('public.__migration_history_smoke_probe')")" ]]; then
             echo "::error::Migration history probe table already exists."
             exit 1
@@ -4465,6 +4466,7 @@ jobs:
             exit 1
           fi
           rm -r "$probe_folder"
+          bun scripts/generate-migration-lock-manifest.ts --write
 
           restored=$(psql -h 127.0.0.1 -U stella_owner -d stella -tAc \
             "WITH restored AS (UPDATE drizzle.__drizzle_migrations AS migration SET hash = backup.hash FROM drizzle.__migration_history_smoke_backup AS backup WHERE migration.id = backup.id AND migration.hash = repeat('0', 64) RETURNING 1) SELECT count(*) FROM restored")

@@ -145,7 +145,12 @@ test("migration preserves the deployment environment despite a local test file",
   await withFixture(async (directory) => {
     const entrypoint = path.join(directory, "src/db/migrate.ts");
     await copyFile(path.join(apiRoot, "src/db/migrate.ts"), entrypoint);
-    for (const dependency of ["db-url.ts", "env-db-load-gate.ts", "lib"]) {
+    for (const dependency of [
+      "db-url.ts",
+      "env-db-load-gate.ts",
+      "env-migration.ts",
+      "lib",
+    ]) {
       await symlink(
         path.join(apiRoot, "src", dependency),
         path.join(directory, "src", dependency),

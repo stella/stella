@@ -26,6 +26,8 @@ import {
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
   "db-registry-entries": "scripts/db-registry-entries.ts",
+  // Parses committed migration SQL and hashes its bytes; no database or clock.
+  "migration-lock-manifest": "scripts/generate-migration-lock-manifest.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":

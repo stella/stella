@@ -3588,24 +3588,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/review-organization/reset.ts: Existing root transaction runner on scope.db; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "36d3640344807ddfd1ecdfef59ddb9fb266ac74c3108930c5c6005912cd6b491",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/scheduler/runner.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "942f29f7268da8a644f825633d4d9f2d840d0885fc74800e5053dedb3690740e",
-    "count": 1,
-    "reason": "The due-job claim transaction gains an optional exclusion of jobs the sweep already ran; same table, same row lock, same count."
-  },
-  {
-    "file": "apps/api/src/lib/scheduler/runner.ts",
-    "fingerprint": "ff61d45e5f412ae87867734c370b6cca2376169183c4076f355fc3d547ecabdf",
-    "count": 1,
-    "reason": "The due-job claim's FOR UPDATE SKIP LOCKED select gains an optional exclusion of jobs the sweep already ran; same table, same row lock, same count."
-  },
-  {
     "file": "apps/api/src/lib/scheduler/tasks/agent-client-storage-backfill.ts",
     "fingerprint": "c327f2ca2ece69502d8f12a664d76b4f18c7fdf7c3754272313f591f61073414",
     "count": 1,

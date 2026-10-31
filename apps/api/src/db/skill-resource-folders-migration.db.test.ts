@@ -20,6 +20,8 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { readCommittedMigrations } from "@/api/tests/stella-table-privileges";
 
+import { generateMigrationLockManifest } from "../../../../scripts/generate-migration-lock-manifest";
+import { MIGRATION_LOCK_MANIFEST_FILE } from "./migration-lock-manifest";
 import { runMigrations } from "./migration-runner";
 
 const migrationName = "20261010005100_standard_skill_resource_folders";
@@ -182,20 +184,24 @@ const withPreCutoverDatabase = async (
     process.env["DATABASE_URL"] ?? panic("DATABASE_URL is required");
   const bundle = mkdtempSync(path.join(tmpdir(), "stella-skill-folders-"));
   try {
+    const sources: { file: string; source: string }[] = [];
     for (const { name, sql } of readCommittedMigrations()) {
       if (name >= migrationName) {
         continue;
       }
       mkdirSync(path.join(bundle, name));
-      writeFileSync(
-        path.join(bundle, name, "migration.sql"),
-        sql.replace(
-          /CREATE ROLE ([a-z_][a-z0-9_]*) NOLOGIN;/gu,
-          (_statement, role: string) =>
-            `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN CREATE ROLE ${role} NOLOGIN; END IF; END $$;`,
-        ),
+      const source = sql.replace(
+        /CREATE ROLE ([a-z_][a-z0-9_]*) NOLOGIN;/gu,
+        (_statement, role: string) =>
+          `DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${role}') THEN CREATE ROLE ${role} NOLOGIN; END IF; END $$;`,
       );
+      writeFileSync(path.join(bundle, name, "migration.sql"), source);
+      sources.push({ file: `apps/api/drizzle/${name}/migration.sql`, source });
     }
+    writeFileSync(
+      path.join(bundle, MIGRATION_LOCK_MANIFEST_FILE),
+      JSON.stringify(generateMigrationLockManifest(sources)),
+    );
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const admin = openClient().sql;
       const name = `stella_skill_folders_${Bun.randomUUIDv7().replaceAll("-", "")}`;

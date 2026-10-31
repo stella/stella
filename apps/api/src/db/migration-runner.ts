@@ -7,6 +7,12 @@ import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
 import { declareFingerprintFields } from "@stll/errors";
 
+import type { MigrationDrainConfirmation } from "../env-migration";
+import {
+  MIGRATION_SCHEMA_RUN_LOCK_QUERY,
+  MIGRATION_SCHEMA_RUN_UNLOCK_QUERY,
+  withAggregateTransaction,
+} from "../lib/db/aggregate-lock";
 import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
@@ -19,6 +25,10 @@ import {
   validateRequires,
 } from "../lib/db/migration-ledger";
 import {
+  DEFAULT_LEASE_MS,
+  defaultHeartbeatIntervalMs,
+} from "../lib/scheduler/lease-timing";
+import {
   CORPUS_SCHEMA_LANE_LOCK_STATEMENTS,
   CORPUS_SCHEMA_LANE_UNLOCK_SQL,
 } from "./corpus-schema-lane";
@@ -28,6 +38,13 @@ import {
   runLockRetryLadder,
 } from "./lock-retry-ladder";
 import type { LockRetryConfig, LockRetryRuntime } from "./lock-retry-ladder";
+import { assertMigrationCutover } from "./migration-cutover";
+import type { MigrationCutoverEvent } from "./migration-cutover";
+import {
+  pendingMigrationLockTables,
+  readMigrationLockManifest,
+  reportWildcardMigrationLocks,
+} from "./migration-lock-manifest";
 import {
   createMigrationLockTelemetry,
   describeMigrationBlockers,
@@ -43,15 +60,25 @@ import { DEFAULT_MIGRATION_TIMING } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
-import { openOnlineIndexObserver } from "./online-index-observer";
+import {
+  openBoundedDatabaseObserver,
+  openOnlineIndexObserver,
+} from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import { recordTableLeaseProtocol } from "./record-table-lease-protocol";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
+import {
+  acquireMigrationTableLeases,
+  ensureTableLeaseQueue,
+  TABLE_LEASE_MIGRATION,
+  tableLeaseClaimLock,
+} from "./table-lease-queue";
 
 type LedgerRow = {
   id: number;
@@ -537,6 +564,22 @@ type MigratePendingOptions = {
   };
 };
 
+const schemaMigrationStatements = (
+  migrations: ReturnType<typeof readMigrationFiles>,
+  lockTimeoutMs: number,
+) =>
+  migrations.map((migration) => ({
+    ...migration,
+    // The coordinator already applied this DDL atomically before table admission.
+    sql: (migration.name === TABLE_LEASE_MIGRATION
+      ? // Bootstrap owns control DDL; replay its ACLs after historical blanket grants.
+        migration.sql.filter((statement) =>
+          statement.trimStart().startsWith("REVOKE "),
+        )
+      : migration.sql
+    ).map((statement) => withMigrationLockTimeout(statement, lockTimeoutMs)),
+  }));
+
 /** Every attempt reruns the whole pending set from the start of its transaction. */
 const migratePending = async ({
   observeSchema,
@@ -549,12 +592,7 @@ const migratePending = async ({
     SCHEMA_PENDING_STEP,
     async () =>
       await pgCoreMigrate(
-        migrations.map((migration) => ({
-          ...migration,
-          sql: migration.sql.map((statement) =>
-            withMigrationLockTimeout(statement, lockTimeoutMs),
-          ),
-        })),
+        schemaMigrationStatements(migrations, lockTimeoutMs),
         database,
         paths,
       ),
@@ -603,7 +641,6 @@ type PrepareSchemaPhaseOptions = {
   migrationsFolder: string;
   migrationsSchema: string;
   migrationsTable: string;
-  onLaneAcquired: () => void;
   observeSchema: SchemaObserver;
   timing: MigrationTiming;
   lockTelemetry: MigrationLockTelemetry;
@@ -615,22 +652,12 @@ const prepareSchemaPhase = async ({
   migrationsFolder,
   migrationsSchema,
   migrationsTable,
-  onLaneAcquired,
   observeSchema,
   timing,
   lockTelemetry,
   lockWaitRetry,
 }: PrepareSchemaPhaseOptions) => {
-  await observeSchema(SCHEMA_LANE_STEP, async () => {
-    await connection.unsafe(bootstrapRoleSql);
-    const [liftTimeout, takeLane, restoreTimeout] =
-      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
-    await connection.unsafe(liftTimeout);
-    await connection.unsafe(takeLane);
-    onLaneAcquired();
-    await connection.unsafe(restoreTimeout);
-  });
-
+  await connection.unsafe(bootstrapRoleSql);
   const bundle = readMigrationFiles({ migrationsFolder });
   const schemaDatabase = createDatabase({ client: connection });
   const retriesAtStart = lockTelemetry.retriesSpent;
@@ -820,6 +847,13 @@ type RunMigrationsOptions = {
   timing?: MigrationTiming;
   lockTelemetry?: MigrationLockTelemetry;
   reserveSchemaObserver?: () => Promise<OnlineMigrationConnection>;
+  manualDrainConfirmation?: MigrationDrainConfirmation;
+  cutoverEmit?: (event: MigrationCutoverEvent) => void;
+  /** Bounded table admission and event sink, injectable for database tests. */
+  tableLeaseOptions?: Pick<
+    Parameters<typeof acquireMigrationTableLeases>[0],
+    "waitMs" | "checkEveryMs" | "emit"
+  >;
 };
 
 const migrationSessionCanUnlock = (
@@ -879,6 +913,285 @@ const createOnlineSession = (
   release: (): void => undefined,
 });
 
+type FinishStaleSchemaPhaseOptions = {
+  preflight: Exclude<StaleBundleDecision, { status: "ready" }>;
+  clock: MigrationPhaseClock;
+  timing: MigrationTiming;
+  durationMs: number;
+};
+
+const finishStaleSchemaPhase = ({
+  preflight,
+  clock,
+  timing,
+  durationMs,
+}: FinishStaleSchemaPhaseOptions) => {
+  reportStalePreflight(preflight);
+  clock.phase = "done";
+  timing.emit({
+    event: "migrate.phase_duration",
+    phase: "schema",
+    durationMs,
+    retriesSpent: clock.retriesSpent,
+    outcome: preflight.status,
+    laneWaitMs: clock.laneWaitMs,
+    appliedCount: 0,
+  });
+};
+
+type OpenSchemaTableLeasesOptions = {
+  tables: readonly string[];
+  databaseUrl: string;
+  connection: ReservedSQL;
+  session: { state: "open" | "terminated" };
+  options: RunMigrationsOptions["tableLeaseOptions"];
+};
+
+const openSchemaTableLeases = async ({
+  tables,
+  databaseUrl,
+  connection,
+  session,
+  options,
+}: OpenSchemaTableLeasesOptions) => {
+  if (tables.length === 0) {
+    return undefined;
+  }
+  const heartbeatMs = defaultHeartbeatIntervalMs(DEFAULT_LEASE_MS);
+  const observer = await openBoundedDatabaseObserver({
+    url: databaseUrl,
+    statementTimeoutMs: heartbeatMs,
+    lockTimeoutMs: heartbeatMs,
+    applicationName: "stella-migration-table-leases",
+  });
+  try {
+    await ensureTableLeaseQueue({ connection: observer });
+    const leases = await acquireMigrationTableLeases({
+      ...options,
+      connection: observer,
+      tables,
+      holderId: Bun.randomUUIDv7(),
+      onLeaseLost: async () => {
+        session.state = "terminated";
+        await terminateReserved(connection);
+      },
+    });
+    return {
+      assertHeld: leases.assertHeld,
+      release: async () => {
+        try {
+          await leases.release();
+        } finally {
+          await observer.release();
+        }
+      },
+    };
+  } catch (error: unknown) {
+    await observer.release();
+    throw error;
+  }
+};
+
+const takeCorpusSchemaLane = async (
+  connection: ReservedSQL,
+  observeSchema: SchemaObserver,
+  onLaneAcquired: () => void,
+) => {
+  await observeSchema(SCHEMA_LANE_STEP, async () => {
+    const [liftTimeout, takeLane, restoreTimeout] =
+      CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
+    await connection.unsafe(liftTimeout);
+    await connection.unsafe(takeLane);
+    onLaneAcquired();
+    await connection.unsafe(restoreTimeout);
+  });
+};
+
+const predictPendingMigrations = (
+  migrations: ReturnType<typeof readMigrationFiles>,
+  rows: readonly LedgerRow[],
+) =>
+  getMigrationsToRun({
+    localMigrations: migrations,
+    dbMigrations: rows.map(({ id, hash, created_at, name }) => ({
+      id,
+      hash,
+      created_at: String(created_at),
+      name,
+    })),
+  });
+
+type ApplyOnlinePhaseOptions = Pick<
+  RunMigrationsOptions,
+  "connection" | "ebs" | "databaseUrl"
+> & {
+  runOnline: typeof runOnlineMigrations;
+  timing: MigrationTiming;
+  lockTelemetry: MigrationLockTelemetry;
+  onlineIndexHold: OnlineIndexHoldRef;
+  session: { state: "open" | "terminated" };
+};
+
+const applyOnlinePhase = async ({
+  connection,
+  session,
+  runOnline,
+  timing,
+  lockTelemetry,
+  ebs,
+  onlineIndexHold,
+  databaseUrl,
+}: ApplyOnlinePhaseOptions) =>
+  await runOnline(
+    {
+      reserve: async () =>
+        await Promise.resolve(createOnlineSession(connection, session)),
+    },
+    {
+      indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
+      reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
+      timing: { ...timing, retriesSpent: () => lockTelemetry.retriesSpent },
+      repairs: ONLINE_MIGRATION_REPAIRS,
+    },
+  );
+
+type ReleaseSchemaCoordinationOptions = {
+  connection: ReservedSQL;
+  session: { state: "open" | "terminated" };
+  schemaRunHeld: boolean;
+  tableLeases: Awaited<ReturnType<typeof openSchemaTableLeases>>;
+  schemaObserver: OnlineMigrationConnection | undefined;
+};
+
+/** Cleanup continues even when a lease release or advisory unlock rejects. */
+const releaseSchemaCoordination = async ({
+  connection,
+  session,
+  schemaRunHeld,
+  tableLeases,
+  schemaObserver,
+}: ReleaseSchemaCoordinationOptions) => {
+  try {
+    await tableLeases?.release();
+  } finally {
+    try {
+      if (schemaRunHeld && session.state === "open") {
+        await connection.unsafe(MIGRATION_SCHEMA_RUN_UNLOCK_QUERY);
+      }
+    } finally {
+      await schemaObserver?.release();
+    }
+  }
+};
+
+type PendingMigrationCutoverOptions = {
+  connection: ReservedSQL;
+  migrations: ReturnType<typeof readMigrationFiles>;
+  manifest: ReturnType<typeof readMigrationLockManifest>;
+  migrationsSchema: string;
+  migrationsTable: string;
+  confirmation: MigrationDrainConfirmation;
+  emit: RunMigrationsOptions["cutoverEmit"];
+};
+
+const assertPendingMigrationCutover = async ({
+  connection,
+  migrations,
+  manifest,
+  migrationsSchema,
+  migrationsTable,
+  confirmation,
+  emit = (event) => {
+    process.stdout.write(`${JSON.stringify(event)}\n`);
+  },
+}: PendingMigrationCutoverOptions) => {
+  const database = createDatabase({ client: connection });
+  const [table] = await database.execute<{ exists: boolean }>(sql`
+    SELECT EXISTS (SELECT 1 FROM pg_catalog.pg_class relation
+      JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+      WHERE namespace.nspname = ${migrationsSchema} AND relation.relname = ${migrationsTable}) AS exists
+  `);
+  const exists =
+    table?.exists ?? panic("Missing migration ledger presence result");
+  const rows = exists
+    ? await database.execute<LedgerRow>(sql`
+    SELECT id, hash, created_at, to_jsonb(ledger)->>'name' AS name
+    FROM ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)} AS ledger ORDER BY id
+  `)
+    : [];
+  const decisions = planLedgerAdoption({
+    rows,
+    bundle: migrations,
+    inventory: migrationAliasInventory,
+  });
+  const appliedNames = new Set(
+    decisions.flatMap((decision) =>
+      decision.type === "mapped" ? [decision.name] : [],
+    ),
+  );
+  const pendingNames = migrations
+    .filter(({ name }) => !appliedNames.has(name))
+    .map(({ name }) => name);
+  const coordinator = {
+    execute: async (query, params = []) => {
+      await connection.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await connection.unsafe<unknown[]>(query, [...params]),
+    release: async () => {
+      await connection.release();
+    },
+  } satisfies OnlineMigrationConnection;
+  const events: MigrationCutoverEvent[] = [];
+  await withAggregateTransaction(database, async (tx) => {
+    await tableLeaseClaimLock(tx);
+    await assertMigrationCutover({
+      connection: coordinator,
+      tables: pendingMigrationLockTables(manifest, pendingNames),
+      confirmation,
+      bootstrapProtocol: async () => {
+        await connection.unsafe(bootstrapRoleSql);
+        await ensureTableLeaseQueue({
+          connection: coordinator,
+          transaction: "caller",
+        });
+        await recordTableLeaseProtocol(tx);
+      },
+      emit: (event) => {
+        events.push(event);
+      },
+    });
+  });
+  for (const event of events) {
+    emit(event);
+  }
+};
+
+type MigrationRunResultOptions = {
+  online: Awaited<ReturnType<typeof runOnlineMigrations>>;
+  predicted: ReturnType<typeof getMigrationsToRun>;
+  inserted: readonly LedgerRow[];
+};
+
+const migrationRunResult = ({
+  online,
+  predicted,
+  inserted,
+}: MigrationRunResultOptions) => {
+  const predictedNames = predicted.map(({ name }) => name);
+  const insertedNames = inserted.map(({ name }) => name);
+  if (online.type === "deferred") {
+    return {
+      status: "online_deferred" as const,
+      step: online.step,
+      retryAfterMs: online.retryAfterMs,
+      predictedNames,
+      insertedNames,
+    };
+  }
+  return { status: "applied" as const, predictedNames, insertedNames };
+};
+
 export const runMigrations = async ({
   connection,
   databaseUrl,
@@ -893,8 +1206,15 @@ export const runMigrations = async ({
   lockTelemetry = createMigrationLockTelemetry(),
   reserveSchemaObserver = async () =>
     await openOnlineIndexObserver(databaseUrl),
+  tableLeaseOptions,
+  manualDrainConfirmation = { type: "automatic" },
+  cutoverEmit,
 }: RunMigrationsOptions) => {
+  const bundle = readMigrationFiles({ migrationsFolder });
+  const manifest = readMigrationLockManifest(migrationsFolder, bundle);
   let laneHeld = false;
+  let schemaRunHeld = false;
+  let tableLeases: Awaited<ReturnType<typeof openSchemaTableLeases>>;
   const clock: MigrationPhaseClock = {
     phase: "schema",
     startedAt: timing.clock(),
@@ -908,6 +1228,19 @@ export const runMigrations = async ({
   const schemaRetriesAtStart = lockTelemetry.retriesSpent;
   let onlineRetriesAtStart = 0;
   try {
+    // Serialize ledger prediction independently of the corpus lane: a job
+    // draining its table leases may still need to enter that lane to finish.
+    await connection.unsafe(MIGRATION_SCHEMA_RUN_LOCK_QUERY);
+    schemaRunHeld = true;
+    await assertPendingMigrationCutover({
+      connection,
+      migrations: bundle,
+      manifest,
+      migrationsSchema,
+      migrationsTable,
+      confirmation: manualDrainConfirmation,
+      emit: cutoverEmit,
+    });
     schemaObserver = await reserveSchemaObserver();
     const observeSchema = await createSchemaObservation({
       observer: schemaObserver,
@@ -927,36 +1260,33 @@ export const runMigrations = async ({
       timing,
       lockTelemetry,
       lockWaitRetry,
-      onLaneAcquired: () => {
-        laneHeld = true;
-        clock.laneWaitMs = elapsedMs();
-      },
     });
 
     if (preflight.status !== "ready") {
-      reportStalePreflight(preflight);
-      clock.phase = "done";
-      timing.emit({
-        event: "migrate.phase_duration",
-        phase: "schema",
+      finishStaleSchemaPhase({
+        preflight,
+        clock,
+        timing,
         durationMs: elapsedMs(),
-        retriesSpent: clock.retriesSpent,
-        outcome: preflight.status,
-        laneWaitMs: clock.laneWaitMs,
-        appliedCount: 0,
       });
       return preflight;
     }
 
-    const predicted = getMigrationsToRun({
-      localMigrations: migrations,
-      dbMigrations: preflight.rows.map(({ id, hash, created_at, name }) => ({
-        id,
-        hash,
-        created_at: String(created_at),
-        name,
-      })),
+    const predicted = predictPendingMigrations(migrations, preflight.rows);
+    const pendingNames = predicted.map(({ name }) => name);
+    reportWildcardMigrationLocks(manifest, pendingNames);
+    tableLeases = await openSchemaTableLeases({
+      tables: pendingMigrationLockTables(manifest, pendingNames),
+      databaseUrl,
+      connection,
+      session,
+      options: tableLeaseOptions,
     });
+    await takeCorpusSchemaLane(connection, observeSchema, () => {
+      laneHeld = true;
+      clock.laneWaitMs = elapsedMs();
+    });
+    await tableLeases?.assertHeld();
     const readLedger = async () =>
       await readLedgerRows({ database, migrationsSchema, migrationsTable });
     const applyRetriesAtStart = lockTelemetry.retriesSpent;
@@ -964,12 +1294,13 @@ export const runMigrations = async ({
       step: "apply",
       timing,
       retriesSpent: () => lockTelemetry.retriesSpent - applyRetriesAtStart,
-      migrations: predicted.map(({ name }) => name),
+      migrations: pendingNames,
       work: async () =>
         await applySchemaMigrationsRetryingLockWaits({
           connection,
           connectionState: () => session.state,
           apply: async (lockTimeoutMs) => {
+            await tableLeases?.assertHeld();
             await connection.unsafe(
               `SET lock_timeout = '${String(lockTimeoutMs)}ms'`,
             );
@@ -1005,6 +1336,10 @@ export const runMigrations = async ({
     });
     await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
     laneHeld = false;
+    await tableLeases?.release();
+    tableLeases = undefined;
+    await connection.unsafe(MIGRATION_SCHEMA_RUN_UNLOCK_QUERY);
+    schemaRunHeld = false;
     timing.emit({
       event: "migrate.phase_duration",
       phase: "schema",
@@ -1016,21 +1351,17 @@ export const runMigrations = async ({
     });
     clock.phase = "online";
     onlineRetriesAtStart = lockTelemetry.retriesSpent;
-    const onlineTiming: MigrationTiming = {
-      ...timing,
-      retriesSpent: () => lockTelemetry.retriesSpent,
-    };
     clock.startedAt = timing.clock();
-    const onlineConnection = createOnlineSession(connection, session);
-    const online = await runOnline(
-      { reserve: async () => await Promise.resolve(onlineConnection) },
-      {
-        indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
-        reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
-        timing: onlineTiming,
-        repairs: ONLINE_MIGRATION_REPAIRS,
-      },
-    );
+    const online = await applyOnlinePhase({
+      connection,
+      session,
+      runOnline,
+      timing,
+      lockTelemetry,
+      ebs,
+      onlineIndexHold,
+      databaseUrl,
+    });
     clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
     clock.phase = "done";
     timing.emit({
@@ -1040,24 +1371,11 @@ export const runMigrations = async ({
       retriesSpent: clock.retriesSpent,
       outcome: online.type,
     });
-    const predictedNames = predicted.map(({ name }) => name);
-    const insertedNames = inserted.map(({ name }) => name);
-    if (online.type === "deferred") {
-      return {
-        status: "online_deferred" as const,
-        step: online.step,
-        retryAfterMs: online.retryAfterMs,
-        predictedNames,
-        insertedNames,
-      };
-    }
-    return { status: "applied" as const, predictedNames, insertedNames };
+    return migrationRunResult({ online, predicted, inserted });
   } catch (error: unknown) {
-    if (clock.phase === "online") {
-      clock.retriesSpent = lockTelemetry.retriesSpent - onlineRetriesAtStart;
-    } else {
-      clock.retriesSpent = lockTelemetry.retriesSpent - schemaRetriesAtStart;
-    }
+    clock.retriesSpent =
+      lockTelemetry.retriesSpent -
+      (clock.phase === "online" ? onlineRetriesAtStart : schemaRetriesAtStart);
     emitFailedPhase(timing, clock, elapsedMs());
     throw error;
   } finally {
@@ -1066,7 +1384,13 @@ export const runMigrations = async ({
         await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
       }
     } finally {
-      await schemaObserver?.release();
+      await releaseSchemaCoordination({
+        connection,
+        session,
+        schemaRunHeld,
+        tableLeases,
+        schemaObserver,
+      });
     }
   }
 };

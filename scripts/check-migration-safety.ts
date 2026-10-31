@@ -2580,6 +2580,7 @@ export {
   indexTokens as migrationStatementTokens,
   readIndexRelation as readMigrationRelation,
   splitAlterActions as splitMigrationAlterActions,
+  migrationIndexOperations,
 };
 
 export type MigrationGuardedRuleId = (typeof GUARDED_RULES)[number]["id"];

@@ -1,0 +1,4 @@
+{
+  "row-level-security": "Row-level security is enabled only on the lease queue and activity tables this migration creates; no other session can hold a lock on them.",
+  "create-policy": "Owner-only policies on tables this migration creates; FORCE row level security applies to the non-bypassing root owner."
+}

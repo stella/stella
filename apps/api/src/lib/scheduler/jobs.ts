@@ -28,6 +28,11 @@ import {
   type RegisteredSchedulerTaskName,
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
+import { allSchedulerTableNames } from "@/api/lib/scheduler/table-declarations";
+import type {
+  SchedulerTableAccess,
+  SchedulerTableName,
+} from "@/api/lib/scheduler/table-declarations";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
 import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
 import { BACKFILL_HEARTBEAT_TASK } from "@/api/lib/scheduler/tasks/backfill-heartbeat";
@@ -276,6 +281,7 @@ type DeclaredSchedulerJob = SchedulerJobDefinition & {
    * `@/api/lib/db/read-budgets`.
    */
   reads: ScheduledJobReads;
+  tables: SchedulerTableAccess;
 };
 
 /**
@@ -296,6 +302,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payload: { paused: false },
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: SWEEP_REQUEST_RECEIPTS_TASK,
+    tables: {
+      reads: ["request_idempotency_receipts"],
+      writes: [],
+    },
     reads: { budget: "scheduled.requests.sweepReceipts" },
   },
   {
@@ -308,6 +318,44 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
+    tables: {
+      reads: [
+        "case_law_browse_facet_counts",
+        "case_law_citation_doctrine_reviews",
+        "case_law_citations",
+        "case_law_corpus_pack_refs",
+        "case_law_corpus_tombstones",
+        "case_law_court_directory_ranks",
+        "case_law_court_weights",
+        "case_law_coverage_slices",
+        "case_law_decision_citation_stats",
+        "case_law_decision_citation_stats_state",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "case_law_fts_configs",
+        "case_law_provision_citations",
+        "case_law_replay_batches",
+        "case_law_search_documents",
+        "case_law_sitemap_drain_progress",
+        "case_law_source_arrivals",
+        "case_law_sources",
+        "corpus_index_generations",
+        "corpus_index_group_enrollments",
+        "corpus_index_group_withdrawals",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_intents",
+        "corpus_index_projection_states",
+        "legislation_sources",
+        "case_law_coverage_summaries",
+        "database_backfill_states",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_coverage_summaries",
+        "database_backfill_states",
+        "system_audit_runs",
+      ],
+    },
     reads: {
       budget: "scheduled.caseLaw.refreshCoverage",
       governance: "load-governed",
@@ -319,6 +367,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: AUDIT_SCHEDULER_PAUSES_TASK,
+    tables: {
+      reads: ["scheduler_jobs"],
+      writes: [],
+    },
     reads: "unmeasured",
   },
   {
@@ -330,6 +382,10 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: envBase.DOCUMENT_OCR_BATCH_INTERVAL_MINUTES * 60_000,
     },
     task: DISPATCH_DOCUMENT_OCR_TASK,
+    tables: {
+      reads: ["document_processing_runs"],
+      writes: ["document_processing_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -338,6 +394,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 1000 },
     task: DISPATCH_NATIVE_EXTRACTION_TASK,
+    tables: {
+      reads: ["document_processing_runs"],
+      writes: ["document_processing_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -346,6 +406,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK,
+    tables: {
+      reads: ["document_processing_runs", "scout_runs"],
+      writes: ["document_processing_runs", "scout_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -355,6 +419,23 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_BUFFER_INTENTS_TASK,
+    tables: {
+      reads: [
+        "buffer_object_cleanup_intents",
+        "organization_file_objects",
+        "organization_file_usage",
+        "pending_uploads",
+        "usage_seat_assignments",
+        "workspaces",
+      ],
+      writes: [
+        "buffer_object_cleanup_intents",
+        "organization_file_objects",
+        "organization_file_usage",
+        "pending_uploads",
+        "usage_seat_assignments",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -363,6 +444,29 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK,
+    tables: {
+      reads: [
+        "chat_threads",
+        "desktop_edit_sessions",
+        "document_processing_runs",
+        "fields",
+        "folio_collab_rooms",
+        "organization_file_objects",
+        "organization_file_usage",
+        "report_exports",
+        "style_sets",
+        "template_versions",
+        "templates",
+        "usage_seat_assignments",
+        "user_files",
+        "workspaces",
+      ],
+      writes: [
+        "organization_file_objects",
+        "organization_file_usage",
+        "usage_seat_assignments",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -375,6 +479,89 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECEIVE_INBOUND_MAIL_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "agent_skills",
+        "audit_logs",
+        "buffer_object_cleanup_intents",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "case_law_search_documents",
+        "case_law_sources",
+        "chat_message_revisions",
+        "chat_message_search_documents",
+        "chat_messages",
+        "chat_thread_search_documents",
+        "chat_threads",
+        "chat_turns",
+        "contact_search_document_preview_passages",
+        "contact_search_documents",
+        "contacts",
+        "correspondence",
+        "correspondence_allowed_sender_matters",
+        "correspondence_allowed_senders",
+        "correspondence_attachments",
+        "correspondence_drop_logs",
+        "correspondence_filers",
+        "document_counters",
+        "document_processing_runs",
+        "document_reference_counters",
+        "entities",
+        "entity_versions",
+        "expenses",
+        "extracted_content",
+        "fields",
+        "matter_inbound_addresses",
+        "mcp_connectors",
+        "member",
+        "organization_file_objects",
+        "organization_file_usage",
+        "pending_uploads",
+        "search_document_preview_passages",
+        "search_documents",
+        "search_projection_repair_queue",
+        "task_assignees",
+        "time_entries",
+        "usage_seat_assignments",
+        "user",
+        "workspace_contacts",
+        "workspace_members",
+        "workspace_search_document_preview_passages",
+        "workspace_search_documents",
+        "workspaces",
+      ],
+      writes: [
+        "account_audit_logs",
+        "audit_logs",
+        "buffer_object_cleanup_intents",
+        "contact_search_document_preview_passages",
+        "contact_search_documents",
+        "correspondence",
+        "correspondence_attachments",
+        "correspondence_drop_logs",
+        "correspondence_filers",
+        "document_counters",
+        "document_processing_runs",
+        "document_reference_counters",
+        "entities",
+        "entity_versions",
+        "expenses",
+        "extracted_content",
+        "fields",
+        "organization_file_objects",
+        "organization_file_usage",
+        "pending_uploads",
+        "search_document_preview_passages",
+        "search_documents",
+        "search_projection_repair_queue",
+        "time_entries",
+        "usage_seat_assignments",
+        "workspace_search_document_preview_passages",
+        "workspace_search_documents",
+        "workspaces",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -387,6 +574,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECEIVE_EMAIL_DELIVERABILITY_TASK,
+    tables: {
+      reads: ["user"],
+      writes: ["user"],
+    },
     reads: "unmeasured",
   },
   {
@@ -395,6 +586,21 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: SWEEP_FILE_COMPARISON_UPLOADS_TASK,
+    tables: {
+      reads: [
+        "file_comparison_uploads",
+        "organization_file_objects",
+        "organization_file_usage",
+        "system_audit_runs",
+        "usage_seat_assignments",
+      ],
+      writes: [
+        "file_comparison_uploads",
+        "organization_file_objects",
+        "organization_file_usage",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -403,6 +609,36 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
+    tables: {
+      reads: [
+        "case_law_citations",
+        "case_law_corpus_pack_refs",
+        "case_law_corpus_upload_intents",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "case_law_provision_citations",
+        "case_law_sources",
+        "corpus_index_generations",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_intents",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "legislation_documents",
+        "legislation_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_corpus_pack_refs",
+        "case_law_corpus_upload_intents",
+        "case_law_decisions",
+        "corpus_index_generations",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "legislation_documents",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -411,6 +647,28 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK,
+    tables: {
+      reads: [
+        "case_law_decisions",
+        "case_law_sitemap_changes",
+        "case_law_sitemap_country_generations",
+        "case_law_sitemap_drain_progress",
+        "case_law_sitemap_refresh_cursor",
+        "case_law_sitemap_shard_counts",
+        "case_law_sitemap_shards",
+        "case_law_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_sitemap_changes",
+        "case_law_sitemap_country_generations",
+        "case_law_sitemap_drain_progress",
+        "case_law_sitemap_refresh_cursor",
+        "case_law_sitemap_shard_counts",
+        "case_law_sitemap_shards",
+        "system_audit_runs",
+      ],
+    },
     reads: { budget: "scheduled.caseLaw.refreshSitemapShards" },
   },
   {
@@ -423,6 +681,38 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REPORT_CASE_LAW_FRESHNESS_TASK,
+    tables: {
+      reads: [
+        "case_law_citations",
+        "case_law_decision_identifier_backfills",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "case_law_provision_citations",
+        "case_law_sources",
+        "corpus_index_generations",
+        "corpus_index_group_enrollments",
+        "corpus_index_group_withdrawals",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_intents",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "legislation_documents",
+        "legislation_sources",
+        "system_audit_runs",
+        "user",
+      ],
+      writes: [
+        "case_law_decisions",
+        "corpus_index_generations",
+        "corpus_index_group_enrollments",
+        "corpus_index_group_withdrawals",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "legislation_documents",
+        "system_audit_runs",
+      ],
+    },
     reads: { budget: "scheduled.caseLaw.reportFreshness" },
   },
   {
@@ -432,6 +722,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
+    tables: {
+      reads: ["organization", "organization_access_states"],
+      writes: ["organization_access_states"],
+    },
     reads: "unmeasured",
   },
   {
@@ -447,6 +741,12 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: RESET_REVIEW_ORGANIZATION_TASK,
+    // Reset combines catalog-discovered sweeps, cascades and seeding. Its
+    // conservative schema-wide reservation covers newly owned child tables.
+    tables: {
+      reads: allSchedulerTableNames(),
+      writes: allSchedulerTableNames(),
+    },
     reads: "unmeasured",
   },
   {
@@ -456,6 +756,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_CASE_LAW_BROWSE_FACETS_TASK,
+    tables: {
+      reads: [
+        "case_law_browse_facet_counts",
+        "case_law_decisions",
+        "case_law_sources",
+        "system_audit_runs",
+      ],
+      writes: ["case_law_browse_facet_counts", "system_audit_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -464,6 +773,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: REFRESH_STATUTE_SITEMAP_SHARDS_TASK,
+    tables: {
+      reads: [
+        "legislation_documents",
+        "legislation_sources",
+        "statute_sitemap_shards",
+        "system_audit_runs",
+      ],
+      writes: ["statute_sitemap_shards", "system_audit_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -476,6 +794,20 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: LEGISLATION_FACET_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_LEGISLATION_FACETS_TASK,
+    tables: {
+      reads: [
+        "legislation_documents",
+        "legislation_facet_counts",
+        "legislation_facet_refreshes",
+        "legislation_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "legislation_facet_counts",
+        "legislation_facet_refreshes",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -488,6 +820,14 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: SOURCE_ARRIVALS_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK,
+    tables: {
+      reads: [
+        "case_law_source_arrivals",
+        "case_law_sources",
+        "system_audit_runs",
+      ],
+      writes: ["case_law_source_arrivals", "system_audit_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -496,6 +836,23 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_RAW_SWEEPS_TASK,
+    tables: {
+      reads: [
+        "case_law_decision_alias_moved_identities",
+        "case_law_decision_source_identities",
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "case_law_sources",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -506,6 +863,23 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_RAW_ROWS_TASK,
+    tables: {
+      reads: [
+        "case_law_decision_alias_moved_identities",
+        "case_law_decision_source_identities",
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "case_law_sources",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -515,6 +889,38 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+    tables: {
+      reads: [
+        "case_law_citations",
+        "case_law_decision_identifier_backfills",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "case_law_provision_citations",
+        "case_law_sources",
+        "corpus_index_generations",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_intents",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "database_backfill_states",
+        "legislation_documents",
+        "legislation_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_citations",
+        "case_law_decision_identifier_backfills",
+        "case_law_decision_identifiers",
+        "case_law_decisions",
+        "corpus_index_generations",
+        "corpus_index_jurisdiction_serving",
+        "corpus_index_projection_revisions",
+        "corpus_index_projection_states",
+        "database_backfill_states",
+        "legislation_documents",
+        "system_audit_runs",
+      ],
+    },
     reads: "load-governed",
   },
   {
@@ -524,6 +930,23 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
+    tables: {
+      reads: [
+        "case_law_decision_alias_moved_identities",
+        "case_law_decision_source_identities",
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "case_law_sources",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_decisions",
+        "case_law_raw_sweeps",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -533,6 +956,21 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+    tables: {
+      reads: [
+        "case_law_corpus_upload_intents",
+        "case_law_decisions",
+        "case_law_index_jobs",
+        "case_law_search_documents",
+        "scheduler_jobs",
+      ],
+      writes: [
+        "case_law_corpus_upload_intents",
+        "case_law_decisions",
+        "case_law_search_documents",
+        "scheduler_jobs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -544,6 +982,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     payload: { paused: false, completed: false },
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+    tables: {
+      reads: ["agent_registration", "scheduler_jobs"],
+      writes: ["agent_registration", "scheduler_jobs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -554,6 +996,28 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
+    tables: {
+      reads: [
+        "case_law_decisions",
+        "case_law_provision_admission",
+        "case_law_provision_citations",
+        "case_law_provision_extraction_scopes",
+        "case_law_provision_extractions",
+        "case_law_provision_repair_cursors",
+        "case_law_provision_scope_transitions",
+        "database_backfill_states",
+      ],
+      // Raw-SQL repair steps also validate the citation constraints.
+      writes: [
+        "case_law_provision_citations",
+        "case_law_provision_admission",
+        "case_law_provision_extraction_scopes",
+        "case_law_provision_extractions",
+        "case_law_provision_repair_cursors",
+        "case_law_provision_scope_transitions",
+        "database_backfill_states",
+      ],
+    },
     reads: "load-governed",
   },
   {
@@ -564,6 +1028,19 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+    tables: {
+      reads: [
+        "database_backfill_states",
+        "legislation_documents",
+        "legislation_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "database_backfill_states",
+        "legislation_documents",
+        "system_audit_runs",
+      ],
+    },
     reads: "load-governed",
   },
   {
@@ -572,6 +1049,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_HEARTBEAT_TASK,
+    tables: {
+      reads: ["database_backfill_states", "scheduler_jobs"],
+      writes: [],
+    },
     reads: "unmeasured",
   },
   {
@@ -580,6 +1061,29 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: CHECK_DATA_INVARIANTS_TASK,
+    tables: {
+      reads: [
+        "agent_skills",
+        "case_law_decisions",
+        "case_law_source_arrivals",
+        "case_law_sources",
+        "chat_message_revisions",
+        "chat_messages",
+        "chat_threads",
+        "chat_turns",
+        "entities",
+        "fields",
+        "mcp_connectors",
+        "member",
+        "sanctions_contact_screenings",
+        "sanctions_editions",
+        "sanctions_sources",
+        "task_assignees",
+        "user",
+        "workspaces",
+      ],
+      writes: ["case_law_source_arrivals", "fields"],
+    },
     reads: "unmeasured",
   },
   {
@@ -589,6 +1093,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CORPUS_INDEX_JOB_DETAIL_TASK,
+    tables: {
+      reads: [
+        "case_law_index_jobs",
+        "legislation_index_jobs",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+      writes: [
+        "case_law_index_jobs",
+        "legislation_index_jobs",
+        "scheduler_jobs",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -599,6 +1117,18 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_WORK_OBLIGATIONS_TASK,
+    tables: {
+      reads: [
+        "entities",
+        "scheduler_jobs",
+        "task_assignees",
+        "work_obligation_events",
+        "work_obligations",
+        "workspace_members",
+        "workspaces",
+      ],
+      writes: ["scheduler_jobs", "work_obligation_events", "work_obligations"],
+    },
     reads: "unmeasured",
   },
   {
@@ -609,6 +1139,21 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: WORK_ATTENTION_SCOUT_TASK,
+    tables: {
+      reads: [
+        "entities",
+        "member",
+        "organization_settings",
+        "scheduler_jobs",
+        "scout_runs",
+        "signal_events",
+        "signals",
+        "work_obligation_events",
+        "work_obligations",
+        "workspaces",
+      ],
+      writes: ["scheduler_jobs", "scout_runs", "signal_events", "signals"],
+    },
     reads: "unmeasured",
   },
   {
@@ -617,6 +1162,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: REPAIR_CHAT_SEARCH_INDEX_TASK,
+    tables: {
+      reads: [
+        "chat_message_search_documents",
+        "chat_messages",
+        "chat_thread_search_documents",
+        "chat_threads",
+      ],
+      writes: ["chat_message_search_documents", "chat_thread_search_documents"],
+    },
     reads: "unmeasured",
   },
   {
@@ -626,6 +1180,33 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REPAIR_SEARCH_PROJECTIONS_TASK,
+    tables: {
+      reads: [
+        "contact_search_document_preview_passages",
+        "contact_search_documents",
+        "contacts",
+        "entities",
+        "entity_versions",
+        "extracted_content",
+        "organization",
+        "search_document_preview_passages",
+        "search_documents",
+        "search_projection_repair_queue",
+        "workspace_contacts",
+        "workspace_search_document_preview_passages",
+        "workspace_search_documents",
+        "workspaces",
+      ],
+      writes: [
+        "contact_search_document_preview_passages",
+        "contact_search_documents",
+        "search_document_preview_passages",
+        "search_documents",
+        "search_projection_repair_queue",
+        "workspace_search_document_preview_passages",
+        "workspace_search_documents",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -634,6 +1215,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_FLOW_RUN_ORPHANS_TASK,
+    tables: {
+      reads: ["flow_runs"],
+      writes: [],
+    },
     reads: "unmeasured",
   },
   {
@@ -643,6 +1228,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     payloadUpdate: "preserve",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: REPAIR_FILE_DERIVATIVES_TASK,
+    tables: {
+      reads: [
+        "entities",
+        "entity_versions",
+        "fields",
+        "scheduler_jobs",
+        "workspaces",
+      ],
+      writes: ["fields", "scheduler_jobs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -651,6 +1246,21 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REAP_OWNERLESS_CHAT_TURNS_TASK,
+    tables: {
+      reads: [
+        "chat_turns",
+        "chat_threads",
+        "chat_messages",
+        "chat_run_log_entries",
+        "chat_run_logs",
+      ],
+      writes: [
+        "chat_turns",
+        "chat_messages",
+        "chat_run_log_entries",
+        "chat_run_logs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -659,6 +1269,31 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: SWEEP_REGISTRATIONS_TASK,
+    tables: {
+      reads: [
+        "agent_assertion_replay",
+        "agent_registration",
+        "mcp_web_handoff",
+        "oauth_access_token",
+        "oauth_client",
+        "oauth_client_assertion",
+        "oauth_consent",
+        "oauth_refresh_token",
+        "registration_daily_budget",
+        "system_audit_runs",
+        "verification",
+      ],
+      writes: [
+        "agent_assertion_replay",
+        "agent_registration",
+        "mcp_web_handoff",
+        "oauth_client",
+        "oauth_client_assertion",
+        "registration_daily_budget",
+        "system_audit_runs",
+        "verification",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -667,6 +1302,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: DAY_IN_MS },
     task: PURGE_SYSTEM_AUDIT_RUNS_TASK,
+    tables: {
+      reads: ["system_audit_runs"],
+      writes: ["system_audit_runs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -675,6 +1314,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK,
+    tables: {
+      reads: ["system_audit_runs", "usage_provider_webhook_events"],
+      writes: ["system_audit_runs", "usage_provider_webhook_events"],
+    },
     reads: "unmeasured",
     enabled: env.HOSTED_USAGE_WEBHOOK_RETENTION_DAYS !== undefined,
   },
@@ -684,6 +1327,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_ACTION_COSTS_TASK,
+    tables: {
+      reads: ["action_cost_calls", "action_cost_records"],
+      writes: ["action_cost_calls", "action_cost_records"],
+    },
     reads: "unmeasured",
     enabled:
       isDeploymentFeatureEnabled("FEATURE_ACTION_COST_RECORDS") &&
@@ -695,6 +1342,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: SWEEP_CHAT_RUN_LOGS_TASK,
+    tables: {
+      reads: ["chat_run_log_entries", "chat_run_logs", "chat_turns"],
+      writes: ["chat_run_log_entries", "chat_run_logs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -703,6 +1354,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: PURGE_CHAT_SECRETS_TASK,
+    tables: {
+      reads: ["chat_secrets"],
+      writes: ["chat_secrets"],
+    },
     reads: "unmeasured",
   },
   {
@@ -711,6 +1366,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_DOCUMENT_REVIEW_RUNS_TASK,
+    tables: {
+      reads: ["document_review_runs"],
+      writes: [],
+    },
     reads: "unmeasured",
   },
   {
@@ -719,6 +1378,22 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_LIST_VERIFICATION_RUNS_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "audit_logs",
+        "feature_enrolments",
+        "legal_list_verification_runs",
+        "member",
+        "user",
+        "workspaces",
+      ],
+      writes: [
+        "account_audit_logs",
+        "audit_logs",
+        "legal_list_verification_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -728,6 +1403,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_BILINGUAL_RUNS_TASK,
+    tables: {
+      reads: ["bilingual_translation_runs"],
+      writes: [],
+    },
     reads: "unmeasured",
   },
   {
@@ -737,6 +1416,10 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_REPORT_EXPORTS_TASK,
+    tables: {
+      reads: ["report_exports", "workspaces"],
+      writes: ["report_exports"],
+    },
     reads: "unmeasured",
   },
   {
@@ -745,6 +1428,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 5 * 60 * 1000 },
     task: RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK,
+    tables: {
+      reads: [
+        "organization_file_objects",
+        "organization_file_usage",
+        "style_sets",
+        "usage_seat_assignments",
+      ],
+      writes: [
+        "organization_file_objects",
+        "organization_file_usage",
+        "style_sets",
+        "usage_seat_assignments",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -753,6 +1450,20 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: CLEAN_TEMPLATE_DELETION_OBJECTS_TASK,
+    tables: {
+      reads: [
+        "organization_file_objects",
+        "organization_file_usage",
+        "template_deletion_cleanup_requests",
+        "usage_seat_assignments",
+      ],
+      writes: [
+        "organization_file_objects",
+        "organization_file_usage",
+        "template_deletion_cleanup_requests",
+        "usage_seat_assignments",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -762,6 +1473,26 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60_000 },
     task: REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK,
+    tables: {
+      reads: [
+        "entities",
+        "entity_versions",
+        "extracted_content",
+        "organization",
+        "scheduler_jobs",
+        "search_document_preview_passages",
+        "search_documents",
+        "search_projection_repair_queue",
+        "workspace_search_documents",
+        "workspaces",
+      ],
+      writes: [
+        "scheduler_jobs",
+        "search_document_preview_passages",
+        "search_documents",
+        "workspace_search_documents",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -775,6 +1506,28 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: INFO_SOUD_SYNC_TRACKED_CASES_TASK,
+    tables: {
+      reads: [
+        "document_counters",
+        "document_reference_counters",
+        "entities",
+        "entity_versions",
+        "infosoud_tracked_cases",
+        "signal_events",
+        "signals",
+        "workspaces",
+      ],
+      writes: [
+        "document_counters",
+        "document_reference_counters",
+        "entities",
+        "entity_versions",
+        "infosoud_tracked_cases",
+        "signal_events",
+        "signals",
+        "workspaces",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -783,6 +1536,36 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: BACKFILL_SANCTIONS_MONITORING_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "audit_logs",
+        "contacts",
+        "organization",
+        "organization_settings",
+        "sanctions_contact_marks",
+        "sanctions_contact_matches",
+        "sanctions_contact_screenings",
+        "sanctions_edition_entries",
+        "sanctions_edition_fanouts",
+        "sanctions_editions",
+        "sanctions_entry_payloads",
+        "sanctions_monitoring_backfills",
+        "sanctions_organization_marks",
+        "sanctions_screening_events",
+        "sanctions_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "account_audit_logs",
+        "audit_logs",
+        "sanctions_edition_fanouts",
+        "sanctions_monitoring_backfills",
+        "sanctions_organization_marks",
+        "sanctions_screening_events",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -791,6 +1574,28 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60_000 },
     task: DRAIN_SANCTIONS_MONITORING_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "audit_logs",
+        "contacts",
+        "organization_settings",
+        "sanctions_contact_marks",
+        "sanctions_contact_matches",
+        "sanctions_contact_screenings",
+        "sanctions_edition_entries",
+        "sanctions_editions",
+        "sanctions_entry_payloads",
+        "sanctions_screening_events",
+        "sanctions_sources",
+      ],
+      writes: [
+        "account_audit_logs",
+        "audit_logs",
+        "sanctions_contact_marks",
+        "sanctions_screening_events",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -799,6 +1604,24 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 2 * 60 * 60 * 1000 },
     task: REFRESH_SANCTIONS_SOURCES_TASK,
+    tables: {
+      reads: [
+        "fields",
+        "sanctions_edition_entries",
+        "sanctions_editions",
+        "sanctions_entry_payloads",
+        "sanctions_sources",
+        "system_audit_runs",
+      ],
+      writes: [
+        "fields",
+        "sanctions_edition_entries",
+        "sanctions_editions",
+        "sanctions_entry_payloads",
+        "sanctions_sources",
+        "system_audit_runs",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -807,6 +1630,15 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 60 * 60 * 1000 },
     task: EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "audit_logs",
+        "desktop_edit_sessions",
+        "workspaces",
+      ],
+      writes: ["account_audit_logs", "audit_logs", "desktop_edit_sessions"],
+    },
     reads: "unmeasured",
   },
   {
@@ -822,6 +1654,10 @@ export const DECLARED_SCHEDULER_JOBS = [
       timeZone: "Europe/Prague",
     },
     task: MEMORY_CURATOR_TASK,
+    tables: {
+      reads: ["account_audit_logs", "ai_memories", "audit_logs"],
+      writes: ["account_audit_logs", "ai_memories", "audit_logs"],
+    },
     reads: "unmeasured",
   },
   {
@@ -835,6 +1671,42 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 60 * 60 * 1000,
     },
     task: MEMORY_EXTRACTOR_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "ai_memories",
+        "audit_logs",
+        "chat_message_revisions",
+        "chat_messages",
+        "chat_thread_compactions",
+        "chat_thread_names",
+        "chat_threads",
+        "feature_enrolments",
+        "member",
+        "organization_access_states",
+        "organization_configured_access",
+        "organization_settings",
+        "usage_allocations",
+        "usage_entitlements",
+        "usage_events",
+        "usage_lane_counters",
+        "usage_policies",
+        "usage_seat_assignments",
+        "user",
+        "workspace_members",
+        "workspaces",
+      ],
+      writes: [
+        "account_audit_logs",
+        "ai_memories",
+        "audit_logs",
+        "chat_thread_compactions",
+        "organization_settings",
+        "usage_allocations",
+        "usage_events",
+        "usage_lane_counters",
+      ],
+    },
     reads: "unmeasured",
   },
   {
@@ -847,9 +1719,118 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: 5 * 60 * 1000,
     },
     task: CHAT_THREAD_COMPACTOR_TASK,
+    tables: {
+      reads: [
+        "account_audit_logs",
+        "audit_logs",
+        "chat_message_revisions",
+        "chat_messages",
+        "chat_thread_compactions",
+        "chat_threads",
+        "feature_enrolments",
+        "member",
+        "organization",
+        "organization_access_states",
+        "organization_configured_access",
+        "organization_settings",
+        "usage_allocations",
+        "usage_entitlements",
+        "usage_events",
+        "usage_lane_counters",
+        "usage_policies",
+        "usage_seat_assignments",
+        "user",
+        "workspace_members",
+        "workspaces",
+      ],
+      writes: [
+        "account_audit_logs",
+        "audit_logs",
+        "chat_thread_compactions",
+        "chat_threads",
+        "usage_allocations",
+        "usage_events",
+        "usage_lane_counters",
+      ],
+    },
     reads: "unmeasured",
   },
 ] as const satisfies readonly DeclaredSchedulerJob[];
+
+/** Tasks whose job rows are registered dynamically rather than at boot. */
+const DYNAMIC_SCHEDULER_TABLES = {
+  "scheduler.noop": { reads: [], writes: [] },
+  "scheduler.dispatchBullMq": { reads: [], writes: [] },
+  "flow.run": {
+    reads: [
+      "flow_definitions",
+      "workspaces",
+      "member",
+      "workspace_members",
+      "user",
+      "organization",
+      "organization_settings",
+      "organization_access_states",
+      "organization_configured_access",
+      "feature_enrolments",
+      "usage_entitlements",
+      "usage_policies",
+      "usage_allocations",
+      "usage_lane_counters",
+      "usage_events",
+      "usage_seat_assignments",
+      "flow_runs",
+      "flow_run_steps",
+    ],
+    writes: [
+      "scheduler_jobs",
+      "flow_runs",
+      "flow_run_steps",
+      "usage_allocations",
+      "usage_lane_counters",
+      "usage_events",
+    ],
+  },
+  // Projection erasure and extension hooks choose tables from the corpus
+  // inventory; reserve those namespaces conservatively as the inventory grows.
+  "caseLaw.reconcilePublisherRemovals": {
+    reads: allSchedulerTableNames().filter(
+      (name) =>
+        name.startsWith("case_law_") ||
+        name.startsWith("corpus_index_") ||
+        name.startsWith("legislation_") ||
+        name === "system_audit_runs",
+    ),
+    writes: allSchedulerTableNames().filter(
+      (name) =>
+        name.startsWith("case_law_") ||
+        name.startsWith("corpus_index_") ||
+        name.startsWith("legislation_") ||
+        name === "system_audit_runs",
+    ),
+  },
+} as const satisfies Record<
+  Exclude<
+    RegisteredSchedulerTaskName,
+    (typeof DECLARED_SCHEDULER_JOBS)[number]["task"]
+  >,
+  SchedulerTableAccess
+>;
+
+export const tablesForSchedulerTask = (
+  task: string,
+): readonly SchedulerTableName[] => {
+  const declared = DECLARED_SCHEDULER_JOBS.find((job) => job.task === task);
+  const access =
+    declared?.tables ??
+    Object.entries(DYNAMIC_SCHEDULER_TABLES).find(
+      ([name]) => name === task,
+    )?.[1];
+  if (access === undefined) {
+    return panic(`Scheduler task ${task} has no table declaration`);
+  }
+  return [...new Set([...access.reads, ...access.writes])].toSorted();
+};
 
 /**
  * Register every declared job, then verify the registration actually landed.

@@ -644,9 +644,9 @@ const writeFixture = ({
     new TextDecoder()
       .decode(Bun.spawnSync(["git", ...args], { cwd: SAVED_STATE_DIR }).stdout)
       .trim();
-  const migrations = readdirSync(MIGRATIONS_DIR).filter((name) =>
-    /^\d{14}_/u.test(name),
-  );
+  const migrations = readdirSync(MIGRATIONS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^\d{14}_/u.test(entry.name))
+    .map(({ name }) => name);
   const fixture: SavedStateFixture = {
     release: null,
     sourceCommit: git("rev-parse", "HEAD"),

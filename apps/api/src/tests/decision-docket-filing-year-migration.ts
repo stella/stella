@@ -5,7 +5,9 @@ import path from "node:path";
 /** The latest committed function is shared by embedded and service-backed PostgreSQL tests. */
 export const readDecisionDocketFilingYearMigration = (): string => {
   const root = path.resolve(import.meta.dir, "../../drizzle");
-  for (const directory of readdirSync(root)
+  for (const directory of readdirSync(root, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map(({ name }) => name)
     .filter((entry) => /^\d{14}_/u.test(entry))
     .toSorted()
     .toReversed()) {
