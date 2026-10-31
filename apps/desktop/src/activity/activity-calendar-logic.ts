@@ -165,7 +165,7 @@ export const contiguousRuns = (
   segments: readonly DayCalendarRange[],
 ): DayCalendarRange[] => {
   const runs: DayCalendarRange[] = [];
-  for (const segment of segments.toSorted(
+  for (const segment of [...segments].sort(
     (left, right) => left.startMs - right.startMs,
   )) {
     const last = runs.at(-1);

@@ -204,10 +204,14 @@ fn well_formed_locale(locale: &str) -> bool {
     && locale.len() <= NARRATIVE_MAX_LOCALE_BYTES
     && locale.split('-').all(|subtag| {
       (1..=8).contains(&subtag.len())
-        && subtag.chars().all(|character| character.is_ascii_alphanumeric())
+        && subtag
+          .chars()
+          .all(|character| character.is_ascii_alphanumeric())
     })
     && locale.split('-').next().is_some_and(|language| {
-      language.chars().all(|character| character.is_ascii_alphabetic())
+      language
+        .chars()
+        .all(|character| character.is_ascii_alphabetic())
     })
 }
 
@@ -517,7 +521,8 @@ mod tests {
     .unwrap();
     assert_eq!(request.titles.len(), NARRATIVE_MAX_TITLES);
     assert!(request.titles.iter().all(|title| {
-      !title.trim().is_empty() && title.encode_utf16().count() <= NARRATIVE_MAX_TITLE_UNITS
+      !title.trim().is_empty()
+        && title.encode_utf16().count() <= NARRATIVE_MAX_TITLE_UNITS
     }));
     // A surrogate pair is never split: 150 emoji fill 300 code units.
     assert_eq!(
@@ -537,7 +542,10 @@ mod tests {
       (vec!["Draft".to_string()], "en--US"),
       (vec!["Draft".to_string()], "12-US"),
       (vec!["Draft".to_string()], "toolongsubtag-x"),
-      (vec!["Draft".to_string()], "en-a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q"),
+      (
+        vec!["Draft".to_string()],
+        "en-a-b-c-d-e-f-g-h-i-j-k-l-m-n-o-p-q",
+      ),
     ] {
       assert!(NarrativeRequest::bounded(titles, locale.to_string(), None).is_err());
     }
