@@ -25,7 +25,9 @@ export const assertInvoicePaymentRequest = ({
 }: AssertInvoicePaymentRequestOptions) => {
   expect(invoice.paymentAmountMinor).toBe(cents(outstandingAmount));
   expect(invoice.totals.grossAmountMinor).toBe(cents(grossAmountMinor));
-  const data = buildInvoiceTemplateData(invoice).unwrap();
+  const data = buildInvoiceTemplateData(invoice).unwrap(
+    "Payment fixture must build invoice template data",
+  );
   expect(data.seller?.name).toBe(invoice.seller?.legalName);
   const { money } = createInvoiceFormatters({
     currency: invoice.invoice.currency,
@@ -55,7 +57,7 @@ export const assertInvoicePaymentRequest = ({
     invoice.invoice.invoiceNumber === null
       ? {}
       : { message: invoice.invoice.invoiceNumber }),
-  }).unwrap();
+  }).unwrap("Payment fixture must build a Czech QR payment payload");
   if (payload.status !== "payable") {
     panic("Payment fixture must support Czech QR payments");
   }

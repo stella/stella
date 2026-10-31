@@ -13,11 +13,12 @@ const renderWithoutPaymentSnapshot = async (
   invoice: Omit<RenderInvoicePdfOptions, "paymentAmountMinor">,
 ) => {
   // @ts-expect-error Document rendering requires the caller's remaining balance.
-  await renderInvoiceDocumentPdf({ loaded });
+  const rendered = await renderInvoiceDocumentPdf({ loaded });
   // @ts-expect-error Mapping document totals cannot choose a payment amount.
   invoiceDocumentRenderOptions(loaded);
   // @ts-expect-error Templates cannot silently fall back to the gross total.
-  buildInvoiceTemplateData(invoice);
+  const templateData = buildInvoiceTemplateData(invoice);
+  return { rendered, templateData };
 };
 
 expectTypeOf(renderWithoutPaymentSnapshot).toBeFunction();
