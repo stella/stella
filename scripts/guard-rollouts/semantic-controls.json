@@ -1,15 +1,13 @@
-import type { GuardRollout } from "../guard-rollout-policy.ts";
-
-export default {
-  id: "semantic-controls",
-  rules: [
+{
+  "id": "semantic-controls",
+  "rules": [
     "semantic-controls/require-context-menu-target",
     "semantic-controls/require-menu-anchor",
-    "semantic-controls/require-specific-icon-label",
+    "semantic-controls/require-specific-icon-label"
   ],
-  type: "changed-lines",
-  expiresAt: "2026-11-05T00:00:00.000Z",
-  check: [
+  "type": "changed-lines",
+  "expiresAt": "2026-11-05T00:00:00.000Z",
+  "check": [
     "bun",
     "--bun",
     "oxlint",
@@ -24,6 +22,6 @@ export default {
     "--deny",
     "semantic-controls/require-specific-icon-label",
     "apps/web/src",
-    "packages/workspace-ui/src",
-  ],
-} as const satisfies GuardRollout;
+    "packages/workspace-ui/src"
+  ]
+}

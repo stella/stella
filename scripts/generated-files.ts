@@ -1745,23 +1745,6 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
-    id: "guard-rollout-manifest",
-    outputKind: "committed",
-    outputs: ["scripts/guard-rollouts.gen.ts"],
-    inputs: [
-      "scripts/generate-guard-rollouts.ts",
-      "scripts/guard-rollouts/*.ts",
-      "scripts/generated-artifacts.ts",
-      "packages/scripts/src/generated-artifact-format.ts",
-      "packages/portable-path/src/index.ts",
-    ],
-    checkInputs: ["bunfig.toml", ".prettierrc.yml"],
-    write: ["bun", "scripts/generate-guard-rollouts.ts", "--write"],
-    check: ["bun", "scripts/generate-guard-rollouts.ts", "--check"],
-    autofix: true,
-    after: [],
-  },
-  {
     // Refreshes only the reviewed digests of jobs whose kind, qualifier and
     // privilege are unchanged since the merge base; new, reclassified and
     // privileged jobs keep failing the check until a human reviews them.
