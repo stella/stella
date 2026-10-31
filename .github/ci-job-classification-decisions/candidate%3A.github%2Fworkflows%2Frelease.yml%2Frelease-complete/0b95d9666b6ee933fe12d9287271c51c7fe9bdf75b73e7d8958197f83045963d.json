@@ -1,0 +1,5 @@
+{
+  "kind": "support",
+  "qualifier": "Reports every artifact the final release run has not produced; no publication.",
+  "reviewedDigest": "0b95d9666b6ee933fe12d9287271c51c7fe9bdf75b73e7d8958197f83045963d"
+}
