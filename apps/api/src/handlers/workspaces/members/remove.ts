@@ -264,6 +264,113 @@ const removedMemberWorkEvents = ({
 // clear, desktop-edit session cancel, audit events) and the in-process SSE
 // dispatch together so member removal has identical side effects on both
 // transports.
+type ReadMemberRemovalStateOptions = Pick<
+  RemoveWorkspaceMemberProps,
+  | "organizationId"
+  | "workspaceId"
+  | "userId"
+  | "actorUserId"
+  | "managesOrganizationMatters"
+  | "reassignTo"
+> & { tx: Transaction };
+
+const readMemberRemovalState = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  userId,
+  actorUserId,
+  managesOrganizationMatters,
+  reassignTo,
+}: ReadMemberRemovalStateOptions) => {
+  const authority = await readMatterMutationAuthority(tx, {
+    permissions: config.permissions,
+    organizationId,
+    workspaceId,
+    userId: actorUserId,
+  });
+  if (authority === null) {
+    abortTransaction(
+      new HandlerError({ status: 404, message: "Member not found" }),
+    );
+  }
+
+  // Timer starts take this lock before inserting. Hold it through the
+  // active-timer check and member deletion so removal cannot strand a
+  // timer that starts concurrently.
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+
+  const workspaceRows = await tx
+    .select({
+      leadUserId: workspaces.leadUserId,
+      organizationId: workspaces.organizationId,
+    })
+    .from(workspaces)
+    .where(eq(workspaces.id, workspaceId))
+    .for("update");
+  const workspace = workspaceRows.at(0);
+
+  if (!workspace) {
+    throw new HandlerError({ status: 404, message: "Member not found" });
+  }
+
+  if (
+    workspace.leadUserId === userId &&
+    actorUserId !== userId &&
+    !(managesOrganizationMatters && authority.managesOrganizationMatters)
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 403,
+        message:
+          "Only the matter lead or an organization admin can remove the matter lead",
+      }),
+    );
+  }
+
+  const lockedRows = await tx
+    .select({
+      id: workspaceMembers.id,
+      userId: workspaceMembers.userId,
+    })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, workspaceId))
+    .for("update");
+
+  // Check membership before the count guard so a non-member
+  // gets 404, not 400 "last member".
+  if (!lockedRows.some((r) => r.userId === userId)) {
+    throw new HandlerError({ status: 404, message: "Member not found" });
+  }
+
+  if (lockedRows.length <= 1) {
+    throw new HandlerError({
+      status: 400,
+      message: "Cannot remove the last workspace member",
+    });
+  }
+
+  if (
+    reassignTo &&
+    (reassignTo === userId ||
+      !lockedRows.some((row) => row.userId === reassignTo))
+  ) {
+    abortTransaction(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this workspace",
+      }),
+    );
+  }
+
+  const ownedWork = await readMemberWorkForRemoval({
+    tx,
+    workspaceId,
+    userId,
+  });
+  return { workspace, ownedWork };
+};
+
 export const removeWorkspaceMemberHandler = async function* ({
   safeDb,
   organizationId,
@@ -295,92 +402,14 @@ export const removeWorkspaceMemberHandler = async function* ({
         ],
         mode: "update",
       });
-      const authority = await readMatterMutationAuthority(tx, {
-        permissions: config.permissions,
+      const { workspace, ownedWork } = await readMemberRemovalState({
+        tx,
         organizationId,
         workspaceId,
-        userId: actorUserId,
-      });
-      if (authority === null) {
-        abortTransaction(
-          new HandlerError({ status: 404, message: "Member not found" }),
-        );
-      }
-
-      // Timer starts take this lock before inserting. Hold it through the
-      // active-timer check and member deletion so removal cannot strand a
-      // timer that starts concurrently.
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-      );
-
-      const workspaceRows = await tx
-        .select({
-          leadUserId: workspaces.leadUserId,
-          organizationId: workspaces.organizationId,
-        })
-        .from(workspaces)
-        .where(eq(workspaces.id, workspaceId))
-        .for("update");
-      const workspace = workspaceRows.at(0);
-
-      if (!workspace) {
-        throw new HandlerError({ status: 404, message: "Member not found" });
-      }
-
-      if (
-        workspace.leadUserId === userId &&
-        actorUserId !== userId &&
-        !(managesOrganizationMatters && authority.managesOrganizationMatters)
-      ) {
-        abortTransaction(
-          new HandlerError({
-            status: 403,
-            message:
-              "Only the matter lead or an organization admin can remove the matter lead",
-          }),
-        );
-      }
-
-      const lockedRows = await tx
-        .select({
-          id: workspaceMembers.id,
-          userId: workspaceMembers.userId,
-        })
-        .from(workspaceMembers)
-        .where(eq(workspaceMembers.workspaceId, workspaceId))
-        .for("update");
-
-      // Check membership before the count guard so a non-member
-      // gets 404, not 400 "last member".
-      if (!lockedRows.some((r) => r.userId === userId)) {
-        throw new HandlerError({ status: 404, message: "Member not found" });
-      }
-
-      if (lockedRows.length <= 1) {
-        throw new HandlerError({
-          status: 400,
-          message: "Cannot remove the last workspace member",
-        });
-      }
-
-      if (
-        reassignTo &&
-        (reassignTo === userId ||
-          !lockedRows.some((row) => row.userId === reassignTo))
-      ) {
-        abortTransaction(
-          new HandlerError({
-            status: 400,
-            message: "User is not a member of this workspace",
-          }),
-        );
-      }
-
-      const ownedWork = await readMemberWorkForRemoval({
-        tx,
-        workspaceId,
         userId,
+        actorUserId,
+        managesOrganizationMatters,
+        reassignTo,
       });
 
       let leadWasCleared = false;
