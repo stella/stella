@@ -16,6 +16,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
+import { mintContactId } from "@/api/handlers/contacts/contact-id";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {
   dateOfBirthToColumns,
@@ -33,10 +34,10 @@ import { nationalityCodesSchema } from "@/api/lib/business-registries/nationalit
 import {
   invoiceLanguageSchema,
   minorUnitAmountSchema,
-  resourceIdSchema,
   userIdSchema,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -45,8 +46,7 @@ import { flushContactSearchRepairs } from "@/api/lib/search/projection-repair-fl
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockOrgUserIdsForAssignment } from "@/api/lib/validated-org-user-id";
 
-export const createContactBodySchema = v.object({
-  id: resourceIdSchema("contact"),
+export const createContactBodySchema = v.strictObject({
   type: createContactTypeSchema,
   prefix: v.optional(v.pipe(v.string(), v.maxLength(32))),
   firstName: v.optional(v.pipe(v.string(), v.maxLength(256))),
@@ -93,6 +93,7 @@ export type CreateContactHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -122,6 +123,7 @@ export type InsertContactRowProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  contactId?: SafeId<"contact">;
   body: CreateContactBody;
 };
 
@@ -135,12 +137,14 @@ export const insertContactRow = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: InsertContactRowProps) => {
+  const id = contactId ?? mintContactId();
   const [row] = await tx
     .insert(contacts)
     .values({
-      id: body.id,
+      id,
       organizationId,
       type: body.type,
       prefix: body.prefix,
@@ -217,6 +221,7 @@ export const createContactHandler = async function* ({
   organizationId,
   userId,
   recordAuditEvent,
+  contactId,
   body,
 }: CreateContactHandlerProps) {
   const personDetailsError = validatePersonDetails(body);
@@ -258,6 +263,7 @@ export const createContactHandler = async function* ({
         organizationId,
         userId,
         recordAuditEvent,
+        ...(contactId === undefined ? {} : { contactId }),
         body,
       });
 
@@ -294,9 +300,10 @@ export const createContactHandler = async function* ({
 const createContact = createSafeRootHandler(
   {
     contract: "patch",
+    idempotency: { type: "replay" },
     description:
       "Create a contact in the organization address book. type (person or " +
-      "organization), displayName, and the contact id are supplied in the " +
+      "organization) and displayName are supplied in the " +
       "body; names, emails, phones, addresses, tags, registration and tax " +
       "numbers, bank and billing details, default hourly rate, payment " +
       "terms, and originating or responsible attorneys are optional. Refused " +
@@ -316,6 +323,7 @@ const createContact = createSafeRootHandler(
       body,
     });
   },
+  { authorize: authorizeOrganizationReplay },
 );
 
 export default createContact;

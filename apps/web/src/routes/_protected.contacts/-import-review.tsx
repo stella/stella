@@ -157,7 +157,7 @@ type ImportReviewSeedRow = {
 };
 
 type ImportReviewRow = ImportReviewSeedRow & {
-  /** The contact id the commit will use; stable so a retry replays. */
+  /** Local identity for editing the reviewed row. */
   id: SafeId<"contact">;
 };
 
@@ -398,10 +398,7 @@ export const useImportReview = ({
     setIsImporting(true);
     const payload = {
       taxIdScheme,
-      rows: validRows.map(({ candidate, id }) => ({
-        id,
-        ...toWireCandidate(candidate),
-      })),
+      rows: validRows.map(({ candidate }) => toWireCandidate(candidate)),
     } satisfies ImportCommitPayload;
 
     const outcome = await Result.tryPromise(async () => {
