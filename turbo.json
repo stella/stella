@@ -908,7 +908,10 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.github/workflows/agent-sandbox-canary.yml",
-        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml"
+        "$TURBO_ROOT$/.github/workflows/scheduled-run-alerts.yml",
+        // The compatibility test binds the policy to the pinned releases.
+        "$TURBO_ROOT$/apps/desktop/package.json",
+        "$TURBO_ROOT$/apps/desktop/src-tauri/harness/releases.gen.json"
       ]
     },
     // Lets dependents name `^generate:capability-runtime`; only @stll/api has

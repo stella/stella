@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 3,
+  "reason": "packages/agent-engine declares valibot for validating harness events and the compatibility manifest, temporal-polyfill for manifest timestamps, and fast-check as a dev dependency for its chunk stream property test; all three are already used across the repository."
+}

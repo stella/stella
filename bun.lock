@@ -683,11 +683,14 @@
         "@tanstack/ai-persistence": "catalog:",
         "@tanstack/ai-sandbox": "catalog:",
         "better-result": "catalog:",
+        "temporal-polyfill": "catalog:",
+        "valibot": "catalog:",
       },
       "devDependencies": {
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/agent-input": {
