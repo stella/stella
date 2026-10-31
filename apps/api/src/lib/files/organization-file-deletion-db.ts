@@ -11,7 +11,7 @@ let hermeticDeletionDb: OrganizationFileDeletionDb | undefined;
 
 /**
  * Hermetic test processes have no shared database pool, so their setup
- * installs the fence database once (src/tests/setup-env.ts). Only a test
+ * installs the fence database once (src/tests/hermetic-file-deletion-preload.ts). Only a test
  * process may install one; every other process fences on the root pool.
  */
 export const installHermeticOrganizationFileDeletionDb = (

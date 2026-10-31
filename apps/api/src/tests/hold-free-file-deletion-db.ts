@@ -3,20 +3,15 @@ import type { OrganizationFileDeletionDb } from "@/api/lib/files/organization-fi
 
 import { asTestRaw } from "./helpers/test-tool-set";
 
-type NoRows = ((...args: unknown[]) => NoRows) & {
-  then: (resolve: (rows: never[]) => unknown) => Promise<unknown>;
-};
-
 // Every query the fence builds resolves to no rows, whatever its chain:
 // no requested key belongs to an organization, so no legal hold applies.
-const noRows = (): NoRows =>
-  new Proxy(() => noRows(), {
-    get: (_target, key) =>
-      key === "then"
-        ? async (resolve: (rows: never[]) => unknown) =>
-            await Promise.resolve(resolve([]))
-        : () => noRows(),
-  }) as NoRows;
+// Awaiting the chain reads the settled empty result; any builder step
+// (`from`, `where`, `innerJoin`, ...) continues the same chain.
+const noRows = (): Promise<never[]> =>
+  new Proxy(Promise.resolve<never[]>([]), {
+    get: (rows, key) =>
+      key === "then" ? rows.then.bind(rows) : () => noRows(),
+  });
 
 /**
  * The file deletion fence for hermetic suites, which have no shared database
