@@ -49,9 +49,7 @@ export type DiffScopeGap =
   /** Inspects changed files; an unchanged dependent can break unseen. */
   | "dependents"
   /** Outside a pull request or merge group the diff is empty. */
-  | "empty-off-change"
-  /** The step's condition can never hold for the workflow's triggers. */
-  | "never-runs";
+  | "empty-off-change";
 
 export type DiffScope =
   /** The rule is about the change itself (a VERSION bump, new migrations). */
@@ -159,6 +157,27 @@ export const DIFF_SCOPED_STEPS = {
   "main-pr-depth.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
+  "merge-group-hold.yml:merge-group-hold#Check out the trusted target-branch resolver":
+    operational("Checks out the target branch's base resolver; no verdict."),
+  "merge-group-hold.yml:merge-group-hold#Resolve comparison base": operational(
+    "Resolves the merge group's comparison base for the hold check.",
+  ),
+  "merge-group-hold.yml:merge-group-hold#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the resolved base; no verdict.",
+    ),
+  "merge-group-hold.yml:merge-group-hold#Refuse held pull requests":
+    diffComplete(
+      "Checks exactly the pull requests between the group's base and head.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Check out trusted base scripts":
+    operational(
+      "Checks out the hold check from the pull request's base; no verdict.",
+    ),
+  "merge-group-hold.yml:dequeue-held-pull-request#Restore active hold labels and remove held pull requests from the queue":
+    operational(
+      "Restores hold labels and dequeues the pull request the event names; no verdict on content.",
+    ),
   "main-heavy.yml:validate#Verify main ancestry": operational(
     "Proves the requested commit is on main.",
   ),
@@ -294,9 +313,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
-  "ci.yml:ci-checks-rest#Bridge-version guard": gap(
-    "dependents",
-    "Watches six bridge files; the other command modules registered by the command manifest can change the bridge without a version bump.",
+  "ci.yml:ci-checks-rest#Bridge-version guard": expands(
+    "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),
   "ci.yml:ci-tests#Compute affected flag": expands(
     "Turbo's affected scope with declared root inputs; without a base the whole tree.",
@@ -363,13 +381,5 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-result#Evaluate CI outcome": operational(
     "Aggregates job results for the comparison base.",
-  ),
-  "dependency-audit.yml:audit#Detect lockfile changes": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
-  ),
-  "dependency-audit.yml:audit#Audit changed dependency resolutions": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
   ),
 } as const satisfies Record<string, DiffScope>;
