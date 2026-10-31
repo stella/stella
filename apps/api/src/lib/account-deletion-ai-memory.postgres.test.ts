@@ -62,7 +62,11 @@ if (!databaseUrl || !runPostgresTests) {
           );
           locked.resolve(undefined);
           await finish.promise;
-          await deletePersonalAiMemories(tx, userId);
+          await deletePersonalAiMemories({
+            tx,
+            currentUserId: userId,
+            retainedWorkspaceIds: [],
+          });
           await tx
             .update(user)
             .set({ deletedAt: new Date() })

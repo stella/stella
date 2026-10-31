@@ -76,6 +76,7 @@ export const MCP_ERROR_CODES = [
   "permission_denied",
   "usage_limited",
   "conflict",
+  "legal_hold_active",
   "rate_limited",
   "upstream_unavailable",
   "public_read_timeout",
@@ -84,6 +85,7 @@ export const MCP_ERROR_CODES = [
   "internal_error",
 ] as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const LEGAL_HOLD_ACTIVE = "legal_hold_active" as const;
 export const VERIFICATION_RUN_CAP_CODES = {
   active: "verification_active_limit_reached",
   daily: "verification_daily_limit_reached",

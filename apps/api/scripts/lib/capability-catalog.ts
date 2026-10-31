@@ -174,9 +174,11 @@ export const DOMAIN_ACTION_VERBS = [
   "lookup",
   "move",
   "pause",
+  "place",
   "prefill",
   "prepare",
   "preview",
+  "release",
   "remove",
   "rename",
   "reorder",
@@ -234,7 +236,15 @@ export type AccessClassification = {
 // both sets are "unclassifiable" and force an explicit ACCESS_OVERRIDES entry
 // so a newly introduced verb fails the export instead of silently defaulting.
 const READ_VERBS = new Set(["read", "list", "view"]);
-const WRITE_VERBS = new Set(["create", "update", "delete", "manage", "write"]);
+const WRITE_VERBS = new Set([
+  "create",
+  "update",
+  "delete",
+  "manage",
+  "write",
+  "place",
+  "release",
+]);
 const DESTRUCTIVE_VERBS = new Set(["delete"]);
 
 export type VerbClassification =

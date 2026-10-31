@@ -1520,10 +1520,13 @@ test("deleting a claimant before seed acknowledgement warns the next member abou
     });
     await testDb.transaction(
       async (tx) =>
-        await resetFolioCollabUserState(
-          asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]>(tx),
-          ids.userA1,
-        ),
+        await resetFolioCollabUserState({
+          tx: asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]["tx"]>(
+            tx,
+          ),
+          currentUserId: ids.userA1,
+          retainedWorkspaceIds: [],
+        }),
     );
     const nextMemberDb = asTestRaw<
       Parameters<typeof loadFolioCollabSnapshot>[0]["scopedDb"]
@@ -1600,10 +1603,13 @@ test("deleting a pending seed claimant retires its stored snapshot under the roo
   });
   await testDb.transaction(
     async (tx) =>
-      await resetFolioCollabUserState(
-        asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]>(tx),
-        ids.userA1,
-      ),
+      await resetFolioCollabUserState({
+        tx: asTestRaw<Parameters<typeof resetFolioCollabUserState>[0]["tx"]>(
+          tx,
+        ),
+        currentUserId: ids.userA1,
+        retainedWorkspaceIds: [],
+      }),
   );
   const [after] = await testDb
     .select()

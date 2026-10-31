@@ -44,6 +44,7 @@ import {
 } from "@/api/lib/file-key";
 import { extractFieldFileRefs } from "@/api/lib/files/field-file-refs";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { LIMITS } from "@/api/lib/limits";
 import {
   forEachOcrDerivativePage,
@@ -862,10 +863,19 @@ export const recordOrganizationStorageTeardown = async ({
   pagesMax = LIMITS.organizationStorageTeardownPagesMax,
   tx,
 }: OrganizationTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "organization" },
+  });
+  if (hold.isErr()) {
+    throw hold.error;
+  }
+
   // Exact-key writers share this advisory lock while reserving storage. Taking
   // it exclusively before transferring intents closes the lifecycle to both
   // matter-scoped and organization-scoped publications.
-  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
   const lockedOrganizations = await tx
     .select({ id: organization.id })
     .from(organization)
@@ -991,6 +1001,15 @@ export const completeWorkspaceDeletion = async ({
   tx,
   workspaceId,
 }: WorkspaceStorageTeardownOptions): Promise<OrganizationStorageTeardownResult> => {
+  await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+  const hold = await requireNoHold({
+    tx,
+    organizationId,
+    target: { type: "matter", workspaceId },
+  });
+  if (hold.isErr()) {
+    throw hold.error;
+  }
   const teardown = await recordWorkspaceStorageTeardown({
     organizationId,
     ...(pagesMax === undefined ? {} : { pagesMax }),

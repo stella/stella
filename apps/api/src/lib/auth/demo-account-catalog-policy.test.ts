@@ -51,6 +51,7 @@ const RESOURCE_WRITE_ACCOUNT_ACCESS = {
   agentSkill: ACCOUNT_ACCESS.sandbox,
   firmMemory: ACCOUNT_ACCESS.sandbox,
   caseLawResearch: ACCOUNT_ACCESS.sandbox,
+  legalHold: ACCOUNT_ACCESS.standard,
   legalReaderAnnotation: ACCOUNT_ACCESS.sandbox,
   savedSearch: ACCOUNT_ACCESS.sandbox,
   searchHistory: ACCOUNT_ACCESS.sandbox,

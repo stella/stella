@@ -3,6 +3,7 @@
 import { panic } from "better-result";
 
 import {
+  LEGAL_HOLD_ACTIVE,
   MCP_ERROR_CODES,
   type McpErrorCode,
   VERIFICATION_RUN_CAP_CODES,
@@ -110,6 +111,7 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   permission_denied: EXIT_CODES.permissionDenied,
   usage_limited: EXIT_CODES.usageLimited,
   conflict: EXIT_CODES.conflict,
+  [LEGAL_HOLD_ACTIVE]: EXIT_CODES.conflict,
   rate_limited: EXIT_CODES.server,
   [VERIFICATION_RUN_CAP_CODES.active]: EXIT_CODES.server,
   [VERIFICATION_RUN_CAP_CODES.daily]: EXIT_CODES.usageLimited,

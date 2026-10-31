@@ -309,6 +309,7 @@ describe.skipIf(!enabled)("user file key lifecycle census", () => {
         await deleteUserFiles({
           tx: asTestRaw<Transaction>(tx),
           currentUserId: fixture.userId,
+          retainedWorkspaceIds: [],
           s3KeysToDelete: accountDeletionKeys,
         });
         tx.rollback();

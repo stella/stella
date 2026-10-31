@@ -40,6 +40,7 @@ const PERSONAL_WRITE_SCOPES = {
   agentSkill: null,
   firmMemory: null,
   caseLawResearch: null,
+  legalHold: null,
   legalReaderAnnotation: ["stella:knowledge_write"],
   savedSearch: null,
   searchHistory: ["stella:knowledge_write"],

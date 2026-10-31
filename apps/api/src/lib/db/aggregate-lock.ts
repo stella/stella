@@ -43,8 +43,10 @@ import {
   fields,
   invoiceLines,
   invoices,
+  legalHolds,
   organizationSettings,
   pdfSigningSessions,
+  pendingUploads,
   requestIdempotencyReceipts,
   timeEntries,
   workspaceMembers,
@@ -56,6 +58,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { outsideRetainedMatters } from "@/api/lib/legal-holds/retained-matters";
 import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
@@ -3372,4 +3375,79 @@ export const lockUnbillableRateCandidates = async (
     })
     .from(timeEntries)
     .where(condition)
+    .for("update");
+
+/** Legal-hold rows are locked after their organization placement fence. */
+export const readLockedLegalHolds = async ({
+  tx,
+  predicate,
+  mode,
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode: "share" | "update";
+}) => await tx.select().from(legalHolds).where(predicate).for(mode);
+
+/** Account erasure locks every affected organization in one stable order. */
+export const lockLegalHoldOrganizations = async ({
+  tx,
+  predicate,
+  mode = "update",
+}: {
+  tx: Transaction;
+  predicate: SQL;
+  mode?: RowLockMode;
+}) => {
+  const rows = await tx
+    .select({ id: organization.id })
+    .from(organization)
+    .where(predicate);
+  for (const { id } of rows.toSorted(({ id: a }, { id: b }) =>
+    compareCodeUnit(a, b),
+  )) {
+    // db-await-in-loop: legal-hold fences acquire in organization ID order.
+    if (mode === "share") {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock_shared(19054, hashtext(${id}))`,
+      );
+    } else {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(19054, hashtext(${id}))`,
+      );
+    }
+  }
+  return rows;
+};
+
+/** In-flight upload cancellation keeps content belonging to held matters. */
+export const lockAccountDeletionPendingUploads = async ({
+  tx,
+  currentUserId,
+  retainedWorkspaceIds,
+}: {
+  tx: Transaction;
+  currentUserId: string;
+  retainedWorkspaceIds: readonly SafeId<"workspace">[];
+}) =>
+  await tx
+    .select({
+      declaredMime: pendingUploads.declaredMime,
+      id: pendingUploads.id,
+      organizationId: pendingUploads.organizationId,
+      purpose: pendingUploads.purpose,
+      purposeData: pendingUploads.purposeData,
+      status: pendingUploads.status,
+      workspaceId: pendingUploads.workspaceId,
+    })
+    .from(pendingUploads)
+    .where(
+      and(
+        eq(pendingUploads.userId, currentUserId),
+        outsideRetainedMatters(
+          pendingUploads.workspaceId,
+          retainedWorkspaceIds,
+        ),
+        sql`${pendingUploads.status} <> 'finalized'`,
+      ),
+    )
     .for("update");

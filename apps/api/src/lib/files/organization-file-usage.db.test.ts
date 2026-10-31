@@ -17,6 +17,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { createSafeId } from "@/api/lib/branded-types";
 import { copyOrganizationFiles } from "@/api/lib/files/copy-organization-files";
 import {
+  DeleteOrganizationFileError,
   deleteOrganizationFilesWithSignal,
   deleteOrganizationFileWithSignal,
 } from "@/api/lib/files/delete-organization-file";
@@ -354,13 +355,18 @@ describe("organization file usage", () => {
         Result.isOk(await reconcileOrganizationFileObject(input(key, 6), db())),
       ).toBe(true);
 
-      const unavailableDb = asTestRaw<
-        NonNullable<Parameters<typeof reserveOrganizationFileBytes>[1]>
-      >({
-        transaction: async () => {
+      let transactionCount = 0;
+      const unavailableDb: NonNullable<
+        Parameters<typeof reserveOrganizationFileBytes>[1]
+      > = {
+        transaction: async (run) => {
+          transactionCount += 1;
+          if (transactionCount === 1) {
+            return await db().transaction(run);
+          }
           throw new Error("ledger unavailable");
         },
-      });
+      };
       const deleted = await deleteOrganizationFileWithSignal(
         key,
         AbortSignal.timeout(10_000),
@@ -368,6 +374,12 @@ describe("organization file usage", () => {
       );
 
       expect(Result.isError(deleted)).toBe(true);
+      if (Result.isError(deleted)) {
+        expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+        if (DeleteOrganizationFileError.is(deleted.error)) {
+          expect(deleted.error.stage).toBe("usage_removal");
+        }
+      }
       expect(fake.objects.has(`${envBase.S3_BUCKET}/${key}`)).toBe(false);
       expect((await counter())?.committedBytes).toBe(6n);
       expect(Result.isOk(await removeOrganizationFileBytes(key, db()))).toBe(
@@ -375,6 +387,25 @@ describe("organization file usage", () => {
       );
     } finally {
       fake.stop();
+    }
+  });
+
+  test("distinguishes a storage failure from usage removal", async () => {
+    const fake = startFakeS3();
+    fake.stop();
+
+    const deleted = await deleteOrganizationFileWithSignal(
+      "fixture/unavailable-storage",
+      AbortSignal.timeout(10_000),
+      { fileUsageDb: db() },
+    );
+
+    expect(Result.isError(deleted)).toBe(true);
+    if (Result.isError(deleted)) {
+      expect(DeleteOrganizationFileError.is(deleted.error)).toBe(true);
+      if (DeleteOrganizationFileError.is(deleted.error)) {
+        expect(deleted.error.stage).toBe("storage");
+      }
     }
   });
 

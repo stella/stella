@@ -287,6 +287,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import { getDisabledNativeToolSlugs } from "@/api/lib/mcp-connectors/catalog-metadata";
@@ -2132,6 +2134,9 @@ const prepareValidatedIncomingMessage = async ({
       // The upload helper already cleans a partial upload (and a newly
       // created thread) before returning an error.
       lifecycle.releaseSideEffects();
+      if (LegalHoldActiveError.is(uploadResult.error)) {
+        return Result.err(legalHoldRefusal(uploadResult.error));
+      }
       return Result.err(uploadResult.error);
     }
     lifecycle.trackUploadedFiles(uploadResult.value.uploadedFiles);

@@ -21,6 +21,8 @@ import listFolders from "@/api/handlers/entities/folders/list";
 import createFromLegalSource from "@/api/handlers/entities/from-legal-source/create";
 import readEntityById from "@/api/handlers/entities/get";
 import joinFolioCollabRoom from "@/api/handlers/entities/join-folio-collab-room";
+import placeEntityLegalHold from "@/api/handlers/entities/legal-holds/place";
+import releaseEntityLegalHold from "@/api/handlers/entities/legal-holds/release";
 import readEntities from "@/api/handlers/entities/list";
 import moveEntity from "@/api/handlers/entities/move";
 import requestOcr from "@/api/handlers/entities/ocr/create";
@@ -116,6 +118,10 @@ const entities = routes({
   "/summaries": { GET: readEntitySummaries },
   "/zip/:entityId": { GET: downloadZip },
   "/entity/:entityId": { GET: readEntityById },
+  "/entity/:entityId/legal-holds": { POST: placeEntityLegalHold },
+  "/entity/:entityId/legal-holds/:holdId/release": {
+    POST: releaseEntityLegalHold,
+  },
   "/entity/:entityId/versions": { GET: readVersions },
   "/entity/:entityId/versions/:versionId": {
     GET: readVersionById,

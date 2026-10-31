@@ -20,6 +20,12 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  lockWorkspaceLifecycle,
+  withAggregateEntityBatch,
+  withAggregateLock,
+  withAggregateParentBatch,
+} from "@/api/lib/db/aggregate-lock";
 import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
@@ -33,6 +39,12 @@ import {
   createOcrSearchablePdfKey,
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import {
@@ -76,15 +88,52 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-      );
+      await lockLegalHoldOrganization({
+        tx,
+        organizationId,
+        mode: "share",
+      });
+      await lockWorkspaceLifecycle(tx, workspaceId);
+      const deletionEntities = await tx
+        .select({ id: entities.id })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.workspaceId, workspaceId),
+            sql`${entities.id} IN (
+              WITH RECURSIVE deletion_tree AS (
+                SELECT id FROM ${entities}
+                WHERE ${entities.workspaceId} = ${workspaceId}
+                  AND ${inArray(entities.id, body.entityIds)}
+                UNION
+                SELECT child.id FROM ${entities} child
+                INNER JOIN deletion_tree parent ON child.parent_id = parent.id
+                WHERE child.workspace_id = ${workspaceId}
+              )
+              SELECT id FROM deletion_tree
+            )`,
+          ),
+        );
+      const deletionEntityIds = deletionEntities.map(({ id }) => id);
+      const entityHolds = await requireNoHold({
+        tx,
+        organizationId,
+        target: { type: "entities", entityIds: deletionEntityIds },
+      });
+      if (entityHolds.isErr()) {
+        return { status: "rejected" as const, error: entityHolds.error };
+      }
+      await withAggregateParentBatch({
+        tx,
+        organizationIds: [],
+        workspaceIds: [workspaceId],
+        mode: "update",
+      });
       const workspaceRows = await tx
         .select({ status: workspaces.status })
         .from(workspaces)
         .where(eq(workspaces.id, workspaceId))
-        .limit(1)
-        .for("update");
+        .limit(1);
       if (workspaceRows.at(0)?.status !== "active") {
         return {
           status: "rejected" as const,
@@ -98,7 +147,7 @@ export const deleteEntitiesHandler = async function* ({
       // Room pointer publication and version deletion both lock a room before
       // its entity. Follow that order so the cleanup request captures the last
       // committed snapshot pointer without introducing an inverse lock edge.
-      const collabRooms = await tx
+      const collabRoomCandidates = await tx
         .select({
           docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
           docxCheckpointUpdatedAt: folioCollabRooms.docxCheckpointUpdatedAt,
@@ -110,33 +159,55 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(folioCollabRooms.workspaceId, workspaceId),
-            inArray(folioCollabRooms.entityId, body.entityIds),
+            inArray(folioCollabRooms.entityId, deletionEntityIds),
           ),
         )
         .orderBy(asc(folioCollabRooms.id))
-        .limit(LIMITS.entitiesPageSizeMax * LIMITS.propertiesCount)
-        .for("update");
+        .limit(Math.max(1, deletionEntityIds.length * LIMITS.propertiesCount));
+      for (const room of collabRoomCandidates) {
+        // db-await-in-loop: aggregate room locks acquire in primary-key order.
+        await withAggregateLock({
+          aggregate: "folioCollabRoom",
+          id: { id: room.id, workspaceId },
+          mode: "update",
+          tx,
+        });
+      }
+      const collabRooms =
+        collabRoomCandidates.length === 0
+          ? []
+          : await tx
+              .select({
+                docxCheckpointFileId: folioCollabRooms.docxCheckpointFileId,
+                docxCheckpointUpdatedAt:
+                  folioCollabRooms.docxCheckpointUpdatedAt,
+                id: folioCollabRooms.id,
+                yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
+                yjsSnapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
+              })
+              .from(folioCollabRooms)
+              .where(
+                inArray(
+                  folioCollabRooms.id,
+                  collabRoomCandidates.map(({ id }) => id),
+                ),
+              )
+              .orderBy(asc(folioCollabRooms.id))
+              .limit(collabRoomCandidates.length);
 
       // OCR dispatch takes this same entity fence before changing a run to
       // `running`. The committed entity deletion is the durable withdrawal
       // fence; storage cleanup happens later from a durable request, never
       // while this transaction owns locks.
-      const lockedEntities = await tx
-        .select({
-          currentVersionId: entities.currentVersionId,
-          id: entities.id,
-          readOnly: entities.readOnly,
-        })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, body.entityIds),
-          ),
-        )
-        .orderBy(asc(entities.id))
-        .limit(LIMITS.entitiesPageSizeMax)
-        .for("update");
+      const lockedEntities =
+        deletionEntityIds.length === 0
+          ? []
+          : await withAggregateEntityBatch({
+              tx,
+              ids: deletionEntityIds.map((id) => ({ id, workspaceId })),
+              mode: "update",
+              limit: deletionEntityIds.length,
+            });
       if (lockedEntities.some(({ readOnly }) => readOnly)) {
         return {
           status: "rejected" as const,
@@ -150,7 +221,7 @@ export const deleteEntitiesHandler = async function* ({
       const removalState = await validateEntityRemovalState({
         tx,
         workspaceId,
-        entityIds: body.entityIds,
+        entityIds: deletionEntityIds,
         operation: "delete",
         now: new Date(),
       });
@@ -168,7 +239,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, body.entityIds),
+            inArray(entities.id, deletionEntityIds),
           ),
         );
 
@@ -198,7 +269,7 @@ export const deleteEntitiesHandler = async function* ({
         tx,
         workspaceId,
         fileRows: fileRefs,
-        excludedEntityIds: body.entityIds,
+        excludedEntityIds: deletionEntityIds,
       });
 
       // A long-lived document accumulates one OCR run per version and field,
@@ -246,7 +317,7 @@ export const deleteEntitiesHandler = async function* ({
             .where(
               and(
                 eq(documentProcessingRuns.workspaceId, workspaceId),
-                inArray(documentProcessingRuns.entityId, body.entityIds),
+                inArray(documentProcessingRuns.entityId, deletionEntityIds),
                 ocrDerivativeCursorFilter(cursor),
               ),
             )
@@ -271,7 +342,7 @@ export const deleteEntitiesHandler = async function* ({
         .where(
           and(
             eq(entities.workspaceId, workspaceId),
-            inArray(entities.id, body.entityIds),
+            inArray(entities.id, deletionEntityIds),
           ),
         )
         .returning({
@@ -322,7 +393,11 @@ export const deleteEntitiesHandler = async function* ({
     }),
   );
   if (txOutcome.status === "rejected") {
-    return Result.err(txOutcome.error);
+    return Result.err(
+      LegalHoldActiveError.is(txOutcome.error)
+        ? legalHoldRefusal(txOutcome.error)
+        : txOutcome.error,
+    );
   }
   const deletedEntities = txOutcome.entities;
   // Accelerate only a bounded prefix. The requests are already committed and

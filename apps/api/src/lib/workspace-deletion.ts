@@ -10,6 +10,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOrganizationObjectIntentsForLifecycle } from "@/api/lib/buffer-intent-reconciliation";
 import {
   lockMatterAccessAssignments,
   lockMatterAccessWorkspaceRows,
@@ -19,6 +20,10 @@ import {
 } from "@/api/lib/db/aggregate-lock";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/legal-holds/holds";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
@@ -166,6 +171,8 @@ export const executeAuthorizedWorkspaceDeletion = async (
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
       return await withAggregateTransaction(database, async (tx) => {
+        await lockOrganizationObjectIntentsForLifecycle(tx, organizationId);
+        await lockLegalHoldOrganization({ tx, organizationId });
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -215,6 +222,14 @@ export const executeAuthorizedWorkspaceDeletion = async (
         });
         if (!authorized) {
           return { status: "not-authorized" } as const;
+        }
+        const hold = await requireNoHold({
+          tx,
+          organizationId,
+          target: { type: "matter", workspaceId },
+        });
+        if (hold.isErr()) {
+          throw hold.error;
         }
         if (workspace.status !== "active") {
           return { status: "workspace-unavailable" } as const;

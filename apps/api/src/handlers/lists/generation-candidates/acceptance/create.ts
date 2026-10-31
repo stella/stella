@@ -24,6 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { isWorkObligationEligible } from "@/api/lib/work-obligations/eligibility";
 
@@ -229,6 +230,20 @@ const cleanupAcceptance = async (
   { reason, entityOwnership }: ReleaseAcceptanceOptions,
 ) =>
   await safeDb(async (tx) => {
+    const workspace = await tx.query.workspaces.findFirst({
+      where: { id: { eq: workspaceId } },
+      columns: { organizationId: true },
+    });
+    if (workspace) {
+      const hold = await requireNoHold({
+        tx,
+        organizationId: workspace.organizationId,
+        target: { type: "entity", entityId: acceptedEntityId },
+      });
+      if (hold.isErr()) {
+        throw hold.error;
+      }
+    }
     const current = (
       await tx
         .select({
