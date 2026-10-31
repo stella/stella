@@ -11,19 +11,12 @@ import type { AstNode } from "./utils.ts";
 import {
   classBaseName,
   classTokens,
-  everyNode,
   filenameForContext,
   isAstNode,
+  isIdentifier,
   jsxName,
   staticStringValue,
 } from "./utils.ts";
-
-const getOpeningElement = (element: unknown): AstNode | null => {
-  if (!isAstNode(element) || element.type !== "JSXElement") {
-    return null;
-  }
-  return isAstNode(element.openingElement) ? element.openingElement : null;
-};
 
 const getClassNameAttribute = (openingElement: unknown): AstNode | null => {
   if (!isAstNode(openingElement) || !Array.isArray(openingElement.attributes)) {
@@ -66,17 +59,55 @@ const templateElementString = (node: AstNode): string | null => {
   return typeof value.raw === "string" ? value.raw : null;
 };
 
-const containsNormalWhitespace = (className: unknown): boolean =>
-  everyNode(className).some((node) => {
-    const value = staticStringValue(node) ?? templateElementString(node);
-    if (value === null) {
-      return false;
-    }
-    return classTokens(value).some(
-      (token) =>
-        classBaseName(token).replaceAll("!", "") === "whitespace-normal",
+const stringContainsNormalWhitespace = (value: string): boolean =>
+  classTokens(value).some(
+    (token) => classBaseName(token).replaceAll("!", "") === "whitespace-normal",
+  );
+
+const containsNormalWhitespace = (className: unknown): boolean => {
+  const value = staticStringValue(className);
+  if (value !== null) {
+    return stringContainsNormalWhitespace(value);
+  }
+  if (!isAstNode(className)) {
+    return false;
+  }
+  if (className.type === "ConditionalExpression") {
+    return (
+      containsNormalWhitespace(className.consequent) ||
+      containsNormalWhitespace(className.alternate)
+    );
+  }
+  if (className.type === "TemplateLiteral") {
+    const quasis = Array.isArray(className.quasis) ? className.quasis : [];
+    const expressions = Array.isArray(className.expressions)
+      ? className.expressions
+      : [];
+    return [...quasis, ...expressions].some((part) => {
+      if (!isAstNode(part)) {
+        return false;
+      }
+      const templateValue = templateElementString(part);
+      return templateValue === null
+        ? containsNormalWhitespace(part)
+        : stringContainsNormalWhitespace(templateValue);
+    });
+  }
+  if (
+    className.type !== "CallExpression" ||
+    (!isIdentifier(className.callee, "cn") &&
+      !isIdentifier(className.callee, "clsx")) ||
+    !Array.isArray(className.arguments)
+  ) {
+    return false;
+  }
+  return className.arguments.some((argument) => {
+    const argumentValue = staticStringValue(argument);
+    return (
+      argumentValue !== null && stringContainsNormalWhitespace(argumentValue)
     );
   });
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-button-whitespace-normal" },
@@ -94,12 +125,16 @@ export default eslintCompatPlugin({
           before() {
             return filenameForContext(context).endsWith(".tsx");
           },
-          JSXElement(node) {
-            const openingElement = getOpeningElement(node);
-            if (jsxName(openingElement?.name) !== "Button") {
+          JSXOpeningElement(node) {
+            if (
+              !isAstNode(node) ||
+              !isAstNode(node.name) ||
+              node.name.type !== "JSXIdentifier" ||
+              node.name.name !== "Button"
+            ) {
               return;
             }
-            const className = getClassNameAttribute(openingElement);
+            const className = getClassNameAttribute(node);
             if (
               className === null ||
               !containsNormalWhitespace(classNameValue(className))
