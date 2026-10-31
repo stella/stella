@@ -58,12 +58,16 @@ const readProjection = async () => {
       message: "Repository identity is unavailable",
     });
   }
-  const deployRepository = await github([
-    "api",
-    `repos/${repository}/actions/variables/STAGING_DEPLOY_REPOSITORY`,
-    "--jq",
-    ".value",
-  ]);
+  // A workflow passes the setting from its own context; an operator's run
+  // reads it from the repository.
+  const deployRepository =
+    process.env["STAGING_DEPLOY_REPOSITORY"] ??
+    (await github([
+      "api",
+      `repos/${repository}/actions/variables/STAGING_DEPLOY_REPOSITORY`,
+      "--jq",
+      ".value",
+    ]));
   if (!/^[\w.-]+$/u.test(deployRepository)) {
     throw new DeployEnvReadError({
       message: "Deployment repository setting is unavailable",

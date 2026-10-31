@@ -222,20 +222,27 @@ TruncatedText.
   disposition, tooltip and focus ring, lays out like a native button
   (`inline-block`, content from the start), and ignores `size`.
   `shape` (`box`, the container radius; `round`, an avatar or pill)
-  sets the outline its focus ring follows.
+  sets the outline its focus ring follows. Selected, it draws an inset
+  edge above its content.
 
 Sizes: `default` (h-9), `sm` (h-8, small type), `xs` (h-7, small
 type), `lg` (h-10), `xl` (h-11), `icon` and `icon-*` (square),
 `icon-2xs` (a 16px glyph action in a dense row; the touch target
 still grows to 44px under a coarse pointer), `row` (a menu-list row),
-`inline` (an action inside a line of text: no height, padding or type
-of its own, an inline box that wraps with the line and whose text stays
-selectable; quiet variants drop their hover fill, and with no variant
-it is an underlined link).
+`inline` (a short action inside a line of text: no height, padding or
+type of its own, and text that stays selectable; quiet variants drop
+their hover fill, and with no variant it is an underlined link). A
+`<button>` is one atomic box even at `display: inline`, so an inline
+button never breaks across the paragraph's lines: a label too long for
+the line moves down whole. Text that must flow with the prose (a
+citation in reader text) is a `ButtonTextRun`: the text sits in a
+native `<label>` that wraps with the line and forwards a press to the
+button it holds.
 
 **Text selection.** Buttons are `select-none`: a label is not text to
-copy. Two exceptions: `size="inline"` is `select-text`, because a
-citation or reference inside prose is copied with the passage; and
+copy. Two exceptions: `size="inline"` and `ButtonTextRun` are
+`select-text`, because a reference inside prose is copied with the
+passage; and
 `plain` leaves selection to the browser, which in practice does not
 drag-select inside a button. So a plain row or card is fine as is, but
 if a reader needs to select or copy its text (a quoted passage, an
@@ -267,6 +274,7 @@ When a screen needs a look the components lack, add it once here and in
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
 | Box-less click target (card, cell, image)                          | `Button variant="plain"` (+ `shape`, `focusRing`)                        |
 | Action inside running text                                         | `Button size="inline"` (`variant="link"` underlined by default)          |
+| Long reference that wraps with running text                        | `ButtonTextRun`                                                          |
 | Current choice in a set                                            | `Button selected`, or a `ToggleGroup` for exclusive options              |
 | Filter tabs, view modes, density                                   | `ToggleGroup` + `ToggleGroupItem` (a segmented tray)                     |
 | A button that stays pressed                                        | `Toggle`                                                                 |
