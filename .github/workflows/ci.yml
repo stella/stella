@@ -1082,20 +1082,29 @@ jobs:
           steps.completed-depth.outputs.run_required != 'false'
           && (github.event_name == 'pull_request' || github.event_name == 'merge_group')
           && steps.changed-files.outputs.database_migrations_required != 'true'
-        timeout-minutes: 2
+        timeout-minutes: 3
         env:
-          CHANGED_FILES: ${{ steps.changed-files.outputs.changed_files }}
+          CHANGED_PATHS: ${{ runner.temp }}/api-test-changed-paths
           PLANNER_DEPENDENCIES: ${{ steps.planner-deps.outcome }}
+        # Every failure answers "changed": an unanswered question must not skip
+        # the migration jobs, nor fail the plan for every pull request.
         run: |
           if [[ "$PLANNER_DEPENDENCIES" == success ]]; then
-            bun scripts/schema-import-changes.ts >> "$GITHUB_OUTPUT"
+            if answer=$(timeout --kill-after=10s 120s bun scripts/schema-import-changes.ts); then
+              echo "$answer" >> "$GITHUB_OUTPUT"
+            else
+              echo "changed=true" >> "$GITHUB_OUTPUT"
+            fi
             exit 0
           fi
-          # Without the import graph, any API or package source may reach the schema.
-          if jq -r '.[]' <<< "$CHANGED_FILES" | grep -Eq '^(apps/api|packages)/.*\.tsx?$'; then
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
+          # Without the import graph, any API or package source may reach the
+          # schema. grep exits 1 only for "no match"; a missing list counts.
+          status=0
+          grep -zEq '^(apps/api|packages)/.*\.tsx?$' "$CHANGED_PATHS" || status=$?
+          if [[ "$status" == 1 ]]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Require planner dependencies for job derivation

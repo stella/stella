@@ -56,10 +56,12 @@ export const schemaImportsChanged = ({
 };
 
 if (import.meta.main) {
-  const changed = v.parse(
-    v.array(v.string()),
-    JSON.parse(process.env["CHANGED_FILES"] ?? "[]"),
-  );
+  // The planner's NUL-separated changed paths; a file avoids the environment
+  // size limit a large change would exceed.
+  const changedPaths = v.parse(v.string(), process.env["CHANGED_PATHS"]);
+  const changed = readFileSync(changedPaths, "utf-8")
+    .split("\0")
+    .filter((file) => file.length > 0);
   const root = path.resolve(import.meta.dir, "..");
   console.log(`changed=${String(schemaImportsChanged({ root, changed }))}`);
 }
