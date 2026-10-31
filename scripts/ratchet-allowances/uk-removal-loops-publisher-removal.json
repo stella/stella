@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/handlers/case-law/publisher-removal.ts",
+  "delta": 3,
+  "reason": "Fenced alias cleanup preserves per-decision derived-store and write-extension ordering. Snapshot owners invalidate within that transaction; alias-wide provenance, listing deletion, content updates, upload and projection reads are batched."
+}

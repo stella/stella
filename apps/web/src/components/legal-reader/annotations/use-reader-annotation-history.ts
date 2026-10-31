@@ -29,14 +29,19 @@ import type {
   ReaderAnnotationWrites,
 } from "@/components/legal-reader/annotations/reader-annotation-history.logic";
 import { detached } from "@/lib/detached";
+import { ClientOperationError } from "@/lib/errors/client";
 
-/** What a reader does to a mark, and the way back from it. */
+/**
+ * What a reader does to a mark, and the way back from it. A write resolves to
+ * whether it held, so a caller sequencing writes stops at the first that did
+ * not; the store has already told the reader why.
+ */
 export type ReaderAnnotationController = {
-  create: (input: CreateAnnotationInput) => Promise<void>;
+  create: (input: CreateAnnotationInput) => Promise<Result<void, Error>>;
   redo: () => Promise<void>;
-  remove: (id: string) => Promise<void>;
+  remove: (id: string) => Promise<Result<void, Error>>;
   undo: () => Promise<void>;
-  update: (input: UpdateAnnotationInput) => Promise<void>;
+  update: (input: UpdateAnnotationInput) => Promise<Result<void, Error>>;
 };
 
 const OUTCOME_KEYS = {
@@ -78,7 +83,7 @@ export const useReaderAnnotationHistory = ({
     history: EMPTY_READER_ANNOTATION_HISTORY,
     scope: currentScope,
     seq: 0,
-    inFlight: new Set<Promise<void>>(),
+    inFlight: new Set<Promise<unknown>>(),
     queue: Promise.resolve(),
   });
   const latest = useRef({ identity: currentScope, writes });
@@ -106,7 +111,7 @@ export const useReaderAnnotationHistory = ({
         history: EMPTY_READER_ANNOTATION_HISTORY,
         scope: currentScope,
         seq: 0,
-        inFlight: new Set<Promise<void>>(),
+        inFlight: new Set<Promise<unknown>>(),
         queue: Promise.resolve(),
       };
     }
@@ -125,25 +130,30 @@ export const useReaderAnnotationHistory = ({
   /** A step the reader takes: written, then remembered once it holds. */
   const recorded = async (
     write: () => Promise<Result<ReaderAnnotationInverse | null, Error>>,
-  ): Promise<void> => {
+  ): Promise<Result<void, Error>> => {
     const session = current();
     if (session === null) {
-      return;
+      return Result.err(
+        new ClientOperationError({
+          action: "write-reader-annotation",
+          message: "The document this change was made on is no longer open",
+        }),
+      );
     }
     session.seq += 1;
     const seq = session.seq;
     const operation = (async () => {
       const written = await write();
-      if (Result.isError(written) || written.value === null) {
-        return;
+      if (Result.isOk(written) && written.value !== null) {
+        const inverse = written.value;
+        setHistory(session, (history) =>
+          recordReaderAnnotationStep(history, { inverse, seq }),
+        );
       }
-      const inverse = written.value;
-      setHistory(session, (history) =>
-        recordReaderAnnotationStep(history, { inverse, seq }),
-      );
+      return written.map(() => undefined);
     })();
     session.inFlight.add(operation);
-    await operation.finally(() => {
+    return await operation.finally(() => {
       session.inFlight.delete(operation);
     });
   };
@@ -155,11 +165,15 @@ export const useReaderAnnotationHistory = ({
   const update = async (input: UpdateAnnotationInput) => {
     // Read before the write: the store paints the change at once.
     const inverse = inverseOfUpdate(writes.rows(), input);
-    await recorded(async () => (await writes.update(input)).map(() => inverse));
+    return await recorded(async () =>
+      (await writes.update(input)).map(() => inverse),
+    );
   };
   const remove = async (id: string) => {
     const inverse = inverseOfRemove(writes.rows(), id);
-    await recorded(async () => (await writes.remove(id)).map(() => inverse));
+    return await recorded(async () =>
+      (await writes.remove(id)).map(() => inverse),
+    );
   };
 
   const step = async (

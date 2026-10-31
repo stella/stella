@@ -8,6 +8,9 @@ import type {
 
 import { panic } from "better-result";
 
+import { statuteListSchemeFor } from "@stll/api-contract/statute-list-schemes";
+import { paragraphFromPreview } from "@stll/legal-ast/statute-list";
+import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { PanelRightIcon } from "@stll/ui/icons";
@@ -16,23 +19,28 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
+import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
+import { BlockRenderer } from "./document-ast-text";
 import {
   fullProvisionOutcome,
   informativeProvisionTrail,
   PROVISION_CARD_SCOPE,
+  PROVISION_WORDING_EMPHASIS,
   provisionCardLabels,
   provisionCardPassage,
   provisionCardScope,
+  provisionWordingRuns,
 } from "./provision-card.logic";
 import type {
   CitedWording,
   FullProvisionOutcome,
   FullProvisionRead,
   ProvisionCardPassage,
+  ProvisionWordingRun,
 } from "./provision-card.logic";
 import { useReaderAdapters, useReaderMessages } from "./reader-adapters";
 import { ReaderInsetBox } from "./reader-inset-box";
@@ -50,9 +58,38 @@ import type {
 const SEPARATED_PART =
   "before:text-muted-foreground before:mx-1.5 before:content-['·'_/_'']";
 
+/**
+ * Whether the header's open button waits for its card. A card in the text or
+ * the margin sits beside many others, so its button appears only while the
+ * reader points at or focuses that card; a hover card is already the one
+ * thing the reader is looking at, so its button stays.
+ */
+export const PROVISION_OPEN_BUTTON = {
+  always: "always",
+  revealOnCard: "reveal-on-card",
+} as const;
+
+type ProvisionOpenButton =
+  (typeof PROVISION_OPEN_BUTTON)[keyof typeof PROVISION_OPEN_BUTTON];
+
+/** The card a revealed open button belongs to. */
+const PROVISION_CARD_GROUP = "group/provision-card";
+
+/**
+ * Opacity alone, so the button keeps its slot (the date beside it never
+ * reflows on hover) and its tab stop (focusing it reveals it). A coarse
+ * pointer cannot hover, so there it always shows.
+ */
+const OPEN_BUTTON_PRESENCE = {
+  always: "",
+  "reveal-on-card":
+    "opacity-0 transition-opacity group-hover/provision-card:opacity-100 group-focus-within/provision-card:opacity-100 pointer-coarse:opacity-100",
+} as const satisfies Record<ProvisionOpenButton, string>;
+
 type ProvisionCardHeaderProps = {
   /** What the card is about, e.g. `§ 226 odst. 1`; never shortened. */
   label: string;
+  openButton: ProvisionOpenButton;
   provision: ProvisionViewPayload;
 };
 
@@ -71,6 +108,7 @@ type ProvisionCardHeaderProps = {
  */
 export const ProvisionCardHeader = ({
   label,
+  openButton,
   provision,
 }: ProvisionCardHeaderProps) => {
   const messages = useReaderMessages();
@@ -119,19 +157,23 @@ export const ProvisionCardHeader = ({
             : messages.provisionEffectiveFrom(date)}
         </span>
       </span>
-      <Button
-        aria-label={messages["statutes.openProvision"]}
-        className="shrink-0"
-        onClick={(event) => {
-          event.stopPropagation();
-          openProvision(provision);
-        }}
-        size="icon-xs"
-        tooltip={messages["statutes.openProvision"]}
-        variant="ghost"
+      <span
+        className={cn("flex shrink-0", OPEN_BUTTON_PRESENCE[openButton])}
+        data-slot="provision-card-open"
       >
-        <PanelRightIcon aria-hidden="true" className="size-3.5" />
-      </Button>
+        <Button
+          aria-label={messages["statutes.openProvision"]}
+          onClick={(event) => {
+            event.stopPropagation();
+            openProvision(provision);
+          }}
+          size="icon-xs"
+          tooltip={messages["statutes.openProvision"]}
+          variant="ghost"
+        >
+          <PanelRightIcon aria-hidden="true" className="size-3.5" />
+        </Button>
+      </span>
     </span>
   );
 };
@@ -219,53 +261,100 @@ const GUTTER_NOTE_TYPE =
  * the analysis notes beside it.
  */
 const WORDING_TYPE = {
-  gutter: cn(
-    "reader-chrome text-foreground-placeholder gap-1.5",
-    GUTTER_NOTE_TYPE,
-  ),
-  inline: "reader-body text-foreground gap-2 text-sm leading-relaxed",
+  gutter: cn("reader-chrome text-foreground-placeholder", GUTTER_NOTE_TYPE),
+  inline: "reader-body text-foreground text-sm leading-relaxed",
 } as const satisfies Record<ProvisionCardPlacement, string>;
+
+/**
+ * How much of the passage a card draws: all of it, or, in a folded margin
+ * card, its first block alone, so the glimpse ends at the end of a unit of
+ * the provision rather than cutting into the first item under it.
+ */
+type ProvisionWordingExtent = "all" | "glimpse";
+
+/** A quoted provision carries no search of its own. */
+const NO_RANGES = {};
+const NO_ACTIVE_MATCH = -1;
+
+const WORDING_RUN_CLASS = {
+  [PROVISION_WORDING_EMPHASIS.cited]: "border-primary/50 border-s-[3px] ps-2.5",
+  [PROVISION_WORDING_EMPHASIS.plain]: undefined,
+} as const satisfies Record<
+  ProvisionWordingRun["emphasis"],
+  string | undefined
+>;
 
 type ProvisionWordingProps = {
   blocks: ProvisionPreviewData["blocks"];
   /** Blocks a citation of a part names, marked beside the rest. */
   cited: ReadonlySet<string>;
+  extent: ProvisionWordingExtent;
   language: string | null;
   placement: ProvisionCardPlacement;
+  /** The cited statute's publisher scheme, which its anchors nest lists in. */
+  statuteLists: StatuteListScheme;
 };
 
-/** Wording of the cited provision, typeset for where the card sits. */
+/**
+ * Wording of the cited provision, typeset for where the card sits and set
+ * by the statute reader's own paragraph renderer, so a quoted paragraph and
+ * its letters nest and hang exactly as they do in the statute.
+ */
 const ProvisionWording = ({
   blocks,
   cited,
+  extent,
   language,
   placement,
+  statuteLists,
 }: ProvisionWordingProps) => (
-  <span
-    className={cn("flex flex-col text-pretty", WORDING_TYPE[placement])}
+  <div
+    className={cn(
+      LEGAL_TEXT_CLASS_NAME,
+      "reader-quote flex flex-col gap-[var(--reader-paragraph-gap)] text-pretty",
+      WORDING_TYPE[placement],
+    )}
     data-slot="provision-card-wording"
     lang={language ?? undefined}
   >
-    {blocks.map((block) => (
-      <span
-        className={cn(
-          cited.has(block.id) && "border-primary/50 border-s-[3px] ps-2.5",
-        )}
-        data-cited={cited.has(block.id) ? "" : undefined}
-        key={block.id}
+    {provisionWordingRuns(
+      extent === "glimpse" ? blocks.slice(0, 1) : blocks,
+      cited,
+    ).map((run) => (
+      <div
+        className={WORDING_RUN_CLASS[run.emphasis]}
+        data-cited={
+          run.emphasis === PROVISION_WORDING_EMPHASIS.cited ? "" : undefined
+        }
+        data-slot="provision-card-quote"
+        key={run.blocks.at(0)?.id}
       >
-        {block.text}
-      </span>
+        {run.blocks.map((block) => (
+          <BlockRenderer
+            activeMatchIndex={NO_ACTIVE_MATCH}
+            anchorPresentation="quoted"
+            block={paragraphFromPreview(block)}
+            key={block.id}
+            rangesByPieceId={NO_RANGES}
+            statuteLists={statuteLists}
+            variant="statute"
+          />
+        ))}
+      </div>
     ))}
-  </span>
+  </div>
 );
 
 const PassageBody = ({
+  extent = "all",
   passage,
   placement = "inline",
+  statuteLists,
 }: {
+  extent?: ProvisionWordingExtent;
   passage: ProvisionCardPassage;
   placement?: ProvisionCardPlacement;
+  statuteLists: StatuteListScheme;
 }) => {
   const messages = useReaderMessages();
   switch (passage.type) {
@@ -279,8 +368,10 @@ const PassageBody = ({
           <ProvisionWording
             blocks={passage.blocks}
             cited={passage.cited}
+            extent={extent}
             language={passage.language}
             placement={placement}
+            statuteLists={statuteLists}
           />
           {passage.unavailable.map((provisionLabel) => (
             <span
@@ -322,36 +413,52 @@ export type { FullProvisionRead } from "./provision-card.logic";
 
 /** Keep the cited passage visible while the full read is pending or unavailable. */
 const FullProvisionWording = ({
+  extent,
   outcome,
   passage,
   placement,
+  statuteLists,
   wordings,
 }: {
+  extent: ProvisionWordingExtent;
   outcome: FullProvisionOutcome;
   passage: ProvisionCardPassage;
   placement: ProvisionCardPlacement;
+  statuteLists: StatuteListScheme;
   wordings: readonly CitedWording[];
 }) => {
   switch (outcome.type) {
     case "pending":
       return (
         <>
-          <PassageBody passage={passage} placement={placement} />
+          <PassageBody
+            extent={extent}
+            passage={passage}
+            placement={placement}
+            statuteLists={statuteLists}
+          />
           <ProvisionWordingSkeleton />
         </>
       );
     case "unavailable":
       return (
         <>
-          <PassageBody passage={passage} placement={placement} />
+          <PassageBody
+            extent={extent}
+            passage={passage}
+            placement={placement}
+            statuteLists={statuteLists}
+          />
           <ProvisionTextUnavailable scope="full" />
         </>
       );
     case "text":
       return (
         <PassageBody
+          extent={extent}
           passage={provisionCardPassage(wordings, outcome.wording)}
           placement={placement}
+          statuteLists={statuteLists}
         />
       );
     default:
@@ -405,7 +512,7 @@ const WordingFrame = ({
       {children}
     </ScrollArea>
   ) : (
-    <span
+    <div
       className={cn(
         "block overflow-hidden",
         GUTTER_NOTE_TYPE,
@@ -414,7 +521,7 @@ const WordingFrame = ({
       data-slot="provision-card-glimpse"
     >
       {children}
-    </span>
+    </div>
   );
 };
 
@@ -436,6 +543,7 @@ export const CitedProvisionExpansion = ({
   const [expanded, setExpanded] = useState(false);
   const messages = useReaderMessages();
   const first = citations.at(0) ?? panic("A provision card without citations");
+  const statuteLists = statuteListSchemeFor(first.document.country);
   const passage = provisionCardPassage(wordings);
   const outcome = fullProvisionOutcome(full);
   const displaysFullText = showsFull && outcome.type === "text";
@@ -445,6 +553,7 @@ export const CitedProvisionExpansion = ({
     provisionCardScope(citations) === PROVISION_CARD_SCOPE.parts &&
     passage.type === "passage" &&
     passage.blocks.length > 0;
+  const extent = placement === "gutter" && !expanded ? "glimpse" : "all";
   const toggleExpanded = () => setExpanded((current) => !current);
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     // A key pressed on a control inside the card belongs to that control:
@@ -463,6 +572,7 @@ export const CitedProvisionExpansion = ({
     <ReaderInsetBox
       aria-expanded={expanded}
       className={cn(
+        PROVISION_CARD_GROUP,
         "flex cursor-pointer flex-col gap-1.5",
         placement === "inline" ? "my-2" : "w-full",
       )}
@@ -475,8 +585,12 @@ export const CitedProvisionExpansion = ({
       role="button"
       tabIndex={0}
     >
-      <ProvisionCardHeader label={label} provision={first.payload} />
-      <span
+      <ProvisionCardHeader
+        label={label}
+        openButton={PROVISION_OPEN_BUTTON.revealOnCard}
+        provision={first.payload}
+      />
+      <div
         className={cn(
           "contents",
           !expanded && placement === "inline" && "hidden",
@@ -491,13 +605,20 @@ export const CitedProvisionExpansion = ({
         <WordingFrame expanded={expanded} placement={placement}>
           {foldable && showsFull ? (
             <FullProvisionWording
+              extent={extent}
               outcome={outcome}
               passage={passage}
               placement={placement}
+              statuteLists={statuteLists}
               wordings={wordings}
             />
           ) : (
-            <PassageBody passage={passage} placement={placement} />
+            <PassageBody
+              extent={extent}
+              passage={passage}
+              placement={placement}
+              statuteLists={statuteLists}
+            />
           )}
         </WordingFrame>
         {foldable && (
@@ -520,7 +641,7 @@ export const CitedProvisionExpansion = ({
             </Button>
           </span>
         )}
-      </span>
+      </div>
     </ReaderInsetBox>
   );
 };
@@ -549,12 +670,19 @@ export const CitedProvisionPeek = ({
       scrollFade
     >
       <div className="flex flex-col gap-1.5">
-        <ProvisionCardHeader label={label} provision={provision.payload} />
+        <ProvisionCardHeader
+          label={label}
+          openButton={PROVISION_OPEN_BUTTON.always}
+          provision={provision.payload}
+        />
         <ProvisionTrailLine
           language={wording?.language}
           trail={provisionTrail({ label, passage, wording })}
         />
-        <PassageBody passage={passage} />
+        <PassageBody
+          passage={passage}
+          statuteLists={statuteListSchemeFor(provision.document.country)}
+        />
       </div>
     </ScrollArea>
   );

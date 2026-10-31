@@ -1,6 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
@@ -12,36 +21,7 @@ Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 const requests: Request[] = [];
 const unexpectedRequests: string[] = [];
 const answers: Response[] = [];
-const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (new URL(request.url).pathname.startsWith("/api/auth/")) {
-        return Response.json(null);
-      }
-      if (
-        request.method === "POST" &&
-        new URL(request.url).pathname.endsWith("/verifications/latest")
-      ) {
-        return Response.json({ runs: [] });
-      }
-      if (
-        request.method !== "POST" ||
-        !new URL(request.url).pathname.endsWith("/verifications")
-      ) {
-        unexpectedRequests.push(`${request.method} ${request.url}`);
-        return panic(`Unexpected request: ${request.method} ${request.url}`);
-      }
-      requests.push(request);
-      const answer = answers.shift();
-      if (answer === undefined) {
-        return panic("No verification response seeded");
-      }
-      return answer;
-    },
-    { preconnect: () => undefined },
-  ),
-);
+let fetchBoundary: Mock<typeof globalThis.fetch>;
 
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
@@ -68,9 +48,7 @@ const target = {
 };
 const runId = "019a0000-0000-7000-8000-000000000005";
 const clients: InstanceType<typeof QueryClient>[] = [];
-const notice = spyOn(stellaToast, "add").mockReturnValue(
-  "verification-refusal",
-);
+let notice: Mock<typeof stellaToast.add>;
 
 const mountDocuments = (locale: "en" | "cs" = "en") => {
   const messages = locale === "cs" ? czech : english;
@@ -127,7 +105,42 @@ const confirmation = () =>
     { status: 428 },
   );
 
+beforeEach(() => {
+  fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (new URL(request.url).pathname.startsWith("/api/auth/")) {
+          return Response.json(null);
+        }
+        if (
+          request.method === "POST" &&
+          new URL(request.url).pathname.endsWith("/verifications/latest")
+        ) {
+          return Response.json({ runs: [] });
+        }
+        if (
+          request.method !== "POST" ||
+          !new URL(request.url).pathname.endsWith("/verifications")
+        ) {
+          unexpectedRequests.push(`${request.method} ${request.url}`);
+          return panic(`Unexpected request: ${request.method} ${request.url}`);
+        }
+        requests.push(request);
+        const answer = answers.shift();
+        if (answer === undefined) {
+          return panic("No verification response seeded");
+        }
+        return answer;
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  notice = spyOn(stellaToast, "add").mockReturnValue("verification-refusal");
+});
+
 afterEach(() => {
+  mock.restore();
   cleanup();
   for (const client of clients) {
     client.clear();
@@ -207,21 +220,22 @@ test("cancelling a size confirmation abandons it and a fresh attempt needs confi
   expect(opened).toEqual([]);
 });
 
-for (const refusal of [
-  {
-    name: "active run limit",
-    message: "This organization has reached its active verification limit.",
-  },
-  {
-    name: "daily run limit",
-    message: "This organization has reached its daily verification limit.",
-  },
-]) {
-  test(`the ${refusal.name} shows a localized refusal and permits another attempt`, async () => {
+test.each<[string, string]>([
+  [
+    "active run limit",
+    "This organization has reached its active verification limit.",
+  ],
+  [
+    "daily run limit",
+    "This organization has reached its daily verification limit.",
+  ],
+])(
+  "the %s shows a localized refusal and permits another attempt",
+  async (_name, refusalMessage) => {
     answers.push(
       Response.json(
         {
-          message: refusal.message,
+          message: refusalMessage,
           retryable: true,
           hint: "Retry later.",
         },
@@ -250,5 +264,5 @@ for (const refusal of [
     ).toBeNull();
     expect(requests).toHaveLength(2);
     expect(await requests.at(1)?.json()).toEqual({ listId, ...target });
-  });
-}
+  },
+);

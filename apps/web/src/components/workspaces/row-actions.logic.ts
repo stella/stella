@@ -102,8 +102,28 @@ export type RowMenuSection =
   | "translate"
   | "upload-version";
 
+/** The kinds of table cell a review decision is made for. */
+type CellReviewKind = "file" | "value";
+
+/**
+ * Whether a cell kind offers review (retry, lock and flags), in its row menu
+ * and in its hover corner. A file cell does not: a lock only holds back
+ * automated column runs and retry, which never write a file cell, and approving
+ * a file duplicates the document review flow.
+ */
+const CELL_REVIEW_BY_KIND = {
+  file: "none",
+  value: "review",
+} as const satisfies Record<CellReviewKind, "none" | "review">;
+
+export const offersCellReview = (kind: CellReviewKind): boolean =>
+  CELL_REVIEW_BY_KIND[kind] === "review";
+
+const cellReviewSections = (kind: CellReviewKind): RowMenuSection[] =>
+  offersCellReview(kind) ? ["cell-review"] : [];
+
 // Every action on the row's file or entity. `cell-review` (retry, lock, flags)
-// is a property's, so a cell offers it and the row does not.
+// is a property's, so only a cell can offer it and the row does not.
 const ROW_FILE_SECTIONS = [
   "preview",
   "upload-version",
@@ -133,15 +153,15 @@ const ROW_SECTIONS = [
 export const ROW_MENU_SECTIONS = {
   row: ROW_SECTIONS,
   bulk: [...ROW_SECTIONS, "new-folder-from-selection"],
-  "row-file-cell": [...ROW_FILE_SECTIONS, "cell-review"],
+  "row-file-cell": [...ROW_FILE_SECTIONS, ...cellReviewSections("file")],
   "file-cell": [
     "run-ocr",
     "edit-pages",
     "translate",
     "cell-ocr-export",
-    "cell-review",
+    ...cellReviewSections("file"),
   ],
-  "value-cell": ["cell-review"],
+  "value-cell": cellReviewSections("value"),
 } as const satisfies Record<RowMenuSubject, readonly RowMenuSection[]>;
 
 export const getRowMenuSections = (

@@ -393,6 +393,120 @@ const finiteUppercaseValues = (
   return values;
 };
 
+// Shared read queries may be embedded in a complete gated statement. Only
+// immutable module bindings resolve; their entire text still enters the DDL census.
+const uniqueModuleConstant = (name: string, context: SourceContext) => {
+  const bindings = context.nodes.filter((node) => {
+    if (node.type !== "Identifier" || node.name !== name) {
+      return false;
+    }
+    let binding: Node = node;
+    let parent = context.parents.get(binding);
+    while (
+      parent?.type === "ObjectPattern" ||
+      parent?.type === "ArrayPattern" ||
+      (parent?.type === "Property" && parent.value === binding) ||
+      (parent?.type === "AssignmentPattern" && parent.left === binding) ||
+      (parent?.type === "RestElement" && parent.argument === binding)
+    ) {
+      binding = parent;
+      parent = context.parents.get(binding);
+    }
+    if (parent === undefined) {
+      return false;
+    }
+    switch (parent.type) {
+      case "VariableDeclarator":
+        return parent.id === binding;
+      case "ArrowFunctionExpression":
+        return parent.params.some((parameter) => parameter === binding);
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+        return (
+          parent.params.some((parameter) => parameter === binding) ||
+          parent.id === binding
+        );
+      case "ClassDeclaration":
+      case "ClassExpression":
+        return parent.id === binding;
+      case "ImportSpecifier":
+      case "ImportDefaultSpecifier":
+      case "ImportNamespaceSpecifier": {
+        const { local: importedBinding } = parent;
+        return importedBinding === binding;
+      }
+      case "TSImportEqualsDeclaration":
+      case "TSEnumDeclaration":
+      case "TSModuleDeclaration":
+        return parent.id === binding;
+      default:
+        return false;
+    }
+  });
+  const binding = bindings.at(0);
+  const declaration = binding && context.parents.get(binding);
+  if (bindings.length !== 1 || declaration?.type !== "VariableDeclarator") {
+    return undefined;
+  }
+  const list = context.parents.get(declaration);
+  const owner = list && context.parents.get(list);
+  const moduleOwner =
+    owner?.type === "ExportNamedDeclaration"
+      ? context.parents.get(owner)
+      : owner;
+  if (
+    list?.type !== "VariableDeclaration" ||
+    list.kind !== "const" ||
+    moduleOwner?.type !== "Program"
+  ) {
+    return undefined;
+  }
+  return declaration.init ?? undefined;
+};
+
+const readQueryConstant = (name: string, context: SourceContext) => {
+  const value = uniqueModuleConstant(name, context);
+  if (value === undefined) {
+    return undefined;
+  }
+  const prefix =
+    value.type === "TemplateLiteral"
+      ? value.quasis.at(0)?.value.cooked
+      : stringLiteralText(value);
+  return prefix !== undefined &&
+    prefix !== null &&
+    /^\s*(?:SELECT|WITH)\b/iu.test(prefix)
+    ? value
+    : undefined;
+};
+
+const provesQuotedLiteral = (context: SourceContext): boolean => {
+  const helper = uniqueModuleConstant("quoteLiteral", context);
+  if (
+    helper?.type !== "ArrowFunctionExpression" ||
+    helper.params.length !== 1
+  ) {
+    return false;
+  }
+  const parameter = helper.params.at(0);
+  return (
+    parameter?.type === "Identifier" &&
+    parameter.name === "value" &&
+    sameSyntax(helper.body, `\`'\${value.replaceAll("'", "''")}'\``)
+  );
+};
+
+const isQuotedSqlData = (node: Node, context: SourceContext): boolean => {
+  const call = context.parents.get(node);
+  return (
+    call !== undefined &&
+    isCallTo(call, ["quoteLiteral"]) &&
+    call.arguments.length === 1 &&
+    call.arguments.at(0) === node &&
+    provesQuotedLiteral(context)
+  );
+};
+
 // Policy DDL already uses ACCESS EXCLUSIVE. Its expression placeholders must
 // never turn into an exception for unresolved ALTER TABLE actions elsewhere.
 const isPolicyExpressionSplice = (
@@ -428,6 +542,12 @@ const expandTemplateInterpolation = (
       return variants;
     }
   }
+  if (expression.type === "Identifier" && !visiting.has(expression.name)) {
+    const query = readQueryConstant(expression.name, context);
+    if (query !== undefined) {
+      return expand(query, context, new Set([...visiting, expression.name]));
+    }
+  }
   const finite = finiteUppercaseValues(expression, context);
   if (finite) {
     return finite;
@@ -445,12 +565,10 @@ const expandTemplateInterpolation = (
     ) {
       return [{ text: "TRUE", resolved: true }];
     }
-    const literal = ownerArrow(context, "quoteLiteral");
     if (
       name === "quoteLiteral" &&
       expression.arguments.length === 1 &&
-      literal &&
-      sameSyntax(literal.body, `\`'\${value.replaceAll("'", "''")}'\``)
+      provesQuotedLiteral(context)
     ) {
       return [{ text: "'online_ddl_literal'", resolved: true }];
     }
@@ -921,7 +1039,11 @@ const checkSql = ({
   const variants = text.split("\n-- variant --\n");
   for (const variant of variants) {
     const line = source.locate(node.start).line;
-    const statements = parseMigrationStatements(variant);
+    // censusSql recursively classifies each complete DO/routine body. Its
+    // surfaced statements are not independent top-level SQL commands.
+    const statements = parseMigrationStatements(variant).filter(
+      ({ enclosingLine }) => enclosingLine === undefined,
+    );
     if (statements.length === 0) {
       errors.push(`${description} at line ${line} has an empty SQL variant`);
       continue;
@@ -1262,7 +1384,7 @@ export const censusOnlineDdlSource = (sourceText: string): string[] => {
   }
 
   for (const { node } of sqlNodes) {
-    if (checked.has(node)) {
+    if (checked.has(node) || isQuotedSqlData(node, context)) {
       continue;
     }
     for (const variant of expand(node, context)) {

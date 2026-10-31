@@ -17,6 +17,8 @@ import {
   chatMessages,
   chatThreads,
   featureEnrolments,
+  rateEntries,
+  rateTables,
   timeEntries,
   timeEntrySuggestions,
 } from "@/api/db/schema";
@@ -31,6 +33,7 @@ import {
 } from "@/api/lib/audit-log";
 import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -67,6 +70,8 @@ const messageIds = [
   createSafeId<"chatMessage">(),
 ];
 const auditIds: SafeId<"auditLog">[] = [];
+const rateTableId = createSafeId<"rateTable">();
+const rateEntryId = createSafeId<"rateEntry">();
 
 type SeedAuditRowOptions = {
   userId: SafeId<"user">;
@@ -220,6 +225,7 @@ afterAll(async () => {
       .delete(timeEntrySuggestions)
       .where(eq(timeEntrySuggestions.userId, ids.userA1));
     await testDb.delete(timeEntries).where(eq(timeEntries.source, "suggested"));
+    await testDb.delete(rateTables).where(eq(rateTables.id, rateTableId));
     await testDb.delete(auditLogs).where(inArray(auditLogs.id, auditIds));
     await testDb
       .delete(chatMessages)
@@ -251,22 +257,23 @@ const baseContext = (userId: SafeId<"user">) => ({
   workspaceId: ids.wsA1,
 });
 
-const listFor = async (userId: SafeId<"user">) =>
+const listFor = async (userId: SafeId<"user">, date = DAY) =>
   await listTimeSuggestions.handler(
     asTestRaw<ListCtx>({
       ...baseContext(userId),
-      query: { date: DAY, timezoneId: TIMEZONE },
+      query: { date, timezoneId: TIMEZONE },
     }),
   );
 
 const decide = async (
   fingerprint: string,
   decision: DecisionCtx["body"]["decision"],
+  date = DAY,
 ) =>
   await createTimeSuggestionDecision.handler(
     asTestRaw<DecisionCtx>({
       ...baseContext(ids.userA1),
-      body: { fingerprint, date: DAY, timezoneId: TIMEZONE, decision },
+      body: { fingerprint, date, timezoneId: TIMEZONE, decision },
     }),
   );
 
@@ -278,7 +285,9 @@ const isListResponse = (
   items: {
     fingerprint: string;
     durationMinutes: number;
+    engagedMinutes: number;
     signalCount: number;
+    alreadyCovered: boolean;
     evidence: unknown[];
   }[];
 } =>
@@ -309,8 +318,9 @@ describe("time entry suggestions integration", () => {
     expect(listed.date).toBe(DAY);
     expect(listed.items).toHaveLength(2);
     // 09:00 -> 09:15 span (15 min) + 5 min tail; 14:00 alone gets the tail.
-    expect(listed.items.map((item) => item.durationMinutes)).toEqual([20, 5]);
-    expect(listed.activeMinutes).toBe(25);
+    expect(listed.items.map((item) => item.durationMinutes)).toEqual([24, 6]);
+    expect(listed.items.map((item) => item.engagedMinutes)).toEqual([20, 5]);
+    expect(listed.activeMinutes).toBe(30);
     expect(listed.items[0]).toMatchObject({
       signalCount: 3,
       evidence: [
@@ -338,6 +348,22 @@ describe("time entry suggestions integration", () => {
   });
 
   test("accepting records a suggested entry once, then the fingerprint is spent", async () => {
+    await testDb.insert(rateTables).values({
+      id: rateTableId,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      name: "Suggestion test rate",
+      currency: "USD",
+      isDefault: true,
+    });
+    await testDb.insert(rateEntries).values({
+      id: rateEntryId,
+      workspaceId: ids.wsA1,
+      rateTableId,
+      userId: ids.userA1,
+      hourlyRate: cents(20_000),
+      effectiveFrom: DAY,
+    });
     const listed = await listFor(ids.userA1);
     if (!isListResponse(listed)) {
       throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
@@ -352,7 +378,6 @@ describe("time entry suggestions integration", () => {
       durationMinutes: 18,
       narrative: "Lease negotiation: reviewed the draft and replied",
       narrativeLanguage: "cs-CZ",
-      billable: false,
     });
     if (!isDecisionResponse(accepted) || accepted.timeEntryId === null) {
       throw new Error(
@@ -373,6 +398,7 @@ describe("time entry suggestions integration", () => {
         billedMinutes: true,
         dateWorked: true,
         narrativeLanguage: true,
+        billable: true,
         userId: true,
       },
     });
@@ -382,6 +408,7 @@ describe("time entry suggestions integration", () => {
       billedMinutes: 18,
       dateWorked: DAY,
       narrativeLanguage: "cs-CZ",
+      billable: true,
       userId: ids.userA1,
     });
 
@@ -397,6 +424,21 @@ describe("time entry suggestions integration", () => {
     expect(stored?.timeEntryId).toBe(timeEntryId);
     expect(stored?.evidence).toEqual(first.evidence);
 
+    const extensionId = createSafeId<"chatMessage">();
+    messageIds.push(extensionId);
+    await testDb.insert(chatMessages).values({
+      id: extensionId,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "follow-up" }],
+      }),
+      // Inside the accepted window, which ran through 09:15 plus the tail.
+      createdAt: at("09:16:00"),
+    });
+
     const relisted = await listFor(ids.userA1);
     if (!isListResponse(relisted)) {
       throw new Error(`unexpected list response: ${JSON.stringify(relisted)}`);
@@ -404,6 +446,18 @@ describe("time entry suggestions integration", () => {
     expect(relisted.items.map((item) => item.fingerprint)).not.toContain(
       first.fingerprint,
     );
+    // Only the minute beyond the accepted window is new; the four inside it
+    // were billed with the accepted suggestion.
+    expect(relisted.items.at(0)).toMatchObject({
+      engagedMinutes: 1,
+      signalCount: 1,
+      evidence: [
+        {
+          type: "chat_thread",
+          signals: [{ resourceId: extensionId }],
+        },
+      ],
+    });
 
     const again = await decide(first.fingerprint, {
       type: "accept",
@@ -411,7 +465,7 @@ describe("time entry suggestions integration", () => {
       narrative: "duplicate",
       billable: false,
     });
-    expect(again).toMatchObject({ code: 409 });
+    expect(again).toEqual(accepted);
 
     // A dismiss after an accept reports the decision that already stands.
     const dismissAfterAccept = await decide(first.fingerprint, {
@@ -468,13 +522,50 @@ describe("time entry suggestions integration", () => {
     expect(await decide(pending.fingerprint, { type: "dismiss" })).toEqual(
       dismissed,
     );
+    // Accepting what was dismissed elsewhere is refused, never reported as
+    // logged time.
+    expect(
+      await decide(pending.fingerprint, {
+        type: "accept",
+        durationMinutes: 18,
+        narrative: "accepted in another tab",
+      }),
+    ).toMatchObject({ code: 409 });
+    expect(
+      await testDb.$count(
+        timeEntries,
+        eq(timeEntries.narrative, "accepted in another tab"),
+      ),
+    ).toBe(0);
+
+    const extensionId = createSafeId<"chatMessage">();
+    messageIds.push(extensionId);
+    await testDb.insert(chatMessages).values({
+      id: extensionId,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user",
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "after dismissal" }],
+      }),
+      createdAt: at("09:25:00"),
+    });
 
     const relisted = await listFor(ids.userA1);
     if (!isListResponse(relisted)) {
       throw new Error(`unexpected list response: ${JSON.stringify(relisted)}`);
     }
-    expect(relisted.items).toHaveLength(0);
-    expect(relisted.activeMinutes).toBe(0);
+    expect(relisted.items.at(0)).toMatchObject({
+      engagedMinutes: 5,
+      signalCount: 1,
+      evidence: [
+        {
+          type: "chat_thread",
+          signals: [{ resourceId: extensionId }],
+        },
+      ],
+    });
   });
 
   test("a fingerprint the day never produced cannot be dismissed", async () => {
@@ -489,6 +580,147 @@ describe("time entry suggestions integration", () => {
     expect(row).toBeUndefined();
   });
 
+  test("a decision without signal identities still settles its own suggestion", async () => {
+    const listed = await listFor(ids.userA1);
+    if (!isListResponse(listed)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+    }
+    const [withoutSignals, withoutEvidence] = listed.items.map(
+      (item) => item.fingerprint,
+    );
+    if (withoutSignals === undefined || withoutEvidence === undefined) {
+      throw new Error("expected two pending suggestions to decide");
+    }
+    // Decisions written before they recorded their signal identities: one
+    // with evidence that names no signals, one with no evidence at all.
+    await testDb.insert(timeEntrySuggestions).values([
+      {
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: DAY,
+        fingerprint: withoutSignals,
+        status: "dismissed",
+        evidence: asTestRaw<
+          (typeof timeEntrySuggestions.$inferInsert)["evidence"]
+        >([
+          {
+            type: "chat_thread",
+            id: threadId,
+            title: "Lease",
+            messageCount: 1,
+          },
+        ]),
+      },
+      {
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        dateWorked: DAY,
+        fingerprint: withoutEvidence,
+        status: "dismissed",
+        evidence: null,
+      },
+    ]);
+    try {
+      const relisted = await listFor(ids.userA1);
+      if (!isListResponse(relisted)) {
+        throw new Error(
+          `unexpected list response: ${JSON.stringify(relisted)}`,
+        );
+      }
+      const pending = relisted.items.map((item) => item.fingerprint);
+      expect(pending).not.toContain(withoutSignals);
+      expect(pending).not.toContain(withoutEvidence);
+    } finally {
+      await testDb
+        .delete(timeEntrySuggestions)
+        .where(
+          inArray(timeEntrySuggestions.fingerprint, [
+            withoutSignals,
+            withoutEvidence,
+          ]),
+        );
+    }
+  });
+
+  const insertRecordedTime = async (
+    values: Pick<
+      typeof timeEntries.$inferInsert,
+      | "dateWorked"
+      | "durationMinutes"
+      | "source"
+      | "timerStartedAt"
+      | "timerStoppedAt"
+    >,
+  ) => {
+    const id = brandPersistedTimeEntryId(createSafeId<"timeEntry">());
+    await testDb.insert(timeEntries).values({
+      id,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      timezoneId: TIMEZONE,
+      billedMinutes: values.durationMinutes,
+      rateAtEntry: cents(0),
+      currency: "CZK",
+      narrative: "Recorded elsewhere",
+      billable: true,
+      status: "draft",
+      ...values,
+    });
+    return id;
+  };
+
+  test("a previous day's timer that runs past midnight covers this day's activity", async () => {
+    const before = await listFor(ids.userA1);
+    if (!isListResponse(before)) {
+      throw new Error(`unexpected list response: ${JSON.stringify(before)}`);
+    }
+    expect(before.items.length).toBeGreaterThan(0);
+    const previousDay = Temporal.PlainDate.from(DAY)
+      .subtract({ days: 1 })
+      .toString();
+    const timerId = await insertRecordedTime({
+      dateWorked: previousDay,
+      durationMinutes: 24 * 60,
+      source: "timer",
+      timerStartedAt: new Date(`${previousDay}T23:30:00Z`),
+      timerStoppedAt: at("23:30:00"),
+    });
+    try {
+      const after = await listFor(ids.userA1);
+      if (!isListResponse(after)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(after)}`);
+      }
+      expect(after.items).toEqual([]);
+    } finally {
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, timerId));
+    }
+  });
+
+  test("an accepted suggestion's minutes never mark other activity as covered", async () => {
+    const acceptedId = await insertRecordedTime({
+      dateWorked: DAY,
+      durationMinutes: 600,
+      source: "suggested",
+      timerStartedAt: null,
+      timerStoppedAt: null,
+    });
+    try {
+      const listed = await listFor(ids.userA1);
+      if (!isListResponse(listed)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+      }
+      expect(listed.items.length).toBeGreaterThan(0);
+      expect(listed.items.map((item) => item.alreadyCovered)).not.toContain(
+        true,
+      );
+    } finally {
+      await testDb.delete(timeEntries).where(eq(timeEntries.id, acceptedId));
+    }
+  });
+
   test("decisions are invisible to other members of the matter", async () => {
     const asOtherUser = createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA2);
     const visible = await asOtherUser((tx) =>
@@ -498,5 +730,74 @@ describe("time entry suggestions integration", () => {
         .where(eq(timeEntrySuggestions.userId, ids.userA1)),
     );
     expect(visible.isOk() && visible.value).toEqual([]);
+  });
+  test("an accepted suggestion's tail past midnight covers the next day's first minutes", async () => {
+    const nextDay = Temporal.PlainDate.from(DAY).add({ days: 1 }).toString();
+    const lateId = createSafeId<"chatMessage">();
+    const laterId = createSafeId<"chatMessage">();
+    const nextDayId = createSafeId<"chatMessage">();
+    messageIds.push(lateId, laterId, nextDayId);
+    const message = (
+      id: SafeId<"chatMessage">,
+      createdAt: Date,
+      text: string,
+    ) => ({
+      id,
+      threadId,
+      workspaceId: ids.wsA1,
+      userId: ids.userA1,
+      role: "user" as const,
+      content: toPersistedChatMessageContentV3({
+        data: [{ type: "text" as const, content: text }],
+      }),
+      createdAt,
+    });
+    // 23:50 to 23:57 plus the five-minute tail runs to 00:02 the next day.
+    await testDb
+      .insert(chatMessages)
+      .values([
+        message(lateId, at("23:50:00"), "late"),
+        message(laterId, at("23:57:00"), "later"),
+      ]);
+    try {
+      const listed = await listFor(ids.userA1);
+      if (!isListResponse(listed)) {
+        throw new Error(`unexpected list response: ${JSON.stringify(listed)}`);
+      }
+      const late = listed.items.find((item) =>
+        JSON.stringify(item.evidence).includes(laterId),
+      );
+      if (!late) {
+        throw new Error("expected the late suggestion");
+      }
+      expect(
+        await decide(late.fingerprint, {
+          type: "accept",
+          durationMinutes: late.durationMinutes,
+          narrative: "late work",
+        }),
+      ).toMatchObject({ status: "accepted" });
+
+      await testDb
+        .insert(chatMessages)
+        .values(message(nextDayId, new Date(`${nextDay}T00:01:00Z`), "early"));
+      const nextListed = await listFor(ids.userA1, nextDay);
+      if (!isListResponse(nextListed)) {
+        throw new Error(
+          `unexpected list response: ${JSON.stringify(nextListed)}`,
+        );
+      }
+      // 00:01 to 00:06, of which the minute to 00:02 was billed yesterday.
+      expect(
+        nextListed.items.find((item) =>
+          JSON.stringify(item.evidence).includes(nextDayId),
+        ),
+      ).toMatchObject({ engagedMinutes: 4 });
+    } finally {
+      // The decision and its entry go with the suite's own cleanup.
+      await testDb
+        .delete(chatMessages)
+        .where(inArray(chatMessages.id, [lateId, laterId, nextDayId]));
+    }
   });
 });

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -15,6 +16,7 @@ import { cn } from "@stll/ui/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import { InspectorTitle } from "@/components/inspector/inspector-title";
 import type { InspectorViewRenderProps } from "@/components/inspector/view-registry";
 import { MatterRefLink } from "@/components/matter-ref-link";
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
@@ -33,6 +35,7 @@ import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
+import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({
@@ -125,9 +128,9 @@ const SignalHeader = ({ signal }: { signal: InboxSignal }) => {
           )}
         </time>
       </div>
-      <h2 className="text-base font-semibold text-balance">
+      <InspectorTitle isEmpty={signal.title === ""}>
         <UserText>{signal.title}</UserText>
-      </h2>
+      </InspectorTitle>
       <UserText as="p" className="text-muted-foreground text-sm text-pretty">
         {signal.summary}
       </UserText>
@@ -355,6 +358,7 @@ const DocumentRef = ({
   name: string;
   signal: InboxSignal;
 }) => {
+  const router = useRouter();
   if (signal.workspaceId === null) {
     return <UserText>{name}</UserText>;
   }
@@ -365,7 +369,12 @@ const DocumentRef = ({
       className="text-start underline-offset-2 hover:underline"
       onClick={() => {
         detached(
-          openEntityInInspector(entityId, name, workspaceId),
+          openEntityInInspector({
+            documentOnScreen: getCurrentWorkspaceDocument(router.state.matches),
+            entityId,
+            label: name,
+            workspaceId,
+          }),
           "inbox.open-evidence-entity",
         );
       }}

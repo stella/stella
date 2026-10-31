@@ -40,8 +40,8 @@ clauses.updated_at       timestamptz         default,not null  clauses.ts:76
 
 ```text
 clause_variants.id               pUuid               pk,not null       clauses.ts:95
-clause_variants.organization_id  safeOrganizationId  not null          clauses.ts:96
-clause_variants.clause_id        safeUuid            not null          clauses.ts:97
+clause_variants.organization_id  safeOrganizationId  fk,not null       clauses.ts:96
+clause_variants.clause_id        safeUuid            fk,not null       clauses.ts:97
 clause_variants.label            varchar             not null          clauses.ts:98
 clause_variants.body             jsonb               not null          clauses.ts:99
 clause_variants.sort_order       integer             default,not null  clauses.ts:100
@@ -53,8 +53,8 @@ clause_variants.updated_at       timestamptz         default,not null  clauses.t
 
 ```text
 clause_versions.id               pUuid               pk,not null       clauses.ts:120
-clause_versions.organization_id  safeOrganizationId  not null          clauses.ts:121
-clause_versions.clause_id        safeUuid            not null          clauses.ts:122
+clause_versions.organization_id  safeOrganizationId  fk,not null       clauses.ts:121
+clause_versions.clause_id        safeUuid            fk,not null       clauses.ts:122
 clause_versions.version          integer             not null          clauses.ts:123
 clause_versions.body             jsonb               not null          clauses.ts:124
 clause_versions.created_at       timestamptz         default,not null  clauses.ts:125
@@ -79,8 +79,8 @@ template_recipes.updated_at       timestamptz         default,not null  clauses.
 
 ```text
 template_clauses.id                    pUuid               pk,not null       clauses.ts:176
-template_clauses.organization_id       safeOrganizationId  not null          clauses.ts:177
-template_clauses.template_id           safeUuid            not null          clauses.ts:178
+template_clauses.organization_id       safeOrganizationId  fk,not null       clauses.ts:177
+template_clauses.template_id           safeUuid            fk,not null       clauses.ts:178
 template_clauses.clause_id             safeUuid            fk,null           clauses.ts:179
 template_clauses.clause_variant_id     safeUuid            fk,null           clauses.ts:182
 template_clauses.clause_variant_label  varchar             null              clauses.ts:191  Label snapshot taken at link time.
