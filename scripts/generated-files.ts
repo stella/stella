@@ -541,6 +541,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/db-url.ts",
     "apps/api/src/env-apple-sign-in.ts",
     "apps/api/src/env-base-schema.ts",
+    "apps/api/src/env-migration.ts",
     "apps/api/src/env-schema.ts",
     "apps/api/src/db/role-names.ts",
     "apps/api/src/lib/*",
@@ -583,6 +584,8 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/email/sqs-queue-url.ts",
   ],
   "migration-lock-baseline": [
+    "packages/collation/src/collation.ts",
+    "packages/collation/src/index.ts",
     "apps/api/src/db/code-owned-tables.ts",
     "apps/api/src/db/high-volume-tables.ts",
     "packages/portable-path/src/index.ts",
