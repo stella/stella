@@ -196,6 +196,7 @@ jobs:
         run: bash scripts/remediate-dependency-audit.sh
 
       - name: Open one remediation
+        id: signed-commit
         if: steps.remediation.outputs.changed == 'true'
         uses: stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61
         with:
@@ -205,8 +206,16 @@ jobs:
           base: main
           paths: |
             bun.lock
+            bunfig.toml
             scripts/dependency-audit-baseline.json
             :(glob)**/package.json
           commit-message: "chore(deps): update dependency audit state"
           pr-title: "chore(deps): update dependency audit state"
-          pr-body: "Updates resolved dependencies and removes acceptances whose advisory is no longer reported."
+          pr-body: ${{ steps.remediation.outputs.quarantined == 'true' && steps.remediation.outputs.pr_body || 'Pins available patched releases, adds temporary release-age exclusions when a security fix is still quarantined, drafts dated acceptances for remaining upstream blockers, and removes stale acceptances.' }}
+
+      - name: Hold quarantined remediation for publisher review
+        if: steps.remediation.outputs.changed == 'true' && steps.remediation.outputs.quarantined == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.signed-commit.outputs.pull-request-number }}
+        run: gh pr edit "$PR_NUMBER" --add-label hold

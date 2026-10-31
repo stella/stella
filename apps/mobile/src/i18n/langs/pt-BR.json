@@ -89,7 +89,14 @@
     "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
     "pickTitle": "Escolha uma tarefa",
     "pickDescription": "Escolha uma tarefa da lista para vê-la aqui.",
-    "openMatter": "Abrir caso"
+    "openMatter": "Abrir caso",
+    "assignedTo": "Atribuída a",
+    "nobody": "Não atribuído",
+    "assign": "Atribuir",
+    "doneAssigning": "Concluído",
+    "someone": "Alguém",
+    "membersFailed": "Não foi possível carregar os membros do caso.",
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",
@@ -133,7 +140,9 @@
     },
     "add": "Adicionar",
     "scanDocument": "Digitalizar um documento",
-    "newTask": "Nova tarefa"
+    "newTask": "Nova tarefa",
+    "uploadDocument": "Carregar documento",
+    "uploadFailed": "Não foi possível enviar o documento. Tente novamente."
   },
   "entity": {
     "type": "Tipo",
@@ -197,6 +206,7 @@
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
     "openSource": "Abrir fonte original",
+    "openFailed": "Não foi possível abrir o link.",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
   },
