@@ -1,18 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { deviceAccountStore } from "@/native/account-store";
 import {
-  clearRecents,
   listServerRecentSearches,
-  mergeRecentSearches,
-  NO_RECENTS,
-  readStoredRecents,
+  openRecentSearches,
   recentSearchesKey,
-  rememberSearch,
 } from "@/state/recent-searches";
-import type { RecentSearch, StoredRecents } from "@/state/recent-searches";
+import type { RecentSearches } from "@/state/recent-searches";
 
 /**
  * The account's recent searches: the ones run in the app, which this device
@@ -24,41 +20,34 @@ import type { RecentSearch, StoredRecents } from "@/state/recent-searches";
 export const useRecentSearches = (source: AccessTokenSource) => {
   const { serverUrl, userId } = source.session();
   const key = recentSearchesKey(serverUrl, userId);
-  const [stored, setStored] = useState<StoredRecents>(NO_RECENTS);
-  const [server, setServer] = useState<readonly RecentSearch[]>([]);
+  const [searches, setSearches] = useState<readonly string[]>([]);
+  const recents = useRef<RecentSearches | null>(null);
 
   useEffect(() => {
     let current = true;
-    void (async () => {
-      const [kept, recorded] = await Promise.all([
-        deviceAccountStore.read(key).catch(() => null),
-        listServerRecentSearches({ fetch, source }),
-      ]);
-      if (current) {
-        setStored(readStoredRecents(kept));
-        setServer(recorded.unwrapOr([]));
-      }
-    })();
+    recents.current = openRecentSearches({
+      key,
+      loadServer: async () => await listServerRecentSearches({ fetch, source }),
+      now: epochMilliseconds,
+      onChange: (next) => {
+        if (current) {
+          setSearches(next);
+        }
+      },
+      store: deviceAccountStore,
+    });
     return () => {
       current = false;
     };
   }, [key, source]);
 
-  const keep = (next: StoredRecents) => {
-    setStored(next);
-    // Best effort: a search not kept is only missing from the list next time.
-    void deviceAccountStore
-      .write(key, JSON.stringify(next))
-      .catch(() => undefined);
-  };
-
   return {
-    searches: mergeRecentSearches(stored, server),
+    searches,
     remember: (query: string) => {
-      keep(rememberSearch(stored, query, epochMilliseconds()));
+      void recents.current?.remember(query);
     },
     clear: () => {
-      keep(clearRecents(epochMilliseconds()));
+      void recents.current?.clear();
     },
   };
 };

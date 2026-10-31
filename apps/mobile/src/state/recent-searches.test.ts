@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "temporal-polyfill/full";
 
@@ -12,12 +13,20 @@ import {
   listServerRecentSearches,
   mergeRecentSearches,
   NO_RECENTS,
+  openRecentSearches,
   readStoredRecents,
   RECENT_SEARCHES_LIMIT,
   recentSearchesKey,
   rememberSearch,
+  SAVED_QUERY_MAX_LENGTH,
+  SAVED_RECENTS_MAX_BYTES,
+  serializeRecents,
 } from "./recent-searches";
-import type { StoredRecents } from "./recent-searches";
+import type {
+  AccountStore,
+  RecentSearch,
+  StoredRecents,
+} from "./recent-searches";
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -120,6 +129,33 @@ describe("remembering a search", () => {
     }
     expect(stored.recents).toHaveLength(RECENT_SEARCHES_LIMIT);
     expect(stored.recents[0]?.query).toBe(`query ${RECENT_SEARCHES_LIMIT + 2}`);
+  });
+});
+
+describe("what the device writes", () => {
+  test("keeps each search to the saved length, whole characters only", () => {
+    const long = `${"a".repeat(SAVED_QUERY_MAX_LENGTH - 1)}😀 tail`;
+    const [saved] = rememberSearch(NO_RECENTS, long, 1).recents;
+    expect(saved?.query).toBe(`${"a".repeat(SAVED_QUERY_MAX_LENGTH - 1)}😀`);
+  });
+
+  test("stays within what the keychain takes at the longest input, dropping the oldest first", () => {
+    let stored = clearRecents(Number.MAX_SAFE_INTEGER);
+    for (let index = 0; index < RECENT_SEARCHES_LIMIT; index += 1) {
+      // Three UTF-8 bytes a character, and a quote JSON escapes.
+      stored = rememberSearch(
+        stored,
+        `${index}"${"€".repeat(SAVED_QUERY_MAX_LENGTH)}`,
+        Number.MAX_SAFE_INTEGER - index,
+      );
+    }
+    const written = new TextEncoder().encode(serializeRecents(stored)).length;
+    expect(written).toBeLessThanOrEqual(SAVED_RECENTS_MAX_BYTES);
+    expect(stored.recents.length).toBeGreaterThan(0);
+    expect(
+      stored.recents[0]?.query.startsWith(`${RECENT_SEARCHES_LIMIT - 1}"`),
+    ).toBe(true);
+    expect(readStoredRecents(serializeRecents(stored))).toEqual(stored);
   });
 });
 
@@ -232,5 +268,141 @@ describe("the server's recent searches", () => {
           .epochMilliseconds,
       },
     ]);
+  });
+});
+
+/** A promise and the means to settle it from the test. */
+const deferred = <T>() => {
+  let settle: (value: T) => void = () => {};
+  const promise = new Promise<T>((resolve) => {
+    settle = resolve;
+  });
+  return { promise, resolve: settle };
+};
+
+/**
+ * A device store holding one value, recording what is written to it and,
+ * in `events`, when its read returned and each write began.
+ */
+const deviceWith = (value: string | null, read?: Promise<void>) => {
+  const writes: string[] = [];
+  const events: string[] = [];
+  const store: AccountStore = {
+    read: async () => {
+      await read;
+      events.push("read");
+      return value;
+    },
+    write: async (_key, next) => {
+      events.push("write");
+      await Promise.resolve();
+      writes.push(next);
+    },
+  };
+  return { events, store, writes };
+};
+
+const opened = ({
+  device,
+  server,
+  now,
+}: {
+  device: ReturnType<typeof deviceWith>;
+  server: Promise<RecentSearch[]>;
+  now: number;
+}) => {
+  const shown: string[][] = [];
+  const recents = openRecentSearches({
+    key: "key-1",
+    loadServer: async () => Result.ok(await server),
+    now: () => now,
+    onChange: (searches) => {
+      shown.push(searches);
+    },
+    store: device.store,
+  });
+  return { recents, shown };
+};
+
+describe("recent searches while the screen is open", () => {
+  test("a search remembered before the server answers keeps the device's earlier ones", async () => {
+    const device = deviceWith(
+      serializeRecents(kept([{ query: "deposit", usedAt: 10 }])),
+    );
+    const server = deferred<RecentSearch[]>();
+    const { recents, shown } = opened({
+      device,
+      server: server.promise,
+      now: 50,
+    });
+
+    await recents.remember("lease");
+    expect(device.writes.map((written) => readStoredRecents(written))).toEqual([
+      kept([
+        { query: "lease", usedAt: 50 },
+        { query: "deposit", usedAt: 10 },
+      ]),
+    ]);
+    expect(shown.at(-1)).toEqual(["lease", "deposit"]);
+
+    server.resolve([{ query: "notice period", usedAt: 20 }]);
+    await recents.ready;
+    expect(shown.at(-1)).toEqual(["lease", "deposit", "notice period"]);
+    expect(device.writes).toHaveLength(1);
+  });
+
+  test("nothing is written before the device's list is read", async () => {
+    const read = deferred<undefined>();
+    const device = deviceWith(
+      serializeRecents(kept([{ query: "deposit", usedAt: 10 }])),
+      read.promise,
+    );
+    const { recents, shown } = opened({
+      device,
+      server: Promise.resolve([]),
+      now: 50,
+    });
+
+    const remembering = recents.remember("lease");
+    expect(shown).toEqual([]);
+    read.resolve(undefined);
+    await remembering;
+    expect(device.events).toEqual(["read", "write"]);
+    expect(device.writes.map((written) => readStoredRecents(written))).toEqual([
+      kept([
+        { query: "lease", usedAt: 50 },
+        { query: "deposit", usedAt: 10 },
+      ]),
+    ]);
+    expect(shown.at(-1)).toEqual(["lease", "deposit"]);
+  });
+
+  test("clearing before anything loads forgets the device's and hides the server's from before", async () => {
+    const read = deferred<undefined>();
+    const device = deviceWith(
+      serializeRecents(kept([{ query: "deposit", usedAt: 10 }])),
+      read.promise,
+    );
+    const server = deferred<RecentSearch[]>();
+    const { recents, shown } = opened({
+      device,
+      server: server.promise,
+      now: 100,
+    });
+
+    const clearing = recents.clear();
+    read.resolve(undefined);
+    await clearing;
+    expect(device.writes.map((written) => readStoredRecents(written))).toEqual([
+      kept([], 100),
+    ]);
+    expect(shown.at(-1)).toEqual([]);
+
+    server.resolve([
+      { query: "before", usedAt: 90 },
+      { query: "since", usedAt: 110 },
+    ]);
+    await recents.ready;
+    expect(shown.at(-1)).toEqual(["since"]);
   });
 });
