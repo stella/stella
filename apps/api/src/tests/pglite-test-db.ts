@@ -321,20 +321,16 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
  * harness mirrors the migrations, so it leaves them ungranted too.
  */
 const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
-  new Set([
-    "case_law_decisions.docket_family_key",
-    ...[DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
+  new Set(
+    [DOCTRINE_COLUMN_GRANTS_BY_RELATION, CENSUS_COLUMN_GRANTS_BY_RELATION]
       .flatMap(publicLawColumnPairs)
       .map(({ relation, column }) => `${relation}.${column}`),
-  ]);
+  );
 
 const decisionColumnNames = new Set(
   Object.values(getColumns(schema.caseLawDecisions)).map(({ name }) => name),
 );
-const decisionRelationNames = new Set<string>([
-  getTableName(schema.caseLawDecisions),
-  ...CASE_LAW_DECISION_VIEWS,
-]);
+const decisionRelationNames = new Set<string>(CASE_LAW_DECISION_VIEWS);
 
 const grantedPublicLawColumns = (
   relation: string,
