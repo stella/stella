@@ -16,9 +16,10 @@ import type {
   KnowledgeSource,
 } from "@/features/knowledge/views/knowledge-seam";
 import { KnowledgeStatusMessage } from "@/features/knowledge/views/knowledge-status-message";
-import type { TemplateDensity } from "@/features/knowledge/views/templates/template-row-view";
+import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplateTagFilter,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -72,6 +73,11 @@ const readTemplateDensity = (): TemplateDensity =>
 const writeTemplateDensity = (density: TemplateDensity): void => {
   deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
 };
+
+const TEMPLATE_TOOLBAR_CLASS = cn(
+  "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
+  TOOLBAR_ROW_MIN_HEIGHT,
+);
 
 const TemplateListView = ({
   source,
@@ -164,12 +170,7 @@ const TemplateListView = ({
       {sidebar && <div className="hidden md:contents">{sidebar(filter)}</div>}
 
       <div className="flex min-h-0 flex-1 flex-col md:border-s">
-        <div
-          className={cn(
-            "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
-            TOOLBAR_ROW_MIN_HEIGHT,
-          )}
-        >
+        <div className={TEMPLATE_TOOLBAR_CLASS}>
           <div className="flex min-w-0 items-center gap-2">
             <h2 className="text-foreground text-sm font-semibold">
               {t("knowledge.sections.templates.title")}
@@ -272,38 +273,74 @@ const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
 // shape while templates load; only the values fade in.
-export const TemplateListSkeleton = () => (
-  <div className="flex min-h-0 flex-1">
-    <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
-      <nav className="flex-1 space-y-1 p-2">
-        <Skeleton className="h-7 w-full rounded-md" />
-        <div className="my-1 border-t" />
-        {TEMPLATE_SIDEBAR_KEYS.map((key) => (
-          <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
-        ))}
-      </nav>
-    </div>
-
-    <div className="flex min-h-0 flex-1 flex-col border-s">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <Skeleton className="h-4 w-8" />
-        <Skeleton className="h-8 w-32 rounded-md" />
+export const TemplateListSkeleton = () => {
+  const density = readTemplateDensity();
+  const t = useTranslations();
+  return (
+    <div
+      aria-hidden="true"
+      className="flex min-h-0 flex-1 flex-col md:flex-row"
+    >
+      <div className="hidden w-48 shrink-0 flex-col md:flex">
+        <nav className="flex-1 space-y-1 p-2">
+          <Skeleton className="h-7 w-full rounded-md" />
+          <div className="my-1 border-t" />
+          {TEMPLATE_SIDEBAR_KEYS.map((key) => (
+            <Skeleton className="h-7 w-2/3 rounded-md" key={key} />
+          ))}
+        </nav>
       </div>
 
-      <ul className="flex-1 divide-y overflow-y-auto">
-        {TEMPLATE_ROW_KEYS.map((key) => (
-          <li className="flex items-center gap-4 px-4 py-3" key={key}>
-            <Skeleton className="size-9 shrink-0 rounded-lg" />
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="flex min-h-0 flex-1 flex-col md:border-s">
+        <div className={TEMPLATE_TOOLBAR_CLASS}>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-foreground text-sm font-semibold">
+              {t("knowledge.sections.templates.title")}
+            </h2>
+            <Skeleton className="h-4 w-4" />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Skeleton className="h-8 w-16 rounded-md" />
+            <Skeleton className="h-8 w-32 rounded-md" />
+          </div>
+        </div>
+
+        <div className="border-b px-3 py-2 md:hidden">
+          <div className="flex gap-1 pb-0.5">
+            <Skeleton className="h-8 w-32" />
+          </div>
+        </div>
+        <ul className="flex-1 divide-y overflow-y-auto">
+          {TEMPLATE_ROW_KEYS.map((key) => (
+            <li
+              className={cn("flex gap-3 px-4", TEMPLATE_ROW_SPACING[density])}
+              key={key}
+            >
+              <Skeleton className="size-9 shrink-0 rounded-lg" />
+              <div
+                className={cn(
+                  "flex min-w-0 flex-1 gap-2",
+                  density === "compact" ? "items-baseline" : "flex-col gap-1",
+                )}
+              >
+                <Skeleton
+                  className={cn(
+                    "w-48 max-w-full",
+                    density === "compact" ? "h-5" : "h-6",
+                  )}
+                />
+                <Skeleton className="h-4 w-32 max-w-full" />
+                {density === "comfortable" && (
+                  <Skeleton className="h-4 w-40 max-w-full" />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /**
  * The template library as one view: a skeleton while the source loads, a

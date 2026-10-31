@@ -221,19 +221,18 @@ export const ProtectedAppFrame = ({
     ? resolveMatterColor(activeWorkspaceId, activeWorkspace?.color ?? null)
     : null;
   const routeMatterChromeStyle = matterChromeStyle(activeMatterColor);
+  // Restore the authenticated tab scope before any previous scope can paint.
+  const reserveInspectorPane = useInspectorTabPersistence({
+    organizationId: inspectorBroadcastOrganizationId,
+    userId: inspectorBroadcastUserId,
+  });
   const inspectorPaneOpen = useInspectorTabsStore(
     (state) => state.tabs.length > 0 && !state.minimized,
   );
   const viewportWidth = useViewportWidth();
   const forceSidebarCollapsed = shouldForceSidebarCollapsed({
-    inspectorPaneOpen,
+    inspectorPaneOpen: inspectorPaneOpen || reserveInspectorPane,
     viewportWidth,
-  });
-
-  // Restore the authenticated tab scope before any previous scope can paint.
-  useInspectorTabPersistence({
-    organizationId: inspectorBroadcastOrganizationId,
-    userId: inspectorBroadcastUserId,
   });
 
   // Mod+J — toggles the inspector pane. With tabs already open it
@@ -277,6 +276,7 @@ export const ProtectedAppFrame = ({
                   composition="host-responsive"
                   endDock={
                     <WorkspaceInspectorSidePanel
+                      reservePane={reserveInspectorPane}
                       routeMatterChromeStyle={routeMatterChromeStyle}
                     />
                   }
@@ -578,8 +578,10 @@ const getInspectorTabWorkspaceId = (
  * inspector chrome.
  */
 function WorkspaceInspectorSidePanel({
+  reservePane,
   routeMatterChromeStyle,
 }: {
+  reservePane: boolean;
   routeMatterChromeStyle: MatterChromeStyle;
 }) {
   const t = useTranslations();
@@ -597,7 +599,7 @@ function WorkspaceInspectorSidePanel({
   // sheet and relies on the topbar restore button after Back.
   // Pane content is shown only when a tab exists and the inspector
   // is not minimized.
-  const showPaneContent = tabs.length > 0 && !minimized;
+  const showPaneContent = reservePane || (tabs.length > 0 && !minimized);
   const activeWorkspaceId = resolveInspectorWorkspaceId({
     activeId,
     routeWorkspaceId,
