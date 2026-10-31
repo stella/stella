@@ -109,7 +109,7 @@ export const AuditChangeDetails = ({
           <TableHeader>
             <TableRow>
               <TableHead className="w-1/4">
-                {t("settings.organization.auditLogsField")}
+                {t("chat.toolCall.field")}
               </TableHead>
               <TableHead>
                 {t("settings.organization.auditLogsBefore")}

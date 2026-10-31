@@ -13,6 +13,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -32,6 +33,8 @@ import { cn } from "@stll/ui/utils";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
+import type { MemberOption } from "@/components/member-combobox";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SettingsPageHeader } from "@/components/settings-page-header";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -50,6 +53,7 @@ import {
   AuditChangeDetails,
   AuditChangeSummary,
 } from "@/routes/_protected.admin/-components/audit-change-details";
+import { auditPersonOptions } from "@/routes/_protected.admin/-components/audit-person-options.logic";
 import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
 import {
   auditLogOptions,
@@ -107,22 +111,23 @@ const ALL_PERFORMERS = "all";
 type PerformerChoice = AuditPerformerFilter | typeof ALL_PERFORMERS;
 
 const toPerformerChoice = (value: string | null): PerformerChoice => {
-  switch (value) {
-    case AUDIT_PERFORMER_FILTER.automations:
-      return AUDIT_PERFORMER_FILTER.automations;
-    case ALL_PERFORMERS:
-      return ALL_PERFORMERS;
-    default:
-      return DEFAULT_PERFORMER_FILTER;
+  if (value === AUDIT_PERFORMER_FILTER.automations) {
+    return AUDIT_PERFORMER_FILTER.automations;
   }
+  if (value === ALL_PERFORMERS) {
+    return ALL_PERFORMERS;
+  }
+  return DEFAULT_PERFORMER_FILTER;
 };
 
 function AuditPersonFilter({
   value,
+  entries,
   onValueChange,
 }: {
-  value: string | null;
-  onValueChange: (userId: string | null) => void;
+  value: MemberOption | null;
+  entries: readonly AuditLogItem[];
+  onValueChange: (person: MemberOption | null) => void;
 }) {
   const t = useTranslations();
   const user = useAuthenticatedUser();
@@ -131,33 +136,40 @@ function AuditPersonFilter({
   );
   const members =
     organizationView.type === "items" ? organizationView.items.members : [];
-  const memberOptions = members.map((member) => ({
-    email: member.user.email,
-    image: member.user.image ?? null,
-    name: member.user.name,
-    userId: member.userId,
-  }));
+  const personOptions = auditPersonOptions({
+    members: members.map((member) => ({
+      email: member.user.email,
+      image: member.user.image ?? null,
+      name: member.user.name,
+      userId: member.userId,
+    })),
+    entries,
+    selected: value,
+  });
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label
-        className="text-muted-foreground text-xs font-medium"
-        htmlFor="audit-person-filter"
-      >
-        {t("settings.organization.auditLogsPerson")}
-      </label>
+      <Label className="text-xs" htmlFor="audit-person-filter">
+        {t("common.anonymizationLabels.person")}
+      </Label>
       <MemberCombobox
         choice={{
           type: MEMBER_CHOICE.memberOrNone,
           noneLabel: t("settings.organization.auditLogsAnyone"),
         }}
         id="audit-person-filter"
-        label={t("settings.organization.auditLogsPerson")}
-        members={memberOptions}
-        onValueChange={onValueChange}
+        label={t("common.anonymizationLabels.person")}
+        members={personOptions}
+        onValueChange={(userId) =>
+          onValueChange(
+            personOptions.find((option) => option.userId === userId) ?? null,
+          )
+        }
         placeholder={t("settings.organization.auditLogsPersonPlaceholder")}
-        value={value}
+        selectedFallback={value}
+        value={value?.userId ?? null}
       />
+      <QueryViewFeedback view={organizationView} />
     </div>
   );
 }
@@ -187,12 +199,9 @@ function AuditPerformerSelect({
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <label
-        className="text-muted-foreground text-xs font-medium"
-        htmlFor="performer-select"
-      >
+      <Label className="text-xs" htmlFor="performer-select">
         {t("settings.organization.auditLogsPerformer")}
-      </label>
+      </Label>
       <Select
         id="performer-select"
         items={choices}
@@ -223,7 +232,7 @@ function AuditLogsPage() {
   );
   const [filterAction, setFilterAction] = useState<string>("");
   const [filterResourceType, setFilterResourceType] = useState<string>("");
-  const [filterUserId, setFilterUserId] = useState<string | null>(null);
+  const [filterPerson, setFilterPerson] = useState<MemberOption | null>(null);
   const [filterPerformer, setFilterPerformer] = useState<PerformerChoice>(
     DEFAULT_PERFORMER_FILTER,
   );
@@ -249,7 +258,7 @@ function AuditLogsPage() {
     cursor,
     action: filterAction || undefined,
     resourceType: filterResourceType || undefined,
-    userId: filterUserId ?? undefined,
+    userId: filterPerson?.userId,
     performer,
     from: dateRange.from,
     toExclusive: dateRange.toExclusive,
@@ -290,8 +299,8 @@ function AuditLogsPage() {
         if (filterResourceType) {
           cleanParams["resourceType"] = filterResourceType;
         }
-        if (filterUserId) {
-          cleanParams["userId"] = filterUserId;
+        if (filterPerson) {
+          cleanParams["userId"] = filterPerson.userId;
         }
         if (performer) {
           cleanParams["performer"] = performer;
@@ -375,10 +384,11 @@ function AuditLogsPage() {
             {/* Filters Row */}
             <div className="bg-muted/30 grid grid-cols-1 items-end gap-2 rounded-lg border p-4 md:grid-cols-2 xl:grid-cols-4">
               <AuditPersonFilter
-                onValueChange={(userId) =>
-                  handleFilterChange(setFilterUserId, userId)
+                entries={data?.items ?? []}
+                onValueChange={(person) =>
+                  handleFilterChange(setFilterPerson, person)
                 }
-                value={filterUserId}
+                value={filterPerson}
               />
 
               <AuditPerformerSelect
@@ -389,12 +399,9 @@ function AuditLogsPage() {
               />
 
               <div className="flex min-w-0 flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="action-select"
-                >
+                <Label className="text-xs" htmlFor="action-select">
                   {t("common.action")}
-                </label>
+                </Label>
                 <Select
                   id="action-select"
                   value={filterAction || "all"}
@@ -439,12 +446,9 @@ function AuditLogsPage() {
               </div>
 
               <div className="flex min-w-0 flex-col gap-1.5">
-                <label
-                  className="text-muted-foreground text-xs font-medium"
-                  htmlFor="resourceType-input"
-                >
+                <Label className="text-xs" htmlFor="resourceType-input">
                   {t("settings.organization.auditLogsResourceType")}
-                </label>
+                </Label>
                 <Input
                   id="resourceType-input"
                   placeholder={t(
@@ -473,9 +477,7 @@ function AuditLogsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">
-                      <span className="sr-only">
-                        {t("settings.organization.auditLogsShowDetails")}
-                      </span>
+                      <span className="sr-only">{t("common.showDetails")}</span>
                     </TableHead>
                     <TableHead>
                       {t("settings.organization.auditLogsTime")}
@@ -623,9 +625,7 @@ function AuditLogRow({
             aria-controls={isExpanded ? detailsId : undefined}
             aria-expanded={isExpanded}
             aria-label={
-              isExpanded
-                ? t("settings.organization.auditLogsHideDetails")
-                : t("settings.organization.auditLogsShowDetails")
+              isExpanded ? t("common.hideDetails") : t("common.showDetails")
             }
             onClick={onToggle}
             size="icon-sm"
@@ -657,7 +657,7 @@ function AuditLogRow({
           </span>
           {isAutomation ? (
             <span className="text-muted-foreground block">
-              {t("settings.organization.auditLogsAutomation")}
+              {t("workspaces.overview.activity.filters.automation")}
             </span>
           ) : null}
         </TableCell>
