@@ -123,7 +123,7 @@ export const rememberSearch = (
   usedAt: number,
 ): StoredRecents => {
   // Cut by code points, so a character outside the basic plane stays whole.
-  const text = [...searchText(query)]
+  const text = Array.from(searchText(query))
     .slice(0, SAVED_QUERY_MAX_LENGTH)
     .join("")
     .trim();
@@ -256,7 +256,8 @@ export const openRecentSearches = ({
   readonly onChange: (searches: string[]) => void;
   readonly store: AccountStore;
 }): RecentSearches => {
-  let stored: StoredRecents | null = null;
+  // Set by the device read below; the closures read it as it is then.
+  let stored = null as StoredRecents | null;
   let server: readonly RecentSearch[] = [];
   const show = (kept: StoredRecents) => {
     onChange(mergeRecentSearches(kept, server));
