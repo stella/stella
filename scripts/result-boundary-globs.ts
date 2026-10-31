@@ -130,6 +130,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/lists/**/*.ts",
   "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/push/**/*.ts",
   "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
@@ -292,6 +293,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-translation/run-queue.ts",
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
+  // BullMQ retries an attempt only when its processor rejects.
+  "apps/api/src/lib/push/push-delivery-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",

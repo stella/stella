@@ -92,6 +92,7 @@
     "./desktop-feature-access": "./src/desktop-feature-access.ts",
     "./desktop-handoff": "./src/desktop-handoff.ts",
     "./mobile-client": "./src/mobile-client.ts",
+    "./mobile-push": "./src/mobile-push.ts",
     "./api-oauth-resource": "./src/api-oauth-resource.ts",
     "./mobile-updates": "./src/mobile-updates.ts",
     "./desktop-registry": "./src/desktop-registry.ts",

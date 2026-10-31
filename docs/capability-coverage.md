@@ -747,6 +747,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 2 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
