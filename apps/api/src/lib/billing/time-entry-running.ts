@@ -177,7 +177,8 @@ const lockRunningEntryPrefix = async ({
         ]),
       ],
     })),
-    mode: "update",
+    // Billing writes hold reach stable; they do not change matter stewardship.
+    mode: "share",
   });
   await lockTimerOwnerIdentities({
     tx,
