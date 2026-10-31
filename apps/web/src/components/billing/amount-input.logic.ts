@@ -1,5 +1,6 @@
 import {
   formatLocaleMinorUnitsInput,
+  type LocaleInputText,
   parseLocaleDecimal,
   parseLocaleMinorUnits,
 } from "@stll/money";
@@ -22,7 +23,8 @@ export const majorUnitInput = (
   amountCents: number,
   currency: string,
   locale = "en",
-): string => formatLocaleMinorUnitsInput({ amountCents, currency, locale });
+): LocaleInputText =>
+  formatLocaleMinorUnitsInput({ amountCents, currency, locale });
 
 /** Canonical decimal text, without grouping or a floating-point conversion. */
 type NormalizeMajorUnitInputOptions = {
@@ -38,7 +40,7 @@ export const normalizeMajorUnitInput = ({
 
 export type SubmittedRateParams = {
   /** The major-unit text the rate input holds, or null when it is not overridden. */
-  draft: string | null;
+  draft: LocaleInputText | null;
   /** The currency the form is submitting. */
   currency: string;
   /** The rate the form already carries, in minor units of that currency. */

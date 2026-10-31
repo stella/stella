@@ -117,7 +117,12 @@ const serveLines = ({ refuse = false }: { refuse?: boolean } = {}) => {
   return calls;
 };
 
-const mount = (line: InvoiceLine, editable = true) => {
+const mount = (
+  line: InvoiceLine,
+  editable = true,
+  locale = "en-GB",
+  currency = CURRENCY,
+) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
@@ -127,9 +132,9 @@ const mount = (line: InvoiceLine, editable = true) => {
   render(
     <QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <FormattingProvider locale="en-GB" timeZone="UTC">
+        <FormattingProvider locale={locale} timeZone="UTC">
           <InvoiceLineEditor
-            currency={CURRENCY}
+            currency={currency}
             editable={editable}
             invoiceId={INVOICE}
             line={line}
@@ -201,9 +206,7 @@ describe("editing a draft invoice line", () => {
       field(messages.billing.invoices.lineOverrides.quantity),
       "2",
     );
-    const rate = screen.getByRole("spinbutton", {
-      name: messages.billing.invoiceComposer.rate,
-    });
+    const rate = field(messages.billing.invoiceComposer.rate);
     await typeInto(rate, "3000");
     await click(messages.common.save);
 
@@ -215,6 +218,30 @@ describe("editing a draft invoice line", () => {
       quantity: "2",
       unitPriceMinor: 3000,
     });
+  });
+
+  test("a Slovak redisplay preserves stored quantity and price", async () => {
+    const calls = serveLines();
+    mount(
+      draftLine({ quantity: "0.125", unitPrice: cents(123_450) }),
+      true,
+      "sk-SK",
+      "EUR",
+    );
+
+    expect(
+      field(messages.billing.invoices.lineOverrides.quantity),
+    ).toHaveProperty("value", "0,125");
+    expect(field(messages.billing.invoiceComposer.rate)).toHaveProperty(
+      "value",
+      "1234,50",
+    );
+
+    await typeInto(field(messages.common.description), "Lease review updated");
+    await click(messages.common.save);
+
+    await waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]?.body).toEqual({ description: "Lease review updated" });
   });
 
   test("a refused save says so and keeps the edit", async () => {
@@ -314,11 +341,10 @@ describe("editing a draft invoice line", () => {
     expect(
       field(messages.billing.invoices.lineOverrides.quantity),
     ).toHaveProperty("readOnly", true);
-    expect(
-      screen.getByRole("spinbutton", {
-        name: messages.billing.invoiceComposer.rate,
-      }),
-    ).toHaveProperty("readOnly", true);
+    expect(field(messages.billing.invoiceComposer.rate)).toHaveProperty(
+      "readOnly",
+      true,
+    );
   });
 
   test("an issued invoice's line is read-only", () => {

@@ -6,7 +6,11 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
-import { parseLocaleMinorUnits } from "@stll/money";
+import {
+  type LocaleInputText,
+  localeInputText,
+  parseLocaleMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -330,10 +334,10 @@ const TimeEntryRateInput = ({
   currentCurrency: string;
   currentRate: number;
   rateOverride: boolean;
-  rateInputValue: string;
+  rateInputValue: LocaleInputText;
   onCurrencyChange: (value: string) => void;
   beginOverride: () => void;
-  setRateInputValue: (value: string) => void;
+  setRateInputValue: (value: LocaleInputText) => void;
 }) => {
   const t = useTranslations();
   const locale = useFormattingLocale();
@@ -373,7 +377,9 @@ const TimeEntryRateInput = ({
                 majorUnitInput(rate.value, currentCurrency, locale),
               );
             }}
-            onChange={(e) => setRateInputValue(e.currentTarget.value)}
+            onChange={(e) =>
+              setRateInputValue(localeInputText(e.currentTarget.value))
+            }
             placeholder="350.00"
             value={rateInputValue}
           />
@@ -509,7 +515,9 @@ const useTimeEntryFormState = ({
   const currentCurrency = pricing.currency;
   const rateOverride = pricingSelection.type === "manual";
   const rateInputValue =
-    pricingSelection.type === "manual" ? pricingSelection.draft : "";
+    pricingSelection.type === "manual"
+      ? pricingSelection.draft
+      : localeInputText("");
   const initialSelection = initialPricingSelection(defaultValues);
   const pricingDirty =
     pricingSelection.type !== initialSelection.type ||
@@ -537,10 +545,12 @@ const useTimeEntryFormState = ({
         type: "manual",
         currency: currentCurrency,
         draft:
-          currentRate > 0 ? majorUnitInput(currentRate, currentCurrency) : "",
+          currentRate > 0
+            ? majorUnitInput(currentRate, currentCurrency)
+            : localeInputText(""),
       }),
     rateInputValue,
-    setRateInputValue: (draft: string) =>
+    setRateInputValue: (draft: LocaleInputText) =>
       setPricingSelection({ type: "manual", currency: currentCurrency, draft }),
     setManualCurrency: (currency: string) =>
       setPricingSelection({ type: "manual", currency, draft: rateInputValue }),

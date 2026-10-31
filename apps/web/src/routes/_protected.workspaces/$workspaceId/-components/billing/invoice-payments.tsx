@@ -10,7 +10,7 @@ import {
   INVOICE_PAYMENT_METHODS,
   type InvoicePaymentMethod,
 } from "@stll/api-contract";
-import { parseLocaleMinorUnits } from "@stll/money";
+import { localeInputText, parseLocaleMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -393,7 +393,9 @@ const RecordPaymentForm = ({
                     }
                   }}
                   onChange={(event) =>
-                    field.handleChange(event.currentTarget.value)
+                    field.handleChange(
+                      localeInputText(event.currentTarget.value),
+                    )
                   }
                   value={field.state.value}
                 />

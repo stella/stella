@@ -8,6 +8,7 @@ import type * as v from "valibot";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { BPS_PER_PERCENTAGE_POINT } from "@stll/api-contract/billing";
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
+import { formatLocaleDecimalInput, localeInputText } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
@@ -146,14 +147,22 @@ const HourlyArrangementForm = ({
         currency,
         capAmount:
           hourly && "capAmount" in hourly
-            ? majorUnitInput(hourly.capAmount, currency)
-            : "",
+            ? majorUnitInput(hourly.capAmount, currency, locale)
+            : localeInputText(""),
         capMinutes:
-          hourly && "capMinutes" in hourly ? `${hourly.capMinutes}` : "",
+          hourly && "capMinutes" in hourly
+            ? formatLocaleDecimalInput({
+                amount: `${hourly.capMinutes}`,
+                locale,
+              })
+            : localeInputText(""),
         alertThreshold:
           hourly && "alertThresholdBps" in hourly
-            ? `${hourly.alertThresholdBps / BPS_PER_PERCENTAGE_POINT}`
-            : "80",
+            ? formatLocaleDecimalInput({
+                amount: `${hourly.alertThresholdBps / BPS_PER_PERCENTAGE_POINT}`,
+                locale,
+              })
+            : formatLocaleDecimalInput({ amount: "80", locale }),
       },
       onSubmit: async ({ value }) => {
         await save.mutateAsync(value);
@@ -212,7 +221,7 @@ const HourlyArrangementForm = ({
                   field.handleChange(
                     name === "currency"
                       ? event.currentTarget.value.toUpperCase()
-                      : event.currentTarget.value,
+                      : localeInputText(event.currentTarget.value),
                   )
                 }
               />

@@ -10,6 +10,7 @@ import {
 import {
   currencyMinorUnitDigits,
   formatLocaleMinorUnitsInput,
+  localeInputText,
   parseLocaleMinorUnits,
 } from "@stll/money";
 import { Button } from "@stll/ui/button";
@@ -160,7 +161,7 @@ export const ExpenseForm = ({
                 currency: initialCurrency,
                 locale,
               })
-            : "",
+            : localeInputText(""),
       },
       onSubmit: async ({ value }) => {
         await onSubmit(value);
@@ -271,7 +272,7 @@ export const ExpenseForm = ({
                   field.handleChange(normalized);
                 }}
                 onChange={(e) => {
-                  const nextValue = e.currentTarget.value;
+                  const nextValue = localeInputText(e.currentTarget.value);
                   field.handleChange(nextValue);
                 }}
                 placeholder={new Intl.NumberFormat(locale, {

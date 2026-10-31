@@ -1,5 +1,7 @@
 import { expect, test } from "bun:test";
 
+import { localeInputText } from "@stll/money";
+
 import {
   majorUnitInput,
   normalizeMajorUnitInput,
@@ -27,7 +29,7 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
   // it is then changed to JPY, and the entry is submitted. 100 is 100 yen.
   expect(
     submittedRateCents({
-      draft: "100",
+      draft: localeInputText("100"),
       currency: "JPY",
       locale: "en-US",
       resolvedRateCents: 10_000,
@@ -35,7 +37,7 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
   ).toBe(100);
   expect(
     submittedRateCents({
-      draft: "100.00",
+      draft: localeInputText("100.00"),
       currency: "USD",
       locale: "en-US",
       resolvedRateCents: 0,
@@ -43,7 +45,7 @@ test("a rate typed under one currency is scaled by the one submitted", () => {
   ).toBe(10_000);
   expect(
     submittedRateCents({
-      draft: "100",
+      draft: localeInputText("100"),
       currency: "KWD",
       locale: "en-US",
       resolvedRateCents: 0,
@@ -63,7 +65,7 @@ test("a rate that is not overridden keeps the one rate resolution supplied", () 
 });
 
 test("a draft the currency cannot express falls back rather than storing nothing", () => {
-  for (const draft of ["", "abc", "99999999999999999"]) {
+  for (const draft of ["", "abc", "99999999999999999"].map(localeInputText)) {
     expect(
       submittedRateCents({
         draft,
@@ -78,7 +80,7 @@ test("a draft the currency cannot express falls back rather than storing nothing
 test("the draft scales the decimal rather than a float parsed from it", () => {
   expect(
     submittedRateCents({
-      draft: "1.005",
+      draft: localeInputText("1.005"),
       currency: "KWD",
       locale: "en-US",
       resolvedRateCents: 0,
@@ -89,7 +91,7 @@ test("the draft scales the decimal rather than a float parsed from it", () => {
 test("a Slovak rate accepts its decimal mark and rejects an ambiguous dot", () => {
   expect(
     submittedRateCents({
-      draft: "1234,56",
+      draft: localeInputText("1234,56"),
       currency: "EUR",
       locale: "sk-SK",
       resolvedRateCents: 0,
@@ -97,7 +99,7 @@ test("a Slovak rate accepts its decimal mark and rejects an ambiguous dot", () =
   ).toBe(123_456);
   expect(
     submittedRateCents({
-      draft: "1.234",
+      draft: localeInputText("1.234"),
       currency: "EUR",
       locale: "sk-SK",
       resolvedRateCents: 777,
@@ -106,7 +108,7 @@ test("a Slovak rate accepts its decimal mark and rejects an ambiguous dot", () =
 });
 
 test("the input text shows the places the currency counts", () => {
-  expect(majorUnitInput(10_000, "USD")).toBe("100.00");
-  expect(majorUnitInput(100, "JPY")).toBe("100");
-  expect(majorUnitInput(100_000, "KWD")).toBe("100.000");
+  expect(majorUnitInput(10_000, "USD")).toBe(localeInputText("100.00"));
+  expect(majorUnitInput(100, "JPY")).toBe(localeInputText("100"));
+  expect(majorUnitInput(100_000, "KWD")).toBe(localeInputText("100.000"));
 });

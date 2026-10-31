@@ -235,11 +235,15 @@ export class MoneyTotals {
 
 export {
   currencyMinorUnitDigits,
+  formatLocaleDecimalInput,
+  type FormatLocaleDecimalInputParams,
   formatLocaleMinorUnitsInput,
   type FormatLocaleMinorUnitsInputParams,
   formatMoneyCents,
   type FormatMoneyCentsParams,
   type LocaleAmountParseError,
+  type LocaleInputText,
+  localeInputText,
   parseLocaleDecimal,
   type ParseLocaleDecimalParams,
   parseLocaleMinorUnits,

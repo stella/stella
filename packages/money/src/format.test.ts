@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
+  formatLocaleDecimalInput,
   formatLocaleMinorUnitsInput,
   formatMoneyCents,
   type LocaleAmountParseError,
@@ -193,6 +194,46 @@ describe("parseLocaleMinorUnits", () => {
               locale,
             }).unwrap(),
           ).toBe(cents(amountCents));
+        }
+      }
+    }
+
+    for (const amountCents of [
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER - 1,
+      -Number.MAX_SAFE_INTEGER,
+      -Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+        for (const currency of ["JPY", "EUR", "KWD"]) {
+          const rendered = formatLocaleMinorUnitsInput({
+            amountCents,
+            currency,
+            locale,
+          });
+          expect(
+            parseLocaleMinorUnits({
+              amount: rendered,
+              currency,
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
+      }
+    }
+  });
+
+  test("decimal redisplay round-trips fraction lengths zero through six", () => {
+    for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+      for (let fractionLength = 0; fractionLength <= 6; fractionLength += 1) {
+        for (const sign of ["", "-"]) {
+          const amount = `${sign}1234${
+            fractionLength === 0 ? "" : `.${"123456".slice(0, fractionLength)}`
+          }`;
+          const rendered = formatLocaleDecimalInput({ amount, locale });
+          expect(
+            parseLocaleDecimal({ amount: rendered, locale }).unwrap(),
+          ).toBe(amount);
         }
       }
     }

@@ -2,4 +2,4 @@
 "@stll/money": minor
 ---
 
-Add `parseLocaleMinorUnits` and `formatLocaleMinorUnitsInput`: parses a human-entered amount with locale separators or an unambiguous dot or comma decimal into exact minor units, and returns a typed `LocaleAmountParseError` (`empty`, `syntax`, `ambiguous`, `precision`, `unsafe-integer` or `locale`) instead of guessing when the text allows two readings.
+Add locale decimal input parsing and exact redisplay formatters, with branded `LocaleInputText` values that keep canonical stored decimals out of locale-validated form fields. Parsing accepts locale separators or an unambiguous dot or comma decimal, and reports a typed `LocaleAmountParseError` instead of guessing when text allows two readings.

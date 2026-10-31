@@ -170,6 +170,19 @@ export type ParseLocaleDecimalParams = {
   maximumFractionDigits?: number;
 };
 
+declare const localeInputTextBrand: unique symbol;
+
+/** Text whose separators and digits belong to a person's formatting locale. */
+export type LocaleInputText = string & {
+  readonly [localeInputTextBrand]: "LocaleInputText";
+};
+
+/** Mark text read directly from an input element as locale input text. */
+export function localeInputText(value: string): LocaleInputText;
+export function localeInputText(value: string): string {
+  return value;
+}
+
 /** Normalize a human-entered locale decimal without converting through a float. */
 export const parseLocaleDecimal = ({
   amount,
@@ -305,17 +318,66 @@ export type FormatLocaleMinorUnitsInputParams = {
   locale: string;
 };
 
+const localizeAsciiDigits = (
+  value: string,
+  digits: Map<string, string>,
+): string => {
+  const localizedByAscii = new Map(
+    [...digits].map(([localized, ascii]) => [ascii, localized]),
+  );
+  const localized = value
+    .split("")
+    .map((character) => localizedByAscii.get(character) ?? character)
+    .join("");
+  return localized;
+};
+
+export type FormatLocaleDecimalInputParams = {
+  amount: string;
+  locale: string;
+};
+
+/** Render canonical decimal text using locale digits and its decimal mark. */
+export const formatLocaleDecimalInput = ({
+  amount,
+  locale,
+}: FormatLocaleDecimalInputParams): LocaleInputText => {
+  const groups = DECIMAL_AMOUNT.exec(amount)?.groups;
+  const whole = groups?.["whole"] ?? "";
+  const fraction = groups?.["fraction"];
+  if (groups === undefined || `${whole}${fraction ?? ""}`.length === 0) {
+    return panic(
+      `formatLocaleDecimalInput(${JSON.stringify(amount)}): not a canonical decimal`,
+    );
+  }
+  const separators = localeSeparators(locale).unwrap(
+    "formatLocaleDecimalInput: invalid locale",
+  );
+  const canonical = `${groups["sign"] ?? ""}${whole || "0"}${
+    fraction === undefined ? "" : `${separators.decimal}${fraction}`
+  }`;
+  return localeInputText(localizeAsciiDigits(canonical, separators.digits));
+};
+
 /** Render stored minor units as locale input text that parses back unchanged. */
 export const formatLocaleMinorUnitsInput = ({
   amountCents,
   currency,
   locale,
-}: FormatLocaleMinorUnitsInputParams): string =>
-  new Intl.NumberFormat(locale, {
-    minimumFractionDigits: currencyMinorUnitDigits(currency),
-    maximumFractionDigits: currencyMinorUnitDigits(currency),
-    useGrouping: false,
-  }).format(toMajorUnits({ amountCents, currency }));
+}: FormatLocaleMinorUnitsInputParams): LocaleInputText => {
+  const fractionDigits = currencyMinorUnitDigits(currency);
+  const sign = amountCents < 0 ? "-" : "";
+  const digits = String(Math.abs(amountCents)).padStart(
+    fractionDigits + 1,
+    "0",
+  );
+  const split = digits.length - fractionDigits;
+  const canonical =
+    fractionDigits === 0
+      ? `${sign}${digits}`
+      : `${sign}${digits.slice(0, split)}.${digits.slice(split)}`;
+  return formatLocaleDecimalInput({ amount: canonical, locale });
+};
 
 /** Scientific notation, which `String(1e21)` and `String(1e-7)` both produce. */
 const EXPONENT_AMOUNT =

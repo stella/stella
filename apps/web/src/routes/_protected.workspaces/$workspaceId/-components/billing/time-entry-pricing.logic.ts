@@ -1,12 +1,15 @@
 import type { QueryState } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import type { LocaleInputText } from "@stll/money";
+
 import { submittedRateCents } from "@/components/billing/amount-input.logic";
 import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import type { resolvedRateOptions } from "@/lib/workspaces/queries/rates";
 
 export type TimeEntryPricingSelection =
-  { type: "automatic" } | { type: "manual"; draft: string; currency: string };
+  | { type: "automatic" }
+  | { type: "manual"; draft: LocaleInputText; currency: string };
 
 type RateResolution = Awaited<
   ReturnType<NonNullable<ReturnType<typeof resolvedRateOptions>["queryFn"]>>

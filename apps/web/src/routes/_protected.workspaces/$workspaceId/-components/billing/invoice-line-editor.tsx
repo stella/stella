@@ -10,10 +10,11 @@ import {
 } from "@stll/api-contract";
 import { quantityText } from "@stll/invoicing";
 import {
-  currencyMinorUnitDigits,
+  formatLocaleDecimalInput,
+  formatLocaleMinorUnitsInput,
+  localeInputText,
   parseLocaleDecimal,
   parseLocaleMinorUnits,
-  toMajorUnits,
 } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Field, FieldError } from "@stll/ui/field";
@@ -138,15 +139,12 @@ export const InvoiceLineEditor = ({
       }),
       defaultValues: {
         description: line.description,
-        quantity: line.quantity,
-        unitPrice: format.number(
-          toMajorUnits({ amountCents: line.unitPrice, currency }),
-          {
-            useGrouping: false,
-            minimumFractionDigits: currencyMinorUnitDigits(currency),
-            maximumFractionDigits: currencyMinorUnitDigits(currency),
-          },
-        ),
+        quantity: formatLocaleDecimalInput({ amount: line.quantity, locale }),
+        unitPrice: formatLocaleMinorUnitsInput({
+          amountCents: line.unitPrice,
+          currency,
+          locale,
+        }),
       },
       submitValues: "schema-output",
       onSubmit: async ({ value }) => {
@@ -237,7 +235,9 @@ export const InvoiceLineEditor = ({
                   readOnly={isFlatFeeLine}
                   value={field.state.value}
                   onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                  onChange={(event) =>
+                    field.handleChange(localeInputText(event.target.value))
+                  }
                 />
                 <FieldError />
               </Field>
@@ -253,7 +253,9 @@ export const InvoiceLineEditor = ({
                   readOnly={isFlatFeeLine}
                   value={field.state.value}
                   onBlur={field.handleBlur}
-                  onChange={(event) => field.handleChange(event.target.value)}
+                  onChange={(event) =>
+                    field.handleChange(localeInputText(event.target.value))
+                  }
                 />
                 <FieldError />
               </Field>
