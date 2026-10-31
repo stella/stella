@@ -23,17 +23,26 @@ const preparedManifestSchema = v.strictObject({
 export const generatedFileHash = (bytes: Uint8Array | string) =>
   hashSha256Hex(bytes);
 
-export const generatedInputIdentity = (root: string) => {
-  const compiler = v.parse(
+// Generators use both compiler APIs and the shared syntax parser.
+const GENERATOR_COMPILERS = ["typescript6", "tsrs", "oxc-parser"] as const;
+
+const installedVersion = (root: string, name: string) =>
+  v.parse(
     v.object({ version: v.string() }),
     JSON.parse(
       readFileSync(
-        // The generators run on the TypeScript 6 compiler API.
-        path.join(root, "node_modules/typescript6/package.json"),
+        path.join(root, "node_modules", name, "package.json"),
         "utf-8",
       ),
     ),
-  );
+  ).version;
+
+export const generatedInputIdentity = (root: string) => {
+  const compiler = {
+    version: GENERATOR_COMPILERS.map(
+      (name) => `${name}@${installedVersion(root, name)}`,
+    ).join(" "),
+  };
   return {
     sourceSha: generatedInputGit({
       root,
