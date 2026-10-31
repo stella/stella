@@ -36,7 +36,7 @@ impl AccountOwner {
     &self.0
   }
 
-  #[cfg(test)]
+  #[cfg(any(test, feature = "allocation-tests"))]
   pub(crate) fn fixture(label: &str) -> Self {
     Self(hex::encode(Sha256::digest(label.as_bytes())))
   }

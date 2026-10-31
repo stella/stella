@@ -57,10 +57,15 @@ impl Fixture {
     manager.store_path = root.join("sessions.json");
     manager.edit_root = root.join("editing");
     manager.file_system = files.clone();
+    let owner = AccountOwner::fixture("allocation");
+    manager.account_owner = Some(owner.clone());
     let sha = hash_bytes(&files.bytes);
     manager.sessions.insert(
       "allocation".into(),
       DesktopSession {
+        editor_state: EditorState::Unknown,
+        account_owner: owner,
+        download_sha: None,
         api_base_url: "http://127.0.0.1".into(),
         base_version_number: 1,
         entity_id: "entity".into(),
