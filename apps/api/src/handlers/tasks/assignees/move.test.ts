@@ -70,7 +70,7 @@ const createMock = ({
                   {
                     actorName: "Ada Lovelace",
                     organizationId,
-                    transactionId: "7",
+                    writeId: "7",
                   },
                 ],
               }),

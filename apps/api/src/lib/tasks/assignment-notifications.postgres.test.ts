@@ -9,6 +9,7 @@ import { TASK_ASSIGNEE_ROLE } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
 import { writeTaskAssignments } from "@/api/lib/tasks/assignment-membership";
 import { taskAssignedNotifications } from "@/api/lib/tasks/assignment-notifications";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -46,6 +47,10 @@ if (!databaseUrl || !runPostgresTests) {
           name: "Assignment organization",
           slug: organizationId,
           createdAt: new Date(),
+        });
+        await recordNewOrganizationAccessState(db, {
+          organizationId,
+          now: new Date(),
         });
         await db.insert(member).values(
           [actorUserId, colleagueId].map((userId) => ({
@@ -103,7 +108,6 @@ if (!databaseUrl || !runPostgresTests) {
         expect(again[0]?.userId).toBe(colleagueId);
         expect(again[0]?.idempotencyKey).not.toBe(first[0]?.idempotencyKey);
       } finally {
-        await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
         await db
           .delete(organization)
           .where(eq(organization.id, organizationId));

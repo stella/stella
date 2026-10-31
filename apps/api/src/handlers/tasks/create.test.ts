@@ -329,7 +329,7 @@ describe("createTaskHandler validation", () => {
                 {
                   organizationId: "org_test123",
                   actorName: "Ada Lovelace",
-                  transactionId: "7",
+                  writeId: "7",
                 },
               ]).from()
             : createSelectQueryMock(

@@ -66,7 +66,7 @@ export const taskAssignedNotifications = async (
     .select({
       actorName: user.name,
       organizationId: workspaces.organizationId,
-      transactionId: sql<string>`pg_current_xact_id()::text`,
+      writeId: sql<string>`pg_current_xact_id()::text`,
     })
     .from(workspaces)
     .innerJoin(
@@ -90,7 +90,7 @@ export const taskAssignedNotifications = async (
     workspaceId,
     organizationId: actor.organizationId,
     userId: brandPersistedUserId(assignment.userId),
-    idempotencyKey: `task_assigned:${assignment.entityId}:${assignment.userId}:${assignment.id}:${actor.transactionId}`,
+    idempotencyKey: `task_assigned:${assignment.entityId}:${assignment.userId}:${assignment.id}:${actor.writeId}`,
   }));
 };
 
