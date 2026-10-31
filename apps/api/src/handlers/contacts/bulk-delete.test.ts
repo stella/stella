@@ -38,13 +38,21 @@ const createContext = (
 
 describe("bulkDeleteContacts", () => {
   test("tenant-scopes contact selection and deletion", async () => {
-    const source = await Promise.all([
+    const [handlerSource, lockSource] = await Promise.all([
       Bun.file(`${import.meta.dir}/bulk/delete.ts`).text(),
       Bun.file(`${import.meta.dir}/../../lib/db/aggregate-lock.ts`).text(),
-    ]).then((files) => files.join("\n"));
-    expect(
-      source.match(/eq\(contacts\.organizationId, organizationId\)/gu),
-    ).toHaveLength(2);
+    ]);
+    const lockStart = lockSource.indexOf(
+      "export const lockOwnedContactsForBulkDelete",
+    );
+    expect(lockStart).toBeGreaterThan(-1);
+    const lockHelper = lockSource.slice(
+      lockStart,
+      lockSource.indexOf("\nexport const ", lockStart + 1),
+    );
+    const tenantFilter = /eq\(contacts\.organizationId, organizationId\)/gu;
+    expect(handlerSource.match(tenantFilter)).toHaveLength(1);
+    expect(lockHelper.match(tenantFilter)).toHaveLength(1);
   });
 
   test("deletes owned contacts, hides other organizations, and audits each deletion", async () => {

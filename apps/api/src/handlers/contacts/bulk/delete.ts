@@ -5,12 +5,15 @@ import * as v from "valibot";
 import { CONTACT_BULK_DELETE_LIMIT, RESOURCE_TYPE } from "@stll/api-contract";
 
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
+import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { createErrorCapture } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { lockOwnedContactsForBulkDelete } from "@/api/lib/db/aggregate-lock";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { organizationResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -49,6 +52,7 @@ const bulkDeleteContacts = createSafeRootHandler(
     const uniqueIds = [...new Set(body.contactIds)];
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        await lockContactCapacity(tx, organizationId);
         const owned = await lockOwnedContactsForBulkDelete({
           tx,
           organizationId,
@@ -105,11 +109,9 @@ const bulkDeleteContacts = createSafeRootHandler(
                 )
                 .returning({ id: contacts.id });
         const deletedIdSet = new Set(deletedContacts.map(({ id }) => id));
-        for (const contact of ownedContacts) {
-          if (!deletedIdSet.has(contact.id)) {
-            continue;
-          }
-          await recordAuditEvent(tx, {
+        const auditEvents = ownedContacts
+          .filter((contact) => deletedIdSet.has(contact.id))
+          .map((contact): AuditEvent => ({
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
             resourceId: contact.id,
@@ -120,7 +122,9 @@ const bulkDeleteContacts = createSafeRootHandler(
                 new: null,
               },
             },
-          });
+          }));
+        if (auditEvents.length > 0) {
+          await recordAuditEvent(tx, auditEvents);
         }
         const affectedWorkspaceIds = affectedWorkspaces
           .filter(({ contactId }) => deletedIdSet.has(contactId))
@@ -150,5 +154,10 @@ const bulkDeleteContacts = createSafeRootHandler(
     return Result.ok({ outcomes: txResult.outcomes });
   },
 );
+
+declareAggregateMutation(bulkDeleteContacts, {
+  type: "aggregate",
+  aggregates: ["contactCapacity"],
+});
 
 export default bulkDeleteContacts;
