@@ -2,6 +2,8 @@ import { useState } from "react";
 
 import { QueryClientProvider } from "@tanstack/react-query";
 
+import { ScrollArea } from "@stll/ui/scroll-area";
+
 import { PlaybookEditor } from "@/features/knowledge/playbook-editor/playbook-editor";
 import { createPlaybookBaseline } from "@/features/knowledge/playbook-editor/playbook-editor.logic";
 import {
@@ -112,31 +114,41 @@ export const PlaybookEditorPlayground = () => {
 
   return (
     <QueryClientProvider client={client}>
-      <div className="flex flex-col gap-6 p-4">
-        {ready &&
-          Object.entries(playbookEditorFixtures).map(([state, playbookId]) => (
-            <section
-              key={state}
-              data-playground-section={`playbook-editor:${state}`}
-            >
-              <h2 className="text-muted-foreground mb-2 text-xs">{state}</h2>
-              {/* Static capture: actions cannot send fixture data to the API. */}
-              <div inert className="bg-background h-[600px] rounded-lg border">
-                <PlaybookEditor
-                  organizationId={ORGANIZATION_ID}
-                  playbookId={playbookId}
-                  host={{
-                    type: "pane",
-                    tabId: tabId(state),
-                    // Unmount discards the bench instead of flushing a save.
-                    isTabOpen: () => false,
-                    onClose: () => undefined,
-                  }}
-                />
-              </div>
-            </section>
-          ))}
-      </div>
+      {/* Three 600px benches run past the fixture's box: scroll inside it. */}
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        <div className="flex flex-col gap-6 p-4">
+          {ready &&
+            Object.entries(playbookEditorFixtures).map(
+              ([state, playbookId]) => (
+                <section
+                  key={state}
+                  data-playground-section={`playbook-editor:${state}`}
+                >
+                  <h2 className="text-muted-foreground mb-2 text-xs">
+                    {state}
+                  </h2>
+                  {/* Static capture: actions cannot send fixture data to the API. */}
+                  <div
+                    inert
+                    className="bg-background h-[600px] rounded-lg border"
+                  >
+                    <PlaybookEditor
+                      organizationId={ORGANIZATION_ID}
+                      playbookId={playbookId}
+                      host={{
+                        type: "pane",
+                        tabId: tabId(state),
+                        // Unmount discards the bench instead of flushing a save.
+                        isTabOpen: () => false,
+                        onClose: () => undefined,
+                      }}
+                    />
+                  </div>
+                </section>
+              ),
+            )}
+        </div>
+      </ScrollArea>
     </QueryClientProvider>
   );
 };

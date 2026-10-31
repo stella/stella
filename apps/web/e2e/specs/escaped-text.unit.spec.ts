@@ -70,8 +70,8 @@ test("leaves a host's own box to the host", async ({ page }) => {
   await page.setContent(`
     ${STYLE}
     <div style="height: 20px; background: #f4f4f5">
-      <section id="tall" style="height: 200px">
-        <p style="margin: 120px 0 0">Below the host</p>
+      <section id="tall" style="height: 200px; padding-top: 120px">
+        <p style="margin: 0">Below the host</p>
       </section>
     </div>
   `);
