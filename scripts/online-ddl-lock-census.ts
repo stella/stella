@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -407,21 +408,36 @@ const uniqueModuleConstant = (name: string, context: SourceContext) => {
       parent?.type === "ArrayPattern" ||
       (parent?.type === "Property" && parent.value === binding) ||
       (parent?.type === "AssignmentPattern" && parent.left === binding) ||
-      (parent?.type === "RestElement" && parent.argument === binding)
+      (parent?.type === "RestElement" && parent.argument === binding) ||
+      (parent?.type === "TSParameterProperty" && parent.parameter === binding)
     ) {
       binding = parent;
       parent = context.parents.get(binding);
     }
-    if (parent === undefined) {
+    // Derive binding owners from the AST's binding fields, so new owner kinds
+    // enter this switch and must be classified rather than resolving outward.
+    if (
+      parent === undefined ||
+      !(
+        "id" in parent ||
+        "params" in parent ||
+        "param" in parent ||
+        "local" in parent
+      )
+    ) {
       return false;
     }
     switch (parent.type) {
       case "VariableDeclarator":
         return parent.id === binding;
+      case "CatchClause":
+        return parent.param === binding;
       case "ArrowFunctionExpression":
         return parent.params.some((parameter) => parameter === binding);
       case "FunctionDeclaration":
       case "FunctionExpression":
+      case "TSDeclareFunction":
+      case "TSEmptyBodyFunctionExpression":
         return (
           parent.params.some((parameter) => parameter === binding) ||
           parent.id === binding
@@ -439,8 +455,24 @@ const uniqueModuleConstant = (name: string, context: SourceContext) => {
       case "TSEnumDeclaration":
       case "TSModuleDeclaration":
         return parent.id === binding;
-      default:
+      case "TSCallSignatureDeclaration":
+      case "TSConstructSignatureDeclaration":
+      case "TSMethodSignature":
+      case "TSFunctionType":
+      case "TSConstructorType":
+        return parent.params.some((parameter) => parameter === binding);
+      case "ExportSpecifier":
+      case "TSEnumMember":
+      case "TSTypeParameterInstantiation":
+      case "TSTypeParameterDeclaration":
+      case "TSTypeAliasDeclaration":
+      case "TSInterfaceDeclaration":
+      case "TSGlobalDeclaration":
+      case "TSNamespaceExportDeclaration":
         return false;
+      default:
+        parent satisfies never;
+        return panic("Unclassified read-query binding owner");
     }
   });
   const binding = bindings.at(0);
