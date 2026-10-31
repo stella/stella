@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  DEPENDENCY_WASI_WORKERS,
   referencedAssetPath,
   resolveSourceWorkerEntry,
   SOURCE_WORKER_FILE_GLOB,
@@ -90,14 +91,11 @@ const RUNTIME_ASSET_CONTRACTS = [
     label: "Aho-Corasick search WASM",
     pattern: "dist/client/assets/aho-corasick.wasm32-wasi-????????.wasm",
   },
-  {
+  ...Object.values(DEPENDENCY_WASI_WORKERS).map(({ assetStem, label }) => ({
     expectedCount: 1,
-    // The threaded WASI runtime of the engine starts its threads from this
-    // emitted worker; the app is cross-origin isolated (COOP/COEP), so the
-    // threaded build runs in the browser.
-    label: "Engine WASI browser thread worker",
-    pattern: "dist/client/assets/wasi-worker-browser-????????.js",
-  },
+    label,
+    pattern: `dist/client/assets/${assetStem}-????????.js`,
+  })),
   {
     expectedCount: 1,
     // @vscode/diff (the markdown editor's baseline diff) loads its binary via
