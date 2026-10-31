@@ -14,12 +14,14 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
   createDecisionDateCeilingRepair,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS } from "./import-provenance-constraint-validation";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -710,8 +712,11 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
-    "validates monitoring constraint $name once and rejects incomplete startup",
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  ])(
+    "validates registered constraint $name once and rejects incomplete startup",
     async (validation) => {
       const { name } = validation;
       const harness = createHarness({ unvalidatedConstraints: [name] });
@@ -2392,7 +2397,13 @@ const createHarness = ({
             return [{ installed: false }];
           }
           if (query.includes("database_backfill_states")) {
+            if (params.at(0) === CASE_LAW_SITEMAP_PACKING_ENROLLMENT.name) {
+              return [{ last_country: "complete" }];
+            }
             return queryBackfillCheckpoint(query, params);
+          }
+          if (query.includes("transaction_isolation")) {
+            return [{ isolation: "read committed" }];
           }
           if (query.includes("pg_constraint")) {
             const constraintName = params.at(2);

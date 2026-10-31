@@ -10,6 +10,7 @@ import { NewChatIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel } from "@stll/ui/popover";
 
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
+import { BrowserExtensionChip } from "@/components/chat/browser-extension-chip";
 import {
   ChatContextMeter,
   type ChatContextUsage,
@@ -119,8 +120,8 @@ const resolveChatComposerDockRenderState = (
 // The one organism that assembles a chat surface's status row. It
 // derives the standard controls from the thread session itself and
 // renders them through `ComposerStatusRow` in the canonical order
-// (context -> globe -> shield -> extras -> new chat -> mock badge -> model ->
-// meter), so every surface gets the full set by construction and cannot omit
+// (context -> globe -> shield -> extension -> extras -> new chat -> mock badge ->
+// model -> meter), so every surface gets the full set by construction and cannot omit
 // one.
 //
 // Anonymize source: the shield reads and writes the shared per-thread
@@ -252,6 +253,7 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
               size="icon-xs"
             />
           </span>
+          {!disabled && <BrowserExtensionChip />}
           {endExtras}
         </div>
       }

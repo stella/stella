@@ -48,14 +48,15 @@ import {
   PinOffIcon,
   PlusIcon,
   SearchIcon,
-  Trash2Icon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { IdentityText } from "@stll/ui/identity-text";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
+  MenuAnchor,
   MenuItem,
   MenuPopup,
   MenuSeparator,
@@ -106,6 +107,7 @@ import {
   SidebarSeparator,
   useSidebar,
 } from "@/components/sidebar";
+import { SidebarEntityRow } from "@/components/sidebar-entity-row";
 import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
@@ -138,7 +140,6 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -159,6 +160,7 @@ import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import { localISODate } from "@/lib/local-iso-date";
 import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { usePinnedStore } from "@/lib/pinned-store";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { queryView } from "@/lib/query-view.logic";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
@@ -267,7 +269,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
       }
     }),
   );
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const publicLawEnabled = isPublicLawEnabled();
   const workflowsPreviewEnabled = useWorkflowsPreviewEnabled();
   const inboxPreviewEnabled = useInboxPreviewEnabled();
   const timeBillingPreviewEnabled = useTimeBillingPreviewEnabled();
@@ -280,7 +282,7 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
   });
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includeInbox: inboxPreviewEnabled,
-    includePublicLaw: publicLawPreviewEnabled,
+    includePublicLaw: publicLawEnabled,
     // The public /tools catalogue stays out of the authenticated app
     // nav; signed-in users manage tools via /knowledge/tools instead.
     includePublicTools: false,
@@ -378,11 +380,11 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const handleCreateWorkspace = () => {
+  const handleCreateWorkspace = (opener?: HTMLElement) => {
     if (!canCreateMatter) {
       return;
     }
-    openCreateMatter();
+    openCreateMatter(opener ? { opener } : undefined);
   };
 
   // The delete + toast + cache invalidation are owned by the shared
@@ -747,62 +749,60 @@ export const AppSidebar = ({ surface }: AppSidebarProps) => {
               return (
                 <Fragment key={item.id}>
                   <NavContextMenu config={navTarget.contextMenu}>
-                    <SidebarMenuItem>
-                      {item.kind === "action" ? (
-                        <SidebarMenuButton
-                          onClick={navTarget.action}
-                          tooltip={label}
+                    {item.kind === "action" ? (
+                      <SidebarMenuButton
+                        onClick={navTarget.action}
+                        tooltip={label}
+                      >
+                        <Icon />
+                        <span>{label}</span>
+                      </SidebarMenuButton>
+                    ) : (
+                      <SidebarMenuButton asChild tooltip={label}>
+                        <Link
+                          activeProps={{ "data-active": true }}
+                          to={item.to}
                         >
                           <Icon />
                           <span>{label}</span>
-                        </SidebarMenuButton>
-                      ) : (
-                        <SidebarMenuButton asChild tooltip={label}>
-                          <Link
-                            activeProps={{ "data-active": true }}
-                            to={item.to}
-                          >
-                            <Icon />
-                            <span>{label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      )}
-                      {(() => {
-                        if (showNavBadges) {
-                          return <NavBadge digit={digit} />;
-                        }
-                        if (item.id === "search") {
-                          return (
-                            <SidebarMenuBadge>
-                              <kbd className="text-muted-foreground text-3xs">
-                                {formatHotkeyForPlatform(
-                                  searchHotkey,
-                                  hotkeyPlatform,
-                                )}
-                              </kbd>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        if (item.id === "timesheets") {
-                          return (
-                            <PendingApprovalsNavBadge
-                              organizationId={user.activeOrganizationId}
-                              userId={user.id}
-                            />
-                          );
-                        }
-                        if (item.id === "inbox" && openInboxCount > 0) {
-                          return (
-                            <SidebarMenuBadge>
-                              <span className="text-muted-foreground text-3xs tabular-nums">
-                                {format.number(openInboxCount)}
-                              </span>
-                            </SidebarMenuBadge>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </SidebarMenuItem>
+                        </Link>
+                      </SidebarMenuButton>
+                    )}
+                    {(() => {
+                      if (showNavBadges) {
+                        return <NavBadge digit={digit} />;
+                      }
+                      if (item.id === "search") {
+                        return (
+                          <SidebarMenuBadge>
+                            <kbd className="text-muted-foreground text-3xs">
+                              {formatHotkeyForPlatform(
+                                searchHotkey,
+                                hotkeyPlatform,
+                              )}
+                            </kbd>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      if (item.id === "timesheets") {
+                        return (
+                          <PendingApprovalsNavBadge
+                            organizationId={user.activeOrganizationId}
+                            userId={user.id}
+                          />
+                        );
+                      }
+                      if (item.id === "inbox" && openInboxCount > 0) {
+                        return (
+                          <SidebarMenuBadge>
+                            <span className="text-muted-foreground text-3xs tabular-nums">
+                              {format.number(openInboxCount)}
+                            </span>
+                          </SidebarMenuBadge>
+                        );
+                      }
+                      return null;
+                    })()}
                   </NavContextMenu>
                 </Fragment>
               );
@@ -950,7 +950,7 @@ type ContextAction = {
   id: string;
   label: string;
   icon: React.ReactNode;
-  onClick: () => void;
+  onClick: (opener?: HTMLElement) => void;
   variant?: "destructive";
 };
 
@@ -967,6 +967,7 @@ const NavContextMenu = ({
   children: React.ReactNode;
 }): React.ReactNode => {
   const [open, setOpen] = useState(false);
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [anchor, setAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -975,13 +976,17 @@ const NavContextMenu = ({
   const hasContent = config.primaryAction !== undefined || hasRecents;
 
   if (!hasContent) {
-    return children;
+    return <SidebarMenuItem>{children}</SidebarMenuItem>;
   }
 
   return (
-    <div
-      className="contents"
+    <SidebarMenuItem
       onContextMenu={containedEventHandler((e) => {
+        if (!contextMenuBelongsTo(e)) {
+          return;
+        }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         e.stopPropagation();
         const x = e.clientX;
@@ -1002,13 +1007,14 @@ const NavContextMenu = ({
         }}
         open={open}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={anchor ?? undefined}>
+        <MenuAnchor />
+        <MenuPopup anchor={anchor ?? undefined} finalFocus={() => returnFocus}>
           {config.primaryAction && (
-            <MenuItem onClick={config.primaryAction.onClick}>
+            <MenuItem
+              onClick={() =>
+                config.primaryAction?.onClick(returnFocus ?? undefined)
+              }
+            >
               {config.primaryAction.icon}
               {config.primaryAction.label}
             </MenuItem>
@@ -1022,7 +1028,7 @@ const NavContextMenu = ({
                 item.variant === "destructive" && "text-destructive",
               )}
               key={item.id}
-              onClick={item.onClick}
+              onClick={() => item.onClick(returnFocus ?? undefined)}
             >
               {item.icon}
               {item.label}
@@ -1030,7 +1036,7 @@ const NavContextMenu = ({
           ))}
         </MenuPopup>
       </Menu>
-    </div>
+    </SidebarMenuItem>
   );
 };
 
@@ -1380,6 +1386,24 @@ export const MatterItem = ({
     { onRename: startRename, onDeleted: () => onDeleted(ws.id) },
   );
 
+  const [matterReturnFocus, setMatterReturnFocus] =
+    useState<HTMLElement | null>(null);
+  const handleMatterContextMenu = (e: React.MouseEvent) => {
+    if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
+      return;
+    }
+    const control = e.currentTarget.querySelector("button,a[href]");
+    setMatterReturnFocus(control instanceof HTMLElement ? control : null);
+    e.preventDefault();
+    e.stopPropagation();
+    const x = e.clientX;
+    const y = e.clientY;
+    setCtxAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+    setMenuOpen(true);
+  };
+
   if (rename.state.mode === "edit") {
     return (
       <SidebarMenuItem>
@@ -1406,27 +1430,16 @@ export const MatterItem = ({
   return (
     <>
       <SidebarMenuItem
+        data-context-menu-target={ws.id}
+        data-entity-id={ws.id}
+        data-entity-kind="matter"
         className={cn(
           isDropTarget &&
             "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
           isEntityDropTarget &&
             "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
         )}
-        data-entity-id={ws.id}
-        data-entity-kind="matter"
-        onContextMenu={containedEventHandler((e) => {
-          if (!contextMenuBelongsTo(e, { id: ws.id, kind: "matter" })) {
-            return;
-          }
-          e.preventDefault();
-          e.stopPropagation();
-          const x = e.clientX;
-          const y = e.clientY;
-          setCtxAnchor({
-            getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-          });
-          setMenuOpen(true);
-        })}
+        onContextMenu={containedEventHandler(handleMatterContextMenu)}
         ref={dropRef}
       >
         {hasExpandableContent ? (
@@ -1507,12 +1520,7 @@ export const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText
-                as="span"
-                className="overflow-hidden text-ellipsis whitespace-pre"
-              >
-                {ws.name}
-              </BidiText>
+              <IdentityText className="whitespace-pre">{ws.name}</IdentityText>
               <Tooltip
                 content={formatFullTimestamp(ws.lastActivityAt)}
                 render={
@@ -1569,6 +1577,7 @@ export const MatterItem = ({
               open={menuOpen}
             >
               <MenuTrigger
+                onClick={(event) => setMatterReturnFocus(event.currentTarget)}
                 aria-label={t("common.actions")}
                 className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
                 tooltip={t("common.actions")}
@@ -1578,6 +1587,7 @@ export const MatterItem = ({
               <MenuPopup
                 align="start"
                 anchor={ctxAnchor ?? undefined}
+                finalFocus={() => matterReturnFocus}
                 side="right"
                 sideOffset={4}
               >
@@ -1678,9 +1688,8 @@ export const MatterActivityList = ({
     id: string;
     title: string;
   } | null>(null);
-  const [contextAnchor, setContextAnchor] = useState<{
-    getBoundingClientRect: () => DOMRect;
-  } | null>(null);
+  const [deleteReturnFocus, setDeleteReturnFocus] =
+    useState<HTMLElement | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const {
     data,
@@ -1814,12 +1823,9 @@ export const MatterActivityList = ({
                   }
                 />
               )}
-              <BidiText
-                as="span"
-                className="min-w-0 flex-1 truncate text-start"
-              >
+              <IdentityText className="min-w-0 flex-1 text-start">
                 {title}
-              </BidiText>
+              </IdentityText>
               {relativeTime ? (
                 <Tooltip
                   content={formatFullTimestamp(item.activityAt)}
@@ -1833,50 +1839,43 @@ export const MatterActivityList = ({
             </>
           );
 
+          if (item.type === "entity") {
+            return (
+              <SidebarEntityRow
+                activeOrganizationId={activeOrganizationId}
+                entityId={item.id}
+                entityKind={item.entityKind}
+                onDelete={(opener) => {
+                  setContextTarget({ id: item.id, title: item.title });
+                  setDeleteReturnFocus(opener);
+                  setDeleteOpen(true);
+                }}
+                key={`${item.type}-${item.id}`}
+                name={title}
+                onOpen={() =>
+                  detached(openEntity(item), "app-sidebar.open-entity")
+                }
+                workspaceId={workspaceId}
+                userId={userId}
+              >
+                {content}
+              </SidebarEntityRow>
+            );
+          }
           return (
-            <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
-              {item.type === "thread" ? (
-                <MatterActivityRow>
-                  <Link
-                    activeProps={{ "data-active": true }}
-                    params={{ threadId: item.id, workspaceId }}
-                    to="/chat/workspaces/$workspaceId/$threadId"
-                  >
-                    {content}
-                  </Link>
-                </MatterActivityRow>
-              ) : (
-                <MatterActivityRow>
-                  <button
-                    data-entity-id={item.id}
-                    data-entity-kind={item.entityKind}
-                    onContextMenu={(event) => {
-                      if (
-                        !contextMenuBelongsTo(event, {
-                          id: item.id,
-                          kind: item.entityKind,
-                        })
-                      ) {
-                        return;
-                      }
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const x = event.clientX;
-                      const y = event.clientY;
-                      setContextTarget({ id: item.id, title: item.title });
-                      setContextAnchor({
-                        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-                      });
-                    }}
-                    onClick={() => {
-                      detached(openEntity(item), "app-sidebar.open-entity");
-                    }}
-                    type="button"
-                  >
-                    {content}
-                  </button>
-                </MatterActivityRow>
-              )}
+            <SidebarMenuSubItem
+              data-context-menu-target={item.id}
+              key={`${item.type}-${item.id}`}
+            >
+              <MatterActivityRow>
+                <Link
+                  activeProps={{ "data-active": true }}
+                  params={{ threadId: item.id, workspaceId }}
+                  to="/chat/workspaces/$workspaceId/$threadId"
+                >
+                  {content}
+                </Link>
+              </MatterActivityRow>
             </SidebarMenuSubItem>
           );
         })}
@@ -1898,27 +1897,8 @@ export const MatterActivityList = ({
           </SidebarMenuSubItem>
         ) : null}
       </SidebarMenuSub>
-      <Menu
-        onOpenChange={(open) => {
-          if (!open) {
-            setContextAnchor(null);
-          }
-        }}
-        open={contextAnchor !== null}
-      >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span aria-hidden="true" className="sr-only" tabIndex={-1} />}
-        />
-        <MenuPopup anchor={contextAnchor ?? undefined}>
-          <MenuItem onClick={() => setDeleteOpen(true)} variant="destructive">
-            <Trash2Icon />
-            {t("common.delete")}
-          </MenuItem>
-        </MenuPopup>
-      </Menu>
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-        <AlertDialogPopup>
+        <AlertDialogPopup finalFocus={() => deleteReturnFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("workspaces.deleteItem")}</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1961,10 +1941,11 @@ const SidebarContextArea = ({
   children,
 }: {
   canCreateWorkspace: boolean;
-  onCreateWorkspace: () => void;
+  onCreateWorkspace: (opener?: HTMLElement) => void;
   children?: React.ReactNode;
 }) => {
   const t = useTranslations();
+  const [returnFocus, setReturnFocus] = useState<HTMLElement | null>(null);
   const [ctxOpen, setCtxOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
@@ -1974,6 +1955,11 @@ const SidebarContextArea = ({
     <div
       className="flex min-h-0 flex-1 flex-col"
       onContextMenu={containedEventHandler((e) => {
+        if (!contextMenuBelongsTo(e)) {
+          return;
+        }
+        const control = e.currentTarget.querySelector("button,a[href]");
+        setReturnFocus(control instanceof HTMLElement ? control : null);
         e.preventDefault();
         const x = e.clientX;
         const y = e.clientY;
@@ -1993,13 +1979,15 @@ const SidebarContextArea = ({
         }}
         open={ctxOpen}
       >
-        <MenuTrigger
-          nativeButton={false}
-          render={<span className="sr-only" />}
-        />
-        <MenuPopup anchor={ctxAnchor ?? undefined}>
+        <MenuAnchor />
+        <MenuPopup
+          anchor={ctxAnchor ?? undefined}
+          finalFocus={() => returnFocus}
+        >
           {canCreateWorkspace && (
-            <MenuItem onClick={onCreateWorkspace}>
+            <MenuItem
+              onClick={() => onCreateWorkspace(returnFocus ?? undefined)}
+            >
               <PlusIcon />
               {t("common.newMatter")}
             </MenuItem>

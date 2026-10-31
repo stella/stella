@@ -89,6 +89,63 @@ const separatesLabelledLines = (
   afterNext?.type === "paragraph" &&
   OPENS_ON_LABEL_RE.test(afterNext.plainText.trim());
 
+/** Units a table row prints beside its figures, compared lowercased. */
+const TABLE_UNITS: ReadonlySet<string> = new Set([
+  "%",
+  "‰",
+  "°",
+  "°c",
+  "m",
+  "cm",
+  "mm",
+  "km",
+  "m2",
+  "m3",
+  "m/s",
+  "km/h",
+  "kg",
+  "g",
+  "mg",
+  "t",
+  "l",
+  "ml",
+  "s",
+  "min",
+  "h",
+  "kw",
+  "mw",
+  "kwh",
+  "mwh",
+  "db",
+  "pa",
+  "hz",
+]);
+/** Tokens carrying a digit a row needs before it can be a table row. */
+const TABLE_MIN_FIGURES = 3;
+/**
+ * Share of a row's tokens that must be figures or units, strictly above:
+ * a citation of a provision (`§ 75 Abs. 1 und 75 Abs. 2 der GewO 1994`)
+ * stays at half and is prose.
+ */
+const TABLE_FIGURE_SHARE = 0.5;
+const TRAILING_PUNCTUATION_RE = /[,;.)]$/u;
+
+/**
+ * A printed table row, not prose: it carries no sentence a page could cut,
+ * so neither it nor its neighbour is judged for one.
+ */
+const isTableRow = (text: string): boolean => {
+  const tokens = text.split(/\s+/u).filter((token) => token.length > 0);
+  const figures = tokens.filter((token) => /\d/u.test(token)).length;
+  const units = tokens.filter((token) =>
+    TABLE_UNITS.has(token.toLowerCase().replace(TRAILING_PUNCTUATION_RE, "")),
+  ).length;
+  return (
+    figures >= TABLE_MIN_FIGURES &&
+    (figures + units) / tokens.length > TABLE_FIGURE_SHARE
+  );
+};
+
 const excerptOf = (text: string): string => text.slice(0, EXCERPT_CHARS);
 
 /** Every printed-page structure the blocks carry, in document order. */
@@ -125,6 +182,8 @@ export const structureFidelityIn = (
       next?.type === "paragraph" &&
       next.role === block.role &&
       !OPENS_ON_LABEL_RE.test(nextText) &&
+      !isTableRow(text) &&
+      !isTableRow(nextText) &&
       !separatesLabelledLines(nextText, blocks[index + 2]) &&
       continuesAcrossPageBreak(text, nextText)
     ) {

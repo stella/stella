@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, isNull, like } from "drizzle-orm";
 import { appendFile } from "node:fs/promises";
 
@@ -276,6 +277,31 @@ type VariantIngestOptions = {
   signal: AbortSignal;
 };
 
+/** A rejected write remains retryable rather than completing the listed variant. */
+export const classifyVariantWrite = (
+  processed: Awaited<ReturnType<typeof processDecision>>,
+): EcjVariantIngestOutcome => {
+  switch (processed.status) {
+    case "error":
+      return { type: "retryable", reason: errorTag(processed.error) };
+    case "ok": {
+      const outcome = processed.value;
+      switch (outcome.status) {
+        case PROCESS_DECISION_STATUS.RETRYABLE:
+          return { type: "retryable", reason: outcome.reason };
+        case PROCESS_DECISION_STATUS.COMPLETE:
+          return { type: "written" };
+        default:
+          outcome satisfies never;
+          return panic("Unknown decision process outcome");
+      }
+    }
+    default:
+      processed satisfies never;
+      return panic("Unknown decision write result");
+  }
+};
+
 /** Fetch one variant through the adapter and write it through the pipeline. */
 const ingestVariantWith = ({
   ingestionDb,
@@ -322,9 +348,7 @@ const ingestVariantWith = ({
         },
         resolveSourceContract,
       );
-      return processed.status === PROCESS_DECISION_STATUS.RETRYABLE
-        ? { type: "retryable", reason: processed.reason }
-        : { type: "written" };
+      return classifyVariantWrite(processed);
     } catch (error) {
       return { type: "retryable", reason: errorTag(error) };
     }

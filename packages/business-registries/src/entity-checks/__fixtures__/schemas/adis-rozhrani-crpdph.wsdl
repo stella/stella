@@ -1,0 +1,474 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<wsdl:definitions xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+  xmlns:tns="http://adis.mfcr.cz/rozhraniCRPDPH/" xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/"
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema" name="rozhraniCRPDPH"
+  targetNamespace="http://adis.mfcr.cz/rozhraniCRPDPH/">
+  <wsdl:types>
+    <xsd:schema elementFormDefault="qualified"
+      targetNamespace="http://adis.mfcr.cz/rozhraniCRPDPH/">
+      
+      <xsd:complexType name="StatusNespolehlivyPlatceRequest">
+        <xsd:sequence>
+          <xsd:element maxOccurs="unbounded" minOccurs="1"
+            name="dic" type="tns:DICType" />
+        </xsd:sequence>
+      </xsd:complexType>
+      
+      <xsd:element name="StatusNespolehlivyPlatceRequest" type="tns:StatusNespolehlivyPlatceRequest"/>
+      <xsd:element name="StatusNespolehlivyPlatceRozsirenyRequest" type="tns:StatusNespolehlivyPlatceRequest"/>
+      <xsd:element name="StatusNespolehlivySubjektRozsirenyRequest" type="tns:StatusNespolehlivyPlatceRequest"/>
+      <xsd:element name="StatusNespolehlivySubjektRozsirenyV2Request" type="tns:StatusNespolehlivyPlatceRequest"/>      
+      
+      <xsd:element name="StatusNespolehlivyPlatceResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element maxOccurs="1" minOccurs="1" name="status"
+              type="tns:StatusType" />
+            <xsd:element maxOccurs="unbounded" minOccurs="0"
+              name="statusPlatceDPH" type="tns:InformaceOPlatciType" />
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="StatusNespolehlivyPlatceRozsirenyResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element maxOccurs="1" minOccurs="1" name="status"
+              type="tns:StatusType" />
+            <xsd:element maxOccurs="unbounded" minOccurs="0"
+              name="statusPlatceDPH" type="tns:InformaceOPlatciRozsireneType" />
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="StatusNespolehlivySubjektRozsirenyResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element maxOccurs="1" minOccurs="1" name="status"
+              type="tns:StatusType" />
+            <xsd:element maxOccurs="unbounded" minOccurs="0"
+              name="statusSubjektu" type="tns:InformaceOSubjektuRozsireneType" />
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+
+      <xsd:element name="SeznamNespolehlivyPlatceResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element maxOccurs="1" minOccurs="1" name="status"
+              type="tns:StatusType" />
+            <xsd:element maxOccurs="unbounded" minOccurs="0"
+              name="statusPlatceDPH" type="tns:InformaceOPlatciType" />
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      
+      <xsd:element name="SeznamNespolehlivyPlatceRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>      
+
+      <xsd:simpleType name="DICType">
+        <xsd:restriction base="xsd:string">
+          <xsd:pattern value="\d{1,10}" />
+        </xsd:restriction>
+      </xsd:simpleType>
+
+      <xsd:complexType name="InformaceOPlatciType">
+        <xsd:sequence>
+          <xsd:element maxOccurs="1" minOccurs="0"
+            name="zverejneneUcty" type="tns:SeznamZverejnenychUctuType">
+            <xsd:annotation>
+              <xsd:documentation>Seznam zveřejněných účtů plátce DPH.
+              </xsd:documentation>
+            </xsd:annotation>
+          </xsd:element>
+        </xsd:sequence>
+        <xsd:attribute name="dic" type="tns:DICType" use="required" />
+        <xsd:attribute name="nespolehlivyPlatce" type="tns:NespolehlivyPlatceType"
+          use="required" />
+        <xsd:attribute name="datumZverejneniNespolehlivosti"
+          type="xsd:date" use="optional">
+          <xsd:annotation>
+            <xsd:documentation>Datum zveřejnění nespolehlivosti plátce
+              DPH. Je uvedenou pouze v případě, že
+              nespolehlivyPlatce="ANO".
+            </xsd:documentation>
+          </xsd:annotation>
+        </xsd:attribute>
+        <xsd:attribute name="cisloFu" use="optional">
+          <xsd:simpleType>
+            <xsd:restriction base="xsd:string">
+              <xsd:pattern value="\d{2,3}" />
+            </xsd:restriction>
+          </xsd:simpleType>
+        </xsd:attribute>
+      </xsd:complexType>
+      
+      <xsd:complexType name="InformaceOPlatciRozsireneType" >
+        <xsd:annotation>
+          <xsd:documentation>Informace o plátci rozšířené o název a adresu subjektu</xsd:documentation>
+        </xsd:annotation>
+        <xsd:complexContent>
+          <xsd:extension base="tns:InformaceOPlatciType">
+                <xsd:sequence>
+                    <xsd:element name="nazevSubjektu" type="xsd:string" minOccurs="0" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Název subjektu
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+                    <xsd:element name="adresa" type="tns:Adresa" minOccurs="0" maxOccurs="1" />
+                </xsd:sequence>
+          </xsd:extension>
+        </xsd:complexContent>
+      </xsd:complexType>
+      
+      <xsd:complexType name="InformaceOSubjektuRozsireneType" >
+        <xsd:annotation>
+          <xsd:documentation>Informace o plátci DPH/identifikované osobě rozšířené o název a adresu subjektu</xsd:documentation>
+        </xsd:annotation>
+        <xsd:complexContent>
+          <xsd:extension base="tns:InformaceOPlatciType">       
+            <xsd:sequence>                      
+              <xsd:element name="nazevSubjektu" type="xsd:string" minOccurs="0" maxOccurs="1">
+                <xsd:annotation>
+                  <xsd:documentation>Název subjektu
+                  </xsd:documentation>
+                </xsd:annotation>
+              </xsd:element>
+              <xsd:element name="adresa" type="tns:Adresa" minOccurs="0" maxOccurs="1" />
+            </xsd:sequence>
+        <xsd:attribute name="typSubjektu" type="tns:TypSubjektuDPHType" use="required">
+                <xsd:annotation>
+                  <xsd:documentation>Typ subjektu DPH
+                  </xsd:documentation>
+                </xsd:annotation>
+              </xsd:attribute>            
+          </xsd:extension>
+        </xsd:complexContent>
+      </xsd:complexType>
+
+      <xsd:complexType name="Adresa">
+        <xsd:annotation>
+            <xsd:documentation>
+            Strukturovaná adresa subjektu
+            </xsd:documentation>
+        </xsd:annotation>
+        <xsd:sequence>
+            <xsd:element name="uliceCislo" type="xsd:string" minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Ulice vč. čísla popisného a orientačního
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="castObce" type="xsd:string" minOccurs="0" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Část obce nebo městská část
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="mesto" type="xsd:string" minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Město
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="psc" type="xsd:string" minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Poštovní směrovací číslo resp. ZIP
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+            <xsd:element name="stat" type="xsd:string" minOccurs="1" maxOccurs="1">
+              <xsd:annotation>
+                <xsd:documentation>Stát
+                </xsd:documentation>
+              </xsd:annotation>
+            </xsd:element>
+        </xsd:sequence>
+    </xsd:complexType>
+
+      <xsd:simpleType name="NespolehlivyPlatceType">
+        <xsd:annotation>
+          <xsd:documentation>Může nabývat hodnot ANO (plátce DPH je
+            nespolehlivý), NE (plátce DPH je spolehlivý), NENALEZEN (DIČ
+            nebylo nalezeno v registru plátců DPH).
+          </xsd:documentation>
+        </xsd:annotation>
+        <xsd:restriction base="xsd:string">
+          <xsd:enumeration value="NE" />
+          <xsd:enumeration value="ANO" />
+          <xsd:enumeration value="NENALEZEN" />
+        </xsd:restriction>
+      </xsd:simpleType>
+      
+      <xsd:simpleType name="TypSubjektuDPHType">
+        <xsd:annotation>
+          <xsd:documentation>Typ subjektu DPH - plátce DPH/identifikovaná osoba.
+          </xsd:documentation>
+        </xsd:annotation>
+        <xsd:restriction base="xsd:string">
+          <xsd:enumeration value="PLATCE_DPH" />
+          <xsd:enumeration value="IDENTIFIKOVANA_OSOBA" />
+          <xsd:enumeration value="SKUPINA_DPH" />
+          <xsd:enumeration value="NENALEZEN" />
+          <xsd:enumeration value="NESPOLEHLIVA_OSOBA" />
+        </xsd:restriction>
+      </xsd:simpleType>
+
+      <xsd:simpleType name="BezVypisuUctuType">
+        <xsd:annotation>
+          <xsd:documentation>
+          </xsd:documentation>
+        </xsd:annotation>
+        <xsd:restriction base="xsd:string">
+          <xsd:enumeration value="ANO" />
+        </xsd:restriction>
+      </xsd:simpleType>      
+
+      <xsd:complexType name="StandardniUcetType">
+        <xsd:attribute name="predcisli" use="optional">
+          <xsd:simpleType>
+            <xsd:restriction base="xsd:string">
+              <xsd:pattern value="\d{1,6}" />
+            </xsd:restriction>
+          </xsd:simpleType>
+        </xsd:attribute>
+        <xsd:attribute name="cislo" use="required">
+          <xsd:simpleType>
+            <xsd:restriction base="xsd:string">
+              <xsd:pattern value="\d{1,10}" />
+            </xsd:restriction>
+          </xsd:simpleType>
+        </xsd:attribute>
+        <xsd:attribute name="kodBanky" use="required">
+          <xsd:simpleType>
+            <xsd:restriction base="xsd:string">
+              <xsd:pattern value="\d{4}" />
+            </xsd:restriction>
+          </xsd:simpleType>
+        </xsd:attribute>
+      </xsd:complexType>
+
+
+      <xsd:complexType name="ZverejnenyUcetType">
+        <xsd:sequence>
+          <xsd:choice>
+            <xsd:element name="standardniUcet" type="tns:StandardniUcetType">
+            </xsd:element>
+            <xsd:element name="nestandardniUcet" type="tns:NestandardniUcetType">
+            </xsd:element>
+          </xsd:choice>
+        </xsd:sequence>
+        <xsd:attribute name="datumZverejneni" type="xsd:date"
+          use="required">
+          <xsd:annotation>
+            <xsd:documentation>Datum zveřejnění registrace účtu plátce
+              DPH.
+            </xsd:documentation>
+          </xsd:annotation>
+        </xsd:attribute>
+        <xsd:attribute name="datumZverejneniUkonceni"
+          type="xsd:date" use="optional" />
+      </xsd:complexType>
+
+
+      <xsd:complexType name="SeznamZverejnenychUctuType">
+        <xsd:sequence>
+          <xsd:element maxOccurs="unbounded" minOccurs="1"
+            name="ucet" type="tns:ZverejnenyUcetType" />
+        </xsd:sequence>
+      </xsd:complexType>
+
+
+      <xsd:complexType name="NestandardniUcetType">
+        <xsd:attribute name="cislo" type="xsd:string" use="required" />
+      </xsd:complexType>
+
+      <xsd:complexType name="StatusType">
+        <xsd:annotation>
+          <xsd:documentation>Hodnoty statusCode a jim odpovídající
+            hodnoty statusText:
+            0 … OK
+            1 … OK - příliš mnoho DIČ v dotazu.
+            Vrácenou pouze prvních 100 subjektů.
+            Tento status se vztahuje pouze na operaci getStatusNespolehlivyPlatce,
+            operace getSeznamNespolehlivyPlatce vrací vždy všechny
+            nespolehlivé plátce.
+            2 … Technologická odstávka služby -
+            0:00-0:10.
+            3 … Služba nedostupná
+
+            Atribut bezVypisuUctu urcuje, zda jsou v odpovědi vynechány seznamy účtů,
+            pokud odpověď obsahuje seznamy účtů, pak není tento atribut
+            v odpovědi uveden. Vatahuje se pouze k operaci
+            getSeznamNespolehlivyPlatce.
+          </xsd:documentation>
+        </xsd:annotation>
+        <xsd:attribute name="odpovedGenerovana" type="xsd:date"
+          use="required" />
+        <xsd:attribute name="statusCode" type="xsd:int"
+          use="required" />
+        <xsd:attribute name="statusText" type="xsd:string"
+          use="required" />
+        <xsd:attribute name="bezVypisuUctu" use="optional"  type="tns:BezVypisuUctuType"/>          
+      </xsd:complexType>
+    </xsd:schema>
+  </wsdl:types>
+  <wsdl:message name="getStatusNespolehlivyPlatceRequestMessage">
+    <wsdl:part element="tns:StatusNespolehlivyPlatceRequest"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getStatusNespolehlivyPlatceResponseMessage">
+    <wsdl:part element="tns:StatusNespolehlivyPlatceResponse"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getSeznamNespolehlivyPlatceRequestMessage">
+    <wsdl:part element="tns:SeznamNespolehlivyPlatceRequest"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getSeznamNespolehlivyPlatceResponseMessage">
+    <wsdl:part element="tns:SeznamNespolehlivyPlatceResponse"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getStatusNespolehlivyPlatceRozsirenyRequestMessage">
+    <wsdl:part element="tns:StatusNespolehlivyPlatceRozsirenyRequest"
+      name="parameters" />
+  </wsdl:message>  
+  <wsdl:message name="getStatusNespolehlivyPlatceRozsirenyResponseMessage">
+    <wsdl:part element="tns:StatusNespolehlivyPlatceRozsirenyResponse"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getStatusNespolehlivySubjektRozsirenyRequestMessage">
+    <wsdl:part element="tns:StatusNespolehlivySubjektRozsirenyRequest"
+      name="parameters" />
+  </wsdl:message>  
+  <wsdl:message name="getStatusNespolehlivySubjektRozsirenyResponseMessage">
+    <wsdl:part element="tns:StatusNespolehlivySubjektRozsirenyResponse"
+      name="parameters" />
+  </wsdl:message>
+  <wsdl:message name="getStatusNespolehlivySubjektRozsirenyV2RequestMessage">
+    <wsdl:part element="tns:StatusNespolehlivySubjektRozsirenyV2Request"
+      name="parameters" />
+  </wsdl:message>  
+  <wsdl:message name="getStatusNespolehlivySubjektRozsirenyV2ResponseMessage">
+    <wsdl:part element="tns:StatusNespolehlivySubjektRozsirenyResponse"
+      name="parameters" />
+  </wsdl:message>  
+  <wsdl:portType name="rozhraniCRPDPH">
+    <wsdl:operation name="getStatusNespolehlivyPlatce">
+      <wsdl:documentation>Pro zadaná DIČ vratí informace o
+        nespolehlivosti plátce DPH a seznam jeho zveřejněných účtů.
+      </wsdl:documentation>
+      <wsdl:input message="tns:getStatusNespolehlivyPlatceRequestMessage"
+        name="getStatusNespolehlivyPlatceRequest" />
+      <wsdl:output message="tns:getStatusNespolehlivyPlatceResponseMessage"
+        name="getStatusNespolehlivyPlatceResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="getSeznamNespolehlivyPlatce">
+      <wsdl:documentation>Vrátí seznam všech nespolehlivých plátců
+      </wsdl:documentation>
+      <wsdl:input message="tns:getSeznamNespolehlivyPlatceRequestMessage"
+        name="getSeznamNespolehlivyPlatceRequest" />
+      <wsdl:output message="tns:getSeznamNespolehlivyPlatceResponseMessage"
+        name="getSeznamNespolehlivyPlatceResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivyPlatceRozsireny">
+      <wsdl:documentation>Pro zadaná DIČ vratí informace o
+        nespolehlivosti plátce DPH a seznam jeho zveřejněných účtů. 
+        Ke každému plácti vrátí navíc název a adresu subjektu.
+      </wsdl:documentation>
+      <wsdl:input message="tns:getStatusNespolehlivyPlatceRozsirenyRequestMessage"
+        name="getStatusNespolehlivyPlatceRequest" />
+      <wsdl:output message="tns:getStatusNespolehlivyPlatceRozsirenyResponseMessage"
+        name="getStatusNespolehlivyPlatceRozsirenyResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivySubjektRozsireny">
+      <wsdl:documentation>
+        Tato operace je zastaralá!!! Je nahrazena getStatusNespolehlivySubjektRozsirenyV2.
+        Pro zadaná DIČ vratí informace o
+        nespolehlivosti plátce DPH/identifikované osobě a seznam jeho zveřejněných účtů. 
+        Ke každému plácti/identifikované osobě vrátí navíc název a adresu subjektu.
+      </wsdl:documentation>
+      <wsdl:input message="tns:getStatusNespolehlivySubjektRozsirenyRequestMessage"
+        name="getStatusNespolehlivySubjektRequest" />
+      <wsdl:output message="tns:getStatusNespolehlivySubjektRozsirenyResponseMessage"
+        name="getStatusNespolehlivySubjektRozsirenyResponse" />
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivySubjektRozsirenyV2">
+      <wsdl:documentation>Pro zadaná DIČ vratí informace o
+        nespolehlivosti plátce DPH/identifikované osobě/nespolehlivé osobě a seznam jeho zveřejněných účtů. 
+        Ke každému plácti/identifikované osobě/nespolehlivé osobě vrátí navíc název a adresu subjektu.
+      </wsdl:documentation>
+      <wsdl:input message="tns:getStatusNespolehlivySubjektRozsirenyV2RequestMessage"
+        name="getStatusNespolehlivySubjektRozsirenyV2Request" />
+      <wsdl:output message="tns:getStatusNespolehlivySubjektRozsirenyV2ResponseMessage"
+        name="getStatusNespolehlivySubjektRozsirenyV2Response" />
+    </wsdl:operation>    
+  </wsdl:portType>
+
+  <wsdl:binding name="rozhraniCRPDPHSOAP" type="tns:rozhraniCRPDPH">
+    <soap:binding style="document"
+      transport="http://schemas.xmlsoap.org/soap/http" />
+    <wsdl:operation name="getStatusNespolehlivyPlatce">
+      <soap:operation
+        soapAction="http://adis.mfcr.cz/rozhraniCRPDPH/getStatusNespolehlivyPlatce" />
+      <wsdl:input name="getStatusNespolehlivyPlatceRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="getStatusNespolehlivyPlatceResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getSeznamNespolehlivyPlatce">
+      <soap:operation
+        soapAction="http://adis.mfcr.cz/rozhraniCRPDPH/getSeznamNespolehlivyPlatce" />
+      <wsdl:input name="getSeznamNespolehlivyPlatceRequest">
+        <soap:body use="literal" />
+      </wsdl:input>        
+      <wsdl:output name="getSeznamNespolehlivyPlatceResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivyPlatceRozsireny">
+      <soap:operation
+        soapAction="http://adis.mfcr.cz/rozhraniCRPDPH/getStatusNespolehlivyPlatceRozsireny" />
+      <wsdl:input name="getStatusNespolehlivyPlatceRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="getStatusNespolehlivyPlatceRozsirenyResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivySubjektRozsireny">
+      <soap:operation
+        soapAction="http://adis.mfcr.cz/rozhraniCRPDPH/getStatusNespolehlivySubjektRozsireny" />
+      <wsdl:input name="getStatusNespolehlivySubjektRequest">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="getStatusNespolehlivySubjektRozsirenyResponse">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>
+    <wsdl:operation name="getStatusNespolehlivySubjektRozsirenyV2">
+      <soap:operation
+        soapAction="http://adis.mfcr.cz/rozhraniCRPDPH/getStatusNespolehlivySubjektRozsirenyV2" />
+      <wsdl:input name="getStatusNespolehlivySubjektRozsirenyV2Request">
+        <soap:body use="literal" />
+      </wsdl:input>
+      <wsdl:output name="getStatusNespolehlivySubjektRozsirenyV2Response">
+        <soap:body use="literal" />
+      </wsdl:output>
+    </wsdl:operation>    
+  </wsdl:binding>
+
+  <wsdl:service name="rozhraniCRPDPH">
+    <wsdl:port binding="tns:rozhraniCRPDPHSOAP" name="rozhraniCRPDPHSOAP">
+      <soap:address
+        location="https://mojedane.gov.cz/dpr/axis2/services/rozhraniCRPDPH.rozhraniCRPDPHSOAP" />
+    </wsdl:port>
+  </wsdl:service>
+</wsdl:definitions>
