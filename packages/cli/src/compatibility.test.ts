@@ -109,7 +109,7 @@ afterEach(async () => {
 describe("deployed API compatibility", () => {
   test("accepts the protocol, revision, capabilities, and required resource scopes", async () => {
     const server = startCompatibilityServer({
-      // Proves the new contract takes precedence over the frozen legacy band.
+      // The modern protocol contract does not impose the legacy maximum.
       maximum: "0.0.1",
       minimum: "0.0.1",
     });

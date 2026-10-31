@@ -273,10 +273,19 @@ const validateLegacyCompatibility = (
   });
 };
 
-const validateCompatibility = (
-  metadata: CompatibilityMetadata,
+export const validateCompatibility = (
+  input: unknown,
   serverUrl: string,
 ): Result<CompatibilityReport, CompatibilityCheckError> => {
+  const parsed = v.safeParse(compatibilityMetadataSchema, input);
+  if (!parsed.success) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: "Server compatibility metadata is absent or malformed.",
+      }),
+    );
+  }
+  const metadata = parsed.output;
   let negotiated: Result<NegotiatedContract, CompatibilityCheckError>;
   if (metadata.stella_contract !== undefined) {
     negotiated = validateContract(metadata.stella_contract);
@@ -294,6 +303,25 @@ const validateCompatibility = (
     return Result.err(negotiated.error);
   }
 
+  const minimumVersion = metadata.stella_compatibility?.cli_version.minimum;
+  const minimum =
+    minimumVersion === undefined ? undefined : parseSemver(minimumVersion);
+  const current = parseSemver(packageJson.version);
+  if (minimum === undefined || current === undefined) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message:
+          "Server compatibility metadata lacks a valid minimum CLI version.",
+      }),
+    );
+  }
+  if (compareSemver(current, minimum) < 0) {
+    return Result.err(
+      new CompatibilityCheckError({
+        message: `CLI ${packageJson.version} is below the server minimum ${minimumVersion}.`,
+      }),
+    );
+  }
   const supportedScopes = new Set(metadata.scopes_supported);
   const missingScopes = CLI_REQUIRED_RESOURCE_SCOPES.filter(
     (scope) => !supportedScopes.has(scope),
@@ -328,6 +356,7 @@ const validateCompatibility = (
 
 export const checkServerCompatibility = async (
   serverUrl: string,
+  onMetadata?: (metadata: unknown) => Promise<void>,
 ): Promise<Result<CompatibilityReport, CompatibilityCheckError>> =>
   await Result.tryPromise({
     catch: (cause) =>
@@ -360,17 +389,11 @@ export const checkServerCompatibility = async (
       }
 
       const body: unknown = await response.json();
-      const parsed = v.safeParse(compatibilityMetadataSchema, body);
-      if (!parsed.success) {
-        throw new CompatibilityCheckError({
-          message: `stella compatibility discovery at ${discoveryUrl.toString()} is absent or malformed. Deploy an API that advertises a stella compatibility contract before publishing this CLI.`,
-        });
-      }
-
-      const result = validateCompatibility(parsed.output, serverUrl);
+      const result = validateCompatibility(body, serverUrl);
       if (Result.isError(result)) {
         throw result.error;
       }
+      await onMetadata?.(body);
       return result.value;
     },
   });

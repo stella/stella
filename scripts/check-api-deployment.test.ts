@@ -917,24 +917,11 @@ describe("API deployment health receipt", () => {
       ),
       "utf-8",
     );
-    const psGalleryPreflight = desktopWindowsBuildAction.indexOf(
-      "Ensure PSGallery is registered",
-    );
-    const azureSigning = desktopWindowsBuildAction.indexOf(
-      "azure/trusted-signing-action@",
-    );
-    expect(psGalleryPreflight).toBeGreaterThanOrEqual(0);
-    expect(azureSigning).toBeGreaterThan(psGalleryPreflight);
-    expect(desktopWindowsBuildAction).toContain(
-      "Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue",
-    );
-    expect(desktopWindowsBuildAction).toContain("if (-not $repository) {");
-    expect(desktopWindowsBuildAction).toContain(
-      "Register-PSRepository -Default",
-    );
-    expect(desktopWindowsBuildAction).toContain(
-      "https://www.powershellgallery.com/api/v2",
-    );
+    const executableSigning =
+      desktopWindowsBuildAction.indexOf(" sign-windows ");
+    const updaterSigning = desktopWindowsBuildAction.indexOf(" resign ");
+    expect(executableSigning).toBeGreaterThanOrEqual(0);
+    expect(updaterSigning).toBeGreaterThan(executableSigning);
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: ready");
     expect(desktopVerify).toContain("API_DEPLOYMENT_PROBE_PATH: version.json");
     expect(desktopManifest).toContain(

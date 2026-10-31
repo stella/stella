@@ -8,6 +8,7 @@
 // they are read through the constants those messages print, never retyped.
 
 import { API_KEY_ENV_VAR, SERVER_URL_ENV_VAR } from "./auth/constants.js";
+import { backgroundUpdateCheckEnabled } from "./install-channel.js";
 
 /** XDG base-directory override for `~/.config/stella`; see `auth/config-dir.ts`. */
 export const XDG_CONFIG_HOME: string | undefined =
@@ -29,3 +30,7 @@ export const XDG_CACHE_HOME: string | undefined = process.env["XDG_CACHE_HOME"];
 
 /** Home directory, the `~/.cache` fallback root for the registry cache. */
 export const HOME: string | undefined = process.env["HOME"];
+
+export const UPDATE_CHECK_ENABLED: boolean = backgroundUpdateCheckEnabled(
+  process.env,
+);

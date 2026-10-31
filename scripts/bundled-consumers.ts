@@ -10,7 +10,7 @@ export type BundledConsumerSite = Readonly<{
 }>;
 
 type BootCheck =
-  | Readonly<{ type: "ci-job"; jobId: string }>
+  | Readonly<{ type: "ci-job"; workflow: string; jobId: string }>
   | Readonly<{ type: "docker-run"; dockerfile: string; run: string }>
   | Readonly<{ type: "none"; reason: string }>;
 
@@ -204,22 +204,44 @@ export const compareSiteCounts = (
 // therefore requires an explicit decision about how the packaged output boots.
 export const BUNDLED_CONSUMERS = [
   {
+    file: ".github/workflows/publish-npm.yml",
+    command:
+      'bun build src/cli.ts --compile --target="$CLI_TARGET" --outfile="../../native-cli/$CLI_ASSET" --asset capabilities --asset src/generated/registry-snapshot.json --no-compile-autoload-dotenv --no-compile-autoload-bunfig',
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/publish-npm.yml",
+      jobId: "cli-native-build",
+    },
+  },
+  {
     file: ".github/workflows/ci.yml",
     command:
       'bun build packages/agent-engine/scripts/mcp-canary-server.ts --target=node --outfile="$RUNNER_TEMP/mcp-canary-server.mjs"',
-    bootCheck: { type: "ci-job", jobId: "docker-checks" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "docker-checks",
+    },
   },
   {
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --sourcemap=linked --target bun --outdir /app/bundles --public-path /app/ --entry-naming server.js apps/api/src/server.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "api-image-smoke",
+    },
   },
   {
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles --public-path /app/ --entry-naming collab.js apps/collab/src/index.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "api-image-smoke",
+    },
   },
   {
     file: "apps/api/Dockerfile",
@@ -255,7 +277,11 @@ export const BUNDLED_CONSUMERS = [
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --outdir /app/bundles/apps/api/src/db --public-path /app/apps/api/src/db/ --entry-naming migrate.js apps/api/src/db/migrate.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "api-image-smoke",
+    },
   },
   {
     file: "apps/api/Dockerfile",
@@ -301,13 +327,21 @@ export const BUNDLED_CONSUMERS = [
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming document-processing-worker.js apps/api/src/scripts/document-processing-worker.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "api-image-smoke",
+    },
   },
   {
     file: "apps/api/Dockerfile",
     command:
       "bun build --define __STELLA_RELEASE__=true --minify --keep-names --target bun --sourcemap=linked --outdir /app/bundles --public-path /app/ --entry-naming file-derivative-worker.js apps/api/src/scripts/file-derivative-worker.ts",
-    bootCheck: { type: "ci-job", jobId: "api-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "api-image-smoke",
+    },
   },
   {
     file: "apps/api/package.json",
@@ -392,7 +426,11 @@ export const BUNDLED_CONSUMERS = [
     file: "apps/web/package.json",
     command:
       "bun build --target=bun --outfile=dist/runtime.js --external ./server/server.js src/runtime.ts",
-    bootCheck: { type: "ci-job", jobId: "web-image-smoke" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "web-image-smoke",
+    },
   },
   {
     file: "docker/audit/Dockerfile",
@@ -408,7 +446,11 @@ export const BUNDLED_CONSUMERS = [
     file: "packages/agent-engine/scripts/e2e-mcp-canary.ts",
     command:
       'Bun.build(entrypoints: [path.join(import.meta.dir, "mcp-canary-server.ts")])',
-    bootCheck: { type: "ci-job", jobId: "docker-checks" },
+    bootCheck: {
+      type: "ci-job",
+      workflow: ".github/workflows/ci.yml",
+      jobId: "docker-checks",
+    },
   },
   {
     file: "packages/mcp-apps/scripts/build-mcp-apps.ts",
