@@ -79,6 +79,14 @@ export const importDependents = ({
         const specifier = QUOTED_SPECIFIER.exec(text)?.groups?.["specifier"];
         return specifier === undefined ? [] : [specifier];
       }),
+      // oxc's module record omits `import x = require("…")`; TypeScript
+      // allows it only at the top level of a module.
+      ...source.program.body.flatMap((statement) =>
+        statement.type === "TSImportEqualsDeclaration" &&
+        statement.moduleReference.type === "TSExternalModuleReference"
+          ? [statement.moduleReference.expression.value]
+          : [],
+      ),
     ];
     for (const specifier of specifiers) {
       const target = resolve(importer, specifier);
