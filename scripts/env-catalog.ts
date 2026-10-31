@@ -1709,6 +1709,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // Historical package builds use current tooling against a separate source root.
   "PACK_SOURCE_ROOT",
   "PGLITE_TEST_SNAPSHOT",
+  // pr-lint passes the pull request description to the log-line guard.
+  "PR_BODY",
   "PR_HEAD_SHA",
   "PR_TITLE",
   // ci-plan: the pull request is armed (auto-merge or the merge-armed label).
