@@ -1048,6 +1048,7 @@
       "healthCurrent": "Aktuāls",
       "healthDelayed": "Aizkavējas",
       "healthDisabled": "Izslēgts",
+      "healthSnapshot": "Fiksēts momentuzņēmums",
       "healthStalled": "Apstājies",
       "healthUnknown": "Nekad nav palaists",
       "inPreparation": "Sagatavošanā",
