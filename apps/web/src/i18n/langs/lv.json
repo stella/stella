@@ -892,6 +892,21 @@
       "title": "Ieteikumi, balstoti uz jūsu aktivitāti",
       "unnamedRecord": "Lietas ieraksts"
     },
+    "timeReport": {
+      "billableHours": "Apmaksājamās stundas",
+      "billableShare": "Apmaksājamā laika daļa",
+      "change": "Izmaiņas: {value}",
+      "collapse": "Sakļaut {name}",
+      "empty": "Reģistrējiet laiku, lai aizpildītu šo pārskatu.",
+      "expand": "Izvērst {name}",
+      "internal": "Iekšējs",
+      "pendingEntries": "Gaida apstiprinājumu",
+      "period": "Periods",
+      "privacy": "Šajā pārskatā tiek izmantoti tikai reģistrētie laika ieraksti. Darbības dati datorā paliek katrā ierīcē.",
+      "title": "Komandas laika pārskats",
+      "total": "Kopā",
+      "unbilledValue": "Neizrakstītā apmaksājamā summa"
+    },
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",

@@ -892,6 +892,21 @@
       "title": "Ettepanekud teie tegevuse põhjal",
       "unnamedRecord": "Toimiku kirje"
     },
+    "timeReport": {
+      "billableHours": "Arveldatavad tunnid",
+      "billableShare": "Arveldatava aja osakaal",
+      "change": "Muutus: {value}",
+      "collapse": "Ahenda {name}",
+      "empty": "Lisa aega, et see aruanne täituks.",
+      "expand": "Laienda {name}",
+      "internal": "Ettevõttesisene",
+      "pendingEntries": "Kinnitamise ootel",
+      "period": "Periood",
+      "privacy": "See aruanne kasutab ainult salvestatud ajakirjeid. Töölaua tegevus jääb igasse seadmesse.",
+      "title": "Meeskonna ajaülevaade",
+      "total": "Kokku",
+      "unbilledValue": "Arveldamata arveldatav väärtus"
+    },
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",

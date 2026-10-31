@@ -892,6 +892,21 @@
       "title": "Sugerencias a partir de tu actividad",
       "unnamedRecord": "Registro del asunto"
     },
+    "timeReport": {
+      "billableHours": "Horas facturables",
+      "billableShare": "Porcentaje facturable",
+      "change": "Cambio: {value}",
+      "collapse": "Contraer {name}",
+      "empty": "Registra tiempo para completar este informe.",
+      "expand": "Expandir {name}",
+      "internal": "Interno",
+      "pendingEntries": "Pendiente de aprobación",
+      "period": "Periodo",
+      "privacy": "Este informe solo utiliza registros de tiempo guardados. La actividad del escritorio permanece en cada dispositivo.",
+      "title": "Informe de tiempo del equipo",
+      "total": "Total general",
+      "unbilledValue": "Valor facturable sin facturar"
+    },
     "timerActive": "Temporizador en marcha",
     "timesheets": "Hojas de horas",
     "total": "Total",

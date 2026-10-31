@@ -892,6 +892,21 @@
       "title": "Pasiūlymai pagal jūsų veiklą",
       "unnamedRecord": "Bylos įrašas"
     },
+    "timeReport": {
+      "billableHours": "Apmokestinamos valandos",
+      "billableShare": "Apmokestinamo laiko dalis",
+      "change": "Pokytis: {value}",
+      "collapse": "Sutraukti {name}",
+      "empty": "Registruokite laiką, kad ši ataskaita būtų užpildyta.",
+      "expand": "Išskleisti {name}",
+      "internal": "Vidinis",
+      "pendingEntries": "Laukia patvirtinimo",
+      "period": "Laikotarpis",
+      "privacy": "Šioje ataskaitoje naudojami tik užregistruoti laiko įrašai. Kompiuterio veikla lieka kiekviename įrenginyje.",
+      "title": "Komandos darbo laiko ataskaita",
+      "total": "Iš viso",
+      "unbilledValue": "Neišrašyta apmokėtina suma"
+    },
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
