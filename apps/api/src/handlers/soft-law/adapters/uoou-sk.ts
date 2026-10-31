@@ -74,10 +74,7 @@ export const parseUoouSkListing = (html: string) =>
         "ÚOOÚ SR response lacks its annual-report index shell",
       );
     }
-    if (
-      article.find('.pagination, .pager, a[rel~="next"], a[href*="page="]')
-        .length
-    ) {
+    if ($('.pagination, .pager, a[rel~="next"], a[href*="page="]').length) {
       return yield* invalid(
         "ÚOOÚ SR annual-report index contains unsupported pagination",
       );

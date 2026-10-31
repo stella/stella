@@ -144,6 +144,11 @@ test("ÚOOÚ SR refuses a changed index shell, pagination, ambiguous rows and fo
         '<a href="/sk/urad/o-nas/vyrocne-spravy/?page=2">2</a>',
       ),
     ),
+    mutate(($) =>
+      $("main article").after(
+        '<nav class="pagination"><a href="/sk/urad/o-nas/vyrocne-spravy/?page=2">2</a></nav>',
+      ),
+    ),
     mutate(($) => $(row).first().after($(row).first().clone())),
     mutate(($) => $(row).first().find("td.fN").text(" ")),
     mutate(($) =>
