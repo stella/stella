@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import net from "node:net";
@@ -21,6 +22,7 @@ import {
 } from "../../scripts/fake-codex-app-server";
 import { bundledHarnessCompatibility } from "../harness/compatibility";
 import {
+  HOLDER_ENDPOINT_FILE,
   HOLDER_LOG_FILE,
   HOLDER_SECRET_FILE,
   startHolderServer,
@@ -792,6 +794,17 @@ describe("harness holder over its socket", () => {
     ).toMatchObject({ outcome: "cancelled" });
     expect(existsSync(holder.endpoint)).toBe(false);
     expect(existsSync(path.join(holder.dir, HOLDER_SECRET_FILE))).toBe(false);
+    expect(existsSync(path.join(holder.dir, HOLDER_ENDPOINT_FILE))).toBe(false);
+  });
+
+  test("records the endpoint it listens on next to its secret", async () => {
+    const holder = await spawnHolder();
+    const file = path.join(holder.dir, HOLDER_ENDPOINT_FILE);
+    expect(readFileSync(file, "utf-8")).toBe(holder.endpoint);
+    expect(statSync(file).mode % 0o1000).toBe(0o600);
+    expect(
+      statSync(path.join(holder.dir, HOLDER_SECRET_FILE)).mode % 0o1000,
+    ).toBe(0o600);
   });
 
   test("a draining holder refuses new runs and exits once its runs are acked", async () => {

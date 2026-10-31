@@ -12,9 +12,20 @@
 //! not fit: there is no shortened or truncated fallback.
 //!
 //! On Windows the endpoint is a named pipe derived from the holder's folder.
+//!
+//! Finding a running holder must not depend on the environment matching the
+//! launch that started it, so the holder records its endpoint next to its
+//! secret (`<holder folder>/endpoint`). The desktop tries that path first,
+//! after the same checks as a fresh one, and computes a fresh path only when
+//! no recorded endpoint answers.
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(unix)]
+use std::path::PathBuf;
+
+/// The file a holder records its endpoint in, beside its secret.
+pub(super) const ENDPOINT_FILE: &str = "endpoint";
 
 /// `sun_path` bytes, its terminating NUL included.
 #[cfg(target_os = "linux")]
@@ -47,7 +58,10 @@ impl From<std::io::Error> for EndpointError {
 #[derive(Debug, Clone)]
 pub(super) struct Endpoints {
   #[cfg(unix)]
-  dir: PathBuf,
+  uid: u32,
+  /// The folder fresh sockets go in; an error leaves only recorded ones.
+  #[cfg(unix)]
+  fresh: Result<PathBuf, EndpointError>,
 }
 
 impl Endpoints {
@@ -60,14 +74,11 @@ impl Endpoints {
     #[cfg(unix)]
     {
       let uid = own_uid(holder_root)?;
-      let dir = match socket_dir {
-        Some(dir) => {
-          checked(dir, uid)?;
-          dir.to_path_buf()
-        }
-        None => runtime_dir(user_runtime_dir().as_deref(), Path::new("/tmp"), uid)?,
+      let fresh = match socket_dir {
+        Some(dir) => checked(dir, uid).map(|()| dir.to_path_buf()),
+        None => runtime_dir(user_runtime_dir().as_deref(), Path::new("/tmp"), uid),
       };
-      Ok(Self { dir })
+      Ok(Self { uid, fresh })
     }
     #[cfg(windows)]
     {
@@ -77,15 +88,33 @@ impl Endpoints {
     }
   }
 
-  /// The endpoint of the holder whose folder is `holder_dir`.
-  pub(super) fn of(&self, holder_dir: &Path) -> Result<OsString, EndpointError> {
+  /// The endpoint the holder of `holder_dir` recorded, when it passes the
+  /// checks a fresh one must pass.
+  pub(super) fn recorded(&self, holder_dir: &Path) -> Option<OsString> {
+    let text = std::fs::read_to_string(holder_dir.join(ENDPOINT_FILE)).ok()?;
+    #[cfg(unix)]
+    let usable = usable_socket(Path::new(&text), self.uid);
+    #[cfg(windows)]
+    let usable = usable_pipe(&text);
+    match usable {
+      Ok(()) => Some(OsString::from(text)),
+      Err(error) => {
+        tracing::warn!(target: super::LOG_TARGET, ?error, "ignored a recorded harness holder endpoint");
+        None
+      }
+    }
+  }
+
+  /// A fresh endpoint for the holder whose folder is `holder_dir`.
+  pub(super) fn fresh(&self, holder_dir: &Path) -> Result<OsString, EndpointError> {
     #[cfg(unix)]
     {
       let version = holder_dir
         .file_name()
         .map(|name| name.to_string_lossy().into_owned())
         .unwrap_or_default();
-      socket_path(&self.dir, &version).map(PathBuf::into_os_string)
+      let dir = self.fresh.as_ref().map_err(|error| *error)?;
+      socket_path(dir, &version).map(PathBuf::into_os_string)
     }
     #[cfg(windows)]
     {
@@ -95,27 +124,53 @@ impl Endpoints {
         r"\\.\pipe\stella-agent-holder-{}",
         hex::encode(&digest[..16])
       );
-      if name.len() > MAX_PIPE_NAME_CHARS {
-        return Err(EndpointError::TooLong {
-          bytes: name.len(),
-          limit: MAX_PIPE_NAME_CHARS,
-        });
-      }
+      usable_pipe(&name)?;
       Ok(OsString::from(name))
     }
   }
+}
+
+#[cfg(windows)]
+fn usable_pipe(name: &str) -> Result<(), EndpointError> {
+  if !name.starts_with(r"\\.\pipe\stella-agent-holder-") {
+    return Err(EndpointError::Insecure);
+  }
+  if name.len() > MAX_PIPE_NAME_CHARS {
+    return Err(EndpointError::TooLong {
+      bytes: name.len(),
+      limit: MAX_PIPE_NAME_CHARS,
+    });
+  }
+  Ok(())
 }
 
 /// The socket of a sidecar version in `dir`, or why it cannot be one.
 #[cfg(unix)]
 pub(super) fn socket_path(dir: &Path, version: &str) -> Result<PathBuf, EndpointError> {
   let path = dir.join(format!("stella-holder-{version}.sock"));
+  fits(&path)?;
+  Ok(path)
+}
+
+/// Whether a socket path fits `sun_path`.
+#[cfg(unix)]
+fn fits(path: &Path) -> Result<(), EndpointError> {
   let bytes = path.as_os_str().len();
   let limit = SUN_PATH_BYTES - 1;
   if bytes > limit {
     return Err(EndpointError::TooLong { bytes, limit });
   }
-  Ok(path)
+  Ok(())
+}
+
+/// A recorded socket path: it fits, and its folder is private to `uid`.
+#[cfg(unix)]
+pub(super) fn usable_socket(path: &Path, uid: u32) -> Result<(), EndpointError> {
+  fits(path)?;
+  if !path.is_absolute() {
+    return Err(EndpointError::Insecure);
+  }
+  checked(path.parent().ok_or(EndpointError::Insecure)?, uid)
 }
 
 #[cfg(unix)]
@@ -244,9 +299,12 @@ mod tests {
       Err(EndpointError::TooLong { .. })
     ));
     let endpoints = Endpoints {
-      dir: PathBuf::from("/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/"),
+      uid: 0,
+      fresh: Ok(PathBuf::from(
+        "/var/folders/zz/zyxvpxvq6csfxvn_n0000000000000/T/",
+      )),
     };
-    let endpoint = PathBuf::from(endpoints.of(&holder_dir).unwrap());
+    let endpoint = PathBuf::from(endpoints.fresh(&holder_dir).unwrap());
     assert_eq!(
       endpoint,
       PathBuf::from(
@@ -304,6 +362,52 @@ mod tests {
       runtime_dir(None, &scratch.0, uid.wrapping_add(1)),
       Err(EndpointError::Insecure)
     );
+  }
+
+  #[test]
+  fn a_recorded_endpoint_passes_the_checks_of_a_fresh_one_or_is_ignored() {
+    let scratch = Scratch::new();
+    let uid = own_uid(&scratch.0).unwrap();
+    let holder_dir = scratch.dir("1.4.0", 0o700);
+    let endpoints = Endpoints {
+      uid,
+      fresh: Err(EndpointError::Insecure),
+    };
+    let record = |path: &Path| {
+      fs::write(
+        holder_dir.join(ENDPOINT_FILE),
+        path.as_os_str().as_encoded_bytes(),
+      )
+      .unwrap();
+    };
+    assert_eq!(endpoints.recorded(&holder_dir), None, "nothing recorded");
+
+    let private = socket_path(&scratch.dir("private", 0o700), "1.4.0").unwrap();
+    record(&private);
+    assert_eq!(
+      endpoints.recorded(&holder_dir),
+      Some(private.into_os_string())
+    );
+
+    let shared = scratch
+      .dir("shared", 0o755)
+      .join("stella-holder-1.4.0.sock");
+    record(&shared);
+    assert_eq!(endpoints.recorded(&holder_dir), None);
+    assert_eq!(usable_socket(&shared, uid), Err(EndpointError::Insecure));
+
+    let long = scratch
+      .dir(&"d".repeat(SUN_PATH_BYTES), 0o700)
+      .join("stella-holder-1.4.0.sock");
+    record(&long);
+    assert_eq!(endpoints.recorded(&holder_dir), None);
+    assert!(matches!(
+      usable_socket(&long, uid),
+      Err(EndpointError::TooLong { .. })
+    ));
+
+    record(Path::new("relative/stella-holder-1.4.0.sock"));
+    assert_eq!(endpoints.recorded(&holder_dir), None);
   }
 
   #[test]

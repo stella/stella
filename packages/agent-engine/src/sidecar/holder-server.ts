@@ -23,10 +23,14 @@ import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
  *
  * - `holder.secret`: 32 random bytes as hex, mode 0600, written after the
  *   holder owns the endpoint; a desktop presents it in `hello`;
+ * - `endpoint`: the endpoint the holder listens on, mode 0600, written
+ *   after it owns the endpoint, so a desktop whose environment names
+ *   another runtime folder still finds it;
  * - `holder.log`: the holder's log, rotated once at `MAX_LOG_BYTES`.
  *
- * The endpoint is the path the desktop passes, never derived here: a Unix
- * socket in the user's short runtime folder (Windows: a named pipe). A
+ * The secret and the endpoint file are written atomically and removed on
+ * exit. The endpoint is the path the desktop passes, never derived here: a
+ * Unix socket in the user's short runtime folder (Windows: a named pipe). A
  * socket path must fit `sun_path`, so a longer one is refused rather than
  * shortened.
  *
@@ -37,6 +41,7 @@ import { SIDECAR_MAX_LINE_BYTES } from "./protocol";
  */
 
 export const HOLDER_SECRET_FILE = "holder.secret";
+export const HOLDER_ENDPOINT_FILE = "endpoint";
 export const HOLDER_LOG_FILE = "holder.log";
 
 const MAX_LOG_BYTES = 1024 * 1024;
@@ -133,11 +138,11 @@ const fileLog = (dir: string) => {
   };
 };
 
-/** Write the secret atomically, readable by the user alone. */
-const writeSecret = (dir: string, secret: string) => {
-  const file = path.join(dir, HOLDER_SECRET_FILE);
+/** Write a file atomically, readable by the user alone. */
+const writePrivate = (dir: string, name: string, text: string) => {
+  const file = path.join(dir, name);
   const temporary = `${file}.${process.pid}.tmp`;
-  writeFileSync(temporary, secret, { mode: 0o600 });
+  writeFileSync(temporary, text, { mode: 0o600 });
   renameSync(temporary, file);
 };
 
@@ -247,7 +252,8 @@ export const startHolderServer = async (
     return owned;
   }
   const secret = randomBytes(SECRET_BYTES).toString("hex");
-  writeSecret(dir, secret);
+  writePrivate(dir, HOLDER_SECRET_FILE, secret);
+  writePrivate(dir, HOLDER_ENDPOINT_FILE, endpoint);
   const { promise: exited, resolve } = Promise.withResolvers<null>();
   const sockets = new Set<net.Socket>();
   /** Flush what was written, then drop the connection. */
@@ -266,6 +272,7 @@ export const startHolderServer = async (
       }
       server.close(() => {
         rmSync(path.join(dir, HOLDER_SECRET_FILE), { force: true });
+        rmSync(path.join(dir, HOLDER_ENDPOINT_FILE), { force: true });
         if (!IS_WINDOWS) {
           rmSync(endpoint, { force: true });
         }

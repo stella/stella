@@ -72,6 +72,26 @@ impl Fixture {
     self.endpoint(&holder_dir.file_name().unwrap().to_string_lossy())
   }
 
+  /// Where a holder said it listens, else where this fixture puts it.
+  fn recorded_or_computed(&self, holder_dir: &Path) -> PathBuf {
+    fs::read_to_string(holder_dir.join(endpoint::ENDPOINT_FILE))
+      .map_or_else(|_missing| self.endpoint_of(holder_dir), PathBuf::from)
+  }
+
+  /// A private socket folder below the fixture.
+  fn socket_dir(&self, name: &str) -> PathBuf {
+    let dir = self.root.join(name);
+    fs::create_dir_all(&dir).unwrap();
+    fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+    dir
+  }
+
+  fn sidecar_with_sockets_in(&self, socket_dir: PathBuf) -> HarnessSidecar {
+    let mut settings = self.settings_for(VERSION, self.stand_in());
+    settings.socket_dir = Some(socket_dir);
+    HarnessSidecar::spawn(settings)
+  }
+
   fn settings_for(&self, version: &str, launch: SidecarLaunch) -> SidecarSettings {
     SidecarSettings {
       launch: launch.env("FAKE_SIDECAR_LOG", self.log()),
@@ -129,7 +149,7 @@ impl Drop for Fixture {
         continue;
       };
       if let Ok(mut socket) =
-        std::os::unix::net::UnixStream::connect(self.endpoint_of(&dir))
+        std::os::unix::net::UnixStream::connect(self.recorded_or_computed(&dir))
       {
         let hello = json!({
           "type": "hello",
@@ -612,6 +632,82 @@ fn run_with_socket_dir(
 }
 
 #[test]
+fn a_holder_is_found_where_it_recorded_its_endpoint_after_the_runtime_folder_moved() {
+  let fixture = Fixture::new();
+  let first_dir = fixture.socket_dir("run-a");
+  let second_dir = fixture.socket_dir("run-b");
+  with_children(async {
+    let first = fixture.sidecar_with_sockets_in(first_dir.clone());
+    let start = run_start("wait");
+    let run_id = start.run_id.clone();
+    let mut outputs = first.start_run(start).unwrap();
+    assert_eq!(next(&mut outputs).await, started(&run_id));
+    drop(first);
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // The next launch's environment names another runtime folder.
+    let second = fixture.sidecar_with_sockets_in(second_dir.clone());
+    assert_eq!(
+      second.held_runs().await,
+      Ok(vec![HeldRun {
+        run_id: run_id.clone(),
+        harness: Harness::Codex,
+        last_seq: 1,
+      }])
+    );
+    let mut resumed = second.resume_run(&run_id, 1).await.unwrap();
+    second.cancel(&run_id).unwrap();
+    assert_eq!(
+      finish(&mut resumed).await,
+      vec![ended(RunOutcome::Cancelled)]
+    );
+    second.shutdown().await;
+  });
+  assert_eq!(fixture.starts(), 1, "no second holder was started");
+  assert!(
+    !endpoint::socket_path(&second_dir, VERSION)
+      .unwrap()
+      .exists()
+  );
+  assert!(
+    !fixture
+      .holders()
+      .join(VERSION)
+      .join(endpoint::ENDPOINT_FILE)
+      .exists()
+  );
+}
+
+#[test]
+fn a_recorded_endpoint_nothing_answers_on_is_dropped_for_a_fresh_holder() {
+  let fixture = Fixture::new();
+  let dir = fixture.holders().join(VERSION);
+  fs::create_dir_all(&dir).unwrap();
+  fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+  let stale = endpoint::socket_path(&fixture.socket_dir("gone"), VERSION).unwrap();
+  let record = dir.join(endpoint::ENDPOINT_FILE);
+  fs::write(&record, stale.as_os_str().as_encoded_bytes()).unwrap();
+  with_children(async {
+    let sidecar = fixture.sidecar();
+    let mut outputs = sidecar.start_run(run_start("gpt-test")).unwrap();
+    assert!(matches!(
+      finish(&mut outputs).await.last(),
+      Some(SidecarRunOutput::Finished {
+        outcome: RunOutcome::Completed,
+        ..
+      })
+    ));
+    assert_eq!(
+      PathBuf::from(fs::read_to_string(&record).unwrap()),
+      fixture.endpoint(VERSION),
+      "the fresh holder recorded its own endpoint"
+    );
+    sidecar.shutdown().await;
+  });
+  assert_eq!(fixture.starts(), 1);
+}
+
+#[test]
 fn a_socket_folder_other_users_can_reach_is_refused() {
   let fixture = Fixture::new();
   let open = fixture.root.join("sockets");
@@ -859,6 +955,11 @@ mod stand_in {
       uuid::Uuid::new_v4().simple()
     );
     fs::write(dir.join(SECRET_FILE), &secret).unwrap();
+    fs::write(
+      dir.join(endpoint::ENDPOINT_FILE),
+      endpoint.as_os_str().as_encoded_bytes(),
+    )
+    .unwrap();
     let state = Arc::new(Mutex::new(State {
       dir,
       endpoint,
@@ -1012,6 +1113,7 @@ mod stand_in {
   fn exit(held: &State) -> ! {
     let _socket = fs::remove_file(&held.endpoint);
     let _secret = fs::remove_file(held.dir.join(SECRET_FILE));
+    let _record = fs::remove_file(held.dir.join(endpoint::ENDPOINT_FILE));
     std::process::exit(0);
   }
 

@@ -8,7 +8,8 @@
 //! a bundled build, the copy of the binary it runs from, so an update never
 //! replaces a running binary. Its socket sits in a short per-user runtime
 //! folder instead (a named pipe on Windows); `endpoint.rs` decides the path
-//! and passes it to the holder.
+//! and passes it to the holder, which records it in its folder so a later
+//! launch finds it whatever its own environment says.
 //!
 //! One supervisor task owns every connection. It connects to the holder of
 //! the bundled version, or starts it detached and connects; it reconnects
@@ -749,13 +750,18 @@ impl Supervisor {
     }
   }
 
-  /// The endpoint of the holder whose folder is `dir`.
-  fn endpoint(&self, dir: &Path) -> Result<OsString, OpenError> {
+  /// The endpoint the holder of `dir` recorded, if it passes the checks.
+  fn recorded_endpoint(&self, dir: &Path) -> Option<OsString> {
+    self.endpoints.as_ref().ok()?.recorded(dir)
+  }
+
+  /// A fresh endpoint for the holder of `dir`: where a new one listens.
+  fn fresh_endpoint(&self, dir: &Path) -> Result<OsString, OpenError> {
     self
       .endpoints
       .as_ref()
       .map_err(|_unresolved| OpenError::NoEndpoint)?
-      .of(dir)
+      .fresh(dir)
       .map_err(|error| {
         tracing::error!(target: LOG_TARGET, ?error, "a harness holder endpoint cannot be used");
         OpenError::NoEndpoint
@@ -818,9 +824,29 @@ impl Supervisor {
       .collect()
   }
 
-  /// Connect and complete the handshake, resuming this supervisor's runs.
+  /// Reach the holder of `dir`: at the endpoint it recorded first, so a
+  /// launch whose environment names another runtime folder still finds it,
+  /// then at a fresh one. A recorded endpoint nothing listens on is stale
+  /// and its record is removed; the secret handshake proves the holder.
   async fn open(&self, dir: &Path) -> Result<Opened, OpenError> {
-    let stream = connect(&self.endpoint(dir)?).await?;
+    let recorded = self.recorded_endpoint(dir);
+    if let Some(endpoint) = &recorded {
+      match self.open_at(dir, endpoint).await {
+        Err(OpenError::Gone) => forget_endpoint(dir, endpoint),
+        reached => return reached,
+      }
+    }
+    let fresh = self.fresh_endpoint(dir)?;
+    if recorded.as_ref() == Some(&fresh) {
+      return Err(OpenError::Gone);
+    }
+    self.open_at(dir, &fresh).await
+  }
+
+  /// Connect at `endpoint` and complete the handshake, resuming this
+  /// supervisor's runs.
+  async fn open_at(&self, dir: &Path, endpoint: &OsStr) -> Result<Opened, OpenError> {
+    let stream = connect(endpoint).await?;
     let secret = read_secret(dir).ok_or(OpenError::Failed)?;
     let (read, mut writer) = tokio::io::split(stream);
     let mut reader = BufReader::new(read);
@@ -924,7 +950,7 @@ impl Supervisor {
       Err(OpenError::NoEndpoint) => return None,
       Err(OpenError::Gone | OpenError::Failed) => {}
     }
-    let Ok(endpoint) = self.endpoint(&dir) else {
+    let Ok(endpoint) = self.fresh_endpoint(&dir) else {
       return None;
     };
     if let Err(error) = self.start_holder(&dir, &endpoint) {
@@ -1312,6 +1338,15 @@ fn finish_failed(outputs: mpsc::Sender<SidecarRunOutput>) {
       })
       .await;
   });
+}
+
+/// Remove a stale endpoint record, unless a holder that just started has
+/// already replaced it with its own.
+fn forget_endpoint(dir: &Path, stale: &OsStr) {
+  let file = dir.join(endpoint::ENDPOINT_FILE);
+  if std::fs::read_to_string(&file).is_ok_and(|text| OsStr::new(&text) == stale) {
+    let _removed = std::fs::remove_file(&file);
+  }
 }
 
 fn remove_holder_dir(dir: &Path) {
