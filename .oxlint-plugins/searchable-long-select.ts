@@ -105,7 +105,7 @@ const renderedOptionCount = (
       renderedOptionCount(node.alternate, isOption),
     );
   }
-  return children(node).reduce(
+  return children(node).reduce<number>(
     (count, child) => count + renderedOptionCount(child, isOption),
     isOption(node) ? 1 : 0,
   );
