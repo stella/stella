@@ -730,7 +730,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-auth-model
@@ -761,7 +761,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ai-catalog
@@ -792,7 +792,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-text-normalize
@@ -825,7 +825,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-anonymize-chat
@@ -856,7 +856,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ui
@@ -891,7 +891,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-chat
@@ -922,7 +922,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-country-codes
@@ -957,7 +957,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-business-registries
@@ -988,7 +988,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-conditions
@@ -1021,7 +1021,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-template-conditions
@@ -1052,7 +1052,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-docx-utils
@@ -1083,7 +1083,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-start-runtime
@@ -1114,7 +1114,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ssr-kit
@@ -1145,7 +1145,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-ssr-testkit
@@ -1176,7 +1176,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-money
@@ -1209,7 +1209,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-calculations
@@ -1244,7 +1244,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-workspace-model
@@ -1283,7 +1283,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-workspace-ui
@@ -1314,7 +1314,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-stable-stringify
@@ -1351,7 +1351,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-agent-input
@@ -1384,7 +1384,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-mcp-kit
@@ -1415,7 +1415,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-fetch
@@ -1448,7 +1448,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-scan-engine
@@ -1483,7 +1483,7 @@ jobs:
       actions: read
       contents: write
       id-token: write
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@042baebaf071329b956555c05caf5736504c278d # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@2ba6dc5822df5213c500aa6edb7b6c4bdec56804 # release job environment input
     with:
       environment: release-app
       artifact-pattern: npm-tarball-cli
