@@ -49,9 +49,7 @@ export type DiffScopeGap =
   /** Inspects changed files; an unchanged dependent can break unseen. */
   | "dependents"
   /** Outside a pull request or merge group the diff is empty. */
-  | "empty-off-change"
-  /** The step's condition can never hold for the workflow's triggers. */
-  | "never-runs";
+  | "empty-off-change";
 
 export type DiffScope =
   /** The rule is about the change itself (a VERSION bump, new migrations). */
@@ -356,13 +354,5 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-result#Evaluate CI outcome": operational(
     "Aggregates job results for the comparison base.",
-  ),
-  "dependency-audit.yml:audit#Detect lockfile changes": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
-  ),
-  "dependency-audit.yml:audit#Audit changed dependency resolutions": gap(
-    "never-runs",
-    "Conditioned on pull_request in a workflow triggered only by push, schedule and dispatch.",
   ),
 } as const satisfies Record<string, DiffScope>;
