@@ -492,3 +492,297 @@ for (const scrolled of [false, true]) {
     expect(await findPhoneLayoutProblems(page)).toEqual([]);
   });
 }
+
+for (const { name, css, containingBlock } of [
+  { name: "ordinary wrapper", css: "", containingBlock: false },
+  { name: "transform", css: "transform:translateZ(0)", containingBlock: true },
+  { name: "translate", css: "translate:0px", containingBlock: true },
+  { name: "rotate", css: "rotate:0deg", containingBlock: true },
+  { name: "scale", css: "scale:1", containingBlock: true },
+  { name: "perspective", css: "perspective:1000px", containingBlock: true },
+  { name: "filter", css: "filter:blur(0px)", containingBlock: true },
+  {
+    name: "backdrop filter",
+    css: "backdrop-filter:blur(0px)",
+    containingBlock: true,
+  },
+  { name: "layout containment", css: "contain:layout", containingBlock: true },
+  { name: "paint containment", css: "contain:paint", containingBlock: true },
+  {
+    name: "will-change transform",
+    css: "will-change:transform",
+    containingBlock: true,
+  },
+  {
+    name: "will-change filter",
+    css: "will-change:filter",
+    containingBlock: true,
+  },
+]) {
+  test(`fixed control respects its actual containing block: ${name}`, async ({
+    page,
+  }) => {
+    // safe-html: static fixed control with enumerated containing-block fixture CSS.
+    await page.setContent(`
+      <style>
+        #wrapper { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; ${css}; }
+        button { position: fixed; left: 200px; top: 80px; width: 30px; height: 30px; }
+      </style>
+      <div id="wrapper"><button aria-label="Fixed"></button></div>
+    `);
+    const metrics = await page
+      .getByRole("button", { name: "Fixed" })
+      .evaluate((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          left: rect.left,
+          top: rect.top,
+          hit:
+            document.elementFromPoint(rect.left + 15, rect.top + 15) === button,
+        };
+      });
+    expect(metrics.left).toBe(containingBlock ? 250 : 200);
+    expect(metrics.top).toBe(containingBlock ? 130 : 80);
+    expect(metrics.hit).toBe(!containingBlock);
+    const problems = await findPhoneLayoutProblems(page);
+    expect(problems.includes("cut-off controls:")).toBe(containingBlock);
+    expect(problems).toHaveLength(containingBlock ? 2 : 0);
+  });
+}
+
+for (const fixedOwner of ["control", "ancestor"]) {
+  for (const containingBlock of [false, true]) {
+    test(`fixed ${fixedOwner} escapes an ordinary clipping wrapper ${containingBlock ? "inside a containing block" : "in the viewport"}`, async ({
+      page,
+    }) => {
+      // safe-html: static fixed control with enumerated positioning fixture CSS.
+      await page.setContent(`
+        <style>
+          #container { position: absolute; left: 50px; top: 50px; width: 200px; height: 200px; ${containingBlock ? "transform:translateZ(0);overflow:hidden" : ""}; }
+          #wrapper { position: absolute; left: 0; top: 0; width: 30px; height: 30px; overflow: hidden; }
+          #anchor { position: ${fixedOwner === "ancestor" ? "fixed" : "static"}; left: 100px; top: 60px; width: 50px; height: 50px; }
+          button { position: ${fixedOwner === "control" ? "fixed" : "absolute"}; left: ${fixedOwner === "control" ? 100 : 0}px; top: ${fixedOwner === "control" ? 60 : 0}px; width: 30px; height: 30px; }
+        </style>
+        <div id="container"><div id="wrapper"><div id="anchor"><button aria-label="Escaped"></button></div></div></div>
+      `);
+      const metrics = await page
+        .getByRole("button", { name: "Escaped" })
+        .evaluate((button) => {
+          const rect = button.getBoundingClientRect();
+          return {
+            left: rect.left,
+            top: rect.top,
+            hit:
+              document.elementFromPoint(rect.left + 15, rect.top + 15) ===
+              button,
+          };
+        });
+      expect(metrics.left).toBe(containingBlock ? 150 : 100);
+      expect(metrics.top).toBe(containingBlock ? 110 : 60);
+      expect(metrics.hit).toBe(true);
+      expect(await findPhoneLayoutProblems(page)).toEqual([]);
+    });
+  }
+}
+
+test("a fixed containing block remains constrained by its outer clipping ancestor", async ({
+  page,
+}) => {
+  // safe-html: static fixed control in a clipped containing block.
+  await page.setContent(`
+    <style>
+      #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
+      #container { position: absolute; left: 120px; top: 0; width: 100px; height: 100px; transform:translateZ(0); }
+      button { position: fixed; left: 20px; top: 20px; width: 30px; height: 30px; }
+    </style>
+    <div id="outer"><div id="container"><button aria-label="Outer clipped fixed"></button></div></div>
+  `);
+  const metrics = await page
+    .getByRole("button", { name: "Outer clipped fixed" })
+    .evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        left: rect.left,
+        top: rect.top,
+        hit:
+          document.elementFromPoint(rect.left + 15, rect.top + 15) === button,
+      };
+    });
+  expect(metrics).toEqual({ left: 190, top: 70, hit: false });
+  expect(await findPhoneLayoutProblems(page)).toEqual([
+    "cut-off controls:",
+    '  button "Outer clipped fixed" is cut off at the side of div',
+  ]);
+});
+
+for (const scrolled of [false, true]) {
+  test(`a document can scroll a fixed containing block into view ${scrolled ? "after scrolling" : "at origin"}`, async ({
+    page,
+  }) => {
+    // safe-html: static fixed control in a below-screen containing block.
+    await page.setContent(`
+      <style>
+        html, body { margin: 0; min-height: 200vh; }
+        #container { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; transform:translateZ(0); overflow:hidden; }
+        button { position: fixed; left: 20px; top: 20px; width: 30px; height: 30px; }
+      </style>
+      <div id="container"><button aria-label="Moving fixed"></button></div>
+    `);
+    const initial = await page
+      .getByRole("button", { name: "Moving fixed" })
+      .evaluate((button) => ({
+        top: button.getBoundingClientRect().top,
+        viewportHeight: window.innerHeight,
+      }));
+    expect(initial.top).toBeGreaterThan(initial.viewportHeight);
+    if (scrolled) {
+      await page.evaluate((top) => window.scrollTo(0, top - 100), initial.top);
+    }
+    const metrics = await page
+      .getByRole("button", { name: "Moving fixed" })
+      .evaluate((button) => {
+        const rect = button.getBoundingClientRect();
+        return {
+          top: rect.top,
+          scroll: window.scrollY,
+          hit:
+            document.elementFromPoint(rect.left + 15, rect.top + 15) === button,
+        };
+      });
+    expect(
+      Math.abs(initial.top - metrics.top - metrics.scroll),
+    ).toBeLessThanOrEqual(1);
+    expect(metrics.scroll > 0).toBe(scrolled);
+    expect(metrics.hit).toBe(scrolled);
+    expect(await findPhoneLayoutProblems(page)).toEqual([]);
+  });
+}
+
+for (const placement of ["document", "nested scroller"]) {
+  for (const scrolled of [false, true]) {
+    test(`an invisible reachable control below the ${placement} fold is reported ${scrolled ? "after scrolling" : "at origin"}`, async ({
+      page,
+    }) => {
+      // safe-html: static transparent control with enumerated scrolling fixture CSS.
+      await page.setContent(`
+        <style>
+          html, body { margin: 0; min-height: 200vh; }
+          #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; ${placement === "nested scroller" ? "overflow:auto" : ""}; }
+          #extent { width: 1px; height: 300px; }
+          button { position: absolute; left: 20px; top: ${placement === "nested scroller" ? 200 : 0}px; width: 40px; height: 40px; opacity:0; }
+        </style>
+        <div id="region"><div id="extent"></div><button aria-label="Hidden below fold"></button></div>
+      `);
+      if (scrolled) {
+        await page.evaluate(() => window.scrollTo(0, 50));
+        await page.locator("#region").evaluate((box) => {
+          box.scrollTop = 50;
+        });
+      }
+      const metrics = await page
+        .getByRole("button", { name: "Hidden below fold" })
+        .evaluate((button) => ({
+          top: button.getBoundingClientRect().top,
+          viewportHeight: window.innerHeight,
+          scroll: window.scrollY,
+          opacity: getComputedStyle(button).opacity,
+        }));
+      expect(metrics.top).toBeGreaterThan(metrics.viewportHeight);
+      expect(metrics.scroll).toBe(scrolled ? 50 : 0);
+      expect(metrics.opacity).toBe("0");
+      if (placement === "nested scroller") {
+        await expect(page.locator("#region")).toHaveJSProperty(
+          "scrollHeight",
+          300,
+        );
+        await expect(page.locator("#region")).toHaveJSProperty(
+          "scrollTop",
+          scrolled ? 50 : 0,
+        );
+      }
+      expect(await findPhoneLayoutProblems(page)).toEqual([
+        "hover-only controls:",
+        '  button "Hidden below fold" is invisible until hovered',
+      ]);
+    });
+  }
+}
+
+for (const hidden of ['aria-hidden="true"', "inert"]) {
+  test(`an explicitly hidden below-fold region ${hidden} excludes invisible controls`, async ({
+    page,
+  }) => {
+    // safe-html: static transparent control with enumerated hiding fixture attributes.
+    await page.setContent(`
+      <style>
+        body { min-height: 200vh; }
+        #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; }
+        button { width: 40px; height: 40px; opacity:0; }
+      </style>
+      <div id="region" ${hidden}><button aria-label="Intentionally hidden"></button></div>
+    `);
+    const metrics = await page.locator("button").evaluate((button) => ({
+      top: button.getBoundingClientRect().top,
+      viewportHeight: window.innerHeight,
+      width: button.getBoundingClientRect().width,
+    }));
+    expect(metrics.top).toBeGreaterThan(metrics.viewportHeight);
+    expect(metrics.width).toBe(40);
+    expect(await findPhoneLayoutProblems(page)).toEqual([]);
+  });
+}
+
+for (const proxy of ["none", "label", "painted sibling"]) {
+  for (const scrolled of [false, true]) {
+    test(`a transparent below-fold native field requires a reachable ${proxy} proxy ${scrolled ? "after scrolling" : "at origin"}`, async ({
+      page,
+    }) => {
+      // safe-html: static native field with enumerated below-screen proxy markup.
+      await page.setContent(`
+        <style>
+          html, body { margin: 0; min-height: 200vh; }
+          #region { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; }
+          input, #proxy { position: absolute; left: 0; top: 0; width: 100px; height: 40px; }
+          input { opacity:0; z-index:1; }
+          #proxy { background:gray; pointer-events:none; }
+          label { position: absolute; top: 60px; }
+        </style>
+        <div id="region">
+          <input id="field" aria-label="Below fold field">
+          ${proxy === "label" ? '<label for="field">Proxy</label>' : ""}
+          ${proxy === "painted sibling" ? '<span id="proxy">Proxy</span>' : ""}
+        </div>
+      `);
+      if (scrolled) {
+        await page.evaluate(() => window.scrollTo(0, 50));
+      }
+      const metrics = await page.locator("input").evaluate((field) => ({
+        top: field.getBoundingClientRect().top,
+        viewportHeight: window.innerHeight,
+        scroll: window.scrollY,
+      }));
+      expect(metrics.top).toBeGreaterThan(metrics.viewportHeight);
+      expect(metrics.scroll).toBe(scrolled ? 50 : 0);
+      if (proxy !== "none") {
+        const affordance = await page
+          .getByText("Proxy", { exact: true })
+          .evaluate((element) => ({
+            top: element.getBoundingClientRect().top,
+            opacity: getComputedStyle(element).opacity,
+            width: element.getBoundingClientRect().width,
+          }));
+        expect(affordance.top).toBeGreaterThan(metrics.viewportHeight);
+        expect(affordance.opacity).toBe("1");
+        expect(affordance.width).toBeGreaterThan(1);
+      }
+      expect(await findPhoneLayoutProblems(page)).toEqual(
+        proxy === "none"
+          ? [
+              "hover-only controls:",
+              '  input "Below fold field" is invisible until hovered',
+            ]
+          : [],
+      );
+    });
+  }
+}

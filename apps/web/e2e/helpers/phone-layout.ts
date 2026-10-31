@@ -83,6 +83,68 @@ const collectPhoneLayoutProblems = (): string[] => {
     max: Math.min(positions.max + scroll.offset - scroll.min, max + tolerance),
   });
   const stationaryScroll = { offset: 0, min: 0, max: 0 };
+  const containingBlockProperties = [
+    "transform",
+    "translate",
+    "rotate",
+    "scale",
+    "perspective",
+    "filter",
+    "backdrop-filter",
+  ];
+  const containingBlockWillChange = new Set([
+    ...containingBlockProperties,
+    "contain",
+    "transform-style",
+    "content-visibility",
+  ]);
+  const establishesFixedContainingBlock = (element: Element) => {
+    const style = getComputedStyle(element);
+    return (
+      containingBlockProperties.some((property) => {
+        // A filter on the document root does not change fixed positioning.
+        if (property === "filter" && element === document.documentElement) {
+          return false;
+        }
+        const value = style.getPropertyValue(property);
+        return value !== "" && value !== "none";
+      }) ||
+      style.transformStyle === "preserve-3d" ||
+      style.contain
+        .split(/\s+/u)
+        .some((value) =>
+          ["layout", "paint", "strict", "content"].includes(value),
+        ) ||
+      style.contentVisibility === "auto" ||
+      style.contentVisibility === "hidden" ||
+      style.willChange
+        .split(",")
+        .some((value) => containingBlockWillChange.has(value.trim()))
+    );
+  };
+  const clippingAncestors = (element: Element) => {
+    const ancestors: Element[] = [];
+    for (let current = element; ;) {
+      let parent = current.parentElement;
+      if (getComputedStyle(current).position === "fixed") {
+        // A fixed box escapes intervening overflow clips until its containing
+        // block; a fixed ancestor's descendants follow the same boundary.
+        while (parent !== null && !establishesFixedContainingBlock(parent)) {
+          parent = parent.parentElement;
+        }
+        if (parent === null) {
+          return { ancestors, root: "viewport" } as const;
+        }
+      }
+      if (parent === null) {
+        return { ancestors, root: "document" } as const;
+      }
+      if (parent !== document.body && parent !== document.documentElement) {
+        ancestors.push(parent);
+      }
+      current = parent;
+    }
+  };
   // Buttons widen their hit area on touch with an absolutely positioned
   // pseudo-element; the target is whichever is larger.
   const targetSize = (element: Element, rect: DOMRect) => {
@@ -155,23 +217,15 @@ const collectPhoneLayoutProblems = (): string[] => {
     const overflow = getComputedStyle(root).overflowY;
     return overflow === "hidden" || overflow === "clip";
   });
-  const cutOff: string[] = [];
-  for (const { element, rect, opacity, visibility } of controls) {
-    if (opacity === 0 || visibility !== "visible") {
-      continue;
-    }
+  const clippingProblem = (element: Element, rect: DOMRect) => {
     let positionsX = { min: rect.left, max: rect.left };
     let positionsY = { min: rect.top, max: rect.top };
-    let fixed = getComputedStyle(element).position === "fixed";
+    const { ancestors, root } = clippingAncestors(element);
     let problem: string | null = null;
-    for (
-      let box = element.parentElement;
-      box !== null &&
-      box !== document.body &&
-      box !== document.documentElement &&
-      problem === null;
-      box = box.parentElement
-    ) {
+    for (const box of ancestors) {
+      if (problem !== null) {
+        break;
+      }
       const style = getComputedStyle(box);
       const boxRect = box.getBoundingClientRect();
       if (style.overflowX !== "visible") {
@@ -212,7 +266,6 @@ const collectPhoneLayoutProblems = (): string[] => {
           problem = `${describe(element)} is cut off at the top or bottom of ${describe(box)}`;
         }
       }
-      fixed ||= style.position === "fixed";
     }
     positionsX = clipReachability({
       positions: positionsX,
@@ -228,7 +281,7 @@ const collectPhoneLayoutProblems = (): string[] => {
       min: 0,
       max: window.innerHeight - rect.height,
       scroll:
-        fixed || rootClipsY
+        root === "viewport" || rootClipsY
           ? stationaryScroll
           : {
               offset: window.scrollY,
@@ -242,14 +295,23 @@ const collectPhoneLayoutProblems = (): string[] => {
             },
     });
     if (problem === null && positionsY.min > positionsY.max) {
-      problem = fixed
-        ? `${describe(element)} sits in a fixed layer past the top or bottom of the screen`
-        : `${describe(element)} sits past the top or bottom of a non-scrollable page`;
+      problem =
+        root === "viewport"
+          ? `${describe(element)} sits in a fixed layer past the top or bottom of the screen`
+          : `${describe(element)} sits past the top or bottom of a non-scrollable page`;
     }
-    if (problem !== null) {
-      cutOff.push(problem);
-    }
-  }
+    return problem;
+  };
+  const checkedControls = controls.map((control) => ({
+    ...control,
+    clippingProblem: clippingProblem(control.element, control.rect),
+  }));
+  const cutOff = checkedControls.flatMap(
+    ({ opacity, visibility, clippingProblem: problem }) =>
+      opacity === 0 || visibility !== "visible" || problem === null
+        ? []
+        : [problem],
+  );
 
   const sized = controls
     .filter(
@@ -327,10 +389,7 @@ const collectPhoneLayoutProblems = (): string[] => {
         effectiveOpacity(proxy) > 0.05 &&
         proxyRect.width > 1 &&
         proxyRect.height > 1 &&
-        proxyRect.right > 0 &&
-        proxyRect.left < window.innerWidth &&
-        proxyRect.bottom > 0 &&
-        proxyRect.top < window.innerHeight &&
+        clippingProblem(proxy, proxyRect) === null &&
         (proxy.textContent.trim() !== "" ||
           style.backgroundImage !== "none" ||
           (style.backgroundColor !== "rgba(0, 0, 0, 0)" &&
@@ -366,19 +425,20 @@ const collectPhoneLayoutProblems = (): string[] => {
     });
   };
   const hoverOnly: string[] = [];
-  for (const { element, rect, opacity, visibility } of controls) {
+  for (const {
+    element,
+    rect,
+    opacity,
+    visibility,
+    clippingProblem: problem,
+  } of checkedControls) {
     if (
       visibility === "visible" &&
       (opacity > 0.05 || hasVisibleProxy(element, rect))
     ) {
       continue;
     }
-    if (
-      rect.right <= 0 ||
-      rect.left >= window.innerWidth ||
-      rect.bottom <= 0 ||
-      rect.top >= window.innerHeight
-    ) {
+    if (problem !== null) {
       continue;
     }
     hoverOnly.push(`${describe(element)} is invisible until hovered`);
