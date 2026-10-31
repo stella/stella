@@ -64,10 +64,18 @@ import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
-const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
-  scenario.type === "case-law"
-    ? describeServed(scenario.served)
-    : `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
+  switch (scenario.type) {
+    case "case-law":
+      return describeServed(scenario.served);
+    case "data-exports":
+    case "request-receipts":
+      return `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
+    default:
+      scenario satisfies never;
+      return panic("Unknown scheduled measurement scenario", scenario);
+  }
+};
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -468,12 +476,19 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           task: string,
           scenario: ScheduledJobScenario,
         ) => {
-          if (scenario.type === "case-law") {
-            await serveCaseLaw(db, scenario.served);
-          } else if (scenario.type === "data-exports") {
-            await seedDataExportScenario(db, scenario);
-          } else {
-            await seedRequestReceiptScenario(db, scenario);
+          switch (scenario.type) {
+            case "case-law":
+              await serveCaseLaw(db, scenario.served);
+              break;
+            case "data-exports":
+              await seedDataExportScenario(db, scenario);
+              break;
+            case "request-receipts":
+              await seedRequestReceiptScenario(db, scenario);
+              break;
+            default:
+              scenario satisfies never;
+              panic("Unknown scheduled measurement scenario", scenario);
           }
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
