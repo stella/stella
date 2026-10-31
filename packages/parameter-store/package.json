@@ -18,7 +18,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
-    "@aws-sdk/client-ssm": "3.1147.0",
+    "@aws-sdk/client-ssm": "3.1156.0",
     "@stll/concurrency": "workspace:*",
     "better-result": "catalog:"
   },
