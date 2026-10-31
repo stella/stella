@@ -16,13 +16,16 @@ const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 export type AuditDisposition =
-  | { status: "fix_available"; patchedVersions: string[] }
+  | {
+      status: "fix_available";
+      installableVersions: string[];
+      quarantinedVersions: InstallableRelease[];
+    }
   | {
       status: "fix_in_quarantine";
       package: string;
-      version: string;
-      installableSince: string;
-      patchedVersions: string[];
+      installableVersions: [];
+      quarantinedVersions: InstallableRelease[];
     }
   | {
       status: "pinned_resolution_blocked";
@@ -81,6 +84,7 @@ type SelectDispositionOptions = {
   acceptance: BaselineEntry | undefined;
   blockers: string[];
   patchedVersions: string[];
+  selectableVersions: string[];
   pins: ReadonlySet<string>;
   quarantinedByVersion: ReadonlyMap<string, InstallableRelease>;
 };
@@ -89,14 +93,15 @@ const selectDisposition = ({
   acceptance,
   blockers,
   patchedVersions,
+  selectableVersions,
   pins,
   quarantinedByVersion,
 }: SelectDispositionOptions): AuditDisposition => {
-  const quarantinedPatches = patchedVersions.flatMap((version) => {
+  const quarantinedPatches = selectableVersions.flatMap((version) => {
     const release = quarantinedByVersion.get(version);
     return release === undefined ? [] : [release];
   });
-  const installablePatches = patchedVersions.filter(
+  const installablePatches = selectableVersions.filter(
     (version) => !quarantinedByVersion.has(version),
   );
   const onlyMovableResolutionPins =
@@ -114,9 +119,8 @@ const selectDisposition = ({
     return {
       status: "fix_in_quarantine",
       package: advisory.package,
-      version: quarantinedPatch.version,
-      installableSince: quarantinedPatch.installableSince,
-      patchedVersions,
+      installableVersions: [],
+      quarantinedVersions: quarantinedPatches,
     };
   }
   if (pins.size > 0 && patchedVersions.length > 0) {
@@ -131,7 +135,11 @@ const selectDisposition = ({
     return { status: "upstream_blocked", blockers, patchedVersions };
   }
   return acceptance === undefined
-    ? { status: "fix_available", patchedVersions }
+    ? {
+        status: "fix_available",
+        installableVersions: installablePatches,
+        quarantinedVersions: quarantinedPatches,
+      }
     : { status: "accepted", acceptance };
 };
 
@@ -265,6 +273,25 @@ type RequirementOwner = {
 // Resolutions and overrides apply to every copy: one that admits no patched
 // release is a pin.
 const MANIFEST_REQUIREMENT_FIELDS = ["resolutions", "overrides"] as const;
+const requirementOwners = (
+  packages: ReturnType<typeof lockPackages>,
+  sources: readonly ManifestSource[],
+): RequirementOwner[] => [
+  ...packages.map(({ key, details }) => ({
+    key,
+    label: key,
+    details,
+    fields: PACKAGE_REQUIREMENT_FIELDS,
+    manifest: false,
+  })),
+  ...sources.map(({ owner, label, manifest: details }) => ({
+    key: owner,
+    label,
+    details,
+    fields: OWNER_REQUIREMENT_FIELDS,
+    manifest: true,
+  })),
+];
 type ManifestPinsOptions = {
   sources: readonly ManifestSource[];
   packageName: string;
@@ -311,22 +338,7 @@ export const assessAdvisories = ({
   const packages = lockPackages(lockfile);
   const keys = new Set(packages.map(({ key }) => key));
   const sources = manifestSources(manifest, lockfile);
-  const owners: RequirementOwner[] = [
-    ...packages.map(({ key, details }) => ({
-      key,
-      label: key,
-      details,
-      fields: PACKAGE_REQUIREMENT_FIELDS,
-      manifest: false,
-    })),
-    ...sources.map(({ owner, label, manifest: details }) => ({
-      key: owner,
-      label,
-      details,
-      fields: OWNER_REQUIREMENT_FIELDS,
-      manifest: true,
-    })),
-  ];
+  const owners = requirementOwners(packages, sources);
   return advisories.map((advisory) => {
     if (advisory.vulnerableVersions === "") {
       return invalidAssessment(
@@ -388,6 +400,7 @@ export const assessAdvisories = ({
     );
     const pins = new Set<string>();
     const blockers: string[] = [];
+    let selectableVersions = patchedVersions;
     const overridden = sources.some(({ manifest: source }) =>
       MANIFEST_REQUIREMENT_FIELDS.some((field) => {
         const entries = source[field];
@@ -396,6 +409,7 @@ export const assessAdvisories = ({
     );
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
+      let selectableForNode = nodePatches;
       for (const pin of manifestPins({
         sources,
         packageName: advisory.package,
@@ -411,6 +425,9 @@ export const assessAdvisories = ({
             `${node.key}@${node.version}: no forward patched release`,
           );
         }
+        selectableVersions = selectableVersions.filter((version) =>
+          selectableForNode.includes(version),
+        );
         continue;
       }
       const parents: string[] = [];
@@ -432,6 +449,9 @@ export const assessAdvisories = ({
           }
           parents.push(
             `${parent.label} requires ${advisory.package} ${requirement}`,
+          );
+          selectableForNode = selectableForNode.filter((version) =>
+            Bun.semver.satisfies(version, requirement),
           );
           if (
             nodePatches.some((version) =>
@@ -463,12 +483,32 @@ export const assessAdvisories = ({
           `${node.key}@${node.version}: no patched release in resolved major`,
         );
       }
+      if (parents.length === 0) {
+        selectableForNode = selectableForNode.filter(
+          (version) =>
+            version.split(".").at(0) === node.version.split(".").at(0),
+        );
+      }
+      selectableVersions = selectableVersions.filter((version) =>
+        selectableForNode.includes(version),
+      );
+    }
+    if (
+      selectableVersions.length === 0 &&
+      patchedVersions.length > 0 &&
+      pins.size === 0 &&
+      blockers.length === 0
+    ) {
+      blockers.push(
+        "no single patched release satisfies every affected resolution path",
+      );
     }
     const disposition = selectDisposition({
       advisory,
       acceptance,
       blockers,
       patchedVersions,
+      selectableVersions,
       pins,
       quarantinedByVersion,
     });
@@ -486,9 +526,9 @@ export const assessAdvisories = ({
 const dispositionAction = (disposition: AuditDisposition): string => {
   switch (disposition.status) {
     case "fix_available":
-      return `Update the lockfile to a patched release: ${disposition.patchedVersions.slice(-3).join(", ")}`;
+      return `Update the lockfile to a patched release: ${disposition.installableVersions.slice(-3).join(", ")}`;
     case "fix_in_quarantine":
-      return `Temporarily add ${disposition.package} to minimumReleaseAgeExcludes with # quarantine-expires: ${disposition.installableSince}, then pin ${disposition.version}`;
+      return `Temporarily add ${disposition.package} to minimumReleaseAgeExcludes with # quarantine-expires: ${disposition.quarantinedVersions.at(0)?.installableSince ?? panic("Missing quarantined patch")}, then pin ${disposition.quarantinedVersions.at(0)?.version ?? panic("Missing quarantined patch")}`;
     case "pinned_resolution_blocked":
       return `Lift ${disposition.pins.join("; ")}; patched releases: ${disposition.patchedVersions.slice(-3).join(", ")}${disposition.blockers.length > 0 ? `; then upgrade the blocking parent: ${disposition.blockers.join("; ")}` : ""}`;
     case "upstream_blocked":

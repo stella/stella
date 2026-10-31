@@ -57,14 +57,19 @@ test("remediation plans pins, quarantine exclusions, and dated blocker acceptanc
     assessments: [
       assessment("available", {
         status: "fix_available",
-        patchedVersions: ["1.4.1"],
+        installableVersions: ["1.4.1"],
+        quarantinedVersions: [],
       }),
       assessment("quarantined", {
         status: "fix_in_quarantine",
-        patchedVersions: ["1.4.1"],
         package: "quarantined",
-        version: "1.4.1",
-        installableSince: "2026-11-01T04:44:07.718Z",
+        installableVersions: [],
+        quarantinedVersions: [
+          {
+            version: "1.4.1",
+            installableSince: "2026-11-01T04:44:07.718Z",
+          },
+        ],
       }),
       assessment("blocked", {
         status: "upstream_blocked",
@@ -92,6 +97,123 @@ test("remediation plans pins, quarantine exclusions, and dated blocker acceptanc
       affectedPaths: ["blocked"],
     }),
   ]);
+});
+
+describe("remediation selects one complete package fix", () => {
+  const assessment = ({
+    id,
+    vulnerableVersions,
+    disposition,
+  }: {
+    id: string;
+    vulnerableVersions: string;
+    disposition: AdvisoryAssessment["disposition"];
+  }): AdvisoryAssessment => ({
+    advisory: { ...currentAdvisory, id, vulnerableVersions },
+    disposition,
+    acceptance: undefined,
+    affectedPaths: ["pkg"],
+    action: "test action",
+  });
+  const available = (
+    id: string,
+    vulnerableVersions: string,
+    installableVersions: string[],
+    quarantinedVersions: {
+      version: string;
+      installableSince: string;
+    }[] = [],
+  ) =>
+    assessment({
+      id,
+      vulnerableVersions,
+      disposition: {
+        status: "fix_available",
+        installableVersions,
+        quarantinedVersions,
+      },
+    });
+  const now = new Date("2026-10-31T12:00:00.000Z");
+
+  test("two advisories select the lowest common fix in either input order", () => {
+    const assessments = [
+      available("GHSA-1111-1111-1111", "<1.5.1", ["1.5.1"]),
+      available("GHSA-2222-2222-2222", "<=1.4.0", ["1.4.1", "1.5.1"]),
+    ];
+    for (const input of [assessments, assessments.toReversed()]) {
+      const plan = planDependencyAuditRemediation({ assessments: input, now });
+      expect([...plan.pins]).toEqual([["pkg", "1.5.1"]]);
+      expect(plan.quarantineExclusions).toEqual([]);
+    }
+  });
+
+  test("an installable common fix wins over an earlier quarantined fix", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        available(
+          "GHSA-1111-1111-1111",
+          "<=1.4.0",
+          ["1.4.2"],
+          [
+            {
+              version: "1.4.1",
+              installableSince: "2026-11-01T04:44:07.718Z",
+            },
+          ],
+        ),
+      ],
+    });
+    expect([...plan.pins]).toEqual([["pkg", "1.4.2"]]);
+    expect(plan.quarantineExclusions).toEqual([]);
+  });
+
+  test("a quarantined fix is pinned with its temporary exclusion", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        assessment({
+          id: "GHSA-1111-1111-1111",
+          vulnerableVersions: "<=1.4.0",
+          disposition: {
+            status: "fix_in_quarantine",
+            package: "pkg",
+            installableVersions: [],
+            quarantinedVersions: [
+              {
+                version: "1.4.1",
+                installableSince: "2026-11-01T04:44:07.718Z",
+              },
+            ],
+          },
+        }),
+      ],
+    });
+    expect([...plan.pins]).toEqual([["pkg", "1.4.1"]]);
+    expect(plan.quarantineExclusions).toEqual([
+      {
+        package: "pkg",
+        version: "1.4.1",
+        quarantineExpires: "2026-11-01T04:44:07.718Z",
+      },
+    ]);
+  });
+
+  test("no common fix drafts every remaining advisory without a partial pin", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        available("GHSA-1111-1111-1111", ">=1.5.0", ["1.4.1"]),
+        available("GHSA-2222-2222-2222", "<2.0.0", ["2.0.0"]),
+      ],
+    });
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.quarantineExclusions).toEqual([]);
+    expect(plan.acceptanceDrafts.map(({ id }) => id)).toEqual([
+      "GHSA-1111-1111-1111",
+      "GHSA-2222-2222-2222",
+    ]);
+  });
 });
 
 test("newer patched releases preserve the first installable patch deadline", () => {

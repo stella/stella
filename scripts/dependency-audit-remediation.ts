@@ -1,7 +1,10 @@
 import { panic } from "better-result";
 
 import type { BaselineEntry } from "./dependency-audit";
-import type { AdvisoryAssessment } from "./dependency-audit-assessment";
+import type {
+  AdvisoryAssessment,
+  InstallableRelease,
+} from "./dependency-audit-assessment";
 
 export type DependencyAuditRemediationPlan = {
   pins: ReadonlyMap<string, string>;
@@ -24,6 +27,59 @@ const expiryDate = (now: Date): string => {
   return expiry.toISOString().slice(0, 10);
 };
 
+const acceptanceDraft = (
+  assessment: AdvisoryAssessment,
+  now: Date,
+): BaselineEntry => ({
+  id: assessment.advisory.id,
+  severity: assessment.advisory.severity,
+  package: assessment.advisory.package,
+  title: assessment.advisory.title,
+  owner: "supply-chain",
+  reason:
+    "A patched release is not currently selectable; review the dependency path before this acceptance expires.",
+  expiresOn: expiryDate(now),
+  affectedPaths: assessment.affectedPaths,
+});
+
+const candidateVersions = (assessment: AdvisoryAssessment): string[] => {
+  switch (assessment.disposition.status) {
+    case "fix_available":
+      return [
+        ...assessment.disposition.installableVersions,
+        ...assessment.disposition.quarantinedVersions.map(
+          ({ version }) => version,
+        ),
+      ];
+    case "fix_in_quarantine":
+      return assessment.disposition.quarantinedVersions.map(
+        ({ version }) => version,
+      );
+    case "pinned_resolution_blocked":
+    case "upstream_blocked":
+      return assessment.disposition.patchedVersions;
+    case "accepted":
+      return [];
+    default:
+      assessment.disposition satisfies never;
+      return panic("Unhandled dependency audit remediation disposition");
+  }
+};
+
+const quarantinedCandidates = (
+  assessments: readonly AdvisoryAssessment[],
+): Map<string, InstallableRelease> =>
+  new Map(
+    assessments.flatMap(({ disposition }) =>
+      disposition.status === "fix_available" ||
+      disposition.status === "fix_in_quarantine"
+        ? disposition.quarantinedVersions.map(
+            (release) => [release.version, release] as const,
+          )
+        : [],
+    ),
+  );
+
 export const planDependencyAuditRemediation = ({
   assessments,
   now,
@@ -36,46 +92,59 @@ export const planDependencyAuditRemediation = ({
   }[] = [];
   const acceptanceDrafts: BaselineEntry[] = [];
 
-  for (const assessment of assessments) {
-    const { advisory, disposition } = assessment;
-    switch (disposition.status) {
-      case "fix_available": {
-        const version = disposition.patchedVersions.at(0);
-        if (version !== undefined) {
-          pins.set(advisory.package, version);
-        }
-        break;
-      }
-      case "fix_in_quarantine": {
-        pins.set(advisory.package, disposition.version);
+  const groups = Map.groupBy(assessments, ({ advisory }) => advisory.package);
+  for (const [packageName, group] of groups) {
+    const actionable = group.filter(
+      ({ disposition }) =>
+        disposition.status === "fix_available" ||
+        disposition.status === "fix_in_quarantine",
+    );
+    const blocked = group.some(
+      ({ disposition }) => disposition.status === "upstream_blocked",
+    );
+    const candidates = new Set(actionable.flatMap(candidateVersions));
+    const common = [...candidates]
+      .filter((version) =>
+        group.every(
+          ({ advisory }) =>
+            !Bun.semver.satisfies(version, advisory.vulnerableVersions),
+        ),
+      )
+      .filter((version) =>
+        actionable.every((assessment) =>
+          candidateVersions(assessment).includes(version),
+        ),
+      )
+      .toSorted(Bun.semver.order);
+    const quarantined = quarantinedCandidates(actionable);
+    const installable = common.find((version) => !quarantined.has(version));
+    const selected = installable ?? common.at(0);
+
+    if (
+      !blocked &&
+      actionable.length === group.length &&
+      selected !== undefined
+    ) {
+      pins.set(packageName, selected);
+      const quarantinedRelease = quarantined.get(selected);
+      if (quarantinedRelease !== undefined) {
         quarantineExclusions.push({
-          package: advisory.package,
-          version: disposition.version,
-          quarantineExpires: disposition.installableSince,
+          package: packageName,
+          version: selected,
+          quarantineExpires: quarantinedRelease.installableSince,
         });
-        break;
       }
-      case "upstream_blocked":
-        if (assessment.acceptance === undefined) {
-          acceptanceDrafts.push({
-            id: advisory.id,
-            severity: advisory.severity,
-            package: advisory.package,
-            title: advisory.title,
-            owner: "supply-chain",
-            reason:
-              "A patched release is not currently selectable; review the dependency path before this acceptance expires.",
-            expiresOn: expiryDate(now),
-            affectedPaths: assessment.affectedPaths,
-          });
-        }
-        break;
-      case "accepted":
-      case "pinned_resolution_blocked":
-        break;
-      default:
-        disposition satisfies never;
-        panic("Unhandled dependency audit remediation disposition");
+      continue;
+    }
+
+    for (const assessment of group) {
+      if (
+        assessment.acceptance === undefined &&
+        assessment.disposition.status !== "accepted" &&
+        assessment.disposition.status !== "pinned_resolution_blocked"
+      ) {
+        acceptanceDrafts.push(acceptanceDraft(assessment, now));
+      }
     }
   }
 

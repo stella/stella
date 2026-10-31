@@ -280,14 +280,18 @@ const multiLineAssessment = ({
     versions: new Map([["example", published]]),
   }).at(0)?.disposition;
 
-test("an advisory spanning release lines keeps each line's forward patch", () => {
+test("an advisory offers only patches accepted by its resolution path", () => {
   expect(
     multiLineAssessment({
       locked: "1.2.2",
       requirement: "^1.0.0",
       published: ["1.2.2", "1.2.3", "2.1.0", "2.1.1"],
     }),
-  ).toEqual({ status: "fix_available", patchedVersions: ["1.2.3", "2.1.1"] });
+  ).toEqual({
+    status: "fix_available",
+    installableVersions: ["1.2.3"],
+    quarantinedVersions: [],
+  });
 });
 
 test("a workspace manifest pin blocks the fix like a root pin", () => {
@@ -338,7 +342,10 @@ test("each workspace requirement is judged against the copy it resolves to", () 
       versions: new Map([["example", published]]),
     }).at(0)?.disposition;
   expect(assess(["1.2.2", "1.2.3", "2.1.0", "2.1.1"])).toEqual({
-    status: "fix_available",
+    status: "upstream_blocked",
+    blockers: [
+      "no single patched release satisfies every affected resolution path",
+    ],
     patchedVersions: ["1.2.3", "2.1.1"],
   });
   expect(assess(["1.2.2", "1.2.3", "2.1.0"])).toEqual({
@@ -397,7 +404,8 @@ test("an override replaces the parent range it widens", () => {
   });
   expect(result?.disposition).toEqual({
     status: "fix_available",
-    patchedVersions: ["2.0.0"],
+    installableVersions: ["2.0.0"],
+    quarantinedVersions: [],
   });
 });
 
@@ -459,9 +467,13 @@ test("a compatible security patch in release-age quarantine is actionable", () =
   expect(result?.disposition).toEqual({
     status: "fix_in_quarantine",
     package: "example",
-    version: "1.4.1",
-    installableSince: "2026-11-01T04:44:07.718Z",
-    patchedVersions: ["1.4.1"],
+    installableVersions: [],
+    quarantinedVersions: [
+      {
+        version: "1.4.1",
+        installableSince: "2026-11-01T04:44:07.718Z",
+      },
+    ],
   });
   expect(result?.action).toContain(
     "minimumReleaseAgeExcludes with # quarantine-expires: 2026-11-01T04:44:07.718Z",
