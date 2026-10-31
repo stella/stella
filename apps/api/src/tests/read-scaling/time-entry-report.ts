@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   contacts,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
   timeEntries,
   workspaceMembers,
   workspaces,
@@ -39,6 +41,12 @@ export const seedTimeEntryReportScaling = async (
     name: "Report fixture",
     slug: organizationId,
     createdAt: new Date("2020-01-01"),
+  });
+  // Member capacity needs the organization's access state before a second
+  // member joins, as tests that add colleagues do.
+  await db.insert(organizationAccessStates).values({
+    organizationId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
   });
   await db.insert(user).values({
     id: userId,
@@ -108,7 +116,7 @@ export const seedTimeEntryReportScaling = async (
       scopedDb: NO_DB,
       audit: NO_AUDIT,
       featureAccessSnapshot,
-      getActiveWorkspaceIds: async () => [workspaceId],
+      getActiveWorkspaceIds: async () => await Promise.resolve([workspaceId]),
       request: new Request("https://example.test/v1/time-entries/report"),
     },
     cleanup: async () => {
