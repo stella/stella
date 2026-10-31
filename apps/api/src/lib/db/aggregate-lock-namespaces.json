@@ -12,7 +12,6 @@
   "expenseCapacity": "hashtext('expense-capacity')",
   "fileComparisonCapacity": "0x0f10ccb2::integer",
   "legislationAmendmentWork": "0x0f10ccad::integer",
-  "legalHoldOrganization": "19054",
   "mcpOAuthState": "0x4d43504f::integer",
   "orgFeatureAdmission": "0x0f10ccaa::integer",
   "organizationObjectIntent": "0x0f10ccb0::integer",

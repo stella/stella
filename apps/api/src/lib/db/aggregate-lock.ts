@@ -166,6 +166,9 @@ const CHAT_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b3;
 const CHAT_OWNER_STORED_CONTENT_EGRESS_LOCK_NAMESPACE = 0x0f_10_cc_b4;
 const ORGANIZATION_OBJECT_INTENT_LOCK_NAMESPACE = 0x0f_10_cc_b0;
 const READER_ANNOTATION_LOCK_NAMESPACE = 0x0f_10_cc_af;
+// Legal-hold organization fences: a plain two-key namespace taken outside the
+// aggregate history, in organization ID order (see lockLegalHoldOrganizations).
+const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -3097,20 +3100,24 @@ export const lockLegalHoldOrganizations = async ({
     .select({ id: organization.id })
     .from(organization)
     .where(predicate);
-  for (const { id } of rows.toSorted(({ id: a }, { id: b }) =>
-    compareCodeUnit(a, b),
-  )) {
-    // db-await-in-loop: legal-hold fences acquire in organization ID order.
-    if (mode === "share") {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock_shared(19054, hashtext(${id}))`,
-      );
-    } else {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(19054, hashtext(${id}))`,
-      );
-    }
+  if (rows.length === 0) {
+    return rows;
   }
+  // One statement takes every fence in organization ID order.
+  const ordered = sql.join(
+    rows
+      .map(({ id }) => id)
+      .toSorted(compareCodeUnit)
+      .map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const fence =
+    mode === "share"
+      ? sql`pg_advisory_xact_lock_shared(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(fence.id))`
+      : sql`pg_advisory_xact_lock(${LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE}, hashtext(fence.id))`;
+  await tx.execute(
+    sql`SELECT ${fence} FROM (SELECT id, position FROM unnest(ARRAY[${ordered}]::text[]) WITH ORDINALITY AS fences(id, position) ORDER BY position) fence ORDER BY fence.position`,
+  );
   return rows;
 };
 
