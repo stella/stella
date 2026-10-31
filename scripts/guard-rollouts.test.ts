@@ -50,7 +50,7 @@ const readFixtures = (directory: string) =>
     encoding: "utf-8",
     recursive: true,
   })
-    .filter((name) => /\.fixture\.tsx?$/u.test(name))
+    .filter((name) => /\.fixture(?:\.test)?\.tsx?$/u.test(name))
     .map((name) => {
       const file = `${directory}/${name}`;
       return { file, source: readFileSync(path.join(ROOT, file), "utf-8") };
@@ -58,17 +58,19 @@ const readFixtures = (directory: string) =>
 
 const fixtures = readFixtures(FIXTURES);
 
-test("fixture discovery reads .fixture.tsx files", () => {
+test("fixture discovery reads TypeScript and test fixture suffixes", () => {
   const directory = mkdtempSync(path.join(ROOT, ".fixture-discovery-"));
   try {
     writeFileSync(path.join(directory, "rule.fixture.tsx"), "tsx");
     writeFileSync(path.join(directory, "rule.fixture.ts"), "ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.ts"), "test-ts");
+    writeFileSync(path.join(directory, "rule.fixture.test.tsx"), "test-tsx");
     writeFileSync(path.join(directory, "rule.ts"), "other");
     expect(
       readFixtures(path.basename(directory))
         .map(({ source }) => source)
         .toSorted(),
-    ).toEqual(["ts", "tsx"]);
+    ).toEqual(["test-ts", "test-tsx", "ts", "tsx"]);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
