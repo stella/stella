@@ -18,7 +18,7 @@ import { writeScalingScenarios } from "@/api/tests/read-scaling/write-scenarios"
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "registered handler scaling",
   () => {
-    test("organization creation keeps the same work as account receipt history grows", async () => {
+    test("organization creation keeps the same work as receipt history and memberships grow", async () => {
       const small = await organizationCreateScalingScenario.measure({
         size: 10,
       });

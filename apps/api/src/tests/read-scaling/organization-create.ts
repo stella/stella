@@ -1,9 +1,9 @@
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 
-import { organization, user } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { organizationCreationRequests } from "@/api/db/schema";
 import createOrganization from "@/api/handlers/organizations/create";
@@ -37,7 +37,28 @@ const seedCreationHistory = async (size: number) => {
       fingerprint: `history-${index}`,
     })),
   );
-  return { userId, email, name: `Scaling ${userId}` };
+  const history = Array.from({ length: size }, () => ({
+    id: mintAuthProviderId<"organization">(),
+    name: "Existing organization",
+    slug: Bun.randomUUIDv7(),
+    createdAt: new Date("2026-10-30T12:00:00Z"),
+  }));
+  await rootDb.insert(organization).values(history);
+  await rootDb.insert(member).values(
+    history.map(({ id }) => ({
+      id: mintAuthProviderId<"member">(),
+      organizationId: id,
+      userId,
+      role: "owner",
+      createdAt: new Date("2026-10-30T12:00:00Z"),
+    })),
+  );
+  return {
+    userId,
+    email,
+    name: `Scaling ${userId}`,
+    historyOrganizationIds: history.map(({ id }) => id),
+  };
 };
 
 type CreationFixture = Awaited<ReturnType<typeof seedCreationHistory>>;
@@ -46,6 +67,9 @@ const cleanupCreation = async (fixture: CreationFixture) => {
   await rootDb
     .delete(organization)
     .where(eq(organization.slug, fixture.userId.toLowerCase()));
+  await rootDb
+    .delete(organization)
+    .where(inArray(organization.id, fixture.historyOrganizationIds));
   await rootDb
     .delete(organizationCreationRequests)
     .where(eq(organizationCreationRequests.userId, fixture.userId));
