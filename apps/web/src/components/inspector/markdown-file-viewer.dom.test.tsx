@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
@@ -338,9 +339,11 @@ test.each([true, false])(
         ).toBe(false),
       );
     }
-    jest.useFakeTimers();
     edit(view.container, "Draft C");
-    await advance(400);
+    await act(async () => {
+      // real-time: this assertion covers the editor's production debounce.
+      await sleep(400);
+    });
     expect(view.container.textContent).toContain("Draft C");
     expect(
       view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),

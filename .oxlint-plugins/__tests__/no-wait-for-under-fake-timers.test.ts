@@ -214,6 +214,34 @@ test("reports when fake timers are reinstalled after a restoration", async () =>
   ).toEqual([5]);
 });
 
+test("reports a conditional fake-timer installation after restoration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useRealTimers();",
+      "  if (condition) jest.useFakeTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("reports a looped fake-timer installation after restoration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useRealTimers();",
+      "  for (const item of items) {",
+      "    jest.useFakeTimers();",
+      "  }",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([7]);
+});
+
 test("accepts when restoration is the last timer call before a wait", async () => {
   expect(
     await lint([
@@ -225,6 +253,20 @@ test("accepts when restoration is the last timer call before a wait", async () =
       "});",
     ]),
   ).toEqual([]);
+});
+
+test("reports when fake timers are installed after the wait", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useFakeTimers();",
+      "  jest.useRealTimers();",
+      "  await waitFor(() => true);",
+      "  jest.useFakeTimers();",
+      "});",
+    ]),
+  ).toEqual([5]);
 });
 
 test("reports when a nested helper may reinstall timers after restoration", async () => {

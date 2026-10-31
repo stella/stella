@@ -1,5 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, describe, expect, jest, test } from "bun:test";
+import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
@@ -530,19 +530,15 @@ describe("chat history page", () => {
       expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
     );
 
-    jest.useFakeTimers();
-    try {
-      await testing.act(async () => {
-        testing.fireEvent.change(field, { target: { value: "lease" } });
-      });
-      // The URL moves on before the typing's debounce fires.
-      await navigateTo({ q: "claim" });
-      await testing.act(async () => {
-        jest.advanceTimersByTime(1000);
-      });
-    } finally {
-      restoreRealTimers();
-    }
+    await testing.act(async () => {
+      testing.fireEvent.change(field, { target: { value: "lease" } });
+    });
+    // The URL moves on before the typing's debounce fires.
+    await navigateTo({ q: "claim" });
+    await testing.act(async () => {
+      // real-time: this assertion covers expiry of the abandoned debounce.
+      await sleep(1000);
+    });
 
     expect(inputValue(field)).toBe("claim");
     expect(searchChanges).toEqual([]);

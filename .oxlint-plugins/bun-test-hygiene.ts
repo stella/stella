@@ -1202,20 +1202,13 @@ export default eslintCompatPlugin({
               const lastRestoration = directRestorations(callback).findLast(
                 (call) => startsBefore(call, waitStatement),
               );
-              const lastDirectInstallation = fakeTimerCalls.findLast(
+              const hasLaterInstallation = fakeTimerCalls.some(
                 (call) =>
                   isInside(call, callback) &&
-                  isDirectStatement(call, callback) &&
-                  startsBefore(call, waitStatement),
-              );
-              const hasNestedInstallation = fakeTimerCalls.some(
-                (call) =>
-                  isInside(call, callback) &&
-                  containingFunction(call) !== callback,
+                  startsAfter(call, lastRestoration),
               );
               const restoredBeforeWait =
-                !hasNestedInstallation &&
-                startsAfter(lastRestoration, lastDirectInstallation);
+                lastRestoration !== undefined && !hasLaterInstallation;
               const localTimerState =
                 (inheritedFakeTimers || testHasFakeTimers) &&
                 !restoredBeforeWait;
