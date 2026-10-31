@@ -92,8 +92,8 @@ export const capturedSkDocumentReplayInput = async (
     sourceUrl: stored.sourceUrl,
     documentUrl: stored.documentUrl,
     metadata: stored.metadata,
-    readObject: (key) =>
-      Promise.resolve(Result.ok(captured.objects.get(key) ?? null)),
+    readObject: async (key) =>
+      await Promise.resolve(Result.ok(captured.objects.get(key) ?? null)),
   } satisfies StoredRawReparseInput;
 };
 

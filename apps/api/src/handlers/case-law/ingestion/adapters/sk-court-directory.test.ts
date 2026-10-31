@@ -110,8 +110,8 @@ describe("court registry enrichment", () => {
           documentUrl: null,
           metadata: {},
         });
-        expect(replay?.type).toBe("parsed");
-        if (replay?.type !== "parsed") {
+        expect(replay.type).toBe("parsed");
+        if (replay.type !== "parsed") {
           continue;
         }
         expect(replay.result.parserVersion).toBe(
@@ -561,8 +561,8 @@ describe("court registry enrichment", () => {
         documentUrl: null,
         metadata: {},
       });
-      expect(outcome?.type).toBe("parsed");
-      if (outcome?.type !== "parsed") {
+      expect(outcome.type).toBe("parsed");
+      if (outcome.type !== "parsed") {
         return;
       }
       expect(
@@ -610,8 +610,8 @@ describe("court registry enrichment", () => {
       documentUrl: null,
       metadata: {},
     });
-    expect(outcome?.type).toBe("parsed");
-    if (outcome?.type !== "parsed") {
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type !== "parsed") {
       return;
     }
     expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
