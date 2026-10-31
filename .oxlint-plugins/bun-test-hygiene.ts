@@ -1011,6 +1011,7 @@ const containingFunction = (node: AstNode) => {
   while (isAstNode(current)) {
     if (
       current.type === "ArrowFunctionExpression" ||
+      current.type === "FunctionDeclaration" ||
       current.type === "FunctionExpression"
     ) {
       return current;
@@ -1018,6 +1019,27 @@ const containingFunction = (node: AstNode) => {
     current = current.parent;
   }
   return null;
+};
+
+const TEST_FRAMEWORK_MODULES = new Set(["bun:test", "vitest", "@jest/globals"]);
+
+const testFrameworkExport = (context: ScopeContext, expression: unknown) => {
+  const binding = resolveImportedExpressionForEnforcement(context, expression);
+  if (binding !== null) {
+    return TEST_FRAMEWORK_MODULES.has(binding.source) ? binding.imported : null;
+  }
+  const unwrapped = unwrapExpression(expression);
+  return isIdentifierReference(unwrapped) &&
+    resolveVariable(context, unwrapped) === null
+    ? unwrapped.name
+    : null;
+};
+
+const timerFrameworkExport = (context: ScopeContext, callee: unknown) => {
+  const expression = unwrapExpression(callee);
+  return isAstNode(expression) && expression.type === "MemberExpression"
+    ? testFrameworkExport(context, expression.object)
+    : null;
 };
 
 export default eslintCompatPlugin({
@@ -1095,34 +1117,48 @@ export default eslintCompatPlugin({
             }
             const property = memberPropertyName(node.callee);
             const calleeName = getPropertyName(node.callee) ?? property;
-            if (property === "useFakeTimers") {
+            const owner = timerFrameworkExport(context, node.callee);
+            if (
+              property === "useFakeTimers" &&
+              (owner === "jest" || owner === "vi")
+            ) {
               fakeTimerCalls.push(node);
               return;
             }
             if (
-              property === "useRealTimers" ||
+              (property === "useRealTimers" &&
+                (owner === "jest" || owner === "vi")) ||
               calleeName === "restoreRealTimers"
             ) {
               realTimerCalls.push(node);
               return;
             }
-            if (calleeName === "beforeEach" || calleeName === "beforeAll") {
+            const frameworkName = testFrameworkExport(context, node.callee);
+            if (
+              frameworkName === "beforeEach" ||
+              frameworkName === "beforeAll"
+            ) {
               const callback = callbackArgument(node);
               if (callback !== undefined) {
-                hooks.push({ callback, kind: calleeName });
+                hooks.push({ callback, kind: frameworkName });
                 ownerCallbacks.push(callback);
               }
               return;
             }
             const registration = testRegistration(context, node);
-            if (registration?.kind === TEST_KIND.describe) {
+            const registrationName = registration?.exportName ?? frameworkName;
+            if (registrationName === "describe") {
               const callback = callbackArgument(node);
               if (callback !== undefined) {
                 suiteCallbacks.push(callback);
               }
               return;
             }
-            if (registration !== null) {
+            if (
+              registration !== null ||
+              registrationName === "test" ||
+              registrationName === "it"
+            ) {
               const callback = callbackArgument(node);
               if (callback !== undefined) {
                 ownerCallbacks.push(callback);

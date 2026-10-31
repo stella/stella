@@ -94,6 +94,54 @@ test("reports waits covered by a fake-timer beforeEach", async () => {
   ).toEqual([4]);
 });
 
+test("resolves an aliased fake-timer hook", async () => {
+  expect(
+    await lint([
+      'import { beforeEach as setup, jest, test } from "bun:test";',
+      "setup(() => jest.useFakeTimers());",
+      'test("unsafe", async () => {',
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([4]);
+});
+
+test("resolves a namespace-imported fake-timer hook", async () => {
+  expect(
+    await lint([
+      'import * as t from "vitest";',
+      "t.beforeEach(() => t.vi.useFakeTimers());",
+      't.test("unsafe", async () => {',
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([4]);
+});
+
+test("ignores fake timers in an uncalled module-level function declaration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      "function install() { jest.useFakeTimers(); }",
+      'test("safe", async () => {',
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([]);
+});
+
+test("treats a function declaration inside a test as possibly active", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  function install() { jest.useFakeTimers(); }",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([4]);
+});
+
 test("does not treat afterEach restoration as preceding the test", async () => {
   expect(
     await lint([
