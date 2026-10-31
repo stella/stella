@@ -1050,18 +1050,6 @@ export const emitTranscriptionDurationMismatchMetric = (
   modelId: TranscriptionModelId,
 ): void => {
   writeMetricLine({
-    _aws: {
-      Timestamp: Temporal.Now.instant().epochMilliseconds,
-      CloudWatchMetrics: [
-        {
-          Namespace: METRIC_NAMESPACE,
-          Dimensions: [[]],
-          Metrics: [
-            { Name: TRANSCRIPTION_DURATION_MISMATCH_METRIC, Unit: "Count" },
-          ],
-        },
-      ],
-    },
     event: "transcription.duration_mismatch",
     modelId,
     [TRANSCRIPTION_DURATION_MISMATCH_METRIC]: 1,

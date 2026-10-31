@@ -439,7 +439,7 @@ test("cost drop metrics count observations rather than failed batches", () => {
   }
 });
 
-test("transcription duration mismatches emit an extractable count with catalog metadata only", () => {
+test("transcription duration mismatches emit a structured count with catalog metadata only", () => {
   const lines: string[] = [];
   setMetricLineSinkForTesting((line) => {
     lines.push(line);
@@ -452,18 +452,6 @@ test("transcription duration mismatches emit an extractable count with catalog m
       emitTranscriptionDurationMismatchMetric(modelId);
       const record: unknown = JSON.parse(lines.at(-1) ?? "null");
       expect(record).toEqual({
-        _aws: {
-          Timestamp: expect.any(Number),
-          CloudWatchMetrics: [
-            {
-              Namespace: "Stella/Api",
-              Dimensions: [[]],
-              Metrics: [
-                { Name: "TranscriptionDurationMismatch", Unit: "Count" },
-              ],
-            },
-          ],
-        },
         event: "transcription.duration_mismatch",
         modelId,
         TranscriptionDurationMismatch: 1,

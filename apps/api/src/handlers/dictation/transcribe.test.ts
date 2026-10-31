@@ -346,7 +346,6 @@ describe("dictation operation request matrix", () => {
       }
       const record: unknown = JSON.parse(line);
       expect(record).toEqual({
-        _aws: expect.any(Object),
         event: "transcription.duration_mismatch",
         modelId: MODEL,
         TranscriptionDurationMismatch: 1,
