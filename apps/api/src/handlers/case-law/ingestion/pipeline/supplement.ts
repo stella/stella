@@ -133,7 +133,7 @@ const leaveFormerHolder = async (
         )
         .limit(1)
     ).at(0);
-    return current?.decisionId === null;
+    return current !== undefined && current.decisionId === null;
   });
   if (!detached) {
     // Moved by a concurrent placement; the next observation settles it.

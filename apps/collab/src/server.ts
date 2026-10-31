@@ -1008,7 +1008,7 @@ export const createCollabServer = async (
         // A coordination lock held by another replica skips the store without
         // running onStoreDocument; keep the pending store on its backoff.
         const current = pendingSnapshotStores.get(document);
-        if (current?.timer === null) {
+        if (current !== undefined && current.timer === null) {
           scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
         }
         return undefined;
@@ -1025,7 +1025,7 @@ export const createCollabServer = async (
         }
 
         const current = pendingSnapshotStores.get(document);
-        if (current?.timer === null) {
+        if (current !== undefined && current.timer === null) {
           scheduleSnapshotStoreRetry(current.payload, current.failedAttempts);
         }
       });

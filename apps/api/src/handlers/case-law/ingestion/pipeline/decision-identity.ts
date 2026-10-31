@@ -495,8 +495,8 @@ const findExistingDecisionTx = async (
   const repairClaimIsCurrent =
     exactClaimedDecisionId !== undefined ||
     repairClaimedDecisionId === undefined ||
-    (provisionalIdentified?.sourceDocumentId !== null &&
-      provisionalIdentified?.sourceDocumentId !== undefined &&
+    (provisionalIdentified !== undefined &&
+      provisionalIdentified.sourceDocumentId !== null &&
       repairSourceIdentityCandidates.includes(
         provisionalIdentified.sourceDocumentId,
       ));
@@ -712,7 +712,7 @@ export const resolveDecisionIdentityTx = async (
   const incomingSupersedesExisting =
     observed.sourceDocumentId !== undefined &&
     (ecliIdentity.type === "adopted" ||
-      existing?.sourceDocumentId === null ||
+      (existing !== undefined && existing.sourceDocumentId === null) ||
       existing?.sourceDocumentId === observed.sourceDocumentId ||
       (existingIdentity !== undefined &&
         (observed.sourceDocumentIdAliases?.includes(existingIdentity) ===

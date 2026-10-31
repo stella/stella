@@ -182,7 +182,8 @@ export const createBackgroundReplayRunner = ({
       }
       const row = await readReservedReplayInput(rootDb, batch);
       const recovered =
-        row?.redactedAt === null &&
+        row !== undefined &&
+        row.redactedAt === null &&
         row.rawKey === expectedRawS3Key &&
         row.parsedInputCurrent &&
         row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
@@ -196,7 +197,12 @@ export const createBackgroundReplayRunner = ({
             : REPLAY_ROW_OUTCOME.UNCHANGED,
           ...(recovered ? { replayedSourceRawS3Key: expectedRawS3Key } : {}),
         };
-        if (!recovered && row?.redactedAt === null && row.rawKey === null) {
+        if (
+          !recovered &&
+          row !== undefined &&
+          row.redactedAt === null &&
+          row.rawKey === null
+        ) {
           report.outcome = REPLAY_ROW_OUTCOME.MISSING_PAYLOAD;
         }
         reports.set(reportKey(batch), report);

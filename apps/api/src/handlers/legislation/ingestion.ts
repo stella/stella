@@ -954,7 +954,8 @@ export const processLegislationDocument = async (
         });
   const corpusAlreadySettled =
     corpus.mode === "off"
-      ? existing?.contentHash === null &&
+      ? existing !== undefined &&
+        existing.contentHash === null &&
         existing.textS3Key === null &&
         existing.normalizedS3Key === null &&
         existing.astS3Key === null

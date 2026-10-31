@@ -1452,7 +1452,7 @@ const createFailureOperations = (
         classification.scope === "row" &&
         classification.attempts >= EU_COMPLETION_STORE_LIMITS.maxAttempts;
       const batch =
-        control?.batch === null || control === undefined
+        control === undefined || control.batch === null
           ? initialBatchState()
           : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
               .batch;
@@ -1754,7 +1754,7 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
           .where(eq(euCompletionControls.key, GLOBAL_CONTROL))
           .limit(1)
       ).at(0);
-      return row?.batch === null || row === undefined
+      return row === undefined || row.batch === null
         ? initialBatchState()
         : decodeCheckpoint({ cursor: null, batch: row.batch }).batch;
     });

@@ -954,8 +954,9 @@ export const assembleSkCourtsDecision = ({
           area: decodeSkCourtTextList(detail?.oblast),
           subArea: decodeSkCourtTextList(detail?.podOblast),
           referencedLegislation:
-            detail?.odkazovanePredpisy === null ||
-            detail?.odkazovanePredpisy === undefined
+            detail === null ||
+            detail.odkazovanePredpisy === null ||
+            detail.odkazovanePredpisy === undefined
               ? detail?.odkazovanePredpisy
               : detail.odkazovanePredpisy.map((reference) => ({
                   ...reference,

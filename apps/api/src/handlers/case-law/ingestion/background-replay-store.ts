@@ -1235,7 +1235,8 @@ const pickUpBatch = async (
       const decision = await lockReplayDecisionInput(tx, batch);
       // Only this reservation's completely parsed input can recover a write.
       if (
-        decision?.redactedAt === null &&
+        decision !== undefined &&
+        decision.redactedAt === null &&
         batch.sourceRawS3Key !== null &&
         decision.sourceRawS3Key === batch.sourceRawS3Key &&
         decision.parsedInputCurrent &&
@@ -1532,7 +1533,8 @@ const recordFailure = async (
     } = classifyReplayFailure({ receipt, failure, progress });
     const decision = await lockReplayDecisionInput(tx, batch);
     if (
-      decision?.redactedAt === null &&
+      decision !== undefined &&
+      decision.redactedAt === null &&
       batch.sourceRawS3Key !== null &&
       decision.sourceRawS3Key === batch.sourceRawS3Key &&
       decision.parsedInputCurrent &&
