@@ -480,7 +480,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "TouchableNativeFeedback",
     "Button",
   ]),
-  calendar: webOnly("a phone picks a date with the platform's picker"),
+  "calendar-primitives": webOnly(
+    "the parts of the web's calendars; the app has no calendar view",
+  ),
   checkbox: webOnly(
     "iOS has no checkbox control; a binary choice on a phone is a Switch",
   ),
@@ -506,6 +508,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
     "a phone picks a date with the platform's picker",
   ),
   "date-range-filter": webOnly("the app has no date-range filters"),
+  "day-calendar": webOnly("the web's day grid; the app has no calendar view"),
   "destructive-action-confirmation": webOnly(
     "a phone confirms through the platform's own alert",
   ),
@@ -538,6 +541,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   "horizontal-scroller": webOnly("ScrollView scrolls natively on a phone"),
   icons: webOnly(
     "the app draws the same entries from lucide-react-native through its generated icon module",
+  ),
+  "identity-text": webOnly(
+    "discloses a clipped name in a hover tooltip; a phone has no hover and caps lines with Text's numberOfLines",
   ),
   "inline-drop-indicator": webOnly("the app has no drag and drop"),
   "inline-rename": webOnly("the app renames nothing inline yet"),
@@ -576,6 +582,9 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   prose: webOnly(
     "a web prose stylesheet; the app sets paragraphs with Text roles",
   ),
+  "resource-calendar": webOnly(
+    "the web's resource grid; the app has no calendar view",
+  ),
   "review-author-avatar": webOnly("the app shows no review surfaces"),
   "review-comment-card": webOnly("the app shows no review surfaces"),
   "review-decision-actions": webOnly("the app shows no review surfaces"),
@@ -603,7 +612,7 @@ export const NO_NATIVE_UI_REACT_NATIVE = {
   skeleton: webOnly("the app shows a Loader until content arrives"),
   "split-button": webOnly("the app has no split buttons"),
   "status-mark": webOnly("a web status glyph the app does not show"),
-  "stella-mark": webOnly("the app shows the wordmark, not the mark"),
+  "stella-mark": renderer("StellaMark from @stll/ui/stella-mark", []),
   "stella-wordmark": renderer(
     "StellaWordmarkLatin from @stll/ui/stella-wordmark",
     [],
