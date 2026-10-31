@@ -543,7 +543,6 @@ test("the required-jobs artifact keeps its exact external schema", () => {
     "reused_from_run_id",
     "basis",
     "pass_through_reason",
-    "classification_refusal",
     "required",
     "job",
     "conclusion",

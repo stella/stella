@@ -1791,7 +1791,6 @@ const requiredRecordSchema = v.strictObject({
   pass_through_reason: v.nullable(
     v.picklist(["enqueued", "draft", "superseded", "metadata", "reused"]),
   ),
-  classification_refusal: v.nullable(v.string()),
   required: v.array(
     v.strictObject({ job: v.string(), conclusion: v.string() }),
   ),

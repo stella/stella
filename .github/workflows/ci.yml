@@ -7155,8 +7155,6 @@ jobs:
       contents: read
       actions: write
       pull-requests: read
-    outputs:
-      classification_refusal: ${{ steps.job-classification.outputs.classification_refusal }}
     steps: *quick-checks-steps
 
   # Aggregation job for branch protection. The ruleset requires
@@ -7430,7 +7428,6 @@ jobs:
                 reused_from_run_id: ($reused | count),
                 basis: (if $pass_through == "" then "evaluated" else "pass_through" end),
                 pass_through_reason: ($pass_through | nonempty),
-                classification_refusal: ($needs["ci-quick-checks"].outputs.classification_refusal // "" | nonempty),
                 required: [$counted[] | {job: ., conclusion: ($needs[.].result // "missing")}],
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
