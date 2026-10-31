@@ -9,6 +9,7 @@ import {
 import { Button } from "@stll/ui/button";
 import { Columns2Icon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { selectChangedVersions } from "@/features/statutes/provision-diff";
@@ -172,7 +173,7 @@ export const ProvisionHistory = ({
                   title={t("statutes.compareSideBySide")}
                   {...comparisonTarget}
                 >
-                  <span className="min-w-0 truncate">{label}</span>
+                  <TruncatedText>{label}</TruncatedText>
                   <Columns2Icon aria-hidden="true" className="size-3.5" />
                 </Link>
               )}

@@ -39,6 +39,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import type {
@@ -622,19 +623,19 @@ export const KanbanColumnTitle = ({
 
   if (!onStartEditing) {
     return (
-      <span className="overflow-hidden text-sm font-medium text-ellipsis whitespace-pre">
+      <TruncatedText className="text-sm font-medium whitespace-pre">
         {title}
-      </span>
+      </TruncatedText>
     );
   }
 
   return (
     <button
-      className="overflow-hidden text-start text-sm font-medium text-ellipsis whitespace-pre"
+      className="min-w-0 text-start text-sm font-medium"
       onClick={onStartEditing}
       type="button"
     >
-      {title}
+      <TruncatedText className="whitespace-pre">{title}</TruncatedText>
     </button>
   );
 };

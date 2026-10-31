@@ -109,6 +109,7 @@ import {
   SCROLL_EDGE_FADE_CLASS,
 } from "@stll/ui/scroll-edge-fade";
 import { StellaMark } from "@stll/ui/stella-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -787,9 +788,9 @@ const ClipboardCard = ({
             title={t("editItem")}
             type="button"
           >
-            <span className="truncate" dir="auto">
+            <TruncatedText dir="auto">
               {item.name ?? untitledName}
-            </span>
+            </TruncatedText>
             <PencilIcon
               aria-hidden="true"
               className="size-3 shrink-0 opacity-0 transition-opacity group-focus-within:opacity-60 group-hover:opacity-60"
@@ -1277,9 +1278,7 @@ const ClipboardContextMenu = ({
                               }
                         }
                       />
-                      <span className="truncate" dir="auto">
-                        {group.name}
-                      </span>
+                      <TruncatedText dir="auto">{group.name}</TruncatedText>
                     </span>
                   </MenuRadioItem>
                 ),
@@ -3418,14 +3417,14 @@ const ClipboardApp = () => {
                               }}
                             >
                               <RotateCcwIcon />
-                              <span className="truncate">
+                              <TruncatedText>
                                 {t.rich("removeSourceAppExclusion", {
                                   bdi: (chunks) => (
                                     <bdi dir="auto">{chunks}</bdi>
                                   ),
                                   source: exclusion.name,
                                 })}
-                              </span>
+                              </TruncatedText>
                             </MenuItem>
                           ))}
                         </MenuSubPopup>

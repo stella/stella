@@ -22,6 +22,7 @@ import {
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { BlockRenderer } from "./document-ast-text";
@@ -125,37 +126,36 @@ export const ProvisionCardHeader = ({
         className="flex min-w-0 flex-1 items-center overflow-hidden whitespace-nowrap"
         data-slot="provision-card-summary"
       >
-        <BidiText
-          as="span"
-          className="max-w-full shrink-0 truncate text-sm font-medium"
+        <TruncatedText
+          className="shrink-0 text-sm font-medium"
           data-slot="provision-card-label"
+          hint={false}
+          render={<BidiText as="span" />}
           title={label}
         >
           {label}
-        </BidiText>
+        </TruncatedText>
         {actText !== "" && (
-          <span
+          <TruncatedText
             className={cn(
-              "text-muted-foreground max-w-max min-w-0 flex-1 basis-0 truncate text-xs",
+              "text-muted-foreground max-w-max flex-1 basis-0 text-xs",
               SEPARATED_PART,
             )}
             data-slot="provision-card-act"
+            hint={false}
             title={actText}
           >
             <BidiText>{actText}</BidiText>
-          </span>
+          </TruncatedText>
         )}
-        <span
-          className={cn(
-            "text-muted-foreground min-w-0 truncate text-xs",
-            SEPARATED_PART,
-          )}
+        <TruncatedText
+          className={cn("text-muted-foreground text-xs", SEPARATED_PART)}
           data-slot="provision-card-date"
         >
           {date === null
             ? messages["statutes.wordingVersionUnknown"]
             : messages.provisionEffectiveFrom(date)}
-        </span>
+        </TruncatedText>
       </span>
       <span
         className={cn("flex shrink-0", OPEN_BUTTON_PRESENCE[openButton])}

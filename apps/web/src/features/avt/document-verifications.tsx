@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { FileCheckIcon, PlayIcon } from "@stll/ui/icons";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { RunSizeConfirmDialog } from "@/components/usage/run-size-confirm-dialog";
 import {
@@ -178,9 +179,13 @@ const DocumentRow = ({
   return (
     <li className="flex flex-col gap-2 p-3 md:flex-row md:items-center">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" dir="auto">
+        <TruncatedText
+          className="text-sm font-medium"
+          dir="auto"
+          render={<p />}
+        >
           {file.name ?? file.fileName}
-        </p>
+        </TruncatedText>
         {statusLoad === "loaded" && (
           <LatestRunSummary latest={latest} listId={listId} />
         )}

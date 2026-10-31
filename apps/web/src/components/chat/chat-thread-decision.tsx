@@ -4,6 +4,7 @@ import { panic } from "better-result";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import {
@@ -86,7 +87,7 @@ export const ChatThreadDecisionLabel = ({
           <span className="sr-only">{decision.court}</span>
         </span>
       )}
-      <BidiText className="min-w-0 truncate">{decision.caseNumber}</BidiText>
+      <TruncatedText render={<BidiText />}>{decision.caseNumber}</TruncatedText>
       {date === null ? null : (
         <span className="shrink-0">
           {"· "}

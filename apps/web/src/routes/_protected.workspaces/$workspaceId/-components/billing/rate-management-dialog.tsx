@@ -28,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -274,9 +275,9 @@ const RateTablesView = ({
                 type="button"
               >
                 <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     {table.name}
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground shrink-0 text-xs">
                     {table.currency}
                   </span>

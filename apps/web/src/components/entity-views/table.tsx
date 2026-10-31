@@ -21,6 +21,7 @@ import {
 } from "@stll/ui/icons";
 import { MattersNavIcon } from "@stll/ui/matter-icon";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 import type { SortableProperty } from "@stll/workspace-ui/sorts";
 
@@ -507,11 +508,11 @@ const CollectionCell = ({ column, entry }: CollectionCellProps) => {
               }
             />
           )}
-          <UserText className="truncate font-medium">
+          <TruncatedText className="font-medium" render={<UserText />}>
             {entry.type === "entity"
               ? getEntityName(entry.entity)
               : entry.signal.title}
-          </UserText>
+          </TruncatedText>
           {entry.type === "proposal" && (
             <ReviewStatusBadge tone="neutral">
               {t("flows.status.awaitingReview")}

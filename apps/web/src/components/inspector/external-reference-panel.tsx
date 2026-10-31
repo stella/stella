@@ -19,6 +19,7 @@ import {
 import { ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MessageResponse } from "@/components/ai-elements/message";
@@ -482,26 +483,29 @@ const GenericExternalReferencePanel = ({
               <div className="flex min-w-0 items-center gap-1.5">
                 <ExternalSourceLogo iconHref={iconHref} />
                 {provider && (
-                  <p className="text-muted-foreground truncate text-xs">
+                  <TruncatedText
+                    className="text-muted-foreground text-xs"
+                    render={<p />}
+                  >
                     {provider}
-                  </p>
+                  </TruncatedText>
                 )}
                 {connectorSlug && (
-                  <span className="bg-muted text-muted-foreground text-3xs max-w-24 truncate rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs max-w-24 rounded px-1.5 py-0.5 font-mono">
                     {connectorSlug}
-                  </span>
+                  </TruncatedText>
                 )}
                 {sourceToolName && (
-                  <span className="bg-muted text-muted-foreground text-3xs min-w-0 truncate rounded px-1.5 py-0.5 font-mono">
+                  <TruncatedText className="bg-muted text-muted-foreground text-3xs rounded px-1.5 py-0.5 font-mono">
                     {sourceToolName}
-                  </span>
+                  </TruncatedText>
                 )}
               </div>
             )}
             {canPreview && (
               <button
                 className={cn(
-                  "text-muted-foreground hover:text-foreground truncate text-start text-xs underline-offset-2 hover:underline",
+                  "text-muted-foreground hover:text-foreground min-w-0 text-start text-xs underline-offset-2 hover:underline",
                   hasMetadata && "mt-1",
                 )}
                 onClick={() => {
@@ -509,7 +513,7 @@ const GenericExternalReferencePanel = ({
                 }}
                 type="button"
               >
-                {safeHref}
+                <TruncatedText>{safeHref}</TruncatedText>
               </button>
             )}
           </div>

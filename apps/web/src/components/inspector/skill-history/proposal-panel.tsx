@@ -10,6 +10,7 @@ import { ReviewDecisionActions } from "@stll/ui/review-decision-actions";
 import type { ReviewStatusTone } from "@stll/ui/review-status-badge";
 import { ReviewStatusBadge } from "@stll/ui/review-status-badge";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -81,7 +82,7 @@ export const ProposalMenu = ({
                   >
                     <span className="flex items-center gap-1.5">
                       <ProposalStatusBadge status={proposal.status} />
-                      <span className="text-muted-foreground text-2xs truncate">
+                      <TruncatedText className="text-muted-foreground text-2xs">
                         {t("skillHistory.proposalMeta", {
                           author: authorName(proposal.authorId),
                           date: format.dateTime(new Date(proposal.createdAt), {
@@ -89,7 +90,7 @@ export const ProposalMenu = ({
                             month: "short",
                           }),
                         })}
-                      </span>
+                      </TruncatedText>
                     </span>
                     <span className="text-foreground text-xs wrap-anywhere">
                       {proposal.summary === ""
@@ -183,9 +184,12 @@ export const ProposalActionBar = ({
           value={summary}
         />
       ) : (
-        <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
+        <TruncatedText
+          className="text-muted-foreground flex-1 text-xs"
+          render={<p />}
+        >
           {summary === "" ? t("skillHistory.proposalNoSummary") : summary}
-        </p>
+        </TruncatedText>
       )}
       {isAuthor && status === "draft" ? (
         <Button onClick={onSubmitForReview} size="xs">

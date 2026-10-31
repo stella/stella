@@ -30,6 +30,7 @@ import {
   TextQuoteIcon,
 } from "@stll/ui/icons";
 import { MenuPreviewLayout, PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -704,9 +705,12 @@ const SlashMenuHeader = ({
   const t = useTranslations();
   if (view === "root") {
     return (
-      <p className="text-muted-foreground text-2xs truncate border-b px-3 py-1.5 leading-snug">
+      <TruncatedText
+        className="text-muted-foreground text-2xs border-b px-3 py-1.5 leading-snug"
+        render={<p />}
+      >
         {query === "" ? t("templates.studio.slashHint") : `/${query}`}
-      </p>
+      </TruncatedText>
     );
   }
   const label =
@@ -721,10 +725,10 @@ const SlashMenuHeader = ({
       type="button"
     >
       <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
-      <span className="truncate">
+      <TruncatedText>
         {label}
         {query === "" ? "" : ` · ${query}`}
-      </span>
+      </TruncatedText>
     </button>
   );
 };
@@ -889,13 +893,13 @@ const SlashMenuRow = ({
       type="button"
     >
       <Icon className="text-muted-foreground size-3.5 shrink-0" />
-      <span className="flex-1 truncate" dir="auto">
+      <TruncatedText className="flex-1" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
       {hint !== undefined && (
-        <span className="text-muted-foreground text-3xs shrink-0 truncate font-mono">
+        <TruncatedText className="text-muted-foreground text-3xs shrink-0 font-mono">
           {hint}
-        </span>
+        </TruncatedText>
       )}
       {chevron && (
         <DirectionalIcon

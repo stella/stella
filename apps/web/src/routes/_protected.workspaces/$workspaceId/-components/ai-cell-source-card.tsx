@@ -9,6 +9,7 @@ import {
   PreviewCardTrigger,
 } from "@stll/ui/preview-card";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { UserIdentityAvatar } from "@/components/user-avatar";
@@ -105,7 +106,7 @@ export const AICellSourceCard = ({
     // Unclamped rationale scrolls within the popup rather than truncating; the
     // container must be block-level for max-height/overflow to form a scroll box
     // (an inline span ignores both).
-    clampStatements ? "line-clamp-3" : "block max-h-64 overflow-y-auto",
+    !clampStatements && "block max-h-64 overflow-y-auto",
   );
 
   const cardContent = (
@@ -121,9 +122,9 @@ export const AICellSourceCard = ({
             kind="document"
             mimeType={primaryFile.mimeType}
           />
-          <BidiText as="span" className="truncate">
+          <TruncatedText render={<BidiText as="span" />}>
             {primaryFile.fileName}
-          </BidiText>
+          </TruncatedText>
           {sourceFiles.length > 1 && (
             <span className="text-muted-foreground shrink-0">
               +{sourceFiles.length - 1}
@@ -133,7 +134,12 @@ export const AICellSourceCard = ({
       )}
       {visibleStatements.map((statement) => (
         <span className="flex w-full flex-col gap-1" key={statement.key}>
-          <span className={statementTextClassName}>
+          <TruncatedText
+            className={statementTextClassName}
+            // The scroll box shows the whole rationale; only the clamp hints.
+            hint={clampStatements}
+            lines={clampStatements ? 3 : "none"}
+          >
             {statement.text}
             {statement.pages.map((page) => (
               <span
@@ -143,16 +149,16 @@ export const AICellSourceCard = ({
                 p.&nbsp;{page.pageNumber}
               </span>
             ))}
-          </span>
+          </TruncatedText>
           {statement.quotes.map((quote) => (
             <span
               className={cn(
                 LEGAL_TEXT_CLASS_NAME,
-                "text-muted-foreground line-clamp-3 text-xs leading-relaxed text-wrap italic",
+                "text-muted-foreground text-xs leading-relaxed text-wrap italic",
               )}
               key={quote.key}
             >
-              "{quote.text}"
+              <TruncatedText lines={3}>"{quote.text}"</TruncatedText>
             </span>
           ))}
         </span>
@@ -273,7 +279,7 @@ const CellFlagProvenanceRow = ({
             image={provenance.addedByImage}
             name={provenance.addedByName}
           />
-          <span className="truncate">
+          <TruncatedText>
             {provenance.addedByName ? (
               <>
                 <BidiText>{provenance.addedByName}</BidiText>
@@ -281,7 +287,7 @@ const CellFlagProvenanceRow = ({
               </>
             ) : null}
             {formatRelativeTime(provenance.addedAt)}
-          </span>
+          </TruncatedText>
         </span>
       )}
     </span>

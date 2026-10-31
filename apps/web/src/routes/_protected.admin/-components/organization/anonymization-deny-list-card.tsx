@@ -21,6 +21,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -542,9 +543,9 @@ export const AnonymizationDenyListCard = () => {
                 key={entry.id}
               >
                 <div className="flex min-w-0 flex-col">
-                  <span className="truncate text-sm font-medium">
+                  <TruncatedText className="text-sm font-medium">
                     {entry.canonical}
-                  </span>
+                  </TruncatedText>
                   <span className="text-muted-foreground text-xs">
                     {isKnownLabel(entry.label)
                       ? t(LABEL_TRANSLATION_KEY[entry.label])

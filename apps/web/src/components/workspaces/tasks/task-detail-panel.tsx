@@ -19,6 +19,7 @@ import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -587,9 +588,9 @@ const TaskDetailPanelContent = ({
         >
           <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
-        <span className="min-w-0 flex-1 truncate text-xs font-medium">
+        <TruncatedText className="flex-1 text-xs font-medium">
           {isNewTask ? t("newTask") : name}
-        </span>
+        </TruncatedText>
         <Button
           aria-label={tCommon("close")}
           onClick={handleClose}

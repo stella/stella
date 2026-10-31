@@ -5,6 +5,7 @@ import type {
   ReactNode,
 } from "react";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -119,15 +120,17 @@ export const InlinePill = ({
   // the focus path entirely.
   const renderAsButton = clickable || tooltip !== undefined;
 
-  // The inner label span owns truncation. Without `min-w-0` flex
-  // children refuse to shrink below their content width and
-  // `truncate` becomes a no-op.
-  const labelClass = truncate ? "min-w-0 truncate" : undefined;
-
+  // The inner label owns truncation; TruncatedText lets it shrink inside
+  // the flex pill and shows the cut label unless the pill's own tooltip
+  // already answers the pointer.
   const body = (
     <>
       {leadingIcon}
-      <span className={cn(labelClass)}>{children}</span>
+      {truncate ? (
+        <TruncatedText>{children}</TruncatedText>
+      ) : (
+        <span>{children}</span>
+      )}
     </>
   );
 

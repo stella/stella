@@ -58,7 +58,7 @@ export const FieldValueSelect = ({
       value={value}
     >
       <SelectTrigger className="grid grid-cols-[1fr_auto]">
-        <SelectValue className="truncate">
+        <SelectValue>
           {(current: string | null | string[]) => (
             <SelectValueContent options={options} type={type} value={current} />
           )}

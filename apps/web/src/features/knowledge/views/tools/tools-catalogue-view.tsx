@@ -20,6 +20,7 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
@@ -194,11 +195,11 @@ export const ToolsCatalogueView = <TTool extends KnowledgeTool>({
               }
             >
               <GlobeIcon className="size-3.5" />
-              <span className="min-w-0 truncate">
+              <TruncatedText>
                 {jurisdictionFilter.size === 0
                   ? t("common.all")
                   : [...jurisdictionFilter].toSorted().join(", ")}
-              </span>
+              </TruncatedText>
               <ChevronDownIcon className="size-3.5" />
             </PopoverTrigger>
             <PopoverPopup align="end" className="w-60" side="bottom">

@@ -6,6 +6,7 @@ import { isEntityKind } from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Separator } from "@stll/ui/separator";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { chatAppOrigins } from "@/components/chat/chat-app-origins";
@@ -187,9 +188,9 @@ const CaseLawSourceRow = ({
             {date ? ` · ${date}` : ""}
           </BidiText>
           {caseLaw.holding && (
-            <span className="text-muted-foreground block truncate text-xs">
+            <TruncatedText className="text-muted-foreground text-xs">
               {caseLaw.holding}
-            </span>
+            </TruncatedText>
           )}
         </span>
       </span>
@@ -296,9 +297,9 @@ const SourceChip = ({
         sourceDocument={sourceDocument}
         workspaceId={resolvedWorkspaceId}
       />
-      <BidiText as="span" className="max-w-full min-w-0 truncate">
+      <TruncatedText render={<BidiText as="span" />}>
         {sourceDocument.title}
-      </BidiText>
+      </TruncatedText>
     </button>
   );
 };

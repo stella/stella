@@ -176,7 +176,7 @@ test.describe("workspace file drop", () => {
     const folder = await createFolder(request, testWorkspace.id, folderName);
 
     await openFilesView(page, request, testWorkspace);
-    const folderLabel = page.getByTitle(folderName, { exact: true });
+    const folderLabel = page.getByText(folderName, { exact: true });
     await expect(folderLabel).toBeVisible({ timeout: 30_000 });
     const folderBox = await folderLabel.boundingBox();
     if (folderBox === null) {
@@ -220,7 +220,7 @@ test.describe("workspace file drop", () => {
     const folder = await createFolder(request, testWorkspace.id, folderName);
 
     await openFilesView(page, request, testWorkspace);
-    const folderLabel = page.getByTitle(folderName, { exact: true });
+    const folderLabel = page.getByText(folderName, { exact: true });
     await expect(folderLabel).toBeVisible({ timeout: 30_000 });
     await folderLabel.dblclick();
 

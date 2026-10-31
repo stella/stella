@@ -33,6 +33,7 @@ import {
   FileIcon,
 } from "@stll/ui/icons";
 import { Menu, MenuAnchor, MenuItem, MenuPopup } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -1141,7 +1142,7 @@ const ColumnHeaderCell = ({
         onClick={() => onSort(propertyId)}
         type="button"
       >
-        <span className="truncate">{label}</span>
+        <TruncatedText>{label}</TruncatedText>
         {isActive && <SortIcon className="size-3 shrink-0" />}
       </button>
       <div
@@ -1594,13 +1595,12 @@ export const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <BidiText
-            as="span"
-            className="overflow-hidden text-ellipsis whitespace-pre"
-            title={name}
+          <TruncatedText
+            className="whitespace-pre"
+            render={<BidiText as="span" />}
           >
             {name}
-          </BidiText>
+          </TruncatedText>
           {folderStatistics && formattedFolderSize && (
             <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs tabular-nums">
               <span>
@@ -1631,7 +1631,7 @@ export const FilesystemRow = ({
 
   const extraCells = extraColumns.map((col) => (
     <span
-      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs text-ellipsis whitespace-nowrap"
+      className="text-muted-foreground flex h-full min-w-0 items-center justify-end overflow-hidden text-end text-xs whitespace-nowrap"
       key={col.id}
     >
       <ExtraColumnCell column={col} entity={node} />
@@ -1844,17 +1844,17 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   if (field?.content.type === "date") {
     const formatted = formatDateValue(field.content.value, locale);
     return (
-      <span className="text-muted-foreground truncate text-xs">
+      <TruncatedText className="text-muted-foreground text-xs">
         {formatted || "-"}
-      </span>
+      </TruncatedText>
     );
   }
 
   const value = getFieldValue(field);
 
   return (
-    <span className="text-muted-foreground truncate text-xs">
+    <TruncatedText className="text-muted-foreground text-xs">
       {value || "-"}
-    </span>
+    </TruncatedText>
   );
 };

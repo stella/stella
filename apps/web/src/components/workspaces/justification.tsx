@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { produce } from "immer";
 import { useTranslations } from "use-intl";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
@@ -198,8 +199,10 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       <Tooltip
         content={t("common.unverifiedCitationHint")}
         render={
-          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 truncate align-baseline font-medium italic underline decoration-dotted underline-offset-2">
-            “{preview}” · {t("common.unverified")}
+          <span className="text-muted-foreground text-2xs inline-flex max-w-[16rem] items-center gap-1 align-baseline font-medium italic underline decoration-dotted underline-offset-2">
+            <TruncatedText>
+              “{preview}” · {t("common.unverified")}
+            </TruncatedText>
           </span>
         }
       />
@@ -210,7 +213,7 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       content={trimmed || undefined}
       render={
         <button
-          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem]")}
           data-block-id={citation.blockId}
           onClick={() => {
             // Inspector peek path reads `pendingBlockScroll` from the
@@ -234,7 +237,7 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
           }}
           type="button"
         >
-          “{preview}”
+          <TruncatedText hint={false}>“{preview}”</TruncatedText>
         </button>
       }
     />

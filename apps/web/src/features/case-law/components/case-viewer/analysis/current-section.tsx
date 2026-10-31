@@ -4,6 +4,7 @@ import type { RefObject } from "react";
 import { useTranslations } from "use-intl";
 
 import { ChevronUpIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { FlatAnalysisHeading } from "@/features/case-law/components/case-viewer/analysis/types";
@@ -140,7 +141,9 @@ export const CurrentSection = ({
                 {parent.label}
               </span>
             )}
-            <span className="block truncate font-medium">{current?.label}</span>
+            <TruncatedText className="font-medium">
+              {current?.label}
+            </TruncatedText>
           </span>
           <ChevronUpIcon
             aria-hidden="true"

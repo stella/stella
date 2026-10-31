@@ -37,6 +37,7 @@ import {
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   ChatThreadDecisionLabel,
@@ -462,12 +463,12 @@ function ChatHistoryRow({ onDelete, thread }: ChatHistoryRowProps) {
                 />
               }
             >
-              <BidiText
-                as="span"
-                className="text-foreground truncate text-sm font-medium"
+              <TruncatedText
+                className="text-foreground text-sm font-medium"
+                render={<BidiText as="span" />}
               >
                 {displayTitle}
-              </BidiText>
+              </TruncatedText>
               {contextLine}
             </Tooltip>
             <time

@@ -238,9 +238,14 @@ through Folio gains one it does not have.
   (sorting, numbers, dates side by side).
 - **Nothing scrolls sideways.** Free text (descriptions, scope lists,
   notes) never sits in a `whitespace-nowrap` cell or row. Clamp it
-  (`line-clamp-1`/`-2` with `min-w-0` on the column), and collapse a
+  (`<TruncatedText lines={2}>` with `min-w-0` on the column), and collapse a
   long list into a count that opens a popover ("15 permissions"). The
   trailing actions stay on screen at every width.
+- **Cut text only with `<TruncatedText>`** (`@stll/ui/truncated-text`:
+  `lines` to clamp, `render` to keep the element, `hint={false}` where
+  the full text already shows). It caps the text at its container and
+  shows what was cut; `require-truncated-text` rejects raw `truncate`,
+  `text-ellipsis` and `line-clamp-*`.
 - **Status is a dot plus a label** (`ListItemStatus` with a tone). The
   label carries the meaning; colour is never the only signal.
 - **Anything people look up by name gets search.** Use

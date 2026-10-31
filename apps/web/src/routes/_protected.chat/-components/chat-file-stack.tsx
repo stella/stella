@@ -7,6 +7,7 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { buttonVariants } from "@stll/ui/button";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useReferenceActivation } from "@/components/references/reference-chip";
@@ -174,9 +175,9 @@ const FileNameList = ({
             key={`${file.type}-${file.id}`}
           >
             <FileGlyph className="size-3 shrink-0" file={file} />
-            <BidiText as="span" className="min-w-0 truncate">
+            <TruncatedText render={<BidiText as="span" />}>
               {file.name}
-            </BidiText>
+            </TruncatedText>
           </li>
         ))}
       </ul>
@@ -258,8 +259,6 @@ const MatterFileRow = ({
 const ThreadFileRowContent = ({ file }: { file: AttachedFile }) => (
   <>
     <FileGlyph className="size-4 shrink-0" file={file} />
-    <BidiText as="span" className="min-w-0 truncate">
-      {file.name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{file.name}</TruncatedText>
   </>
 );

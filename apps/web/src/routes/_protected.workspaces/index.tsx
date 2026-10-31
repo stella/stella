@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -471,7 +472,7 @@ const MattersTableSkeleton = () => {
           <TableRow>
             {columns.map((col) => (
               <TableHead key={col.id}>
-                <span className="truncate">{headerLabel(col.id)}</span>
+                <TruncatedText>{headerLabel(col.id)}</TruncatedText>
               </TableHead>
             ))}
           </TableRow>

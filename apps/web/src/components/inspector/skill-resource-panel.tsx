@@ -7,6 +7,7 @@ import { PencilIcon, SaveIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
@@ -81,8 +82,10 @@ const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => {
     <Tooltip
       content={`${tab.skillName} · ${tab.resourcePath}`}
       render={
-        <span className="text-muted-foreground text-3xs truncate">
-          {skillLabel(skillResourceTabSkill(tab))}
+        <span className="text-muted-foreground text-3xs min-w-0">
+          <TruncatedText>
+            {skillLabel(skillResourceTabSkill(tab))}
+          </TruncatedText>
         </span>
       }
     />

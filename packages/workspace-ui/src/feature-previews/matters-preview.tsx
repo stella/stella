@@ -1,6 +1,7 @@
 import { CalendarIcon, FileTextIcon } from "@stll/ui/icons";
 import { KanbanCardShell, KanbanColumnHeader } from "@stll/ui/kanban";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { TASK_STATUS_COLORS, TASK_STATUS_ICONS } from "../task-status";
@@ -105,12 +106,12 @@ const PreviewTaskCard = ({ task, locale }: PreviewTaskCardProps) => {
               TASK_STATUS_COLORS[task.status],
             )}
           />
-          <span className="line-clamp-2 min-w-0">{task.name}</span>
+          <TruncatedText lines={2}>{task.name}</TruncatedText>
         </span>
         {task.attachment === null ? null : (
           <span className="text-muted-foreground flex min-w-0 items-center gap-1.5">
             <FileTextIcon className="size-3 shrink-0" />
-            <span className="truncate">{task.attachment}</span>
+            <TruncatedText>{task.attachment}</TruncatedText>
           </span>
         )}
         <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 leading-none">

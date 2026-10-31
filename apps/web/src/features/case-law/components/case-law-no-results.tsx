@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import {
   PublicLawAskInChat,
@@ -134,13 +135,13 @@ export const RewrittenSearchLine = ({
 
   return (
     <div className="text-muted-foreground flex max-w-full min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
-      <p className="min-w-0 truncate" title={rewritten}>
+      <TruncatedText render={<p />}>
         {t.rich("caseLaw.rewritten.line", {
           bdi: (chunks) => <BidiText>{chunks}</BidiText>,
           original,
           query: rewritten,
         })}
-      </p>
+      </TruncatedText>
       <Button onClick={onSearchOriginal} size="xs" variant="link">
         {t("caseLaw.rewritten.searchOriginal")}
       </Button>

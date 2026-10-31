@@ -16,6 +16,7 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -225,9 +226,13 @@ const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {fileName && (
-          <p className="truncate text-xs font-semibold" dir="auto">
+          <TruncatedText
+            className="text-xs font-semibold"
+            dir="auto"
+            render={<p />}
+          >
             {fileName}
-          </p>
+          </TruncatedText>
         )}
         {snippet ? (
           <MarkdownPreview
@@ -444,9 +449,12 @@ const MatterPickerSection = ({
                       className="size-3.5 shrink-0"
                       matter={{ id: m.id, color: m.color }}
                     />
-                    <BidiText as="span" className="min-w-0 flex-1 truncate">
+                    <TruncatedText
+                      className="flex-1"
+                      render={<BidiText as="span" />}
+                    >
                       {m.name}
-                    </BidiText>
+                    </TruncatedText>
                     {m.client?.displayName && (
                       <BidiText
                         as="span"
@@ -515,9 +523,12 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <BidiText as="span" className="truncate text-xs font-semibold">
+        <TruncatedText
+          className="text-xs font-semibold"
+          render={<BidiText as="span" />}
+        >
           {output.fileName}
-        </BidiText>
+        </TruncatedText>
         {canOpen && (
           <span className="text-muted-foreground text-2xs inline-flex items-center gap-1">
             {t("chat.createDocument.openInFolio")}

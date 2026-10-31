@@ -16,6 +16,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Input } from "@stll/ui/input";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { contentDir } from "@stll/ui/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -343,7 +344,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         : content.value.length === 0);
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -357,15 +358,17 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         }}
         type="button"
       >
-        {isEmpty ? (
-          <span className="text-muted-foreground">—</span>
-        ) : (
-          <FieldValue
-            content={content}
-            property={property}
-            variant={displayVariant}
-          />
-        )}
+        <TruncatedText>
+          {isEmpty ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <FieldValue
+              content={content}
+              property={property}
+              variant={displayVariant}
+            />
+          )}
+        </TruncatedText>
       </button>
     );
   }
@@ -435,7 +438,7 @@ const InlineDateEditor = ({
   if (!editing) {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
         onClick={(event) => {
           if (stopPropagation) {
             event.stopPropagation();
@@ -449,11 +452,13 @@ const InlineDateEditor = ({
         }}
         type="button"
       >
-        <FieldValue
-          content={{ type: "date", version: 1, value }}
-          property={property}
-          variant={displayVariant}
-        />
+        <TruncatedText>
+          <FieldValue
+            content={{ type: "date", version: 1, value }}
+            property={property}
+            variant={displayVariant}
+          />
+        </TruncatedText>
       </button>
     );
   }
@@ -513,7 +518,7 @@ const InlineTextEditor = ({
   if (state.status !== "editing") {
     return (
       <button
-        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm"
+        className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm"
         data-open-expanded-cell
         disabled={state.status === "loading"}
         onClick={(event) => {
@@ -543,15 +548,17 @@ const InlineTextEditor = ({
         }}
         type="button"
       >
-        {value ? (
-          <FieldValue
-            content={{ type: "text", version: 1, value }}
-            property={property}
-            variant={displayVariant}
-          />
-        ) : (
-          <span className="text-muted-foreground">—</span>
-        )}
+        <TruncatedText>
+          {value ? (
+            <FieldValue
+              content={{ type: "text", version: 1, value }}
+              property={property}
+              variant={displayVariant}
+            />
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          )}
+        </TruncatedText>
       </button>
     );
   }
@@ -804,12 +811,13 @@ const TableFileField = ({
         />
         {/* The name, not the icon, sets the chip's baseline, so a wrapped
             row lines the name up with its neighbours' first lines. */}
-        <BidiText
-          as="span"
-          className="min-w-0 self-baseline truncate text-start"
+        <TruncatedText
+          className="self-baseline text-start"
+          hint={false}
+          render={<BidiText as="span" />}
         >
           <HighlightedText columnId={propertyId} text={content.fileName} />
-        </BidiText>
+        </TruncatedText>
       </Tooltip>
     );
   }
@@ -827,9 +835,13 @@ const TableFileField = ({
         mimeType={content.mimeType}
         thumbnail={thumbnail}
       />
-      <BidiText as="span" className="min-w-0 self-baseline truncate text-start">
+      <TruncatedText
+        className="self-baseline text-start"
+        hint={false}
+        render={<BidiText as="span" />}
+      >
         <HighlightedText columnId={propertyId} text={content.fileName} />
-      </BidiText>
+      </TruncatedText>
     </Tooltip>
   );
 };

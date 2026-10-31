@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { InlinePill } from "@/components/inline-pill";
 import {
@@ -166,8 +167,6 @@ const ThreadContextEntry = ({
 }) => (
   <li className="flex min-w-0 items-center gap-1.5">
     {icon}
-    <BidiText as="span" className="min-w-0 truncate">
-      {name}
-    </BidiText>
+    <TruncatedText render={<BidiText as="span" />}>{name}</TruncatedText>
   </li>
 );

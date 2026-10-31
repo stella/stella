@@ -1,5 +1,6 @@
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { BidiText } from "@stll/ui/bidi-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 type StatuteDisplayLabelProps = {
   statute: Parameters<typeof statuteDisplayLabel>[0];
@@ -24,7 +25,9 @@ export const StatuteDisplayLabel = ({ statute }: StatuteDisplayLabelProps) => {
         </span>
       )}
       {label.subject !== null && (
-        <span className="line-clamp-2 whitespace-normal">{label.subject}</span>
+        <TruncatedText className="whitespace-normal" lines={2}>
+          {label.subject}
+        </TruncatedText>
       )}
     </BidiText>
   );

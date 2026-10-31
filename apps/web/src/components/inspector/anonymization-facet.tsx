@@ -40,6 +40,7 @@ import { Input } from "@stll/ui/input";
 import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
@@ -907,9 +908,9 @@ export const AnonymizationFacet = ({
                 onClick={() => selectFromSidebar(entry.canonical, entry.label)}
                 type="button"
               >
-                <span className="truncate text-sm font-medium">
+                <TruncatedText className="text-sm font-medium">
                   {entry.canonical}
-                </span>
+                </TruncatedText>
                 <span className="text-muted-foreground text-xs">
                   {formatLabel(entry.label)}
                 </span>
@@ -980,9 +981,9 @@ export const AnonymizationFacet = ({
                     ) : (
                       <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                     )}
-                    <span className="truncate text-sm font-medium">
+                    <TruncatedText className="text-sm font-medium">
                       {formatLabel(label)}
-                    </span>
+                    </TruncatedText>
                   </span>
                   <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
                     {format.number(activeCount)}
@@ -1001,13 +1002,13 @@ export const AnonymizationFacet = ({
                         key={row.canonical}
                       >
                         <button
-                          className="min-w-0 flex-1 truncate text-start text-xs"
+                          className="min-w-0 flex-1 text-start text-xs"
                           onClick={() =>
                             selectFromSidebar(row.canonical, label)
                           }
                           type="button"
                         >
-                          {row.canonical}
+                          <TruncatedText>{row.canonical}</TruncatedText>
                         </button>
                         <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (

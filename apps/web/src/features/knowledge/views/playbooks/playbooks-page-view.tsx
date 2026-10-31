@@ -13,6 +13,7 @@ import {
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { PlaybookStatusBadge } from "@/components/playbook-status-badge";
 import type {
@@ -234,9 +235,9 @@ const BuildWithAiCard = ({ onStart, disabled }: BuildWithAiCardProps) => {
         <span className="mt-3 font-medium">
           {t("knowledge.playbooks.buildWithAi.title")}
         </span>
-        <span className="text-muted-foreground mt-1 line-clamp-2 text-sm">
+        <TruncatedText className="text-muted-foreground mt-1 text-sm" lines={2}>
           {t("knowledge.playbooks.buildWithAi.description")}
-        </span>
+        </TruncatedText>
         <StarterCardAction isPending={false} label={t("common.start")} />
       </button>
     </li>
@@ -302,12 +303,13 @@ const PlaybookStarterCards = ({
               <span className="mt-3 font-medium" dir="auto">
                 {starter.name}
               </span>
-              <span
-                className="text-muted-foreground mt-1 line-clamp-2 text-sm"
+              <TruncatedText
+                className="text-muted-foreground mt-1 text-sm"
                 dir="auto"
+                lines={2}
               >
                 {starter.description}
-              </span>
+              </TruncatedText>
               <span className="text-muted-foreground mt-2 text-xs">
                 {t("knowledge.playbooks.starters.positionCount", {
                   count: starter.positionCount,
@@ -345,17 +347,24 @@ const RecentPlaybookRow = ({
           <Clock3Icon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
+          <TruncatedText
+            className="text-sm font-medium"
+            dir="auto"
+            render={<p />}
+          >
             {playbook.name}
-          </p>
-          <p className="text-muted-foreground mt-0.5 truncate text-xs">
+          </TruncatedText>
+          <TruncatedText
+            className="text-muted-foreground mt-0.5 text-xs"
+            render={<p />}
+          >
             {t("knowledge.playbooks.lastUsed", {
               date: format.dateTime(
                 new Date(playbook.lastUsedAt),
                 MEDIUM_DATE_SHORT_TIME_FORMAT,
               ),
             })}
-          </p>
+          </TruncatedText>
         </div>
         <PlaybookStatusBadge status={playbook.status} />
       </button>
@@ -401,15 +410,20 @@ const PlaybookRow = ({
           <ClipboardCheckIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium" dir="auto">
-            {playbook.name}
-          </p>
-          <p
-            className="text-muted-foreground mt-0.5 truncate text-xs"
+          <TruncatedText
+            className="text-sm font-medium"
             dir="auto"
+            render={<p />}
+          >
+            {playbook.name}
+          </TruncatedText>
+          <TruncatedText
+            className="text-muted-foreground mt-0.5 text-xs"
+            dir="auto"
+            render={<p />}
           >
             <PlaybookRowDetail playbook={playbook} />
-          </p>
+          </TruncatedText>
         </div>
         <PlaybookStatusBadge status={playbook.status} />
         <span className="sr-only">{t("common.edit")}</span>

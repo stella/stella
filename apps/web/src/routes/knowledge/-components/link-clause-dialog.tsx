@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -378,12 +379,9 @@ export const LinkClauseDialog = ({
                     type="button"
                   >
                     <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
-                    <span
-                      className="min-w-0 flex-1 truncate font-medium"
-                      dir="auto"
-                    >
+                    <TruncatedText className="flex-1 font-medium" dir="auto">
                       {clause.title}
-                    </span>
+                    </TruncatedText>
                     <span className="text-muted-foreground shrink-0 text-xs">
                       {t("common.versionLabel", {
                         version: String(clause.currentVersion),

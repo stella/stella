@@ -26,6 +26,7 @@ import {
   registerDeferredE2eCleanup,
 } from "../helpers/deferred-cleanup";
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { findEscapedText } from "../helpers/escaped-text";
 import {
   assertNetworkBaseline,
   assertNetworkBaselineCoverage,
@@ -536,6 +537,10 @@ const measureRouteTarget = async ({
     expect(
       await findChromeDividerProblems(page),
       `${route.template} must show exactly one divider under the app chrome`,
+    ).toEqual([]);
+    expect(
+      await findEscapedText(page),
+      `${route.template} must keep every text inside its box`,
     ).toEqual([]);
     browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
     // Captured after the route shell and tracked API work are ready, so the

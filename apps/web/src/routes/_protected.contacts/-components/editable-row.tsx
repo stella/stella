@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { InlineRenameInput } from "@stll/ui/inline-rename";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useFormattingLocale } from "@/i18n/formatting-context";
@@ -160,18 +161,20 @@ export const EditableRow = ({
         <span className="text-muted-foreground w-32 shrink-0">{label}</span>
       )}
       <button
-        className="hover:text-foreground min-w-0 cursor-text overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
+        className="hover:text-foreground min-w-0 cursor-text text-start text-sm"
         disabled={rateNeedsCurrency}
         onClick={() => rename.startEditing()}
         type="button"
       >
-        {rateNeedsCurrency ? (
-          <span className="text-foreground-subtle">
-            {t("contacts.billing.selectCurrencyForRate")}
-          </span>
-        ) : (
-          displayValue || <span className="text-foreground-subtle">—</span>
-        )}
+        <TruncatedText className="whitespace-pre">
+          {rateNeedsCurrency ? (
+            <span className="text-foreground-subtle">
+              {t("contacts.billing.selectCurrencyForRate")}
+            </span>
+          ) : (
+            displayValue || <span className="text-foreground-subtle">—</span>
+          )}
+        </TruncatedText>
       </button>
     </div>
   );

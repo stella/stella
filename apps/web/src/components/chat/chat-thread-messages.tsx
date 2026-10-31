@@ -33,6 +33,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { StatusMark } from "@stll/ui/status-mark";
 import { SwapText } from "@stll/ui/swap-text";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -2395,14 +2396,11 @@ const AssistantThinkingHeader = ({
   return (
     <>
       <StatusMark status={isStreaming ? "running" : "done"} />
-      <span
-        className={cn(
-          "min-w-0 truncate",
-          isStreaming && CHAT_PENDING_TEXT_CLASS,
-        )}
+      <TruncatedText
+        render={<span className={cn(isStreaming && CHAT_PENDING_TEXT_CLASS)} />}
       >
         {t("chat.reasoning")}
-      </span>
+      </TruncatedText>
       {reasoningTokenCount !== null && (
         <ReasoningTokenCount count={reasoningTokenCount} />
       )}

@@ -8,6 +8,7 @@ import { IntlProvider, useFormatter, useTranslations } from "use-intl";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -139,7 +140,7 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                     (!bridge.supportsTools() &&
                       parseLegalCitationHttpUrl(node.decision.url) === null))
                 }
-                className="bg-background h-11 w-full truncate rounded-md px-2 text-xs focus-visible:outline-2"
+                className="bg-background h-11 w-full rounded-md px-2 text-xs focus-visible:outline-2"
                 title={nodeLabel(node, t)}
                 onFocus={() => setSelected(node.id)}
                 onClick={containedEventHandler(() => {
@@ -152,7 +153,9 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
                   }
                 })}
               >
-                <bdi>{nodeLabel(node, t)}</bdi>
+                <TruncatedText hint={false} render={<bdi />}>
+                  {nodeLabel(node, t)}
+                </TruncatedText>
               </button>
             </foreignObject>
           </g>
@@ -223,9 +226,9 @@ const CitationList = ({
                     ),
                   )}
                 >
-                  <BidiText className="min-w-0 truncate">
+                  <TruncatedText render={<BidiText />}>
                     {decision.caseNumber}
-                  </BidiText>
+                  </TruncatedText>
                 </Button>
               ) : (
                 <p className="min-w-0 font-medium break-words">

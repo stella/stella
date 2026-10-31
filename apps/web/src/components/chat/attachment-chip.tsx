@@ -4,6 +4,7 @@ import { panic } from "better-result";
 
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -39,7 +40,7 @@ type AttachmentChipProps = {
 };
 
 const TITLE_CLASS = cn(
-  "focus-visible:outline-ring max-w-40 min-w-0 truncate rounded-sm text-start focus-visible:outline-2",
+  "focus-visible:outline-ring max-w-40 min-w-0 rounded-sm text-start focus-visible:outline-2",
   CHIP_TOUCH_TARGET_CLASS,
 );
 
@@ -49,7 +50,11 @@ const NO_ACTIONS: readonly AttachmentChipAction[] = [];
 // The title is the tooltip's trigger: Base UI keeps the element's own
 // children, so the label sits inside the button or link it names.
 const titleElement = (open: AttachmentChipOpen, title: string) => {
-  const label = <bdi>{title}</bdi>;
+  const label = (
+    <TruncatedText hint={false} render={<bdi />}>
+      {title}
+    </TruncatedText>
+  );
   switch (open.type) {
     case "none":
       return (

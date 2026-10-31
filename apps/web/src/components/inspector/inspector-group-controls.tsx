@@ -32,6 +32,7 @@ import {
   MenuSubPopup,
   MenuSubTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useInspectorGroupTransfer } from "@/components/inspector/inspector-group-transfer";
 import { getInspectorTabGroupId } from "@/components/inspector/inspector-groups.logic";
@@ -369,7 +370,9 @@ const InspectorGroupDestinations = ({
       {destinations.map((group) => (
         <MenuItem key={group.id} onClick={() => onMove(group.id)}>
           <InspectorGroupIcon group={group} />
-          <bdi className="max-w-64 truncate">{group.name}</bdi>
+          <TruncatedText className="max-w-64" render={<bdi />}>
+            {group.name}
+          </TruncatedText>
         </MenuItem>
       ))}
     </>

@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -934,12 +935,14 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
         data-tauri-drag-region
       >
         <div className="min-w-0 flex-1" data-tauri-drag-region>
-          <h1 className="truncate text-sm font-semibold" data-tauri-drag-region>
-            {t("editItem")}
-          </h1>
+          <TruncatedText
+            className="text-sm font-semibold"
+            render={<h1 data-tauri-drag-region>{t("editItem")}</h1>}
+            tooltip={t("editItem")}
+          />
           {sourceName ? (
             <p
-              className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate text-xs"
+              className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-xs"
               data-tauri-drag-region
               title={sourceTitle}
             >
@@ -956,9 +959,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
                   style={{ backgroundColor: sourceVisual?.color ?? undefined }}
                 />
               )}
-              <span className="truncate" dir="auto">
+              <TruncatedText dir="auto" hint={false}>
                 {sourceName}
-              </span>
+              </TruncatedText>
             </p>
           ) : null}
         </div>

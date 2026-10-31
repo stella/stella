@@ -27,6 +27,7 @@ import {
 import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { useContentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -457,7 +458,7 @@ export const VersionsSidebar = ({
             variant="ghost"
           >
             <FileDiffIcon className="size-4 shrink-0" />
-            <span className="truncate">{t("fileDetail.compare")}</span>
+            <TruncatedText>{t("fileDetail.compare")}</TruncatedText>
           </Button>
         )}
         <Button
@@ -478,7 +479,7 @@ export const VersionsSidebar = ({
           variant="ghost"
         >
           <PlusIcon className="size-4" />
-          <span className="truncate">{t("fileDetail.uploadNewVersion")}</span>
+          <TruncatedText>{t("fileDetail.uploadNewVersion")}</TruncatedText>
         </Button>
       </div>
     </div>
@@ -621,21 +622,23 @@ const VersionItem = ({
                 <Tooltip
                   content={t("common.documentReference")}
                   render={
-                    <span className="text-muted-foreground text-3xs truncate font-mono" />
+                    <span className="text-muted-foreground text-3xs min-w-0 font-mono" />
                   }
                 >
-                  <BidiText direction="ltr">{version.stamp}</BidiText>
+                  <TruncatedText render={<BidiText direction="ltr" />}>
+                    {version.stamp}
+                  </TruncatedText>
                 </Tooltip>
               )}
               {version.label !== null && (
-                <span className="text-accent-foreground text-3xs inline-flex w-fit items-center gap-1.5 truncate font-medium">
+                <span className="text-accent-foreground text-3xs inline-flex w-fit min-w-0 items-center gap-1.5 font-medium">
                   <span
                     className={cn(
                       "size-2 shrink-0 rounded-full",
                       labelDotColor,
                     )}
                   />
-                  {version.label}
+                  <TruncatedText>{version.label}</TruncatedText>
                 </span>
               )}
             </div>

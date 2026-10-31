@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import type { PromptSuggestion } from "@/lib/prompts/types";
@@ -54,9 +55,12 @@ export const PromptSuggestions = ({
               <span className="text-foreground block text-sm leading-5 font-medium">
                 {prompt.name}
               </span>
-              <span className="text-muted-foreground line-clamp-2 text-xs leading-4">
+              <TruncatedText
+                className="text-muted-foreground text-xs leading-4"
+                lines={2}
+              >
                 {prompt.body}
-              </span>
+              </TruncatedText>
             </span>
           </button>
         ))}

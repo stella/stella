@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { majorUnitInput } from "@/components/billing/amount-input.logic";
@@ -183,8 +184,8 @@ export const InvoicePaymentsSection = ({
                         </span>
                       )}
                     </td>
-                    <td className="max-w-xs truncate px-4 py-2" dir="auto">
-                      {payment.reference ?? ""}
+                    <td className="max-w-xs px-4 py-2" dir="auto">
+                      <TruncatedText>{payment.reference ?? ""}</TruncatedText>
                     </td>
                     <td
                       className={cn(

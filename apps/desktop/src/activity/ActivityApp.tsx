@@ -26,6 +26,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/popover";
 import { PreviewPane } from "@stll/ui/preview-pane";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -172,7 +173,9 @@ const ActivityWelcomePreview = ({
                       appIdentifier={segment.appIdentifier}
                       sourceAppVisuals={snapshot.sourceAppVisuals}
                     />
-                    <bdi className="truncate">{segment.appName}</bdi>
+                    <TruncatedText hint={false} render={<bdi />}>
+                      {segment.appName}
+                    </TruncatedText>
                   </span>
                 ),
                 tone: {
@@ -529,7 +532,9 @@ const AppTotals = ({
               appIdentifier={app.identifier}
               sourceAppVisuals={sourceAppVisuals}
             />
-            <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
+            <TruncatedText className="flex-1 text-sm" render={<bdi />}>
+              {app.name}
+            </TruncatedText>
             <span className="text-muted-foreground text-sm tabular-nums">
               {sampleDuration?.identifier === app.identifier ? (
                 <span className="inline-grid">

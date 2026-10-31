@@ -22,6 +22,7 @@ import {
   MenuSubTrigger,
 } from "@stll/ui/menu";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -325,9 +326,9 @@ const ModelOptionRow = ({
           />
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-1.5">
-              <BidiText as="span" className="truncate">
+              <TruncatedText render={<BidiText as="span" />}>
                 {option.displayName}
-              </BidiText>
+              </TruncatedText>
               {recommendation === "new" && (
                 <span className="bg-muted text-muted-foreground text-2xs shrink-0 rounded px-1.5 py-px font-medium">
                   {t("chat.modelSelector.newModel")}

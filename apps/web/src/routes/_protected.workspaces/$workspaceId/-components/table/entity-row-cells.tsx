@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -872,7 +873,7 @@ const FolderCell = ({
         />
       ) : (
         <button
-          className="overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
+          className="min-w-0 text-start text-sm"
           dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();
@@ -881,7 +882,7 @@ const FolderCell = ({
           }}
           type="button"
         >
-          {name}
+          <TruncatedText className="whitespace-pre">{name}</TruncatedText>
         </button>
       )}
     </div>

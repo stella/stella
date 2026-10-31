@@ -9,6 +9,7 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { DialogFormState } from "@stll/ui/dialog";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { SearchField } from "@stll/ui/search-field";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { filterVisibleDocuments } from "@/components/workspaces/matter-document-picker.logic";
@@ -116,9 +117,9 @@ export const MatterDocumentPicker = ({
                     }
                     onCheckedChange={() => toggle(doc.entityId)}
                   />
-                  <BidiText as="span" className="min-w-0 truncate">
+                  <TruncatedText render={<BidiText as="span" />}>
                     {doc.name ?? doc.fileName}
-                  </BidiText>
+                  </TruncatedText>
                 </label>
               );
             })}

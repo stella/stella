@@ -14,6 +14,7 @@ import {
 } from "@stll/ui/composer";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { publishDocumentPanelInset } from "@stll/ui/panel-inset";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -41,14 +42,15 @@ export const PromptBarPlaceholderContent = ({
 }: {
   children: ReactNode;
 }) => (
-  <span
-    className={cn(
-      "text-foreground-placeholder block min-w-0 truncate",
-      COMPOSER_TEXT_CLASS,
-    )}
+  <TruncatedText
+    render={
+      <span
+        className={cn("text-foreground-placeholder", COMPOSER_TEXT_CLASS)}
+      />
+    }
   >
     {children}
-  </span>
+  </TruncatedText>
 );
 
 type PromptBarShellProps = {

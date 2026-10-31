@@ -28,6 +28,13 @@ const visualLoaders = {
       return { default: TaskMetadataPlayground };
     },
   },
+  "overview-stat-cards": {
+    load: async () => {
+      const { OverviewStatCardsPlayground } =
+        await import("./-components/overview-stat-cards-playground");
+      return { default: OverviewStatCardsPlayground };
+    },
+  },
   "column-composer": {
     load: async () => {
       const { ColumnComposerPlayground } =

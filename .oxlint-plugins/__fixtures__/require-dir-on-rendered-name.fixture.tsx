@@ -15,6 +15,10 @@ declare const x: {
 };
 declare const BidiText: (props: { children: ReactNode }) => ReactNode;
 declare const UserText: (props: { children: ReactNode }) => ReactNode;
+declare const TruncatedText: (props: {
+  children: ReactNode;
+  render?: ReactNode;
+}) => ReactNode;
 declare const Foo: {
   Label: (props: { children: ReactNode; dir?: string }) => ReactNode;
 };
@@ -52,6 +56,10 @@ export const _rawBdi = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <bdi>{x.displayName}</bdi>
 );
+export const _truncatedPlain = () => (
+  // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
+  <TruncatedText>{x.displayName}</TruncatedText>
+);
 export const _compound = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <Foo.Label dir="auto">{x.displayName}</Foo.Label>
@@ -62,3 +70,8 @@ export const _compound = () => (
 export const _ok1 = () => <span>{x.name}</span>;
 export const _ok2 = () => <BidiText>{x.displayName}</BidiText>;
 export const _ok3 = () => <UserText>{x.fileName}</UserText>;
+export const _ok4 = () => (
+  <TruncatedText render={<BidiText>{null}</BidiText>}>
+    {x.displayName}
+  </TruncatedText>
+);

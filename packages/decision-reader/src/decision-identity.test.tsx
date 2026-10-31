@@ -4,6 +4,7 @@ import { expect, test } from "bun:test";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbPage } from "@stll/ui/breadcrumb";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { CourtName } from "./court-name";
 import { CourtTierBadge } from "./court-tier-badge";
@@ -28,17 +29,22 @@ test.each(["ÚS", null, "  "])(
       // The public-law breadcrumb before extraction: this serialized surface is the contract.
       const previous = renderToStaticMarkup(
         <>
-          <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
-            <BidiText>{props.caseNumber}</BidiText>
+          <BreadcrumbPage className="min-w-0 flex-1 font-medium">
+            <TruncatedText render={<BidiText />}>
+              {props.caseNumber}
+            </TruncatedText>
           </BreadcrumbPage>
-          <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate max-sm:hidden">
+          <TruncatedText
+            className="text-muted-foreground flex items-center gap-1.5 max-sm:hidden"
+            hint={false}
+          >
             ·
             <CourtName
               abbreviation={props.courtAbbreviation}
               court={props.court}
               tier={courtTier}
             />
-          </span>
+          </TruncatedText>
         </>,
       );
       const shared = renderToStaticMarkup(<DecisionIdentity {...props} />);

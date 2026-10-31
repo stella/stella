@@ -31,6 +31,7 @@ import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -571,8 +572,10 @@ const InvoiceDetail = ({
                             MEDIUM_DATE,
                           )}
                         </td>
-                        <td className="max-w-xs truncate px-4 py-2">
-                          {entry.invoiceNarrative ?? entry.narrative}
+                        <td className="max-w-xs px-4 py-2">
+                          <TruncatedText>
+                            {entry.invoiceNarrative ?? entry.narrative}
+                          </TruncatedText>
                         </td>
                         <td className="px-4 py-2 text-end tabular-nums">
                           {format.number(entry.billedMinutes / 60, {
@@ -653,8 +656,10 @@ const InvoiceDetail = ({
                             MEDIUM_DATE,
                           )}
                         </td>
-                        <td className="max-w-xs truncate px-4 py-2">
-                          {expense.invoiceDescription ?? expense.description}
+                        <td className="max-w-xs px-4 py-2">
+                          <TruncatedText>
+                            {expense.invoiceDescription ?? expense.description}
+                          </TruncatedText>
                         </td>
                         <td className="px-4 py-2 text-end tabular-nums">
                           {formatCurrencyAmount(

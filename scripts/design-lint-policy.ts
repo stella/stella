@@ -305,6 +305,14 @@ export const SHADCN_LINT_RULES = {
           pattern: "^(?:BidiText|UserText)$",
           allow: ["layout", "typography", "color"],
         },
+        // Truncation around the caller's own element (a span, a paragraph, a
+        // chip): the caller owns how it looks, the component owns only how
+        // the text is cut, so it takes every class but the ones that cut.
+        {
+          pattern: "^TruncatedText$",
+          allow: ["*"],
+          deny: ["truncate", "text-ellipsis", "text-clip", "line-clamp-*"],
+        },
         // A placeholder mirrors the shape of the content it stands in for.
         { pattern: "^Skeleton$", allow: ["layout", "shape"] },
         // RTL-flipping wrapper around an icon: the caller owns the icon's

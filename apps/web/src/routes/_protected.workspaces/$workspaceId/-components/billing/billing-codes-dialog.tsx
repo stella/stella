@@ -14,6 +14,7 @@ import { Form } from "@stll/ui/form";
 import { PlusIcon, TrashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -245,7 +246,9 @@ export const BillingCodesDialog = ({
                     <span className="text-muted-foreground shrink-0 font-mono text-xs">
                       {code.code}
                     </span>
-                    <span className="truncate text-sm">{code.label}</span>
+                    <TruncatedText className="text-sm">
+                      {code.label}
+                    </TruncatedText>
                     {!code.active && (
                       <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
                         {t("billing.codes.inactive")}

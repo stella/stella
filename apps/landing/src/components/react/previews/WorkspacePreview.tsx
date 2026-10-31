@@ -1,3 +1,5 @@
+import { TruncatedText } from "@stll/ui/truncated-text";
+
 import { PreviewSurface } from "./PreviewSurface";
 
 // Static lookalike of the app's matter workspace: a left nav rail (matter sections
@@ -178,12 +180,12 @@ const DocRow = ({ name, pill, index }: Doc & { index: number }) => (
       }}
     />
     <FileGlyph />
-    <span
-      className="min-w-0 flex-1 truncate text-[0.6rem]"
+    <TruncatedText
+      className="flex-1 text-[0.6rem]"
       style={{ color: "var(--foreground)" }}
     >
       {name}
-    </span>
+    </TruncatedText>
     <StatusPill pill={pill} />
   </li>
 );

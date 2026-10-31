@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -107,9 +108,12 @@ export const FileChatEmptyPlaceholder = ({
       )}
     >
       <span className="shrink-0">{placeholderAction}</span>
-      <BidiText as="span" className="text-foreground-label max-w-64 truncate">
+      <TruncatedText
+        className="text-foreground-label max-w-64"
+        render={<BidiText as="span" />}
+      >
         {sourceLabel}
-      </BidiText>
+      </TruncatedText>
     </span>
   );
 };

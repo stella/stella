@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -251,9 +252,9 @@ export const CreateProperty = ({
                   {...capabilityProps}
                 >
                   <PlusIcon className="size-4" />
-                  <span className="truncate">
+                  <TruncatedText>
                     {t("workspaces.properties.extractEntityType")}
-                  </span>
+                  </TruncatedText>
                 </DialogTrigger>
               )}
             </CapabilityAction>

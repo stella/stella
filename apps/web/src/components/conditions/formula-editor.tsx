@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/button";
 import { FunctionSquareIcon, HashIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { includesValue } from "@/lib/utils";
@@ -360,15 +361,12 @@ export const FormulaCell = ({
         }
       >
         <FunctionSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
-        <span
-          className={cn(
-            "min-w-0 truncate font-mono",
-            value === "" && "text-muted-foreground",
-          )}
+        <TruncatedText
+          className={cn("font-mono", value === "" && "text-muted-foreground")}
           dir="ltr"
         >
           {value === "" ? t("templates.conditionFormulaPlaceholder") : value}
-        </span>
+        </TruncatedText>
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-80" side="bottom">
         <div className="flex flex-col gap-2 p-2">

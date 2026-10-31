@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { CheckCircle2Icon, CircleIcon } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { useFormatter } from "@/i18n/formatting-context";
@@ -74,14 +75,11 @@ const SubtaskRow = ({
       ) : (
         <CircleIcon className="text-muted-foreground size-3.5" />
       )}
-      <span
-        className={cn(
-          "truncate",
-          isDone && "text-muted-foreground line-through",
-        )}
+      <TruncatedText
+        className={cn(isDone && "text-muted-foreground line-through")}
       >
         {name}
-      </span>
+      </TruncatedText>
     </button>
   );
 };

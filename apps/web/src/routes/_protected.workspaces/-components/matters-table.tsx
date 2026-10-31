@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -120,7 +121,7 @@ export const MattersTable = ({
                   return (
                     <TableHead className="group/header" key={col.id}>
                       <span className="inline-flex items-center gap-1">
-                        <span className="truncate">{columnLabels[col.id]}</span>
+                        <TruncatedText>{columnLabels[col.id]}</TruncatedText>
                         {trailing}
                       </span>
                     </TableHead>
@@ -192,12 +193,12 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <BidiText
-      as="span"
-      className="overflow-hidden font-medium text-ellipsis whitespace-pre"
+    <TruncatedText
+      className="font-medium whitespace-pre"
+      render={<BidiText as="span" />}
     >
       {workspace.name}
-    </BidiText>
+    </TruncatedText>
   </div>
 );
 
@@ -205,22 +206,25 @@ const ClientCell = ({ workspace }: CellProps) => {
   const t = useTranslations();
   if (!workspace.client) {
     return (
-      <span className="text-muted-foreground block truncate italic">
+      <TruncatedText className="text-muted-foreground italic">
         {t("workspaces.parties.personalLabel")}
-      </span>
+      </TruncatedText>
     );
   }
   return (
-    <BidiText as="span" className="text-muted-foreground block truncate">
+    <TruncatedText
+      className="text-muted-foreground"
+      render={<BidiText as="span" />}
+    >
       {workspace.client.displayName}
-    </BidiText>
+    </TruncatedText>
   );
 };
 
 const ReferenceCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground block truncate font-mono">
+  <TruncatedText className="text-muted-foreground font-mono">
     {workspace.reference}
-  </span>
+  </TruncatedText>
 );
 
 const EntityCountCell = ({ workspace }: CellProps) => {
@@ -507,9 +511,9 @@ const MattersTableGroup = ({
               {format.number(group.workspaces.length)}
             </span>
             {group.type === "client" && group.responsibleAttorneyName && (
-              <span className="text-muted-foreground ms-auto truncate text-xs font-normal">
+              <TruncatedText className="text-muted-foreground ms-auto text-xs font-normal">
                 {group.responsibleAttorneyName}
-              </span>
+              </TruncatedText>
             )}
           </div>
         </TableCell>

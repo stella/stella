@@ -68,7 +68,7 @@ test.describe("filesystem rename", () => {
     });
     await page.getByRole("tab", { exact: true, name: "Files" }).click();
 
-    const originalName = page.getByTitle(`${LONG_BASE_NAME}.docx`, {
+    const originalName = page.getByText(`${LONG_BASE_NAME}.docx`, {
       exact: true,
     });
     await expect(originalName).toBeVisible({ timeout: 30_000 });
@@ -122,7 +122,7 @@ test.describe("filesystem rename", () => {
     );
     await input.press("Enter");
 
-    const renamedName = page.getByTitle(`${renamedBase}.docx`, {
+    const renamedName = page.getByText(`${renamedBase}.docx`, {
       exact: true,
     });
     await expect(renamedName).toBeVisible({ timeout: 1000 });

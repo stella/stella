@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../select";
+import { TruncatedText } from "../truncated-text";
 
 // One label far wider than the 16rem popup. A list item must clip it inside
 // the popup rather than widen its content track past the popup edge.
@@ -39,7 +40,7 @@ const ListItemsFixture = () => {
           <ComboboxList>
             {(item: string) => (
               <ComboboxItem key={item} value={item}>
-                <span className="block truncate">{item}</span>
+                <TruncatedText>{item}</TruncatedText>
               </ComboboxItem>
             )}
           </ComboboxList>
@@ -53,7 +54,7 @@ const ListItemsFixture = () => {
         <SelectPopup className="w-64">
           {ITEMS.map((item) => (
             <SelectItem key={item} value={item}>
-              <span className="block truncate">{item}</span>
+              <TruncatedText>{item}</TruncatedText>
             </SelectItem>
           ))}
         </SelectPopup>

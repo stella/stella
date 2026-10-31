@@ -23,6 +23,7 @@ import {
 } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -163,11 +164,15 @@ const VersionRow = ({
   return (
     <div className="border-border flex items-center justify-between gap-3 rounded-lg border p-3">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium" dir="auto">
+        <TruncatedText
+          className="text-sm font-medium"
+          dir="auto"
+          render={<p />}
+        >
           {t("common.versionLabel", { version: String(version.version) })}
           {" — "}
           {version.name}
-        </p>
+        </TruncatedText>
         <p className="text-muted-foreground text-xs">
           {format.dateTime(
             new Date(version.createdAt),

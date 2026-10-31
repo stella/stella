@@ -1,5 +1,6 @@
 import type * as React from "react";
 
+import { TruncatedText } from "../components/truncated-text";
 import { cn } from "../lib/utils";
 import {
   PROPERTY_ROW_GRID,
@@ -182,32 +183,33 @@ export const InspectorTitle = ({
   className,
   ...props
 }: React.ComponentProps<"h2">) => (
-  <h2
-    className={cn(
-      "truncate text-xs font-medium [unicode-bidi:isolate]",
-      className,
-    )}
+  <TruncatedText
+    className={cn("text-xs font-medium [unicode-bidi:isolate]", className)}
     data-slot="inspector-title"
-    dir="auto"
-    {...props}
-  >
-    {children}
-  </h2>
+    render={
+      <h2 dir="auto" {...props}>
+        {children}
+      </h2>
+    }
+    tooltip={children}
+  />
 );
 
 export const InspectorDescription = ({
+  children,
   className,
   ...props
 }: React.ComponentProps<"p">) => (
-  <p
+  <TruncatedText
     className={cn(
-      "text-muted-foreground text-2xs truncate [unicode-bidi:isolate]",
+      "text-muted-foreground text-2xs [unicode-bidi:isolate]",
       className,
     )}
     data-slot="inspector-description"
-    dir="auto"
-    {...props}
-  />
+    render={<p dir="auto" {...props} />}
+  >
+    {children}
+  </TruncatedText>
 );
 
 export const InspectorActions = ({
@@ -307,29 +309,31 @@ export const InspectorProperty = ({
 );
 
 export const InspectorPropertyLabel = ({
+  children,
   className,
   ...props
 }: React.ComponentProps<"dt">) => (
-  <dt
-    className={cn(
-      "text-muted-foreground min-w-0 truncate text-sm font-medium",
-      className,
-    )}
+  <TruncatedText
+    className={cn("text-muted-foreground text-sm font-medium", className)}
     data-slot="inspector-property-label"
-    {...props}
-  />
+    render={<dt {...props} />}
+  >
+    {children}
+  </TruncatedText>
 );
 
 export const InspectorPropertyValue = ({
+  children,
   className,
   ...props
 }: React.ComponentProps<"dd">) => (
-  <dd
-    className={cn("min-w-0 truncate text-sm [unicode-bidi:isolate]", className)}
+  <TruncatedText
+    className={cn("text-sm [unicode-bidi:isolate]", className)}
     data-slot="inspector-property-value"
-    dir="auto"
-    {...props}
-  />
+    render={<dd dir="auto" {...props} />}
+  >
+    {children}
+  </TruncatedText>
 );
 
 /** Row-height empty state, so an empty list keeps the list's rhythm. */

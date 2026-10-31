@@ -33,6 +33,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { accountExpiryDelay } from "../shared/account-expiry";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -602,12 +603,12 @@ export const RegistrySearch = ({
             aria-label={t("registrySelect")}
           >
             <Building2Icon aria-hidden="true" className="size-4" />
-            <span className="truncate">
+            <TruncatedText hint={false}>
               {connected
                 ? (connection.registries.find(({ id }) => id === registryId)
                     ?.name ?? t("registrySelect"))
                 : t("registrySelect")}
-            </span>
+            </TruncatedText>
             <ChevronDownIcon aria-hidden="true" className="size-3.5" />
           </MenuTrigger>
           <MenuPopup align="start">
@@ -712,9 +713,11 @@ export const RegistrySearch = ({
                 }}
                 className="focus-visible:ring-ring min-h-0 flex-1 overflow-y-auto px-4 py-3 text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
               >
-                <h2 className="truncate text-sm font-semibold" dir="auto">
-                  {card.name}
-                </h2>
+                <TruncatedText
+                  className="text-sm font-semibold"
+                  render={<h2 dir="auto">{card.name}</h2>}
+                  tooltip={card.name}
+                />
                 <p
                   className="text-foreground-muted mt-2 text-xs whitespace-pre-wrap"
                   dir="auto"
@@ -744,11 +747,11 @@ export const RegistrySearch = ({
                     }
                     aria-label={t("registryFormat")}
                   >
-                    <span className="truncate">
+                    <TruncatedText hint={false}>
                       {currentSearch.formats.find(
                         ({ id }) => id === card.formatId,
                       )?.name ?? t("registryDefaultFormat")}
-                    </span>
+                    </TruncatedText>
                     <ChevronDownIcon aria-hidden="true" className="size-3.5" />
                   </MenuTrigger>
                   <MenuPopup align="start" side="top">
@@ -829,9 +832,7 @@ export const RegistrySearch = ({
           aria-atomic="true"
         >
           <CircleAlertIcon aria-hidden="true" className="size-3.5 shrink-0" />
-          <span className="truncate" title={errorMessage}>
-            {errorMessage}
-          </span>
+          <TruncatedText>{errorMessage}</TruncatedText>
         </p>
       ) : null}
     </div>

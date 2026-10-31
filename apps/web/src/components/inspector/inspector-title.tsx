@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 type InspectorTitleProps = {
@@ -32,12 +33,12 @@ export const InspectorTitle = ({
       <button
         className={cn(
           className,
-          "hover:bg-accent -mx-1 w-full overflow-hidden rounded-sm px-1 text-start text-ellipsis whitespace-pre",
+          "hover:bg-accent -mx-1 w-full rounded-sm px-1 text-start",
         )}
         onClick={onEdit}
         type="button"
       >
-        {children}
+        <TruncatedText className="whitespace-pre">{children}</TruncatedText>
       </button>
     </h2>
   );

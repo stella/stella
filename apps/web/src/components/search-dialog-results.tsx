@@ -21,6 +21,7 @@ import { Loader } from "@stll/ui/loader";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -93,7 +94,7 @@ export const CommandActionItem = ({
           {...capabilityProps}
         >
           <Icon className="text-muted-foreground size-4 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">{action.title}</span>
+          <TruncatedText className="flex-1">{action.title}</TruncatedText>
           {/* A shortcut hint means nothing without a keyboard, so a
               touch-first device drops it. */}
           {action.hotkey && (
@@ -145,12 +146,15 @@ export const SearchSummaryItem = ({
               )}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">
+              <TruncatedText className="text-sm font-medium">
                 {title}
-              </span>
-              <span className="text-muted-foreground line-clamp-2 text-xs font-normal">
+              </TruncatedText>
+              <TruncatedText
+                className="text-muted-foreground text-xs font-normal"
+                lines={2}
+              >
                 {body}
-              </span>
+              </TruncatedText>
             </span>
           </Button>
         )}
@@ -165,9 +169,9 @@ export const SearchSummaryItem = ({
           <AiActionIcon className="size-3.5" />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
+          <TruncatedText className="text-sm font-medium">
             {data.title}
-          </span>
+          </TruncatedText>
           <span className="text-muted-foreground block text-xs font-normal whitespace-pre-line">
             <SummaryBody
               citations={data.citations}
@@ -301,7 +305,7 @@ export const SearchRecents = ({
               variant="ghost"
             >
               <HistoryIcon className="text-muted-foreground size-4 shrink-0" />
-              <span className="truncate">{recent.query}</span>
+              <TruncatedText>{recent.query}</TruncatedText>
             </Button>
           ))}
         </MenuSection>
@@ -328,15 +332,15 @@ export const SearchRecents = ({
             >
               <RecentFileIcon file={file} />
               <span className="min-w-0 flex-1">
-                <BidiText as="span" className="block truncate">
+                <TruncatedText render={<BidiText as="span" />}>
                   {file.title}
-                </BidiText>
-                <BidiText
-                  as="span"
-                  className="text-muted-foreground block truncate text-xs"
+                </TruncatedText>
+                <TruncatedText
+                  className="text-muted-foreground text-xs"
+                  render={<BidiText as="span" />}
                 >
                   {file.workspaceName}
-                </BidiText>
+                </TruncatedText>
               </span>
             </Button>
           ))}
@@ -400,10 +404,12 @@ export const SearchResultItem = ({
     >
       <SearchHitIcon hit={hit} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{hit.title || hit.id}</p>
+        <TruncatedText className="text-sm font-medium" render={<p />}>
+          {hit.title || hit.id}
+        </TruncatedText>
         {(meta || editorMeta) && (
           <div className="text-muted-foreground flex min-w-0 items-center gap-1 text-xs">
-            {meta ? <span className="min-w-0 truncate">{meta}</span> : null}
+            {meta ? <TruncatedText>{meta}</TruncatedText> : null}
             {editorMeta ? (
               <>
                 {meta ? <span className="shrink-0">·</span> : null}
@@ -421,15 +427,21 @@ export const SearchResultItem = ({
           </div>
         )}
         {hit.headline && (
-          <p
-            className={cn(
-              "text-muted-foreground mt-0.5 line-clamp-2 text-xs font-normal",
-              SEARCH_HIT_DESCENDANT_MARK_CLASS,
-            )}
+          <TruncatedText
             dangerouslySetInnerHTML={{
               // safe-html: server-escaped + <mark>-highlighted by escapeAndHighlight() in the global search mappers
               __html: hit.headline,
             }}
+            hint={false}
+            lines={2}
+            render={
+              <p
+                className={cn(
+                  "text-muted-foreground mt-0.5 text-xs font-normal",
+                  SEARCH_HIT_DESCENDANT_MARK_CLASS,
+                )}
+              />
+            }
           />
         )}
       </div>

@@ -14,6 +14,7 @@ import {
   TrashIcon,
   UndoIcon,
 } from "@stll/ui/icons";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -107,9 +108,12 @@ export const TimeEntryRow = ({
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
             {matterName && (
-              <BidiText as="span" className="truncate text-sm font-medium">
+              <TruncatedText
+                className="text-sm font-medium"
+                render={<BidiText as="span" />}
+              >
                 {matterName}
-              </BidiText>
+              </TruncatedText>
             )}
             {!entry.billable && (
               <span className="bg-muted text-muted-foreground text-3xs shrink-0 rounded px-1.5 py-0.5">
@@ -134,9 +138,12 @@ export const TimeEntryRow = ({
             </span>
           </div>
           {entry.narrative && (
-            <p className="text-muted-foreground truncate text-xs">
+            <TruncatedText
+              className="text-muted-foreground text-xs"
+              render={<p />}
+            >
               {entry.narrative}
-            </p>
+            </TruncatedText>
           )}
           <ReturnReason entry={entry} />
         </div>

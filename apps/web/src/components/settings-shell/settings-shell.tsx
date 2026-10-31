@@ -15,6 +15,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -86,9 +87,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
               <Button className="w-full justify-between" variant="outline" />
             }
           >
-            <span className="truncate">
+            <TruncatedText>
               {activeItem ? t(activeItem.labelKey) : t("common.settings")}
-            </span>
+            </TruncatedText>
             <ChevronDownIcon className="size-4 shrink-0" />
           </MenuTrigger>
           <MenuPopup align="start">

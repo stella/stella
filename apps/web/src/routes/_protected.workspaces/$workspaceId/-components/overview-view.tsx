@@ -42,12 +42,14 @@ import {
   TooltipPopup,
   TooltipTrigger,
 } from "@stll/ui/tooltip";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { StatCard } from "@/components/overview-stat-card";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
@@ -623,7 +625,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           status={task.status}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm">{task.name}</p>
+                          <TruncatedText className="text-sm" render={<p />}>
+                            {task.name}
+                          </TruncatedText>
                           <span className="text-muted-foreground flex items-center gap-1 text-xs">
                             {task.assignedTo !== null && (
                               <PersonMentionLabel
@@ -1041,7 +1045,7 @@ const OverviewSectionHeader = ({
   <div className="mb-3 flex h-7 items-center justify-between gap-3">
     <h2 className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-sm font-medium [&_svg]:size-3.5 [&_svg]:shrink-0">
       {icon}
-      <span className="truncate">{title}</span>
+      <TruncatedText>{title}</TruncatedText>
     </h2>
     <Button
       className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"
@@ -1055,52 +1059,3 @@ const OverviewSectionHeader = ({
     </Button>
   </div>
 );
-
-type StatCardProps = {
-  icon: React.ReactNode;
-  label:
-    | "common.workflows"
-    | "workspaces.overview.nextDeadline"
-    | "workspaces.overview.openTasks"
-    | "workspaces.overview.timeThisWeek"
-    | "workspaces.overview.totalDocuments";
-  value: React.ReactNode;
-  sublabel?: string | undefined;
-  onClick?: () => void;
-};
-
-const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
-  const t = useTranslations();
-  const content = (
-    <>
-      <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-        {icon}
-        {t(label)}
-      </div>
-      <div className="text-xl font-semibold tabular-nums">{value}</div>
-      {sublabel && (
-        <span className="text-muted-foreground truncate text-xs">
-          {sublabel}
-        </span>
-      )}
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        className="bg-card hover:bg-muted/50 flex cursor-pointer flex-col items-start gap-1.5 rounded-lg border px-4 py-3 text-start"
-        onClick={onClick}
-        type="button"
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div className="bg-card flex flex-col gap-1.5 rounded-lg border px-4 py-3">
-      {content}
-    </div>
-  );
-};

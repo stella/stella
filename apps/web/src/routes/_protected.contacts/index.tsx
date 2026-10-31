@@ -62,6 +62,7 @@ import {
   TableRow,
 } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ContactReadError } from "@/components/contact-read-error";
@@ -433,16 +434,19 @@ const useContactColumns = () => {
           id: "name",
           header: t("common.name"),
           cell: ({ row, getValue }) => (
-            <Link
-              className="block max-w-xs truncate font-medium hover:underline"
+            <TruncatedText
+              className="max-w-xs font-medium hover:underline"
               dir="auto"
-              onClick={(event) => event.stopPropagation()}
-              params={{ contactId: row.original.id }}
-              title={getValue()}
-              to="/contacts/$contactId"
+              render={
+                <Link
+                  onClick={(event) => event.stopPropagation()}
+                  params={{ contactId: row.original.id }}
+                  to="/contacts/$contactId"
+                />
+              }
             >
               {getValue()}
-            </Link>
+            </TruncatedText>
           ),
         }),
         columnHelper.display({
@@ -456,14 +460,13 @@ const useContactColumns = () => {
               return null;
             }
             return (
-              <a
-                className="text-muted-foreground hover:text-foreground inline-block max-w-xs truncate align-middle hover:underline"
-                href={`mailto:${primaryEmail.address}`}
+              <TruncatedText
+                className="text-muted-foreground hover:text-foreground inline-block max-w-xs align-middle hover:underline"
                 onClick={(event) => event.stopPropagation()}
-                title={primaryEmail.address}
+                render={<a href={`mailto:${primaryEmail.address}`} />}
               >
                 {primaryEmail.address}
-              </a>
+              </TruncatedText>
             );
           },
         }),

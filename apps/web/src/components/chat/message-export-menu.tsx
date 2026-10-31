@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import { prepareCreateDocumentDraft } from "@/components/chat/create-document-draft-runtime";
@@ -248,7 +249,7 @@ export const MessageExportMenu = ({
                   fileName={artifactFileName}
                   mimeType={DOCX_MIME}
                 />
-                <span className="truncate">{artifactFileName}</span>
+                <TruncatedText>{artifactFileName}</TruncatedText>
               </label>
             </div>
           )}

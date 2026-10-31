@@ -37,6 +37,7 @@ import {
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
@@ -369,13 +370,13 @@ const TemplateRow = ({
       <CapabilityAction action={{ capability }} surface="control">
         {(capabilityProps) => (
           <button
-            className="min-w-0 flex-1 truncate text-start text-sm"
+            className="min-w-0 flex-1 text-start text-sm"
             disabled={isPending}
             onClick={onUse}
             type="button"
             {...capabilityProps}
           >
-            {template.name}
+            <TruncatedText>{template.name}</TruncatedText>
           </button>
         )}
       </CapabilityAction>
@@ -428,7 +429,7 @@ const BuiltInTemplateRow = ({
       <CapabilityAction action={{ capability }} surface="control">
         {(capabilityProps) => (
           <button
-            className="min-w-0 flex-1 truncate text-start text-sm"
+            className="min-w-0 flex-1 text-start text-sm"
             disabled={isPending}
             onClick={onUse}
             onFocus={onPreview}
@@ -436,7 +437,7 @@ const BuiltInTemplateRow = ({
             type="button"
             {...capabilityProps}
           >
-            {name}
+            <TruncatedText>{name}</TruncatedText>
           </button>
         )}
       </CapabilityAction>

@@ -15,6 +15,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { PropertyIcon } from "@stll/workspace-ui/property-icon";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
@@ -216,9 +217,7 @@ const PickQuestionColumn = ({
                   className="size-3.5 shrink-0"
                   type={column.content.type}
                 />
-                <span className="min-w-0 truncate" title={column.question}>
-                  {column.question}
-                </span>
+                <TruncatedText>{column.question}</TruncatedText>
               </MenuItem>
             ))}
           </MenuGroup>

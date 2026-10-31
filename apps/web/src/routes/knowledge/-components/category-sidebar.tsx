@@ -39,6 +39,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/menu";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { detached } from "@/lib/detached";
@@ -397,9 +398,9 @@ const CategoryMobileFilterButton = ({
       type="button"
     >
       {icon ?? null}
-      <span className="max-w-40 truncate" dir="auto">
+      <TruncatedText className="max-w-40" dir="auto">
         {label}
-      </span>
+      </TruncatedText>
     </button>
   );
 };
@@ -488,7 +489,7 @@ const CategoryNavButton = ({
   return (
     <button
       className={cn(
-        "w-full truncate rounded-md px-3 py-1.5 text-start text-sm",
+        "w-full rounded-md px-3 py-1.5 text-start text-sm",
         isSelected ? "bg-muted font-medium" : "hover:bg-muted/50",
         drop.isDragOver && "ring-primary bg-muted ring-2 ring-inset",
       )}
@@ -498,7 +499,7 @@ const CategoryNavButton = ({
       onDrop={drop.onDrop}
       type="button"
     >
-      {label}
+      <TruncatedText>{label}</TruncatedText>
     </button>
   );
 };
@@ -558,14 +559,14 @@ const CategoryRow = ({
     >
       <button
         className={cn(
-          "min-w-0 flex-1 truncate px-3 py-1.5 text-start text-sm",
+          "min-w-0 flex-1 px-3 py-1.5 text-start text-sm",
           isSelected && "font-medium",
         )}
         dir="auto"
         onClick={onSelect}
         type="button"
       >
-        {category.name}
+        <TruncatedText>{category.name}</TruncatedText>
       </button>
 
       <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>

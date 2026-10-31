@@ -15,6 +15,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/popover";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -224,7 +225,7 @@ export const ReadingFromRow = ({
                   }
                 >
                   <FileTextIcon className="text-muted-foreground size-3" />
-                  <span className="truncate">{file.name}</span>
+                  <TruncatedText>{file.name}</TruncatedText>
                 </PopoverClose>
               ))}
             </div>

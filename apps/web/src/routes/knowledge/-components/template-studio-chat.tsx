@@ -57,6 +57,7 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
 import { Loader } from "@stll/ui/loader";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -1548,12 +1549,12 @@ const TemplateStudioChatInner = ({
               <span className="shrink-0">
                 {t("chat.editableFilePlaceholderAction")}
               </span>
-              <BidiText
-                as="span"
-                className="text-foreground-label max-w-64 truncate"
+              <TruncatedText
+                className="text-foreground-label max-w-64"
+                render={<BidiText as="span" />}
               >
                 {fileName}
-              </BidiText>
+              </TruncatedText>
             </span>
           }
           layout="floating"

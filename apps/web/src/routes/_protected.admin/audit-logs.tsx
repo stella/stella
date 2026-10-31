@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/table";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import { SettingsPageHeader } from "@/components/settings-page-header";
@@ -461,11 +462,8 @@ function AuditLogsTableBody({
           <TableCell className="text-xs">
             <bdi>{log.resourceType}</bdi>
           </TableCell>
-          <TableCell
-            className="max-w-[120px] truncate font-mono text-xs"
-            title={log.resourceId}
-          >
-            <bdi>{log.resourceId}</bdi>
+          <TableCell className="max-w-[120px] font-mono text-xs">
+            <TruncatedText render={<bdi />}>{log.resourceId}</TruncatedText>
           </TableCell>
           <AuditChangeDetails
             changes={log.changes}

@@ -3,6 +3,7 @@ import type { PropsWithChildren } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { BreadcrumbItem } from "@stll/ui/breadcrumb";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { RouterToPath } from "@/lib/types";
 
@@ -20,11 +21,11 @@ export const BreadcrumbLink = ({
     <Link
       activeOptions={{ exact: true, includeSearch: false }}
       activeProps={{ className: "text-foreground font-semibold" }}
-      className="hover:text-foreground max-w-64 truncate"
+      className="hover:text-foreground max-w-64 min-w-0"
       onClick={onClick}
       to={to}
     >
-      {children}
+      <TruncatedText>{children}</TruncatedText>
     </Link>
   </BreadcrumbItem>
 );
