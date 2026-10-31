@@ -12,7 +12,6 @@ import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { CheckIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 import { Loader } from "@stll/ui/loader";
 
 import { useChatApproval } from "@/components/chat/chat-approval-context";
@@ -80,18 +79,16 @@ const RequestSecretCredentialFields = ({
           value={value}
         />
       </Field>
-      <Label className="flex min-h-11">
+      <Field className="min-h-11 flex-row items-center gap-2">
         <Checkbox
           checked={saveForFuture}
           disabled={disabled}
           onCheckedChange={(checked) => onSaveForFutureChange(checked)}
         />
-        <span className="font-normal">
-          {t("chat.requestSecret.saveForFuture")}
-        </span>
-      </Label>
+        <FieldLabel>{t("chat.requestSecret.saveForFuture")}</FieldLabel>
+      </Field>
       {saveForFuture && responseDisposition === "normal" ? (
-        <Label className="flex min-h-11">
+        <Field className="min-h-11 flex-row items-center gap-2">
           <Checkbox
             checked={normalConnectionAction === "replace-with-receipt-only"}
             disabled={disabled}
@@ -101,10 +98,10 @@ const RequestSecretCredentialFields = ({
               )
             }
           />
-          <span className="font-normal">
+          <FieldLabel>
             {t("chat.requestSecret.replaceOrdinaryConnection")}
-          </span>
-        </Label>
+          </FieldLabel>
+        </Field>
       ) : null}
     </>
   );
