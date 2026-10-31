@@ -95,23 +95,26 @@ const exercise = async ({
   answer = async () => await Promise.resolve("Revize smlouvy o dílo."),
 }: ExerciseOptions) => {
   const calls: GenerateOptions[] = [];
-  const featureAccess = {
-    identity: { email: "desktop@example.test", emailVerified: true },
-    enrolments:
-      hidden === "time-billing"
-        ? []
-        : [
-            {
-              featureId: "time-billing",
-              organizationId: toSafeId<"organization">(ORGANIZATION_ID),
-              userId: USER_ID,
-            },
-          ],
-  };
-  const { scopedDb } = createScopedDbMock({}, { featureAccess });
+  const { scopedDb } = createScopedDbMock({});
   const device = await createDesktopDeviceSigner();
   const authorizeAccount = async (request: Request) =>
     Result.ok({
+      // Built per request, after the grants below are configured.
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        userId: USER_ID,
+        identity: { email: "desktop@example.test", emailVerified: true },
+        enrolments:
+          hidden === "time-billing"
+            ? []
+            : [
+                {
+                  featureId: "time-billing",
+                  organizationId: ORGANIZATION_ID,
+                  userId: USER_ID,
+                },
+              ],
+      }),
       consumedProof: await claimFixtureDeviceProof({
         request: await device.signRequest({
           request,
@@ -134,12 +137,6 @@ const exercise = async ({
             },
           })
         : sessionMemberRole("member"),
-      // Built per request, after the test configures the feature grants.
-      featureAccessSnapshot: buildFeatureAccessSnapshot({
-        organizationId: ORGANIZATION_ID,
-        userId: USER_ID,
-        ...featureAccess,
-      }),
     });
   const endpoint = createDesktopTimeEntryNarrativeEndpoint({
     authorizeAccount,

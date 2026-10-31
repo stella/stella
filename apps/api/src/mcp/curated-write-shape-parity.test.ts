@@ -161,6 +161,12 @@ const SHAPE_EXCLUSIONS: readonly ShapeExclusion[] = [
     reason: "Matter leads are managed with membership.",
   },
   {
+    capability: "matters.update",
+    field: "billingNarrativeLanguage",
+    reason:
+      "The narrative language only steers activity billing drafts and is set through the matter capability.",
+  },
+  {
     capability: "contacts.create",
     field: "id",
     reason: "Allocated by the tool.",

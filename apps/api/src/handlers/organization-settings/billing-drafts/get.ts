@@ -3,6 +3,10 @@ import * as v from "valibot";
 
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 
+import {
+  AI_BILLING_DRAFTS_MODES,
+  DEFAULT_AI_BILLING_DRAFTS_MODE,
+} from "@/api/db/schema";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
@@ -22,7 +26,7 @@ const clientQuerySchema = v.object({
 });
 
 const responseSchema = v.strictObject({
-  mode: v.picklist(["enabled", "disabled"]),
+  mode: v.picklist(AI_BILLING_DRAFTS_MODES),
   updatedAt: v.pipe(
     v.string(),
     v.maxLength(30),
@@ -108,7 +112,7 @@ const readBillingDraftConfiguration = createSafeRootHandler(
     }
     return Result.ok(
       projectionPayload(responseSchema, {
-        mode: settings?.aiBillingDraftsMode ?? "disabled",
+        mode: settings?.aiBillingDraftsMode ?? DEFAULT_AI_BILLING_DRAFTS_MODE,
         updatedAt: (settings?.updatedAt ?? new Date(0)).toISOString(),
         files,
         timeBillingFormat: client?.timeBillingFormat ?? "categories",

@@ -13,6 +13,7 @@ import {
   AI_BILLING_DRAFTS_MODE,
   billingGuidelineFiles,
   contacts,
+  DEFAULT_AI_BILLING_DRAFTS_MODE,
   organizationSettings,
 } from "@/api/db/schema";
 import { EDITABLE_AGENT_SKILL_ORIGINS } from "@/api/lib/agent-skills/origin";
@@ -156,7 +157,7 @@ const billingDraftAuditChanges = ({
   ...(body.mode !== undefined
     ? {
         aiBillingDraftsMode: {
-          old: previousMode ?? "disabled",
+          old: previousMode ?? DEFAULT_AI_BILLING_DRAFTS_MODE,
           new: body.mode,
         },
       }
@@ -235,10 +236,9 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         await withAggregateLock({
-          aggregate: "organization",
-          id: organizationId,
+          aggregate: "billingDraftSettings",
+          id: { organizationId },
           tx,
-          mode: "update",
         });
         if (
           body.resourceIds !== undefined &&
@@ -414,7 +414,7 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
 
 declareAggregateMutation(updateBillingDraftConfiguration, {
   type: "aggregate",
-  aggregates: ["organization"],
+  aggregates: ["billingDraftSettings"],
 });
 
 export default updateBillingDraftConfiguration;

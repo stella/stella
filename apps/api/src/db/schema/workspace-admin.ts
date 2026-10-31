@@ -91,10 +91,8 @@ export const AI_BILLING_DRAFTS_MODES = [
     (mode) => mode !== AI_BILLING_DRAFTS_MODE.DISABLED,
   ),
 ] as const;
-
-/** The mode an organization has before an administrator sets one; every
- * reader of a missing settings row falls back to it. */
-export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.DISABLED;
+/** Drafting is on until an administrator turns it off; no setup is needed. */
+export const DEFAULT_AI_BILLING_DRAFTS_MODE = AI_BILLING_DRAFTS_MODE.ENABLED;
 
 export const DEFAULT_TIME_MINIMUM_UNIT_MINUTES = 6;
 export const DEFAULT_TIME_EDIT_WINDOW_DAYS = 90;
