@@ -700,6 +700,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               jobId,
               generation,
               ...run.metrics,
+              readMetrics: run.readMetrics,
+              writeMetrics: run.writeMetrics,
+              writtenRows: run.writtenRows,
               statements: run.statements,
             });
             for (const violation of run.planViolations) {

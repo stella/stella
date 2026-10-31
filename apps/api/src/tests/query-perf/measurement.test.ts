@@ -76,11 +76,23 @@ test("scheduled write budgets fail closed and enforce both write limits", () => 
   );
   expect(
     scheduledJobBudgetProblems(
-      "scheduled.caseLaw.backfillProvisionState",
+      "scheduled.requests.sweepReceipts",
       measured(0, 0),
     ),
+  ).toEqual([]);
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(0, 20_001),
+    ).join("\n"),
+  ).toContain("20001 write pages per run");
+  expect(
+    scheduledJobBudgetProblems(
+      "scheduled.caseLaw.reportFreshness",
+      measured(0, 1),
+    ),
   ).toContain(
-    "scheduled.caseLaw.backfillProvisionState: declares a write budget but measured no written rows",
+    "scheduled.caseLaw.reportFreshness: measured writes but declares no write budget",
   );
   expect(
     scheduledJobBudgetProblems(

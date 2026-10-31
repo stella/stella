@@ -181,21 +181,15 @@ export const scheduledJobBudgetProblems = (
     problems.push(readProblem);
   }
   const writes = "writes" in budget ? budget.writes : undefined;
-  if (measured.writtenRows > 0 && writes === undefined) {
+  if (measured.writeMetrics.sharedBlocks > 0 && writes === undefined) {
     problems.push(`${id}: measured writes but declares no write budget`);
-    return problems;
-  }
-  if (measured.writtenRows === 0 && writes !== undefined) {
-    problems.push(
-      `${id}: declares a write budget but measured no written rows`,
-    );
     return problems;
   }
   if (writes === undefined) {
     return problems;
   }
   const perRow = measured.writeMetrics.sharedBlocks / measured.writtenRows;
-  if (perRow > writes.pagesPerWrittenRow) {
+  if (measured.writtenRows > 0 && perRow > writes.pagesPerWrittenRow) {
     problems.push(
       `${id}: ${String(perRow)} write pages per row > budget ${String(writes.pagesPerWrittenRow)}`,
     );

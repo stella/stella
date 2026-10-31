@@ -76,6 +76,12 @@ export const READ_BUDGETS = {
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
     reads: { pages: 20_000 },
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: 20_000,
+      reason:
+        "Thirty pages per deleted receipt cover indexed deletion and constraints; the run retains the existing 20,000-page envelope.",
+    },
     reason:
       "Four rounds each discover at most 128 completed and 128 pending receipts, then lock and delete at most 128 scoped rows: 2,048 row visits. Nine index/heap pages per visit leave 1,568 pages for tenant-scope reads and fixed probes under the 20,000-page ungoverned ceiling. State-leading ordered expiry probes keep this independent of total receipt cardinality; PostgreSQL measures quiet, expired and mixed cohorts at both sizes.",
   },
@@ -129,6 +135,12 @@ export const READ_BUDGETS = {
   "scheduled.caseLaw.refreshSitemapShards": {
     surface: "scheduled-job",
     reads: { pages: 18_000 },
+    writes: {
+      pagesPerWrittenRow: 30,
+      ceilingPagesPerRun: 18_000,
+      reason:
+        "Thirty pages per changed row cover bounded shard, cursor and retirement writes; the run retains the existing 18,000-page envelope.",
+    },
     statementDeadlineMs: 30_000,
     runBudgetMs: 15 * 60 * 1000,
     reason:
