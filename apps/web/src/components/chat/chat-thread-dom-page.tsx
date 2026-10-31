@@ -136,6 +136,7 @@ const ChatThreadDomPage = ({
     editUserMessage: session.editUserMessage,
     ensureAIAvailable: aiAvailable,
     holdQueueForMessageEdit: session.holdQueueForMessageEdit,
+    messages: session.messages,
     startUserMessageEdit: session.startUserMessageEdit,
     threadRef,
   });
@@ -312,6 +313,8 @@ export const openChatThreadDomPage = async ({
     }
   });
   return {
+    /** The page's query cache, for a test that refreshes what it reads. */
+    queryClient,
     session: (): ChatThreadDomSession =>
       session ?? panic("The page is not rendered"),
     view,

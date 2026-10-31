@@ -42,12 +42,12 @@ import type {
   UserMessageEditDraft,
   UserMessageEditFailure,
   UserMessageEditOutcome,
-  UserMessageEditResult,
   UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
@@ -57,6 +57,9 @@ import { createUuid } from "@/lib/uuid";
 export type UserMessageEditActions = {
   /** The editor opened; a running turn is stopped first. */
   onStart: () => void;
+  /** Open an edit session for `messageId`, the message's current one from
+   *  now on. */
+  openSession: (messageId: string) => OpenUserMessageEditSession;
   /** The edit session `sessionId` opened its form: queued prompts wait. The
    *  release it returns runs when that form closes and lifts only that
    *  session's hold. */
@@ -75,13 +78,19 @@ export type UserMessageEditActions = {
  * The edit actions a page hands its transcript, built from its chat session:
  * one stable object, so the transcript's edit actions do not re-render while
  * a turn streams. An edit is a send, so it passes the page's AI check first.
- * An edit whose message the thread no longer holds goes into the thread's
- * composer with its notice: its form went with the message, the edit stays.
+ *
+ * It owns the page's edit sessions, and with them the one path for an edit
+ * whose message leaves the thread, whatever removed it (a refused edit's
+ * reload, another tab's edit, a rejoin, a refetch): the current session's
+ * latest draft goes into the thread's composer with the target-missing
+ * notice, and the session ends. `messages` is the thread as the page shows
+ * it; checking it costs nothing while no edit is open.
  */
 export const useUserMessageEditActions = ({
   editUserMessage,
   ensureAIAvailable,
   holdQueueForMessageEdit,
+  messages,
   startUserMessageEdit,
   threadRef,
 }: {
@@ -89,18 +98,57 @@ export const useUserMessageEditActions = ({
     messageId: string,
     edit: UserMessageEdit,
     sessionId: string,
-  ) => Promise<UserMessageEditResult>;
+  ) => Promise<UserMessageEditOutcome>;
   ensureAIAvailable: () => Promise<boolean>;
   holdQueueForMessageEdit: UserMessageEditActions["holdQueue"];
+  messages: readonly Pick<PersistedChatMessage, "id">[];
   startUserMessageEdit: UserMessageEditActions["onStart"];
   threadRef: ChatThreadRef;
 }): UserMessageEditActions => {
   const t = useTranslations();
   const format = useFormatter();
   const { restoreMessageDraftIntoThread } = useChatEditorManager();
+  const [sessions] = useState(() => createUserMessageEditSessions(createUuid));
+  // Bumped when the server answered an edit: the thread then shown, once it
+  // has rendered, decides whether that edit's message is still there.
+  const [answeredEdits, setAnsweredEdits] = useState(0);
+  const handOrphansOn = useLatestCallback(
+    (shown: readonly Pick<PersistedChatMessage, "id">[]) => {
+      if (!sessions.hasOpen()) {
+        return;
+      }
+      const orphans = sessions.takeOrphans(new Set(shown.map(({ id }) => id)));
+      for (const orphan of orphans) {
+        const { composer, storedFiles } = userMessageEditHandoff(orphan);
+        restoreMessageDraftIntoThread(threadRef, composer);
+        // A stored file cannot go back into the composer: the notice names
+        // every one that did not come back, so none is lost unseen.
+        stellaToast.warning(
+          storedFiles.length === 0
+            ? t("chat.editMessageRefusedTargetMissing")
+            : t("chat.editMessageRefusedTargetMissingFiles", {
+                files: format.list(
+                  storedFiles.map(
+                    (filename) => filename ?? t("chat.attachment"),
+                  ),
+                ),
+              }),
+        );
+      }
+    },
+  );
+  // The thread the page shows changed, or an edit was answered: an open
+  // edit whose message left the thread goes on. The sessions are the
+  // external system kept in step with the rendered thread here.
+  useExternalSyncEffect(() => {
+    handOrphansOn(messages);
+  }, [answeredEdits, handOrphansOn, messages]);
   const onStart = useLatestCallback(() => {
     startUserMessageEdit();
   });
+  const openSession = useLatestCallback((messageId: string) =>
+    sessions.open(messageId),
+  );
   const holdQueue = useLatestCallback((sessionId: string) =>
     holdQueueForMessageEdit(sessionId),
   );
@@ -113,33 +161,14 @@ export const useUserMessageEditActions = ({
       if (!(await ensureAIAvailable())) {
         return { type: "ai-unavailable" };
       }
-      const { orphanedEdit, outcome } = await editUserMessage(
-        messageId,
-        edit,
-        session.id,
+      // While the request is out the page shows a rewound thread; once the
+      // server answered, the thread it shows decides whether the message
+      // is still there.
+      const outcome = await sessions.whileSending(
+        session,
+        async () => await editUserMessage(messageId, edit, session.id),
       );
-      if (orphanedEdit !== null) {
-        // Only the session that sent the edit hands it over: a later edit
-        // of the same message owns the composer's attention by then.
-        session.run(() => {
-          const { composer, storedFiles } =
-            userMessageEditHandoff(orphanedEdit);
-          restoreMessageDraftIntoThread(threadRef, composer);
-          // A stored file cannot go back into the composer: the notice
-          // names every one that did not come back, so none is lost unseen.
-          stellaToast.warning(
-            storedFiles.length === 0
-              ? t(userMessageEditNoticeKey(outcome))
-              : t("chat.editMessageRefusedTargetMissingFiles", {
-                  files: format.list(
-                    storedFiles.map(
-                      (filename) => filename ?? t("chat.attachment"),
-                    ),
-                  ),
-                }),
-          );
-        });
-      }
+      setAnsweredEdits((count) => count + 1);
       return outcome;
     },
   );
@@ -147,6 +176,7 @@ export const useUserMessageEditActions = ({
     holdQueue,
     onStart,
     onSubmit,
+    openSession,
   }));
   return actions;
 };
@@ -266,8 +296,12 @@ const UserMessageEditForm = ({
   const warnCredentialSend = useCredentialSendNotice();
   const submitFrom = useLatestCallback((current: Editor) => {
     if (containsCredentialCandidate(current.getText())) {
+      // "Send anyway" can come after the form closed (its editor is gone):
+      // it sends only while this edit's session is still open.
       warnCredentialSend(() => {
-        sendFrom(current);
+        session.run(() => {
+          sendFrom(current);
+        });
       });
       return;
     }
@@ -313,6 +347,20 @@ const UserMessageEditForm = ({
   const html = useEditorState({
     editor,
     selector: ({ editor: current }) => chatComposerHtml(current),
+  });
+  // The session keeps the form's current draft, so it survives the form if
+  // the message leaves the thread. Written as the form changes; nothing
+  // reads it then, so nothing re-renders.
+  useExternalSyncEffect(() => {
+    session.mirror({ attachments: attachments.map(({ part }) => part), html });
+  }, [attachments, html, session]);
+  // A changed edit is unsaved work: closing the tab asks first. The markup
+  // compares formatting and chips too, not only the text.
+  const [openedHtml] = useState(html);
+  useUnsavedWork({
+    guard: "unload",
+    isDirty: html !== openedHtml || attachments !== draft.attachments,
+    surface: "chat-message-edit",
   });
   const canSend =
     hasUserMessageEditContent({
@@ -419,9 +467,9 @@ export const useUserMessageEdit = ({
   editor: ReactElement | null;
 } => {
   const t = useTranslations();
-  // Every opening of the form is its own session: what an answer does to the
-  // page applies only while the session that asked is still the open one.
-  const [sessions] = useState(() => createUserMessageEditSessions(createUuid));
+  // Every opening of the form is its own session (`actions.openSession`):
+  // what an answer does to the page applies only while the session that
+  // asked is still the message's open one.
   const [open, setOpen] = useState<{
     draft: UserMessageEditDraft;
     session: OpenUserMessageEditSession;
@@ -478,7 +526,7 @@ export const useUserMessageEdit = ({
             actions.onStart();
             setOpen({
               draft: createUserMessageEditDraft(message, createUuid),
-              session: sessions.open(),
+              session: actions.openSession(message.id),
             });
           }}
           size="icon-xs"

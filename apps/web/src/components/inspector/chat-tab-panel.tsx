@@ -320,6 +320,7 @@ export const ChatTabPanel = ({
     editUserMessage,
     ensureAIAvailable,
     holdQueueForMessageEdit,
+    messages,
     startUserMessageEdit,
     threadRef,
   });

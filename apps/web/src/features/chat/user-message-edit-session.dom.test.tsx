@@ -54,6 +54,7 @@ const { toSafeId } = await import("@/lib/safe-id");
 const { getChatThreadKey, toChatThreadId } =
   await import("@/lib/chat-thread-ref");
 const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { invalidateChatThread } = await import("@/features/chat/queries");
 const { useChatEditor } = await import("@/components/chat-editor-provider");
 const { composerText } = await import("@/components/chat-editor-source");
 const { EditorContent } = await import("@tiptap/react");
@@ -256,7 +257,16 @@ const createServer = ({
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not served" }, { status: 404 });
   };
-  return { fetch, posted, unexpected };
+  return {
+    fetch,
+    posted,
+    /** Another tab or device changed the thread: the server now stores
+     *  `messages`. */
+    replaceStored: (messages: readonly StoredMessage[]) => {
+      stored = messages;
+    },
+    unexpected,
+  };
 };
 
 type Page = Awaited<ReturnType<typeof openChatThreadDomPage>>;
@@ -634,7 +644,7 @@ describe("an edit whose message the server no longer holds", () => {
       expect(editField(page)?.textContent).toBe("Second question again later");
     });
 
-    test("a target-missing answer hands nothing over and says nothing", async () => {
+    test("a target-missing answer hands over the newer draft once, not the cancelled one", async () => {
       const warning = spyOn(stellaToast, "warning").mockReturnValue("notice");
       const answered = Promise.withResolvers<undefined>();
       const server = createServer({
@@ -653,14 +663,55 @@ describe("an edit whose message the server no longer holds", () => {
 
       answered.resolve(undefined);
 
-      // The thread is still reloaded from the server.
+      // The thread is reloaded from the server, without the message: the
+      // open, newer edit goes into the composer. The cancelled one, whose
+      // answer this is, hands nothing over.
       await testing.waitFor(() => {
         expect(shownMessages(page)).toEqual([...STORED_WITHOUT_SECOND]);
       });
-      expect(warning).not.toHaveBeenCalled();
-      expect(composerEditor().isEmpty).toBe(true);
+      await testing.waitFor(() => {
+        expect(composerParagraphs()).toEqual(["Second question again later"]);
+      });
+      expect(warning).toHaveBeenCalledTimes(1);
+      expect(warning).toHaveBeenCalledWith(
+        translations.chat.editMessageRefusedTargetMissing,
+      );
       expect(composerPastedTexts()).toEqual([]);
     });
+  });
+
+  test("an open edit whose message a live reload removes goes into the composer", async () => {
+    const warning = spyOn(stellaToast, "warning").mockReturnValue("notice");
+    const server = createServer({ answer: { type: "accepted" } });
+    const page = await openPage(server, (controller) => {
+      composerController = controller;
+    });
+    await testing.waitFor(() => {
+      expect(
+        composerController !== undefined && composerController.editor !== null,
+      ).toBe(true);
+    });
+    // An unsent draft is open on the second question.
+    await editSecondQuestion(page);
+
+    // Another tab's edit of the first question dropped the second turn.
+    server.replaceStored(STORED_WITHOUT_SECOND);
+    await invalidateChatThread({
+      queryClient: page.queryClient,
+      threadRef: COMPOSER_THREAD_REF,
+    });
+
+    await testing.waitFor(() => {
+      expect(shownMessages(page)).toEqual([...STORED_WITHOUT_SECOND]);
+    });
+    await testing.waitFor(() => {
+      expect(composerParagraphs()).toEqual(["Second question again"]);
+    });
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning).toHaveBeenCalledWith(
+      translations.chat.editMessageRefusedTargetMissing,
+    );
+    expect(server.posted).toEqual([]);
   });
 });
 

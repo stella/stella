@@ -11,6 +11,7 @@ import {
 } from "@/components/chat/user-message-edit.logic";
 import type { UserMessageEditAttachmentPart } from "@/components/chat/user-message-edit.logic";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 const ndaDocument: UserMessageEditAttachmentPart = {
   metadata: { filename: "nda.pdf" },
@@ -100,9 +101,9 @@ describe("the edit sessions of a message", () => {
     );
     const ran: string[] = [];
 
-    const first = sessions.open();
+    const first = sessions.open("message");
     first.end();
-    const second = sessions.open();
+    const second = sessions.open("message");
     first.run(() => {
       ran.push("first");
     });
@@ -120,5 +121,36 @@ describe("the edit sessions of a message", () => {
     });
 
     expect(ran).toEqual(["second", "second again"]);
+  });
+
+  test("a current session whose message left the thread is taken once, with its latest draft", async () => {
+    const sessions = createUserMessageEditSessions(createUuid);
+    const open = sessions.open("gone");
+    open.mirror({ attachments: [], html: "<p>First</p>" });
+    open.mirror({ attachments: [pasted], html: "<p>Latest</p>" });
+    const kept = sessions.open("kept");
+    kept.mirror({ attachments: [], html: "<p>Kept</p>" });
+    // A cancelled session is no longer current and never handed on.
+    sessions.open("cancelled").end();
+
+    // While its request is out the thread is rewound: not an orphan yet.
+    const answered = Promise.withResolvers<undefined>();
+    const sending = sessions.whileSending(open, async () => {
+      await answered.promise;
+    });
+    expect(sessions.takeOrphans(new Set(["kept"]))).toEqual([]);
+    answered.resolve(undefined);
+    await sending;
+
+    expect(sessions.takeOrphans(new Set(["kept"]))).toEqual([
+      { attachments: [pasted], html: "<p>Latest</p>" },
+    ]);
+    expect(sessions.takeOrphans(new Set(["kept"]))).toEqual([]);
+    let ranOrphaned = false;
+    open.run(() => {
+      ranOrphaned = true;
+    });
+    expect(ranOrphaned).toBe(false);
+    expect(sessions.hasOpen()).toBe(true);
   });
 });

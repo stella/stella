@@ -87,7 +87,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
 import type {
   UserMessageEdit,
-  UserMessageEditResult,
+  UserMessageEditOutcome,
 } from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { queryView } from "@/lib/query-view.logic";
@@ -1183,9 +1183,9 @@ export const useChatSession = ({
    * there: the message and every later turn leave the thread, and the edited
    * message is sent under the same id. Resolves once the server accepted the
    * edit's turn or did not; when it did not, the page shows the thread as the
-   * server stores it again. The session holds the edit until then: should
-   * that thread no longer hold the edited message, the edit comes back as
-   * `orphanedEdit` rather than leaving with the message's form.
+   * server stores it again. Should that thread no longer hold the edited
+   * message, the page's edit sessions hand the edit on, as they do for a
+   * message that leaves the thread any other way.
    */
   const editUserMessage = useCallback(
     async (
@@ -1194,10 +1194,10 @@ export const useChatSession = ({
       /** The edit session that sent it, whose queue hold the accepted
        *  edit's turn takes over. */
       sessionId: string,
-    ): Promise<UserMessageEditResult> => {
+    ): Promise<UserMessageEditOutcome> => {
       const replayed = await replayFromTruncation(
         { type: "user-message", messageId },
-        async (options, rewoundFrom): Promise<UserMessageEditResult> => {
+        async (options, rewoundFrom): Promise<UserMessageEditOutcome> => {
           const acceptance = await sendThreadChatMessageUntilAccepted(
             chat,
             buildEditedUserMessage({ edit, messageId }),
@@ -1205,23 +1205,17 @@ export const useChatSession = ({
           );
           if (acceptance.status === "accepted") {
             applySendQueueEvent({ type: "message-edit-accepted", sessionId });
-            return { orphanedEdit: null, outcome: { type: "accepted" } };
+            return { type: "accepted" };
           }
-          const shown = await showStoredChatThread(chat, rewoundFrom);
-          const outcome = userMessageEditFailure(acceptance.error);
-          return shown.some(({ id }) => id === messageId)
-            ? { orphanedEdit: null, outcome }
-            : { orphanedEdit: edit, outcome };
+          await showStoredChatThread(chat, rewoundFrom);
+          return userMessageEditFailure(acceptance.error);
         },
       );
       // A message the page no longer holds cannot be edited from it.
       return (
         replayed ?? {
-          orphanedEdit: edit,
-          outcome: {
-            type: "edit-refused",
-            code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
-          },
+          type: "edit-refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
         }
       );
     },

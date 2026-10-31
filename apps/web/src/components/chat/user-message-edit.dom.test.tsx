@@ -15,6 +15,7 @@ import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 
 import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
 import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
+import { createUuid } from "@/lib/uuid";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -25,6 +26,10 @@ const { IntlProvider } = await import("use-intl");
 const { TooltipProvider } = await import("@stll/ui/tooltip");
 const { stellaToast } = await import("@stll/ui/toast");
 const { EditableUserMessage } = await import("./user-message-edit");
+const { createUserMessageEditSessions } =
+  await import("@/components/chat/user-message-edit.logic");
+const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
 const en = (await import("@/i18n/langs/en.json")).default;
 
 afterEach(() => {
@@ -66,7 +71,9 @@ const createActions = () => {
   const submitted: [string, UserMessageEdit][] = [];
   /** The edit sessions whose form holds the queue now. */
   const holding: string[] = [];
+  const sessions = createUserMessageEditSessions(createUuid);
   const actions: UserMessageEditActions = {
+    openSession: (messageId) => sessions.open(messageId),
     holdQueue: (sessionId) => {
       holding.push(sessionId);
       return () => {
@@ -95,17 +102,19 @@ const renderMessage = ({
   target?: EditableUserMessageProps["message"];
 }) =>
   render(
-    <IntlProvider locale="en" messages={en}>
-      <TooltipProvider>
-        <EditableUserMessage
-          actions={actions}
-          isGenerating={isGenerating}
-          message={target}
-        >
-          <p>{SENT_BODY}</p>
-        </EditableUserMessage>
-      </TooltipProvider>
-    </IntlProvider>,
+    <ChatThreadTestRouter>
+      <IntlProvider locale="en" messages={en} timeZone="UTC">
+        <TooltipProvider>
+          <EditableUserMessage
+            actions={actions}
+            isGenerating={isGenerating}
+            message={target}
+          >
+            <p>{SENT_BODY}</p>
+          </EditableUserMessage>
+        </TooltipProvider>
+      </IntlProvider>
+    </ChatThreadTestRouter>,
   );
 
 const REMOVE_NDA = en.chat.editMessageRemoveAttachment.replace(
@@ -240,6 +249,25 @@ describe("editing a sent message", () => {
     expect(holding).toHaveLength(1);
     fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
     expect(holding).toEqual([]);
+  });
+
+  test("a changed edit is unsaved work until the form closes", async () => {
+    const { actions } = createActions();
+    const view = renderMessage({ actions });
+
+    const field = openEditor(view);
+    expect(hasUnsavedWork()).toBe(false);
+    fireEvent.paste(field, {
+      clipboardData: plainTextClipboard(" today"),
+    });
+    await waitFor(() => {
+      expect(hasUnsavedWork()).toBe(true);
+    });
+    fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(hasUnsavedWork()).toBe(false);
   });
 
   test("enter sends", () => {

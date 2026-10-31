@@ -70,17 +70,6 @@ export type UserMessageEditFailure = Exclude<
 >;
 
 /**
- * What sending an edit came to, as the session hands it to the page. The
- * session keeps the edit it was sent until the server answers: when the
- * thread it then shows no longer holds the edited message (the server
- * dropped it), the edit comes back as `orphanedEdit`, so the page puts it
- * into the composer instead of losing it with the message's form.
- */
-export type UserMessageEditResult =
-  | { orphanedEdit: null; outcome: UserMessageEditOutcome }
-  | { orphanedEdit: UserMessageEdit; outcome: UserMessageEditFailure };
-
-/**
  * One opening of a sent message's edit form. An edit's work goes on after
  * its form may have closed: the request, the server's answer. Every
  * continuation that acts on the form, its draft, the composer or the queue
@@ -94,6 +83,9 @@ export type UserMessageEditSession = {
   /** Keys the session's queue hold and its form. */
   readonly id: string;
   run: (continuation: () => void) => void;
+  /** Keep the session's copy of the form's current draft; read only when
+   *  the session's message leaves the thread. */
+  mirror: (edit: UserMessageEdit) => void;
 };
 
 /** A session as its message holds it: `end` retires it (the form closed). */
@@ -101,31 +93,86 @@ export type OpenUserMessageEditSession = UserMessageEditSession & {
   end: () => void;
 };
 
+type TrackedSession = {
+  draft: UserMessageEdit | null;
+  id: string;
+  /** Requests of this session the server has yet to answer. */
+  sending: number;
+};
+
 /**
- * The edit sessions of one sent message. Opening one makes it the current
- * session and so retires the one before; ending it leaves none current.
+ * The open edits of a thread's sent messages, one current session per
+ * message. Opening a session for a message retires the one before; ending
+ * it leaves none. It is also the one owner of what happens when an edited
+ * message leaves the thread, whatever removed it: `takeOrphans` ends every
+ * current session whose message the thread no longer holds and hands back
+ * its latest draft. A session with a request out is left alone until the
+ * server answered it (`whileSending`), since the page shows a rewound
+ * thread meanwhile.
  */
-export const createUserMessageEditSessions = (
-  createId: () => string,
-): { open: () => OpenUserMessageEditSession } => {
-  let current: string | null = null;
+export const createUserMessageEditSessions = (createId: () => string) => {
+  const current = new Map<string, TrackedSession>();
+  const isCurrent = (messageId: string, id: string) =>
+    current.get(messageId)?.id === id;
   return {
-    open: () => {
-      const id = createId();
-      current = id;
+    open: (messageId: string): OpenUserMessageEditSession => {
+      const tracked: TrackedSession = {
+        draft: null,
+        id: createId(),
+        sending: 0,
+      };
+      current.set(messageId, tracked);
+      const { id } = tracked;
       return {
         end: () => {
-          if (current === id) {
-            current = null;
+          if (isCurrent(messageId, id)) {
+            current.delete(messageId);
           }
         },
         id,
+        mirror: (edit) => {
+          tracked.draft = edit;
+        },
         run: (continuation) => {
-          if (current === id) {
+          if (isCurrent(messageId, id)) {
             continuation();
           }
         },
       };
+    },
+    /** Ends and returns every current session (its last draft) whose
+     *  message is not in `messageIds` and has no request out. */
+    takeOrphans: (messageIds: ReadonlySet<string>): UserMessageEdit[] => {
+      const orphans: UserMessageEdit[] = [];
+      for (const [messageId, tracked] of current) {
+        if (messageIds.has(messageId) || tracked.sending > 0) {
+          continue;
+        }
+        current.delete(messageId);
+        if (tracked.draft !== null) {
+          orphans.push(tracked.draft);
+        }
+      }
+      return orphans;
+    },
+    hasOpen: (): boolean => current.size > 0,
+    /** Runs `request` for `session`, holding its orphan check until the
+     *  server answered. */
+    whileSending: async <T>(
+      session: UserMessageEditSession,
+      request: () => Promise<T>,
+    ): Promise<T> => {
+      const tracked = [...current.values()].find(({ id }) => id === session.id);
+      if (tracked !== undefined) {
+        tracked.sending += 1;
+      }
+      try {
+        return await request();
+      } finally {
+        if (tracked !== undefined) {
+          tracked.sending -= 1;
+        }
+      }
     },
   };
 };

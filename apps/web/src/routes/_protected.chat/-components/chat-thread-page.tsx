@@ -310,6 +310,7 @@ export const ChatThreadPage = ({
     editUserMessage,
     ensureAIAvailable,
     holdQueueForMessageEdit,
+    messages,
     startUserMessageEdit,
     threadRef,
   });
