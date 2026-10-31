@@ -1,10 +1,11 @@
 import { InfiniteQueryObserver, QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect } from "bun:test";
 import * as v from "valibot";
 
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
 import { PROVISION_LINK_STATUS_TYPES } from "@stll/api-contract/provision-link-status";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import {
   allowsLegacyProvisionFallback,

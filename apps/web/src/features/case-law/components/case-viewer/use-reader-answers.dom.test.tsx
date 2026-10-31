@@ -73,6 +73,7 @@ const user = {
   activeOrganizationId: "test-org",
   id: "test-user",
   email: "reader@example.test",
+  locale: "en",
   image: null,
   name: "Reader",
   preferredName: null,

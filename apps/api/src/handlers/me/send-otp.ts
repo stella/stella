@@ -13,6 +13,7 @@ import {
   getUserEmail,
   ORGANIZATION_OWNERSHIP,
 } from "@/api/lib/delete-account";
+import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
@@ -67,6 +68,7 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     });
 
     if (isLocalDevOpen()) {
+      stashDevOtp(emailStr, otp);
       // oxlint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,

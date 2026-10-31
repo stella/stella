@@ -80,7 +80,7 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/server-boundary.js", async (route) =>
     route.fulfill({
       contentType: "text/javascript",
-      body: "export const getRequestHost = () => location.host; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
+      body: "export const getRequestHost = () => location.host; export const getRequestHeader = () => undefined; export const getCookie = () => undefined; export const setCookie = () => { throw new Error('Server cookie writes are unavailable in this fixture'); };",
     }),
   );
   await page.route("**/coverage-fixture.js", async (route) =>

@@ -13,6 +13,8 @@ const landingUrl = "https://stll.app";
 
 export const Route = createFileRoute("/auth")({
   staticData: { appFrame: APP_FRAME_SCOPE.none },
+  // Signed OAuth state arrives in the URL fragment, which HTTP omits.
+  ssr: false,
   beforeLoad: async ({ context }) => await loadAuthContext(context.queryClient),
   component: AuthLayout,
 });

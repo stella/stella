@@ -151,7 +151,7 @@
 }
 
 /* The element the document's sizes are measured from, marked by the reader's
-   own +/- (see use-reader-text-scale.ts, which owns the slot and the step
+   own +/- (see reader-text-scale.ts, which owns the slot and the step
    together). One declaration moves the whole document: the running text
    through --reader-body-size, anything that merely inherits through the
    root's own font-size, and every Tailwind size utility inside through the

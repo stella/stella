@@ -86,6 +86,11 @@ export type PublicCountry = keyof typeof PUBLIC_COUNTRY_CAPABILITIES;
 export const isPublicCountry = (country: string): country is PublicCountry =>
   Object.hasOwn(PUBLIC_COUNTRY_CAPABILITIES, country);
 
+// parser-output-unchanged: Extracting country uppercasing preserves admission normalization and parsed decision records.
+/** Canonical spelling used at public-law jurisdiction boundaries. */
+export const canonicalizePublicCountry = (country: string): string =>
+  country.toUpperCase();
+
 /** Advertising a country requires a capability: the keys are the only list. */
 export const PUBLIC_COUNTRIES = Object.keys(PUBLIC_COUNTRY_CAPABILITIES).filter(
   isPublicCountry,
@@ -228,7 +233,7 @@ export const publicCountryUnavailableIn = ({
   input,
   surface,
 }: PublicCountryUnavailableOptions): PublicCountryUnavailable | null => {
-  const country = input.trim().toUpperCase();
+  const country = canonicalizePublicCountry(input.trim());
   if (!isPublicCountry(country)) {
     return null;
   }

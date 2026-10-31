@@ -363,6 +363,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "packages/cli/src/cli.ts",
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  // The TanStack Start request boundary turns callback throws into responses;
+  // test assertions rethrow their original value for Bun to report.
+  "packages/start-runtime/src/test-request.ts",
   "packages/property-testing/src/index.ts",
   // wasm-bindgen reports initialization failures and traps through rejection;
   // this adapter converts that runtime contract to a typed Result.

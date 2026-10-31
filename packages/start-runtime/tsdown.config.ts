@@ -3,7 +3,7 @@ import { defineConfig } from "tsdown";
 import { resolvePackageBinary } from "../../scripts/resolve-package-binary.ts";
 
 export default defineConfig({
-  entry: ["src/runtime.ts", "src/local-module-loader.ts"],
+  entry: ["src/**/*.ts", "!src/**/*.test.ts"],
   deps: {
     neverBundle: ["bun", "node:path", "node:url"],
   },

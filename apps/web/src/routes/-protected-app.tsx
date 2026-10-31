@@ -609,7 +609,6 @@ function WorkspaceInspectorSidePanel({
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
   const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
-    openedFrom: "matter",
     sidebarWidth,
     viewportWidth,
   });

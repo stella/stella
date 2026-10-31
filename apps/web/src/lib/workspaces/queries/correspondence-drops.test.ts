@@ -1,7 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect } from "bun:test";
 
 import type { CorrespondenceDropsPage } from "@stll/api-contract/correspondence";
+import { requestTest as test } from "@stll/start-runtime/test-request";
 
 import { toSafeId } from "@/lib/safe-id";
 

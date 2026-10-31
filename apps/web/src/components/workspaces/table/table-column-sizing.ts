@@ -1,0 +1,1 @@
+export const DEFAULT_TABLE_COLUMN_MIN_SIZE = 64;

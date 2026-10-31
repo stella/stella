@@ -30,6 +30,7 @@
 
   "include": [
     "src",
+    "public/prepaint-init.js",
     "tests",
     "public/handoff-init.js",
     "vite.config.ts",

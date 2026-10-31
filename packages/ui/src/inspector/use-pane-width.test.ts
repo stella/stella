@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  INSPECTOR_PANE_MAX_WIDTH,
+  INSPECTOR_PANE_MIN_WIDTH,
+} from "./pane-width";
 import { resolveDragWidth } from "./use-pane-width";
 
 describe("resolveDragWidth", () => {
@@ -26,4 +30,14 @@ describe("resolveDragWidth", () => {
     const rtl = resolveDragWidth({ clientX: 400, isRtl: true, viewportWidth });
     expect(ltr).toBe(rtl);
   });
+});
+
+test("dragging beyond either edge returns a width inside the persistence bounds", () => {
+  for (const isRtl of [false, true]) {
+    for (const clientX of [-200, 0, 40, 1440, 1640]) {
+      const width = resolveDragWidth({ clientX, isRtl, viewportWidth: 1440 });
+      expect(width).toBeGreaterThanOrEqual(INSPECTOR_PANE_MIN_WIDTH);
+      expect(width).toBeLessThanOrEqual(INSPECTOR_PANE_MAX_WIDTH);
+    }
+  }
 });

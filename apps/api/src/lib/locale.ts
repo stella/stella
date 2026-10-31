@@ -8,7 +8,7 @@
  * also handles browser quality weights (e.g. "cs,en-US;q=0.9,en;q=0.8").
  */
 
-import { resolveUiLocale } from "@stll/locales";
+import { resolveAcceptLanguage, resolveUiLocale } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 
 export type SupportedLang = UiLocale;
@@ -29,19 +29,8 @@ const acceptLanguageTags = (header: string): string[] =>
 
 export const extractLangFromRequest = (
   request: Request | undefined,
-): SupportedLang => {
-  const header = request?.headers.get("Accept-Language");
-  if (!header) {
-    return "en";
-  }
-  for (const tag of acceptLanguageTags(header)) {
-    const match = matchSupportedLang(tag);
-    if (match) {
-      return match;
-    }
-  }
-  return "en";
-};
+): SupportedLang =>
+  resolveAcceptLanguage(request?.headers.get("Accept-Language") ?? undefined);
 
 const matchFormattingLocale = (tag: string): string | undefined => {
   const match = matchSupportedLang(tag);

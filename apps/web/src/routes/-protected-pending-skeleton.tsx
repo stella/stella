@@ -1,5 +1,7 @@
 import type { ReactElement } from "react";
 
+import { useTranslations } from "use-intl";
+
 import {
   HelpCircleIcon,
   NewChatIcon,
@@ -10,16 +12,14 @@ import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
 } from "@stll/ui/inspector";
+import { SIDEBAR_WIDTH_ICON_PX, SIDEBAR_WIDTH_PX } from "@stll/ui/sidebar";
 import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { cn } from "@stll/ui/utils";
 
-import {
-  DEFAULT_SIDEBAR_OPEN,
-  readPersistedSidebarOpen,
-} from "@/components/sidebar/sidebar-state";
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 
 // The primary entries every signed-in person sees, from the same list the
@@ -32,33 +32,102 @@ const STATIC_NAV_ITEMS = getWorkspacePrimaryNavItems({
   includeTimesheets: false,
   publicKnowledge: false,
 });
-const NAV_LABEL_WIDTHS = ["w-14", "w-10", "w-16", "w-20", "w-16"] as const;
 const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 
 // Static, SSR-safe placeholder for the client-only `_protected` subtree.
 // Chrome that needs no data renders for real (the logo, the primary nav
 // icons, the rail toggles), so the frame is already the app; only what
-// depends on data or on the active locale shimmers: nav labels, pinned
-// matters, the account card, the breadcrumb and the page body. Intentionally
-// free of hooks, context, data, and Suspense. A page that is the same for
-// every visitor can take the content column's place.
+// depends on data shimmers: pinned matters, the account card, the breadcrumb
+// and the page body. Cookie preferences and the request locale already exist
+// during SSR, so the pending frame uses the same geometry and nav labels.
 export function ProtectedPendingSkeleton({
   content,
 }: {
   content?: ReactElement | undefined;
 }) {
+  const t = useTranslations();
+  const {
+    prefs: { sidebarOpen },
+  } = usePresentationPrefs();
   return (
     <div
       aria-hidden={content === undefined ? "true" : undefined}
       className="bg-background flex h-full min-h-dvh"
     >
-      {/* The sidebar as the user left it: its cookie reads the same on the
-          server and in the browser. */}
-      {(readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) ? (
-        <ExpandedSidebarSkeleton />
-      ) : (
-        <CollapsedSidebarSkeleton />
-      )}
+      {/* Sidebar column: AppSidebar's 16rem width, logo header, primary nav,
+          pinned matters, help, account. */}
+      <div
+        className="bg-sidebar hidden shrink-0 flex-col overflow-hidden border-e md:flex"
+        data-slot="pending-sidebar"
+        data-state={sidebarOpen ? "expanded" : "collapsed"}
+        style={{
+          width: sidebarOpen ? SIDEBAR_WIDTH_PX : SIDEBAR_WIDTH_ICON_PX,
+        }}
+      >
+        <div
+          className={cn(
+            "flex shrink-0 items-center border-b",
+            sidebarOpen ? "justify-between ps-3 pe-2" : "justify-center",
+            TOOLBAR_ROW_HEIGHT,
+          )}
+        >
+          {sidebarOpen ? (
+            <>
+              <StellaWordmarkLatin className="h-5 w-auto rtl:hidden" />
+              <StellaWordmarkArabic className="hidden h-5 w-auto rtl:block" />
+            </>
+          ) : null}
+          <span
+            className={cn(
+              "text-muted-foreground grid place-items-center",
+              SIDE_RAIL_ICON_BUTTON_SIZE,
+            )}
+          >
+            <PanelLeftIcon className="size-4" />
+          </span>
+        </div>
+        <div className="flex flex-col gap-1 p-2">
+          {STATIC_NAV_ITEMS.map((item) => (
+            <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
+              <item.icon className="text-muted-foreground size-4 shrink-0" />
+              <span
+                className={cn(sidebarOpen ? "truncate text-sm" : "sr-only")}
+              >
+                {t(item.labelKey)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {sidebarOpen && (
+          <div className="flex flex-col gap-1 border-t p-2">
+            {PINNED_ROW_KEYS.map((key) => (
+              <div className="flex h-9 items-center gap-2 px-2" key={key}>
+                <Skeleton className="size-4 rounded-sm" />
+                <div className="flex flex-1 flex-col gap-1">
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-2 w-20" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex-1" />
+        <div className="flex flex-col gap-1 p-2">
+          <div className="flex h-8 items-center gap-2 px-2">
+            <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
+            {sidebarOpen && <Skeleton className="h-3 w-24" />}
+          </div>
+          <div className="flex h-12 items-center gap-2 px-2">
+            <Skeleton className="size-8 rounded-full" />
+            {sidebarOpen && (
+              <div className="flex flex-1 flex-col gap-1">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-2 w-28" />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Main content column: header bar (breadcrumb) + page body. */}
       <div className="flex min-w-0 flex-1 flex-col">
@@ -107,100 +176,6 @@ export function ProtectedPendingSkeleton({
         >
           <NewChatIcon className="size-4" />
         </div>
-      </div>
-    </div>
-  );
-}
-
-// AppSidebar's 16rem width: logo header, primary nav, pinned matters, help,
-// account.
-function ExpandedSidebarSkeleton() {
-  return (
-    <div className="bg-sidebar hidden w-64 shrink-0 flex-col border-e md:flex">
-      <div
-        className={cn(
-          "flex shrink-0 items-center justify-between border-b ps-3 pe-2",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        {/* The prepaint script sets `dir` before first paint, so the
-            right lockup shows without a locale hook. */}
-        <StellaWordmarkLatin className="h-5 w-auto rtl:hidden" />
-        <StellaWordmarkArabic className="hidden h-5 w-auto rtl:block" />
-        <span
-          className={cn(
-            "text-muted-foreground grid place-items-center",
-            SIDE_RAIL_ICON_BUTTON_SIZE,
-          )}
-        >
-          <PanelLeftIcon className="size-4" />
-        </span>
-      </div>
-      <div className="flex flex-col gap-1 p-2">
-        {STATIC_NAV_ITEMS.map((item, index) => (
-          <div className="flex h-8 items-center gap-2 px-2" key={item.id}>
-            <item.icon className="text-muted-foreground size-4 shrink-0" />
-            <Skeleton
-              className={cn("h-3", NAV_LABEL_WIDTHS[index] ?? "w-16")}
-            />
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-col gap-1 border-t p-2">
-        {PINNED_ROW_KEYS.map((key) => (
-          <div className="flex h-9 items-center gap-2 px-2" key={key}>
-            <Skeleton className="size-4 rounded-sm" />
-            <div className="flex flex-1 flex-col gap-1">
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-2 w-20" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex-1" />
-      <div className="flex flex-col gap-1 p-2">
-        <div className="flex h-8 items-center gap-2 px-2">
-          <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
-          <Skeleton className="h-3 w-24" />
-        </div>
-        <div className="flex h-12 items-center gap-2 px-2">
-          <Skeleton className="size-8 rounded-full" />
-          <div className="flex flex-1 flex-col gap-1">
-            <Skeleton className="h-3 w-24" />
-            <Skeleton className="h-2 w-28" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// AppSidebar's 3rem icon rail (`SIDEBAR_WIDTH_ICON_PX`): the toggle, the
-// primary nav icons, help and the account avatar, no labels.
-function CollapsedSidebarSkeleton() {
-  return (
-    <div className="bg-sidebar hidden w-12 shrink-0 flex-col items-center border-e md:flex">
-      <div
-        className={cn(
-          "text-muted-foreground flex w-full shrink-0 items-center justify-center border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <PanelLeftIcon className="size-4" />
-      </div>
-      <div className="flex flex-col items-center gap-1 p-2">
-        {STATIC_NAV_ITEMS.map((item) => (
-          <div className="grid size-8 place-items-center" key={item.id}>
-            <item.icon className="text-muted-foreground size-4" />
-          </div>
-        ))}
-      </div>
-      <div className="flex-1" />
-      <div className="flex flex-col items-center gap-1 p-2">
-        <div className="grid size-8 place-items-center">
-          <HelpCircleIcon className="text-muted-foreground size-4" />
-        </div>
-        <Skeleton className="size-8 rounded-full" />
       </div>
     </div>
   );

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The published @stll/start-runtime test-request entry owns TanStack Start's request callback boundary and directly imports @tanstack/react-start from the existing locked version."
+}

@@ -1,4 +1,4 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -43,6 +43,7 @@ import { UserIdentityAvatar } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useSignOut } from "@/hooks/use-sign-out";
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
@@ -78,6 +79,7 @@ type SidebarUserMenuProps = {
  * between the workspace sidebar and the public law shell so the chrome
  * stays identical on both surfaces. */
 export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
+  const queryClient = useQueryClient();
   const t = useTranslations();
   const navigate = useNavigate();
   const signOut = useSignOut();
@@ -85,7 +87,6 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
   const isCollapsed = sidebarLayout === "rail";
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const roleQuery = useChromeQuery(roleOptions);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SidebarUserMenu:query");
@@ -250,7 +251,10 @@ export const SidebarUserMenu = ({ user }: SidebarUserMenuProps) => {
                   <MenuRadioItem
                     key={langCode}
                     onClick={() =>
-                      detached(setLang(langCode), "sidebar-user-menu.set-lang")
+                      detached(
+                        setLang(queryClient, langCode),
+                        "sidebar-user-menu.set-lang",
+                      )
                     }
                     value={langCode}
                   >

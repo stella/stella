@@ -265,6 +265,7 @@ export const NO_NATIVE_UI_REGISTRY = {
     "HTML has no pagination element or role; a hand-rolled pager is " +
       "buttons and text no lexical pattern tells apart from other button rows",
   ),
+  "pane-width": notComponent("inspector pane width policy"),
   "panel-inset": notComponent("panel spacing tokens"),
   popover: native("Popover from @stll/ui/popover", {
     attributes: [{ name: "popover" }, { name: "popoverTarget" }],

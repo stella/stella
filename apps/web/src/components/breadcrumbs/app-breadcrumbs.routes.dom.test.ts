@@ -3,6 +3,7 @@ import { createRouter } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { createRouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { createAppQueryClient } from "@/lib/react-query";
@@ -30,6 +31,7 @@ const router = createRouter({
   routeTree,
   context: {
     analyticsValue,
+    presentationPrefs: defaultPresentationPrefs,
     queryClient: createAppQueryClient(),
     routeErrorLifecycle: createRouteErrorLifecycleController(
       analyticsValue.analytics,

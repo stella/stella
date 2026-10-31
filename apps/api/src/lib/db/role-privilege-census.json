@@ -32,6 +32,7 @@
       "column:public.user.guide_progress:SELECT:GRANTABLE:false",
       "column:public.user.id:SELECT:GRANTABLE:false",
       "column:public.user.image:SELECT:GRANTABLE:false",
+      "column:public.user.locale:SELECT:GRANTABLE:false",
       "column:public.user.name:SELECT:GRANTABLE:false",
       "column:public.user.preferred_name:SELECT:GRANTABLE:false",
       "column:public.user.reader_answer_language:SELECT:GRANTABLE:false",

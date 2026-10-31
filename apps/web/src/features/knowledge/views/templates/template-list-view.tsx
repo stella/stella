@@ -23,7 +23,7 @@ import type {
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { optionalArray } from "@/lib/arrays";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
@@ -61,18 +61,6 @@ type TemplateListViewProps = {
 // carries its own MIME type, not files) — should light up the list.
 const isFileDrag = (e: DragEvent) => e.dataTransfer.types.includes("Files");
 
-const DENSITY_STORAGE_KEY = "stella.templates.density";
-
-/** Persisted list density; defaults to compact for fast scanning. */
-const readTemplateDensity = (): TemplateDensity =>
-  deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
-    ? "comfortable"
-    : "compact";
-
-const writeTemplateDensity = (density: TemplateDensity): void => {
-  deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
-};
-
 const TemplateListView = ({
   source,
   actions,
@@ -90,13 +78,15 @@ const TemplateListView = ({
   const lang = useI18nStore((s) => s.lang);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
+  const {
+    prefs: { templateDensity: density },
+    setPrefs,
+  } = usePresentationPrefs();
   const { templates, selectedCategoryId } = source;
   const { dropFile } = actions;
 
   const changeDensity = (next: TemplateDensity) => {
-    setDensity(next);
-    writeTemplateDensity(next);
+    setPrefs(() => ({ templateDensity: next }));
   };
 
   const handleDragOver = (e: DragEvent) => {

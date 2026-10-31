@@ -6,6 +6,7 @@ import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { runInRequest } from "@stll/start-runtime/test-request";
 import { parseTimeZoneId } from "@stll/time";
 
 import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
@@ -27,11 +28,15 @@ import {
   publicFixtureReadySelector,
   publicRouteExceptions,
 } from "@/__fixtures__/route-shell/route-shell-public-fixtures";
+import { withRequestI18n } from "@/i18n/request-i18n.server";
+import { defaultPresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { memberSessionFor } from "@/lib/account/auth-session.test-fixtures";
 import type { api, WebApiRoutes } from "@/lib/api";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
+import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
 type RouteShellProviderFixtureOptions = {
   mode: "public-knowledge" | "legacy-tools";
@@ -258,6 +263,11 @@ const installFixtureNetwork = () => {
     userId: toSafeId<"user">(user.id),
     activeOrganizationId: toSafeId<"organization">("org-fixture"),
   };
+  const member = memberSessionFor({ userId: user.id, locale: "en" });
+  const authSession = {
+    session: { ...member.session, ...session },
+    user: { ...member.user, ...user },
+  };
   const originalEventSource = globalThis.EventSource;
   globalThis.EventSource = createFixtureEventSource();
   const timeZone = parseTimeZoneId("UTC");
@@ -314,7 +324,7 @@ const installFixtureNetwork = () => {
       }
       if (pathname === "/api/auth/get-session") {
         return Response.json(
-          state.audience === "member" ? { session, user } : null,
+          state.audience === "member" ? authSession : null,
         );
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
@@ -593,14 +603,10 @@ const loadFixtureRuntime = async (
   } = await import("@testing-library/react");
   const waitFor = async (assertion: () => void) =>
     waitForDom(assertion, { onTimeout: (error) => error });
-  const { initializeI18n, useI18nStore } = await import("@/i18n/i18n-store");
+  const { useI18nStore } = await import("@/i18n/i18n-store");
   const initializeFixtureI18n = async () => {
-    if (!Object.hasOwn(useI18nStore, "persist")) {
-      const state = useI18nStore.getState();
-      await state.loadMessages(state.lang);
-      return;
-    }
-    await initializeI18n();
+    const state = useI18nStore.getState();
+    await state.loadMessages(state.lang);
   };
   const { useFormatter, useFormattingLocale } = await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
@@ -619,7 +625,16 @@ const loadFixtureRuntime = async (
   const { parseRouteSearch, stringifyRouteSearch } =
     await import("@/route-search-params");
 
+  const { initializeBrowserPresentationPrefs } =
+    await import("@/lib/account/presentation-prefs/provider");
+  const { createTestPresentationPrefsSync } =
+    await import("@/lib/account/presentation-prefs/sync.test-fixtures");
+
   const createFixtureRouter = (initialEntry: string) => {
+    initializeBrowserPresentationPrefs(
+      defaultPresentationPrefs,
+      createTestPresentationPrefsSync(),
+    );
     const queryClient = createAppQueryClient();
     queryClient.setDefaultOptions({ queries: { retry: false } });
     const routeErrorLifecycle =
@@ -638,6 +653,7 @@ const loadFixtureRuntime = async (
       context: {
         queryClient,
         analyticsValue: { analytics: noopAnalytics, client: null },
+        presentationPrefs: defaultPresentationPrefs,
         routeErrorLifecycle,
       },
     });
@@ -1436,7 +1452,15 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       const requestsBeforeSsr = fixture.requests.length;
       try {
         Object.assign(import.meta.env, { SSR: true });
-        await router.load();
+        await runInRequest(
+          async () =>
+            await withRequestI18n(async () =>
+              await withTestServerIsomorphicHalf(async () =>
+                await router.load(),
+              ),
+            ),
+          new Request(new URL(path, window.location.origin)),
+        );
         expect(router.state.location.pathname).toBe(
           new URL(path, window.location.origin).pathname,
         );

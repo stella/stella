@@ -1,24 +1,22 @@
 import { useState } from "react";
 
-import {
-  readPersistedSidebarOpen,
-  writePersistedSidebarOpen,
-} from "@/components/sidebar/sidebar-state";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
+
+type PersistedSidebarOpenOptions = {
+  defaultOpen: boolean;
+  usePreference: boolean;
+};
 
 export const usePersistedSidebarOpen = ({
   defaultOpen,
-  hydrateFromStorage,
-}: {
-  defaultOpen: boolean;
-  hydrateFromStorage: boolean;
-}) => {
-  // The cookie is the same on the server and in the hydrating client, so the
-  // first render already matches what the user left.
-  const [open, setOpen] = useState(() =>
-    hydrateFromStorage
-      ? (readPersistedSidebarOpen() ?? defaultOpen)
-      : defaultOpen,
-  );
-
-  return { open, persistOpen: writePersistedSidebarOpen, setOpen };
+  usePreference,
+}: PersistedSidebarOpenOptions) => {
+  const { prefs, setPrefs } = usePresentationPrefs();
+  const [openOverride, setOpenOverride] = useState<boolean | null>(null);
+  const open = usePreference
+    ? prefs.sidebarOpen
+    : (openOverride ?? defaultOpen);
+  const persistOpen = (nextOpen: boolean) =>
+    setPrefs(() => ({ sidebarOpen: nextOpen }));
+  return { open, persistOpen, setOpen: setOpenOverride };
 };

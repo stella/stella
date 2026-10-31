@@ -177,9 +177,9 @@ describe("registered browser storage families", () => {
     });
     expect(browserStorage("local")).toBeNull();
     const local = deviceStorage("local");
-    local.setItem("stella.templates.density", "compact");
-    expect(local.getItem("stella.templates.density")).toBeNull();
-    local.removeItem("stella.templates.density");
+    local.setItem("folio:debug-scroll", "open");
+    expect(local.getItem("folio:debug-scroll")).toBeNull();
+    local.removeItem("folio:debug-scroll");
     const session = browserStateStorage("session");
     session.setItem("stella.storage-owner", "visitor");
     expect(session.getItem("stella.storage-owner")).toBeNull();
@@ -197,18 +197,18 @@ describe("required registered persistence", () => {
       );
     }
     const strict = requireBrowserStorage("local").unwrap();
-    strict.setItem("stella.templates.density", "comfortable");
-    expect(strict.getItem("stella.templates.density")).toBe("comfortable");
+    strict.setItem("folio:debug-scroll", "expanded");
+    expect(strict.getItem("folio:debug-scroll")).toBe("expanded");
     expect(() => strict.setItem("unregistered.fixture", "value")).toThrow(
       "Unregistered local storage family",
     );
     original.setItem = () => {
       throw new DOMException("Storage quota exceeded", "QuotaExceededError");
     };
-    expect(() => strict.setItem("stella.templates.density", "compact")).toThrow(
+    expect(() => strict.setItem("folio:debug-scroll", "collapsed")).toThrow(
       "Storage quota exceeded",
     );
-    expect(strict.getItem("stella.templates.density")).toBe("comfortable");
+    expect(strict.getItem("folio:debug-scroll")).toBe("expanded");
     Object.defineProperty(globalThis, "window", {
       configurable: true,
       value: {},

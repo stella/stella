@@ -1,3 +1,5 @@
+import { useQueryClient } from "@tanstack/react-query";
+
 import { Button } from "@stll/ui/button";
 import { GlobeIcon } from "@stll/ui/icons";
 import {
@@ -8,6 +10,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   supportedLanguages,
@@ -16,8 +19,8 @@ import {
 import { detached } from "@/lib/detached";
 
 export const LanguagePicker = () => {
+  const queryClient = useQueryClient();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
 
   return (
     <Menu>
@@ -31,7 +34,7 @@ export const LanguagePicker = () => {
             <MenuRadioItem
               key={code}
               onClick={() =>
-                detached(setLang(code), "language-picker.set-lang")
+                detached(setLang(queryClient, code), "language-picker.set-lang")
               }
               value={code}
             >

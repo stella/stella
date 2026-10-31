@@ -46,6 +46,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { SettingsPageHeader } from "@/components/settings-page-header";
+import { setLang } from "@/i18n/client-document-locale";
 import {
   LANG_ENDONYMS,
   REGIONAL_FORMAT_LABELS,
@@ -841,9 +842,9 @@ const PreferenceRow = ({
 );
 
 const LocalePreferences = () => {
+  const queryClient = useQueryClient();
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
-  const setLang = useI18nStore((s) => s.setLang);
   const regionalFormat = useI18nStore((s) => s.regionalFormat);
   const setRegionalFormat = useI18nStore((s) => s.setRegionalFormat);
   const calendar = useI18nStore((s) => s.calendar);
@@ -865,7 +866,10 @@ const LocalePreferences = () => {
           <Select
             onValueChange={(value) => {
               if (value) {
-                detached(setLang(value), "settings-account-profile.set-lang");
+                detached(
+                  setLang(queryClient, value),
+                  "settings-account-profile.set-lang",
+                );
               }
             }}
             value={lang}

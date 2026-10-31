@@ -6,19 +6,18 @@ import {
 } from "react";
 import type { PropsWithChildren } from "react";
 
-import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useHydrated } from "@/hooks/use-hydrated";
-import { deviceStorage } from "@/lib/account/browser-storage";
+import { PALETTES, THEMES } from "@/lib/account/presentation-prefs/preferences";
+import type { PresentationPrefs } from "@/lib/account/presentation-prefs/preferences";
+import { usePresentationPrefs } from "@/lib/account/presentation-prefs/provider";
 import { forceReflow } from "@/lib/utils";
 
 import { syncThemeColorMeta } from "./theme-color";
 
-const THEMES = ["light", "dark", "system"] as const;
-type Theme = (typeof THEMES)[number];
+type Theme = PresentationPrefs["theme"];
 
-const PALETTES = ["nord", "neutral", "flexoki"] as const;
-type Palette = (typeof PALETTES)[number];
+type Palette = PresentationPrefs["palette"];
 
 type ThemeProviderState = {
   theme: Theme;
@@ -39,24 +38,6 @@ const initialState: ThemeProviderState = {
 const ThemeProviderContext = createContext(initialState);
 
 const PALETTE_PREFIX = "palette-";
-const PREFERENCE_CHANGE_EVENT = "stella-theme-preference-change";
-
-const getStoredTheme = (): Theme => {
-  const stored = deviceStorage("local").getItem(THEME_STORAGE_KEY);
-  if (stored === "light" || stored === "dark") {
-    return stored;
-  }
-  return "system";
-};
-
-const getStoredPalette = (): Palette => {
-  const stored = deviceStorage("local").getItem(PALETTE_STORAGE_KEY);
-  if (stored === "nord" || stored === "flexoki") {
-    return stored;
-  }
-  return "neutral";
-};
-
 const getSystemTheme = (): "light" | "dark" => {
   if (typeof matchMedia === "undefined") {
     return "light";
@@ -69,39 +50,11 @@ const getSystemTheme = (): "light" | "dark" => {
   return "light";
 };
 
-const subscribeToPreferenceChanges = (onStoreChange: () => void) => {
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === THEME_STORAGE_KEY || event.key === PALETTE_STORAGE_KEY) {
-      onStoreChange();
-    }
-  };
-  window.addEventListener("storage", onStorage);
-  window.addEventListener(PREFERENCE_CHANGE_EVENT, onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStorage);
-    window.removeEventListener(PREFERENCE_CHANGE_EVENT, onStoreChange);
-  };
-};
-
 const subscribeToSystemTheme = (onStoreChange: () => void) => {
   const mediaQuery = matchMedia("(prefers-color-scheme: dark)");
   mediaQuery.addEventListener("change", onStoreChange);
   return () => mediaQuery.removeEventListener("change", onStoreChange);
 };
-
-const useStoredTheme = (): Theme =>
-  useSyncExternalStore(
-    subscribeToPreferenceChanges,
-    getStoredTheme,
-    () => "system",
-  );
-
-const useStoredPalette = (): Palette =>
-  useSyncExternalStore(
-    subscribeToPreferenceChanges,
-    getStoredPalette,
-    () => "neutral",
-  );
 
 const useSystemTheme = (): "light" | "dark" =>
   useSyncExternalStore(subscribeToSystemTheme, getSystemTheme, () => "light");
@@ -123,19 +76,19 @@ const suppressTransitions = () => {
 
 export const ThemeProvider = ({ children }: PropsWithChildren) => {
   const hydrated = useHydrated();
-  const theme = useStoredTheme();
-  const palette = useStoredPalette();
+  const {
+    prefs: { theme, palette },
+    setPrefs,
+  } = usePresentationPrefs();
   const systemTheme = useSystemTheme();
   const resolvedTheme = theme === "system" ? systemTheme : theme;
 
   const setTheme = (next: Theme) => {
-    deviceStorage("local").setItem(THEME_STORAGE_KEY, next);
-    window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
+    setPrefs(() => ({ theme: next }));
   };
 
   const setPalette = (next: Palette) => {
-    deviceStorage("local").setItem(PALETTE_STORAGE_KEY, next);
-    window.dispatchEvent(new Event(PREFERENCE_CHANGE_EVENT));
+    setPrefs(() => ({ palette: next }));
   };
 
   useLayoutEffect(() => {
@@ -145,12 +98,8 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     const root = document.documentElement;
     const restore = suppressTransitions();
     root.classList.toggle("dark", resolvedTheme === "dark");
-    // Override the inline color-scheme/background the pre-paint init script
-    // (prepaint-init.js) may have set; inline styles win over the CSS
-    // `html { color-scheme }` rule, so without this a dark->light override
-    // would leave native scrollbars and form controls painted dark.
+    // Keep native controls in sync when an explicit theme replaces system mode.
     root.style.setProperty("color-scheme", resolvedTheme);
-    root.style.removeProperty("background-color");
     syncThemeColorMeta();
     restore();
   }, [hydrated, resolvedTheme]);
