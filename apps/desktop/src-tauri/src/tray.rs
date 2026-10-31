@@ -3,6 +3,7 @@ use tauri::{
   menu::{Menu, MenuBuilder, MenuItemBuilder, Submenu, SubmenuBuilder},
 };
 
+use crate::PreferencesTab;
 use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
 use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
@@ -525,7 +526,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::Quit;
   }
   if action == OPEN_PREFERENCES_ACTION || action == RECONNECT_ACCOUNT_ACTION {
-    return MenuAction::OpenPreferences("general");
+    return MenuAction::OpenPreferences(PreferencesTab::General);
   }
   if action == OPEN_CLIPBOARD_ACTION {
     return MenuAction::OpenClipboard;
@@ -540,7 +541,7 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording);
   }
   if action == OPEN_ABOUT_ACTION {
-    return MenuAction::OpenPreferences("about");
+    return MenuAction::OpenPreferences(PreferencesTab::About);
   }
   if action == CHECK_FOR_UPDATES_ACTION {
     return MenuAction::CheckForUpdates;
@@ -571,12 +572,12 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
     return MenuAction::RetrySession(id.to_string());
   }
 
-  MenuAction::OpenPreferences("general")
+  MenuAction::OpenPreferences(PreferencesTab::General)
 }
 
 pub enum MenuAction {
   Quit,
-  OpenPreferences(&'static str),
+  OpenPreferences(PreferencesTab),
   OpenClipboard,
   OpenActivity,
   SetActivityRecording(ActivityRecordingStatus),
@@ -624,7 +625,7 @@ mod tests {
   fn reconnect_opens_the_account_settings() {
     assert!(matches!(
       handle_menu_action(RECONNECT_ACCOUNT_ACTION),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 
@@ -892,7 +893,7 @@ mod tests {
   fn test_handle_menu_action_preferences() {
     assert!(matches!(
       handle_menu_action("open-preferences"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 
@@ -908,7 +909,7 @@ mod tests {
   fn test_handle_menu_action_about() {
     assert!(matches!(
       handle_menu_action("open-about"),
-      MenuAction::OpenPreferences("about")
+      MenuAction::OpenPreferences(PreferencesTab::About)
     ));
   }
 
@@ -972,7 +973,7 @@ mod tests {
   fn test_handle_menu_action_unknown_defaults_to_preferences() {
     assert!(matches!(
       handle_menu_action("some-unknown-action"),
-      MenuAction::OpenPreferences("general")
+      MenuAction::OpenPreferences(PreferencesTab::General)
     ));
   }
 }

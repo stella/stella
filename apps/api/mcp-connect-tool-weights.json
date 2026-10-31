@@ -46,14 +46,6 @@
       "estimatedTokens": 2316
     },
     {
-      "name": "create_organization",
-      "nameChars": 19,
-      "descriptionChars": 275,
-      "inputSchemaChars": 509,
-      "totalChars": 803,
-      "estimatedTokens": 311
-    },
-    {
       "name": "create_reader_annotation",
       "nameChars": 24,
       "descriptionChars": 327,
@@ -168,10 +160,10 @@
     {
       "name": "list_audit_log",
       "nameChars": 14,
-      "descriptionChars": 108,
-      "inputSchemaChars": 1052,
-      "totalChars": 1174,
-      "estimatedTokens": 480
+      "descriptionChars": 389,
+      "inputSchemaChars": 1256,
+      "totalChars": 1659,
+      "estimatedTokens": 658
     },
     {
       "name": "list_capabilities",
@@ -432,10 +424,10 @@
     {
       "name": "remove_matter_member",
       "nameChars": 20,
-      "descriptionChars": 107,
+      "descriptionChars": 125,
       "inputSchemaChars": 423,
-      "totalChars": 550,
-      "estimatedTokens": 219
+      "totalChars": 568,
+      "estimatedTokens": 225
     },
     {
       "name": "resolve_case_law_decision",
@@ -480,10 +472,10 @@
     {
       "name": "save_contact",
       "nameChars": 12,
-      "descriptionChars": 303,
-      "inputSchemaChars": 2200,
-      "totalChars": 2515,
-      "estimatedTokens": 1022
+      "descriptionChars": 172,
+      "inputSchemaChars": 2256,
+      "totalChars": 2440,
+      "estimatedTokens": 1002
     },
     {
       "name": "save_document",
@@ -553,9 +545,9 @@
       "name": "search_boe_legislation",
       "nameChars": 22,
       "descriptionChars": 547,
-      "inputSchemaChars": 1591,
-      "totalChars": 2160,
-      "estimatedTokens": 853
+      "inputSchemaChars": 1849,
+      "totalChars": 2418,
+      "estimatedTokens": 961
     },
     {
       "name": "search_case_law",
@@ -601,9 +593,9 @@
       "name": "update_organization_settings",
       "nameChars": 28,
       "descriptionChars": 163,
-      "inputSchemaChars": 1223,
-      "totalChars": 1414,
-      "estimatedTokens": 574
+      "inputSchemaChars": 1256,
+      "totalChars": 1447,
+      "estimatedTokens": 587
     },
     {
       "name": "update_reader_annotation",
@@ -631,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127424,
-    "estimatedTokens": 50522
+    "characters": 127340,
+    "estimatedTokens": 50496
   }
 }
