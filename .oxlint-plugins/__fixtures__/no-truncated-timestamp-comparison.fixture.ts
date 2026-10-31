@@ -6,7 +6,18 @@
 // or the column-name recognition), the matching disable becomes unused and
 // `--report-unused-disable-directives-severity=error` fails CI.
 
-import { and, eq, gt, gte, lt, lte, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gt,
+  gte,
+  inArray,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { Temporal, Temporal as Time } from "@stll/time";
 
@@ -226,6 +237,30 @@ const _textCastReversed = sql`${casToken} IS NOT DISTINCT FROM ${decisions.updat
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _textCastCall = eq(timestampCasToken(decisions.updatedAt), casToken);
 
+// Every other spelling of the same text comparison.
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastParenthesized = sql`(${decisions.updatedAt})::varchar <> ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastFunction = sql`CAST(${decisions.updatedAt} AS text) = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastFunctionReversed = sql`${casToken} = CAST(${decisions.updatedAt} AS character varying)`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textFormatted = sql`to_char(${decisions.updatedAt}, 'YYYY-MM-DD HH24:MI:SS.US') = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textTokenInterpolated = sql`${timestampCasToken(decisions.updatedAt)} = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastList = sql`${decisions.updatedAt}::text IN (${casToken}, ${boundaryId})`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastNamedFunction = sql`${casToken} = CAST(updated_at AS text)`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textFormattedLiteral = sql`WHERE to_char(t.updated_at, 'YYYY') = '2026'`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textTokenList = inArray(timestampCasToken(decisions.updatedAt), [
+  casToken,
+]);
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCastFragment = eq(sql`CAST(${decisions.updatedAt} AS text)`, casToken);
+
 // --- Cases the rule MUST NOT flag ---
 
 // The shared helper compares the instant, not its printed text.
@@ -236,6 +271,13 @@ const _nonTimestampTextCast = sql`${decisions.id}::text = ${boundaryId}`;
 
 // Selecting the token as text compares nothing.
 const _textCastSelect = sql`${decisions.updatedAt}::text`;
+const _textCastSelectAliased = sql`SELECT CAST(${decisions.updatedAt} AS text) AS revision`;
+
+// Writing the token into a text column assigns it.
+const _textTokenAssigned = sql`UPDATE t SET note = ${timestampCasToken(decisions.updatedAt)}`;
+
+// Membership of a non-timestamp column's text.
+const _nonTimestampTextList = inArray(decisions.id, [boundaryId]);
 
 // An explicit cast keeps the operand at the column's precision whatever
 // produced it: this is what `timestampMatchesCasToken` emits.
@@ -338,9 +380,22 @@ export const __noTruncatedTimestampComparisonFixture = {
   _textCastNamedColumn,
   _textCastReversed,
   _textCastCall,
+  _textCastParenthesized,
+  _textCastFunction,
+  _textCastFunctionReversed,
+  _textFormatted,
+  _textTokenInterpolated,
+  _textCastList,
+  _textCastNamedFunction,
+  _textFormattedLiteral,
+  _textTokenList,
+  _textCastFragment,
   _casHelper,
   _nonTimestampTextCast,
   _textCastSelect,
+  _textCastSelectAliased,
+  _textTokenAssigned,
+  _nonTimestampTextList,
   _castCasGuard,
   _castComparison,
   _castTuple,

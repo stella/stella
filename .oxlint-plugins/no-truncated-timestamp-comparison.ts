@@ -51,10 +51,17 @@ import type { AstNode } from "./utils.ts";
 //   sql`created_at > ${cursor.createdAt}`     // column named in the SQL text
 //
 // Flagged — a timestamp compared as text, whatever the operand (its own
-// message points at timestampMatchesCasToken):
+// message points at timestampMatchesCasToken), in every spelling of the cast:
 //   sql`${t.updatedAt}::text = ${token}`
 //   sql`${token} = ${t.updatedAt}::text`
+//   sql`(${t.updatedAt})::varchar <> ${token}`
+//   sql`CAST(${t.updatedAt} AS text) = ${token}`
+//   sql`to_char(${t.updatedAt}, 'YYYY-MM-DD HH24:MI:SS.US') = ${token}`
+//   sql`${timestampCasToken(t.updatedAt)} = ${token}`
+//   sql`${t.updatedAt}::text IN (${a}, ${b})`
+//   sql`${token} = CAST(updated_at AS text)`  // column named in the SQL text
 //   eq(timestampCasToken(t.updatedAt), token)
+//   inArray(sql`${t.updatedAt}::text`, tokens)
 //
 // Flagged — Drizzle comparison calls:
 //   gt(docxSuggestions.createdAt, cursor.createdAt)
@@ -257,7 +264,6 @@ const EXPLICIT_NON_TIMESTAMP_CAST = /^\s*::\s*interval\b/iu;
 // session's TimeZone and DateStyle, so a comparison of that text can refuse
 // the very instant it was read from once either setting differs.
 const TEXT_TYPE = String.raw`(?:"?pg_catalog"?\s*\.\s*)?"?(?:text|varchar|bpchar|char|character(?:\s+varying)?)\b"?(?:\s*\(\s*\d+\s*\))?`;
-const TRAILING_TEXT_CAST = new RegExp(String.raw`::\s*${TEXT_TYPE}\s*$`, "iu");
 const LEADING_TEXT_CAST = new RegExp(String.raw`^\s*::\s*${TEXT_TYPE}`, "iu");
 
 // A quasi's `value` is a plain `{ raw, cooked }` record, not an AST node, so
@@ -439,8 +445,97 @@ const isFreshClockRead = (
 // codebase applies it to a timestamp column — add it here if that changes.
 const DRIZZLE_COMPARISONS = new Set(["eq", "ne", "gt", "gte", "lt", "lte"]);
 
+// Drizzle's list membership builders; a timestamp's text in the list position
+// compares exactly like `eq`.
+const DRIZZLE_LIST_COMPARISONS = new Set(["inArray", "notInArray"]);
+
+// ── A timestamp rendered as text ─────────────────────────────────────────
+//
+// Every spelling Postgres accepts for turning a timestamp into text prints it
+// in the session's TimeZone and DateStyle (or a caller's format), so each is
+// the same hazard: `col::text`, `(col)::text`, `CAST(col AS text)`,
+// `to_char(col, …)`, and the token helper `timestampCasToken(col)` itself.
+const CAST_OPEN = /\bcast\s*\(\s*$/iu;
+const TO_CHAR_OPEN = /\bto_char\s*\(\s*$/iu;
+const RENDERING_OPENER = /(?:\b(?:cast|to_char)\s*)?\(\s*$/iu;
+const CAST_TEXT_CLOSE = new RegExp(
+  String.raw`^\s*as\s+${TEXT_TYPE}\s*\)`,
+  "iu",
+);
+const TO_CHAR_CLOSE = /^\s*,[^()]*\)/u;
+const PAREN_TEXT_CAST = new RegExp(
+  String.raw`^\s*\)\s*::\s*${TEXT_TYPE}`,
+  "iu",
+);
+
+// A SQL identifier, qualified or quoted: `updated_at`, `t."updatedAt"`.
+const SQL_NAME = String.raw`[\w$."]+`;
+// The same renderings written around a column named in the SQL text.
+const NAMED_TIMESTAMP_TEXT = new RegExp(
+  [
+    String.raw`\bcast\s*\(\s*(?<cast>${SQL_NAME})\s+as\s+${TEXT_TYPE}\s*\)`,
+    String.raw`\bto_char\s*\(\s*(?<format>${SQL_NAME})\s*,[^()]*\)`,
+    String.raw`\(\s*(?<paren>${SQL_NAME})\s*\)\s*::\s*${TEXT_TYPE}`,
+    String.raw`(?<plain>${SQL_NAME})\s*::\s*${TEXT_TYPE}`,
+  ].join("|"),
+  "giu",
+);
+
+// An operator that compares the text right after a rendering: the scalar
+// comparisons, `IS [NOT] DISTINCT FROM`, list membership and pattern matches.
+// A closing paren may sit between them: `(${t.updatedAt}::text) = ${token}`.
+const LEADING_TEXT_COMPARISON =
+  /^\s*\)?\s*(?<operator><>|!=|>=|<=|=(?!>)|>|<|is\s+(?:not\s+)?distinct\s+from\b|(?:not\s+)?(?:in|i?like)\b)/iu;
+
+// The column a named rendering reads is a timestamp by the naming convention.
+const namedRenderingIsTimestamp = (match: RegExpExecArray): boolean => {
+  const groups = match.groups ?? {};
+  const name =
+    groups["cast"] ?? groups["format"] ?? groups["paren"] ?? groups["plain"];
+  return name !== undefined && trailingNameIsTimestampColumn(name);
+};
+
+// Every named timestamp rendering in `text` with its span.
+const namedTimestampRenderings = (
+  text: string,
+): { start: number; end: number }[] =>
+  Array.from(text.matchAll(NAMED_TIMESTAMP_TEXT))
+    .filter(namedRenderingIsTimestamp)
+    .map((match) => ({
+      start: match.index,
+      end: match.index + match[0].length,
+    }));
+
+// The length of the SQL text that closes a rendering of the interpolation at
+// `index` (`::text`, ` AS text)`, `, 'YYYY')`, `)::text`), or `undefined`
+// when that interpolation is not a timestamp rendered as text.
+const timestampTextTail = (
+  quasis: unknown[],
+  expressions: unknown[],
+  index: number,
+): number | undefined => {
+  const expression = expressions[index];
+  if (isTimestampTextOperand(expression)) {
+    return 0;
+  }
+  if (!isTimestampColumnExpression(expression)) {
+    return undefined;
+  }
+  const before = stripSqlComments(rawTextOf(quasis[index]));
+  const after = stripSqlComments(rawTextOf(quasis[index + 1]));
+  const close = CAST_OPEN.test(before)
+    ? CAST_TEXT_CLOSE.exec(after)
+    : TO_CHAR_OPEN.test(before)
+      ? TO_CHAR_CLOSE.exec(after)
+      : (LEADING_TEXT_CAST.exec(after) ??
+        (/\(\s*$/u.test(before) ? PAREN_TEXT_CAST.exec(after) : null));
+  return close === null ? undefined : close[0].length;
+};
+
 // A Drizzle comparison argument that is a timestamp column's text:
-// `timestampCasToken(t.updatedAt)` or sql`${t.updatedAt}::text`.
+// `timestampCasToken(t.updatedAt)`, or a `sql` fragment that is nothing but
+// one rendering such as sql`${t.updatedAt}::text` or
+// sql`CAST(${t.updatedAt} AS varchar)`.
 const isTimestampTextOperand = (node: unknown): boolean => {
   if (calleeName(node) === "timestampCasToken") {
     return true;
@@ -454,11 +549,25 @@ const isTimestampTextOperand = (node: unknown): boolean => {
   }
   const expressions = Array.isArray(quasi.expressions) ? quasi.expressions : [];
   const quasis = Array.isArray(quasi.quasis) ? quasi.quasis : [];
+  if (expressions.length === 0) {
+    const text = stripSqlComments(rawTextOf(quasis[0]));
+    const [only, ...others] = namedTimestampRenderings(text);
+    return (
+      only !== undefined &&
+      others.length === 0 &&
+      text.slice(0, only.start).trim() === "" &&
+      text.slice(only.end).trim() === ""
+    );
+  }
+  if (expressions.length !== 1) {
+    return false;
+  }
+  const opening = stripSqlComments(rawTextOf(quasis[0]));
+  const tail = timestampTextTail(quasis, expressions, 0);
   return (
-    expressions.length === 1 &&
-    isTimestampColumnExpression(expressions[0]) &&
-    stripSqlComments(rawTextOf(quasis[0])).trim() === "" &&
-    LEADING_TEXT_CAST.test(stripSqlComments(rawTextOf(quasis[1])))
+    tail !== undefined &&
+    opening.replace(RENDERING_OPENER, "").trim() === "" &&
+    stripSqlComments(rawTextOf(quasis[1])).slice(tail).trim() === ""
   );
 };
 
@@ -753,42 +862,77 @@ export default eslintCompatPlugin({
 
         // ── Family A0: a timestamp compared as text ──────────────────────
         //
-        // True when the comparison just before the interpolation at `index`
-        // casts a timestamp column to text on either side:
-        // `${t.updatedAt}::text = ${token}`, `updated_at::text = ${token}`, or
-        // `${token} = ${t.updatedAt}::text`. No operand form makes this safe,
-        // so the operand is not inspected.
+        // True when a comparison sits right before or right after `before`
+        // and `after`, the SQL text around one timestamp rendering. An `=`
+        // in an UPDATE's SET list assigns and compares nothing.
+        const isComparedText = (
+          before: string,
+          after: string,
+          precedingSql: string,
+        ): boolean => {
+          const assigns = (operator: string | undefined) =>
+            operator === "=" && isAssignmentClause(precedingSql);
+          const leading = findComparisonOperator(before);
+          if (leading !== undefined && !assigns(leading.operator)) {
+            return true;
+          }
+          const trailing = LEADING_TEXT_COMPARISON.exec(after);
+          return trailing !== null && !assigns(trailing.groups?.["operator"]);
+        };
+
+        // True when the interpolation at `index` renders a timestamp column
+        // as text in any spelling — `${t.updatedAt}::text`,
+        // `(${t.updatedAt})::text`, `CAST(${t.updatedAt} AS varchar)`,
+        // `to_char(${t.updatedAt}, …)`, `${timestampCasToken(t.updatedAt)}`
+        // — and that text is compared, on either side. No operand form makes
+        // this safe, so the other operand is not inspected.
         const isTimestampTextComparison = (
           quasis: unknown[],
           expressions: unknown[],
           index: number,
           precedingSql: string,
         ): boolean => {
-          const before = stripSqlComments(rawTextOf(quasis[index]));
-          const match = findComparisonOperator(before);
-          if (
-            match === undefined ||
-            (match.operator === "=" && isAssignmentClause(precedingSql))
-          ) {
+          const tail = timestampTextTail(quasis, expressions, index);
+          if (tail === undefined) {
             return false;
           }
-          const head = before.slice(0, match.index);
-          if (TRAILING_TEXT_CAST.test(head)) {
-            const column = head.replace(TRAILING_TEXT_CAST, "");
-            if (
-              column.trim() === ""
-                ? isTimestampColumnExpression(expressions[index - 1])
-                : trailingNameIsTimestampColumn(column)
-            ) {
-              return true;
-            }
-          }
-          return (
-            isTimestampColumnExpression(expressions[index]) &&
-            LEADING_TEXT_CAST.test(
-              stripSqlComments(rawTextOf(quasis[index + 1])),
-            )
+          return isComparedText(
+            stripSqlComments(rawTextOf(quasis[index])).replace(
+              RENDERING_OPENER,
+              "",
+            ),
+            stripSqlComments(rawTextOf(quasis[index + 1])).slice(tail),
+            precedingSql,
           );
+        };
+
+        // The same renderings written around a column named in the SQL text:
+        // `updated_at::text = ${token}`, `${token} = CAST(updated_at AS
+        // text)`, `to_char(t.updated_at, 'YYYY') = ${token}`.
+        const reportNamedTimestampText = (
+          node: unknown,
+          quasis: unknown[],
+          expressions: unknown[],
+        ) => {
+          let precedingSql = "";
+          for (const [index, quasi] of quasis.entries()) {
+            const text = stripSqlComments(rawTextOf(quasi));
+            for (const { start, end } of namedTimestampRenderings(text)) {
+              if (
+                isComparedText(
+                  text.slice(0, start),
+                  text.slice(end),
+                  precedingSql + text.slice(0, start),
+                )
+              ) {
+                context.report({
+                  node: expressions[index] ?? expressions[index - 1] ?? node,
+                  messageId: "timestampTextComparison",
+                });
+              }
+            }
+            precedingSql += text;
+          }
         };
 
         // ── Family A: raw SQL templates ──────────────────────────────────
@@ -849,6 +993,10 @@ export default eslintCompatPlugin({
               ? node.expressions
               : [];
             const quasis = Array.isArray(node.quasis) ? node.quasis : [];
+
+            if (isSqlTaggedTemplate(node.parent)) {
+              reportNamedTimestampText(node, quasis, expressions);
+            }
 
             // Statement text up to (and including) each interpolation's own
             // quasi, so the SET-vs-WHERE clause of an `=` can be decided.
@@ -949,10 +1097,22 @@ export default eslintCompatPlugin({
           // innocuous `cursor.createdAt`.
           CallExpression(node) {
             const callee = calleeName(node);
+            const args = Array.isArray(node.arguments) ? node.arguments : [];
+            // `inArray(timestampCasToken(t.updatedAt), tokens)` compares the
+            // same text, once per listed token.
+            if (callee !== undefined && DRIZZLE_LIST_COMPARISONS.has(callee)) {
+              const [listed] = args;
+              if (isTimestampTextOperand(listed)) {
+                context.report({
+                  node: listed,
+                  messageId: "timestampTextComparison",
+                });
+              }
+              return;
+            }
             if (callee === undefined || !DRIZZLE_COMPARISONS.has(callee)) {
               return;
             }
-            const args = Array.isArray(node.arguments) ? node.arguments : [];
             if (args.length !== 2) {
               return;
             }
