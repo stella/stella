@@ -194,7 +194,12 @@ type MoveEnds = {
   after: StatuteCompareSide;
 };
 
-type MoveSource = { key: string; block: ComparedBlock };
+type MoveSource = { key: string; blocks: readonly ComparedBlock[] };
+type MoveTarget = {
+  key: string;
+  blocks: readonly ComparedBlock[];
+  segments: readonly StatuteWordDiffSegment[] | undefined;
+};
 
 /**
  * Folio reports a move as two events, one where the paragraph left and one
@@ -205,26 +210,19 @@ const indexMoves = (
   events: readonly ComparisonEvent[],
 ): ReadonlyMap<number, MoveEnds> => {
   const sources = new Map<number, MoveSource>();
-  const targets = new Map<
-    number,
-    {
-      key: string;
-      block: ComparedBlock;
-      segments: readonly StatuteWordDiffSegment[] | undefined;
-    }
-  >();
+  const targets = new Map<number, MoveTarget>();
 
   for (const [index, event] of events.entries()) {
     if (event.type === "movedFrom") {
       sources.set(event.moveId, {
         key: rowKey(index),
-        block: event.baseBlocks[0],
+        blocks: event.baseBlocks,
       });
     }
     if (event.type === "movedTo") {
       targets.set(event.moveId, {
         key: rowKey(index),
-        block: event.revisedBlocks[0],
+        blocks: event.revisedBlocks,
         segments: event.segments,
       });
     }
@@ -241,16 +239,16 @@ const indexMoves = (
     const sides =
       target.segments === undefined
         ? {
-            before: unmarkedSide([source.block]),
-            after: unmarkedSide([target.block]),
+            before: unmarkedSide(source.blocks),
+            after: unmarkedSide(target.blocks),
           }
         : {
             before: {
-              blocks: astBlocks([source.block]),
+              blocks: astBlocks(source.blocks),
               segments: splitDiffSides(target.segments).before,
             },
             after: {
-              blocks: astBlocks([target.block]),
+              blocks: astBlocks(target.blocks),
               segments: splitDiffSides(target.segments).after,
             },
           };
@@ -286,12 +284,19 @@ const wholeSide = (
  * each end, each naming the other, so the reader sees where it went rather
  * than a deletion here and an unrelated insertion there.
  */
-const rowFromEvent = (
-  event: ComparisonEvent,
-  index: number,
-  moves: ReadonlyMap<number, MoveEnds>,
-  diffWords: StatuteComparisonAdapter<unknown>["diffWords"],
-): StatuteCompareRow => {
+type RowFromEventOptions = {
+  event: ComparisonEvent;
+  index: number;
+  moves: ReadonlyMap<number, MoveEnds>;
+  diffWords: StatuteComparisonAdapter<unknown>["diffWords"];
+};
+
+const rowFromEvent = ({
+  event,
+  index,
+  moves,
+  diffWords,
+}: RowFromEventOptions): StatuteCompareRow => {
   const key = rowKey(index);
 
   switch (event.type) {
@@ -393,7 +398,7 @@ export const compareStatuteBlocks = <Error>({
       const moves = indexMoves(events);
 
       return events.map((event, index) =>
-        rowFromEvent(event, index, moves, adapter.diffWords),
+        rowFromEvent({ event, index, moves, diffWords: adapter.diffWords }),
       );
     });
 

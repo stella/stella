@@ -36,6 +36,7 @@ import {
   UNVERSIONED_SORT_DATE,
   versionSortKey,
 } from "@/api/lib/legal-search/legislation-validity-window";
+import { legislationVersionPredecessorQuery } from "@/api/lib/legal-search/legislation-version-predecessor";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -145,6 +146,9 @@ export const listStatuteVersionsHandler = async ({
     }
 
     const defaultId = await selectDefaultVersionId(tx, work, surface);
+    const predecessor = legislationVersionPredecessorQuery(tx).as(
+      "current_summary_base",
+    );
     const page = await tx
       .select({
         id: legislationDocuments.id,
@@ -163,8 +167,13 @@ export const listStatuteVersionsHandler = async ({
         documentUrl: legislationDocuments.documentUrl,
         changeSummary: legislationDocuments.changeSummary,
         payloadRevision: legislationDocuments.payloadRevision,
+        base: {
+          documentId: predecessor.id,
+          payloadRevision: predecessor.payloadRevision,
+        },
       })
       .from(legislationDocuments)
+      .leftJoinLateral(predecessor, sql`true`)
       .where(and(...conditions))
       .orderBy(
         sql`${versionSortKey(legislationDocuments.versionValidFrom)} desc`,
@@ -219,7 +228,7 @@ export const listStatuteVersionsHandler = async ({
     }
     return {
       type: "found",
-      rows: page.map(({ changeSummary, payloadRevision, ...row }) =>
+      rows: page.map(({ changeSummary, payloadRevision, base, ...row }) =>
         projectStatuteVersion({
           ...row,
           isDefault: row.id === defaultId,
@@ -227,6 +236,7 @@ export const listStatuteVersionsHandler = async ({
           changes: servedStatuteVersionChanges({
             stored: changeSummary,
             payloadRevision,
+            base,
           }),
           // The actor comes from an explicit publisher relation; multiple acts
           // starting on one day remain separate effects in that day's wording.

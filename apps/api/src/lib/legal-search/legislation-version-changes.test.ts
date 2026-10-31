@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { STATUTE_VERSION_CHANGES_METHOD } from "@stll/api-contract/statute-version-changes";
@@ -157,3 +158,65 @@ describe("isVersionChangeSummaryFresh", () => {
     ).toBe(false);
   });
 });
+
+test.each(
+  [0, 1, 2, 3].flatMap((movedIndex) =>
+    ["2019-01-01", "2021-01-01", "2023-01-01", "2025-01-01", "2027-01-01"].map(
+      (opening) => [movedIndex, opening] as const,
+    ),
+  ),
+)(
+  "scoped planning matches a full repair after re-dating position %s to %s",
+  (movedIndex, opening) => {
+    const original = [
+      "2020-01-01",
+      "2022-01-01",
+      "2024-01-01",
+      "2026-01-01",
+    ].map((date) => version(date));
+    const fresh = original.map((row, index) => {
+      const previous = original.at(index - 1);
+      return {
+        ...row,
+        changeSummary:
+          index === 0
+            ? {
+                type: "first",
+                method: STATUTE_VERSION_CHANGES_METHOD,
+                payloadRevision: 1,
+              }
+            : comparedWith(
+                previous ?? panic("previous fixture version exists"),
+              ),
+      };
+    });
+    const moved = fresh.at(movedIndex) ?? panic("moved fixture version exists");
+    const versions = fresh.map((row) =>
+      row.id === moved.id
+        ? { ...row, versionValidFrom: opening, payloadRevision: 2n }
+        : row,
+    );
+    expect(targets(planVersionChanges({ versions, around: moved.id }))).toEqual(
+      targets(planVersionChanges({ versions })),
+    );
+  },
+);
+
+test.each([null, { type: "unrecognized" }] as const)(
+  "repairs an undated version's successor without a stored base reference: %j",
+  (changeSummary) => {
+    const first = version("2020-01-01", {
+      changeSummary: {
+        type: "first",
+        method: STATUTE_VERSION_CHANGES_METHOD,
+        payloadRevision: 1,
+      },
+    });
+    const successor = version("2022-01-01", { changeSummary });
+    const undatedId = createSafeId<"legislationDocument">();
+    const versions = [first, successor];
+    expect(
+      targets(planVersionChanges({ versions, around: undatedId })),
+    ).toEqual(targets(planVersionChanges({ versions })));
+  },
+);

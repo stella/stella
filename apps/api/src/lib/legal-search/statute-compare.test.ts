@@ -8,7 +8,12 @@ import {
   groupCompareRows,
 } from "@stll/legal-ast/statute-compare";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
-import type { StatuteComparisonAdapter } from "@stll/legal-ast/statute-comparison-adapter";
+import type {
+  StatuteComparisonAdapter,
+  StatuteComparisonBlock,
+  StatuteWordDiffSegment,
+} from "@stll/legal-ast/statute-comparison-adapter";
+import { markSide } from "@stll/legal-ast/statute-diff-marks";
 
 import { statuteComparisonAdapter } from "./statute-comparison-adapter";
 
@@ -208,4 +213,144 @@ test("comparison preserves an injected host failure", () => {
   if (result.isErr()) {
     expect(result.error).toBe(failure);
   }
+});
+
+const MOVE_DIFF: readonly StatuteWordDiffSegment[] = [
+  { type: "equal", text: "alpha " },
+  { type: "del", text: "old" },
+  { type: "ins", text: "new" },
+  { type: "equal", text: "\nbeta " },
+  { type: "del", text: "old" },
+  { type: "ins", text: "new" },
+];
+
+const multiBlockMoveAdapter = (
+  segments: readonly StatuteWordDiffSegment[] | undefined,
+) =>
+  ({
+    compare: ({ base, revised }) => {
+      const sourceBlocks = asMoveBlocks(base);
+      const targetBlocks = asMoveBlocks(revised);
+      if (sourceBlocks === null || targetBlocks === null) {
+        return Result.err(
+          new ComparisonFailure({ message: "expected multi-block endpoints" }),
+        );
+      }
+      return Result.ok([
+        {
+          type: "movedFrom",
+          moveId: 7,
+          baseBlocks: sourceBlocks,
+          revisedBlocks: [],
+        },
+        {
+          type: "movedTo",
+          moveId: 7,
+          baseBlocks: [],
+          revisedBlocks: targetBlocks,
+          ...(segments === undefined ? {} : { segments }),
+        },
+      ]);
+    },
+    diffWords: () => [],
+  }) satisfies StatuteComparisonAdapter<ComparisonFailure>;
+
+const asMoveBlocks = <Item extends StatuteComparisonBlock>(
+  blocks: readonly Item[],
+): [Item, Item, ...Item[]] | null => {
+  const [first, second, ...rest] = blocks;
+  if (first === undefined || second === undefined) {
+    return null;
+  }
+  return [first, second, ...rest];
+};
+
+const multiMoveSource = [
+  paragraph("source-alpha", "alpha old"),
+  paragraph("source-beta", "beta old"),
+];
+const multiMoveTarget = [
+  paragraph("target-alpha", "alpha new"),
+  paragraph("target-beta", "beta new"),
+];
+
+test("a multi-block move keeps every endpoint block when wording is unchanged", () => {
+  const rows = compareStatuteBlocks({
+    older: multiMoveSource,
+    newer: multiMoveTarget,
+    adapter: multiBlockMoveAdapter(undefined),
+  }).unwrap();
+
+  expect(
+    rows.map((row) => ({
+      end: row.move?.end,
+      blockIds: [
+        ...(row.before?.blocks ?? []),
+        ...(row.after?.blocks ?? []),
+      ].map((block) => block.id),
+      text: [...(row.before?.segments ?? []), ...(row.after?.segments ?? [])]
+        .map((segment) => segment.text)
+        .join(""),
+    })),
+  ).toEqual([
+    {
+      end: "source",
+      blockIds: multiMoveSource.map((block) => block.id),
+      text: "alpha old\nbeta old",
+    },
+    {
+      end: "target",
+      blockIds: multiMoveTarget.map((block) => block.id),
+      text: "alpha new\nbeta new",
+    },
+  ]);
+});
+
+test("a multi-block move maps changed segments across every endpoint block", () => {
+  const rows = compareStatuteBlocks({
+    older: multiMoveSource,
+    newer: multiMoveTarget,
+    adapter: multiBlockMoveAdapter(MOVE_DIFF),
+  }).unwrap();
+  const source = rows.find((row) => row.move?.end === "source");
+  const target = rows.find((row) => row.move?.end === "target");
+
+  expect(source?.before?.blocks.map((block) => block.id)).toEqual(
+    multiMoveSource.map((block) => block.id),
+  );
+  expect(target?.after?.blocks.map((block) => block.id)).toEqual(
+    multiMoveTarget.map((block) => block.id),
+  );
+  expect(
+    source?.before?.segments.map(({ type, text }) => ({ type, text })),
+  ).toEqual([
+    { type: "equal", text: "alpha " },
+    { type: "del", text: "old" },
+    { type: "equal", text: "\nbeta " },
+    { type: "del", text: "old" },
+  ]);
+  expect(
+    target?.after?.segments.map(({ type, text }) => ({ type, text })),
+  ).toEqual([
+    { type: "equal", text: "alpha " },
+    { type: "ins", text: "new" },
+    { type: "equal", text: "\nbeta " },
+    { type: "ins", text: "new" },
+  ]);
+
+  const marks = [source?.before, target?.after]
+    .flatMap((side) =>
+      side === null || side === undefined ? [] : markSide(side),
+    )
+    .flatMap(({ rangesByPieceId }) =>
+      Object.entries(rangesByPieceId).flatMap(([pieceId, ranges]) =>
+        ranges.map(({ type, start, end }) => ({ pieceId, type, start, end })),
+      ),
+    );
+  expect(marks).toEqual([
+    { pieceId: "source-alpha", type: "deleted", start: 6, end: 9 },
+    { pieceId: "source-beta", type: "deleted", start: 5, end: 8 },
+    { pieceId: "target-alpha", type: "inserted", start: 6, end: 9 },
+    { pieceId: "target-beta", type: "inserted", start: 5, end: 8 },
+  ]);
 });

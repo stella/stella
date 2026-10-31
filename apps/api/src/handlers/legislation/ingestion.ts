@@ -63,7 +63,7 @@ import {
   eligibleExpression,
   legislationVersionRef,
 } from "@/api/lib/legal-search/legislation-validity-window";
-import { refreshWorkVersionChanges } from "@/api/lib/legal-search/legislation-version-changes";
+import { recoverVersionChanges } from "@/api/lib/legal-search/legislation-version-changes-recovery";
 import { syncLegislationWorkIdentifiersTx } from "@/api/lib/legal-search/legislation-work-identifiers";
 import { syncLegislationWorkNamesTx } from "@/api/lib/legal-search/legislation-work-names";
 import {
@@ -72,9 +72,7 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
-import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
 export type { LegislationCorpusDependencies } from "@/api/handlers/legislation/revision";
@@ -333,56 +331,6 @@ const reportWindowJunctions = async ({
       junction: defect.junction.type,
       overlapDays:
         defect.junction.type === "overlap" ? defect.junction.days : 0,
-    });
-  }
-};
-
-const VERSION_CHANGES_REFRESH_FAILURE = failureSink({
-  event: "legislation.version_changes.refresh_failed",
-  expected: [],
-});
-
-type RefreshVersionChangesOptions = {
-  input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
-  documentId: SafeId<"legislationDocument">;
-  scopedDb: ScopedDb;
-};
-
-/**
- * Recount what the stored version changed against the one before it, and
- * what the version after it changed against it: the two summaries this write
- * can have outdated. Derived state, so a failure here does not fail the
- * store; the summary stays stale and the `legislation-version-changes`
- * backfill, which runs the same refresh, recomputes it.
- */
-const refreshVersionChanges = async ({
-  input,
-  documentId,
-  scopedDb,
-}: RefreshVersionChangesOptions): Promise<void> => {
-  const refreshed = (
-    await Result.tryPromise({
-      try: async () =>
-        await refreshWorkVersionChanges({
-          db: scopedDb,
-          work: {
-            sourceId: input.sourceId,
-            eli: input.eli,
-            language: input.language,
-          },
-          around: documentId,
-        }),
-      catch: (cause) => cause,
-    })
-  ).andThen((outcome) => outcome);
-  if (Result.isError(refreshed)) {
-    observeFailure(refreshed.error, {
-      sink: VERSION_CHANGES_REFRESH_FAILURE,
-      ctx: {
-        documentId,
-        source: input.sourceId,
-        step: "processLegislationDocument.versionChanges",
-      },
     });
   }
 };
@@ -1033,6 +981,11 @@ export const processLegislationDocument = async (
       projection: revision.withoutCorpusWrite(classification),
       scopedDb,
     });
+    await recoverVersionChanges({
+      db: scopedDb,
+      works: [revisionInput],
+      around: existing.id,
+    });
     return {
       type: "stored",
       id: existing.id,
@@ -1137,10 +1090,10 @@ export const processLegislationDocument = async (
 
   // Last: settling the corpus pointers advances the payload revision, and a
   // summary records the revision it was computed from.
-  await refreshVersionChanges({
-    input: revisionInput,
-    documentId: id,
-    scopedDb,
+  await recoverVersionChanges({
+    db: scopedDb,
+    works: [revisionInput],
+    around: id,
   });
 
   return {

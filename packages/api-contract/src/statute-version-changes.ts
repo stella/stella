@@ -96,22 +96,41 @@ type ServedChangesOptions = {
   stored: unknown;
   /** The row's payload revision now. */
   payloadRevision: bigint;
+  /** Current eligible predecessor, from the same read as the target revision. */
+  base: { documentId: string; payloadRevision: bigint } | null;
 };
 
-/**
- * The counts a versions list may show for a row: a comparison computed from
- * the wording the row holds now, or nothing. A summary of an earlier payload,
- * or one that does not parse, is not shown; the backfill recomputes it.
- */
-export const servedStatuteVersionChanges = ({
+/** The shared provenance check used by repair planning and serving. */
+export const currentStatuteVersionChanges = ({
   payloadRevision,
   stored,
-}: ServedChangesOptions): StatuteChangeCounts | null => {
+  base,
+}: ServedChangesOptions): StoredStatuteVersionChanges | null => {
   const parsed = v.safeParse(storedStatuteVersionChangesSchema, stored);
-  if (!parsed.success || parsed.output.type !== "compared") {
+  if (!parsed.success) {
     return null;
   }
-  return BigInt(parsed.output.payloadRevision) === payloadRevision
-    ? parsed.output.counts
+  const summary = parsed.output;
+  if (
+    summary.method !== STATUTE_VERSION_CHANGES_METHOD ||
+    BigInt(summary.payloadRevision) !== payloadRevision
+  ) {
+    return null;
+  }
+  if (base === null) {
+    return summary.type === "first" ? summary : null;
+  }
+  return summary.type !== "first" &&
+    summary.base.documentId === base.documentId &&
+    BigInt(summary.base.payloadRevision) === base.payloadRevision
+    ? summary
     : null;
+};
+
+/** Counts require the current method and both current eligible endpoints. */
+export const servedStatuteVersionChanges = (
+  options: ServedChangesOptions,
+): StatuteChangeCounts | null => {
+  const current = currentStatuteVersionChanges(options);
+  return current?.type === "compared" ? current.counts : null;
 };

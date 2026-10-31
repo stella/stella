@@ -1,5 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, desc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import * as v from "valibot";
@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { isEligibleLegislationExpression } from "@stll/api-contract/legislation-expression";
 import {
+  currentStatuteVersionChanges,
   STATUTE_VERSION_CHANGES_METHOD,
   storedStatuteVersionChangesSchema,
 } from "@stll/api-contract/statute-version-changes";
@@ -23,18 +24,18 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockLegislationVersionRows } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
-  eligibleExpression,
   isDated,
   legislationVersionRef,
-  precedesInHistory,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
   readVersionChangePayloads,
   VERSION_CHANGE_COMPARISON_BATCH_MAX,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { VersionChangePayload } from "@/api/lib/legal-search/legislation-version-blocks";
+import { legislationVersionPredecessorQuery } from "@/api/lib/legal-search/legislation-version-predecessor";
 import { statuteComparisonAdapter } from "@/api/lib/legal-search/statute-comparison-adapter";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -51,7 +52,7 @@ import { recordSystemAudit } from "@/api/lib/system-audit/record";
  * from. A summary is fresh while those still hold and the version before is
  * still the same one; otherwise it is recomputed. Ingestion refreshes the
  * version it stored and the one after it; the backfill walks every Work.
- * Both use `refreshWorkVersionChanges`, and its write is a compare-and-set,
+ * Both use `refreshVersionChanges`, and its write is a compare-and-set,
  * so a run that loses a race to a newer write leaves the newer summary.
  */
 
@@ -104,35 +105,20 @@ const storedRevision = (revision: bigint): number => {
 export const isVersionChangeSummaryFresh = ({
   base,
   target,
-}: VersionChangeTask): boolean => {
-  const parsed = v.safeParse(
-    storedStatuteVersionChangesSchema,
-    target.changeSummary,
-  );
-  if (!parsed.success) {
-    return false;
-  }
-  const stored = parsed.output;
-  if (
-    stored.method !== STATUTE_VERSION_CHANGES_METHOD ||
-    BigInt(stored.payloadRevision) !== target.payloadRevision
-  ) {
-    return false;
-  }
-  if (base === null) {
-    return stored.type === "first";
-  }
-  return (
-    stored.type !== "first" &&
-    stored.base.documentId === base.id &&
-    BigInt(stored.base.payloadRevision) === base.payloadRevision
-  );
-};
+}: VersionChangeTask): boolean =>
+  currentStatuteVersionChanges({
+    stored: target.changeSummary,
+    payloadRevision: target.payloadRevision,
+    base:
+      base === null
+        ? null
+        : { documentId: base.id, payloadRevision: base.payloadRevision },
+  }) !== null;
 
 /**
  * Which versions a write of `around` can have outdated: itself (its text or
- * its window changed) and the first eligible version after it (its base may
- * now be `around`, or no longer be). Every version when nothing was written.
+ * its window changed), its new successor and any stored summary that used it
+ * as a base before the change. Every version when nothing was written.
  */
 const scopeAround = (
   ordered: readonly VersionChangeCandidate[],
@@ -142,18 +128,36 @@ const scopeAround = (
     return () => true;
   }
   const index = ordered.findIndex((version) => version.id === around);
+  // An expression that became undated is absent from this history. Without
+  // its old position, repair every stale summary in the bounded Work.
+  if (index === -1) {
+    return () => true;
+  }
   const next = ordered.slice(index + 1).find((version) => version.eligible);
-  const scope = new Set(
-    index === -1 ? [] : [around, ...(next === undefined ? [] : [next.id])],
-  );
+  const formerSuccessors = ordered.filter((version) => {
+    const parsed = v.safeParse(
+      storedStatuteVersionChangesSchema,
+      version.changeSummary,
+    );
+    return (
+      parsed.success &&
+      parsed.output.type !== "first" &&
+      parsed.output.base.documentId === around
+    );
+  });
+  const scope = new Set([
+    around,
+    ...(next === undefined ? [] : [next.id]),
+    ...formerSuccessors.map((version) => version.id),
+  ]);
   return (version) => scope.has(version.id);
 };
 
 type PlanVersionChangesOptions = {
   versions: readonly VersionChangeCandidate[];
   /**
-   * Only the summaries one stored version can have outdated: its own, and
-   * that of the eligible version after it. Omitted, every version is planned.
+   * Its own summary, its current successor and summaries that used it as a base.
+   * Omitted, every version is planned.
    */
   around?: SafeId<"legislationDocument"> | undefined;
 };
@@ -259,29 +263,10 @@ const computeSummary = (
  * check it still holds.
  */
 const predecessorIdOf = (tx: Transaction): SQL => {
-  const previous = alias(legislationDocuments, "previous");
-  const predecessor = tx
-    .select({ id: previous.id })
-    .from(previous)
-    .where(
-      and(
-        eq(previous.sourceId, legislationDocuments.sourceId),
-        eq(previous.eli, legislationDocuments.eli),
-        eq(previous.language, legislationDocuments.language),
-        isDated(legislationVersionRef(previous)),
-        eligibleExpression(legislationVersionRef(previous)),
-        precedesInHistory(
-          { ref: legislationVersionRef(previous), id: previous.id },
-          {
-            ref: legislationVersionRef(legislationDocuments),
-            id: legislationDocuments.id,
-          },
-        ),
-      ),
-    )
-    .orderBy(desc(previous.versionValidFrom), desc(previous.id))
-    .limit(1);
-  return sql`(${predecessor})`;
+  const previous = legislationVersionPredecessorQuery(tx).as(
+    "summary_predecessor",
+  );
+  return sql`(${tx.select({ id: previous.id }).from(previous)})`;
 };
 
 /** Work keys are shared by candidate grouping and page planning. */
@@ -456,6 +441,17 @@ export const writePreparedVersionChangesTx = async (
   tx: Transaction,
   writes: readonly PreparedVersionChange[],
 ): Promise<number> => {
+  // Refresh callers enter without document locks. Lock every endpoint in ID order
+  // before any update, so concurrent writers cannot upgrade shared locks or
+  // persist a base revision from an earlier statement snapshot.
+  const ids = [
+    ...new Set(
+      writes.flatMap(({ targetId, base }) =>
+        base === null ? [targetId] : [targetId, base.id],
+      ),
+    ),
+  ];
+  await lockLegislationVersionRows(tx, ids);
   let written = 0;
   for (const batch of chunk(writes, SUMMARY_WRITE_BATCH_MAX)) {
     const values = batch.map(
@@ -483,6 +479,7 @@ export const writePreparedVersionChangesTx = async (
         and(
           eq(legislationDocuments.id, sql`batch.target_id`),
           eq(legislationDocuments.payloadRevision, sql`batch.target_revision`),
+          sql`${legislationDocuments.changeSummary} IS DISTINCT FROM batch.summary`,
           sql`${predecessor} IS NOT DISTINCT FROM batch.base_id`,
           sql`(${baseRevision}) IS NOT DISTINCT FROM batch.base_revision`,
         ),
@@ -497,23 +494,23 @@ export const writePreparedVersionChangesTx = async (
   return written;
 };
 
-type RefreshWorkVersionChangesOptions = {
+type RefreshVersionChangesOptions = {
   db: ScopedDb;
-  work: LegislationVersionWork;
+  works: readonly LegislationVersionWork[];
   around?: SafeId<"legislationDocument"> | undefined;
   readPayloads?: typeof readVersionChangePayloads | undefined;
 };
 
 /** Refresh the same canonical comparison plan used by the backfill. */
-export const refreshWorkVersionChanges = async ({
+export const refreshVersionChanges = async ({
   db,
-  work,
+  works,
   around,
   readPayloads,
-}: RefreshWorkVersionChangesOptions) => {
+}: RefreshVersionChangesOptions) => {
   const taskPlan = await planVersionChangeTasks({
     db,
-    works: [work],
+    works,
     around,
   });
   if (taskPlan.isErr()) {
