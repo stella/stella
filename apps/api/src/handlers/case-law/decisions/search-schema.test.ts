@@ -71,6 +71,7 @@ const validResponse = {
       languageAlternates: [],
       decisionDate: null,
       decisionType: null,
+      decisionTypeKind: null,
       sourceUrl: null,
       keywords: null,
       headnote: {

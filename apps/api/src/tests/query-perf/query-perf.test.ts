@@ -17,7 +17,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
-import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
+import {
+  indexedAccessPaths,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 import {
   CASE_LAW_SEARCH_FETCH_LIMIT,
@@ -41,8 +44,10 @@ import {
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
+  OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
 } from "./measurement";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
@@ -108,19 +113,28 @@ test("every measurement execution guard applies even when pages fit or carry an 
   }
 });
 
-test("corpus page markers still reflect pages within the execution guard", () => {
+test("over-budget markers use hysteresis while unmarked budgets retain their edge", () => {
   const id = "statement.legislation.candidateRows";
+  const budget = READ_BUDGETS[id].pages;
+  expect(OVER_BUDGET_REMOVAL_BAND).toBe(0.15);
+  const removalLine = budget * 0.85;
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages,
+      sharedBlocks: removalLine,
       executionTimeMs: 10_000,
     }),
   ).toContain("remove its overBudget marker");
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages + 1,
+      sharedBlocks: removalLine + 1,
       executionTimeMs: 10_000,
     }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget, executionTimeMs: 10_000 }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget + 1, executionTimeMs: 10_000 }),
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
@@ -292,6 +306,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(
+              sharedBlockSampleProblem(budgetId, good.samples),
+            ).toBeUndefined();
             expect(good.planViolations.map(({ message }) => message)).toEqual(
               [],
             );
@@ -403,6 +420,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             budgetId,
             plan: result.plan.Plan,
           });
+          note(sharedBlockSampleProblem(budgetId, result.samples));
           note(
             result.plan.Plan["Actual Rows"] === entry.expectedRows
               ? undefined
@@ -451,14 +469,20 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             const scans = scanOccurrences(result.plan.Plan).filter(
               ({ relation }) => relation === "case_law_decisions",
             );
+            const orderedReads = indexedAccessPaths(
+              result.plan.Plan,
+              "case_law_decisions",
+            ).filter(
+              ({ accessKind, branches }) =>
+                accessKind !== "bitmap" &&
+                branches.every(
+                  ({ indexName }) =>
+                    indexName === CASE_LAW_REPLAY_PENDING_INDEX.name,
+                ),
+            );
             note(
               scans.length === BACKGROUND_REPLAY_ARMS.length &&
-                scans.every(
-                  ({ nodeType, index }) =>
-                    (nodeType === "Index Scan" ||
-                      nodeType === "Index Only Scan") &&
-                    index === CASE_LAW_REPLAY_PENDING_INDEX.name,
-                )
+                orderedReads.length === scans.length
                 ? undefined
                 : `${budgetId}: each arm must read ${CASE_LAW_REPLAY_PENDING_INDEX.name} alone; scans: ${scans.map(({ nodeType, index }) => `${nodeType} ${String(index)}`).join(", ")}`,
             );

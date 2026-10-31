@@ -1,7 +1,14 @@
 import { panic } from "better-result";
-import ts from "typescript6";
 
-import { parseSource } from "./parse-memo";
+import {
+  type CallExpression,
+  type Node,
+  type ObjectProperty,
+  type ParsedSource,
+  type Statement,
+  walk,
+} from "../packages/scripts/src/syntax-tree.ts";
+import { parseSyntax } from "./parse-memo";
 import { isExcludedSource } from "./source-globs";
 
 // Stored/served data boundaries: UI rendering, optional metadata parsers and
@@ -33,32 +40,150 @@ export const isExcludedSkipSource = (file: string): boolean =>
   file.endsWith(".tsx") ||
   /\.generated\./u.test(file);
 
-const parentNode = (node: ts.Node): ts.Node | undefined =>
-  ts.isSourceFile(node) ? undefined : node.parent;
+// oxc nodes carry no parent links or source; each tree is indexed once when
+// it is read, and the parse memo shares trees between the ratchet's counters.
+const PARENTS = new WeakMap<Node, Node>();
+const SOURCES = new WeakMap<Node, ParsedSource>();
+const INDEXED = new WeakSet<ParsedSource>();
 
-const unwrap = (node: ts.Expression): ts.Expression => {
+const indexSource = (source: ParsedSource): void => {
+  if (INDEXED.has(source)) {
+    return;
+  }
+  INDEXED.add(source);
+  walk(source.program, (node, ancestors) => {
+    const parent = ancestors.at(-1);
+    if (parent !== undefined) {
+      PARENTS.set(node, parent);
+    }
+    SOURCES.set(node, source);
+  });
+};
+
+const parentNode = (node: Node): Node | undefined => PARENTS.get(node);
+
+const sourceOf = (node: Node): ParsedSource =>
+  SOURCES.get(node) ?? panic("Expected a node of an indexed source");
+
+const textOf = (node: Node): string =>
+  sourceOf(node).sourceText.slice(node.start, node.end);
+
+const childNodes = (node: Node): Node[] => {
+  const children: Node[] = [];
+  walk(node, (child) => {
+    if (child === node) {
+      return undefined;
+    }
+    children.push(child);
+    return "skip-children";
+  });
+  return children;
+};
+
+// Functions and the signatures that declare parameters.
+const FUNCTION_LIKE = new Set([
+  "ArrowFunctionExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSCallSignatureDeclaration",
+  "TSConstructSignatureDeclaration",
+  "TSConstructorType",
+  "TSDeclareFunction",
+  "TSEmptyBodyFunctionExpression",
+  "TSFunctionType",
+  "TSMethodSignature",
+]);
+
+const isFunctionLike = (node: Node): boolean => FUNCTION_LIKE.has(node.type);
+
+const parameterName = (parameter: Node): string | undefined => {
+  if (parameter.type === "Identifier") {
+    return parameter.name;
+  }
+  if (parameter.type === "AssignmentPattern") {
+    return parameter.left.type === "Identifier"
+      ? parameter.left.name
+      : undefined;
+  }
+  if (parameter.type === "RestElement") {
+    return parameter.argument.type === "Identifier"
+      ? parameter.argument.name
+      : undefined;
+  }
+  return parameter.type === "TSParameterProperty"
+    ? parameterName(parameter.parameter)
+    : undefined;
+};
+
+const declaresParameter = (scope: Node, name: string): boolean =>
+  "params" in scope &&
+  Array.isArray(scope.params) &&
+  scope.params.some((parameter: Node) => parameterName(parameter) === name);
+
+// The statements of a block or the module; others hold no declarations.
+const scopeStatements = (scope: Node): readonly Node[] | undefined => {
+  if (scope.type === "Program") {
+    return scope.body.map((statement) =>
+      (statement.type === "ExportNamedDeclaration" ||
+        statement.type === "ExportDefaultDeclaration") &&
+      statement.declaration !== null
+        ? statement.declaration
+        : statement,
+    );
+  }
+  return scope.type === "BlockStatement" || scope.type === "StaticBlock"
+    ? scope.body
+    : undefined;
+};
+
+// A module statement starts at its `export` keyword.
+const statementStart = (statement: Node): number => {
+  const parent = parentNode(statement);
+  return parent?.type === "ExportNamedDeclaration" ||
+    parent?.type === "ExportDefaultDeclaration"
+    ? parent.start
+    : statement.start;
+};
+
+const unwrap = (node: Node): Node => {
   if (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isSatisfiesExpression(node) ||
-    ts.isNonNullExpression(node) ||
-    ts.isAwaitExpression(node)
+    node.type === "ParenthesizedExpression" ||
+    node.type === "TSAsExpression" ||
+    node.type === "TSSatisfiesExpression" ||
+    node.type === "TSNonNullExpression" ||
+    node.type === "ChainExpression"
   ) {
     return unwrap(node.expression);
+  }
+  if (node.type === "AwaitExpression") {
+    return unwrap(node.argument);
   }
   return node;
 };
 
-const callName = (expression: ts.Expression): string => {
-  const node = unwrap(expression);
-  if (ts.isIdentifier(node)) {
-    return node.text;
+// `object.name`, as the compiler's property access: not computed.
+const memberName = (node: Node): string | undefined => {
+  if (node.type !== "MemberExpression" || node.computed) {
+    return undefined;
   }
-  if (ts.isPropertyAccessExpression(node)) {
-    return node.name.text;
-  }
-  return "";
+  return node.property.type === "PrivateIdentifier"
+    ? `#${node.property.name}`
+    : node.property.name;
 };
+
+const callName = (expression: Node): string => {
+  const node = unwrap(expression);
+  if (node.type === "Identifier") {
+    return node.name;
+  }
+  return memberName(node) ?? "";
+};
+
+const isLiteral = (node: Node, value: boolean | null): boolean =>
+  node.type === "Literal" && node.value === value;
+
+const isStringLiteral = (node: Node): node is Node & { value: string } =>
+  node.type === "Literal" && typeof node.value === "string";
 
 // Syntax-only inventory: these names belong to the repository's observation
 // helpers. No type checker or application imports run during a ratchet scan.
@@ -115,67 +240,73 @@ const FAILURE_DISCRIMINANT =
 const FAILURE_COLLECTION =
   /(?:issue|error|failure|reject|skip|warning|problem|diagnostic)s?$/iu;
 
+// A `key: value` entry of an object literal.
+const isPropertyAssignment = (property: Node): property is ObjectProperty =>
+  property.type === "Property" &&
+  property.kind === "init" &&
+  !property.method &&
+  !property.shorthand;
+
+const propertyKeyText = (property: ObjectProperty): string => {
+  if (property.computed) {
+    return "";
+  }
+  if (property.key.type === "Identifier") {
+    return property.key.name;
+  }
+  return isStringLiteral(property.key) ? property.key.value : "";
+};
+
 const isTypedRecord = (
-  expression: ts.Expression,
+  expression: Node,
   { failureCollection = false } = {},
 ): boolean => {
   const node = unwrap(expression);
-  if (!ts.isObjectLiteralExpression(node)) {
+  if (node.type !== "ObjectExpression") {
     return false;
   }
   return node.properties.some((property) => {
-    if (!ts.isPropertyAssignment(property)) {
+    if (!isPropertyAssignment(property)) {
       return false;
     }
-    const name =
-      ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)
-        ? property.name.text
-        : "";
-    const value = unwrap(property.initializer);
+    const name = propertyKeyText(property);
+    const value = unwrap(property.value);
     return (
-      (name === "ok" && value.kind === ts.SyntaxKind.FalseKeyword) ||
+      (name === "ok" && isLiteral(value, false)) ||
       (["type", "status", "kind", "code", "reason"].includes(name) &&
-        (ts.isStringLiteral(value) || ts.isPropertyAccessExpression(value)) &&
-        (failureCollection || FAILURE_DISCRIMINANT.test(value.getText()))) ||
-      (name.endsWith("Failures") && ts.isObjectLiteralExpression(value))
+        (isStringLiteral(value) || memberName(value) !== undefined) &&
+        (failureCollection || FAILURE_DISCRIMINANT.test(textOf(value)))) ||
+      (name.endsWith("Failures") && value.type === "ObjectExpression")
     );
   });
 };
 
-const declarationValue = (
-  identifier: ts.Identifier,
-): ts.Expression | undefined => {
+const declarationValue = (identifier: Node & { name: string }) => {
   for (
-    let scope: ts.Node | undefined = identifier.parent;
+    let scope: Node | undefined = parentNode(identifier);
     scope;
     scope = parentNode(scope)
   ) {
-    if (
-      ts.isFunctionLike(scope) &&
-      scope.parameters.some(
-        (parameter) =>
-          ts.isIdentifier(parameter.name) &&
-          parameter.name.text === identifier.text,
-      )
-    ) {
+    if (isFunctionLike(scope) && declaresParameter(scope, identifier.name)) {
       return undefined;
     }
-    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
+    const statements = scopeStatements(scope);
+    if (statements === undefined) {
       continue;
     }
-    for (const statement of scope.statements.toReversed()) {
+    for (const statement of statements.toReversed()) {
       if (
-        statement.getStart() >= identifier.getStart() ||
-        !ts.isVariableStatement(statement)
+        statementStart(statement) >= identifier.start ||
+        statement.type !== "VariableDeclaration"
       ) {
         continue;
       }
-      for (const declaration of statement.declarationList.declarations) {
+      for (const declaration of statement.declarations) {
         if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.name.text === identifier.text
+          declaration.id.type === "Identifier" &&
+          declaration.id.name === identifier.name
         ) {
-          return declaration.initializer;
+          return declaration.init ?? undefined;
         }
       }
     }
@@ -184,93 +315,83 @@ const declarationValue = (
 };
 
 const localFunctionBody = (
-  identifier: ts.Identifier,
-): ts.ConciseBody | undefined => {
+  identifier: Node & { name: string },
+): Node | undefined => {
   const value = declarationValue(identifier);
-  if (value && (ts.isArrowFunction(value) || ts.isFunctionExpression(value))) {
-    return value.body;
+  if (
+    value &&
+    (value.type === "ArrowFunctionExpression" ||
+      value.type === "FunctionExpression")
+  ) {
+    return value.body ?? undefined;
   }
   for (
-    let scope: ts.Node | undefined = identifier.parent;
+    let scope: Node | undefined = parentNode(identifier);
     scope;
     scope = parentNode(scope)
   ) {
-    if (
-      ts.isFunctionLike(scope) &&
-      scope.parameters.some(
-        (parameter) =>
-          ts.isIdentifier(parameter.name) &&
-          parameter.name.text === identifier.text,
-      )
-    ) {
+    if (isFunctionLike(scope) && declaresParameter(scope, identifier.name)) {
       return undefined;
     }
-    if (!ts.isBlock(scope) && !ts.isSourceFile(scope)) {
-      continue;
-    }
-    for (const statement of scope.statements) {
+    for (const statement of scopeStatements(scope) ?? []) {
+      // An overload signature comes first and has no body.
       if (
-        ts.isFunctionDeclaration(statement) &&
-        statement.name?.text === identifier.text
+        (statement.type === "FunctionDeclaration" ||
+          statement.type === "TSDeclareFunction") &&
+        statement.id?.name === identifier.name
       ) {
-        return statement.body;
+        return statement.body ?? undefined;
       }
     }
   }
   return undefined;
 };
 
-const unwrapExpression = (node: ts.Node): ts.Expression => {
-  if (ts.isExpression(node)) {
-    return unwrap(node);
-  }
-  // Only block bodies and expression bodies reach this helper.
-  return panic("Expected a callback expression body");
-};
-
 const LOCAL_HELPER_DEPTH = 4;
 
-function isSignalCall(node: ts.CallExpression, depth: number): boolean {
-  const callee = unwrap(node.expression);
+const importsSignal = (callee: Node & { name: string }): boolean =>
+  sourceOf(callee).program.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.specifiers.some((binding) => {
+        if (
+          binding.type !== "ImportSpecifier" ||
+          binding.local.name !== callee.name
+        ) {
+          return false;
+        }
+        const imported =
+          binding.imported.type === "Identifier"
+            ? binding.imported.name
+            : binding.imported.value;
+        return SIGNAL_CALLS.has(imported);
+      }),
+  );
+
+function isSignalCall(node: CallExpression, depth: number): boolean {
+  const callee = unwrap(node.callee);
   if (SIGNAL_CALLS.has(callName(callee))) {
     return true;
   }
-  if (ts.isIdentifier(callee)) {
-    const source = callee.getSourceFile();
-    for (const statement of source.statements) {
-      if (!ts.isImportDeclaration(statement)) {
-        continue;
-      }
-      const bindings = statement.importClause?.namedBindings;
-      if (
-        bindings &&
-        ts.isNamedImports(bindings) &&
-        bindings.elements.some(
-          (binding) =>
-            binding.name.text === callee.text &&
-            SIGNAL_CALLS.has(binding.propertyName?.text ?? binding.name.text),
-        )
-      ) {
-        return true;
-      }
-    }
+  if (callee.type === "Identifier" && importsSignal(callee)) {
+    return true;
   }
-  if (ts.isIdentifier(callee) && depth < LOCAL_HELPER_DEPTH) {
+  if (callee.type === "Identifier" && depth < LOCAL_HELPER_DEPTH) {
     const body = localFunctionBody(callee);
     if (body && !dropsWithoutSignal(body, depth + 1, "observe")) {
       return true;
     }
   }
-  if (!ts.isPropertyAccessExpression(callee)) {
+  const name = memberName(callee);
+  if (callee.type !== "MemberExpression" || name === undefined) {
     return false;
   }
-  const receiver = callee.expression.getText();
+  const receiver = textOf(callee.object);
   return (
-    (LOG_METHODS.has(callee.name.text) &&
-      /(?:logger|log|console)$/iu.test(receiver)) ||
-    (METRIC_METHODS.has(callee.name.text) &&
+    (LOG_METHODS.has(name) && /(?:logger|log|console)$/iu.test(receiver)) ||
+    (METRIC_METHODS.has(name) &&
       /(?:metric|counter|skip|reject|fail)/iu.test(receiver)) ||
-    (callee.name.text === "push" &&
+    (name === "push" &&
       node.arguments.some(
         (argument) =>
           isTypedRecord(argument, {
@@ -284,95 +405,87 @@ function isSignalCall(node: ts.CallExpression, depth: number): boolean {
 // is returned or collected.
 const TYPED_OUTCOME_METHODS = new Set(["err", "try", "tryPromise"]);
 
-function isTypedOutcomeCall(node: ts.CallExpression, depth: number): boolean {
-  const callee = unwrap(node.expression);
-  if (
-    ts.isPropertyAccessExpression(callee) &&
-    callee.expression.getText() === "Result" &&
-    TYPED_OUTCOME_METHODS.has(callee.name.text)
-  ) {
+const isResultCall = (callee: Node, methods: ReadonlySet<string>): boolean =>
+  callee.type === "MemberExpression" &&
+  methods.has(memberName(callee) ?? "") &&
+  textOf(callee.object) === "Result";
+
+function isTypedOutcomeCall(node: CallExpression, depth: number): boolean {
+  const callee = unwrap(node.callee);
+  if (isResultCall(callee, TYPED_OUTCOME_METHODS)) {
     return true;
   }
-  if (!ts.isIdentifier(callee) || depth >= LOCAL_HELPER_DEPTH) {
+  if (callee.type !== "Identifier" || depth >= LOCAL_HELPER_DEPTH) {
     return false;
   }
   const body = localFunctionBody(callee);
   return body !== undefined && !dropsWithoutSignal(body, depth + 1, "outcome");
 }
 
-function hasSignal(node: ts.Node, depth = 0): boolean {
-  if (ts.isFunctionLike(node)) {
+const COUNTER_TEXT = /(?:skip|reject|fail|counter)/iu;
+
+function hasSignal(node: Node, depth = 0): boolean {
+  if (isFunctionLike(node)) {
     return false;
   }
-  if (ts.isConditionalExpression(node)) {
+  if (node.type === "ConditionalExpression") {
     return (
-      hasSignal(node.condition, depth) ||
-      (hasSignal(node.whenTrue, depth) && hasSignal(node.whenFalse, depth))
+      hasSignal(node.test, depth) ||
+      (hasSignal(node.consequent, depth) && hasSignal(node.alternate, depth))
     );
   }
-  if (
-    ts.isBinaryExpression(node) &&
-    [
-      ts.SyntaxKind.AmpersandAmpersandToken,
-      ts.SyntaxKind.BarBarToken,
-      ts.SyntaxKind.QuestionQuestionToken,
-    ].includes(node.operatorToken.kind)
-  ) {
+  if (node.type === "LogicalExpression") {
     return hasSignal(node.left, depth);
   }
   if (
-    ts.isCallExpression(node) &&
-    (node.questionDotToken ||
-      (ts.isPropertyAccessExpression(node.expression) &&
-        node.expression.questionDotToken))
+    node.type === "CallExpression" &&
+    (node.optional ||
+      (node.callee.type === "MemberExpression" && node.callee.optional))
   ) {
     return false;
   }
-  if (ts.isCallExpression(node) && isSignalCall(node, depth)) {
+  if (node.type === "CallExpression" && isSignalCall(node, depth)) {
     return true;
   }
   if (
-    (ts.isPostfixUnaryExpression(node) || ts.isPrefixUnaryExpression(node)) &&
-    [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
-      node.operator,
-    ) &&
-    /(?:skip|reject|fail|counter)/iu.test(node.operand.getText())
+    node.type === "UpdateExpression" &&
+    COUNTER_TEXT.test(textOf(node.argument))
   ) {
     return true;
   }
   // Assigning a typed outcome hands it on to the enclosing code.
   if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    node.type === "AssignmentExpression" &&
+    node.operator === "=" &&
     isTypedReturn(node.right, depth)
   ) {
     return true;
   }
   if (
-    ts.isBinaryExpression(node) &&
-    node.operatorToken.kind === ts.SyntaxKind.PlusEqualsToken &&
-    /(?:skip|reject|fail|counter)/iu.test(node.left.getText())
+    node.type === "AssignmentExpression" &&
+    node.operator === "+=" &&
+    COUNTER_TEXT.test(textOf(node.left))
   ) {
     return true;
   }
-  return node.getChildren().some((child) => hasSignal(child, depth));
+  return childNodes(node).some((child) => hasSignal(child, depth));
 }
 
-function isTypedReturn(expression: ts.Expression, depth = 0): boolean {
+function isTypedReturn(expression: Node, depth = 0): boolean {
   const node = unwrap(expression);
   if (isTypedRecord(node)) {
     return true;
   }
-  if (ts.isConditionalExpression(node)) {
+  if (node.type === "ConditionalExpression") {
     return (
-      isTypedReturn(node.whenTrue, depth) &&
-      isTypedReturn(node.whenFalse, depth)
+      isTypedReturn(node.consequent, depth) &&
+      isTypedReturn(node.alternate, depth)
     );
   }
-  if (ts.isCallExpression(node)) {
+  if (node.type === "CallExpression") {
     return isTypedOutcomeCall(node, depth) || hasSignal(node, depth);
   }
-  if (ts.isIdentifier(node) && depth < LOCAL_HELPER_DEPTH) {
+  if (node.type === "Identifier" && depth < LOCAL_HELPER_DEPTH) {
     const value = declarationValue(node);
     return value !== undefined && isTypedReturn(value, depth + 1);
   }
@@ -404,7 +517,7 @@ type FlowOptions = {
 const unique = (states: boolean[]): boolean[] => [...new Set(states)];
 
 function flowSequence(
-  statements: readonly ts.Statement[],
+  statements: readonly Statement[],
   options: Required<FlowOptions>,
 ): Flow {
   let live = [options.signalled];
@@ -422,7 +535,7 @@ function flowSequence(
 }
 
 function flow(
-  statement: ts.Node,
+  statement: Node,
   {
     signalled = false,
     depth = 0,
@@ -431,31 +544,31 @@ function flow(
   }: FlowOptions = {},
 ): Flow {
   const options = { signalled, depth, mode, inSwitch };
-  if (ts.isBlock(statement)) {
-    return flowSequence(statement.statements, options);
+  if (statement.type === "BlockStatement") {
+    return flowSequence(statement.body, options);
   }
-  if (ts.isIfStatement(statement)) {
-    const state = signalled || hasSignal(statement.expression, depth);
-    const yes = flow(statement.thenStatement, { ...options, signalled: state });
+  if (statement.type === "IfStatement") {
+    const state = signalled || hasSignal(statement.test, depth);
+    const yes = flow(statement.consequent, { ...options, signalled: state });
     const no =
-      statement.elseStatement === undefined
+      statement.alternate === null
         ? { live: [state], unsignalledExit: false, switchExits: [] }
-        : flow(statement.elseStatement, { ...options, signalled: state });
+        : flow(statement.alternate, { ...options, signalled: state });
     return {
       live: unique([...yes.live, ...no.live]),
       unsignalledExit: yes.unsignalledExit || no.unsignalledExit,
       switchExits: unique([...yes.switchExits, ...no.switchExits]),
     };
   }
-  if (ts.isThrowStatement(statement)) {
+  if (statement.type === "ThrowStatement") {
     return { live: [], unsignalledExit: false, switchExits: [] };
   }
-  if (ts.isSwitchStatement(statement)) {
+  if (statement.type === "SwitchStatement") {
     // Case fallthrough is conservative: a case must carry its own signal.
-    const outcomes = statement.caseBlock.clauses.map((clause) =>
-      flowSequence(clause.statements, { ...options, inSwitch: true }),
+    const outcomes = statement.cases.map((clause) =>
+      flowSequence(clause.consequent, { ...options, inSwitch: true }),
     );
-    if (!statement.caseBlock.clauses.some(ts.isDefaultClause)) {
+    if (!statement.cases.some((clause) => clause.test === null)) {
       outcomes.push({
         live: [signalled],
         unsignalledExit: false,
@@ -470,32 +583,36 @@ function flow(
       switchExits: [],
     };
   }
-  if (ts.isReturnStatement(statement)) {
+  if (statement.type === "ReturnStatement") {
     return {
       live: [],
       unsignalledExit:
         !signalled &&
-        (statement.expression === undefined ||
+        (statement.argument === null ||
           (mode === "observe"
-            ? !hasSignal(statement.expression, depth)
-            : !isTypedReturn(statement.expression, depth))),
+            ? !hasSignal(statement.argument, depth)
+            : !isTypedReturn(statement.argument, depth))),
       switchExits: [],
     };
   }
   if (
-    ts.isBreakStatement(statement) &&
-    statement.label === undefined &&
+    statement.type === "BreakStatement" &&
+    statement.label === null &&
     inSwitch
   ) {
     return { live: [], unsignalledExit: false, switchExits: [signalled] };
   }
-  if (ts.isContinueStatement(statement) || ts.isBreakStatement(statement)) {
+  if (
+    statement.type === "ContinueStatement" ||
+    statement.type === "BreakStatement"
+  ) {
     return { live: [], unsignalledExit: !signalled, switchExits: [] };
   }
   // Signals within control structures are conditional. Only direct statements
   // establish observation for the following statement.
   const observed =
-    ts.isExpressionStatement(statement) || ts.isVariableStatement(statement)
+    statement.type === "ExpressionStatement" ||
+    statement.type === "VariableDeclaration"
       ? hasSignal(statement, depth)
       : false;
   return {
@@ -506,12 +623,12 @@ function flow(
 }
 
 function dropsWithoutSignal(
-  body: ts.Node,
+  body: Node,
   depth = 0,
   mode: FlowMode = "outcome",
 ): boolean {
-  if (!ts.isBlock(body)) {
-    const expression = unwrapExpression(body);
+  if (body.type !== "BlockStatement") {
+    const expression = unwrap(body);
     return mode === "observe"
       ? !hasSignal(expression, depth)
       : !isTypedReturn(expression, depth);
@@ -520,41 +637,36 @@ function dropsWithoutSignal(
   return result.unsignalledExit || result.live.includes(false);
 }
 
-const isLoop = (node: ts.Node): boolean =>
-  ts.isForOfStatement(node) ||
-  ts.isForInStatement(node) ||
-  ts.isForStatement(node) ||
-  ts.isWhileStatement(node) ||
-  ts.isDoStatement(node);
+const isLoop = (node: Node): boolean =>
+  node.type === "ForOfStatement" ||
+  node.type === "ForInStatement" ||
+  node.type === "ForStatement" ||
+  node.type === "WhileStatement" ||
+  node.type === "DoWhileStatement";
 
-const isLookupOrParse = (node: ts.Node): boolean => {
-  if (ts.isFunctionLike(node)) {
+const LOOKUP_OR_PARSE =
+  /^(?:(?:parse|safeParse|decode|lookup|find)(?:[A-Z_]|$)|get$|exec$|match$|valueAtPath$|fieldOf$|asString$|sentenceHeadPattern$|extractId$)/u;
+const RESULT_CAPTURES = new Set(["try", "tryPromise"]);
+
+const isLookupOrParse = (node: Node): boolean => {
+  if (isFunctionLike(node)) {
     return false;
   }
   if (
-    ts.isCallExpression(node) &&
-    ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.expression.getText() === "Result" &&
-    ["try", "tryPromise"].includes(node.expression.name.text)
+    node.type === "CallExpression" &&
+    (isResultCall(node.callee, RESULT_CAPTURES) ||
+      LOOKUP_OR_PARSE.test(callName(node.callee)))
   ) {
     return true;
   }
-  if (
-    ts.isCallExpression(node) &&
-    /^(?:(?:parse|safeParse|decode|lookup|find)(?:[A-Z_]|$)|get$|exec$|match$|valueAtPath$|fieldOf$|asString$|sentenceHeadPattern$|extractId$)/u.test(
-      callName(node.expression),
-    )
-  ) {
-    return true;
-  }
-  return node.getChildren().some(isLookupOrParse);
+  return childNodes(node).some(isLookupOrParse);
 };
 
 // Resolve only preceding declarations in enclosing blocks; unrelated functions
 // and shadowed names cannot supply a parse/lookup origin.
 
-const refersToFailure = (node: ts.Node, seen = new Set<ts.Node>()): boolean => {
-  if (ts.isFunctionLike(node)) {
+const refersToFailure = (node: Node, seen = new Set<Node>()): boolean => {
+  if (isFunctionLike(node)) {
     return false;
   }
   if (seen.has(node)) {
@@ -564,10 +676,13 @@ const refersToFailure = (node: ts.Node, seen = new Set<ts.Node>()): boolean => {
   if (isLookupOrParse(node)) {
     return true;
   }
-  if (ts.isIdentifier(node)) {
+  if (node.type === "Identifier") {
+    const parent = parentNode(node);
     if (
-      (ts.isCallExpression(node.parent) && node.parent.expression === node) ||
-      (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node)
+      (parent?.type === "CallExpression" && parent.callee === node) ||
+      (parent?.type === "MemberExpression" &&
+        !parent.computed &&
+        parent.property === node)
     ) {
       return false;
     }
@@ -577,85 +692,76 @@ const refersToFailure = (node: ts.Node, seen = new Set<ts.Node>()): boolean => {
       (isLookupOrParse(value) || refersToFailure(value, seen))
     );
   }
-  return node.getChildren().some((child) => refersToFailure(child, seen));
+  return childNodes(node).some((child) => refersToFailure(child, seen));
 };
 
 const ERROR_PREDICATES = new Set(["isErr", "isError", "isFailure"]);
 
-const isAbsent = (node: ts.Expression): boolean => {
+const isAbsent = (node: Node): boolean => {
   const value = unwrap(node);
   return (
-    value.kind === ts.SyntaxKind.NullKeyword ||
-    (ts.isIdentifier(value) && value.text === "undefined") ||
-    ts.isVoidExpression(value)
+    isLiteral(value, null) ||
+    (value.type === "Identifier" && value.name === "undefined") ||
+    (value.type === "UnaryExpression" && value.operator === "void")
   );
 };
 
-const failureArm = (expression: ts.Expression): "then" | "else" => {
+const isNegation = (
+  node: Node,
+): node is Node & { type: "UnaryExpression"; argument: Node } =>
+  node.type === "UnaryExpression" && node.operator === "!";
+
+const failureArm = (expression: Node): "then" | "else" => {
   const node = unwrap(expression);
   if (
-    ts.isCallExpression(node) &&
-    ERROR_PREDICATES.has(callName(node.expression))
+    node.type === "CallExpression" &&
+    ERROR_PREDICATES.has(callName(node.callee))
   ) {
     return "then";
   }
-  if (
-    ts.isPrefixUnaryExpression(node) &&
-    node.operator === ts.SyntaxKind.ExclamationToken
-  ) {
-    return failureArm(node.operand) === "then" ? "else" : "then";
+  if (isNegation(node)) {
+    return failureArm(node.argument) === "then" ? "else" : "then";
   }
-  if (ts.isBinaryExpression(node)) {
-    if (
-      [
-        ts.SyntaxKind.AmpersandAmpersandToken,
-        ts.SyntaxKind.BarBarToken,
-      ].includes(node.operatorToken.kind)
-    ) {
-      if (refersToFailure(node.left)) {
-        return failureArm(node.left);
-      }
-      if (refersToFailure(node.right)) {
-        return failureArm(node.right);
-      }
+  if (
+    node.type === "LogicalExpression" &&
+    (node.operator === "&&" || node.operator === "||")
+  ) {
+    if (refersToFailure(node.left)) {
+      return failureArm(node.left);
     }
-    const equality = [
-      ts.SyntaxKind.EqualsEqualsToken,
-      ts.SyntaxKind.EqualsEqualsEqualsToken,
-    ].includes(node.operatorToken.kind);
-    const inequality = [
-      ts.SyntaxKind.ExclamationEqualsToken,
-      ts.SyntaxKind.ExclamationEqualsEqualsToken,
-    ].includes(node.operatorToken.kind);
+    if (refersToFailure(node.right)) {
+      return failureArm(node.right);
+    }
+  }
+  if (node.type === "BinaryExpression") {
+    const equality = node.operator === "==" || node.operator === "===";
+    const inequality = node.operator === "!=" || node.operator === "!==";
     if (equality || inequality) {
       if (isAbsent(node.left) || isAbsent(node.right)) {
         return equality ? "then" : "else";
       }
       // Equality is symmetric: the boolean literal may sit on either side.
-      const sides = [node.left.kind, node.right.kind];
-      if (sides.includes(ts.SyntaxKind.FalseKeyword)) {
+      const sides = [node.left, node.right];
+      if (sides.some((side) => isLiteral(side, false))) {
         return equality ? "then" : "else";
       }
-      if (sides.includes(ts.SyntaxKind.TrueKeyword)) {
+      if (sides.some((side) => isLiteral(side, true))) {
         return equality ? "else" : "then";
       }
     }
   }
-  if (
-    ts.isPropertyAccessExpression(node) &&
-    ["error", "isError"].includes(node.name.text)
-  ) {
+  if (["error", "isError"].includes(memberName(node) ?? "")) {
     return "then";
   }
   return "else";
 };
 
-const isEmptyFallback = (node: ts.Expression): boolean => {
+const isEmptyFallback = (node: Node): boolean => {
   const value = unwrap(node);
   return (
-    (ts.isStringLiteral(value) && value.text === "") ||
-    (ts.isArrayLiteralExpression(value) && value.elements.length === 0) ||
-    (ts.isObjectLiteralExpression(value) && value.properties.length === 0)
+    (isStringLiteral(value) && value.value === "") ||
+    (value.type === "ArrayExpression" && value.elements.length === 0) ||
+    (value.type === "ObjectExpression" && value.properties.length === 0)
   );
 };
 
@@ -667,33 +773,33 @@ const EXTRACTION_CALLS = new Set([
   "extractId",
 ]);
 
-const isMapLookup = (node: ts.CallExpression): boolean => {
+const isMapLookup = (node: CallExpression): boolean => {
+  const { callee } = node;
   if (
-    !ts.isPropertyAccessExpression(node.expression) ||
-    !["get", "has"].includes(node.expression.name.text)
+    callee.type !== "MemberExpression" ||
+    !["get", "has"].includes(memberName(callee) ?? "")
   ) {
     return false;
   }
-  const receiver = unwrap(node.expression.expression);
-  const value = ts.isIdentifier(receiver)
-    ? declarationValue(receiver)
-    : receiver;
+  const receiver = unwrap(callee.object);
+  const value =
+    receiver.type === "Identifier" ? declarationValue(receiver) : receiver;
   if (value === undefined) {
     return false;
   }
   const constructor = unwrap(value);
   return (
-    ts.isNewExpression(constructor) &&
-    callName(constructor.expression) === "Map"
+    constructor.type === "NewExpression" &&
+    callName(constructor.callee) === "Map"
   );
 };
 
-const isExtractionCall = (expression: ts.Expression): boolean => {
+const isExtractionCall = (expression: Node): boolean => {
   const node = unwrap(expression);
-  if (!ts.isCallExpression(node)) {
+  if (node.type !== "CallExpression") {
     return false;
   }
-  const name = callName(node.expression);
+  const name = callName(node.callee);
   return (
     isMapLookup(node) ||
     EXTRACTION_CALLS.has(name) ||
@@ -703,78 +809,69 @@ const isExtractionCall = (expression: ts.Expression): boolean => {
 
 // Predicate roots matter: calling a date parser somewhere in a year-selection
 // predicate does not turn selection into a failed-record rejection.
-const isFailureFilter = (expression: ts.Expression, depth = 0): boolean => {
+const isFailureFilter = (expression: Node, depth = 0): boolean => {
   if (depth >= LOCAL_HELPER_DEPTH) {
     return false;
   }
   const node = unwrap(expression);
-  if (
-    ts.isPrefixUnaryExpression(node) &&
-    node.operator === ts.SyntaxKind.ExclamationToken
-  ) {
-    const operand = unwrap(node.operand);
+  if (isNegation(node)) {
+    const operand = unwrap(node.argument);
     return (
       refersToFailure(operand) &&
-      ((ts.isPropertyAccessExpression(operand) &&
-        operand.name.text === "error") ||
-        (ts.isCallExpression(operand) &&
-          ERROR_PREDICATES.has(callName(operand.expression))))
+      (memberName(operand) === "error" ||
+        (operand.type === "CallExpression" &&
+          ERROR_PREDICATES.has(callName(operand.callee))))
     );
   }
-  if (ts.isIdentifier(node)) {
+  if (node.type === "Identifier") {
     const value = declarationValue(node);
     return value !== undefined && isFailureFilter(value, depth + 1);
   }
-  if (ts.isPropertyAccessExpression(node)) {
-    return node.name.text === "success" && refersToFailure(node.expression);
+  if (node.type === "MemberExpression" && memberName(node) !== undefined) {
+    return memberName(node) === "success" && refersToFailure(node.object);
   }
-  if (ts.isCallExpression(node)) {
-    const name = callName(node.expression);
+  if (node.type === "CallExpression") {
+    const name = callName(node.callee);
     if (name === "Boolean") {
       const argument = node.arguments.at(0);
       return argument !== undefined && isFailureFilter(argument, depth + 1);
     }
     return isExtractionCall(node) || name === "get";
   }
-  if (ts.isBinaryExpression(node)) {
-    if (node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
-      return (
-        isFailureFilter(node.left, depth + 1) ||
-        isFailureFilter(node.right, depth + 1)
-      );
-    }
+  if (node.type === "LogicalExpression" && node.operator === "&&") {
     return (
-      [
-        ts.SyntaxKind.ExclamationEqualsToken,
-        ts.SyntaxKind.ExclamationEqualsEqualsToken,
-      ].includes(node.operatorToken.kind) &&
-      ((isAbsent(node.right) && refersToFailure(node.left)) ||
-        (isAbsent(node.left) && refersToFailure(node.right)))
+      isFailureFilter(node.left, depth + 1) ||
+      isFailureFilter(node.right, depth + 1)
     );
   }
-  return false;
+  return (
+    node.type === "BinaryExpression" &&
+    (node.operator === "!=" || node.operator === "!==") &&
+    ((isAbsent(node.right) && refersToFailure(node.left)) ||
+      (isAbsent(node.left) && refersToFailure(node.right)))
+  );
 };
 
 type ItemSkipContext =
   | { type: "none" }
-  | { type: "loop" | "filter"; failureBranch: ts.Statement | undefined };
+  | { type: "loop" | "filter"; failureBranch: Node | undefined };
 
-const itemSkipContext = (node: ts.Node): ItemSkipContext => {
-  let child: ts.Node = node;
-  let failureBranch: ts.Statement | undefined;
+const itemSkipContext = (node: Node): ItemSkipContext => {
+  let child: Node = node;
+  let failureBranch: Node | undefined;
   for (
     let parent = parentNode(node);
     parent;
     child = parent, parent = parentNode(parent)
   ) {
-    if (ts.isCatchClause(parent)) {
+    if (parent.type === "CatchClause") {
       break;
     } // The catch clause owns this site.
-    if (ts.isIfStatement(parent) && refersToFailure(parent.expression)) {
+    if (parent.type === "IfStatement" && refersToFailure(parent.test)) {
       const arm =
-        failureArm(parent.expression) === "then"
-          ? parent.thenStatement
-          : parent.elseStatement;
+        failureArm(parent.test) === "then"
+          ? parent.consequent
+          : (parent.alternate ?? undefined);
       if (arm === child) {
         failureBranch ??= arm;
       }
@@ -782,13 +879,15 @@ const itemSkipContext = (node: ts.Node): ItemSkipContext => {
     if (isLoop(parent)) {
       return { type: "loop", failureBranch };
     }
-    if (ts.isFunctionLike(parent)) {
-      if (ts.isArrowFunction(parent) || ts.isFunctionExpression(parent)) {
-        const call = parent.parent;
+    if (isFunctionLike(parent)) {
+      if (
+        parent.type === "ArrowFunctionExpression" ||
+        parent.type === "FunctionExpression"
+      ) {
+        const call = parentNode(parent);
         if (
-          ts.isCallExpression(call) &&
-          ts.isPropertyAccessExpression(call.expression) &&
-          call.expression.name.text === "filter"
+          call?.type === "CallExpression" &&
+          memberName(call.callee) === "filter"
         ) {
           return { type: "filter", failureBranch };
         }
@@ -799,10 +898,10 @@ const itemSkipContext = (node: ts.Node): ItemSkipContext => {
   return { type: "none" };
 };
 
-const isUnsignalledItemSkip = (node: ts.Node): boolean => {
+const isUnsignalledItemSkip = (node: Node): boolean => {
   if (
-    !ts.isContinueStatement(node) &&
-    (!ts.isReturnStatement(node) || node.expression === undefined)
+    node.type !== "ContinueStatement" &&
+    (node.type !== "ReturnStatement" || node.argument === null)
   ) {
     return false;
   }
@@ -811,12 +910,12 @@ const isUnsignalledItemSkip = (node: ts.Node): boolean => {
     return false;
   }
   if (
-    ts.isReturnStatement(node) &&
+    node.type === "ReturnStatement" &&
     context.type === "filter" &&
-    node.expression &&
-    node.expression.kind !== ts.SyntaxKind.FalseKeyword &&
-    isFailureFilter(node.expression) &&
-    !hasSignal(node.expression)
+    node.argument !== null &&
+    !isLiteral(node.argument, false) &&
+    isFailureFilter(node.argument) &&
+    !hasSignal(node.argument)
   ) {
     return true;
   }
@@ -824,10 +923,11 @@ const isUnsignalledItemSkip = (node: ts.Node): boolean => {
     return false;
   }
   const dropsItem =
-    (ts.isContinueStatement(node) && context.type === "loop") ||
-    (ts.isReturnStatement(node) &&
+    (node.type === "ContinueStatement" && context.type === "loop") ||
+    (node.type === "ReturnStatement" &&
       context.type === "filter" &&
-      node.expression?.kind === ts.SyntaxKind.FalseKeyword);
+      node.argument !== null &&
+      isLiteral(node.argument, false));
   return dropsItem && flow(context.failureBranch).unsignalledExit;
 };
 
@@ -836,88 +936,97 @@ type SkipSite = {
   line: number;
 };
 
+const ALLOWANCE = /^\/\/\s*unsignalled-skip-allow:[\t ]*\S[^\r\n]*$/u;
+
+// The operator between a logical expression's operands, past any comments.
+const operatorStart = (
+  source: ParsedSource,
+  node: Node & { left: Node; right: Node; operator: string },
+): number => {
+  for (
+    let index = source.sourceText.indexOf(node.operator, node.left.end);
+    index !== -1 && index < node.right.start;
+    index = source.sourceText.indexOf(node.operator, index + 1)
+  ) {
+    if (
+      !source.comments.some(
+        (comment) => comment.start <= index && index < comment.end,
+      )
+    ) {
+      return index;
+    }
+  }
+  return node.start;
+};
+
 export const unsignalledSkipSites = (
   content: string,
   { file }: { file: string },
 ): SkipSite[] => {
-  const source = parseSource({ fileName: file, text: content });
-  const allowanceLines = new Set<number>();
-  const collectComments = (ranges: readonly ts.CommentRange[] | undefined) => {
-    for (const range of ranges ?? []) {
-      if (
-        range.kind === ts.SyntaxKind.SingleLineCommentTrivia &&
-        /^\/\/\s*unsignalled-skip-allow:[\t ]*\S[^\r\n]*$/u.test(
-          content.slice(range.pos, range.end),
-        )
-      ) {
-        allowanceLines.add(
-          source.getLineAndCharacterOfPosition(range.pos).line,
-        );
-      }
-    }
-  };
-  const collect = (node: ts.Node) => {
-    collectComments(ts.getLeadingCommentRanges(content, node.pos));
-    collectComments(ts.getTrailingCommentRanges(content, node.end));
-    for (const child of node.getChildren(source)) {
-      collect(child);
-    }
-  };
-  collect(source);
-  const siteLine = (node: ts.Node): number => {
+  const source = parseSyntax({ fileName: file, text: content });
+  indexSource(source);
+  // 0-based lines, as the sites are charged.
+  const lineOf = (offset: number) => source.locate(offset).line - 1;
+  const allowanceLines = new Set(
+    source.comments
+      .filter(
+        (comment) =>
+          comment.type === "Line" &&
+          ALLOWANCE.test(content.slice(comment.start, comment.end)),
+      )
+      .map((comment) => lineOf(comment.start)),
+  );
+  const siteLine = (node: Node): number => {
     if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
+      node.type === "CallExpression" &&
+      memberName(node.callee) !== undefined
     ) {
-      return source.getLineAndCharacterOfPosition(
-        node.expression.name.getStart(),
-      ).line;
+      return node.callee.type === "MemberExpression"
+        ? lineOf(node.callee.property.start)
+        : lineOf(node.start);
     }
-    const location = ts.isBinaryExpression(node) ? node.operatorToken : node;
-    return source.getLineAndCharacterOfPosition(location.getStart()).line;
+    return node.type === "LogicalExpression"
+      ? lineOf(operatorStart(source, node))
+      : lineOf(node.start);
   };
   const sites: SkipSite[] = [];
-  const charge = (node: ts.Node, shape: SkipSite["shape"]) => {
+  const charge = (node: Node, shape: SkipSite["shape"]) => {
     const line = siteLine(node);
     if (!allowanceLines.has(line)) {
       sites.push({ shape, line: line + 1 });
     }
   };
-  const visit = (node: ts.Node) => {
+  walk(source.program, (node) => {
     if (
-      ts.isBinaryExpression(node) &&
-      [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(
-        node.operatorToken.kind,
-      ) &&
+      node.type === "LogicalExpression" &&
+      (node.operator === "??" || node.operator === "||") &&
       isEmptyFallback(node.right) &&
       isExtractionCall(node.left)
     ) {
       charge(node, "empty-extraction-fallback");
     }
-    if (ts.isCatchClause(node) && dropsWithoutSignal(node.block)) {
+    if (node.type === "CatchClause" && dropsWithoutSignal(node.body)) {
       charge(node, "catch-outcome");
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression)
-    ) {
+    const method =
+      node.type === "CallExpression" ? memberName(node.callee) : undefined;
+    if (node.type === "CallExpression" && method !== undefined) {
       const argument = node.arguments.at(0);
       const callback = argument === undefined ? undefined : unwrap(argument);
       if (
-        callback &&
-        (ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+        callback?.type === "ArrowFunctionExpression" ||
+        callback?.type === "FunctionExpression"
       ) {
-        if (
-          node.expression.name.text === "catch" &&
-          dropsWithoutSignal(callback.body)
-        ) {
+        const { body } = callback;
+        if (method === "catch" && body !== null && dropsWithoutSignal(body)) {
           charge(node, "catch-outcome");
         }
         if (
-          node.expression.name.text === "filter" &&
-          !ts.isBlock(callback.body) &&
-          isFailureFilter(callback.body) &&
-          !hasSignal(callback.body)
+          method === "filter" &&
+          body !== null &&
+          body.type !== "BlockStatement" &&
+          isFailureFilter(body) &&
+          !hasSignal(body)
         ) {
           charge(node, "item-skip");
         }
@@ -926,9 +1035,7 @@ export const unsignalledSkipSites = (
     if (isUnsignalledItemSkip(node)) {
       charge(node, "item-skip");
     }
-    node.forEachChild(visit);
-  };
-  visit(source);
+  });
   return sites;
 };
 

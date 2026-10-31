@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/legal-search/corpus-reads";
 import {
   parsePersistedCorpusAst,
+  readCorpusForRecovery,
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import type { EmptyAst } from "@/api/lib/legal-search/document-types";
@@ -207,7 +208,7 @@ export type ReadVersionAstOptions = {
  * result. Never call this inside a database transaction, because object
  * storage is a network hop that must not hold one open.
  */
-export const readVersionAst = async ({
+const readVersionAstPayload = async ({
   row,
   legislationDb,
   step,
@@ -240,6 +241,15 @@ export const readVersionAst = async ({
     }
   }
 };
+
+/** Invalid stored structure leaves the version's independent text readable. */
+export const readVersionAst = async (options: ReadVersionAstOptions) =>
+  (
+    await readCorpusForRecovery({
+      documentId: options.row.id,
+      read: async () => await readVersionAstPayload(options),
+    })
+  ).unwrapOr(null);
 
 /** One version's parsed blocks; see {@link readVersionAst}. */
 export const readVersionBlocks = async (

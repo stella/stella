@@ -98,7 +98,7 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // internal-only public reads with no MCP tool.
   "apps/api/src/handlers/public-knowledge/endpoints.ts": 6,
   "apps/api/src/handlers/search/routes.ts": 5,
-  "apps/api/src/handlers/workspaces/routes.ts": 4,
+  "apps/api/src/handlers/workspaces/routes.ts": 3,
 };
 
 /**

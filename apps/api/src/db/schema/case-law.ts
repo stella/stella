@@ -2750,9 +2750,9 @@ export const caseLawSitemapShards = p.pgTable(
  * `20261029140900_case_law_sitemap_changes`): the month a decision left and
  * the month it entered. A month of `*` asks for a whole country, and a
  * country of `*` for every country (a source's redistribution changed). The
- * refresh recounts each logged month and deletes exactly the rows its count's
- * own snapshot saw, so a row is consumed only by a count that includes its
- * change. One row per month per transaction, so a bulk write logs each month
+ * refresh persists a recount's snapshot xmin and retires older transactions
+ * in bounded batches, so a row is consumed only by a count that includes it.
+ * One row per month per transaction, so a bulk write logs each month
  * once. A queue, not a watermark: ids order nothing.
  */
 export const caseLawSitemapChanges = p.pgTable(
@@ -3955,6 +3955,60 @@ export const caseLawDecisionCitationStatsState = p.pgTable(
       for: "select",
       to: stellaPublicLawReader,
       using: sql`true`,
+    }),
+  ],
+);
+
+const SITEMAP_DRAIN_PHASES = ["draining", "awaiting_visibility"] as const;
+
+/** A published recount's safe transaction boundary, retained while its log rows drain. */
+export const caseLawSitemapDrainProgress = p.pgTable(
+  "case_law_sitemap_drain_progress",
+  {
+    country: p.text().notNull(),
+    year: p.text().notNull(),
+    month: p.text().notNull(),
+    coveredBefore: xid8("covered_before").notNull(),
+    phase: p.text({ enum: SITEMAP_DRAIN_PHASES }).notNull().default("draining"),
+    retiredThrough: xid8("retired_through")
+      .notNull()
+      .default(sql`'0'::xid8`),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.country, t.year, t.month] }),
+    p.check(
+      "case_law_sitemap_drain_phase_check",
+      sql`${t.phase} IN (${sql.join(
+        SITEMAP_DRAIN_PHASES.map((phase) => sql`${phase}`),
+        sql`, `,
+      )})`,
+    ),
+    p.pgPolicy("case_law_sitemap_drain_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
+    }),
+  ],
+);
+
+/** Singleton strict-lower cursor for bounded sitemap refresh discovery. */
+export const caseLawSitemapRefreshCursor = p.pgTable(
+  "case_law_sitemap_refresh_cursor",
+  {
+    slot: p.integer().notNull().default(0),
+    lastCountry: p.text("last_country").notNull().default(""),
+    lastYear: p.text("last_year").notNull().default(""),
+    lastMonth: p.text("last_month").notNull().default(""),
+  },
+  (t) => [
+    p.primaryKey({ columns: [t.slot] }),
+    p.check("case_law_sitemap_refresh_cursor_singleton", sql`${t.slot} = 0`),
+    p.pgPolicy("case_law_sitemap_refresh_cursor_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`true`,
+      withCheck: sql`true`,
     }),
   ],
 );
