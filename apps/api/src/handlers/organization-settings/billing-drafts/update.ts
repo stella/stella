@@ -254,10 +254,9 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         await withAggregateLock({
-          aggregate: "organization",
-          id: organizationId,
+          aggregate: "billingDraftSettings",
+          id: { organizationId },
           tx,
-          mode: "update",
         });
         if (
           body.resourceIds !== undefined &&
@@ -440,7 +439,7 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
 
 declareAggregateMutation(updateBillingDraftConfiguration, {
   type: "aggregate",
-  aggregates: ["organization"],
+  aggregates: ["billingDraftSettings"],
 });
 
 export default updateBillingDraftConfiguration;
