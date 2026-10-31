@@ -521,6 +521,7 @@ type ChatSendLifecycleOptions = {
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
   /** The boundary mode the turn's settlement is counted under. */
   mode: ChatTurnObservation["mode"];
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -1123,6 +1124,7 @@ export class ChatSendLifecycle {
       }
       if (this.pendingSideEffects !== undefined) {
         const rollbackResult = await this.options.rollbackSideEffects({
+          organizationId: this.options.organizationId,
           recordAuditEvent: this.options.recordAuditEvent,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
@@ -2574,6 +2576,7 @@ export const createSendMessage = (
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
+        organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
         scopedDb,

@@ -74,12 +74,10 @@ describe("send-message side-effect rollback", () => {
         where,
       }),
       select: selectNoChatMessages,
-      query: {
-        chatThreads: { findFirst: async () => ({ organizationId }) },
-      },
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
@@ -110,12 +108,10 @@ describe("send-message side-effect rollback", () => {
         where,
       }),
       select: selectNoChatMessages,
-      query: {
-        chatThreads: { findFirst: async () => ({ organizationId }) },
-      },
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
@@ -136,6 +132,7 @@ describe("send-message side-effect rollback", () => {
     const { safeDb } = createScopedDbMock({ delete: deleteThread });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -174,6 +171,7 @@ describe("send-message side-effect rollback", () => {
     fake.put(bucket, uploadedFile.s3Key, "attachment body");
 
     const result = await rollbackUnpersistedChatSideEffects({
+      organizationId,
       recordAuditEvent,
       safeDb,
       threadId,

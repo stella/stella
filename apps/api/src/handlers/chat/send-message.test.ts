@@ -555,6 +555,7 @@ describe("send message disconnect handling", () => {
         return Result.ok("owned");
       });
       const lifecycle = new ChatSendLifecycle({
+        organizationId,
         ownership,
         mode: "raw",
         indexThread: upsertChatThreadSearchDocumentMock,

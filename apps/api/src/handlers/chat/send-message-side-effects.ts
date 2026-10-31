@@ -69,6 +69,7 @@ export const uploadMessageFilesWithRollback = async ({
   }
 
   const rollbackResult = await rollbackUnpersistedChatSideEffects({
+    organizationId,
     recordAuditEvent,
     safeDb,
     threadId,
@@ -93,6 +94,7 @@ export const uploadMessageFilesWithRollback = async ({
 
 export const rollbackUnpersistedChatSideEffects = async ({
   checkHold = requireNoHold,
+  organizationId,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -101,6 +103,8 @@ export const rollbackUnpersistedChatSideEffects = async ({
   userId,
 }: {
   checkHold?: typeof requireNoHold;
+  /** The session's organization, which owns every thread it created. */
+  organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -127,20 +131,9 @@ export const rollbackUnpersistedChatSideEffects = async ({
   }
 
   const threadRollbackResult = await safeDb(async (tx) => {
-    const thread = await tx.query.chatThreads.findFirst({
-      where: {
-        id: { eq: threadId },
-        userId: { eq: userId },
-        rollbackToken: { eq: threadState.rollbackToken },
-      },
-      columns: { organizationId: true },
-    });
-    if (thread === undefined) {
-      return Result.ok();
-    }
     const hold = await checkHold({
       tx,
-      organizationId: thread.organizationId,
+      organizationId,
       target: { type: "thread", threadId },
     });
     if (hold.isErr()) {

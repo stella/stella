@@ -794,6 +794,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           });
 
           const rollback = await rollbackUnpersistedChatSideEffects({
+            organizationId,
             recordAuditEvent,
             safeDb: createSafeDb(
               markRlsDatabase(db),
