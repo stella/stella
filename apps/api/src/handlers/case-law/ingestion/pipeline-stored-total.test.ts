@@ -13,6 +13,7 @@ import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline
 import { createSafeId } from "@/api/lib/branded-types";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -56,7 +57,11 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
       panic("Expected source ingestion lease");
     }
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: [], nextCursor: null });
+      Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
     const budgetMs = 300_000;
     const startedAt = performance.now();
     let admissions = 0;

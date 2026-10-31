@@ -22,7 +22,8 @@
     "toolUsed": "Użyto: {tool}",
     "threadTitle": "Rozmowa",
     "threadLoadFailed": "Nie udało się wczytać tej rozmowy.",
-    "threadEmptyDescription": "Ta rozmowa nie ma jeszcze wiadomości.",
+    "greeting": "Nad czym chcesz pracować?",
+    "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "sections": {
       "today": "Dzisiaj",
       "yesterday": "Wczoraj",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Ta odpowiedź wymaga Twojej decyzji. Dokończ ją w stelli w przeglądarce.",
     "answerFailed": "Nie udało się dokończyć odpowiedzi.",
     "composerMenu": "Otwórz menu załączników i narzędzi",
+    "attachFile": "Załącz plik",
+    "attachment": "Załącznik",
+    "fileTooLarge": "Plik przekracza limit {maxSize}",
+    "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
+    "unsupportedFileType": "Nieobsługiwany typ pliku",
+    "uploadFailed": "Przetwarzanie pliku nie powiodło się",
+    "scanDocument": "Zeskanuj dokument",
+    "removeAttachment": "Usuń {name}",
+    "attachmentReading": "Przygotowywanie…",
+    "attachmentUploading": "Przesyłanie…",
+    "pickFailed": "Nie udało się otworzyć wyboru plików. Spróbuj ponownie.",
+    "sendFileRefused": "Nie udało się wysłać pliku, więc wiadomość nie została wysłana. Usuń plik i spróbuj ponownie.",
+    "sendFileNotAnonymizable": "Ta rozmowa jest anonimizowana, a stella nie mogła zanonimizować jednego z plików, więc nic nie wysłano. Usuń plik i spróbuj ponownie.",
     "pickTitle": "Wybierz rozmowę",
     "pickDescription": "Wybierz wątek z listy lub rozpocznij nowy przyciskiem +."
   },
@@ -75,7 +89,14 @@
     "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
     "pickTitle": "Wybierz zadanie",
     "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
-    "openMatter": "Otwórz sprawę"
+    "openMatter": "Otwórz sprawę",
+    "assignedTo": "Przypisano do",
+    "nobody": "Nieprzypisane",
+    "assign": "Przypisz",
+    "doneAssigning": "Gotowe",
+    "someone": "Ktoś",
+    "membersFailed": "Nie udało się wczytać członków sprawy.",
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",
@@ -119,7 +140,9 @@
     },
     "add": "Dodaj",
     "scanDocument": "Zeskanuj dokument",
-    "newTask": "Nowe zadanie"
+    "newTask": "Nowe zadanie",
+    "uploadDocument": "Prześlij dokument",
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
   },
   "entity": {
     "type": "Typ",
@@ -183,6 +206,7 @@
     "headnote": "Teza",
     "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
     "openSource": "Otwórz źródło oryginalne",
+    "openFailed": "Nie udało się otworzyć linku.",
     "loadFailed": "Nie udało się wczytać orzecznictwa.",
     "share": "Udostępnij"
   },

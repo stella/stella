@@ -30,12 +30,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   citationKeyOf,
   decisionIdentifiersFromStoredMetadata,
@@ -58,6 +52,12 @@ import {
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -139,14 +139,16 @@ const ingest = async (
   input: IngestionResult,
 ) => {
   order += 1n;
-  const outcome = await processDecision({
-    input,
-    observationOrder: order,
-    sourceId,
-    scopedDb,
-    observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
-    corpus: postgresOnly,
-  });
+  const outcome = (
+    await processDecision({
+      input,
+      observationOrder: order,
+      sourceId,
+      scopedDb,
+      observedAt: new Date(Date.UTC(2026, 8, 26, 12, 0, Number(order))),
+      corpus: postgresOnly,
+    })
+  ).unwrap();
   expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
 };
 
