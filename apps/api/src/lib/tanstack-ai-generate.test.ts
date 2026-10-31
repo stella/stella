@@ -51,6 +51,7 @@ import {
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
+  DispatchRefusedError,
   generateTanStackObjectForTask,
   generateTanStackTextForTask,
   mergeGenerationOptions,
@@ -375,6 +376,20 @@ const testModel = {
 } as ResolvedTanStackTextModel;
 
 const resolveTextModel = () => testModel;
+
+/** A dispatch check that allows its first `allowed` requests and refuses
+ * the next one, recording how many requests had left at each call. */
+const refusingAfter = (allowed: number) => {
+  const refusal = new Error("Consent withdrawn");
+  const sentAtCheck: number[] = [];
+  const check = async () => {
+    sentAtCheck.push(providerRequests.length);
+    return await Promise.resolve(
+      sentAtCheck.length > allowed ? Result.err(refusal) : Result.ok(undefined),
+    );
+  };
+  return { check, refusal, sentAtCheck };
+};
 const generateTextForTestModel = async (
   options: Parameters<typeof generateTanStackTextForTask>[0],
 ) => await generateTanStackTextForTask({ ...options, resolveTextModel });
@@ -1199,6 +1214,40 @@ describe("TanStack AI structured output generation", () => {
     expect(providerRequests[1]?.modelOptions).toMatchObject({
       service_tier: "default",
     });
+  });
+
+  test("a dispatch check refusing the standard-tier retry sends nothing more and keeps its own error", async () => {
+    const apiError = Object.assign(new Error("OpenAI flex tier unavailable"), {
+      isRetryable: true,
+      statusCode: 429,
+    });
+    queueRun(throwingRun(apiError));
+    queueRun(objectRun({ answer: "ok" }));
+    const gate = refusingAfter(1);
+
+    const caught = await generateObjectForTestModel({
+      caching: noCaching,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      task: "chat",
+      serviceTier: "flex",
+      tenantWorkspaceIds: [],
+      beforeEachDispatch: gate.check,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1]);
+    expect(providerRequests).toHaveLength(1);
   });
 
   test("rejects a cancelled object run as a cancelled generation", async () => {
@@ -2667,14 +2716,13 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     queueRun(objectRun({ answer: "ok", page: 3 }));
     let checks = 0;
 
+    const refusal = new Error("Consent withdrawn");
     const caught = await generateObjectForTestModel({
       ...objectOptions,
       beforeEachDispatch: async () => {
         checks += 1;
         return await Promise.resolve(
-          checks > 1
-            ? Result.err(new Error("Consent withdrawn"))
-            : Result.ok(undefined),
+          checks > 1 ? Result.err(refusal) : Result.ok(undefined),
         );
       },
     }).then(
@@ -2682,9 +2730,12 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
       (error: unknown) => error,
     );
 
-    expect(caught).toBeInstanceOf(Error);
+    // The caller's own refusal, untouched, and no repair outcome recorded.
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal });
     expect(checks).toBe(2);
     expect(providerRequests).toHaveLength(1);
+    expect(outcomeLogs()).toEqual([]);
   });
 
   test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
@@ -2964,6 +3015,57 @@ describe("an unrepaired structured answer falls back once within the approved se
     expect(providerRequests[3]?.messages).toEqual(
       providerRequests[0]?.messages,
     );
+  });
+
+  test("a dispatch check runs before the fallback model's request, and its refusal sends nothing and records no fallback", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(2);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(caught).toMatchObject({ refusal: gate.refusal });
+    expect(gate.sentAtCheck).toEqual([0, 1, 2]);
+    expect(providerRequests).toHaveLength(2);
+    expect(fallbackOutcome()).toBeUndefined();
+  });
+
+  test("a dispatch check runs before a retry after the provider's delay, and its refusal sends nothing", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: "3" }));
+    queueRun({
+      type: "throw",
+      error: Object.assign(
+        new Error("Rate limit exceeded. Please retry in 1ms."),
+        {
+          status: 429,
+          headers: new Headers({ "retry-after-ms": "1" }),
+        },
+      ),
+    });
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const gate = refusingAfter(3);
+
+    const caught = await rejectionOf(
+      generateTanStackObjectForTask({
+        ...options,
+        resolveTextModel: resolver,
+        beforeEachDispatch: gate.check,
+      }),
+    );
+
+    expect(caught).toBeInstanceOf(DispatchRefusedError);
+    expect(gate.sentAtCheck).toEqual([0, 1, 2, 3]);
+    expect(providerRequests).toHaveLength(3);
+    expect(fallbackOutcome()).toBeUndefined();
   });
 
   test("a repair rejected as invalid structured output still reaches the approved fallback", async () => {
