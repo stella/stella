@@ -94,7 +94,7 @@ export const executeAdmissionCommand = async ({
         ? cause
         : new ActionAdmissionError({
             message: "Action admission is unavailable",
-            reason: "unavailable",
+            reason: "store_unavailable",
             cause,
           }),
     );
@@ -234,6 +234,7 @@ export const withAcquiredConcurrencyLease = async <T>({
   let leaseDeadline = initialAttemptAt + leaseMs;
   const controller = new AbortController();
   let leaseState: "active" | "degraded" | "lost" = "active";
+  let renewalFailure: ActionAdmissionError | null = null;
   let stopped = false;
   let cancelScheduled: () => void = () => undefined;
   let renewal: Promise<void> | null = null;
@@ -249,10 +250,12 @@ export const withAcquiredConcurrencyLease = async <T>({
       }
       return;
     }
-    const leaseLost = new ActionAdmissionError({
-      message: "Action lease was lost",
-      reason: "unavailable",
-    });
+    const leaseLost =
+      renewalFailure ??
+      new ActionAdmissionError({
+        message: "Action lease was lost",
+        reason: "lease_lost",
+      });
     leaseState = "lost";
     cancelScheduled();
     if (availability.type === "best_effort") {
@@ -293,6 +296,13 @@ export const withAcquiredConcurrencyLease = async <T>({
               if (availability.type === "best_effort") {
                 degrade({ phase: "renewal", reason: "unavailable" });
               } else {
+                renewalFailure = ActionAdmissionError.is(outcome.error)
+                  ? outcome.error
+                  : new ActionAdmissionError({
+                      message: "Action admission is unavailable",
+                      reason: "store_unavailable",
+                      cause: outcome.error,
+                    });
                 observeFailure(outcome.error, { sink: RENEW_FAILURE });
                 loseLease();
               }
@@ -315,6 +325,7 @@ export const withAcquiredConcurrencyLease = async <T>({
     const result = await execute(RENEW_SCRIPT, [leaseId, String(leaseMs)]);
     if (Result.isOk(result)) {
       if (result.value === 0) {
+        renewalFailure = null;
         loseLease();
         return;
       }
@@ -322,10 +333,15 @@ export const withAcquiredConcurrencyLease = async <T>({
         if (availability.type === "best_effort") {
           degrade({ phase: "renewal", reason: "invalid_reply" });
         } else {
+          renewalFailure = new ActionAdmissionError({
+            message: "Action admission returned an invalid response",
+            reason: "store_unavailable",
+          });
           loseLease();
         }
         return;
       }
+      renewalFailure = null;
       leaseDeadline = attemptAt + leaseMs;
       scheduleRenewal(Math.max(1, Math.floor(leaseMs / 2)));
       return;
@@ -334,6 +350,7 @@ export const withAcquiredConcurrencyLease = async <T>({
       degrade({ phase: "renewal", reason: "unavailable" });
       return;
     }
+    renewalFailure = result.error;
     observeFailure(result.error, { sink: RENEW_FAILURE });
     const remaining = leaseDeadline - timing.now();
     if (remaining <= 0) {

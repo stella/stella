@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useDeferredValue, useState } from "react";
 
 import {
   useQuery,
@@ -50,6 +50,7 @@ import {
 import { useDecisionColumnPreferences } from "@/features/case-law/decision-column-preferences";
 import { openDecisionMatch } from "@/features/case-law/open-decision-match";
 import { latestDecisionsOptions } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { StatuteSignalText } from "@/features/statutes/components/statute-signal-text";
 import { openStatuteMatch } from "@/features/statutes/open-statute-match";
@@ -57,13 +58,12 @@ import { legislationShelfOptions } from "@/features/statutes/queries/statutes";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale, getTranslator } from "@/i18n/i18n-store";
-import { useMessageLocale } from "@/i18n/message-locale";
 import {
   caseLawCountryName,
   resolveCaseLawRouteCountry,
 } from "@/lib/case-law-route";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
 import {
   createLegalCollectionJsonLd,
@@ -262,7 +262,7 @@ const LawHomeGreeting = ({ children }: { children: string }) => (
 function LawHome() {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useMessageLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const routeNavigate = Route.useNavigate();
@@ -275,7 +275,7 @@ function LawHome() {
     if (!decisionNotFound) {
       return;
     }
-    notifyUserError(undefined, t("caseLaw.decisionNotFound"));
+    notifyUserProblem(t("caseLaw.decisionNotFound"));
     detached(
       routeNavigate({
         replace: true,
@@ -312,7 +312,13 @@ function LawHome() {
       ? "all"
       : requestedScope;
 
-  const { data: latest } = useSuspenseQuery(latestDecisionsOptions(scope));
+  // Deferred: the reader's practice languages arrive after the first paint,
+  // and the shelf already drawn stays while it is read again in them, rather
+  // than suspending back to its skeleton.
+  const shelfLanguages = useDeferredValue(readingLanguages);
+  const { data: latest } = useSuspenseQuery(
+    latestDecisionsOptions(scope, shelfLanguages),
+  );
   const shelfQuery = useQuery({
     ...legislationShelfOptions(scope),
     enabled: statuteCountry !== null,
@@ -358,7 +364,7 @@ function LawHome() {
       navigate,
       queryClient,
       search: { country: countryParam, q: trimmed },
-      uiLocale,
+      readingLanguages,
     });
     if (opened) {
       return;

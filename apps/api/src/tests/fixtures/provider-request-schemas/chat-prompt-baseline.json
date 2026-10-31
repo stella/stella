@@ -44,6 +44,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 32670
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33274
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33477
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33232
       }
     ],
     "anthropic/extended": [
@@ -90,6 +102,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 33160
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33765
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33967
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33722
       }
     ],
     "bedrock/default": [
@@ -132,6 +156,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33078
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33523
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33732
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33487
       }
     ],
     "bedrock/extended": [
@@ -174,6 +210,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33567
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34012
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34220
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33975
       }
     ],
     "google/default": [
@@ -212,6 +260,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32188
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 32639
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 32841
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 32597
       }
     ],
     "google/extended": [
@@ -246,6 +306,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 32666
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 33117
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 33320
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 33075
       }
     ],
     "mistral/default": [
@@ -288,6 +360,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34330
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34800
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35026
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34781
       }
     ],
     "mistral/extended": [
@@ -330,6 +414,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34857
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35327
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35552
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35307
       }
     ],
     "openai/default": [
@@ -372,6 +468,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 33933
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34387
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34608
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34363
       }
     ],
     "openai/extended": [
@@ -414,6 +522,18 @@
       {
         "reason": "Code-mode prompt removes duplicate eager-tool descriptions and the long example while retaining generated signatures, discovery and sandbox guidance.",
         "tokens": 34449
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34903
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35123
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34878
       }
     ],
     "openrouter-anthropic/default": [
@@ -456,6 +576,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 34013
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
       }
     ],
     "openrouter-anthropic/extended": [
@@ -498,6 +630,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 34525
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
       }
     ],
     "openrouter/default": [
@@ -540,6 +684,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 34013
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 34632
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 34854
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 34609
       }
     ],
     "openrouter/extended": [
@@ -582,6 +738,18 @@
       {
         "reason": "Lock in connect-time MCP prompt savings",
         "tokens": 34525
+      },
+      {
+        "reason": "Connect an installed connector through the consent card without exposing credentials",
+        "tokens": 35145
+      },
+      {
+        "reason": "Paged connector discovery expands the bounded optional prompt catalog",
+        "tokens": 35365
+      },
+      {
+        "reason": "Paged connector discovery keeps optional catalog details out of the stable prompt prefix",
+        "tokens": 35120
       }
     ]
   },

@@ -169,6 +169,66 @@ describe("which routes an API access token opens", () => {
     ).toEqual({ admitted: true });
   });
 
+  test("an upload opens at its domain scope, its folder steps never", () => {
+    for (const route of [
+      "/v1/uploads/:workspaceId/presign",
+      "/v1/uploads/:workspaceId/:uploadId/finalize",
+      "/v1/uploads/:workspaceId/:uploadId/abort",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:read", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const route of [
+      "/v1/uploads/:workspaceId/entity-create/preflight",
+      "/v1/uploads/:workspaceId/entity-create/tree",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
+  test("a file attached to a chat message goes up with it, at the chat scope only", () => {
+    const send = { method: "POST", route: "/v1/chat" } as const;
+    expect(
+      admitApiAccessTokenRoute({ ...send, scopes: MOBILE_SCOPES }),
+    ).toEqual({ admitted: true });
+    expect(
+      admitApiAccessTokenRoute({
+        ...send,
+        scopes: MOBILE_SCOPES.filter((scope) => scope !== "stella:chat"),
+      }),
+    ).toEqual({ admitted: false, reason: "scope" });
+    // Attaching opens no chat route beyond the conversation the app holds.
+    expect(
+      Object.keys(API_OAUTH_ROUTES).filter((key) => key.includes(" /v1/chat")),
+    ).toEqual([
+      "GET /v1/chat/threads",
+      "GET /v1/chat/threads/:threadId/messages",
+      "GET /v1/chat/threads/:threadId/messages/older",
+      "POST /v1/chat",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/resume",
+      "GET /v1/chat/threads/:threadId/turns/:turnId/join",
+      "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
+    ]);
+  });
+
   test("a request no route matched is refused", () => {
     expect(
       admitApiAccessTokenRoute({
@@ -198,6 +258,9 @@ describe("which routes an API access token opens", () => {
             "/v1/entities/:workspaceId/upload",
             "/v1/entities/:workspaceId/folio-collab-rooms/publish-version",
             "/v1/files/:workspaceId/stamped/:fieldId",
+            "/v1/uploads/:workspaceId/entity-create/preflight",
+            "/v1/uploads/:workspaceId/entity-create/tree",
+            "/v1/properties/:workspaceId/property/:propertyId",
             "/v1/me/oauth-connections/:consentId",
             "/v1/contacts",
           ),

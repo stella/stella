@@ -10,6 +10,7 @@ import {
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
+import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
 import { isCountryCode } from "@stll/country-codes";
 
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
@@ -70,6 +71,7 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { externalRefSchema } from "@/api/lib/imports/external-ref";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -666,30 +668,12 @@ const handleListContactsTool: TypedMcpToolHandler<
 
 // --- save_contact -------------------------------------------------------
 
-const birthYearSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1000), v.maxValue(9999));
-const birthMonthSchema = () =>
-  v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(12));
-
 /**
  * A date of birth at the precision known, as contacts store it: a year, a
  * year and month, or a full date. Shared by save_contact and
  * check_counterparty, so a date read back from a contact is accepted as is.
  */
-const dateOfBirthInputSchema = v.variant("precision", [
-  v.strictObject({ precision: v.literal("year"), year: birthYearSchema() }),
-  v.strictObject({
-    precision: v.literal("month"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-  }),
-  v.strictObject({
-    precision: v.literal("day"),
-    year: birthYearSchema(),
-    month: birthMonthSchema(),
-    day: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(31)),
-  }),
-]);
+const dateOfBirthInputSchema = contactBirthDateSchema;
 
 type ContactNameParts = {
   display_name?: string | undefined;
@@ -731,67 +715,66 @@ export const deriveContactDisplayName = ({
 const saveContactArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
-      contact_id: v.optional(
-        uuidInputSchema("Contact ID to update; omit to create"),
-      ),
+      contact_id: v.optional(uuidInputSchema("Update ID; omit to create")),
       type: v.optional(
-        v.pipe(
-          v.picklist(CONTACT_TYPES),
-          v.description("Contact kind; required when creating"),
-        ),
+        v.pipe(v.picklist(CONTACT_TYPES), v.description("Create kind")),
       ),
       display_name: v.optional(
         v.pipe(
           v.string(),
           v.minLength(1),
           v.maxLength(512),
-          v.description(
-            "Display name; when creating it defaults to first + last name " +
-              "(person) or organization name (organization); non-empty when " +
-              "updating",
-          ),
+          v.description("Defaults to person or organization name"),
         ),
       ),
       first_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(256))),
-          v.description("First name; pass null to clear"),
+          v.description("Given name"),
         ),
       ),
       last_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(256))),
-          v.description("Last name; pass null to clear"),
+          v.description("Family name"),
         ),
       ),
       organization_name: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(512))),
-          v.description("Organization name; pass null to clear"),
+          v.description("Organization"),
         ),
       ),
-      notes: v.optional(
-        v.pipe(
-          v.nullable(v.string()),
-          v.description("Free-text notes; pass null to clear"),
-        ),
-      ),
+      notes: v.optional(v.pipe(v.nullable(v.string()), v.description("Notes"))),
       date_of_birth: v.optional(
         v.pipe(
           v.nullable(dateOfBirthInputSchema),
-          v.description(
-            "Date of birth with known year, month, or day precision; pass null to clear",
-          ),
+          v.description("Birth year, month or date"),
         ),
       ),
       nationality_codes: v.optional(
         v.pipe(
           v.array(countryInputSchema("Nationality country")),
           v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
-          v.description("Nationality countries; pass [] to clear"),
+          v.description("Countries; [] clears"),
+        ),
+      ),
+      external: v.optional(
+        v.pipe(
+          externalRefSchema,
+          v.description("Create only; unique source/id."),
         ),
       ),
     }),
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["external"]],
+        ({ contact_id, external }) =>
+          contact_id === undefined || external === undefined,
+        "external can only be set when creating a contact",
+      ),
+      ["external"],
+    ),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
       v.partialCheck(
@@ -852,7 +835,9 @@ const handleSaveContactTool: TypedMcpToolHandler<
 > = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
+    return validationErrorResult(parsed.issues, undefined, {
+      date_of_birth: "dateOfBirth",
+    });
   }
   const input = parsed.output;
 
@@ -906,6 +891,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.nationality_codes === undefined
             ? {}
             : { nationalityCodes: input.nationality_codes }),
+          ...(input.external === undefined ? {} : { external: input.external }),
         },
       }),
     );
@@ -2475,7 +2461,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "'active' to archive or unarchive it. Returns the matter ID.",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2553,11 +2539,8 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a contact (a person or organization in the address " +
-      "book, shared across the whole organization). Omit contact_id to create " +
-      "(type required, plus display_name or the name parts it is derived " +
-      "from); pass contact_id to update. String fields other than " +
-      "display_name accept null to clear them.",
+      "Save a contact in the organization address book. Set contact_id to update; otherwise " +
+      "type and display_name or name parts create it. Null clears strings except display_name.",
     inputSchema: saveContactArgsSchema,
     inputNormalization: {
       "nationality_codes[]": countryNormalization({
@@ -2566,7 +2549,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     jsonSchemaProjectionWaiver: {
-      ignoreActions: ["partial_check"],
+      ignoreActions: ["check", "partial_check"],
       reason:
         "The cross-field create/update mode rules stay authoritative in the runtime schema; a JSON Schema client cannot express them.",
     },
@@ -2666,6 +2649,11 @@ export const MATTER_TOOL_DEFINITIONS = [
         spelling: "alpha-2",
         tool: "check_counterparty",
       }),
+    },
+    jsonSchemaProjectionWaiver: {
+      ignoreActions: ["check"],
+      reason:
+        "Birth-date chronology is enforced at runtime because JSON Schema cannot compare a partial date with today.",
     },
     access: "read",
     permissions: { type: "all", permissions: { workspace: ["read"] } },

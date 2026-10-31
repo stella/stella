@@ -75,6 +75,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,
   catalogue: WAIVER_REASON.preExistingGap,
+  // Caller-supplied audio is transient; optional matter access is authorized
+  // through MemberCaller and covered by dictation/transcribe.test.ts.
+  dictation: WAIVER_REASON.noTenantReadSurface,
   clauses: WAIVER_REASON.preExistingGap,
   "document-types": WAIVER_REASON.preExistingGap,
   fields: WAIVER_REASON.preExistingGap,
@@ -121,6 +124,8 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "visual-sandbox": WAIVER_REASON.noTenantReadSurface,
   mcp: WAIVER_REASON.noTenantReadSurface,
   "mcp-connectors": WAIVER_REASON.noTenantReadSurface,
+  // Relays signed public update manifests from the downloads CDN; no tenant data.
+  "mobile-updates": WAIVER_REASON.noTenantReadSurface,
   // Deployment-owned directory access, independent of tenant membership;
   // credential denial and the projected read are covered by operator/routes.test.ts
   // and lib/db/operator-registrations/read.postgres.test.ts.
@@ -184,7 +189,11 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
-  "desktop-time-entries": {},
+  "desktop-time-entries": {
+    // Writes a narrative from the window titles in the request body; reads no
+    // stored record.
+    narrative: WAIVER_REASON.noTenantReadSurface,
+  },
   chat: {
     // Authenticated public-host icon bytes contain no tenant-owned records.
     "link-icons/get": WAIVER_REASON.noTenantReadSurface,

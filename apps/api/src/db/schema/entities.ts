@@ -1,4 +1,7 @@
-import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
+import type {
+  AiCellSettlement,
+  ApiFileSecurityRejectionDetails,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_FAILURE_REASONS } from "@stll/api-contract/desktop-handoff";
 import type { DocumentTranslationSourceLanguageCode } from "@stll/api-contract/document-translation";
 
@@ -63,6 +66,7 @@ import type {
   DocumentSource,
   EntityDeletionCleanupStatus,
   FieldContent,
+  ImportDocumentSource,
   JustificationContent,
   LinkMetadata,
   SafeId,
@@ -1200,6 +1204,8 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /** Set when the upload imports a file from another system. */
+      importSource?: ImportDocumentSource;
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a
@@ -1497,6 +1503,8 @@ export const fields = p.pgTable(
       .references(() => entityVersions.id, { onDelete: "cascade" }),
     fileId: safeUuid<"userFile">("file_id"),
     content: jsonb().$type<FieldContent>().notNull(),
+    /** Durable terminal outcome of the latest AI run for this cell. */
+    aiSettlement: jsonb("ai_settlement").$type<AiCellSettlement>(),
     /** Workflow run that currently owns this non-terminal cell. */
     ownerRunId: p.text("owner_run_id"),
     /** Batch within the workflow run that currently owns this cell. */

@@ -85,7 +85,6 @@ const { DECISION_AI_MODE } = await import("./decision-ai-mode");
 
 // The member chunk and the chat overlay it enables are lazy; their first load
 // under a busy runner outlasts the default per-test timeout.
-const MEMBER_CHUNK_TIMEOUT_MS = 30_000;
 const READER_SCROLL_TOP = 480;
 const initialInspector = useInspectorTabsStore.getState();
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -176,43 +175,34 @@ const readerIn = (container: HTMLElement) => {
 // chat opener) has arrived. The chunk's arrival must reach the reader already
 // on screen rather than replace it: a replaced reader drops the member back to
 // the top of the decision and takes the focus out of the page.
-// timeout: the member chunk and the chat overlay it enables are lazy chunks
-// whose first load outlasts the default budget
-test(
-  "a member's reader keeps its node, scroll position and focus when the member chunk arrives",
-  async () => {
-    const view = await renderDecisionPage(memberClient());
+test("a member's reader keeps its node, scroll position and focus when the member chunk arrives", async () => {
+  const view = await renderDecisionPage(memberClient());
 
-    const gated = readerIn(view.container);
-    expect(gated.dataset["aiMode"]).toBe(DECISION_AI_MODE.gated);
-    const scroller =
-      gated.querySelector<HTMLElement>(".reader-scroll") ??
-      panic("Expected the reader's scroll container");
-    const zoomIn = within(gated).getByRole("button", { name: "Zoom in" });
-    act(() => {
-      scroller.scrollTop = READER_SCROLL_TOP;
-      zoomIn.focus();
-    });
-    // The fixture reaches the fault: the reader is scrolled and focused
-    // before the chunk lands, so a replaced reader would read differently.
-    expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
-    expect(zoomIn.ownerDocument.activeElement).toBe(zoomIn);
+  const gated = readerIn(view.container);
+  expect(gated.dataset["aiMode"]).toBe(DECISION_AI_MODE.gated);
+  const scroller =
+    gated.querySelector<HTMLElement>(".reader-scroll") ??
+    panic("Expected the reader's scroll container");
+  const zoomIn = within(gated).getByRole("button", { name: "Zoom in" });
+  act(() => {
+    scroller.scrollTop = READER_SCROLL_TOP;
+    zoomIn.focus();
+  });
+  // The fixture reaches the fault: the reader is scrolled and focused
+  // before the chunk lands, so a replaced reader would read differently.
+  expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
+  expect(zoomIn.ownerDocument.activeElement).toBe(zoomIn);
 
-    await waitFor(
-      () => {
-        expect(readerIn(view.container).dataset["aiMode"]).toBe(
-          DECISION_AI_MODE.enabled,
-        );
-      },
-      { timeout: MEMBER_CHUNK_TIMEOUT_MS },
+  await waitFor(() => {
+    expect(readerIn(view.container).dataset["aiMode"]).toBe(
+      DECISION_AI_MODE.enabled,
     );
+  });
 
-    const enabled = readerIn(view.container);
-    expect(enabled).toBe(gated);
-    expect(enabled.querySelector(".reader-scroll")).toBe(scroller);
-    expect(scroller.isConnected).toBe(true);
-    expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
-    expect(zoomIn.ownerDocument.activeElement).toBe(zoomIn);
-  },
-  MEMBER_CHUNK_TIMEOUT_MS,
-);
+  const enabled = readerIn(view.container);
+  expect(enabled).toBe(gated);
+  expect(enabled.querySelector(".reader-scroll")).toBe(scroller);
+  expect(scroller.isConnected).toBe(true);
+  expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
+  expect(zoomIn.ownerDocument.activeElement).toBe(zoomIn);
+});

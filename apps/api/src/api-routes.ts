@@ -30,6 +30,7 @@ import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
+import { dictationRoute } from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -65,6 +66,7 @@ import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
 import { memoriesRoute } from "@/api/handlers/memories/routes";
+import { mobileUpdatesRoute } from "@/api/handlers/mobile-updates/routes";
 import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
@@ -252,6 +254,7 @@ export const apiRoutes = mount([
       legislationCorpusRoute,
       publicLegislationRoute,
       publicSanctionsRoute,
+      mobileUpdatesRoute,
       publicKnowledgeRoute,
       searchRoute,
       savedSearchesRoute,
@@ -262,6 +265,7 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      dictationRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,

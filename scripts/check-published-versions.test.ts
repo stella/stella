@@ -13,10 +13,8 @@ import {
   type RegistryFetch,
   versionBumpTime,
 } from "./check-npm-publish-lag";
-import {
-  checkPublishedVersions,
-  type GitRunner,
-} from "./check-published-versions";
+import { checkPublishedVersions } from "./check-published-versions";
+import type { GitRunner } from "./promoted-cli-target";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
 
 const NOW = 2_000_000_000;
@@ -934,6 +932,9 @@ type RunLagCliOptions = {
   manifest?: string;
   npmOutput?: string;
   npmError?: string;
+  versionFile?: string;
+  dates?: string;
+  tags?: readonly string[];
 };
 
 const runLagCli = async ({
@@ -941,6 +942,9 @@ const runLagCli = async ({
   manifest = '{"name":"@stll/cli","version":"1.2.3"}',
   npmOutput = '{"dist-tags":{"latest":"1.2.4"},"versions":["1.2.4"]}',
   npmError,
+  versionFile = "1.2.4",
+  dates = '{"v1.0.0":"2026-01-01T00:00:00Z","v1.2.4":null}',
+  tags = ["v9.0.0", "v1.2.4", "v1.2.4-rc.1", "v1.0.0"],
 }: RunLagCliOptions) => {
   const directory = await mkdtemp(path.join(tmpdir(), "publish-lag-cli-"));
   try {
@@ -948,7 +952,7 @@ const runLagCli = async ({
     const fakeNpm = path.join(directory, "npm");
     await Bun.write(
       fakeGit,
-      `#!${process.execPath}\nif (Bun.argv[2] === "tag") console.log("v1.0.0"); else console.log(${JSON.stringify(manifest)});\n`,
+      `#!${process.execPath}\nif (Bun.argv[2] === "tag") console.log(${JSON.stringify(tags.join("\n"))}); else if (Bun.argv[2] === "show" && Bun.argv[3].endsWith(":VERSION")) console.log(${JSON.stringify(versionFile)}); else if (Bun.argv[2] === "show" && Bun.argv[3].endsWith("changelog-release-dates.json")) console.log(${JSON.stringify(dates)}); else console.log(${JSON.stringify(manifest)});\n`,
     );
     await Bun.write(
       fakeNpm,

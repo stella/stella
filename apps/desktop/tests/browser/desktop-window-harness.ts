@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
+import type { ActivitySettingsSnapshot } from "../../src/activity/activity-types";
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
 import type {
@@ -13,6 +14,7 @@ import { DESKTOP_WINDOW_SIZES } from "../desktop-window-sizes";
 import type { DesktopWindowSize } from "../desktop-window-sizes";
 import {
   ACCOUNT,
+  ACTIVITY_SETTINGS,
   APP_STATE,
   PERMISSIONS,
   SHORTCUT,
@@ -106,6 +108,8 @@ export const ONBOARDING_SCREENS = [
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
 
 type WindowFixture = {
+  /** The activity settings, or null while the feature is off. */
+  activity: ActivitySettingsSnapshot | null;
   account: DesktopAccountSnapshot;
   appState: AppSnapshot;
   language: string;
@@ -146,6 +150,8 @@ const openWindow = async (
     handlers: (data) => ({
       account_get_state: () => data.account,
       account_record_use: () => null,
+      // No connection status: the section stays hidden, as with local agents off.
+      chatgpt_auth_get_status: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
       get_desktop_language: () => data.language,
@@ -165,6 +171,8 @@ const openWindow = async (
       },
       set_desktop_language: () => null,
       shortcut_get_snapshot: () => data.shortcut,
+      is_activity_enabled: () => data.activity !== null,
+      activity_get_settings: () => data.activity,
     }),
   });
   await page.goto(path);
@@ -179,6 +187,7 @@ export const openOnboardingWindow = async (
   await openWindow(page, {
     fixture: {
       account: { server: ACCOUNT.server, status: "disconnected" },
+      activity: null,
       appState: APP_STATE,
       language: options.language,
       onboarding: snapshot,
@@ -196,7 +205,12 @@ export const openOnboardingWindow = async (
   await settle(page);
 };
 
-export const SETTINGS_TABS = ["general", "notifications", "about"] as const;
+export const SETTINGS_TABS = [
+  "general",
+  "activity",
+  "notifications",
+  "about",
+] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 
@@ -209,6 +223,8 @@ export const openSettingsWindow = async (
   await openWindow(page, {
     fixture: {
       account: ACCOUNT,
+      // On for every tab, so each one is checked with the Activity tab shown.
+      activity: ACTIVITY_SETTINGS,
       appState: APP_STATE,
       language: options.language,
       onboarding: null,
@@ -228,18 +244,39 @@ export const openSettingsWindow = async (
     await expect(page.getByText(ACCOUNT.account.email)).toBeVisible();
     await expect(page.getByRole("switch").first()).toBeVisible();
   }
+  if (tab === "activity") {
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Example Editor" }),
+    ).toBeVisible();
+  }
   if (tab === "notifications") {
     await expect(page.getByRole("checkbox").first()).toBeEnabled();
   }
   await settle(page);
 };
 
-/** Waits for fonts, the language catalogue and any running animation. */
+/** Waits for fonts, the language catalogue and every animation that ends.
+ * A looping animation, such as a loading skeleton, never finishes; one
+ * cancelled because its element left the page has settled. */
 const settle = async (page: Page) => {
   await page.evaluate(async () => {
     await document.fonts.ready;
     await Promise.all(
-      document.getAnimations().map(async (animation) => animation.finished),
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().endTime !== Infinity,
+        )
+        .map(async (animation) =>
+          animation.finished.catch((error: unknown) => {
+            if (!(
+              error instanceof DOMException && error.name === "AbortError"
+            )) {
+              throw error;
+            }
+          }),
+        ),
     );
   });
 };

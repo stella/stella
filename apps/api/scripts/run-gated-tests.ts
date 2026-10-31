@@ -6,6 +6,7 @@ import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
+import { discoverGatedTestFiles } from "./gated-test-files";
 import { parseGatedTestSelection } from "./gated-test-selection";
 import {
   mergeJunitReports,
@@ -17,6 +18,8 @@ import {
   partitionRunnerArguments,
   selectTestPaths,
 } from "./test-path-filters";
+
+export { discoverGatedTestFiles } from "./gated-test-files";
 
 type GatedTestScript = keyof typeof packageJson.ciGateTestRunners;
 
@@ -144,34 +147,6 @@ export const runTestBatches = async ({
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
   }
-};
-
-type DiscoverGatedTestFilesOptions = {
-  apiRoot: string;
-  testFileGlob: string;
-  gate: string;
-};
-
-export const discoverGatedTestFiles = async ({
-  apiRoot: testRoot,
-  testFileGlob,
-  gate,
-}: DiscoverGatedTestFilesOptions) => {
-  const files = [
-    ...new Bun.Glob(testFileGlob).scanSync({ cwd: testRoot, onlyFiles: true }),
-  ];
-  const sources = await Promise.all(
-    files.map(async (testFile) => ({
-      testFile,
-      isGated: (await Bun.file(path.join(testRoot, testFile)).text()).includes(
-        gate,
-      ),
-    })),
-  );
-  return sources
-    .filter(({ isGated }) => isGated)
-    .map(({ testFile }) => testFile)
-    .toSorted();
 };
 
 /**

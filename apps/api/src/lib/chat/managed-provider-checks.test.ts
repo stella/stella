@@ -354,8 +354,13 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               dataClass === "customer"
                 ? { dataClass, managedAIResidency: residency }
                 : { dataClass };
+            // Managed requests carry the credential their tier resolved.
             const adapter = createTanStackTextAdapterFactory({
               provider: "openrouter",
+              managedOpenRouterCredential: {
+                type: "static",
+                apiKey: "fixture-key",
+              },
               ...policy,
             })(MODEL);
             const options = {

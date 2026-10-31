@@ -19,6 +19,9 @@ export const testChatApprovalContextValue = {
   handleApprove: ignore,
   handleDeny: ignore,
   continueRequestSecret: async () => await Promise.resolve(),
+  continueConnectConnector: async () => await Promise.resolve(),
+  handleConnectConnector: async () =>
+    await Promise.resolve({ status: "declined", connectorSlug: "test" }),
   handleRequestSecret: async () =>
     await Promise.resolve({
       status: "declined",

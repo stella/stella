@@ -198,6 +198,7 @@ export const ACTIVITY_TARGET_SOURCE_BY_RESOURCE_TYPE = {
   personal_api_key: null,
   mcp_connection: null,
   mcp_gateway_tool: null,
+  organization_access_state: null,
   organization_settings: null,
   property: null,
   rate_entry: null,

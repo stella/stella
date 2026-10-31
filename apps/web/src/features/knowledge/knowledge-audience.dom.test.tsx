@@ -598,7 +598,7 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 
   test("switching from organization A to B keeps nothing of A, frame included", async () => {
     session = "org-a";
@@ -620,5 +620,5 @@ describe("Knowledge for every visitor, on one live client", () => {
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),
     ).toEqual([]);
     view.unmount();
-  }, 30_000);
+  });
 });

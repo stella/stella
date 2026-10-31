@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   balanceTestFiles,
   parseScriptTestArguments,
+  selectScriptTests,
   unlistedTestCommands,
   unlistedTests,
 } from "./run-unlisted-script-tests";
@@ -104,19 +105,52 @@ describe("unlistedTests", () => {
   });
 });
 
+describe("selectScriptTests", () => {
+  test("partitions depth tests away from the default runner", () => {
+    const discovered = ["scripts/fast.test.ts", "scripts/depth.test.ts"];
+    const depth = ["scripts/depth.test.ts"];
+    expect(selectScriptTests(discovered, depth, false)).toEqual([
+      "scripts/fast.test.ts",
+    ]);
+    expect(selectScriptTests(discovered, depth, true)).toEqual([
+      "scripts/depth.test.ts",
+    ]);
+  });
+});
+
 describe("parseScriptTestArguments", () => {
   test("accepts the default and a positive integer timeout", () => {
     expect(parseScriptTestArguments([])).toEqual({
       type: "valid",
       timeout: undefined,
+      depth: false,
     });
     expect(parseScriptTestArguments(["--timeout", "35000"])).toEqual({
       type: "valid",
       timeout: 35_000,
+      depth: false,
+    });
+  });
+
+  test("accepts depth mode in either position", () => {
+    expect(
+      parseScriptTestArguments(["--depth", "--timeout", "120000"]),
+    ).toEqual({
+      type: "valid",
+      timeout: 120_000,
+      depth: true,
+    });
+    expect(
+      parseScriptTestArguments(["--timeout", "120000", "--depth"]),
+    ).toEqual({
+      type: "valid",
+      timeout: 120_000,
+      depth: true,
     });
   });
 
   test.each([
+    [["--depth", "--depth"], "--depth may be supplied once"],
     [["--unknown"], "unknown argument"],
     [["--timeout"], "requires a positive integer"],
     [["--timeout", "0"], "requires a positive integer"],
