@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
 import {
-  excludedSourceField,
   excludedSourceSurface,
+  legacyExcludedSourceField,
   storedSourceSurface,
 } from "@/api/lib/legal-search/ingestion-types";
 import type {
@@ -427,26 +427,26 @@ const fields = {
     disposition: "stored",
     target: { type: "metadata", key: "statedReference" },
   },
-  "publisher-date": excludedSourceField(
+  "publisher-date": legacyExcludedSourceField(
     "Publisher Date is retained in sourceDates and raw HTML; it is not an adoption date.",
   ),
   "asset-language": {
     disposition: "stored",
     target: { type: "metadata", key: "expression" },
   },
-  "asset-title": excludedSourceField(
+  "asset-title": legacyExcludedSourceField(
     "Download display names are retained in raw HTML; the instrument title identifies the document.",
   ),
-  "asset-format": excludedSourceField(
+  "asset-format": legacyExcludedSourceField(
     "Asset format is retained in raw HTML and verified by the bounded PDF or Word content-type boundary.",
   ),
-  "asset-size": excludedSourceField(
+  "asset-size": legacyExcludedSourceField(
     "Publisher display size is presentation metadata; actual bytes and raw HTML are retained.",
   ),
-  "archive-year": excludedSourceField(
+  "archive-year": legacyExcludedSourceField(
     "Year grouping is retained in sourceDates and raw HTML, without invented day precision.",
   ),
-  "archive-date": excludedSourceField(
+  "archive-date": legacyExcludedSourceField(
     "Archive date text is retained in sourceDates and raw HTML without inferring adoption.",
   ),
 } as const satisfies Record<(typeof FIELDS)[number], SourceFieldDisposition>;

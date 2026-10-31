@@ -93,6 +93,7 @@ import type {
 } from "@/api/lib/legal-search/ingestion-types";
 import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import type { SourceRecordPaths } from "@/api/lib/legal-search/source-record-fields";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -2346,6 +2347,13 @@ const DISSENTING_OPINION_FIELD = {
   target: { type: "metadata", key: "dissentingOpinions" },
 } as const satisfies SourceFieldDisposition;
 
+type PlCourtsPublisherRecord = Readonly<
+  Record<
+    (typeof SOURCE_FIELDS)[number] | SourceRecordPaths<SaosItem, true>,
+    unknown
+  >
+>;
+
 const PL_COURTS_SOURCE_FIELDS = {
   id: { disposition: "stored", target: { type: "identity" } },
   href: { disposition: "stored", target: { type: "metadata", key: "href" } },
@@ -2470,7 +2478,7 @@ const PL_COURTS_SOURCE_FIELDS = {
   "dissentingOpinions[].textContent": DISSENTING_OPINION_FIELD,
   "dissentingOpinions[].authors": JUDGE_FIELD,
 } as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
+  keyof PlCourtsPublisherRecord,
   SourceFieldDisposition
 >;
 

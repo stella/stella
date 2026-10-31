@@ -151,3 +151,81 @@ export const listNssRegistryFields = (html: string): string[] => {
       ),
   ];
 };
+
+type ReadNssRegistryMetadataOptions = {
+  html: string | undefined;
+  reference: string;
+};
+
+/** Only the registry row naming this exact original describes this decision. */
+export const readNssRegistryMetadata = ({
+  html,
+  reference,
+}: ReadNssRegistryMetadataOptions) => {
+  if (html === undefined) {
+    return {};
+  }
+  const $ = cheerio.load(html);
+  const anchor = $("tbody a[href]")
+    .toArray()
+    .find((node) => {
+      const link = $(node);
+      if (
+        normalizedReference(visibleHtmlText(link)) !==
+        normalizedReference(reference)
+      ) {
+        return false;
+      }
+      const cell = link.closest("td");
+      const cellNode = cell.get(0);
+      if (cellNode === undefined || cellNode.type !== "tag") {
+        return false;
+      }
+      const index = cell.parent().children("td").toArray().indexOf(cellNode);
+      const header = cell
+        .closest("table")
+        .children("thead")
+        .children("tr")
+        .children("th")
+        .toArray()
+        .at(index);
+      return (
+        index !== -1 &&
+        header !== undefined &&
+        visibleHtmlText($(header)).trim() === "Rozhodnutí RS"
+      );
+    });
+  if (anchor === undefined) {
+    return {};
+  }
+  const row = $(anchor).closest("tr");
+  const headers = row
+    .closest("table")
+    .children("thead")
+    .children("tr")
+    .children("th")
+    .toArray();
+  const cells = row.children("td").toArray();
+  const read = (label: string) => {
+    const index = headers.findIndex(
+      (node) => visibleHtmlText($(node)).trim() === label,
+    );
+    const cell = cells.at(index);
+    if (index === -1 || cell === undefined) {
+      return undefined;
+    }
+    return visibleHtmlText($(cell)).trim();
+  };
+  const annotation = row.next(".nssext-extra-table-row").clone();
+  annotation.find("strong").remove();
+  return {
+    nssRegistryCaseNumber: read("Spisová značka"),
+    nssRegistryReferral: read("Předkládací usnesení"),
+    nssRegistryReferralDate: read("Datum předložení"),
+    nssRegistryAgainstCases: read("Proti věci"),
+    nssRegistryStatus: read("Stav"),
+    ...(annotation.length === 0
+      ? {}
+      : { nssRegistryAnnotation: visibleHtmlText(annotation).trim() }),
+  };
+};

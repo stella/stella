@@ -1438,22 +1438,78 @@ export type SourceFieldDisposition =
   | { readonly disposition: "stored"; readonly target: SourceFieldTarget }
   | {
       readonly disposition: "excluded";
+      readonly reason: SourceExclusionReason;
+      readonly justification: string;
+      readonly pointer: string;
+      readonly [STATED_REASON]: true;
+    }
+  | {
+      readonly disposition: "excluded";
+      readonly legacy: true;
       readonly reason: string;
       readonly [STATED_REASON]: true;
     };
 
-/**
- * State why a field the source publishes is not stored. The reason has to say
- * something: `""` and `"   "` are compile errors rather than a check somebody
- * has to remember to run.
- */
-export const excludedSourceField = <const TText extends string>(
+/** Migration-only constructor, held to the exact legacy source exclusion census. */
+export const legacyExcludedSourceField = <const TText extends string>(
   reason: StatedReason<TText>,
 ): SourceFieldDisposition => ({
   disposition: "excluded",
   reason,
+  legacy: true,
   [STATED_REASON]: true,
 });
+
+/** Closed policy vocabulary; exclusion is a decision that must be reviewable. */
+export const SOURCE_EXCLUSION_REASONS = [
+  "duplicate_of",
+  "personal_data_minimisation",
+  "publisher_noise",
+  "licence_restriction",
+  "unsupported_format_tracked",
+] as const;
+
+export type SourceExclusionReason = (typeof SOURCE_EXCLUSION_REASONS)[number];
+
+type SourceFieldExclusionOptions<
+  TJustification extends string,
+  TPointer extends string,
+> = {
+  reason: SourceExclusionReason;
+  justification: StatedReason<TJustification>;
+  /** Stored field, minimisation rule, publisher element, licence term, or issue. */
+  pointer: StatedReason<TPointer>;
+};
+
+/** Literal blanks fail typecheck; dynamic inputs fail before an inventory exists. */
+export const excludedSourceField = <
+  const TJustification extends string,
+  const TPointer extends string,
+>({
+  reason,
+  justification,
+  pointer,
+}: SourceFieldExclusionOptions<
+  TJustification,
+  TPointer
+>): SourceFieldDisposition => {
+  if (
+    !SOURCE_EXCLUSION_REASONS.includes(reason) ||
+    !justification.trim() ||
+    !pointer.trim()
+  ) {
+    return panic(
+      "Source exclusions require an allowed reason, justification and pointer",
+    );
+  }
+  return {
+    disposition: "excluded",
+    reason,
+    justification,
+    pointer,
+    [STATED_REASON]: true,
+  };
+};
 
 /**
  * The adapters that may still declare a surface they do not record.
@@ -1656,8 +1712,9 @@ export type SourceAdapter = {
    * decisions, one blob cannot be mapped back to one row, and the adapter
    * omits this rather than guessing.
    *
-   * The outcome may be returned directly by a parser that needs no I/O, or
-   * as a promise by one that does (an office-format extractor, say).
+   * Replays use retained publisher bytes and must not fetch the publisher.
+   * Await the outcome: common field inspection is asynchronous even for pure
+   * parsers; office-format extraction may also require local or service I/O.
    */
   reparseStoredRaw?: (
     stored: StoredRawReparseInput,
@@ -1725,6 +1782,23 @@ type ScopedCallbacks<TSource> = {
   ]-?: TSource[TKey] | undefined;
 };
 
+/** The publisher record a stored replay produced, for field-coverage inspection. */
+const replayedPublisherRecord = (
+  outcome: StoredRawReparseOutcome,
+): IngestionResult | undefined => {
+  switch (outcome.type) {
+    case "parsed":
+      return outcome.result;
+    case "supplement":
+      return outcome.supplement.document;
+    case "rejected":
+      return undefined;
+    default:
+      outcome satisfies never;
+      return panic("Unhandled publisher replay outcome");
+  }
+};
+
 /** Build an adapter from the source facts declared for its registry key. */
 export const defineSourceAdapter = <
   const TKey extends AdapterKey,
@@ -1745,6 +1819,44 @@ export const defineSourceAdapter = <
     function (this: unknown, ...args: TArgs) {
       return withExceptionScope(scope, () => operation.apply(this, args));
     };
+  const inspectRecord = async (result: IngestionResult) => {
+    const { inspectPublisherFieldCoverage } =
+      await import("@/api/lib/legal-search/publisher-field-coverage");
+    await inspectPublisherFieldCoverage({
+      adapterKey: adapter.key,
+      inventory: adapter.sourceFields,
+      result,
+    });
+  };
+  const inspectBuild = <
+    TArgs extends unknown[],
+    TOutcome extends ReconciliationBuildOutcome,
+  >(
+    operation: (...args: TArgs) => Promise<TOutcome>,
+  ) =>
+    scoped(async function (this: unknown, ...args: TArgs) {
+      const outcome = await operation.apply(this, args);
+      switch (outcome.type) {
+        case "built":
+          await inspectRecord(outcome.decision);
+          if (outcome.companions !== undefined) {
+            for (const companion of outcome.companions) {
+              await inspectRecord(companion);
+            }
+          }
+          break;
+        case "built-supplement":
+          await inspectRecord(outcome.supplement.document);
+          break;
+        case "unkeyable":
+        case "detail-unavailable":
+          break;
+        default:
+          outcome satisfies never;
+          return panic("Unhandled publisher build outcome");
+      }
+      return outcome;
+    });
   const reconciliation = adapter.reconciliation;
   const createSliceBuildDecision = reconciliation.createSliceBuildDecision;
   const textlessHeldRecheck = reconciliation.textlessHeldRecheck;
@@ -1766,9 +1878,18 @@ export const defineSourceAdapter = <
       reparseStoredRaw === undefined
         ? undefined
         : scoped(async function (this: unknown, stored: StoredRawReparseInput) {
-            return readStoredRawReparseResult(
+            const outcome = readStoredRawReparseResult(
               await reparseStoredRaw.call(this, stored),
             );
+            const record = replayedPublisherRecord(outcome);
+            if (
+              record !== undefined &&
+              (stored.contentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
+                decodeSourceRawEnvelope(record.sourceRaw ?? "") !== null)
+            ) {
+              await inspectRecord(record);
+            }
+            return outcome;
           }),
     fetchPage: async (cursor, config, signal, onDocumentObservation) =>
       await observeDocumentStage({
@@ -1783,7 +1904,24 @@ export const defineSourceAdapter = <
                 cause,
               }),
           });
-          return fetched.andThen((page) => page);
+          const page = fetched.andThen((outcome) => outcome);
+          if (Result.isError(page)) {
+            return page;
+          }
+          for (const decision of page.value.decisions) {
+            await inspectRecord(decision);
+          }
+          if (page.value.supplements !== undefined) {
+            for (const supplement of page.value.supplements) {
+              await inspectRecord(supplement.document);
+            }
+          }
+          if (page.value.unreadItems !== undefined) {
+            for (const unread of page.value.unreadItems) {
+              await inspectRecord(unread.listing);
+            }
+          }
+          return page;
         },
         observe: onDocumentObservation,
       }),
@@ -1796,7 +1934,7 @@ export const defineSourceAdapter = <
     nextSlice: scoped(reconciliation.nextSlice),
     previousSlice: scoped(reconciliation.previousSlice),
     listSlicePage: scoped(reconciliation.listSlicePage),
-    buildDecision: scoped(reconciliation.buildDecision),
+    buildDecision: inspectBuild(reconciliation.buildDecision),
     heldWithoutDetail:
       reconciliation.heldWithoutDetail === undefined
         ? undefined
@@ -1805,7 +1943,7 @@ export const defineSourceAdapter = <
       createSliceBuildDecision === undefined
         ? undefined
         : scoped(function (this: unknown) {
-            return scoped(createSliceBuildDecision.call(this));
+            return inspectBuild(createSliceBuildDecision.call(this));
           }),
   } satisfies ScopedCallbacks<SourceReconciliation>;
   const sourceFieldCallbacks = {
@@ -1827,7 +1965,7 @@ export const defineSourceAdapter = <
       : {
           ...textlessHeldRecheck,
           ...({
-            buildDecisionFromStored: scoped(
+            buildDecisionFromStored: inspectBuild(
               textlessHeldRecheck.buildDecisionFromStored,
             ),
           } satisfies ScopedCallbacks<TextlessHeldRecheck>),

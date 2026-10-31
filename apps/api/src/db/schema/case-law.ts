@@ -818,6 +818,26 @@ export const caseLawDecisions = p.pgTable(
       .defaultNow()
       .notNull()
       .$onUpdate(() => new Date()),
+    /** NSS reporter entry number as published. */
+    nssReporterNumber: p.text("nss_reporter_number"),
+    /** NSS reporter year as published. */
+    nssReporterYear: p.text("nss_reporter_year"),
+    /** NSS reporter issue as published. */
+    nssReporterIssue: p.text("nss_reporter_issue"),
+    /** NSS keyword-search taxonomy code as published. */
+    nssKeywordSearchCode: p.text("nss_keyword_search_code"),
+    /** Extended-chamber registry reference for the matched original. */
+    nssRegistryCaseNumber: p.text("nss_registry_case_number"),
+    /** Full published reference of the referring order. */
+    nssRegistryReferral: p.text("nss_registry_referral"),
+    /** Referral date in the publisher’s original notation. */
+    nssRegistryReferralDate: p.text("nss_registry_referral_date"),
+    /** Cases opposed in the extended-chamber proceeding, as published. */
+    nssRegistryAgainstCases: p.text("nss_registry_against_cases"),
+    /** Publisher status of the extended-chamber proceeding. */
+    nssRegistryStatus: p.text("nss_registry_status"),
+    /** Publisher annotation of the extended-chamber proceeding. */
+    nssRegistryAnnotation: p.text("nss_registry_annotation"),
   },
   (t) => [
     parsedSourceComplete(t),

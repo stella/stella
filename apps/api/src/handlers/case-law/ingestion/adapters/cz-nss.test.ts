@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * The cz-nss listing reconciliation capability, and the parser it keys on.
  *
@@ -6,8 +7,6 @@
  * regexes rather than the ones the crawl runs, which is how this suite's
  * predecessor came to assert a citation pattern the adapter no longer had.
  */
-
-import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -39,7 +38,10 @@ import {
   parseResultRows,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
 import type { ParsedRow } from "@/api/handlers/case-law/ingestion/adapters/cz-nss";
-import { isNssDocumentPlaceholder } from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
+import {
+  isNssDocumentPlaceholder,
+  readNssRegistryMetadata,
+} from "@/api/handlers/case-law/ingestion/adapters/cz-nss-documents";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
@@ -65,6 +67,11 @@ import {
   listingIdentityKey,
   SOURCE_DOCUMENT_ID_MAX_LENGTH,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  inspectPublisherFieldCoverage,
+  PUBLISHER_FIELD_COVERAGE_EVENT,
+} from "@/api/lib/legal-search/publisher-field-coverage";
+import { encodeSourceRawEnvelope } from "@/api/lib/legal-search/source-raw-envelope";
 import { isRecord } from "@/api/lib/type-guards";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -76,6 +83,72 @@ const BASE_URL = "https://vyhledavac.nssoud.cz";
 
 /** One backslash, for fixtures that must carry a literal escape. */
 const BACKSLASH = String.fromCodePoint(92);
+
+test("NSS publisher labels remain observable when their mapping is removed", async () => {
+  const detail = await Bun.file(
+    new URL(
+      "__fixtures__/cz-nss-publisher-field-excerpt.html",
+      import.meta.url,
+    ),
+  ).text();
+  const observed = await czNssAdapter.sourceFields.listSourceFields({ detail });
+  expect(observed).toContain("krajskysoud");
+  expect(observed).toContain("vztahkpredpisům");
+  expect(observed).toContain("spzncjnapadenarozhodnutinss");
+
+  const result = Object.freeze({
+    sourceRaw: encodeSourceRawEnvelope({ detail }),
+  });
+  const reports: unknown[] = [];
+  const report = (...args: unknown[]) => {
+    reports.push(args);
+  };
+  const fullyAccounted = {
+    ...czNssAdapter.sourceFields,
+    fields: Object.fromEntries(
+      observed.map((field) => [
+        field,
+        { disposition: "stored", target: { type: "identity" } } as const,
+      ]),
+    ),
+  };
+  await inspectPublisherFieldCoverage({
+    adapterKey: czNssAdapter.key,
+    inventory: fullyAccounted,
+    result,
+    report,
+  });
+  expect(reports).toEqual([]);
+
+  for (const removed of observed) {
+    reports.length = 0;
+    await inspectPublisherFieldCoverage({
+      adapterKey: czNssAdapter.key,
+      inventory: {
+        ...fullyAccounted,
+        fields: Object.fromEntries(
+          Object.entries(fullyAccounted.fields).filter(
+            ([field]) => field !== removed,
+          ),
+        ),
+      },
+      result,
+      report,
+    });
+    expect(reports).toEqual([
+      [
+        PUBLISHER_FIELD_COVERAGE_EVENT.UNMAPPED,
+        {
+          adapterKey: czNssAdapter.key,
+          recordCount: 1,
+          unmappedFieldCount: 1,
+          retainedRaw: true,
+        },
+      ],
+    ]);
+    expect(decodeSourceRawEnvelope(result.sourceRaw)?.["detail"]).toBe(detail);
+  }
+});
 
 // ── Portal-shaped fixtures ───────────────────────────────
 
@@ -2855,4 +2928,38 @@ describe("cz-nss reads the portal did not answer", () => {
     expect(built.type).toBe("built");
     expect(built.decision.fulltext).toContain("Kasační stížnost");
   });
+});
+
+describe("NSS publisher retention", () => {
+  test("retains reporter components from table cells and keyword codes", () => {
+    const detail = parseCzNssDetailMetadata(`
+      <table><tr><td class="det-textval" data-field-id="nssjudikat">3540</td>
+      <td class="det-textval" data-field-id="nssrok">2017</td>
+      <td class="det-textval" data-field-id="nsssesit">4</td></tr></table>
+      <div data-field-id="vyhledavanidlehesel"><span class="det-textval">017</span></div>
+    `);
+    expect(detail).toMatchObject({
+      nssReporterNumber: "3540",
+      nssReporterYear: "2017",
+      nssReporterIssue: "4",
+      nssKeywordSearchCode: "017",
+    });
+  });
+});
+
+test("registry metadata belongs to the exact decision rather than its referral", () => {
+  const html = `<table><thead><tr><th>Spisová značka</th><th>Předkládací usnesení</th><th>Rozhodnutí RS</th><th>Stav</th></tr></thead><tbody>
+    <tr><td>RS 20/2017</td><td><a href="/referral">5 As 140/2014-76</a></td><td><a href="/other">8 As 1/2017-42</a></td><td>Other status</td></tr>
+    <tr><td>RS 10/2016</td><td><a href="/earlier">5 As 140/2014-53</a></td><td><a href="/original">5 As 140/2014-76</a></td><td>Rozhodnuto</td></tr>
+    <tr class="nssext-extra-table-row"><td><strong>Anotace:</strong> Publisher annotation</td></tr>
+  </tbody></table>`;
+  expect(
+    readNssRegistryMetadata({ html, reference: "5 As 140/2014-76" }),
+  ).toMatchObject({
+    nssRegistryCaseNumber: "RS 10/2016",
+    nssRegistryReferral: "5 As 140/2014-53",
+    nssRegistryStatus: "Rozhodnuto",
+    nssRegistryAnnotation: "Publisher annotation",
+  });
+  expect(readNssRegistryMetadata({ html, reference: "missing" })).toEqual({});
 });

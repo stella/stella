@@ -1,3 +1,5 @@
+// parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
+// parser-output-unchanged: [eu-ecj] capture retains original ZIP bytes; replay of existing envelopes is unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
@@ -86,9 +88,9 @@ import {
   defineSourceAdapter,
   EMPTY_AST,
   encodeSourceRawEnvelope,
-  excludedSourceField,
   excludedSourceSurface,
   isPersistableSourceDocumentId,
+  legacyExcludedSourceField,
   PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   SOURCE_TOTAL_PROBE_FAILURE,
@@ -1419,6 +1421,7 @@ const RAW_PART = {
   NOTICE_STATE: "notice-state",
   DOCUMENT: "document",
   FORMEX: "formex",
+  FORMEX_ORIGINAL_ZIP: "formex-original-zip",
   FORMEX_STATE: "formex-state",
 } as const;
 
@@ -1518,6 +1521,7 @@ type EcjRawPartsOptions = {
   html: string;
   notice: string | undefined;
   formex: string | undefined;
+  formexOriginalZip?: string | undefined;
 };
 
 /**
@@ -1535,11 +1539,15 @@ export const ecjRawParts = ({
   html,
   notice,
   formex,
+  formexOriginalZip,
 }: EcjRawPartsOptions): SourceRawParts => ({
   [RAW_PART.LISTING]: JSON.stringify(binding),
   [RAW_PART.DOCUMENT]: html,
   ...(notice === undefined ? {} : { [RAW_PART.NOTICE]: notice }),
   ...(formex === undefined ? {} : { [RAW_PART.FORMEX]: formex }),
+  ...(formexOriginalZip === undefined
+    ? {}
+    : { [RAW_PART.FORMEX_ORIGINAL_ZIP]: formexOriginalZip }),
 });
 
 /**
@@ -1757,6 +1765,7 @@ const ecjDecisionFromParts = ({
   }
   const noticeXml = parts[RAW_PART.NOTICE];
   const formexXml = parts[RAW_PART.FORMEX];
+  const formexOriginalZip = parts[RAW_PART.FORMEX_ORIGINAL_ZIP];
   const facts = noticeXml === undefined ? undefined : parseEcjNotice(noticeXml);
   const bibliography =
     formexXml === undefined
@@ -1890,6 +1899,10 @@ const ecjDecisionFromParts = ({
           formexXml === undefined
             ? (parts[RAW_PART.FORMEX_STATE] ?? "formex:not-located")
             : hashContent(formexXml)
+        }${
+          formexOriginalZip === undefined
+            ? ""
+            : `|formex-original-zip:${hashContent(Buffer.from(formexOriginalZip, "base64"))}`
         }`,
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
@@ -2100,7 +2113,10 @@ export const refreshEcjStoredFormex = async ({
     return { type: "write-rejected", rejection: "invalid-envelope" };
   }
   const existingFormex = parts[RAW_PART.FORMEX];
-  if (existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX)) {
+  if (
+    existingFormex?.startsWith(FORMEX_ARCHIVE_PREFIX) &&
+    parts[RAW_PART.FORMEX_ORIGINAL_ZIP] !== undefined
+  ) {
     // Decode to ensure the marker is a valid archive before treating it as current.
     ecjFormexDocuments(existingFormex);
     return { type: "unchanged-already-current" };
@@ -2149,10 +2165,11 @@ export const refreshEcjStoredFormex = async ({
   }
 
   const nextRaw = encodeSourceRawEnvelope({
-    ...Object.fromEntries(
-      Object.entries(parts).filter(([key]) => key !== RAW_PART.FORMEX_STATE),
-    ),
+    ...parts,
     [RAW_PART.FORMEX]: fetched.formex,
+    ...(fetched.formexOriginalZip === undefined
+      ? {}
+      : { [RAW_PART.FORMEX_ORIGINAL_ZIP]: fetched.formexOriginalZip }),
   });
   const reparsed = reparseStoredRaw({
     ...stored,
@@ -2252,7 +2269,11 @@ export const fetchNotice = async ({
 };
 
 type EcjFormexRead =
-  | { type: "fetched"; formex: string }
+  | {
+      type: "fetched";
+      formex: string;
+      formexOriginalZip: string | undefined;
+    }
   | { type: "gone" }
   | { type: "refused"; status: number }
   | { type: "not-located" };
@@ -2327,11 +2348,17 @@ const fetchFormex = async (
   if (
     mediaTypeOf(response.headers.get("content-type") ?? "") !== ZIP_MEDIA_TYPE
   ) {
-    return Result.ok({ type: "fetched", formex: await response.text() });
+    return Result.ok({
+      type: "fetched",
+      formex: await response.text(),
+      formexOriginalZip: undefined,
+    });
   }
+  const bytes = await response.arrayBuffer();
   return Result.ok({
     type: "fetched",
-    formex: await readEcjFormexArchive(await response.arrayBuffer()),
+    formex: await readEcjFormexArchive(bytes),
+    formexOriginalZip: Buffer.from(bytes).toBase64(),
   });
 };
 
@@ -2341,11 +2368,9 @@ export const readEcjFormexArchive = async (
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
   const archive = await JSZip.loadAsync(bytes);
   const entries = await Promise.all(
-    Object.values(archive.files)
-      .filter((file) => !file.dir)
-      .map(
-        async (file) => [file.name, await file.async("uint8array")] as const,
-      ),
+    Object.values(archive.files).map(
+      async (file) => [file.name, await file.async("uint8array")] as const,
+    ),
   );
   return encodeEcjFormexArchive(entries);
 };
@@ -2442,7 +2467,16 @@ export const buildDecision = async (
   const formex =
     formexResult?.type === "fetched" ? formexResult.formex : undefined;
   const parts = {
-    ...ecjRawParts({ binding, html: served.html, notice, formex }),
+    ...ecjRawParts({
+      binding,
+      html: served.html,
+      notice,
+      formex,
+      formexOriginalZip:
+        formexResult?.type === "fetched"
+          ? formexResult.formexOriginalZip
+          : undefined,
+    }),
     ...(noticeRead.type === "refused"
       ? { [RAW_PART.NOTICE_STATE]: `notice:refused:${noticeRead.status}` }
       : {}),
@@ -2824,6 +2858,10 @@ const SOURCE_FIELDS = [
  * language expressions are rows of their own too, but their list is kept: it
  * is the publisher's statement of which rows the work should have.
  */
+type EuEcjPublisherRecord = Readonly<
+  Record<(typeof SOURCE_FIELDS)[number], unknown>
+>;
+
 const EU_ECJ_SOURCE_FIELDS = {
   "listing.celex": { disposition: "stored", target: { type: "identity" } },
   "listing.ecli": {
@@ -2883,7 +2921,7 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "caseLawDirectory" },
   },
-  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT.MEMBERLIST": excludedSourceField(
+  "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT.MEMBERLIST": legacyExcludedSourceField(
     "a wrapper listing the directory chains stated beside it, with no level of its own",
   ),
   "notice.WORK/CASE-LAW_IS_ABOUT_CONCEPT_NEW_CASE-LAW": {
@@ -2899,7 +2937,7 @@ const EU_ECJ_SOURCE_FIELDS = {
     target: { type: "metadata", key: "referringCountry" },
   },
   "notice.WORK/CASE-LAW_ORIGINATES_IN_COUNTRY_ROLE-QUALIFIER":
-    excludedSourceField(
+    legacyExcludedSourceField(
       "the same country as the originating-country field, carrying the role it is named in",
     ),
   "notice.WORK/CASE-LAW_PUBLISHED_IN_ERECUEIL": {
@@ -2910,44 +2948,44 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "procedureLanguage" },
   },
-  "notice.WORK/COMPLEX_WORK_HAS_MEMBER_WORK": excludedSourceField(
+  "notice.WORK/COMPLEX_WORK_HAS_MEMBER_WORK": legacyExcludedSourceField(
     "a grouping work verified to carry no expression and no manifestation",
   ),
-  "notice.WORK/CREATED_BY": excludedSourceField(
+  "notice.WORK/CREATED_BY": legacyExcludedSourceField(
     "the agent link of the created-by-agent field, without the corporate body that names the court",
   ),
-  "notice.WORK/CREATIONDATE": excludedSourceField(
+  "notice.WORK/CREATIONDATE": legacyExcludedSourceField(
     "when the repository first held the record, which moves when the Office re-indexes",
   ),
-  "notice.WORK/DATE": excludedSourceField(
+  "notice.WORK/DATE": legacyExcludedSourceField(
     "the document date under a generic name; the dated field is read instead",
   ),
-  "notice.WORK/DATE_CREATION_LEGACY": excludedSourceField(
+  "notice.WORK/DATE_CREATION_LEGACY": legacyExcludedSourceField(
     "the document date as an earlier system recorded it",
   ),
-  "notice.WORK/DATE_DOCUMENT": excludedSourceField(
+  "notice.WORK/DATE_DOCUMENT": legacyExcludedSourceField(
     "the document date under a second generic name",
   ),
   "notice.WORK/ECLI": {
     disposition: "stored",
     target: { type: "result", key: "ecli" },
   },
-  "notice.WORK/IDENTIFIER": excludedSourceField(
+  "notice.WORK/IDENTIFIER": legacyExcludedSourceField(
     "the ECLI with its scheme prefixed, which the ECLI field states plain",
   ),
-  "notice.WORK/ID_CELEX": excludedSourceField(
+  "notice.WORK/ID_CELEX": legacyExcludedSourceField(
     "the CELEX number under a generic name",
   ),
-  "notice.WORK/ID_SECTOR": excludedSourceField(
+  "notice.WORK/ID_SECTOR": legacyExcludedSourceField(
     "the first character of the CELEX number, which the CELEX number carries",
   ),
-  "notice.WORK/IS_ABOUT": excludedSourceField(
+  "notice.WORK/IS_ABOUT": legacyExcludedSourceField(
     "the subject concepts flattened out of the chains that state their depth",
   ),
-  "notice.WORK/LASTMODIFICATIONDATE": excludedSourceField(
+  "notice.WORK/LASTMODIFICATIONDATE": legacyExcludedSourceField(
     "when the repository last touched the record, which moves when the Office re-indexes",
   ),
-  "notice.WORK/PART_OF": excludedSourceField(
+  "notice.WORK/PART_OF": legacyExcludedSourceField(
     "the container work under a generic name; its coordinates are read from the container itself",
   ),
   "notice.WORK/RESOURCE_LEGAL_DATE_REQUEST_OPINION": {
@@ -2962,7 +3000,7 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "subjectMatter" },
   },
-  "notice.WORK/RESOURCE_LEGAL_NUMBER_NATURAL_CELEX": excludedSourceField(
+  "notice.WORK/RESOURCE_LEGAL_NUMBER_NATURAL_CELEX": legacyExcludedSourceField(
     "the case number digits of the CELEX number, which the CELEX number carries",
   ),
   "notice.WORK/RESOURCE_LEGAL_TYPE": {
@@ -2973,16 +3011,16 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "procedureLanguage" },
   },
-  "notice.WORK/RESOURCE_LEGAL_YEAR": excludedSourceField(
+  "notice.WORK/RESOURCE_LEGAL_YEAR": legacyExcludedSourceField(
     "the year digits of the CELEX number, which the CELEX number carries",
   ),
-  "notice.WORK/SAMEAS": excludedSourceField(
+  "notice.WORK/SAMEAS": legacyExcludedSourceField(
     "the CELEX and ECLI forms of this work's address, both read from their own fields",
   ),
-  "notice.WORK/TYPE": excludedSourceField(
+  "notice.WORK/TYPE": legacyExcludedSourceField(
     "the ontology classes of the record, which describe the repository's model rather than the decision",
   ),
-  "notice.WORK/URI": excludedSourceField(
+  "notice.WORK/URI": legacyExcludedSourceField(
     "the repository address of the work, which the row holds as the address the document was served from",
   ),
   "notice.WORK/VERSION": {
@@ -3011,38 +3049,39 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "form" },
   },
-  "notice.WORK/WORK_ID_DOCUMENT": excludedSourceField(
+  "notice.WORK/WORK_ID_DOCUMENT": legacyExcludedSourceField(
     "the CELEX number with its scheme prefixed",
   ),
   "notice.WORK/WORK_PART_OF_DOSSIER": {
     disposition: "stored",
     target: { type: "metadata", key: "dossier" },
   },
-  "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS": legacyExcludedSourceField(
     "the works of the case file under a generic relation, which the case event lists",
   ),
-  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK": excludedSourceField(
-    "this decision restated as a member of its own case file",
-  ),
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK":
+    legacyExcludedSourceField(
+      "this decision restated as a member of its own case file",
+    ),
   "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_IDENTIFIER": {
     disposition: "stored",
     target: { type: "metadata", key: "dossier" },
   },
-  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TITLE": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TITLE": legacyExcludedSourceField(
     "the docket without its scheme, which the case-file identifier carries whole",
   ),
   "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_TYPE_REFERENCE":
-    excludedSourceField(
+    legacyExcludedSourceField(
       "that the file is a case, which is the scheme its identifier already names",
     ),
   "notice.WORK/WORK_PART_OF_DOSSIER/EVENT_CONTAINS_WORK": {
     disposition: "stored",
     target: { type: "metadata", key: "caseEventWorks" },
   },
-  "notice.WORK/WORK_PART_OF_DOSSIER/PART_OF": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_DOSSIER/PART_OF": legacyExcludedSourceField(
     "the case file the delivery event belongs to, which the case-file identifier names",
   ),
-  "notice.WORK/WORK_PART_OF_DOSSIER/TYPE": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_DOSSIER/TYPE": legacyExcludedSourceField(
     "the ontology classes of the case-file record",
   ),
   "notice.WORK/WORK_PART_OF_WORK": {
@@ -3069,47 +3108,51 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "reportsReference" },
   },
-  "notice.WORK/WORK_PART_OF_WORK/CONTAINS": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_WORK/CONTAINS": legacyExcludedSourceField(
     "the decisions the Reports volume holds, which are documents of their own",
   ),
-  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_TITLE": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_TITLE": legacyExcludedSourceField(
     "the title of the Reports volume, not of the decision",
   ),
-  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_USES_LANGUAGE": excludedSourceField(
-    "the language the Reports volume's own title is given in",
-  ),
-  "notice.WORK/WORK_PART_OF_WORK/NUMBER": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_WORK/EXPRESSION_USES_LANGUAGE":
+    legacyExcludedSourceField(
+      "the language the Reports volume's own title is given in",
+    ),
+  "notice.WORK/WORK_PART_OF_WORK/NUMBER": legacyExcludedSourceField(
     "the container number under a generic name",
   ),
-  "notice.WORK/WORK_PART_OF_WORK/TYPE": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_WORK/TYPE": legacyExcludedSourceField(
     "the ontology classes of the container record",
   ),
-  "notice.WORK/WORK_PART_OF_WORK/WORK_DATE_DOCUMENT": excludedSourceField(
+  "notice.WORK/WORK_PART_OF_WORK/WORK_DATE_DOCUMENT": legacyExcludedSourceField(
     "the decision date restated on its container",
   ),
-  "notice.WORK/WORK_PART_OF_WORK/WORK_HAS_RESOURCE-TYPE": excludedSourceField(
-    "that the container is the Reports of Cases, which its coordinates already name",
-  ),
+  "notice.WORK/WORK_PART_OF_WORK/WORK_HAS_RESOURCE-TYPE":
+    legacyExcludedSourceField(
+      "that the container is the Reports of Cases, which its coordinates already name",
+    ),
   "notice.WORK/WORK_SUMMARIZED_BY_SUMMARY": {
     disposition: "stored",
     target: { type: "metadata", key: "abstractCelex" },
   },
-  "notice.WORK/YEAR": excludedSourceField("the case year under a generic name"),
-  "notice.EXPRESSION/CREATIONDATE": excludedSourceField(
+  "notice.WORK/YEAR": legacyExcludedSourceField(
+    "the case year under a generic name",
+  ),
+  "notice.EXPRESSION/CREATIONDATE": legacyExcludedSourceField(
     "when the repository first held this translation's record",
   ),
-  "notice.EXPRESSION/EXPRESSION_BELONGS_TO_WORK": excludedSourceField(
+  "notice.EXPRESSION/EXPRESSION_BELONGS_TO_WORK": legacyExcludedSourceField(
     "the work this translation belongs to, which is what the row is keyed by",
   ),
   "notice.EXPRESSION/EXPRESSION_CASE-LAW_IDENTIFIER_CASE": {
     disposition: "stored",
     target: { type: "metadata", key: "caseIdentifier" },
   },
-  "notice.EXPRESSION/EXPRESSION_CASE-LAW_PARTIES": excludedSourceField(
+  "notice.EXPRESSION/EXPRESSION_CASE-LAW_PARTIES": legacyExcludedSourceField(
     "the parties' names, which the decision's own text carries and bounds",
   ),
   "notice.EXPRESSION/EXPRESSION_MANIFESTED_BY_MANIFESTATION":
-    excludedSourceField(
+    legacyExcludedSourceField(
       "the formats of this translation without their types, which the format records state",
     ),
   "notice.EXPRESSION/EXPRESSION_TITLE": {
@@ -3120,45 +3163,45 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "identity" },
   },
-  "notice.EXPRESSION/LANG": excludedSourceField(
+  "notice.EXPRESSION/LANG": legacyExcludedSourceField(
     "the two-letter form of this translation's language, which the language concept states",
   ),
-  "notice.EXPRESSION/LASTMODIFICATIONDATE": excludedSourceField(
+  "notice.EXPRESSION/LASTMODIFICATIONDATE": legacyExcludedSourceField(
     "when the repository last touched this translation's record",
   ),
-  "notice.EXPRESSION/PARTIES": excludedSourceField(
+  "notice.EXPRESSION/PARTIES": legacyExcludedSourceField(
     "the parties' names under a generic name",
   ),
-  "notice.EXPRESSION/SAMEAS": excludedSourceField(
+  "notice.EXPRESSION/SAMEAS": legacyExcludedSourceField(
     "the CELEX and ECLI forms of this translation's address",
   ),
-  "notice.EXPRESSION/TITLE": excludedSourceField(
+  "notice.EXPRESSION/TITLE": legacyExcludedSourceField(
     "the translated title under a generic name",
   ),
-  "notice.EXPRESSION/URI": excludedSourceField(
+  "notice.EXPRESSION/URI": legacyExcludedSourceField(
     "the repository address of this translation",
   ),
-  "notice.MANIFESTATION/CREATIONDATE": excludedSourceField(
+  "notice.MANIFESTATION/CREATIONDATE": legacyExcludedSourceField(
     "when the repository first held this format's record",
   ),
-  "notice.MANIFESTATION/LASTMODIFICATIONDATE": excludedSourceField(
+  "notice.MANIFESTATION/LASTMODIFICATIONDATE": legacyExcludedSourceField(
     "when the repository last touched this format's record",
   ),
-  "notice.MANIFESTATION/MANIFESTATION_HAS_ITEM": excludedSourceField(
+  "notice.MANIFESTATION/MANIFESTATION_HAS_ITEM": legacyExcludedSourceField(
     "the numbered items of the format, which the content stream resolves on request",
   ),
   "notice.MANIFESTATION/MANIFESTATION_MANIFESTS_EXPRESSION":
-    excludedSourceField(
+    legacyExcludedSourceField(
       "the translation this format belongs to, which is this row's",
     ),
   "notice.MANIFESTATION/MANIFESTATION_TYPE": {
     disposition: "stored",
     target: { type: "metadata", key: "manifestations" },
   },
-  "notice.MANIFESTATION/SAMEAS": excludedSourceField(
+  "notice.MANIFESTATION/SAMEAS": legacyExcludedSourceField(
     "the CELEX and ECLI forms of this format's address",
   ),
-  "notice.MANIFESTATION/TYPE": excludedSourceField(
+  "notice.MANIFESTATION/TYPE": legacyExcludedSourceField(
     "the ontology classes of the format record",
   ),
   "notice.MANIFESTATION/URI": {
@@ -3210,13 +3253,10 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "metadata", key: "formexAuthors" },
   },
-  "formex.body": excludedSourceField(
+  "formex.body": legacyExcludedSourceField(
     "the same decision text the document part carries, in the publisher's semantic encoding; the part is kept so a later parse can be checked against it rather than read into the row today",
   ),
-} as const satisfies Record<
-  (typeof SOURCE_FIELDS)[number],
-  SourceFieldDisposition
->;
+} as const satisfies Record<keyof EuEcjPublisherRecord, SourceFieldDisposition>;
 
 /**
  * What the stored envelope states, read from every part of it.
