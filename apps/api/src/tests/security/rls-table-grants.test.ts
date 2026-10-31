@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import {
+  migrationStatementTokens,
+  parseMigrationStatements,
+  readMigrationRelation,
+} from "../../../../../scripts/check-migration-safety";
+
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../../drizzle");
 const BOOTSTRAP_MIGRATION = "20260510140000_document_rls_role_bootstrap";
 
@@ -663,6 +669,129 @@ const mutableProjectionExcessGrantTargets = (
   );
 };
 
+const rootOnlyRlsState = (sources: readonly string[]) => {
+  const forced = new Set<string>();
+  const revoked = new Set<string>();
+  const policies = new Map<string, Map<string, boolean>>();
+  const privileged = new Set<string>();
+  const created = new Set<string>();
+  for (const source of sources) {
+    for (const statement of parseMigrationStatements(source)) {
+      if (statement.deferred) {
+        continue;
+      }
+      const tokens = migrationStatementTokens(statement);
+      const words = tokens.map(({ value }) => value);
+      if (words.at(0) === "create" && words.at(1) === "table") {
+        const relation = readMigrationRelation(
+          tokens,
+          words.at(2) === "if" ? 5 : 2,
+        );
+        if (relation?.relation.schema === "public") {
+          created.add(relation.relation.name);
+        }
+      }
+      if (words.at(0) === "alter" && words.at(1) === "table") {
+        const relation = readMigrationRelation(tokens, 2);
+        if (relation?.relation.schema === "public") {
+          const action = words.slice(relation.next).join(" ");
+          if (action === "force row level security") {
+            forced.add(relation.relation.name);
+          }
+          if (
+            action === "no force row level security" ||
+            action === "disable row level security"
+          ) {
+            forced.delete(relation.relation.name);
+          }
+        }
+      }
+      const normalized = stripSqlLineComments(statement.raw)
+        .replace(/\s+/gu, " ")
+        .trim();
+      const grant = stellaTableGrant(normalized);
+      if (grant?.type === "tables") {
+        for (const table of grant.tables) {
+          privileged.add(table);
+        }
+      } else if (grant?.schemas.includes("public")) {
+        for (const table of created) {
+          privileged.add(table);
+        }
+      }
+      if (words.at(0) === "revoke" && words.at(1) === "all") {
+        const on = words.indexOf("on");
+        const from = words.indexOf("from");
+        const relation = readMigrationRelation(
+          tokens,
+          on + (words.at(on + 1) === "table" ? 2 : 1),
+        );
+        const grantees = words.slice(from + 1).filter((word) => word !== ",");
+        if (
+          on !== -1 &&
+          from !== -1 &&
+          relation?.next === from &&
+          relation.relation.schema === "public" &&
+          grantees.includes("stella") &&
+          grantees.includes("public")
+        ) {
+          revoked.add(relation.relation.name);
+          privileged.delete(relation.relation.name);
+        }
+      }
+      if (
+        !["create", "alter", "drop"].includes(words.at(0) ?? "") ||
+        words.at(1) !== "policy"
+      ) {
+        continue;
+      }
+      const on = words.indexOf("on");
+      const relation = readMigrationRelation(tokens, on + 1);
+      const name = words.at(2);
+      if (
+        on === -1 ||
+        relation?.relation.schema !== "public" ||
+        name === undefined
+      ) {
+        continue;
+      }
+      const table = relation.relation.name;
+      const tablePolicies = policies.get(table) ?? new Map<string, boolean>();
+      policies.set(table, tablePolicies);
+      if (words.at(0) === "drop") {
+        tablePolicies.delete(name);
+        continue;
+      }
+      const bodyStart = tokens.at(relation.next)?.index;
+      const body =
+        bodyStart === undefined
+          ? ""
+          : statement.text.slice(bodyStart).replace(/\s+/gu, "").toLowerCase();
+      const owner =
+        "(current_user=(selectpg_catalog.pg_get_userbyid(relowner)frompg_catalog.pg_classwhereoid=::regclass))";
+      const ownerOnly =
+        words.at(0) === "create" &&
+        body === `foralltopublicusing${owner}withcheck${owner}` &&
+        statement.literals.length === 2 &&
+        statement.literals.every(({ value }) => value === `public.${table}`);
+      tablePolicies.set(name, ownerOnly);
+    }
+  }
+  const tables = new Set(
+    [...policies]
+      .filter(
+        ([table, entries]) =>
+          forced.has(table) &&
+          revoked.has(table) &&
+          entries.size > 0 &&
+          [...entries.values()].every(Boolean),
+      )
+      .map(([table]) => table),
+  );
+  const invalid = [...tables].filter((table) => privileged.has(table));
+  return { tables, invalid };
+};
+
 const collectRlsGrantState = () => {
   let rlsTables: RlsTableIntroduction[] = [];
   const droppedTables = new Set<string>();
@@ -671,6 +800,9 @@ const collectRlsGrantState = () => {
   const appendOnlyMutationGrants: string[] = [];
   const unexpectedDynamicGrantSites: string[] = [];
   const mutableProjectionExcessGrants: string[] = [];
+  const rootOnly = rootOnlyRlsState(
+    migrationSqlFiles().map((path) => readFileSync(path, "utf-8")),
+  );
 
   for (const path of migrationSqlFiles()) {
     const migration = nodePath.basename(nodePath.resolve(path, ".."));
@@ -729,6 +861,7 @@ const collectRlsGrantState = () => {
   }
 
   return {
+    rootOnly,
     droppedTables,
     explicitGrantMigrationsByTable,
     rlsTables,
@@ -740,6 +873,58 @@ const collectRlsGrantState = () => {
 };
 
 describe("RLS table grants", () => {
+  test("owner-only classification requires a complete privilege boundary", () => {
+    const table = "transaction_proofs";
+    const owner = `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`;
+    const source = `CREATE TABLE public.${table}(id bigint);
+      ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY;
+      ALTER TABLE public.${table} FORCE ROW LEVEL SECURITY;
+      CREATE POLICY owner_access ON public.${table} FOR ALL TO public USING (${owner}) WITH CHECK (${owner});
+      REVOKE ALL ON TABLE public.${table} FROM PUBLIC, stella;`;
+    const valid = (sql: string) => {
+      const state = rootOnlyRlsState([sql]);
+      return state.tables.has(table) && state.invalid.length === 0;
+    };
+    expect(valid(source)).toBe(true);
+    for (const privilege of ["SELECT", "INSERT", "UPDATE", "DELETE", "ALL"]) {
+      expect(
+        valid(
+          `${source} GRANT ${privilege} ON TABLE public.${table} TO stella;`,
+        ),
+      ).toBe(false);
+    }
+    expect(
+      valid(
+        source.replace(
+          `REVOKE ALL ON TABLE public.${table} FROM PUBLIC, stella;`,
+          "",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(
+        source.replace(
+          "FORCE ROW LEVEL SECURITY",
+          "NO FORCE ROW LEVEL SECURITY",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      valid(source.replace(`WITH CHECK (${owner})`, "WITH CHECK (true)")),
+    ).toBe(false);
+    expect(valid(source.replace(`USING (${owner})`, "USING (true)"))).toBe(
+      false,
+    );
+    expect(
+      valid(source.replaceAll(`'public.${table}'`, "'public.other_table'")),
+    ).toBe(false);
+    expect(
+      valid(
+        `${source} CREATE POLICY other_access ON public.${table} USING (true);`,
+      ),
+    ).toBe(false);
+  });
+
   test("the public sanctions reader can be assumed by the application connection", () => {
     const migration = readFileSync(
       nodePath.join(
@@ -860,12 +1045,14 @@ describe("RLS table grants", () => {
   });
 
   test("post-bootstrap RLS tables explicitly grant stella table privileges", () => {
-    const { explicitGrantMigrationsByTable, rlsTables } =
+    const { explicitGrantMigrationsByTable, rlsTables, rootOnly } =
       collectRlsGrantState();
+    expect(rootOnly.invalid).toEqual([]);
 
     const missingGrants = rlsTables
       .filter(
         ({ migration, table }) =>
+          !rootOnly.tables.has(table) &&
           !explicitGrantMigrationsByTable
             .get(table)
             ?.some((grantMigration) => grantMigration >= migration),
