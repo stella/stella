@@ -294,9 +294,8 @@ export const DIFF_SCOPED_STEPS = {
   ),
   "ci.yml:ci-checks-rest#Check migration identity against the base branch":
     diffComplete("Concerns the migrations the change adds or removes."),
-  "ci.yml:ci-checks-rest#Bridge-version guard": gap(
-    "dependents",
-    "Watches six bridge files; the other command modules registered by the command manifest can change the bridge without a version bump.",
+  "ci.yml:ci-checks-rest#Bridge-version guard": expands(
+    "Watches the bridge files and every crate module the bridge calls, read from bridge.rs.",
   ),
   "ci.yml:ci-tests#Compute affected flag": expands(
     "Turbo's affected scope with declared root inputs; without a base the whole tree.",
