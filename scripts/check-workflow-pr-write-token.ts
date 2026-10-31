@@ -16,90 +16,217 @@ type Finding = {
   trigger: string;
 };
 
+type FindingKey = `${Finding["class"]}:${string}`;
+
+type WorkflowPrivilegeExemption = {
+  reason: string;
+  /** The findings the reason covers; any other finding on the job is reported. */
+  covers: readonly [FindingKey, ...FindingKey[]];
+  /** Job-condition fragments the reason depends on; without one the exemption lapses. */
+  requires: readonly string[];
+};
+
+const CI_PLAN_REASON =
+  "pull-request credentials are platform-downgraded or admitted by the trusted CI plan";
+const CI_PLAN_TRUSTED = "needs.ci-plan.outputs.trusted == 'true'";
+const RELEASE_SHOULD_BUILD = "needs.resolve.outputs.should_build == 'true'";
+const PULL_REQUEST_DEPENDABOT = ["class 3:pull_request"] as const;
+const PULL_REQUEST_SECRET = [
+  "class 2:pull_request",
+  "class 3:pull_request",
+] as const;
+const WORKFLOW_RUN_WRITE = ["class 1:workflow_run"] as const;
+
 export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
-  ".github/workflows/ci.yml:api-image-smoke":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-browser":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-checks-generated":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-checks-policy":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-checks-rest":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-plan":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:ci-result":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:marketing-screenshots":
-    "registry pull credentials reach the reusable capture only when the trusted CI plan admits the run",
-  ".github/workflows/ci.yml:ci-tests":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:code-quality-api":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:code-quality-web-rest":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:dependency-malware":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:desktop-rust-lint":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:desktop-rust-tests":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:desktop-windows-dry-run":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:e2e-landing":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:e2e-production-shard":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:e2e-report":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:e2e-vite-canary":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:generated-sources":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:landing-build":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:legal-atlas-image":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:migration-upgrade-rehearsal":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:mobile-build":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:postgres-service-suites":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:release-typecheck":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:route-smoke":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:scan-engine-wasm-drift":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:service-suites":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:stack-redaction-browsers":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:web-build":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:web-image-smoke":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/ci.yml:windows-scripts":
-    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
-  ".github/workflows/release-desktop.yml:build":
-    "the workflow_run release reference is resolved and admitted from the trusted release workflow",
-  ".github/workflows/release-desktop.yml:manifest":
-    "the workflow_run release reference is resolved and admitted from the trusted release workflow",
-  ".github/workflows/ci.yml:database-migrations-check":
-    "ci-plan trusted is false for Dependabot pull requests",
-  ".github/workflows/ci.yml:database-migrations-apply-fresh":
-    "ci-plan trusted is false for Dependabot pull requests",
-  ".github/workflows/release-desktop.yml:promote-latest":
-    "resolve accepts only a release tag produced from main",
-  ".github/workflows/release-desktop.yml:carry-forward":
-    "resolve accepts only a release tag produced from main",
-  ".github/workflows/release-tag.yml:tag":
-    "the workflow_run path is rejected by the dispatch-only job condition",
-  ".github/workflows/scheduled-run-alerts.yml:notify":
-    "the workflow_run condition accepts only non-pull-request source events from this repository",
-} as const satisfies Record<string, string>;
+  ".github/workflows/ci.yml:api-image-smoke": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:ci-browser": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [],
+  },
+  ".github/workflows/ci.yml:ci-checks-generated": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:ci-checks-policy": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:ci-checks-rest": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:ci-plan": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [],
+  },
+  ".github/workflows/ci.yml:ci-result": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [],
+  },
+  ".github/workflows/ci.yml:marketing-screenshots": {
+    reason:
+      "registry pull credentials reach the reusable capture only when the trusted CI plan admits the run",
+    covers: PULL_REQUEST_SECRET,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:ci-tests": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:code-quality-api": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:code-quality-web-rest": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:dependency-malware": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:desktop-rust-lint": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:desktop-rust-tests": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:desktop-windows-dry-run": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:e2e-landing": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:e2e-production-shard": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_SECRET,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:e2e-report": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [],
+  },
+  ".github/workflows/ci.yml:e2e-vite-canary": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_SECRET,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:generated-sources": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:landing-build": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:legal-atlas-image": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:migration-upgrade-rehearsal": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:mobile-build": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:postgres-service-suites": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:release-typecheck": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:route-smoke": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_SECRET,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:scan-engine-wasm-drift": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:service-suites": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:stack-redaction-browsers": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:web-build": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:web-image-smoke": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:windows-scripts": {
+    reason: CI_PLAN_REASON,
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/release-desktop.yml:build": {
+    reason:
+      "the workflow_run release reference is resolved and admitted from the trusted release workflow",
+    covers: WORKFLOW_RUN_WRITE,
+    requires: [RELEASE_SHOULD_BUILD],
+  },
+  ".github/workflows/release-desktop.yml:manifest": {
+    reason:
+      "the workflow_run release reference is resolved and admitted from the trusted release workflow",
+    covers: WORKFLOW_RUN_WRITE,
+    requires: [RELEASE_SHOULD_BUILD],
+  },
+  ".github/workflows/ci.yml:database-migrations-check": {
+    reason: "ci-plan trusted is false for Dependabot pull requests",
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+  ".github/workflows/ci.yml:database-migrations-apply-fresh": {
+    reason: "ci-plan trusted is false for Dependabot pull requests",
+    covers: PULL_REQUEST_DEPENDABOT,
+    requires: [CI_PLAN_TRUSTED],
+  },
+} as const satisfies Record<string, WorkflowPrivilegeExemption>;
 
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -596,6 +723,39 @@ const findingsForStep = (options: StepFindingOptions): Finding[] => {
   return findings;
 };
 
+const WORKFLOW_PRIVILEGE_EXEMPTIONS = new Map(
+  Object.entries(WORKFLOW_PRIVILEGE_ALLOWLIST),
+);
+
+type UnexemptedFindingsOptions = {
+  key: string;
+  condition: string;
+  findings: readonly Finding[];
+};
+
+// An exemption covers only the findings it was approved for, and only while
+// the job keeps every condition its reason depends on, so a later edit that
+// adds a trigger, a privilege class or drops a guard condition is reported.
+const unexemptedFindings = ({
+  key,
+  condition,
+  findings,
+}: UnexemptedFindingsOptions): readonly Finding[] => {
+  const exemption = WORKFLOW_PRIVILEGE_EXEMPTIONS.get(key);
+  if (
+    exemption === undefined ||
+    !exemption.requires.every((fragment) => condition.includes(fragment))
+  ) {
+    return findings;
+  }
+  return findings.filter(
+    (finding) =>
+      !exemption.covers.some(
+        (covered) => covered === `${finding.class}:${finding.trigger}`,
+      ),
+  );
+};
+
 export const checkWorkflowPrivilegeSource = (
   file: string,
   source: string,
@@ -621,11 +781,10 @@ export const checkWorkflowPrivilegeSource = (
   }
   const findings: Finding[] = [];
   const jobEntries = Object.entries(parsed["jobs"]).filter(
-    (entry): entry is [string, Record<string, unknown>] =>
-      record(entry[1]) &&
-      !(`${file}:${entry[0]}` in WORKFLOW_PRIVILEGE_ALLOWLIST),
+    (entry): entry is [string, Record<string, unknown>] => record(entry[1]),
   );
   for (const [jobName, rawJob] of jobEntries) {
+    const jobFindings: Finding[] = [];
     const permissions = rawJob["permissions"] ?? parsed["permissions"];
     const write = hasWrite(permissions);
     const steps = stepsOf(rawJob);
@@ -710,7 +869,7 @@ export const checkWorkflowPrivilegeSource = (
       }
       const step =
         typeof rawStep["name"] === "string" ? rawStep["name"] : "unnamed step";
-      findings.push(
+      jobFindings.push(
         ...findingsForStep({
           condition,
           excludesDependabot,
@@ -727,7 +886,7 @@ export const checkWorkflowPrivilegeSource = (
     }
     const reusableUses = stringField(rawJob["uses"]);
     if (reusableUses.startsWith("./") && (secret || write)) {
-      findings.push(
+      jobFindings.push(
         ...findingsForStep({
           condition,
           excludesDependabot,
@@ -742,6 +901,13 @@ export const checkWorkflowPrivilegeSource = (
         }),
       );
     }
+    findings.push(
+      ...unexemptedFindings({
+        key: `${file}:${jobName}`,
+        condition,
+        findings: jobFindings,
+      }),
+    );
   }
   return findings;
 };

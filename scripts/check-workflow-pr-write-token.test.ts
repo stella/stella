@@ -22,12 +22,51 @@ const check = (source: string) =>
 
 describe("privileged workflow policy", () => {
   test("every allowlist entry has a reachability reason", () => {
-    for (const [entry, reason] of Object.entries(
+    for (const [entry, { reason }] of Object.entries(
       WORKFLOW_PRIVILEGE_ALLOWLIST,
     )) {
       expect(entry).toMatch(/^\.github\/workflows\/[^:]+:[^:]+$/u);
       expect(reason.length).toBeGreaterThan(20);
     }
+  });
+  test("an exemption covers only its approved findings", () => {
+    const source = `
+on: pull_request_target
+permissions:
+  contents: write
+jobs:
+  ci-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@pin
+        with:
+          ref: \${{ github.event.pull_request.head.sha }}
+      - run: bash scripts/x.sh`;
+    expect(
+      checkWorkflowPrivilegeSource(".github/workflows/ci.yml", source),
+    ).not.toHaveLength(0);
+  });
+  test("an exemption lapses when the job drops a condition its reason needs", () => {
+    const source = (condition: string) => `
+on: pull_request
+permissions:
+  actions: write
+jobs:
+  database-migrations-check:
+    runs-on: ubuntu-latest
+${condition}    steps:
+      - uses: actions/checkout@pin
+      - run: bash scripts/x.sh`;
+    const ciFile = ".github/workflows/ci.yml";
+    expect(
+      checkWorkflowPrivilegeSource(
+        ciFile,
+        source("    if: needs.ci-plan.outputs.trusted == 'true'\n"),
+      ),
+    ).toEqual([]);
+    expect(checkWorkflowPrivilegeSource(ciFile, source(""))).not.toHaveLength(
+      0,
+    );
   });
   test("refuses pull_request_target head tooling with write access", () => {
     expect(
