@@ -1,0 +1,8 @@
+{
+  "sourceUrl": "https://publications.europa.eu/resource/celex/32006L0123",
+  "retrievedAt": "2026-10-16",
+  "sourceSha256": "3aa061dc722ee317d95ceafab6d7efe66a4ae525b39092789d106c92e9306c92",
+  "sha256": "1161edb3332c636a775f8f5396d945582795f805bbec60b224362ff9a2e9a07f",
+  "transformation": "Extracted publisher elements by id; removed XML namespace prefixes and wrapped as XHTML. Annex excerpt retains first six children.",
+  "originalCapture": "32006L0123-eng.raw"
+}
