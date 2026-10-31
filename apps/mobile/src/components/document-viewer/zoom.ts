@@ -52,18 +52,22 @@ export const docxZoomTarget = ({
     : folioZoom(fitPerPixel * width, zoom);
 
 /**
- * Where a scroller's offset along one axis moves when its content scales by
- * `ratio`, so the point at the middle of its `viewport` stays there.
+ * Where a scroller's offset along one axis moves when its content, after
+ * `lead` pixels of padding that do not scale, scales by `ratio`, so the
+ * point at the middle of its `viewport` stays there.
  */
 export const scaledScroll = ({
   offset,
   viewport,
   ratio,
+  lead,
 }: {
   offset: number;
   viewport: number;
   ratio: number;
-}): number => Math.max(0, (offset + viewport / 2) * ratio - viewport / 2);
+  lead: number;
+}): number =>
+  Math.max(0, (offset + viewport / 2 - lead) * ratio + lead - viewport / 2);
 
 /**
  * The most pixels one canvas holds. WebKit refuses to draw a larger one,

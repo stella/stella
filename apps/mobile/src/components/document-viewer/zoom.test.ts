@@ -86,12 +86,30 @@ describe("docxZoomTarget", () => {
 
 describe("scaledScroll", () => {
   test("keeps the middle of the screen on the same point", () => {
-    const offset = scaledScroll({ offset: 1000, viewport: 800, ratio: 2 });
+    const offset = scaledScroll({
+      offset: 1000,
+      viewport: 800,
+      ratio: 2,
+      lead: 0,
+    });
     expect((offset + 400) / 2).toBe(1000 + 400);
   });
 
+  test("leaves the padding before the content unscaled", () => {
+    const lead = 12;
+    const offset = scaledScroll({
+      offset: 1000,
+      viewport: 800,
+      ratio: 2,
+      lead,
+    });
+    expect((offset + 400 - lead) / 2).toBe(1000 + 400 - lead);
+  });
+
   test("never scrolls before the start", () => {
-    expect(scaledScroll({ offset: 0, viewport: 800, ratio: 0.5 })).toBe(0);
+    expect(
+      scaledScroll({ offset: 0, viewport: 800, ratio: 0.5, lead: 12 }),
+    ).toBe(0);
   });
 });
 

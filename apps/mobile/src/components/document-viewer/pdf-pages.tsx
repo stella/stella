@@ -5,6 +5,7 @@
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
 import {
+  useCallback,
   useEffect,
   useEffectEvent,
   useLayoutEffect,
@@ -165,23 +166,26 @@ export const PdfPages = ({
       offset: box.scrollTop,
       viewport: box.clientHeight,
       ratio,
+      lead: PAGE_GAP,
     });
     box.scrollLeft = scaledScroll({
       offset: box.scrollLeft,
       viewport: box.clientWidth,
       ratio,
+      lead: PAGE_GAP,
     });
   }, [zoom]);
+  const holdScroller = useCallback((node: HTMLDivElement | null) => {
+    scrolling.current = node;
+    setScroller(node);
+  }, []);
 
   if (pdf === null || layout === null) {
     return null;
   }
   return (
     <div
-      ref={(node) => {
-        scrolling.current = node;
-        setScroller(node);
-      }}
+      ref={holdScroller}
       style={{
         height: "100%",
         overflow: "auto",

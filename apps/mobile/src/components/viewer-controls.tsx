@@ -59,6 +59,8 @@ export const ViewerControls = ({
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
   const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const level =
+    zoom === FIT_ZOOM ? t("fit") : format.number(zoom, { style: "percent" });
 
   const row = (
     <View style={styles.row}>
@@ -73,6 +75,7 @@ export const ViewerControls = ({
       <Pressable
         accessibilityLabel={t("zoomFit")}
         accessibilityRole="button"
+        accessibilityValue={{ text: level }}
         className="active:opacity-60"
         hitSlop={4}
         onPress={() => {
@@ -81,9 +84,7 @@ export const ViewerControls = ({
         style={styles.level}
       >
         <Text numberOfLines={1} variant="label">
-          {zoom === FIT_ZOOM
-            ? t("fit")
-            : format.number(zoom, { style: "percent" })}
+          {level}
         </Text>
       </Pressable>
       <ControlButton

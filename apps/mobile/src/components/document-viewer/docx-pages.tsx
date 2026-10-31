@@ -93,21 +93,27 @@ export const DocxPages = ({
   const messages: AbstractIntlMessages = FOLIO_CATALOGS[uiLocale];
 
   const editor = useRef<DocxEditorRef>(null);
-  // folio's fit over the width it fitted, read once, at the first paint,
-  // before any zoom of the person's.
-  const [fitPerPixel, setFitPerPixel] = useState<number | null>(null);
+  // folio's fit over the width it fitted, read once, while folio still
+  // fits the page itself: at the first paint, or else at the first zoom.
+  const fitPerPixel = useRef<number | null>(null);
   const [width, setWidth] = useState(
     () => document.documentElement.clientWidth,
   );
   const zoomed = useRef(false);
 
-  const painted = useEffectEvent(() => {
+  const readFit = () => {
     const fitted = editor.current?.getZoom();
-    if (fitted !== undefined) {
-      setFitPerPixel(
-        (current) => current ?? fitted / document.documentElement.clientWidth,
-      );
+    if (
+      fitPerPixel.current === null &&
+      !zoomed.current &&
+      fitted !== undefined
+    ) {
+      fitPerPixel.current = fitted / document.documentElement.clientWidth;
     }
+  };
+
+  const painted = useEffectEvent(() => {
+    readFit();
     onReady();
   });
 
@@ -121,11 +127,12 @@ export const DocxPages = ({
     };
   }, []);
 
-  useEffect(() => {
+  const applyZoom = useEffectEvent((atWidth: number, atZoom: number) => {
+    readFit();
     const target = docxZoomTarget({
-      fitPerPixel,
-      width,
-      zoom,
+      fitPerPixel: fitPerPixel.current,
+      width: atWidth,
+      zoom: atZoom,
       zoomed: zoomed.current,
     });
     if (target === null) {
@@ -133,7 +140,11 @@ export const DocxPages = ({
     }
     zoomed.current = true;
     editor.current?.setZoom(target);
-  }, [fitPerPixel, width, zoom]);
+  });
+
+  useEffect(() => {
+    applyZoom(width, zoom);
+  }, [width, zoom]);
 
   useEffect(() => {
     declareFolioFonts();
