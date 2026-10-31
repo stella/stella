@@ -1,8 +1,10 @@
 import { Suspense, useState } from "react";
 
 import { Stack, useLocalSearchParams } from "expo-router";
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
+
+import { Loader } from "@stll/ui/loader";
 
 import { DecisionReader } from "@/components/decision-reader";
 import { screenStyles } from "@/components/empty-state-screen";
@@ -60,14 +62,11 @@ const LoadedDecision = ({
   serverUrl: string;
   webOrigin: string;
 }) => {
-  const colors = useAppColors();
   const [load, setLoad] = useState(
     async () => await loadDecision(decisionId, serverUrl),
   );
   return (
-    <Suspense
-      fallback={<ActivityIndicator className="flex-1" color={colors.muted} />}
-    >
+    <Suspense fallback={<Loader className="flex-1" />}>
       <DecisionReader
         load={load}
         onReload={() => {

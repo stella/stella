@@ -7,10 +7,11 @@ import {
   useNavigation,
   useRouter,
 } from "expo-router";
-import { ActivityIndicator, ScrollView, View } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -23,7 +24,6 @@ import { useSession } from "@/connection/session-provider";
 import { readFileProperty, uploadDocument } from "@/state/document-upload";
 import { listMatters } from "@/state/matters";
 import { sizeInUnits } from "@/state/scan-pages";
-import { useAppColors } from "@/theme";
 
 /**
  * The reviewed scan, bound into a PDF, on its way into a matter: its name,
@@ -42,7 +42,6 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
   const t = useTranslations("scan");
   const tabs = useTranslations("tabs");
   const format = useFormatter();
-  const colors = useAppColors();
   const router = useRouter();
   const navigation = useNavigation();
   const { end } = useSession();
@@ -161,13 +160,13 @@ const SaveScanForm = ({ source }: { source: AccessTokenSource }) => {
             ].join(" · ")}
           </Text>
         </View>
-        {uploading ? <ActivityIndicator color={colors.muted} /> : null}
+        {uploading ? <Loader /> : null}
         <WriteFailureNotice failure={failure} message={t("uploadFailed")} />
         <View className="gap-2">
           <View className="px-1">
             <Text variant="section">{t("matterTitle")}</Text>
           </View>
-          <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
+          <Suspense fallback={<Loader />}>
             <MatterPicker
               matters={matters}
               onSelect={setMatterId}

@@ -1,8 +1,5 @@
-import { ActivityIndicator } from "react-native";
-
 import { Button } from "@stll/ui/button";
-
-import { useAppColors } from "@/theme";
+import { Loader } from "@stll/ui/loader";
 
 /** The outlined button a failed load offers to run again. */
 export const RetryButton = ({
@@ -30,9 +27,8 @@ export const PagingFooter = ({
   onRetry: () => void;
   state: PagingState;
 }) => {
-  const colors = useAppColors();
   if (state === "loading") {
-    return <ActivityIndicator className="py-3" color={colors.muted} />;
+    return <Loader className="py-3" />;
   }
   if (state === "failed") {
     return <RetryButton label={label} onPress={onRetry} />;

@@ -1,14 +1,10 @@
-import { ActivityIndicator, View } from "react-native";
+import { View } from "react-native";
 
-import { useAppColors } from "@/theme";
+import { Loader } from "@stll/ui/loader";
 
 /** A full screen with one spinner, while something the screen needs loads. */
-export const LoadingScreen = () => {
-  const colors = useAppColors();
-
-  return (
-    <View className="bg-background flex-1 items-center justify-center">
-      <ActivityIndicator color={colors.muted} />
-    </View>
-  );
-};
+export const LoadingScreen = () => (
+  <View className="bg-background flex-1 items-center justify-center">
+    <Loader />
+  </View>
+);

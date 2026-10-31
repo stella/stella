@@ -1,6 +1,7 @@
 import type { PressableProps } from "react-native";
 import { Pressable } from "react-native";
 
+import { cn } from "../lib/utils";
 import {
   BUTTON_VARIANT_TOKENS,
   type ButtonContract,
@@ -32,13 +33,13 @@ const SIZES = {
   icon: { box: `${CONTROL} size-11 rounded-lg`, label: "", slop: 0 },
   "icon-lg": { box: `${CONTROL} size-12 rounded-lg`, label: "", slop: 0 },
   "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
-  "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
+  "icon-xl": { box: `${CONTROL} size-11 rounded-lg`, label: "", slop: 0 },
   "icon-xs": { box: `${CONTROL} size-7 rounded-md`, label: "", slop: 8 },
   lg: { box: `${CONTROL} min-h-12 gap-2 rounded-lg px-5`, label: "", slop: 0 },
-  // One row of a list: full width, its content leading and top-aligned (a
-  // glyph stays beside a title's first line), as tall as the content plus
-  // the platform's row inset. The list draws the dividers between rows.
-  row: { box: "min-h-11 w-full items-start gap-3 py-3", label: "", slop: 0 },
+  // One row of a list: a full-width target at least a touch target tall,
+  // laid out by the content it holds (a glyph beside two lines of text, a
+  // chevron trailing). The list draws the dividers between rows.
+  row: { box: "min-h-11 w-full rounded-lg", label: "", slop: 0 },
   sm: {
     box: `${CONTROL} min-h-9 gap-1.5 rounded-lg px-3`,
     label: "text-sm",
@@ -108,13 +109,11 @@ export const Button = ({
   const press = PRESS[variant ?? "default"];
   const inactive = disabled || loading;
   const selected = accessibilityState?.selected === true;
-  const label = [
+  const label = cn(
     tokens.label,
-    variant === "link" ? "text-foreground underline" : "",
+    variant === "link" && "text-foreground underline",
     shape.label,
-  ]
-    .filter((name) => name !== "")
-    .join(" ");
+  );
   return (
     <Pressable
       accessibilityRole="button"
@@ -123,16 +122,15 @@ export const Button = ({
         busy: loading,
         disabled: inactive,
       }}
-      className={[
+      // As on the web, a caller's class wins over the button's own.
+      className={cn(
         "flex-row",
         tokens.surface,
         shape.box,
         inactive ? "opacity-64" : press.pressed,
-        selected ? press.selected : "",
-        className ?? "",
-      ]
-        .filter((name) => name !== "")
-        .join(" ")}
+        selected && press.selected,
+        className,
+      )}
       disabled={inactive}
       hitSlop={hitSlop ?? (shape.slop === 0 ? undefined : shape.slop)}
       {...props}

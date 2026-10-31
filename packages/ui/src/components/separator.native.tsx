@@ -1,6 +1,7 @@
 import type { ViewProps } from "react-native";
 import { View } from "react-native";
 
+import { cn } from "../lib/utils";
 import type { SeparatorContract } from "./separator.shared";
 
 /**
@@ -21,9 +22,11 @@ export const Separator = ({
   <View
     {...props}
     accessibilityElementsHidden
-    className={`bg-border ${
-      orientation === "vertical" ? "w-px self-stretch" : "h-px w-full"
-    } ${className ?? ""}`}
+    className={cn(
+      "bg-border",
+      orientation === "vertical" ? "w-px self-stretch" : "h-px w-full",
+      className,
+    )}
     importantForAccessibility="no-hide-descendants"
   />
 );

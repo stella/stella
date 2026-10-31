@@ -1,17 +1,15 @@
 import { useState } from "react";
 
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import {
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-} from "react-native";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
-import { COMPOSER_BOX_CLASS } from "@stll/ui/composer-tokens";
+import { Button } from "@stll/ui/button";
+import {
+  COMPOSER_BOX_CLASS,
+  COMPOSER_CONTROL_BUTTON_SIZE,
+} from "@stll/ui/composer-tokens";
 import { Text } from "@stll/ui/text";
 import { Textarea } from "@stll/ui/textarea";
 
@@ -93,10 +91,9 @@ export const ChatComposer = ({
   // A one-line text cell is 42pt tall (24pt line, 9pt above and below); the
   // 36pt round controls sit centred on it. With nothing to send, the button
   // is drawn muted rather than dimmed, so it never reads as ready.
-  const round =
-    "mb-[3px] size-9 shrink-0 items-center justify-center rounded-full";
+  const round = "mb-[3px] size-9 shrink-0 rounded-full border-transparent";
   const ready = `${round} bg-foreground`;
-  const muted = `${round} bg-secondary`;
+  const muted = `${round} bg-secondary opacity-100`;
 
   // iOS 26's Liquid Glass: the box is a glass capsule floating over the
   // screen, as the platform's own message fields are. Elsewhere it keeps the
@@ -145,33 +142,31 @@ export const ChatComposer = ({
             />
           </View>
           {busy ? (
-            <Pressable
+            <Button
               accessibilityLabel={t("stop")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canStop }}
               className={canStop ? ready : muted}
               disabled={!canStop}
               onPress={onStop}
+              size={COMPOSER_CONTROL_BUTTON_SIZE}
             >
               <SquareIcon
                 color={canStop ? ui.background : ui.mutedForeground}
                 size={16}
               />
-            </Pressable>
+            </Button>
           ) : (
-            <Pressable
+            <Button
               accessibilityLabel={t("send")}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSend }}
               className={canSend ? ready : muted}
               disabled={!canSend}
               onPress={send}
+              size={COMPOSER_CONTROL_BUTTON_SIZE}
             >
               <ArrowUpIcon
                 color={canSend ? ui.background : ui.mutedForeground}
                 size={18}
               />
-            </Pressable>
+            </Button>
           )}
         </View>
       </Box>

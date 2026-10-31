@@ -1,8 +1,9 @@
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { TASK_STATUS } from "@stll/api-contract/entity-options";
 import type { TaskStatus } from "@stll/api-contract/entity-options";
+import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { EntityKindIcon } from "@/components/entity-kind-icon";
@@ -58,37 +59,41 @@ export const EntityRow = ({
   ].filter((detail): detail is string => detail !== undefined);
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       accessibilityState={
         folder === null ? undefined : { expanded: folder.open }
       }
-      className="border-border active:bg-accent flex-row gap-3 border-b py-3"
       onPress={onPress}
-      style={{ paddingStart: depth * DEPTH_INDENT }}
+      size="row"
+      variant="ghost"
     >
-      <View className="pt-0.5">
-        <EntityKindIcon color={ui.mutedForeground} kind={entity.kind} />
-      </View>
-      <View className="flex-1 gap-0.5">
-        <Text numberOfLines={2} variant="rowTitle">
-          {entity.name === null || entity.name === ""
-            ? t("untitled")
-            : entity.name}
-        </Text>
-        <Text numberOfLines={1} variant="caption">
-          {details.join(" · ")}
-        </Text>
-      </View>
-      {folder === null ? null : (
-        <View className="self-center">
-          {folder.open ? (
-            <ChevronDownIcon color={ui.mutedForeground} size={16} />
-          ) : (
-            <ChevronRightIcon color={ui.mutedForeground} size={16} />
-          )}
+      <View
+        className="border-border flex-1 flex-row gap-3 border-b py-3"
+        style={{ paddingStart: depth * DEPTH_INDENT }}
+      >
+        <View className="pt-0.5">
+          <EntityKindIcon color={ui.mutedForeground} kind={entity.kind} />
         </View>
-      )}
-    </Pressable>
+        <View className="flex-1 gap-0.5">
+          <Text numberOfLines={2} variant="rowTitle">
+            {entity.name === null || entity.name === ""
+              ? t("untitled")
+              : entity.name}
+          </Text>
+          <Text numberOfLines={1} variant="caption">
+            {details.join(" · ")}
+          </Text>
+        </View>
+        {folder === null ? null : (
+          <View className="self-center">
+            {folder.open ? (
+              <ChevronDownIcon color={ui.mutedForeground} size={16} />
+            ) : (
+              <ChevronRightIcon color={ui.mutedForeground} size={16} />
+            )}
+          </View>
+        )}
+      </View>
+    </Button>
   );
 };

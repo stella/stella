@@ -1,10 +1,11 @@
 import { Suspense, use, useState, useTransition } from "react";
 
 import { Result } from "better-result";
-import { ActivityIndicator, Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
@@ -114,7 +115,7 @@ export const TaskAssignees = ({
         </Button>
       </View>
       {members === null ? null : (
-        <Suspense fallback={<ActivityIndicator />}>
+        <Suspense fallback={<Loader />}>
           <MemberList
             assigned={new Set(assignees.map((assignee) => assignee.userId))}
             load={members}
@@ -160,21 +161,26 @@ const MemberList = ({
       {loaded.value.map((member) => {
         const isAssigned = assigned.has(member.userId);
         return (
-          <Pressable
+          <Button
             accessibilityRole="checkbox"
-            accessibilityState={{ checked: isAssigned, disabled: saving }}
-            className="border-border active:bg-accent min-h-11 flex-row items-center gap-3 border-b py-2"
+            accessibilityState={{ checked: isAssigned }}
             disabled={saving}
             key={member.userId}
             onPress={() => {
               onToggle(member, !isAssigned);
             }}
+            size="row"
+            variant="ghost"
           >
-            <Text className="flex-1" numberOfLines={1} variant="rowTitle">
-              {member.user?.name ?? t("someone")}
-            </Text>
-            {isAssigned ? <CheckIcon color={ui.foreground} size={18} /> : null}
-          </Pressable>
+            <View className="border-border flex-1 flex-row items-center gap-3 border-b py-2">
+              <Text className="flex-1" numberOfLines={1} variant="rowTitle">
+                {member.user?.name ?? t("someone")}
+              </Text>
+              {isAssigned ? (
+                <CheckIcon color={ui.foreground} size={18} />
+              ) : null}
+            </View>
+          </Button>
         );
       })}
     </View>

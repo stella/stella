@@ -1,9 +1,10 @@
 import { use, useState } from "react";
 
 import { Result } from "better-result";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { Input } from "@stll/ui/input";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Text } from "@stll/ui/text";
@@ -62,53 +63,63 @@ export const MatterPicker = ({
       />
       <View className="border-border bg-card rounded-xl border px-3">
         {noneLabel === undefined ? null : (
-          <Pressable
+          <Button
             accessibilityRole="radio"
             accessibilityState={{ selected: selected === null }}
-            className={`active:bg-accent flex-row items-center gap-3 py-3 ${
-              shown.length === 0 ? "" : "border-border border-b"
-            }`}
             onPress={() => {
               onSelect(null);
             }}
+            size="row"
+            variant="ghost"
           >
-            <View className="flex-1">
-              <Text numberOfLines={1} variant="rowTitle">
-                {noneLabel}
-              </Text>
+            <View
+              className={`flex-1 flex-row items-center gap-3 py-3 ${
+                shown.length === 0 ? "" : "border-border border-b"
+              }`}
+            >
+              <View className="flex-1">
+                <Text numberOfLines={1} variant="rowTitle">
+                  {noneLabel}
+                </Text>
+              </View>
+              {selected === null ? (
+                <CheckIcon color={ui.foreground} size={18} />
+              ) : null}
             </View>
-            {selected === null ? (
-              <CheckIcon color={ui.foreground} size={18} />
-            ) : null}
-          </Pressable>
+          </Button>
         )}
         {shown.map((matter, index) => (
-          <Pressable
+          <Button
             accessibilityRole="radio"
             accessibilityState={{ selected: matter.id === selected }}
-            className={`active:bg-accent flex-row items-center gap-3 py-3 ${
-              index === shown.length - 1 ? "" : "border-border border-b"
-            }`}
             key={matter.id}
             onPress={() => {
               onSelect(matter.id);
             }}
+            size="row"
+            variant="ghost"
           >
-            <MatterIcon matter={matter} size={18} />
-            <View className="flex-1 gap-0.5">
-              <Text numberOfLines={1} variant="rowTitle">
-                {matter.name}
-              </Text>
-              {matter.client?.displayName === undefined ? null : (
-                <Text numberOfLines={1} variant="caption">
-                  {matter.client.displayName}
+            <View
+              className={`flex-1 flex-row items-center gap-3 py-3 ${
+                index === shown.length - 1 ? "" : "border-border border-b"
+              }`}
+            >
+              <MatterIcon matter={matter} size={18} />
+              <View className="flex-1 gap-0.5">
+                <Text numberOfLines={1} variant="rowTitle">
+                  {matter.name}
                 </Text>
-              )}
+                {matter.client?.displayName === undefined ? null : (
+                  <Text numberOfLines={1} variant="caption">
+                    {matter.client.displayName}
+                  </Text>
+                )}
+              </View>
+              {matter.id === selected ? (
+                <CheckIcon color={ui.foreground} size={18} />
+              ) : null}
             </View>
-            {matter.id === selected ? (
-              <CheckIcon color={ui.foreground} size={18} />
-            ) : null}
-          </Pressable>
+          </Button>
         ))}
       </View>
     </View>

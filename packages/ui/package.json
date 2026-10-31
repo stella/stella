@@ -243,7 +243,10 @@
     },
     "./components/sidebar": "./src/components/sidebar.tsx",
     "./components/skeleton": "./src/components/skeleton.tsx",
-    "./components/stella-mark": "./src/components/stella-mark.tsx",
+    "./components/stella-mark": {
+      "react-native": "./src/components/stella-mark.native.tsx",
+      "default": "./src/components/stella-mark.tsx"
+    },
     "./components/stella-wordmark": {
       "react-native": "./src/components/stella-wordmark.native.tsx",
       "default": "./src/components/stella-wordmark.tsx"

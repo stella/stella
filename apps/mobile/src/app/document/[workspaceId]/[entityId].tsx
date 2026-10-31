@@ -3,10 +3,8 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import {
-  ActivityIndicator,
   Alert,
   Platform,
-  Pressable,
   StyleSheet,
   useColorScheme,
   View,
@@ -14,6 +12,7 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
@@ -201,7 +200,7 @@ const OpenedDocument = ({
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
-      return <ActivityIndicator color={colors.muted} style={styles.center} />;
+      return <Loader style={styles.center} />;
     }
     if (phase.status === "failed") {
       return (
@@ -276,7 +275,7 @@ const OpenedDocument = ({
               { backgroundColor: colors.background },
             ]}
           >
-            <ActivityIndicator color={colors.muted} />
+            <Loader />
           </View>
         )}
       </View>
@@ -288,19 +287,19 @@ const OpenedDocument = ({
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable
+            <Button
               accessibilityLabel={t("details")}
-              accessibilityRole="button"
-              hitSlop={8}
               onPress={() => {
                 router.push({
                   pathname: "/matter/[workspaceId]/[entityId]",
                   params: { workspaceId, entityId },
                 });
               }}
+              size="icon-sm"
+              variant="ghost"
             >
               <LucideGlyphs color={colors.text} name="info" size={22} />
-            </Pressable>
+            </Button>
           ),
           title,
         }}

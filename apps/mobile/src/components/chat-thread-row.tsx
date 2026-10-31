@@ -1,7 +1,8 @@
 import { useRouter } from "expo-router";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { Text } from "@stll/ui/text";
 
@@ -38,10 +39,8 @@ export const ChatThreadRow = ({
   const open = layout.usesSplitView && selection.thread?.threadId === thread.id;
 
   return (
-    <Pressable
-      accessibilityRole="button"
+    <Button
       accessibilityState={{ selected: open }}
-      className={`border-border active:bg-accent gap-0.5 border-b py-3 ${open ? "bg-accent" : ""}`}
       onPress={() => {
         if (layout.usesSplitView) {
           selection.select("thread", {
@@ -62,26 +61,30 @@ export const ChatThreadRow = ({
           },
         });
       }}
+      size="row"
+      variant="ghost"
     >
-      <View className="flex-row items-start gap-3">
-        <View className="flex-1">
-          <Text numberOfLines={2} variant="rowTitle">
-            {title}
-          </Text>
-        </View>
-        <Text variant="caption">{when}</Text>
-      </View>
-      {thread.matterName === undefined ||
-      thread.matterId === undefined ? null : (
-        <View className="flex-row items-center gap-1.5">
-          <MatterIcon matter={{ id: thread.matterId }} size={12} />
+      <View className="border-border flex-1 gap-0.5 border-b py-3">
+        <View className="flex-row items-start gap-3">
           <View className="flex-1">
-            <Text numberOfLines={1} variant="caption">
-              {thread.matterName}
+            <Text numberOfLines={2} variant="rowTitle">
+              {title}
             </Text>
           </View>
+          <Text variant="caption">{when}</Text>
         </View>
-      )}
-    </Pressable>
+        {thread.matterName === undefined ||
+        thread.matterId === undefined ? null : (
+          <View className="flex-row items-center gap-1.5">
+            <MatterIcon matter={{ id: thread.matterId }} size={12} />
+            <View className="flex-1">
+              <Text numberOfLines={1} variant="caption">
+                {thread.matterName}
+              </Text>
+            </View>
+          </View>
+        )}
+      </View>
+    </Button>
   );
 };
