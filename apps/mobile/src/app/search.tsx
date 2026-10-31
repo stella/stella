@@ -64,9 +64,12 @@ const TYPE_LABELS = {
  */
 const SearchScreen = () => {
   const { state } = useSession();
-  return state.status === "signed-in" ? (
-    <SearchStella source={state.source} />
-  ) : null;
+  if (state.status !== "signed-in") {
+    return null;
+  }
+  const { serverUrl, userId } = state.source.session();
+  // One screen per account, so nothing typed or picked carries over to another.
+  return <SearchStella key={`${serverUrl} ${userId}`} source={state.source} />;
 };
 
 export default SearchScreen;
@@ -438,7 +441,7 @@ const SearchResultRow = ({
       entity={{
         createdAt: result.updatedAt,
         createdBy: null,
-        entityId: result.key,
+        entityId: idOf(result),
         kind,
         name: result.title,
         parentId: null,
@@ -449,4 +452,12 @@ const SearchResultRow = ({
       onPress={onPress}
     />
   );
+};
+
+/** The id of what a result stands for: the item, the matter or the thread. */
+const idOf = (result: Exclude<SearchResult, { kind: "case-law" }>): string => {
+  if (result.kind === "entity") {
+    return result.entityId;
+  }
+  return result.kind === "matter" ? result.workspaceId : result.threadId;
 };

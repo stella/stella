@@ -4,6 +4,7 @@ import * as v from "valibot";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
+import type { BeforeSessionEnd } from "@/connection/session-end";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { foldText } from "@/state/palette";
@@ -45,6 +46,7 @@ export const NO_RECENTS: StoredRecents = { recents: [], clearedAt: null };
 export type AccountStore = {
   readonly read: (key: string) => Promise<string | null>;
   readonly write: (key: string, value: string) => Promise<void>;
+  readonly remove: (key: string) => Promise<void>;
 };
 
 /**
@@ -66,6 +68,16 @@ const keyPart = (part: string): string =>
  */
 export const recentSearchesKey = (serverUrl: string, userId: string): string =>
   `stella.recent-searches.${keyPart(serverUrl)}.${keyPart(userId)}`;
+
+/**
+ * Deletes the ending session's recent searches from the device, so a
+ * signed-out account leaves none of its searches behind.
+ */
+export const forgetRecentSearches =
+  (store: AccountStore): BeforeSessionEnd =>
+  async (_reason, session) => {
+    await store.remove(recentSearchesKey(session.serverUrl, session.userId));
+  };
 
 /** What the device kept, or none when it kept nothing this build can read. */
 export const readStoredRecents = (stored: string | null): StoredRecents => {
@@ -255,7 +267,11 @@ export const openRecentSearches = ({
     show(kept);
   })();
   const serverRead = (async () => {
-    server = (await loadServer()).unwrapOr([]);
+    // The server's list is a nicety: a load that throws lists none.
+    const recorded = await loadServer().catch(
+      (): Result<RecentSearch[], ApiError> => Result.ok([]),
+    );
+    server = recorded.unwrapOr([]);
     if (stored !== null) {
       show(stored);
     }

@@ -7,9 +7,11 @@ import {
   createAccessTokenSource,
   type StoredSession,
 } from "@/connection/session";
+import { createSessionEndBoundary } from "@/connection/session-end";
 
 import {
   clearRecents,
+  forgetRecentSearches,
   listServerRecentSearches,
   mergeRecentSearches,
   NO_RECENTS,
@@ -298,6 +300,9 @@ const deviceWith = (value: string | null, read?: Promise<void>) => {
       await Promise.resolve();
       writes.push(next);
     },
+    remove: async () => {
+      await Promise.resolve();
+    },
   };
   return { events, store, writes };
 };
@@ -404,5 +409,52 @@ describe("recent searches while the screen is open", () => {
     ]);
     await recents.ready;
     expect(shown.at(-1)).toEqual(["since"]);
+  });
+});
+
+describe("when the server's list cannot load", () => {
+  test("a load that throws still settles and lists the device's searches", async () => {
+    const device = deviceWith(
+      serializeRecents(kept([{ query: "deposit", usedAt: 10 }])),
+    );
+    const shown: string[][] = [];
+    const recents = openRecentSearches({
+      key: "key-1",
+      loadServer: async () => {
+        await Promise.resolve();
+        throw new Error("offline");
+      },
+      now: () => 50,
+      onChange: (searches) => {
+        shown.push(searches);
+      },
+      store: device.store,
+    });
+    await recents.ready;
+    expect(shown.at(-1)).toEqual(["deposit"]);
+  });
+});
+
+describe("ending a session", () => {
+  test("deletes that account's recent searches from the device", async () => {
+    const removed: string[] = [];
+    const store: AccountStore = {
+      read: async () => await Promise.resolve(null),
+      write: async () => {
+        await Promise.resolve();
+      },
+      remove: async (key) => {
+        await Promise.resolve();
+        removed.push(key);
+      },
+    };
+    const boundary = createSessionEndBoundary();
+    boundary.register(forgetRecentSearches(store));
+
+    await boundary.run("signed-out", SESSION);
+    await boundary.run("ended", SESSION);
+
+    const key = recentSearchesKey(SESSION.serverUrl, SESSION.userId);
+    expect(removed).toEqual([key, key]);
   });
 });

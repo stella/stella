@@ -20,7 +20,12 @@ import type { RecentSearches } from "@/state/recent-searches";
 export const useRecentSearches = (source: AccessTokenSource) => {
   const { serverUrl, userId } = source.session();
   const key = recentSearchesKey(serverUrl, userId);
-  const [searches, setSearches] = useState<readonly string[]>([]);
+  // The list belongs to the key it was loaded under; another account's
+  // shows none until its own loads.
+  const [loaded, setLoaded] = useState<{
+    readonly key: string;
+    readonly searches: readonly string[];
+  }>({ key, searches: [] });
   const recents = useRef<RecentSearches | null>(null);
 
   useEffect(() => {
@@ -29,9 +34,9 @@ export const useRecentSearches = (source: AccessTokenSource) => {
       key,
       loadServer: async () => await listServerRecentSearches({ fetch, source }),
       now: epochMilliseconds,
-      onChange: (next) => {
+      onChange: (searches) => {
         if (current) {
-          setSearches(next);
+          setLoaded({ key, searches });
         }
       },
       store: deviceAccountStore,
@@ -42,7 +47,7 @@ export const useRecentSearches = (source: AccessTokenSource) => {
   }, [key, source]);
 
   return {
-    searches,
+    searches: loaded.key === key ? loaded.searches : [],
     remember: (query: string) => {
       void recents.current?.remember(query);
     },

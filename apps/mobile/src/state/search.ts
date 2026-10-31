@@ -283,7 +283,8 @@ export const searchResultRoute = (result: SearchResult): Href => {
           },
         };
       }
-      // A folder opens in its matter, where it unfolds in place.
+      // A folder opens its matter at the top level, where the folder unfolds
+      // in place; the matter screen takes no folder to open at.
       if (result.entityKind === "folder") {
         return {
           pathname: "/matter/[workspaceId]",
