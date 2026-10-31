@@ -43,6 +43,7 @@ describe.skipIf(!enabled)(
           await client.unsafe(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
           GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
           GRANT stella TO ${ownerRole} WITH INHERIT FALSE, SET TRUE;
+          GRANT EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) TO ${ownerRole};
           GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${ownerRole};
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           SET search_path TO ${schema}, public`);
@@ -229,7 +230,9 @@ describe.skipIf(!enabled)(
           ).toHaveLength(0);
         } finally {
           await client.unsafe(
-            `RESET ROLE; RESET search_path; DROP SCHEMA ${schema} CASCADE; DROP ROLE IF EXISTS ${ownerRole}`,
+            `RESET ROLE; RESET search_path; DROP SCHEMA ${schema} CASCADE;
+            REVOKE EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) FROM ${ownerRole};
+            DROP ROLE IF EXISTS ${ownerRole}`,
           );
         }
       });
