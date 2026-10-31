@@ -175,7 +175,9 @@ test.describe("reader chat decision citations", () => {
         }),
       );
       await expect(action).toHaveAttribute("href", `${targetPath}#p-28`);
-      await action.click();
+      await popup
+        .getByRole("button", { name: "Open in side panel", exact: true })
+        .click();
     };
     const expectLandingMarker = async (target: Locator) => {
       await expect(target).toBeInViewport();

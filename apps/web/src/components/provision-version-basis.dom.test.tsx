@@ -25,6 +25,8 @@ const router = await import("@tanstack/react-router");
 const { IntlProvider, createTranslator } = await import("use-intl");
 const { env } = await import("@/env");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { ProvisionsCited } =
   await import("@/features/case-law/components/case-viewer/provisions-cited");
@@ -299,12 +301,14 @@ for (const [locale, messages] of [
               locale={formattingLocale}
               timeZone="Europe/Prague"
             >
-              <router.RouterProvider router={appRouter} />
+              <WebReaderPresentationProvider>
+                <router.RouterProvider router={appRouter} />
+              </WebReaderPresentationProvider>
             </FormattingProvider>
           </IntlProvider>
         </QueryClientProvider>,
       );
-      const chip = ui.getByRole("button", { name: reference });
+      const chip = ui.getByRole("link", { name: reference });
       const href = chip.getAttribute("href");
       expect(href).not.toBeNull();
       if (href === null) {
@@ -352,7 +356,7 @@ for (const [locale, messages] of [
       provisionChip.focus();
       await waitFor(() => {
         expect(
-          ui.baseElement.querySelector('[data-slot="preview-card-content"]')
+          ui.baseElement.querySelector('[data-slot="reference-peek"]')
             ?.textContent,
         ).toContain(label);
       });
@@ -362,7 +366,7 @@ for (const [locale, messages] of [
         await sleep(0);
       });
       expect(
-        ui.baseElement.querySelector('[data-slot="preview-card-content"]')
+        ui.baseElement.querySelector('[data-slot="reference-peek"]')
           ?.textContent,
       ).toContain(label);
     });

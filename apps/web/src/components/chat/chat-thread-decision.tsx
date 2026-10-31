@@ -2,14 +2,12 @@ import type { MouseEvent } from "react";
 
 import { panic } from "better-result";
 
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
-import {
-  createCaseDecisionViewTab,
-  isPlainPrimaryClick,
-} from "@/components/inspector/case-decision-view";
+import { createCaseDecisionViewTab } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
 import type { ChatHistoryItem } from "@/features/chat/queries";

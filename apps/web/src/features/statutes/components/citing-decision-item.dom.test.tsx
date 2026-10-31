@@ -19,6 +19,8 @@ const { QueryClient, QueryClientProvider } =
 const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { WebReaderPresentationProvider } =
+  await import("@/components/legal-reader/web-reader-presentation");
 const { buildFormattingLocale } = await import("@/i18n/i18n-store");
 const { CitingDecisionItem } = await import("./citing-decision-item");
 const { decisionCardSummaryOptions } =
@@ -134,7 +136,7 @@ for (const [locale, messages, localizedThree] of [
       </QueryClientProvider>,
     );
 
-    expect(ui.getByRole("button", { name: /1 C 1\/2020/u })).toBeTruthy();
+    expect(ui.getByRole("link", { name: /1 C 1\/2020/u })).toBeTruthy();
     const row = ui.container;
     // The row names its decision once: the case number is the trigger, and
     // no chip repeats it or the court badge beside the court's name.
@@ -287,12 +289,15 @@ test("opens a citing decision at its excerpt", async () => {
           })}
           timeZone="UTC"
         >
-          <router.RouterProvider router={appRouter} />
+          {/* The app provides the reader's presentation; the peek reads it. */}
+          <WebReaderPresentationProvider>
+            <router.RouterProvider router={appRouter} />
+          </WebReaderPresentationProvider>
         </FormattingProvider>
       </IntlProvider>
     </QueryClientProvider>,
   );
-  fireEvent.focus(ui.getByRole("button", { name: /1 C 1\/2020/u }));
+  fireEvent.focus(ui.getByRole("link", { name: /1 C 1\/2020/u }));
   const open = await ui.findByRole("link", { name: en.common.openInStella });
   expect(
     new URL(
@@ -300,7 +305,8 @@ test("opens a citing decision at its excerpt", async () => {
       window.location.origin,
     ).searchParams.get("q"),
   ).toBe(decision.sentenceText);
-  fireEvent.click(open);
+  // "Open in stella" is the full page; the side panel opens the inspector tab.
+  fireEvent.click(ui.getByRole("button", { name: en.common.openInSidePanel }));
   await waitFor(() => {
     const opened = useInspectorTabsStore
       .getState()

@@ -6,6 +6,7 @@ import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
@@ -14,7 +15,6 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import {
   InspectorFindBar,
   useInspectorFind,

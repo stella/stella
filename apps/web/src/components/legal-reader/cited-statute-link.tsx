@@ -1,30 +1,20 @@
-import type { MouseEvent, ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 
 import { LEGAL_CITATION_LINK_CLASS_NAME } from "@stll/decision-reader/citation-link";
 import type { CitedStatuteTarget } from "@stll/decision-reader/reader-types";
-import { BidiText } from "@stll/ui/bidi-text";
-import {
-  PreviewCard,
-  PreviewCardPopup,
-  PreviewCardTrigger,
-} from "@stll/ui/preview-card";
-import { useIsMobile } from "@stll/ui/use-mobile";
+import { ReferencePeek } from "@stll/decision-reader/reference-peek";
 import { cn } from "@stll/ui/utils";
 
-import { opensCitationInInspector } from "@/components/inspector/case-decision-view";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { createStatuteViewTab } from "@/features/statutes/statute-inspector.logic";
 import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
 
 /**
- * A work-level statute citation: no provision locator is required.
- *
- * A plain click opens the act beside the decision, the way a cited decision
- * opens beside the results. Every browser navigation gesture, and a phone,
- * where there is no beside to open into, follows the link to the act's own
- * page instead.
+ * A work-level statute citation: no provision locator is required. Its peek
+ * names the act and opens it beside the decision or on its own page; every
+ * browser navigation gesture follows the link to the act's page.
  */
 export const CitedStatuteLink = ({
   children,
@@ -35,50 +25,46 @@ export const CitedStatuteLink = ({
   className?: string | undefined;
   target: CitedStatuteTarget;
 }) => {
-  const inspectorAvailable = !useIsMobile();
   const { open } = useInspectorView();
-
-  const onStatuteClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    if (!opensCitationInInspector(event, inspectorAvailable)) {
-      return;
-    }
-    event.preventDefault();
-    open(
-      createStatuteViewTab({
-        country: target.document.country,
-        documentId: target.document.id,
-        eli: target.document.eli,
-        slug: target.document.slug,
-        statuteTitle: target.statuteTitle,
-        versionValidFrom: target.document.versionValidFrom,
-      }),
-    );
-  };
+  const linkTarget = createStatuteLinkTarget({
+    country: target.document.country,
+    documentId: target.document.id,
+    eli: target.document.eli,
+    slug: target.document.slug,
+    versionValidFrom: target.document.versionValidFrom,
+  });
 
   return (
-    <PreviewCard>
-      <PreviewCardTrigger
-        render={
+    <ReferencePeek
+      header={{ primary: target.statuteTitle, meta: [] }}
+      target={{
+        kind: "statute",
+        actions: {
+          openInSidePanel: () =>
+            open(
+              createStatuteViewTab({
+                country: target.document.country,
+                documentId: target.document.id,
+                eli: target.document.eli,
+                slug: target.document.slug,
+                statuteTitle: target.statuteTitle,
+                versionValidFrom: target.document.versionValidFrom,
+              }),
+            ),
+          openInStella: <Link {...linkTarget} />,
+        },
+      }}
+      trigger={{
+        type: "link",
+        element: (
           <Link
             className={cn(LEGAL_CITATION_LINK_CLASS_NAME, className)}
-            onClick={onStatuteClick}
-            {...createStatuteLinkTarget({
-              country: target.document.country,
-              documentId: target.document.id,
-              eli: target.document.eli,
-              slug: target.document.slug,
-              versionValidFrom: target.document.versionValidFrom,
-            })}
+            {...linkTarget}
           />
-        }
-      >
-        {children}
-      </PreviewCardTrigger>
-      <PreviewCardPopup className="reader-chrome w-auto max-w-80 p-3">
-        <BidiText as="span" className="text-foreground text-sm font-medium">
-          {target.statuteTitle}
-        </BidiText>
-      </PreviewCardPopup>
-    </PreviewCard>
+        ),
+      }}
+    >
+      {children}
+    </ReferencePeek>
   );
 };

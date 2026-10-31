@@ -79,8 +79,10 @@ test("describes a headnoted decision without a reader presentation provider", ()
     </>,
   );
 
-  expect(screen.getByText(cited.court)).toBeTruthy();
-  expect(screen.getByText(cited.caseNumber)).toBeTruthy();
+  // The peek's shared header names the court and the case; the card adds
+  // only what the summary read knows.
+  expect(screen.queryByText(cited.court)).toBeNull();
+  expect(screen.queryByText(cited.caseNumber)).toBeNull();
   expect(screen.getByText("usnesení")).toBeTruthy();
   expect(screen.getByText(cited.headnote.text)).toBeTruthy();
   expect(screen.getByText("NS")).toBeTruthy();
@@ -138,7 +140,7 @@ test("loads the stored summary endpoint instead of the full decision read", asyn
   globalThis.fetch = originalFetch;
 });
 
-test("keeps the cited court and case number when the stored summary fails", async () => {
+test("says so when the stored summary fails", async () => {
   globalThis.fetch = Object.assign(
     async () =>
       Response.json({ message: "Summary unavailable" }, { status: 503 }),
@@ -159,6 +161,4 @@ test("keeps the cited court and case number when the stored summary fails", asyn
   );
 
   expect(await screen.findByRole("alert")).toBeTruthy();
-  expect(screen.getByText(cited.court)).toBeTruthy();
-  expect(screen.getByText(cited.caseNumber)).toBeTruthy();
 });

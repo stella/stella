@@ -173,7 +173,10 @@ const readerAdapters = {
     "caseLaw.notesFilter.ai": "AI",
     "common.court": "Court",
     "statutes.wordingVersionUnknown": "Wording version unknown",
-    "statutes.openProvision": "Open provision",
+    "common.openInSidePanel": "Open in side panel",
+    "common.openInStella": "Open in stella",
+    "inspector.external.openOriginal": "Open original",
+    "caseLaw.citation.notInStella": "Not in stella yet",
     "statutes.provisionTextUnavailable": "Text not available",
     "statutes.showCitedPartOnly": "Show cited part only",
     "statutes.showFullProvision": "Show full provision",
@@ -187,8 +190,9 @@ const readerAdapters = {
     formatLabelList: (labels) => labels.join(", "),
   },
   copyPermalink: async () => true,
-  loadProvisionPreview: async () => null,
   openProvision: () => undefined,
+  // oxlint-disable-next-line jsx-a11y/anchor-has-content -- a render element; the peek supplies its content
+  provisionPageLink: ({ payload }) => <a href={`#${payload.anchorId}`} />,
   renderBodyUnavailable: () => null,
   renderDecisionLink: ({ children }) => <span>{children}</span>,
   renderStatuteLink: (props) =>

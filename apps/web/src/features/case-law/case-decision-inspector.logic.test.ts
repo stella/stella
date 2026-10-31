@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { CASE_LAW_BROWSER_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { isPlainPrimaryClick } from "@stll/decision-reader/citation-click";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
@@ -10,7 +11,6 @@ import {
   createCaseDecisionViewTab,
   isCaseDecisionGenericTab,
   isCaseDecisionViewPayload,
-  isPlainPrimaryClick,
   navigateToCaseDecisionMain,
   opensCitationInInspector,
 } from "@/components/inspector/case-decision-view";
