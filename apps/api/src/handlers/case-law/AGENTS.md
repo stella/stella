@@ -287,17 +287,18 @@ filter for the class that matters. All four carry `caseNumber`,
 a document: a court publishing in 24 languages emits 24 variants under
 one number, and a case can carry both a judgment and an opinion.
 
-| Event                                         | Level | Meaning                                                                                  |
-| --------------------------------------------- | ----- | ---------------------------------------------------------------------------------------- |
-| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                   |
-| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`). |
-| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                       |
-| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).     |
-| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                |
-| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                |
-| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).         |
-| `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.              |
-| `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.     |
+| Event                                         | Level | Meaning                                                                                                            |
+| --------------------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------ |
+| `case_law.ingestion.decision_empty`           | ERROR | Stored with neither text nor AST. Nothing is readable.                                                             |
+| `case_law.ingestion.ast_content_lost`         | ERROR | Source text did not survive into the AST (`CONTENT_LOSS`, `MISSING_WORDS`, `EMPTY_AST`, `TEXT_FIDELITY_MISMATCH`). |
+| `case_law.ingestion.ast_markup_residue`       | ERROR | The source's own markup survived into the text (`MARKUP_RESIDUE`).                                                 |
+| `case_law.ingestion.text_misdecoded`          | ERROR | The text reads as decoded with the wrong character set (`parsers/text-encoding.ts`).                               |
+| `case_law.ingestion.ast_missing`              | WARN  | Text stored, no AST: the unstructured-wall-of-text state.                                                          |
+| `case_law.ingestion.ast_structure_degraded`   | WARN  | Text is complete, structure is imperfect.                                                                          |
+| `case_law.ingestion.text_encoding_incomplete` | WARN  | The encoding check stopped at a work bound with nothing found (`encodingLimit`).                                   |
+| `case_law.ingestion.ris_unknown_element`      | WARN  | A RIS document printed an element outside `RIS_ELEMENTS`; its text is kept.                                        |
+| `case_law.retention.unverifiable`             | ERROR | A parsed decision whose retention could not be measured; `reason` says why.                                        |
+| `case_law.retention.unchecked`                | INFO  | Text held in a separately stored document (`separate-document`), a known blind spot.                               |
 
 The ERROR events are the ones to act on. Sweep for them to find
 decisions worth re-ingesting after a parser fix; `sourceRaw` in S3
@@ -732,10 +733,11 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
   - `"holding"` — ruling/verdict paragraphs (bold in reader)
   - `"closing"` — closing formula
   - `"signature"` — judge signatures
-  - `"syllabus"`, `"headnotes"`, `"summary"`, `"counsel"`,
-    `"apparatus"` — publisher-authored matter around the decision
-    (`APPARATUS_ROLES`); the reader folds these behind one disclosure
-  - `"panel"` — the judges sitting; not folded
+  - `"syllabus"`, `"headnotes"`, `"summary"`, `"apparatus"` — publisher head
+    matter (`APPARATUS_ROLES`); the reader folds consecutive blocks behind
+    one localized disclosure, only before the decision body
+  - `"publisher-note"` — publisher annotations after the decision; not folded
+  - `"panel"`, `"counsel"` — the judges sitting and representatives; not folded
   - (no role) — regular body text
 - `table` with optional `role`:
   - `"related-proceedings"` — hidden in reader
@@ -744,6 +746,13 @@ type Block = HeadingBlock | ParagraphBlock | TableBlock | ImageBlock;
   URL into an asset store; a `data:` URI is rejected, because the AST is
   read, indexed and prompted with as a whole and would carry the bytes
   down every one of those paths. Its `plainText` is the alt text.
+
+An opening publisher section heading uses `"publisher-heading"`; a court section uses
+`"section-heading"`. Closing dates, signatures and certifications use
+`"closing"` or `"signature"`, never head matter. `headMatterPrecedesBody` in
+`@stll/legal-ast/document-ast` enforces ordering in the canonical and persisted
+schemas; ingestion rejects invalid structure with a typed reason and retains
+text. Footnotes keep their own placement and never become head-matter regions.
 
 Every block has: `id` (nanoid), `anchorId` (stable for deep
 links) and `plainText` (for search/AI); `heading` and `paragraph` also
@@ -759,7 +768,15 @@ and nowhere else. Writers validate against the strict schema; the
 persisted reader degrades vocabulary it does not declare instead of
 failing the document — a role becomes the declared fallback, an unknown
 inline kind collapses to the text its children carried, an unknown block
-kind is dropped — and reports each one through `StoredAstDegradedError`.
+kind is dropped, and repeated block identities are re-keyed by
+`withUniqueBlockIdentities`, reporting each degradation through
+`StoredAstDegradedError`. The same persisted schema is used by the writer's
+`prepareCorpusAst` owner, so a repaired document reads as it was written.
+Malformed stored payloads retain `StoredCorpusValidationError` with its stable
+code and path-only diagnostics. A reader chooses recovery through the typed
+`readCorpusForRecovery` result after trying its usable row copy. A write or
+index path may recover absent structure only beside usable text; otherwise
+it propagates the validation failure.
 
 ## Decision analysis
 

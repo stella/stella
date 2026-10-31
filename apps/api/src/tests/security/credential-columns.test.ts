@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
@@ -60,6 +61,10 @@ const classificationSchema = v.variant("status", [
     reason: reasonSchema,
   }),
   v.strictObject({ status: v.literal("cleartext"), reason: reasonSchema }),
+  v.strictObject({
+    status: v.literal("resource_content"),
+    reason: reasonSchema,
+  }),
 ]);
 const registrySchema = v.record(v.string(), classificationSchema);
 type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
@@ -102,6 +107,7 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
   "sharepoint_oauth_state.state",
   "mcp_oauth_clients.registration_response",
   "business_registry_credentials.ciphertext",
+  "request_idempotency_receipts.response_body",
 ]);
 
 const discoverTables = async () => {
@@ -216,7 +222,11 @@ const addedCleartextColumns = (
 
 const readBaseRegistry = () => {
   const result = Bun.spawnSync(
-    ["git", "show", `origin/main:${REGISTRY_PATH}`],
+    [
+      "git",
+      "show",
+      `${treeBaseRevision({ repoRoot: REPO_ROOT })}:${REGISTRY_PATH}`,
+    ],
     { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode === 0) {
@@ -242,7 +252,10 @@ const organizationCredentialTables = () => {
   const credentialTables = new Set(
     Object.entries(classifications)
       .filter(
-        ([, classification]) => classification.status !== "public_by_design",
+        ([, classification]) =>
+          classification.status === "hashed" ||
+          classification.status === "encrypted" ||
+          classification.status === "cleartext",
       )
       .map(([column]) => column.split(".").at(0)),
   );

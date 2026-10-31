@@ -38,6 +38,7 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { GRADED_HANDLER_CODE_REASON } from "../apps/api/src/lib/errors/graded-handler-codes";
 import { MCP_WRITE_ONLY_RESOURCE_SCOPES } from "../packages/api-contract/src/mcp";
+import { treeBaseRevision } from "../packages/scripts/src/tree-base-revision";
 import { countDbAwaitInLoopDirectives } from "./db-await-in-loop";
 import {
   collectLintDirectives,
@@ -4357,10 +4358,7 @@ const renamedFiles = (
 const comparisonBase = (headRef?: string): string => {
   const explicitBase =
     revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
-  if (explicitBase !== undefined) {
-    return resolveCommit(explicitBase);
-  }
-  if (headRef !== undefined) {
+  if (explicitBase === undefined && headRef !== undefined) {
     readGit([
       "fetch",
       "--no-tags",
@@ -4368,9 +4366,11 @@ const comparisonBase = (headRef?: string): string => {
       "+refs/heads/main:refs/remotes/origin/main",
     ]);
   }
-  return resolveCommit(
-    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
-  );
+  return treeBaseRevision({
+    repoRoot: REPO_ROOT,
+    baseRef: explicitBase,
+    headRef,
+  });
 };
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
@@ -5102,6 +5102,7 @@ const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: result.error.message ?? fallback });",
   "if (APIError.is(error) &&",
   "    error.message) {",
+  "}",
   "const internal = userErrorMessage(response.error, fallback);",
   'const literal = "error.message ?? fallback";',
   "// error instanceof Error ? error.message : fallback",
@@ -6504,7 +6505,7 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
     },
     {
       name: "empty text extraction fallback",
-      code: 'return { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };',
+      code: 'function fixture() {\nreturn { kind: "windowed-text", text: asString(valueAtPath(payload, textPath)) ?? "", nextCursor: asString(fieldOf(payload, "nextCursor")) };\n}',
       expected: 1,
     },
     {
@@ -6519,7 +6520,7 @@ const unsignalledSkipSelfTestFailures = (): string[] => {
     },
     {
       name: "catch with result",
-      code: "try { read(); } catch { return Result.err(cause); }",
+      code: "function fixture() {\ntry { read(); } catch { return Result.err(cause); }\n}",
       expected: 0,
     },
   ];
