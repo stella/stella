@@ -1,43 +1,42 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { readdirSync } from "node:fs";
 import nodePath from "node:path";
 
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
 import { runMigrations } from "./migration-runner";
 
-const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
 
 describe.skipIf(!enabled)("fresh committed migration history", () => {
+  // timeout: The isolated cluster applies the full committed migration chain; each statement retains its migration-owned deadline.
   test("every migration applies chronologically to an empty database", async () => {
-    const url = databaseUrl ?? panic("DATABASE_URL is required");
-    await withGatedTestClients(url, async ({ openClient }) => {
-      const admin = openClient({ max: 1 });
-      const databaseName = `migration_history_${Bun.randomUUIDv7().replaceAll("-", "")}`;
-      const freshUrl = new URL(url);
-      freshUrl.pathname = `/${databaseName}`;
-      await admin.db.execute(
-        sql`CREATE DATABASE ${sql.identifier(databaseName)}`,
-      );
-      try {
+    await withIsolatedPostgresCluster(
+      {
+        prefix: "migration-history",
+        database: "migration_history",
+        user: "migration_owner",
+        password: "migration-fixture-password",
+        directory: nodePath.resolve(import.meta.dir, "../../node_modules"),
+      },
+      async (databaseUrl) => {
         await withGatedTestClients(
-          freshUrl.href,
+          databaseUrl,
           async ({ openClient: openFreshClient }) => {
             const fresh = openFreshClient({ max: 1 });
             const connection = await fresh.sql.reserve();
             try {
               await runMigrations({
                 connection,
-                databaseUrl: freshUrl.href,
+                databaseUrl,
                 migrationsFolder,
                 ebs: { type: "disabled" },
               });
             } finally {
-              connection.release();
+              await connection.release();
             }
             const expected = readdirSync(migrationsFolder, {
               withFileTypes: true,
@@ -67,11 +66,7 @@ describe.skipIf(!enabled)("fresh committed migration history", () => {
             });
           },
         );
-      } finally {
-        await admin.db.execute(
-          sql`DROP DATABASE ${sql.identifier(databaseName)}`,
-        );
-      }
-    });
+      },
+    );
   }, 180_000);
 });
