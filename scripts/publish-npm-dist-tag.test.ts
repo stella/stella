@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { NPM_RELEASE_WORKFLOW } from "./generate-npm-release-jobs";
+
 const source = readFileSync(
   new URL("../.github/workflows/publish-npm.yml", import.meta.url),
   "utf-8",
@@ -82,9 +84,7 @@ test("RC runs publish no npm version or dist-tag", () => {
 });
 
 test("stable npm source must equal the final tag and its RC SHA through the unchanged publisher", () => {
-  expect(workflow.jobs["release-cli"].uses).toBe(
-    "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-  );
+  expect(workflow.jobs["release-cli"].uses).toBe(NPM_RELEASE_WORKFLOW);
   const validation = requiredRun(workflow.jobs.pack.steps, "release-source");
   expect(validation).toContain('if [[ "$source_sha" != "$release_sha" ]]');
   expect(validation).toContain('git tag --points-at "$release_sha"');

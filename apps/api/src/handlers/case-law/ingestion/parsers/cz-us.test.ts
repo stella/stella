@@ -521,6 +521,44 @@ describe("parseUsDecisionHtml", () => {
       });
     });
 
+    // A concurring judge agrees with the outcome: the opinion is that
+    // judge's argumentation, not a dissent.
+    test.each([
+      ["Odlišné stanovisko sudcu A. B.", "dissent"],
+      ["Odlišné stanovisko sudkyne A. B.", "dissent"],
+      ["Paralelní stanovisko soudkyně A. B.", "argumentation"],
+      ["Konkurujúce stanovisko sudcov A. B. a C. D.", "argumentation"],
+    ] as const)("shares CS/SK opinion roles at %s", (opinionLine, role) => {
+      const lines = [
+        "Odůvodnění:",
+        `1. ${MAJORITY_TEXT}`,
+        opinionLine,
+        `2. ${DISSENT_TEXT}`,
+      ].map((text) => ({
+        kind: "body" as const,
+        value: normalizeInlineLine([{ type: "text", text }]),
+      }));
+      const blocks = courtParagraphNumbers(classifyUsDocumentLines(lines), {
+        parser: "cz-us",
+        caseNumber: "test",
+      });
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "heading",
+          plainText: opinionLine,
+          role: "section-heading",
+        }),
+      );
+      expect(blocks).toContainEqual(
+        expect.objectContaining({
+          type: "paragraph",
+          plainText: DISSENT_TEXT,
+          number: 2,
+          role,
+        }),
+      );
+    });
+
     test("keeps the number the court printed on the opinion heading", () => {
       const heading = "3. Odlišné stanovisko soudce Jana Nováka";
       const parsed = parseUsDecisionHtml(baseInput(decisionWith(heading)));

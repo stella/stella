@@ -3,8 +3,6 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronLeftIcon, ChevronRightIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
@@ -12,11 +10,8 @@ import {
   plainDateEpoch,
   SHORT_DATE,
 } from "@/components/billing/format-plain-date";
-import {
-  shiftWeeks,
-  type Week,
-  weekOf,
-} from "@/components/billing/work-week.logic";
+import { WeekNavigator } from "@/components/billing/week-navigator";
+import { type Week, weekOf } from "@/components/billing/work-week.logic";
 import { ReturnSelected } from "@/features/time-review/return-selected";
 import {
   groupForReview,
@@ -212,7 +207,6 @@ export const TimeApprovalsPage = ({
 }: TimeApprovalsPageProps) => {
   const t = useTranslations();
   const locale = useMessageLocale();
-  const format = useFormatter();
   const week = weekOf(filter.date);
   const queue = useSuspenseInfiniteQuery(
     timeApprovalsQuery(organizationId, userId, week, filter),
@@ -220,42 +214,16 @@ export const TimeApprovalsPage = ({
   const review = useTimeReview();
   const rows = queue.data.pages.flatMap((page) => page.items.map(reviewRowOf));
   const people = groupForReview(rows, locale);
-  const moveTo = (weeks: number) =>
-    onFilterChange({ ...filter, date: shiftWeeks(filter.date, weeks) });
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3">
+      <header className="flex min-h-12 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b px-4 py-1.5">
         <h1 className="text-sm font-medium">{t("billing.approval.title")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={onThisWeek} size="sm" variant="outline">
-            {t("common.today")}
-          </Button>
-          <Button
-            aria-label={t("timesheets.week.previousWeek")}
-            className="size-11"
-            onClick={() => moveTo(-1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
-          </Button>
-          <span className="min-w-36 text-center text-sm tabular-nums">
-            {t("timesheets.week.range", {
-              start: format.dateTime(plainDateEpoch(week.start), SHORT_DATE),
-              end: format.dateTime(plainDateEpoch(week.end), SHORT_DATE),
-            })}
-          </span>
-          <Button
-            aria-label={t("timesheets.week.nextWeek")}
-            className="size-11"
-            onClick={() => moveTo(1)}
-            size="icon"
-            variant="ghost"
-          >
-            <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
-          </Button>
-        </div>
+        <WeekNavigator
+          date={filter.date}
+          onSelectDate={(date) => onFilterChange({ ...filter, date })}
+          onToday={onThisWeek}
+        />
       </header>
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4">

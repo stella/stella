@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 /**
  * One surface census for the eleven tribunals this publisher serves.
  *
@@ -15,12 +16,12 @@ import {
   backlogSurface,
   excludedSourceSurface,
   storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
+} from "@/api/lib/legal-search/ingestion-types";
 import type {
+  LegacyAdapterKey,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { LegacyAdapterKey } from "@/api/lib/legal-search/ingestion-types";
+} from "@/api/lib/legal-search/ingestion-types";
 
 /** The adapters this census speaks for: the tribunals, not the ministry's. */
 export type AtRisSurfaceAdapter = Exclude<
