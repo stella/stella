@@ -97,7 +97,7 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   // Built by a factory so tests can inject the bundled catalogue; all six are
   // internal-only public reads with no MCP tool.
   "apps/api/src/handlers/public-knowledge/endpoints.ts": 6,
-  "apps/api/src/handlers/search/routes.ts": 5,
+  "apps/api/src/handlers/search/routes.ts": 3,
   "apps/api/src/handlers/workspaces/routes.ts": 3,
 };
 
@@ -111,10 +111,8 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
 const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
   mint_web_handoff:
     "no dedicated REST endpoint: app-only link refresh invokes the shared handoff mint service (apps/api/src/mcp/web-handoff-links.ts)",
-  search:
-    "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search",
   search_across_matters:
-    "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search (same backing as `search`)",
+    "no dedicated endpoint: same backing as `search` (apps/api/src/handlers/search/results/list.ts POST /search)",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   case_law_coverage:
