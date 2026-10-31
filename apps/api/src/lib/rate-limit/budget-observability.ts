@@ -60,12 +60,13 @@ export const recordBudgetRejection = ({
   name,
   keyKind,
   windowMs,
-}: BudgetObservation & { windowMs: number }): void => {
+  status = 429,
+}: BudgetObservation & { windowMs: number; status?: 429 | 503 }): void => {
   logger.warn("rate_limit.rejected", {
     budget: name,
     "budget.keyKind": keyKind,
     "budget.windowMs": windowMs,
-    "http.status_code": 429,
+    "http.status_code": status,
   });
   emitRateLimitRejectedMetric(name);
 };
