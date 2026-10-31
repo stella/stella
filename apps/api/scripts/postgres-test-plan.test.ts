@@ -204,3 +204,20 @@ test.each([
     ).toEqual(new Set([testPath]));
   },
 );
+
+test("the scheduled-run block measurement runs after all cluster workers finish", async () => {
+  const testPath = "src/tests/query-perf/scheduled-run.postgres.test.ts";
+  const runner = packageJson.ciGateTestRunners["test:postgres"];
+  expect(
+    await discoverGatedTestFiles({
+      apiRoot: path.resolve(import.meta.dir, ".."),
+      gate: runner.gate,
+      testFileGlob: runner.testFileGlob,
+    }),
+  ).toContain(testPath);
+  expect(
+    clusterExclusivePostgresTests(
+      new Map([[testPath, "test('measurement', () => {})"]]),
+    ),
+  ).toEqual(new Set([testPath]));
+});

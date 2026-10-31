@@ -111,6 +111,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/handlers/data-exports/data-export-worker.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
         path: "apps/api/src/lib/sse-broadcast.ts",
         reason:
           "Cross-instance SSE fan-out publisher. Lost messages degrade to inline local delivery.",

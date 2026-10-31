@@ -93,6 +93,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A personal data export is available to every account on every deployment",
   ],
   [
+    "/v1/data-exports",
+    "Organization data export (data portability) is available on every deployment",
+  ],
+  [
     "/v1/chat/threads/:threadId/connectors/:toolCallId",
     "Authenticated chat connector receipts are available on every deployment",
   ],

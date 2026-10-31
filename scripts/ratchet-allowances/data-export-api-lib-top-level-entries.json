@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "The data-export/ slice holds the queue identity and object layout apart from the worker, alongside the pure version-scope contract; request handlers and the scheduler can enqueue without importing the archive builder, and schema readers can import the scope without initializing the queue."
+}

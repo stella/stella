@@ -486,6 +486,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/data-exports": { type: "replay" },
+  "POST /v1/data-exports/:exportId/download": { type: "replay" },
   "POST /v1/desktop-registry/grant": {
     type: "non-replay",
     reason: "current-state",

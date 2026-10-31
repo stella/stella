@@ -25,6 +25,8 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  // Converts the static manifest schema and shared version policy; no DB imports.
+  "data-export-schema": "apps/api/scripts/generate-data-export-schema.ts",
   "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
@@ -230,6 +232,33 @@ test("every module the case-law re-parse imports selects it", () => {
       (file) => !inputs.some((input) => matchesGeneratedGlob(input, file)),
     ),
   ).toEqual([]);
+});
+
+test("export schema inputs select the canonical producer without database initialization", () => {
+  const manifest = readFileSync(
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "utf-8",
+  );
+  expect(manifest).toContain("@/api/lib/data-export/version-scope");
+  expect(manifest).not.toContain("@/api/db/");
+  for (const file of [
+    "apps/api/scripts/generate-data-export-schema.ts",
+    "scripts/generated-artifacts.ts",
+    "packages/scripts/src/generated-artifact-format.ts",
+    "bunfig.toml",
+    "apps/api/src/handlers/data-exports/manifest-json-schema.ts",
+    "apps/api/src/handlers/data-exports/manifest-schema.ts",
+    "apps/api/src/lib/data-export/version-scope.ts",
+    "packages/api-contract/src/api-date.ts",
+    "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
+    "packages/api-contract/src/json-schema-regex.ts",
+    "packages/legal-ast/src/analysis.ts",
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain("data-export-schema");
+  }
 });
 
 test("translation content never becomes an autofix output", () => {

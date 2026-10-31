@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { docxToMarkdown } from "@stll/folio-core/server";
 
 import {
+  bufferObjectCleanupIntents,
   documentCounters,
   entities,
   entityVersions,
@@ -159,6 +160,14 @@ describe("createCreateWorkspaceDocumentTools", () => {
               ? { returning: async () => [{ id: "intent_1" }] }
               : undefined,
         }),
+      }),
+      delete: (table: unknown) => ({
+        where: async () => {
+          if (table !== bufferObjectCleanupIntents) {
+            throw new TypeError("Unexpected delete target");
+          }
+          return [];
+        },
       }),
     };
     return { tx, getInsertedFileName: () => insertedFileName };

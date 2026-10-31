@@ -1,0 +1,1251 @@
+import { Ajv } from "ajv";
+import addFormats from "ajv-formats";
+import { describe, expect, test } from "bun:test";
+import JSZip from "jszip";
+import * as v from "valibot";
+
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { sha256Hex } from "@stll/sha256/bun";
+
+import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
+import {
+  buildDataExport,
+  DATA_EXPORT_RECORD_BYTES_CAP,
+  DataExportManifestInvalidError,
+  DataExportRecordsTooLargeError,
+  planDataExport,
+} from "@/api/handlers/data-exports/build-export";
+import type {
+  CompletedPart,
+  ExportFileRef,
+  ExportPlan,
+  ExportSource,
+  FileRead,
+  RecordBytes,
+  SourceDocument,
+  SourceMatter,
+  SourceMatterSummary,
+  SourceOrganizationRecords,
+  SourceVersionSelection,
+} from "@/api/handlers/data-exports/build-export";
+import { buildDataExportJsonSchema } from "@/api/handlers/data-exports/manifest-json-schema";
+import {
+  dataExportManifestSchema,
+  partManifestSchema,
+} from "@/api/handlers/data-exports/manifest-schema";
+import type { PartManifest } from "@/api/handlers/data-exports/manifest-schema";
+import {
+  DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+  DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
+  dataExportArchivePathSchema,
+} from "@/api/lib/data-export/manifest-values";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
+
+const CREATED_AT = new Date("2026-10-01T08:00:00.000Z");
+const encoder = new TextEncoder();
+
+type FakeFile = { bytes: Uint8Array; storedSha256: string };
+
+const fakeFile = (content: string): FakeFile => {
+  const bytes = encoder.encode(content);
+  return { bytes, storedSha256: sha256Hex(bytes) };
+};
+
+const emptyTable = { columns: ["id"], rows: [] };
+
+type FakeMatter = {
+  summary: SourceMatterSummary;
+  matter: SourceMatter;
+};
+
+type FakeWorld = {
+  matters: FakeMatter[];
+  files: Map<string, FakeFile | "missing" | "failed">;
+  organization: SourceOrganizationRecords;
+  templateFiles: Map<string, Uint8Array>;
+  recordBytes?: RecordBytes;
+};
+
+const documentWithVersions = ({
+  id,
+  name,
+  parentId = null,
+  versions,
+}: {
+  id: string;
+  name: string;
+  parentId?: string | null;
+  versions: { id: string; fileId: string; file: FakeFile; fileName?: string }[];
+}): SourceDocument => ({
+  id,
+  kind: "document",
+  parentId,
+  name,
+  docSequence: 1,
+  currentVersionId: versions.at(-1)?.id ?? null,
+  createdAt: CREATED_AT,
+  createdBy: "user-1",
+  updatedAt: null,
+  lastEditedBy: null,
+  versions: versions.map((version, index) => ({
+    id: version.id,
+    versionNumber: index + 1,
+    stamp: null,
+    label: null,
+    description: null,
+    createdAt: new Date(CREATED_AT.getTime() + index * 60_000),
+    createdBy: `user-${index + 1}`,
+    files: [
+      {
+        fieldId: `field-${version.id}`,
+        fileId: version.fileId,
+        fileName: version.fileName ?? name,
+        mimeType: "application/pdf",
+        sizeBytes: version.file.bytes.byteLength,
+        sha256: version.file.storedSha256,
+      },
+    ],
+  })),
+});
+
+// Two chunks, so the streaming path is exercised across a chunk boundary.
+const found = (data: Uint8Array): FileRead => ({
+  type: "found",
+  sizeBytes: data.byteLength,
+  chunks: (async function* () {
+    const middle = Math.floor(data.byteLength / 2);
+    yield data.subarray(0, middle);
+    yield data.subarray(middle);
+  })(),
+});
+
+const selectedMatter = (
+  matter: SourceMatter,
+  selection: SourceVersionSelection,
+): SourceMatter => {
+  if (selection === "all") {
+    return matter;
+  }
+  const documents =
+    selection === "current"
+      ? matter.documents.map((document) => ({
+          ...document,
+          versions: document.versions.filter(
+            (version) => version.id === document.currentVersionId,
+          ),
+        }))
+      : matter.documents.flatMap((document) => {
+          const documentPaths = selection.documents[document.id];
+          if (documentPaths === undefined) {
+            return [];
+          }
+          return [
+            {
+              ...document,
+              versions: document.versions.flatMap((version) => {
+                const versionPaths = documentPaths.versions[version.id];
+                if (versionPaths === undefined) {
+                  return [];
+                }
+                return [
+                  {
+                    ...version,
+                    files: version.files.filter(
+                      (file) => versionPaths.files[file.fieldId] !== undefined,
+                    ),
+                  },
+                ];
+              }),
+            },
+          ];
+        });
+  return { ...matter, documents };
+};
+
+const fakeSource = (world: FakeWorld): ExportSource => ({
+  listMatters: async () => world.matters.map((m) => m.summary),
+  loadMatter: async (matterId, selection) => {
+    const matter = world.matters.find((m) => m.summary.id === matterId)?.matter;
+    return matter === undefined ? null : selectedMatter(matter, selection);
+  },
+  loadOrganizationRecords: async () => world.organization,
+  measureRecords: async () =>
+    world.recordBytes ?? { organizationBytes: 0, matterBytes: new Map() },
+  readFile: async (ref: ExportFileRef): Promise<FileRead> => {
+    if (ref.type === "template") {
+      const data = world.templateFiles.get(ref.templateVersionId);
+      return data === undefined ? { type: "missing" } : found(data);
+    }
+    const file = world.files.get(ref.fileId);
+    if (file === undefined || file === "missing") {
+      return { type: "missing" };
+    }
+    if (file === "failed") {
+      return { type: "failed" };
+    }
+    return found(file.bytes);
+  },
+});
+
+const memorySink = () => {
+  const parts = new Map<string, Uint8Array[]>();
+  const closed: string[] = [];
+  return {
+    parts,
+    closed,
+    sink: {
+      openPart: (fileName: string) => {
+        const chunks: Uint8Array[] = [];
+        parts.set(fileName, chunks);
+        return {
+          write: async (chunk: Uint8Array) => {
+            chunks.push(chunk);
+          },
+          close: async () => {
+            closed.push(fileName);
+          },
+        };
+      },
+    },
+    bytesOf: (fileName: string) => Buffer.concat(parts.get(fileName) ?? []),
+  };
+};
+
+const matterFixture = ({
+  id,
+  name,
+  documents,
+  folders = [],
+}: {
+  id: string;
+  name: string;
+  documents: SourceDocument[];
+  folders?: SourceMatter["folders"];
+}): FakeMatter => {
+  const summary = {
+    id,
+    name,
+    reference: `REF-${id}`,
+    status: "active",
+    createdAt: CREATED_AT,
+    estimatedBytes: documents
+      .flatMap((d) => d.versions.flatMap((ver) => ver.files))
+      .reduce((sum, file) => sum + file.sizeBytes, 0),
+  };
+  return {
+    summary,
+    matter: {
+      summary,
+      record: { id, name },
+      folders,
+      documents,
+      tasks: {
+        columns: ["id", "name"],
+        rows: [{ id: `task-${id}`, name: "=SUM(A1)" }],
+      },
+      timeEntries: emptyTable,
+      expenses: emptyTable,
+      invoices: emptyTable,
+    },
+  };
+};
+
+const organizationFixture = (): SourceOrganizationRecords => ({
+  sellerProfiles: emptyTable,
+  clauseCategories: emptyTable,
+  templateCategories: emptyTable,
+  contacts: {
+    columns: ["id", "displayName"],
+    rows: [{ id: "contact-1", displayName: "Novák, s.r.o." }],
+  },
+  contactRelationships: emptyTable,
+  clauses: emptyTable,
+  templates: emptyTable,
+  unassignedTimeEntries: emptyTable,
+  invoices: {
+    columns: ["id", "workspaceId"],
+    rows: [
+      {
+        id: "client-invoice-1",
+        workspaceId: null,
+        lines: [{ id: "line-1" }],
+        payments: [{ id: "payment-1" }],
+      },
+    ],
+  },
+  templateFiles: [
+    {
+      templateId: "tpl-1",
+      templateName: "Plná moc",
+      templateVersionId: "tplv-1",
+      version: 1,
+      fileName: "plna-moc.docx",
+      sizeBytes: 4,
+    },
+  ],
+});
+
+type RunOptions = {
+  partTargetBytes?: number;
+  completedParts?: CompletedPart[];
+  beforePart?: () => Promise<void>;
+  source?: ExportSource;
+  plan?: ExportPlan;
+  versionScope?: "all" | "current";
+};
+
+const run = async (
+  world: FakeWorld,
+  {
+    partTargetBytes = 1_000_000,
+    completedParts = [],
+    beforePart = async () => {},
+    source = fakeSource(world),
+    plan: persistedPlan,
+    versionScope = "all",
+  }: RunOptions = {},
+) => {
+  const memory = memorySink();
+  const plan =
+    persistedPlan ??
+    (
+      await planDataExport({
+        source,
+        partTargetBytes,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: versionScope },
+        pace: async () => {},
+      })
+    ).unwrap();
+  const checkpoints: CompletedPart[] = [];
+  let paced = 0;
+  const built = await buildDataExport({
+    exportId: "0f1e2d3c-0000-4000-8000-000000000001",
+    organization: { id: "org-1", name: "Kancelář" },
+    requestedBy: "user-1",
+    createdAt: CREATED_AT,
+    scope: { versions: versionScope },
+    plan,
+    completedParts,
+    source,
+    sink: memory.sink,
+    pace: async () => {
+      paced += 1;
+    },
+    signal: new AbortController().signal,
+    beforePart,
+    onPartComplete: async (part) => {
+      checkpoints.push(part);
+    },
+    now: () => new Date("2026-10-01T09:00:00.000Z"),
+  });
+  if (built.isErr()) {
+    throw built.error;
+  }
+  const manifest = built.value;
+  const builtParts = manifest.parts.filter((part) =>
+    memory.parts.has(part.fileName),
+  );
+  const zips = await Promise.all(
+    builtParts.map(async (part) => {
+      const bytes = memory.bytesOf(part.fileName);
+      expect(bytes.byteLength).toBe(part.sizeBytes);
+      expect(sha256Hex(bytes)).toBe(part.sha256);
+      return await JSZip.loadAsync(bytes);
+    }),
+  );
+  const partManifests = await Promise.all(
+    zips.map(async (zip, index) => {
+      const completed = builtParts.at(index);
+      if (completed === undefined) {
+        throw new Error("built ZIP has no completed part");
+      }
+      const planned = plan.parts.find((part) => part.index === completed.index);
+      if (planned === undefined) {
+        throw new Error(`part ${completed.index} is absent from the plan`);
+      }
+      const text = await zip.file(planned.paths.manifest)?.async("string");
+      if (text === undefined) {
+        throw new Error(`part has no ${planned.paths.manifest}`);
+      }
+      return v.parse(partManifestSchema, JSON.parse(text));
+    }),
+  );
+  return { manifest, plan, zips, partManifests, memory, checkpoints, paced };
+};
+
+const basicWorld = (): FakeWorld => {
+  const v1 = fakeFile("version one");
+  const v2 = fakeFile("version two, longer");
+  const v3 = fakeFile("version three");
+  const other = fakeFile("other matter document");
+  return {
+    matters: [
+      matterFixture({
+        id: "m-1",
+        name: "Alfa v. Beta",
+        folders: [{ id: "folder-1", parentId: null, name: "Pleadings" }],
+        documents: [
+          documentWithVersions({
+            id: "doc-1",
+            name: "Žaloba.pdf",
+            parentId: "folder-1",
+            versions: [
+              { id: "ver-1", fileId: "file-1", file: v1 },
+              { id: "ver-2", fileId: "file-2", file: v2 },
+              { id: "ver-3", fileId: "file-3", file: v3 },
+            ],
+          }),
+        ],
+      }),
+      matterFixture({
+        id: "m-2",
+        name: "Gama",
+        documents: [
+          documentWithVersions({
+            id: "doc-2",
+            name: "Smlouva.pdf",
+            versions: [{ id: "ver-4", fileId: "file-4", file: other }],
+          }),
+        ],
+      }),
+    ],
+    files: new Map([
+      ["file-1", v1],
+      ["file-2", v2],
+      ["file-3", v3],
+      ["file-4", other],
+    ]),
+    organization: organizationFixture(),
+    templateFiles: new Map([["tplv-1", encoder.encode("docx")]]),
+  };
+};
+
+const nestedWorld = (letter = "a"): FakeWorld => {
+  const world = basicWorld();
+  const folders = Array.from({ length: 40 }, (_, index) => ({
+    id: `folder-${index}`,
+    parentId: index === 0 ? null : `folder-${index - 1}`,
+    name: letter.repeat(220),
+  }));
+  return {
+    ...world,
+    matters: world.matters.map(({ summary, matter }) => ({
+      summary,
+      matter: {
+        ...matter,
+        folders,
+        documents: matter.documents.map((document) => ({
+          ...document,
+          parentId: "folder-39",
+        })),
+      },
+    })),
+  };
+};
+
+describe("organisation data export admission", () => {
+  test("sizes parts by the records they carry, not only their files", async () => {
+    const world = basicWorld();
+    const filesOnly = (
+      await planDataExport({
+        source: fakeSource(world),
+        partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: "all" },
+        pace: async () => {},
+      })
+    ).unwrap();
+    const matterId = world.matters.at(0)?.summary.id ?? "";
+    const withRecords = (
+      await planDataExport({
+        source: fakeSource({
+          ...world,
+          recordBytes: {
+            organizationBytes: 1000,
+            matterBytes: new Map([[matterId, 500]]),
+          },
+        }),
+        partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: "all" },
+        pace: async () => {},
+      })
+    ).unwrap();
+    expect(withRecords.bytesTotal).toBe(filesOnly.bytesTotal + 1500);
+  });
+
+  test.each(["organization", "matter"] as const)(
+    "refuses an export whose records exceed the cap, here through its %s records, before loading any",
+    async (unit) => {
+      const world = basicWorld();
+      const matterId = world.matters.at(0)?.summary.id ?? "";
+      const over = DATA_EXPORT_RECORD_BYTES_CAP + 1;
+      let loaded = false;
+      const source: ExportSource = {
+        ...fakeSource({
+          ...world,
+          recordBytes: {
+            organizationBytes: unit === "organization" ? over : 0,
+            matterBytes: new Map([[matterId, unit === "matter" ? over : 0]]),
+          },
+        }),
+        loadOrganizationRecords: async () => {
+          loaded = true;
+          return world.organization;
+        },
+      };
+      const planned = await planDataExport({
+        source,
+        partTargetBytes: 2 * 1024 ** 3,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: "all" },
+        pace: async () => {},
+      });
+      const error = planned.isErr() ? planned.error : null;
+      expect(error).toBeInstanceOf(DataExportRecordsTooLargeError);
+      expect(error).toMatchObject({ bytes: over });
+      expect(loaded).toBe(false);
+    },
+  );
+});
+
+describe("organisation data export archive paths", () => {
+  test("keeps a historical file and a mirrored folder of the same name apart", async () => {
+    const files = new Map(
+      ["r-1", "r-2", "c-1", "c-2"].map(
+        (id) => [id, fakeFile(`bytes of ${id}`)] as const,
+      ),
+    );
+    const version = (id: string) => ({
+      id: `ver-${id}`,
+      fileId: id,
+      file: files.get(id) ?? fakeFile(id),
+    });
+    const world: FakeWorld = {
+      ...basicWorld(),
+      matters: [
+        matterFixture({
+          id: "m-1",
+          name: "Alfa v. Beta",
+          // "Report" at version 1 is named "Report (v1)" under versions/,
+          // the mirrored name of this folder.
+          folders: [{ id: "folder-r", parentId: null, name: "Report (v1)" }],
+          documents: [
+            documentWithVersions({
+              id: "doc-r",
+              name: "Report",
+              versions: [version("r-1"), version("r-2")],
+            }),
+            documentWithVersions({
+              id: "doc-c",
+              name: "child.pdf",
+              parentId: "folder-r",
+              versions: [version("c-1"), version("c-2")],
+            }),
+          ],
+        }),
+      ],
+      files,
+    };
+    const { zips } = await run(world);
+    const paths = zips.flatMap((zip) =>
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name),
+    );
+    // No file path is also the directory of another file.
+    for (const path of paths) {
+      expect(
+        paths.some((other) => other.startsWith(`${path}/`)),
+        path,
+      ).toBe(false);
+    }
+    expect(paths.filter((path) => path.includes("/versions/"))).toHaveLength(2);
+  });
+
+  test("keeps every file path unique across parts after matter names are shortened", async () => {
+    const world = basicWorld();
+    const sharedPrefix = "x".repeat(240);
+    for (const [index, matter] of world.matters.entries()) {
+      matter.summary.name = `${sharedPrefix}${index === 0 ? "A" : "B"}`;
+    }
+    const result = await run(world, { partTargetBytes: 10 });
+    expect(result.plan.parts.map((part) => part.matterIds)).toEqual([
+      [],
+      ["m-1"],
+      ["m-2"],
+    ]);
+    const firstDirectory = result.plan.paths.matters["m-1"]?.directory;
+    const secondDirectory = result.plan.paths.matters["m-2"]?.directory;
+    if (firstDirectory === undefined || secondDirectory === undefined) {
+      throw new Error("planned matter directories are missing");
+    }
+    expect(archivePathKey(firstDirectory)).not.toBe(
+      archivePathKey(secondDirectory),
+    );
+
+    const allFilePaths = result.zips.flatMap((zip) =>
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map((entry) => entry.name),
+    );
+    const foldedPaths = allFilePaths.map(archivePathKey);
+    expect(new Set(foldedPaths).size).toBe(allFilePaths.length);
+    for (const [index, planned] of result.plan.parts.entries()) {
+      const zip = result.zips[index];
+      if (zip === undefined) {
+        throw new Error(`missing ZIP for part ${planned.index}`);
+      }
+      expect(zip.file(planned.paths.manifest)).not.toBeNull();
+      expect(zip.file(planned.paths.readme)).not.toBeNull();
+    }
+  });
+});
+
+describe("organisation data export builder", () => {
+  test("carries every document version with its verified checksum and path", async () => {
+    const world = basicWorld();
+    const { manifest, plan, zips, partManifests } = await run(world);
+    expect(manifest.parts).toHaveLength(1);
+    const zip = zips[0];
+    const part = partManifests[0];
+    if (zip === undefined || part === undefined) {
+      throw new Error("expected one part");
+    }
+
+    const document = part.matters
+      .flatMap((m) => m.documents)
+      .find((d) => d.id === "doc-1");
+    expect(document?.versions.map((ver) => ver.versionNumber)).toEqual([
+      1, 2, 3,
+    ]);
+    const files = document?.versions.flatMap((ver) => ver.files) ?? [];
+    const matterDirectory = plan.paths.matters["m-1"]?.directory;
+    if (matterDirectory === undefined) {
+      throw new Error("matter directory was not planned");
+    }
+    expect(files.map((f) => f.path)).toEqual([
+      `${matterDirectory}/versions/Pleadings/Žaloba (v1).pdf`,
+      `${matterDirectory}/versions/Pleadings/Žaloba (v2).pdf`,
+      `${matterDirectory}/documents/Pleadings/Žaloba.pdf`,
+    ]);
+    for (const file of files) {
+      const bytes = await zip.file(file.path)?.async("uint8array");
+      expect(bytes).toBeDefined();
+      expect(sha256Hex(bytes ?? new Uint8Array())).toBe(file.sha256);
+      expect(bytes?.byteLength).toBe(file.sizeBytes);
+    }
+    expect(manifest.totals).toEqual({
+      matters: 2,
+      documents: 2,
+      versions: 4,
+      files: 4,
+      fileBytes: [...world.files.values()].reduce(
+        (sum, f) => sum + (typeof f === "string" ? 0 : f.bytes.byteLength),
+        0,
+      ),
+    });
+    expect(manifest.problems).toEqual([]);
+  });
+
+  test("writes JSON records verbatim and CSV with neutralised formulas", async () => {
+    const { zips, partManifests } = await run(basicWorld());
+    const zip = zips[0];
+    const tasksRef = partManifests[0]?.matters[0]?.records.tasks;
+    if (
+      zip === undefined ||
+      tasksRef?.csv === undefined ||
+      tasksRef.csv === null
+    ) {
+      throw new Error("expected task records");
+    }
+    const json = JSON.parse(
+      (await zip.file(tasksRef.json)?.async("string")) ?? "",
+    );
+    expect(json).toEqual([{ id: "task-m-1", name: "=SUM(A1)" }]);
+    const csv = (await zip.file(tasksRef.csv)?.async("string")) ?? "";
+    expect(csv).toContain('"\t=SUM(A1)"');
+    const invoicesRef = partManifests[0]?.organizationRecords?.invoices;
+    expect(invoicesRef?.count).toBe(1);
+    const invoiceJson =
+      invoicesRef === undefined
+        ? undefined
+        : await zip.file(invoicesRef.json)?.async("string");
+    expect(JSON.parse(invoiceJson ?? "null")).toEqual(
+      organizationFixture().invoices.rows,
+    );
+    expect(
+      Object.keys(zip.files).filter((path) =>
+        path.endsWith("invoices-without-matter.json"),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test("splits parts only at matter boundaries and keeps organisation records in part 1", async () => {
+    const world = basicWorld();
+    // Organization records and each matter exceed this target individually.
+    const { manifest, partManifests, zips } = await run(world, {
+      partTargetBytes: 10,
+    });
+    expect(manifest.parts.map((p) => p.matterIds)).toEqual([
+      [],
+      ["m-1"],
+      ["m-2"],
+    ]);
+    expect(partManifests.map((p) => p.part)).toEqual([
+      { index: 1, count: 3 },
+      { index: 2, count: 3 },
+      { index: 3, count: 3 },
+    ]);
+    expect(partManifests[0]?.organizationRecords).not.toBeNull();
+    expect(partManifests[0]?.matters).toEqual([]);
+    expect(partManifests[1]?.organizationRecords).toBeNull();
+    expect(partManifests[2]?.organizationRecords).toBeNull();
+    for (const [index, part] of partManifests.entries()) {
+      const zip = zips[index];
+      for (const matter of part.matters) {
+        for (const document of matter.documents) {
+          for (const file of document.versions.flatMap((ver) => ver.files)) {
+            expect(zip?.file(file.path)).not.toBeNull();
+          }
+        }
+      }
+      expect(part.matters.map((m) => m.id)).toEqual(
+        manifest.parts[index]?.matterIds ?? [],
+      );
+    }
+  });
+
+  test("records the archived byte length for buffered files despite stale storage sizes", async () => {
+    const world = basicWorld();
+    for (const matter of world.matters) {
+      for (const document of matter.matter.documents) {
+        for (const version of document.versions) {
+          for (const file of version.files) {
+            file.mimeType = "text/plain";
+          }
+        }
+      }
+    }
+    const source = fakeSource(world);
+    const { zips, partManifests } = await run(world, {
+      source: {
+        ...source,
+        readFile: async (ref) => {
+          const read = await source.readFile(ref);
+          return ref.type === "document" && read.type === "found"
+            ? { ...read, sizeBytes: read.sizeBytes + 100 }
+            : read;
+        },
+      },
+    });
+    let checkedFiles = 0;
+    for (const [index, part] of partManifests.entries()) {
+      for (const matter of part.matters) {
+        for (const document of matter.documents) {
+          for (const version of document.versions) {
+            for (const file of version.files) {
+              const bytes = await zips[index]
+                ?.file(file.path)
+                ?.async("uint8array");
+              expect(bytes).toBeDefined();
+              expect(bytes?.byteLength).toBe(file.sizeBytes);
+              checkedFiles += 1;
+            }
+          }
+        }
+      }
+    }
+    expect(checkedFiles).toBeGreaterThan(0);
+  });
+
+  test("lists unreadable files as absent and corrupted files as checksum mismatches", async () => {
+    const world = basicWorld();
+    world.files.set("file-1", "missing");
+    world.files.set("file-2", "failed");
+    world.files.set("file-4", {
+      bytes: encoder.encode("tampered"),
+      storedSha256: "0".repeat(64),
+    });
+    const { manifest, zips } = await run(world);
+    expect(
+      manifest.problems.map((problem) =>
+        problem.reason === "matter_unavailable" ||
+        problem.reason === "planned_item_unavailable"
+          ? { matterId: problem.matterId, reason: problem.reason }
+          : { fileId: problem.fileId, reason: problem.reason },
+      ),
+    ).toEqual([
+      { fileId: "file-1", reason: "missing" },
+      { fileId: "file-2", reason: "fetch_failed" },
+      { fileId: "file-4", reason: "checksum_mismatch" },
+    ]);
+    for (const problem of manifest.problems) {
+      if (
+        problem.reason === "matter_unavailable" ||
+        problem.reason === "planned_item_unavailable"
+      ) {
+        throw new Error("no planned item was removed in this world");
+      }
+      const entry = zips[0]?.file(problem.path) ?? null;
+      if (problem.reason === "checksum_mismatch") {
+        // Shipped as stored, so the person can still inspect it.
+        expect(await entry?.async("string")).toBe("tampered");
+        // The checksum recorded at upload, not the one of the bytes found.
+        expect(problem.recordedSha256).toBe(
+          sha256Hex(encoder.encode("other matter document")),
+        );
+        continue;
+      }
+      expect(entry).toBeNull();
+    }
+  });
+
+  test.each([
+    { completedCount: 1, remainingIndices: [2, 3] },
+    { completedCount: 2, remainingIndices: [3] },
+  ])(
+    "resumes after $completedCount checkpoints without rebuilding finished parts",
+    async ({ completedCount, remainingIndices }) => {
+      const originalWorld = basicWorld();
+      const first = await run(originalWorld, { partTargetBytes: 10 });
+      expect(first.checkpoints.map((part) => part.index)).toEqual([1, 2, 3]);
+      expect(first.paced).toBeGreaterThan(0);
+      const completedParts = first.checkpoints.slice(0, completedCount);
+      const persistedPlan = structuredClone(first.plan);
+      const resumed = await run(originalWorld, {
+        plan: persistedPlan,
+        completedParts,
+      });
+      const remainingParts = first.manifest.parts.slice(completedCount);
+      expect(completedParts.at(0)?.matterIds).toEqual([]);
+      expect([...resumed.memory.parts.keys()]).toEqual(
+        remainingParts.map((part) => part.fileName),
+      );
+      expect(resumed.checkpoints.map((part) => part.index)).toEqual([
+        ...remainingIndices,
+      ]);
+      expect(resumed.manifest.parts.map((part) => part.sha256)).toEqual(
+        first.manifest.parts.map((part) => part.sha256),
+      );
+      expect(resumed.manifest.totals).toEqual(first.manifest.totals);
+
+      const renamedWorld = basicWorld();
+      const renamedMatter = renamedWorld.matters.find(
+        ({ summary }) => summary.id === "m-2",
+      );
+      if (renamedMatter === undefined) {
+        throw new Error("expected second matter in resumed source");
+      }
+      renamedMatter.summary.name = "Renamed matter after checkpoint";
+      renamedMatter.matter.summary.name = renamedMatter.summary.name;
+      const renamedFolder = renamedMatter.matter.folders.at(0);
+      if (renamedFolder !== undefined) {
+        renamedFolder.name = "Renamed folder";
+      }
+      const renamedDocument = renamedMatter.matter.documents.at(0);
+      if (renamedDocument !== undefined) {
+        renamedDocument.name = "Renamed document";
+        for (const version of renamedDocument.versions) {
+          for (const file of version.files) {
+            file.fileName = "renamed-file.pdf";
+          }
+        }
+      }
+      const resumedAfterRename = await run(renamedWorld, {
+        plan: persistedPlan,
+        completedParts,
+      });
+      expect([...resumedAfterRename.memory.parts.keys()]).toEqual(
+        remainingParts.map((part) => part.fileName),
+      );
+      expect(resumedAfterRename.checkpoints.map((part) => part.index)).toEqual([
+        ...remainingIndices,
+      ]);
+      expect(resumedAfterRename.plan.paths).toEqual(first.plan.paths);
+      const filePaths = (zip: JSZip) =>
+        Object.values(zip.files)
+          .filter((entry) => !entry.dir)
+          .map((entry) => entry.name)
+          .toSorted();
+      expect(resumedAfterRename.zips.map(filePaths)).toEqual(
+        first.zips.slice(completedCount).map(filePaths),
+      );
+    },
+  );
+
+  test("resumes a current-version plan after the document is promoted", async () => {
+    const world = basicWorld();
+    const firstMatter = world.matters.find(
+      ({ summary }) => summary.id === "m-1",
+    );
+    const secondMatter = world.matters.find(
+      ({ summary }) => summary.id === "m-2",
+    );
+    const plannedDocument = firstMatter?.matter.documents.at(0);
+    if (
+      firstMatter === undefined ||
+      secondMatter === undefined ||
+      plannedDocument === undefined
+    ) {
+      throw new Error("expected the planned document fixture");
+    }
+    firstMatter.matter = { ...firstMatter.matter, documents: [] };
+    firstMatter.summary.estimatedBytes = 0;
+    firstMatter.matter.summary.estimatedBytes = 0;
+    secondMatter.matter = {
+      ...secondMatter.matter,
+      documents: [{ ...plannedDocument, currentVersionId: "ver-1" }],
+    };
+    const estimatedBytes = plannedDocument.versions
+      .flatMap((version) => version.files)
+      .reduce((total, file) => total + file.sizeBytes, 0);
+    secondMatter.summary.estimatedBytes = estimatedBytes;
+    secondMatter.matter.summary.estimatedBytes = estimatedBytes;
+
+    const first = await run(world, {
+      partTargetBytes: 10,
+      versionScope: "current",
+    });
+    expect(first.plan.parts.map((planned) => planned.matterIds)).toEqual([
+      ["m-1"],
+      ["m-2"],
+    ]);
+    const completedFirstPart = first.checkpoints.at(0);
+    if (completedFirstPart === undefined) {
+      throw new Error("expected the first part checkpoint");
+    }
+    const persistedPlan = structuredClone(first.plan);
+    secondMatter.matter = {
+      ...secondMatter.matter,
+      documents: [{ ...plannedDocument, currentVersionId: "ver-2" }],
+    };
+    const promotedCurrent =
+      secondMatter.matter.documents.at(0)?.currentVersionId;
+    expect(promotedCurrent).toBe("ver-2");
+
+    const resumed = await run(world, {
+      plan: persistedPlan,
+      completedParts: [completedFirstPart],
+      versionScope: "current",
+    });
+    const part = resumed.partManifests.at(0);
+    const zip = resumed.zips.at(0);
+    const document = part?.matters
+      .flatMap((matter) => matter.documents)
+      .find((row) => row.id === plannedDocument.id);
+    expect(document?.currentVersionId).toBe("ver-1");
+    expect(document?.versions.map((version) => version.id)).toEqual(["ver-1"]);
+    const file = document?.versions.at(0)?.files.at(0);
+    if (file === undefined || zip === undefined) {
+      throw new Error("expected the planned current-version file");
+    }
+    const expectedFile = world.files.get("file-1");
+    if (
+      expectedFile === undefined ||
+      expectedFile === "missing" ||
+      expectedFile === "failed"
+    ) {
+      throw new Error("expected planned current-version file bytes");
+    }
+    expect(await zip.file(file.path)?.async("uint8array")).toEqual(
+      expectedFile.bytes,
+    );
+  });
+
+  test("reports every planned document folder and template lost before packing", async () => {
+    const world = basicWorld();
+    const initial = await run(world);
+    const firstMatter = world.matters.at(0);
+    if (firstMatter === undefined) {
+      throw new Error("expected planned matter fixture");
+    }
+    const matterPlan = initial.plan.paths.matters[firstMatter.summary.id];
+    if (matterPlan === undefined) {
+      throw new Error("expected persisted matter paths");
+    }
+    expect(Object.keys(matterPlan.documents).length).toBeGreaterThan(0);
+    expect(Object.keys(matterPlan.folders).length).toBeGreaterThan(0);
+    expect(
+      Object.keys(initial.plan.paths.organization.templateFiles).length,
+    ).toBeGreaterThan(0);
+    firstMatter.matter = { ...firstMatter.matter, documents: [], folders: [] };
+    world.organization.templateFiles = [];
+    const result = await run(world, { plan: structuredClone(initial.plan) });
+    const expectedProblems = [
+      ...Object.keys(matterPlan.documents).map((itemId) => ({
+        reason: "planned_item_unavailable",
+        matterId: firstMatter.summary.id,
+        itemType: "document",
+        itemId,
+      })),
+      ...Object.keys(matterPlan.folders).map((itemId) => ({
+        reason: "planned_item_unavailable",
+        matterId: firstMatter.summary.id,
+        itemType: "folder",
+        itemId,
+      })),
+      ...Object.entries(initial.plan.paths.organization.templateFiles).map(
+        ([fileId, path]) => ({ reason: "missing", fileId, path }),
+      ),
+    ];
+    expect(result.manifest.problems).toEqual(
+      expect.arrayContaining(expectedProblems),
+    );
+    expect(result.manifest.problems).toHaveLength(expectedProblems.length);
+  });
+
+  test("reports planned versions and files that disappear or change identity", async () => {
+    const world = basicWorld();
+    const baseSource = fakeSource(world);
+    const source: ExportSource = {
+      ...baseSource,
+      loadMatter: async (matterId, selection) => {
+        const matter = await baseSource.loadMatter(matterId, selection);
+        if (
+          matter === null ||
+          matterId !== "m-1" ||
+          selection === "all" ||
+          selection === "current"
+        ) {
+          return matter;
+        }
+        return {
+          ...matter,
+          documents: matter.documents.map((document) => ({
+            ...document,
+            versions: document.versions.flatMap((version) => {
+              if (version.id === "ver-3") {
+                return [];
+              }
+              if (version.id === "ver-2") {
+                return [
+                  {
+                    ...version,
+                    files: version.files.map((file) => ({
+                      ...file,
+                      fileId: "replacement-file-id",
+                    })),
+                  },
+                ];
+              }
+              if (version.id === "ver-1") {
+                return [{ ...version, files: [] }];
+              }
+              return [version];
+            }),
+          })),
+        };
+      },
+    };
+    const { partManifests } = await run(world, { source });
+    const problems = partManifests.flatMap((part) => part.problems);
+    expect(problems).toContainEqual({
+      reason: "planned_item_unavailable",
+      matterId: "m-1",
+      itemType: "version",
+      itemId: "ver-3",
+    });
+    expect(problems).toContainEqual({
+      reason: "missing",
+      path: expect.any(String),
+      fileId: "file-1",
+    });
+    expect(problems).toContainEqual({
+      reason: "missing",
+      path: expect.any(String),
+      fileId: "file-2",
+    });
+    expect(problems).toHaveLength(3);
+  });
+
+  test("stops between files when its signal aborts", async () => {
+    const controller = new AbortController();
+    const source = fakeSource(basicWorld());
+    const plan = (
+      await planDataExport({
+        source,
+        partTargetBytes: 10,
+        recordBytesCap: DATA_EXPORT_RECORD_BYTES_CAP,
+        scope: { versions: "all" },
+        pace: async () => {},
+      })
+    ).unwrap();
+    const checkpoints: CompletedPart[] = [];
+    const rejection = await rejectionOf(
+      buildDataExport({
+        exportId: "0f1e2d3c-0000-4000-8000-000000000001",
+        organization: { id: "org-1", name: "Kancelář" },
+        requestedBy: "user-1",
+        createdAt: CREATED_AT,
+        scope: { versions: "all" },
+        plan,
+        completedParts: [],
+        source,
+        sink: memorySink().sink,
+        pace: async () => {
+          controller.abort();
+        },
+        signal: controller.signal,
+        beforePart: async () => {},
+        onPartComplete: async (part) => {
+          checkpoints.push(part);
+        },
+      }),
+    );
+    expect(rejection).toBeInstanceOf(DOMException);
+    expect(
+      checkpoints.map(({ index, matterIds }) => ({ index, matterIds })),
+    ).toEqual([{ index: 1, matterIds: [] }]);
+  });
+
+  test.each([
+    { name: "ordinary folders", world: basicWorld },
+    {
+      name: "nested folders exceeding the complete path limit",
+      world: () => nestedWorld(),
+    },
+    {
+      name: "nested Unicode folders exceeding the byte limit",
+      world: () => nestedWorld("Ž"),
+    },
+  ])(
+    "validates $name against the Valibot contract and the committed JSON Schema",
+    async ({ world }) => {
+      const { manifest, partManifests, zips } = await run(world(), {
+        partTargetBytes: 10,
+      });
+      const committed: unknown = await Bun.file(
+        new URL(
+          "../../../../../docs/data-export/stella-data-export.v1.schema.json",
+          import.meta.url,
+        ),
+      ).json();
+      // Drift guard: the published schema is exactly what the contract derives.
+      expect(committed).toEqual(buildDataExportJsonSchema());
+
+      const ajv = new Ajv({ allowUnionTypes: true, strict: true });
+      addFormats(ajv);
+      ajv.addKeyword({
+        keyword: "x-maxUtf8Bytes",
+        type: "string",
+        schemaType: "number",
+        validate: (limit: number, value: string) =>
+          utf8ByteLength(value) <= limit,
+      });
+      ajv.addKeyword({
+        keyword: "x-maxSegmentUtf8Bytes",
+        type: "string",
+        schemaType: "number",
+        validate: (limit: number, value: string) =>
+          value.split("/").every((segment) => utf8ByteLength(segment) <= limit),
+      });
+      const { $schema: _draft, ...schema } = buildDataExportJsonSchema();
+      const validate = ajv.compile(schema);
+      const documents: unknown[] = [manifest, ...partManifests];
+      for (const document of documents) {
+        expect(v.safeParse(dataExportManifestSchema, document).success).toBe(
+          true,
+        );
+        expect(validate(document)).toBe(true);
+      }
+      const broken: PartManifest | undefined = partManifests[0];
+      expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
+      for (const [index, part] of partManifests.entries()) {
+        const zip = zips.at(index);
+        for (const path of Object.keys(zip?.files ?? {})) {
+          expect(encoder.encode(path).byteLength).toBeLessThanOrEqual(
+            DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+          );
+          for (const segment of path.split("/")) {
+            expect(encoder.encode(segment).byteLength).toBeLessThanOrEqual(
+              DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
+            );
+            expect(segment.isWellFormed()).toBe(true);
+          }
+        }
+        for (const matter of part.matters) {
+          for (const document of matter.documents) {
+            for (const version of document.versions) {
+              for (const file of version.files) {
+                expect(zip?.file(file.path)).not.toBeNull();
+              }
+            }
+          }
+        }
+      }
+    },
+  );
+
+  test("manifest paths enforce complete and per-segment byte bounds", () => {
+    const longSegment = "Ž".repeat(150);
+    const deep = Array.from({ length: 20 }, () => "Ž".repeat(115)).join("/");
+    expect(utf8ByteLength(longSegment)).toBe(300);
+    expect(deep.length).toBeLessThan(DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES);
+    expect(utf8ByteLength(deep)).toBeGreaterThan(
+      DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+    );
+    expect(v.safeParse(dataExportArchivePathSchema, longSegment).success).toBe(
+      false,
+    );
+    expect(v.safeParse(dataExportArchivePathSchema, deep).success).toBe(false);
+    expect(
+      v.safeParse(dataExportArchivePathSchema, "matters/Žaloba.pdf").success,
+    ).toBe(true);
+  });
+
+  test("refuses a part whose manifest violates the published schema", async () => {
+    const world = basicWorld();
+    world.organization.templateFiles = world.organization.templateFiles.map(
+      (file) => ({ ...file, version: -1 }),
+    );
+    expect(await rejectionOf(run(world))).toBeInstanceOf(
+      DataExportManifestInvalidError,
+    );
+  });
+
+  test("refuses an export manifest with invalid resumed checkpoint values", async () => {
+    const world = basicWorld();
+    const first = await run(world);
+    expect(
+      await rejectionOf(
+        run(world, {
+          plan: first.plan,
+          completedParts: first.checkpoints.map((part) => ({
+            ...part,
+            fileCount: -1,
+          })),
+        }),
+      ),
+    ).toBeInstanceOf(DataExportManifestInvalidError);
+  });
+
+  test("records a planned matter that can no longer be read instead of dropping it", async () => {
+    const world = basicWorld();
+    const source = fakeSource(world);
+    const gone: ExportSource = {
+      ...source,
+      // Planned (listed) but unreadable when its part is built.
+      loadMatter: async (matterId, scope) =>
+        matterId === "m-2" ? null : await source.loadMatter(matterId, scope),
+    };
+    const { manifest } = await run(world, { source: gone });
+    expect(manifest.problems).toEqual([
+      { reason: "matter_unavailable", matterId: "m-2" },
+    ]);
+    expect(manifest.parts.flatMap((part) => part.matterIds)).toEqual(["m-1"]);
+  });
+
+  test("stops before a part when the run may no longer continue", async () => {
+    const refusal = new Error("requester lost the export permission");
+    const rejection = await rejectionOf(
+      run(basicWorld(), {
+        beforePart: async () => {
+          throw refusal;
+        },
+      }),
+    );
+    expect(rejection).toBe(refusal);
+  });
+});

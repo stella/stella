@@ -1,0 +1,5 @@
+{
+  "row-level-security": "ENABLE and FORCE RLS are catalog-only changes on the export table created empty in this migration, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The policies install tenant and table-owner boundaries through catalog-only changes on the export table created empty in this migration, bounded by 1s lock_timeout and 5s statement_timeout.",
+  "add-foreign-key": "The two foreign keys on the export table created empty in this migration briefly take SHARE ROW EXCLUSIVE on organization and user with no existing export rows to validate, bounded by 1s lock_timeout and 5s statement_timeout."
+}

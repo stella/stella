@@ -50,6 +50,7 @@ import {
   legalReaderAnswers,
   notifications,
   numberSeries,
+  organizationDataExports,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -113,6 +114,8 @@ import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import createClientInvoice from "@/api/handlers/client-invoices/create";
 import prefillClientInvoice from "@/api/handlers/client-invoices/prefill";
 import readContactById from "@/api/handlers/contacts/get";
+import readDataExport from "@/api/handlers/data-exports/get";
+import listDataExports from "@/api/handlers/data-exports/list";
 import { createDesktopFeatureAccessReadEndpoint } from "@/api/handlers/desktop-feature-access/read";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
 import { createDesktopRegistryRequestEndpoint } from "@/api/handlers/desktop-registry/request";
@@ -388,6 +391,9 @@ const numberSeriesB = toSafeId<"numberSeries">(
   "22222222-2222-4222-8222-222222222259",
 );
 const vatRateB = toSafeId<"vatRate">("22222222-2222-4222-8222-222222222260");
+const dataExportB = toSafeId<"dataExport">(
+  "22222222-2222-4222-8222-2222222229d1",
+);
 const entityViewB = toSafeId<"workspaceView">(
   "22222222-2222-4222-8222-222222222255",
 );
@@ -1458,6 +1464,29 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: (result) => expectRecordFieldEquals(result, "id", vatRateB),
+  },
+  {
+    name: "organization data export list",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listDataExports, workspaceA, { query: {} }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(listDataExports, workspaceB, { query: {} }),
+    expectDenied: (result) => expectPageExcludesId(result, dataExportB),
+    expectPositive: (result) => expectPageContainsId(result, dataExportB),
+  },
+  {
+    name: "organization data export read by id",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(readDataExport, workspaceA, {
+        params: { exportId: dataExportB },
+      }),
+    runBPositive: async ({ workspaceB }) =>
+      await runHandler(readDataExport, workspaceB, {
+        params: { exportId: dataExportB },
+      }),
+    expectDenied: expectStatus(404),
+    expectPositive: (result) =>
+      expectRecordFieldEquals(result, "id", dataExportB),
   },
   {
     name: "VAT rate preset applies only to the active organization",
@@ -2953,6 +2982,13 @@ testState.beforeAll(async () => {
     pattern: "INV-{YYYY}-{SEQ}",
     padding: 5,
     isDefault: true,
+  });
+  await testDb.insert(organizationDataExports).values({
+    id: dataExportB,
+    organizationId: ids.orgB,
+    requestedBy: ids.userB1,
+    status: "failed",
+    versionScope: "all",
   });
   await testDb.insert(vatRates).values({
     id: vatRateB,

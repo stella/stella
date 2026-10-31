@@ -283,6 +283,9 @@ type McpCapabilityReason =
  * - `compound_consent`: operations that require multiple independent OAuth
  *   consent families; these stay first-party-only until the generic capability
  *   path can enforce conjunctive scopes.
+ * - `organization_export`: starting or downloading a whole-organization data
+ *   export; a person performs it in the app, never an agent, because it hands
+ *   over the firm's privileged material in one action.
  */
 type McpInternalReason =
   | "auth_plumbing"
@@ -306,7 +309,8 @@ type McpInternalReason =
   | "document_processing"
   | "native_tool_ui"
   | "billing_ui"
-  | "compound_consent";
+  | "compound_consent"
+  | "organization_export";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

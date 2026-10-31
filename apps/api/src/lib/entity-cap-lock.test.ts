@@ -182,7 +182,10 @@ describe("lockWorkspacesForEntityCap against a real workspace row", () => {
         .update(workspaces)
         .set({ status: "archived" })
         .where(eq(workspaces.id, workspaceId));
-      const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
+      const status = await lockWorkspaceForEntityCreate(
+        tx,
+        toSafeId<"workspace">(workspaceId.toUpperCase()),
+      );
       return { missing, status };
     });
     expect(result).toEqual({ missing: undefined, status: "archived" });

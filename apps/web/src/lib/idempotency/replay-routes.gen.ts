@@ -4,6 +4,7 @@ import type { RequestReplayRoute } from "@stll/api-client";
 export const REPLAY_CAPABLE_ROUTES = [
   { method: "POST", path: "/v1/case/matter-links/:workspaceId" },
   { method: "POST", path: "/v1/case/matter-links/:workspaceId/batch" },
+  { method: "POST", path: "/v1/data-exports" },
   { method: "POST", path: "/v1/document-types" },
   {
     method: "POST",

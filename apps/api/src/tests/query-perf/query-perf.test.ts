@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { getTableName, is, sql } from "drizzle-orm";
+import { asc, getTableName, is, sql } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 
 import * as schema from "@/api/db/schema";
+import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -15,6 +16,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
+import { DATA_EXPORT_HANDOFF_PAGE_SIZE } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
 import {
@@ -33,6 +35,7 @@ import {
   seedCorpusReadBudgets,
   serveCaseLaw,
 } from "./corpus-seed";
+import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
 import {
   budgetProblem,
@@ -61,10 +64,18 @@ import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
-const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
-  scenario.type === "case-law"
-    ? describeServed(scenario.served)
-    : `receipts:${scenario.cohort}:${scenario.rows}`;
+const describeScheduledScenario = (scenario: ScheduledJobScenario) => {
+  switch (scenario.type) {
+    case "case-law":
+      return describeServed(scenario.served);
+    case "data-exports":
+    case "request-receipts":
+      return `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
+    default:
+      scenario satisfies never;
+      return panic("Unknown scheduled measurement scenario", scenario);
+  }
+};
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
@@ -465,10 +476,19 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           task: string,
           scenario: ScheduledJobScenario,
         ) => {
-          if (scenario.type === "case-law") {
-            await serveCaseLaw(db, scenario.served);
-          } else {
-            await seedRequestReceiptScenario(db, scenario);
+          switch (scenario.type) {
+            case "case-law":
+              await serveCaseLaw(db, scenario.served);
+              break;
+            case "data-exports":
+              await seedDataExportScenario(db, scenario);
+              break;
+            case "request-receipts":
+              await seedRequestReceiptScenario(db, scenario);
+              break;
+            default:
+              scenario satisfies never;
+              panic("Unknown scheduled measurement scenario", scenario);
           }
           const measurement =
             SCHEDULED_JOB_MEASUREMENTS[jobId] ??
@@ -483,11 +503,54 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               : undefined;
           try {
             const generation = describeScheduledScenario(scenario);
+            let enqueued = 0;
+            const exportLifecycle = async () =>
+              await db
+                .select({
+                  id: schema.organizationDataExports.id,
+                  status: schema.organizationDataExports.status,
+                })
+                .from(schema.organizationDataExports)
+                .orderBy(asc(schema.organizationDataExports.id));
+            const originalExportLifecycle =
+              scenario.type === "data-exports" ? await exportLifecycle() : null;
             const run = await measureScheduledJobRun({
               database: db,
               jobId,
               task,
+              ...(scenario.type === "data-exports"
+                ? {
+                    dataExportMaintenance: {
+                      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+                      enqueue: async () => {
+                        enqueued += 1;
+                        return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+                      },
+                    },
+                  }
+                : {}),
             });
+            if (scenario.type === "data-exports") {
+              const retained = await db.$count(schema.organizationDataExports);
+              if (retained !== scenario.rows) {
+                panic("Scheduled measurement consumed its export fixture", {
+                  retained,
+                  expected: scenario.rows,
+                });
+              }
+              const lifecycleChanged =
+                JSON.stringify(await exportLifecycle()) !==
+                JSON.stringify(originalExportLifecycle);
+              if (lifecycleChanged !== (scenario.cohort === "transitions")) {
+                panic(
+                  "Export measurement missed its transition path",
+                  scenario,
+                );
+              }
+              if (enqueued > 0 !== (scenario.cohort !== "quiet")) {
+                panic("Export measurement missed its handoff path", scenario);
+              }
+            }
             if (scenario.type === "request-receipts") {
               const retained = await db.$count(
                 schema.requestIdempotencyReceipts,
