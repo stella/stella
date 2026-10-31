@@ -259,6 +259,8 @@ export const STACK_REDACTION_BROWSER_INPUTS = [
 export const DESKTOP_WINDOWS_DRY_RUN_INPUTS = [
   "VERSION",
   "apps/desktop/*",
+  "packages/agent-engine/package.json",
+  "packages/agent-engine/scripts/build-sidecar.ts",
   "scripts/desktop-*",
   "scripts/*tauri*",
   "scripts/detect-desktop-*",
@@ -348,6 +350,7 @@ const desktopRustRequired = (files: readonly string[]) =>
     "packages/api-contract/src/desktop-presence-policy.json",
     "packages/api-contract/src/desktop-presence-request.fixture.json",
     "packages/api-contract/src/desktop-runner.fixtures.json",
+    "packages/agent-engine/src/sidecar/protocol.fixtures.json",
     "packages/api-contract/src/desktop-edit-file-types.ts",
     "packages/api-contract/src/desktop-registry.ts",
     "packages/api-contract/src/desktop-rpc.gen.ts",
