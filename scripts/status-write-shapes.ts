@@ -736,8 +736,8 @@ const replayPlansFor = (
       plans.set(binding, plan);
     }
   });
-  // A plan may only be consumed through its read-only projections or the raw
-  // assignment owner. Escapes and mutation attempts make the shape opaque.
+  // A plan may only be consumed through its read-only Drizzle projections.
+  // Escapes and mutation attempts make the shape opaque.
   walk(source, (node, ancestors) => {
     if (node.type !== "Identifier") {
       return;
@@ -764,13 +764,6 @@ const replayPlansFor = (
             bindingFor(expression.name, expression) ?? { type: "shadow" },
           ),
       )
-    ) {
-      return;
-    }
-    if (
-      parent?.type === "CallExpression" &&
-      imported(parent.callee, "replayWriteAssignments") &&
-      parent.arguments.at(1) === node
     ) {
       return;
     }

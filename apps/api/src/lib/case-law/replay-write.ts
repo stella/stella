@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { getColumns, isSQLWrapper, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
+import { alias as tableAlias, PgDialect } from "drizzle-orm/pg-core";
 import type { PgColumn, PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 type ReplayWriteOptions = {
@@ -95,8 +96,7 @@ export const replayWriteOutcome = <T>(
   return { status: "ownership-lost" };
 };
 
-/** Raw-session writers share the normalized SET with Drizzle writers. */
-export const replayWriteAssignments = (
+const replayWriteAssignments = (
   table: PgTable,
   { set }: ReturnType<typeof replayWrite>,
 ): SQL => {
@@ -112,4 +112,117 @@ export const replayWriteAssignments = (
     }),
     sql`, `,
   );
+};
+
+type RawReplayOperation =
+  | { kind: "update"; from?: SQL }
+  | {
+      kind: "upsert";
+      columns: readonly PgColumn[];
+      source: SQL;
+      target: readonly PgColumn[];
+    };
+type RawReplayResult =
+  | { kind: "rows"; columns: SQL }
+  | { kind: "query"; columns: SQL; name: string; query: SQL };
+type RawReplayWriteOptions<T extends PgTable> = {
+  table: T;
+  values: PgUpdateSetSource<T>;
+  predicate: SQL;
+  operation: RawReplayOperation;
+  alias?: string;
+  ctes?: readonly { name: string; query: SQL }[];
+  result?: RawReplayResult;
+};
+
+type RawReplayExecutor =
+  | {
+      kind: "drizzle";
+      connection: { execute: (query: SQLWrapper) => PromiseLike<unknown> };
+    }
+  | {
+      kind: "session";
+      connection: {
+        query: (
+          query: string,
+          params?: ReturnType<PgDialect["sqlToQuery"]>["params"],
+        ) => PromiseLike<unknown>;
+      };
+    };
+
+/** Own the complete statement so distinctness cannot be moved out of its WHERE. */
+export const replayRawWrite = <T extends PgTable>({
+  table,
+  values,
+  predicate,
+  operation,
+  alias,
+  ctes = [],
+  result,
+}: RawReplayWriteOptions<T>) => {
+  const target = alias === undefined ? table : tableAlias(table, alias);
+  const plan = replayWrite(target, values);
+  const assignments = replayWriteAssignments(target, plan);
+  const relation =
+    alias === undefined
+      ? sql`${table}`
+      : sql`${table} AS ${sql.identifier(alias)}`;
+  const where = sql`(${predicate}) AND (${plan.setWhere})`;
+  const returning =
+    result === undefined ? sql`` : sql` RETURNING ${result.columns}`;
+  const mutation = (() => {
+    switch (operation.kind) {
+      case "update":
+        return sql`UPDATE ${relation} SET ${assignments}${operation.from === undefined ? sql`` : sql` FROM ${operation.from}`} WHERE ${where}${returning}`;
+      case "upsert":
+        if (operation.columns.length === 0 || operation.target.length === 0) {
+          return panic("Raw replay upsert needs input and conflict columns");
+        }
+        return sql`INSERT INTO ${relation} (${sql.join(
+          operation.columns.map((column) => sql.identifier(column.name)),
+          sql`, `,
+        )}) ${operation.source} ON CONFLICT (${sql.join(
+          operation.target.map((column) => sql.identifier(column.name)),
+          sql`, `,
+        )}) DO UPDATE SET ${assignments} WHERE ${where}${returning}`;
+      default:
+        operation satisfies never;
+        return panic("Unknown raw replay operation");
+    }
+  })();
+  const definitions = ctes.map(
+    ({ name, query }) => sql`${sql.identifier(name)} AS (${query})`,
+  );
+  const statement = (() => {
+    switch (result?.kind) {
+      case "query":
+        definitions.push(sql`${sql.identifier(result.name)} AS (${mutation})`);
+        return sql`WITH ${sql.join(definitions, sql`, `)} ${result.query}`;
+      case "rows":
+      case undefined:
+        return definitions.length === 0
+          ? mutation
+          : sql`WITH ${sql.join(definitions, sql`, `)} ${mutation}`;
+      default:
+        result satisfies never;
+        return panic("Unknown raw replay result");
+    }
+  })();
+  // The SQL stays private: callers receive an executable statement, never a
+  // fragment they can append to or place in another clause.
+  return Object.freeze({
+    execute: async (executor: RawReplayExecutor): Promise<unknown> => {
+      switch (executor.kind) {
+        case "drizzle":
+          return await executor.connection.execute(statement);
+        case "session": {
+          const query = new PgDialect().sqlToQuery(statement);
+          return await executor.connection.query(query.sql, query.params);
+        }
+        default:
+          executor satisfies never;
+          return panic("Unknown raw replay executor");
+      }
+    },
+  });
 };

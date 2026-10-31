@@ -1,6 +1,9 @@
+/**
+ * Raw replay statements keep mutation and transition-job CTEs together.
+ * The reserved session remains the transaction boundary for each unit.
+ */
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
-import { alias, PgDialect } from "drizzle-orm/pg-core";
 
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
@@ -12,10 +15,7 @@ import {
   caseLawProvisionAdmission,
   caseLawProvisionExtractionScopes,
 } from "@/api/db/schema";
-import {
-  replayWrite,
-  replayWriteAssignments,
-} from "@/api/lib/case-law/replay-write";
+import { replayRawWrite } from "@/api/lib/case-law/replay-write";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
@@ -269,32 +269,44 @@ const transitionScopes = async (
 ): Promise<void> => {
   // One bounded mutation owns both the generation and its durable job.
   // Ordering scope locks matches the transition worker's key order.
-  const scope = alias(caseLawProvisionExtractionScopes, "scope");
-  const write = replayWrite(scope, {
-    status: sql`EXCLUDED.status`,
-    generation: sql`${scope.generation} + 1`,
-  });
-  const query = new PgDialect().sqlToQuery(sql`
-    WITH changed AS (
-      INSERT INTO ${caseLawProvisionExtractionScopes} AS scope
-        (country, language, status, generation)
-      SELECT country, language,
+  const statement = replayRawWrite({
+    table: caseLawProvisionExtractionScopes,
+    alias: "scope",
+    values: {
+      status: sql`EXCLUDED.status`,
+      generation: sql`scope.generation + 1`,
+    },
+    operation: {
+      kind: "upsert",
+      columns: [
+        caseLawProvisionExtractionScopes.country,
+        caseLawProvisionExtractionScopes.language,
+        caseLawProvisionExtractionScopes.status,
+        caseLawProvisionExtractionScopes.generation,
+      ],
+      source: sql`SELECT country, language,
         CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
       FROM jsonb_to_recordset(${JSON.stringify(transitions)}::text::jsonb)
         AS input(country varchar, language varchar, action text)
-      ORDER BY country, language
-      ON CONFLICT (country, language) DO UPDATE
-        SET ${replayWriteAssignments(scope, write)}
-        WHERE scope.status IS DISTINCT FROM EXCLUDED.status AND ${write.setWhere}
-      RETURNING country, language, generation, status
-    )
-    INSERT INTO case_law_provision_scope_transitions
-      (country, language, generation, action)
-    SELECT country, language, generation,
-      CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END
-    FROM changed
-  `);
-  await connection.execute(query.sql, query.params);
+      ORDER BY country, language`,
+      target: [
+        caseLawProvisionExtractionScopes.country,
+        caseLawProvisionExtractionScopes.language,
+      ],
+    },
+    predicate: sql`scope.status IS DISTINCT FROM EXCLUDED.status`,
+    result: {
+      kind: "query",
+      name: "changed",
+      columns: sql`country, language, generation, status`,
+      query: sql`
+      INSERT INTO case_law_provision_scope_transitions (country, language, generation, action)
+      SELECT country, language, generation,
+        CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END FROM changed
+    `,
+    },
+  });
+  await statement.execute({ kind: "session", connection });
 };
 
 /** The admission revision the scopes were last reconciled to, if any. */
@@ -367,16 +379,23 @@ const scopeSeedStep = (admission: Admission): ProvisionBackfillStep => ({
         return;
       }
       if (applied === null || applied < admission.revision) {
-        const write = replayWrite(caseLawProvisionAdmission, {
-          revision: sql`greatest(${caseLawProvisionAdmission.revision}, EXCLUDED.revision)`,
+        const statement = replayRawWrite({
+          table: caseLawProvisionAdmission,
+          values: {
+            revision: sql`greatest(${caseLawProvisionAdmission.revision}, EXCLUDED.revision)`,
+          },
+          operation: {
+            kind: "upsert",
+            columns: [
+              caseLawProvisionAdmission.key,
+              caseLawProvisionAdmission.revision,
+            ],
+            source: sql`VALUES ('global', ${admission.revision})`,
+            target: [caseLawProvisionAdmission.key],
+          },
+          predicate: sql`true`,
         });
-        const query = new PgDialect().sqlToQuery(sql`
-          INSERT INTO ${caseLawProvisionAdmission} (key, revision)
-          VALUES ('global', ${admission.revision})
-          ON CONFLICT (key) DO UPDATE SET ${replayWriteAssignments(caseLawProvisionAdmission, write)}
-          WHERE ${write.setWhere}
-        `);
-        await connection.execute(query.sql, query.params);
+        await statement.execute({ kind: "session", connection });
         return;
       }
       // Retirements first, then activations.

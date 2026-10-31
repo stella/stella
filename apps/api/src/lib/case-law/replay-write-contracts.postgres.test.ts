@@ -27,6 +27,7 @@ import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source
 import { replaceDecisionJudges } from "@/api/handlers/case-law/judges/decision-judges";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
+  replayRawWrite,
   replayWrite,
   replayWriteOutcome,
 } from "@/api/lib/case-law/replay-write";
@@ -115,7 +116,7 @@ if (!databaseUrl || !enabled) {
     test("requires Postgres", () => expect(enabled).toBe(false)));
 } else {
   test("case-law child diffs match replacement and retain equal physical rows", async () => {
-    await fixture(async (db, _sourceId, decisionId) => {
+    await fixture(async (db, sourceId, decisionId) => {
       const judges = async () =>
         await db
           .select()
@@ -368,7 +369,7 @@ if (!databaseUrl || !enabled) {
   });
 
   test("converted child triggers retain update and foreign-key enforcement", async () => {
-    await fixture(async (db, _sourceId, decisionId) => {
+    await fixture(async (db, sourceId, decisionId) => {
       const triggers = executedRows(
         await db.execute(sql`
         SELECT relation.relname AS relation, procedure.proname AS function, trigger.tgisinternal AS internal
@@ -720,6 +721,128 @@ if (!databaseUrl || !enabled) {
         ).at(0) ?? panic("Replacement source missing");
       expect(stillOwned.token).toBe(replacement.leaseToken);
       await replacement.release();
+    });
+  });
+
+  test("complete raw replay statements skip equal rows and retain caller predicates", async () => {
+    await fixture(async (db, sourceId, decisionId) => {
+      const read = async () =>
+        executedRows(
+          await db.execute(
+            sql`SELECT metadata, xmin::text AS version FROM ${caseLawDecisions} WHERE id=${decisionId}`,
+          ),
+        ).at(0) ?? panic("Raw replay fixture missing");
+      const initial = await read();
+      const equal = replayRawWrite({
+        table: caseLawDecisions,
+        values: { metadata: {} },
+        predicate: eq(caseLawDecisions.id, decisionId),
+        operation: { kind: "update" },
+        result: { kind: "rows", columns: sql`metadata` },
+      });
+      expect("getSQL" in equal).toBe(false);
+      expect("setWhere" in equal).toBe(false);
+      expect(
+        executedRows(await equal.execute({ kind: "drizzle", connection: db })),
+      ).toEqual([]);
+      expect(await read()).toEqual(initial);
+      await assertProperty(
+        "case-law.raw-replay-statement.fixed-point",
+        fc.asyncProperty(
+          fc.record({ label: fc.string(), count: fc.integer() }),
+          async (metadata) => {
+            const before = await read();
+            const statement = replayRawWrite({
+              table: caseLawDecisions,
+              values: { metadata },
+              predicate: eq(caseLawDecisions.id, decisionId),
+              operation: { kind: "update" },
+              result: { kind: "rows", columns: sql`metadata` },
+            });
+            const changed = executedRows(
+              await statement.execute({ kind: "drizzle", connection: db }),
+            );
+            expect(changed).toEqual([{ metadata }]);
+            const after = await read();
+            expect(after.version).not.toBe(before.version);
+            expect(
+              executedRows(
+                await statement.execute({ kind: "drizzle", connection: db }),
+              ),
+            ).toEqual([]);
+            expect(await read()).toEqual(after);
+            // Reset to a different shape so every generated case exercises a write.
+            await db
+              .update(caseLawDecisions)
+              .set({ metadata: {} })
+              .where(eq(caseLawDecisions.id, decisionId));
+          },
+        ),
+        { numRuns: 20 },
+      );
+      const blocked = replayRawWrite({
+        table: caseLawDecisions,
+        values: { metadata: { changed: true } },
+        predicate: sql`false OR false`,
+        operation: { kind: "update" },
+        result: { kind: "rows", columns: sql`id` },
+      });
+      expect(
+        executedRows(
+          await blocked.execute({ kind: "drizzle", connection: db }),
+        ),
+      ).toEqual([]);
+      const upsert = replayRawWrite({
+        table: caseLawSources,
+        values: { name: sql`EXCLUDED.name` },
+        operation: {
+          kind: "upsert",
+          columns: [
+            caseLawSources.id,
+            caseLawSources.adapterKey,
+            caseLawSources.name,
+          ],
+          source: sql`VALUES (${sourceId},${sourceId},'Raw replay source')`,
+          target: [caseLawSources.id],
+        },
+        predicate: sql`true`,
+        result: { kind: "rows", columns: sql`name` },
+      });
+      expect(
+        executedRows(await upsert.execute({ kind: "drizzle", connection: db })),
+      ).toEqual([{ name: "Raw replay source" }]);
+      expect(
+        executedRows(await upsert.execute({ kind: "drizzle", connection: db })),
+      ).toEqual([]);
+      const composed = replayRawWrite({
+        table: caseLawDecisions,
+        alias: "d",
+        values: { metadata: sql`input.metadata` },
+        predicate: sql`d.id = input.id`,
+        operation: { kind: "update", from: sql`input` },
+        ctes: [
+          {
+            name: "input",
+            query: sql`SELECT ${decisionId}::uuid AS id, '{"raw":true}'::jsonb AS metadata`,
+          },
+        ],
+        result: {
+          kind: "query",
+          name: "changed",
+          columns: sql`d.id`,
+          query: sql`SELECT count(*)::int AS changed FROM changed`,
+        },
+      });
+      expect(
+        executedRows(
+          await composed.execute({ kind: "drizzle", connection: db }),
+        ),
+      ).toEqual([{ changed: 1 }]);
+      expect(
+        executedRows(
+          await composed.execute({ kind: "drizzle", connection: db }),
+        ),
+      ).toEqual([{ changed: 0 }]);
     });
   });
 

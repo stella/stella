@@ -145,6 +145,47 @@ describe.serial(RULE, () => {
       ),
     ).toEqual([2]);
   });
+  test("raw templates cannot substitute for a complete owner statement", async () => {
+    const rawImports =
+      'import {sql} from "drizzle-orm"; import {replayWriteAssignments} from "@/api/lib/case-law/replay-write";';
+    const marker = "$";
+    await Promise.all(
+      [
+        `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE true RETURNING ${marker}{write.setWhere}`,
+        `UPDATE rows SET value=1 WHERE true RETURNING ${marker}{write.setWhere}`,
+        `UPDATE rows SET value=(SELECT 1 WHERE ${marker}{write.setWhere}) WHERE true`,
+        `WITH check AS (SELECT ${marker}{write.setWhere}) UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE true`,
+        `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE ${marker}{write.setWhere} OR true`,
+        `UPDATE rows SET ${marker}{replayWriteAssignments(rows,write)} WHERE ${marker}{write.setWhere}`,
+        `INSERT INTO rows(id,value) VALUES(1,1) ON CONFLICT(id) DO UPDATE SET value=1 WHERE ${marker}{write.setWhere}`,
+      ].map(async (statement) => {
+        expect(
+          await lint(
+            `${imports}${rawImports}\nconst write = plan(rows,{value});\nawait tx.execute(sql\`${statement}\`);`,
+          ),
+        ).toEqual([4]);
+      }),
+    );
+    expect(
+      await lint(
+        'import {replayRawWrite} from "@/api/lib/case-law/replay-write";\nawait replayRawWrite({table:rows,values:{value},predicate:sql`true`,operation:{kind:"update"}}).execute({kind:"drizzle",connection:tx});',
+      ),
+    ).toEqual([]);
+  });
+  test("complete owners cannot smuggle a raw mutation in a CTE or result query", async () => {
+    await Promise.all(
+      [
+        'ctes:[{name:"x",query:sql`UPDATE rows SET value=1 RETURNING id`}]',
+        'result:{kind:"query",name:"x",columns:sql`id`,query:sql`UPDATE rows SET value=1`}',
+      ].map(async (extra) => {
+        expect(
+          await lint(
+            `import {replayRawWrite} from "@/api/lib/case-law/replay-write"; import {sql} from "drizzle-orm";\nawait replayRawWrite({table:rows,values:{value},predicate:sql\`true\`,operation:{kind:"update"},${extra}}).execute({kind:"drizzle",connection:tx});`,
+          ),
+        ).toEqual([2]);
+      }),
+    );
+  });
   test("serialized raw updates cannot compare a different SET", async () => {
     expect(
       await lint(

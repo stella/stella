@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
@@ -14,10 +13,7 @@ import {
 import { matchCzechDeclinedName } from "@/api/handlers/case-law/judges/czech-declined-name";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  replayWrite,
-  replayWriteAssignments,
-} from "@/api/lib/case-law/replay-write";
+import { replayRawWrite, replayWrite } from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -326,43 +322,45 @@ export const relinkUnmatchedDecisionJudgesPage = async (
   { country, court, after, size }: RelinkUnmatchedDecisionJudgesPageOptions,
 ): Promise<RelinkUnmatchedDecisionJudgesPage> => {
   // audit: skip — relinks derived public case-law judge attributions
-  const write = replayWrite(alias(caseLawDecisionJudges, "dj"), {
-    judgeId: sql`j.id`,
-  });
-  const result = await db.execute(sql`
-    WITH page AS (
+  const result = await replayRawWrite({
+    table: caseLawDecisionJudges,
+    alias: "dj",
+    values: { judgeId: sql`j.id` },
+    operation: { kind: "update", from: sql`page, ${caseLawJudges} AS j` },
+    predicate: sql`dj.decision_id = page.decision_id
+         AND dj.judge_id IS NULL
+         AND dj.name_key = j.name_key
+         AND j.country = ${country}
+         AND j.court = ${court}`,
+    ctes: [
+      {
+        name: "page",
+        query: sql`
       SELECT DISTINCT dj.decision_id
         FROM ${caseLawDecisionJudges} AS dj
         JOIN ${caseLawDecisions} AS d ON d.id = dj.decision_id
        WHERE dj.judge_id IS NULL
          AND dj.name_key IN (
-           SELECT j.name_key
-             FROM ${caseLawJudges} AS j
-            WHERE j.country = ${country}
-              AND j.court = ${court}
+           SELECT j.name_key FROM ${caseLawJudges} AS j
+            WHERE j.country = ${country} AND j.court = ${court}
          )
-         AND d.country = ${country}
-         AND d.court = ${court}
+         AND d.country = ${country} AND d.court = ${court}
          ${after === null ? sql`` : sql`AND dj.decision_id > ${after}`}
-       ORDER BY dj.decision_id
-       LIMIT ${size}
-    ),
-    linked AS (
-      UPDATE ${caseLawDecisionJudges} AS dj
-         SET ${replayWriteAssignments(caseLawDecisionJudges, write)}
-        FROM page, ${caseLawJudges} AS j
-       WHERE dj.decision_id = page.decision_id
-         AND ${write.setWhere}
-         AND dj.judge_id IS NULL
-         AND dj.name_key = j.name_key
-         AND j.country = ${country}
-         AND j.court = ${court}
-      RETURNING 1
-    )
-    SELECT (SELECT count(*) FROM page)::int AS covered,
-           (SELECT count(*) FROM linked)::int AS linked,
-           (SELECT max(decision_id::text) FROM page) AS last
-  `);
+       ORDER BY dj.decision_id LIMIT ${size}
+    `,
+      },
+    ],
+    result: {
+      kind: "query",
+      name: "linked",
+      columns: sql`1`,
+      query: sql`
+      SELECT (SELECT count(*) FROM page)::int AS covered,
+             (SELECT count(*) FROM linked)::int AS linked,
+             (SELECT max(decision_id::text) FROM page) AS last
+    `,
+    },
+  }).execute({ kind: "drizzle", connection: db });
 
   const [row] = executedRows(result);
   if (

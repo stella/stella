@@ -129,60 +129,34 @@ const hasGuardedPredicate = (
 
 const rawWriteCandidate = (text: string | null) =>
   text !== null &&
-  /(?:^|[;(])\s*UPDATE\b|ON\s+CONFLICT[\s\S]*DO\s+UPDATE/iu.test(text);
+  /(?:^|[;()])\s*UPDATE\b|ON\s+CONFLICT[\s\S]*DO\s+UPDATE/iu.test(text);
 
-const usesAssignmentsForBinding = (
+const containsRawMutation = (
   context: ReplayContext,
-  expressions: unknown[],
-  binding: NonNullable<PlanBinding>,
-) =>
-  expressions.some((assignmentExpression) => {
-    const assignments = unwrapExpression(assignmentExpression);
-    if (
-      assignments?.type !== "CallExpression" ||
-      !Array.isArray(assignments.arguments)
-    ) {
-      return false;
-    }
-    const imported = resolveImportedExpressionForEnforcement(
-      context,
-      assignments.callee,
-    );
-    return (
-      imported?.source === "@/api/lib/case-law/replay-write" &&
-      imported.imported === "replayWriteAssignments" &&
-      planBinding(context, assignments.arguments.at(1)) === binding
-    );
-  });
-
-const rawQueryIsGuarded = (
-  context: ReplayContext,
-  query: AstNode | null,
-  text: string,
-) => {
-  if (
-    query?.type !== "TaggedTemplateExpression" ||
-    !isAstNode(query.quasi) ||
-    !Array.isArray(query.quasi.expressions) ||
-    /\bOR\b/iu.test(text)
-  ) {
+  value: unknown,
+  seen = new Set<unknown>(),
+): boolean => {
+  const expression = rawQuery(context, value);
+  if (expression === null || seen.has(expression)) {
     return false;
   }
-  const expressions = query.quasi.expressions;
-  return expressions.some((predicateExpression) => {
-    const predicate = unwrapExpression(predicateExpression);
-    if (
-      predicate?.type !== "MemberExpression" ||
-      memberPropertyName(predicate) !== "setWhere"
-    ) {
-      return false;
-    }
-    const binding = planBinding(context, predicate.object);
-    return (
-      binding !== null &&
-      usesAssignmentsForBinding(context, expressions, binding)
-    );
-  });
+  seen.add(expression);
+  if (
+    (expression.type === "TaggedTemplateExpression" ||
+      (expression.type === "CallExpression" &&
+        isAstNode(expression.callee) &&
+        memberPropertyName(expression.callee) === "raw")) &&
+    rawWriteCandidate(writeSqlText(context, expression))
+  ) {
+    return true;
+  }
+  return Object.entries(expression).some(
+    ([key, child]) =>
+      key !== "parent" &&
+      (Array.isArray(child)
+        ? child.some((item) => containsRawMutation(context, item, seen))
+        : isAstNode(child) && containsRawMutation(context, child, seen)),
+  );
 };
 
 const handleRawWrite = (
@@ -195,7 +169,7 @@ const handleRawWrite = (
     : undefined;
   const query = rawQuery(context, argument);
   const text = writeSqlText(context, query) ?? staticStringValue(query);
-  if (rawWriteCandidate(text) && !rawQueryIsGuarded(context, query, text)) {
+  if (rawWriteCandidate(text)) {
     report(node);
   }
 };
@@ -350,6 +324,19 @@ const handleCall = (
     return;
   }
   const node = input;
+  const imported = resolveImportedExpressionForEnforcement(
+    context,
+    node.callee,
+  );
+  if (
+    imported?.source === "@/api/lib/case-law/replay-write" &&
+    imported.imported === "replayRawWrite" &&
+    Array.isArray(node.arguments) &&
+    containsRawMutation(context, node.arguments.at(0))
+  ) {
+    report(node);
+    return;
+  }
   const callee = unwrapExpression(node.callee);
   if (!isAstNode(callee) || callee.type !== "MemberExpression") {
     return;
