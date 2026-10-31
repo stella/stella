@@ -432,6 +432,11 @@ const CENSUS: readonly CensusEntry[] = [
     why: "Opens the request latency scope itself, with the tool's own budget.",
   },
   {
+    site: "apps/api/src/mcp/tools.ts#budgetMs",
+    path: "off-request",
+    why: "Opens the public-read scope itself; transport waits inside it are declared at their own sites.",
+  },
+  {
     site: "apps/api/src/mcp/static-cli-metadata.ts#DOCUMENT_COMPARE_REQUEST_TIMEOUT_MS",
     path: "off-request",
     why: "The generated CLI's client transport deadline; the server does not wait on it.",
@@ -542,6 +547,22 @@ const CENSUS: readonly CensusEntry[] = [
     why: "A corpus search with a caller's shorter timeout, clamped again to the request.",
   },
   {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min( input.timeoutMs ?? CORPUS_INDEX_SEARCH_TIMEOUT_MS, CORPUS_INDEX_SEARCH_TIMEOUT_MS, )",
+    path: "request",
+    tools: CORPUS_SEARCH_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "A scored corpus search with the caller's shorter timeout, clamped again to the request before transport.",
+  },
+  {
+    site: "apps/api/src/lib/legal-search/corpus-index-client.ts#Math.min(timeoutMs, CORPUS_INDEX_AGGREGATION_TIMEOUT_MS)",
+    path: "request",
+    tools: ["case_law_coverage", ...CORPUS_SEARCH_TOOLS],
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "Facet counts with the caller's shorter timeout, clamped again to the request before transport.",
+  },
+  {
     site: "apps/api/src/lib/legal-search/corpus-index-client.ts#CORPUS_INDEX_SEARCH_TIMEOUT_MS",
     path: "request",
     tools: CORPUS_SEARCH_TOOLS,
@@ -616,6 +637,14 @@ const CENSUS: readonly CensusEntry[] = [
     bound: "request",
     onExpiry: "fails-fast",
     why: "The transaction-wide deadline: statement_timeout restarts per statement, so transaction_timeout ends the whole read at the request's deadline.",
+  },
+  {
+    site: "apps/api/src/lib/public-law-read-db.ts#requestBoundedTimeoutMs(0)",
+    path: "request",
+    tools: PUBLIC_LAW_READ_TOOLS,
+    bound: "request",
+    onExpiry: "fails-fast",
+    why: "Cancels pool acquisition when the enclosing request's remaining budget expires, before a transaction starts.",
   },
 ];
 
