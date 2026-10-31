@@ -849,3 +849,12 @@ test("every protected blocking check has a transport-safe local import closure",
     }),
   ).toEqual([]);
 });
+
+test("guard rollout discovery preserves an enumerable offline import closure", () => {
+  expect(
+    offlineImportGraphViolations({
+      entries: [path.join(root, "scripts/guard-rollout-policy.ts")],
+      repositoryRoot: root,
+    }),
+  ).toEqual([]);
+});

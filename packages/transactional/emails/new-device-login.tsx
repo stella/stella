@@ -1,16 +1,13 @@
-import {
-  Body,
-  Button,
-  Container,
-  Head,
-  Heading,
-  Hr,
-  Html,
-  Preview,
-  Section,
-  Text,
-} from "@react-email/components";
-
+import { Body } from "../components/body";
+import { Button } from "../components/button";
+import { Container } from "../components/container";
+import { Head } from "../components/head";
+import { Heading } from "../components/heading";
+import { Hr } from "../components/hr";
+import { Html } from "../components/html";
+import { Preview } from "../components/preview";
+import { Section } from "../components/section";
+import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
 
@@ -35,45 +32,37 @@ export const Email = ({
     <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
       <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
-      <Body style={styles["body"]}>
-        <Container style={styles["container"]}>
-          <Heading style={styles["heading"]}>
+      <Body style={styles.body}>
+        <Container style={styles.container}>
+          <Heading style={styles.heading}>
             {t("newDeviceLogin.heading")}
           </Heading>
-          <Text style={styles["text"]}>{t("newDeviceLogin.body")}</Text>
-          <Section style={styles["detailsSection"]}>
-            <Text style={styles["detailRow"]}>
+          <Text style={styles.text}>{t("newDeviceLogin.body")}</Text>
+          <Section style={styles.detailsSection}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.device")}:</strong> {device}
             </Text>
-            <Text style={styles["detailRow"]}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.ipAddress")}:</strong> {ipAddress}
             </Text>
-            <Text style={styles["detailRow"]}>
+            <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          <Section style={styles["buttonSection"]}>
-            <Button href={sessionsUrl} style={styles["button"]}>
+          <Section style={styles.buttonSection}>
+            <Button href={sessionsUrl} style={styles.button}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
-          <Hr style={styles["hr"]} />
-          <Text style={styles["footer"]}>{t("newDeviceLogin.ignore")}</Text>
+          <Hr style={styles.hr} />
+          <Text style={styles.footer}>{t("newDeviceLogin.ignore")}</Text>
         </Container>
       </Body>
     </Html>
   );
 };
 
-Email.PreviewProps = {
-  device: "Chrome on macOS",
-  ipAddress: "203.0.113.42",
-  time: "Mar 6, 2026, 2:30 PM UTC",
-  sessionsUrl: "http://localhost:3000/account/sessions",
-  lang: "en",
-} satisfies Props;
-
-const styles: Record<string, React.CSSProperties> = {
+const styles = {
   body: {
     margin: "0",
     backgroundColor: "#f6f9fc",
@@ -140,4 +129,4 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: "20px",
     textAlign: "center",
   },
-};
+} satisfies Record<string, React.CSSProperties>;

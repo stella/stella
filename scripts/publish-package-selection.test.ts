@@ -14,7 +14,10 @@ import * as v from "valibot";
 
 import { loadChangesetPolicy } from "./changeset-guard";
 import { publishedPackageNames } from "./check-published-package-lists";
-import { readNpmReleaseGraph } from "./generate-npm-release-jobs";
+import {
+  NPM_RELEASE_WORKFLOW,
+  readNpmReleaseGraph,
+} from "./generate-npm-release-jobs";
 import {
   changedPathsCommand,
   expandPublishPackages,
@@ -188,9 +191,7 @@ describe("publish package selection", () => {
     expect(workflow).toContain(
       `artifact-run-id: ${String.fromCodePoint(36)}{{ inputs.artifact_run_id || '' }}`,
     );
-    expect(workflow).toContain(
-      "uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-    );
+    expect(workflow).toContain(`uses: ${NPM_RELEASE_WORKFLOW}`);
   });
 
   test("selects an explicit historical recovery package without requiring new tooling in old source", async () => {

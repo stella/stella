@@ -71,6 +71,10 @@
       "types": "./src/document-ast.ts",
       "import": "./src/document-ast.ts"
     },
+    "./heading-designator-levels": {
+      "types": "./src/heading-designator-levels.ts",
+      "import": "./src/heading-designator-levels.ts"
+    },
     "./document-kind": {
       "types": "./src/document-kind.ts",
       "import": "./src/document-kind.ts"
@@ -139,6 +143,10 @@
       "types": "./src/slovak-document-roles.ts",
       "import": "./src/slovak-document-roles.ts"
     },
+    "./source-contents": {
+      "types": "./src/source-contents.ts",
+      "import": "./src/source-contents.ts"
+    },
     "./spot-place": {
       "types": "./src/spot-place.ts",
       "import": "./src/spot-place.ts"
@@ -158,6 +166,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./separate-opinion-heading": {
+      "types": "./src/separate-opinion-heading.ts",
+      "import": "./src/separate-opinion-heading.ts"
     }
   },
   "scripts": {
@@ -169,6 +181,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/legal-ast"
   },
   "dependencies": {
+    "@stll/agent-input": "workspace:*",
     "@stll/sha256": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "better-result": "catalog:",

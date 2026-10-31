@@ -1,6 +1,7 @@
 /**
- * @typedef {{ name: string, conclusion: string | null }} JobStep
- * @typedef {{ name: string, conclusion: string | null, steps?: JobStep[] }} Job
+ * @typedef {{ name: string, conclusion: string | null, started_at?: string | null, status?: string }} JobStep
+ * @typedef {{ message?: string }} Annotation
+ * @typedef {{ name: string, conclusion: string | null, steps?: JobStep[], runner_name?: string | null, check_run_url?: string, annotations?: Annotation[] }} Job
  * @typedef {{ owner: string, repo: string }} Repository
  * @typedef {{ id: number, head_sha: string, run_attempt: number }} QueueRun
  * @typedef {{ run_id: number, per_page: number, filter?: string, attempt_number?: number } & Repository} JobQuery
@@ -13,10 +14,41 @@
  *       listJobsForWorkflowRunAttempt: unknown,
  *       listWorkflowRuns: (options: RunQuery) => Promise<{ data: { workflow_runs: QueueRun[] } }>
  *     },
+ *     checks: { listAnnotations: (options: Repository & { check_run_id: number, page: number, per_page: number, request: { timeout: number } }) => Promise<{ data: Annotation[] }> },
  *     repos: { getCommit: (options: Repository & { ref: string }) => Promise<{ data: { commit: { tree: { sha: string } } } }> }
  *   }
  * }} EvidenceClient
  */
+
+import assert from "node:assert/strict";
+
+import infrastructureDefinitions from "./main-heavy-infrastructure-steps.json" with { type: "json" };
+
+const RUNNER_INFRASTRUCTURE_STEPS = new Set([
+  "Set up job",
+  "Initialize containers",
+  "Complete job",
+  "Post job cleanup",
+]);
+
+/** @param {string} name @param {typeof infrastructureDefinitions} definitions */
+const jobInfrastructureSteps = (name, definitions) => {
+  const normalized = jobName(name);
+  for (const [id, definition] of Object.entries(definitions)) {
+    const { prefix, suffix } = definition.displayName;
+    if (
+      normalized === id ||
+      normalized.startsWith(`${id} (`) ||
+      (normalized.startsWith(prefix) && normalized.endsWith(suffix))
+    ) {
+      return {
+        declaredStepNames: new Set(definition.declaredStepNames),
+        infrastructureSteps: new Set(definition.steps),
+      };
+    }
+  }
+  return { declaredStepNames: new Set(), infrastructureSteps: new Set() };
+};
 
 /** @param {string} name Workflow job display name. */
 const jobName = (name) => name.replace(/^suites \/ /u, "");
@@ -34,12 +66,51 @@ const failed = ({ conclusion }) =>
 
 // The jobs API has no task/file selection receipts. Even matching successful
 // steps on the same Git tree cannot prove full versus affected test scope.
-/** @param {{ jobs: Job[], queueJobs: Job[] }} options Main and queue execution evidence. */
-export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
+/** @param {{ jobs: Job[], queueJobs: Job[], definitions?: typeof infrastructureDefinitions }} options Main and queue execution evidence. */
+export const classifyMainHeavyFailures = ({
+  jobs,
+  queueJobs,
+  definitions = infrastructureDefinitions,
+}) =>
   jobs.filter(failed).map((job) => {
     const executed = (job.steps ?? []).filter(
       ({ conclusion }) => conclusion !== "skipped",
     );
+    const noStepStarted = (job.steps ?? []).every(
+      (step) =>
+        !step.started_at &&
+        step.status !== "in_progress" &&
+        !["success", "failure", "timed_out"].includes(step.conclusion ?? ""),
+    );
+    if (job.conclusion === "cancelled" && !job.runner_name && noStepStarted) {
+      return {
+        name: job.name,
+        type: "INFRA",
+        reason:
+          "The job was cancelled before a runner was assigned or any step started.",
+      };
+    }
+    const runnerImageUnavailable = job.annotations?.some(
+      ({ message = "" }) =>
+        /runner[- ]image|(?:macos|ubuntu|windows)[- ][\d.]+ environment/iu.test(
+          message,
+        ) && /brownout|deprecat/iu.test(message),
+    );
+    if (
+      runnerImageUnavailable &&
+      (job.steps ?? []).every(
+        ({ conclusion, started_at, status }) =>
+          conclusion === "success" ||
+          conclusion === "skipped" ||
+          (conclusion === null && !started_at && status !== "in_progress"),
+      )
+    ) {
+      return {
+        name: job.name,
+        type: "INFRA",
+        reason: "GitHub reported a runner image brownout or deprecation.",
+      };
+    }
     const passed = queueJobs.some(
       (queueJob) =>
         jobName(queueJob.name) === jobName(job.name) &&
@@ -53,6 +124,28 @@ export const classifyMainHeavyFailures = ({ jobs, queueJobs }) =>
           ),
         ),
     );
+    const { declaredStepNames, infrastructureSteps } = jobInfrastructureSteps(
+      job.name,
+      definitions,
+    );
+    const failedSteps = executed.filter(failed);
+    const allInfrastructure =
+      failedSteps.length > 0 &&
+      failedSteps.every(
+        ({ name }) =>
+          (RUNNER_INFRASTRUCTURE_STEPS.has(name) &&
+            !declaredStepNames.has(name)) ||
+          infrastructureSteps.has(name),
+      );
+    if (allInfrastructure) {
+      const firstFailedStep = failedSteps.at(0);
+      assert.ok(firstFailedStep, "Missing failed step");
+      return {
+        name: job.name,
+        type: "INFRA",
+        reason: `The failed step ${firstFailedStep.name} prepares the runner or toolchain.`,
+      };
+    }
     return {
       name: job.name,
       type: "CODE",
@@ -91,6 +184,43 @@ export const collectMainHeavyFailures = async ({
         type: "CODE",
         reason: "No completed job evidence is available.",
       }));
+  }
+  for (const job of jobs.filter(failed)) {
+    if (!job.check_run_url) {
+      continue;
+    }
+    const prefix = `https://api.github.com/repos/${repository.owner}/${repository.repo}/check-runs/`;
+    const id = job.check_run_url.startsWith(prefix)
+      ? job.check_run_url.slice(prefix.length)
+      : "";
+    if (!/^[1-9][0-9]*$/u.test(id)) {
+      warn(
+        `Invalid check-run URL for ${job.name}; classification uses job and step evidence.`,
+      );
+      continue;
+    }
+    try {
+      /** @type {Annotation[]} */
+      const annotations = [];
+      for (let page = 1; ; page += 1) {
+        const { data } = await github.rest.checks.listAnnotations({
+          ...repository,
+          check_run_id: Number(id),
+          page,
+          per_page: 100,
+          request: { timeout: 30_000 },
+        });
+        annotations.push(...data);
+        if (data.length < 100) {
+          break;
+        }
+      }
+      job.annotations = annotations;
+    } catch {
+      warn(
+        `Runner annotations are unavailable for ${job.name}; classification uses job and step evidence.`,
+      );
+    }
   }
   /** @type {Job[]} */
   const queueJobs = [];
