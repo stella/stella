@@ -21,6 +21,7 @@ import {
 import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ProvisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
+import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { LEGAL_TEXT_CLASS_NAME } from "@stll/ui/prose";
@@ -72,6 +73,21 @@ const READER_STYLE = {
   fontSize: "var(--reader-body-size)",
   lineHeight: "var(--reader-body-line-height)",
 } as const;
+
+/**
+ * The blocks the statute reader draws marks in: the parsed provisions, or
+ * the plain text's paragraphs when the version has none. The marks are
+ * placed among these and drawn over these, so the two cannot disagree.
+ */
+export const statuteAnnotationBlocks = (
+  blocks: readonly Block[],
+  fulltext: string | null,
+): readonly Block[] => {
+  if (blocks.length > 0) {
+    return blocks;
+  }
+  return fulltext ? buildFulltextParagraphBlocks(fulltext) : [];
+};
 
 // The statutes reader carries no in-page find bar yet, so every block renders
 // with an empty highlight set.
@@ -149,7 +165,10 @@ export const StatuteText = ({
   }, [landingAnchorId]);
 
   if (blocks.length > 0) {
-    const anchorsByPieceId = buildAnnotationAnchors(annotationAnchors, blocks);
+    const anchorsByPieceId = buildAnnotationAnchors(
+      annotationAnchors,
+      statuteAnnotationBlocks(blocks, fulltext),
+    );
     return (
       <article
         className={cn(
@@ -218,7 +237,10 @@ export const StatuteText = ({
         </h1>
         <FulltextFallback
           activeMatchIndex={NO_ACTIVE_MATCH}
-          anchorsByPieceId={buildAnnotationAnchors(annotationAnchors)}
+          anchorsByPieceId={buildAnnotationAnchors(
+            annotationAnchors,
+            statuteAnnotationBlocks(blocks, fulltext),
+          )}
           rangesByPieceId={NO_RANGES}
           text={fulltext}
         />

@@ -72,6 +72,8 @@ const pendingRows = ({
     kind: input.kind,
     mine: true,
     quote: span.quote,
+    quotePrefix: span.quotePrefix,
+    quoteSuffix: span.quoteSuffix,
     startOffset: span.startOffset,
     style: input.kind === "highlight" ? input.style : null,
     updatedAt: now,

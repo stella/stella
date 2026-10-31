@@ -110,6 +110,8 @@ const comment = ({
   kind: "comment" as const,
   mine,
   quote: claim.text,
+  quotePrefix: "",
+  quoteSuffix: "",
   startOffset: 0,
   style: null,
   updatedAt: at,

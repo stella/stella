@@ -14,6 +14,10 @@ import { READER_ANNOTATION_QUOTE_MAX_LENGTH } from "@stll/api-contract/legal-rea
 import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import { courtParagraphNumber } from "@stll/legal-ast/court-paragraph-number";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  readerTextQuoteContext,
+  readerTextQuoteOccurrences,
+} from "@stll/legal-ast/reader-text-quote";
 
 import {
   servedNoteLabel,
@@ -35,6 +39,8 @@ type LocatedSpan = {
   startOffset: number;
   endOffset: number;
   quote: string;
+  quotePrefix: string;
+  quoteSuffix: string;
 };
 
 export const ANNOTATION_LOCATE_ISSUE = {
@@ -58,62 +64,6 @@ type AnnotationLocateIssue = {
 type LocatePassagesResult =
   | { status: "located"; spans: LocatedSpan[] }
   | { status: "rejected"; issues: AnnotationLocateIssue[] };
-
-type CompactText = {
-  text: string;
-  /** UTF-16 offset in the raw text of every compact code unit. */
-  rawIndex: number[];
-};
-
-const WHITESPACE = /\s/u;
-
-/**
- * The text with every whitespace character dropped, one entry per UTF-16
- * code unit (the unit a browser selection measures, and the unit `indexOf`
- * returns). Matching here finds a quote however its spaces were typed: a
- * plain space for a non-breaking one or a line break, and the collapsed
- * form of a letter-spaced heading ("R O Z S U D E K" as "ROZSUDEK"), which
- * is how the agent-facing text prints it. Every whitespace character is in
- * the BMP, so dropping one never splits a surrogate pair.
- */
-const compact = (raw: string): CompactText => {
-  let text = "";
-  const rawIndex: number[] = [];
-  for (let index = 0; index < raw.length; index += 1) {
-    const unit = raw.charAt(index);
-    if (WHITESPACE.test(unit)) {
-      continue;
-    }
-    text += unit;
-    rawIndex.push(index);
-  }
-  return { text, rawIndex };
-};
-
-type Occurrence = { startOffset: number; endOffset: number };
-
-const findOccurrences = (raw: string, quote: string): Occurrence[] => {
-  const haystack = compact(raw);
-  const needle = compact(quote).text;
-  if (needle.length === 0) {
-    return [];
-  }
-  const occurrences: Occurrence[] = [];
-  let from = 0;
-  for (;;) {
-    const at = haystack.text.indexOf(needle, from);
-    if (at === -1) {
-      return occurrences;
-    }
-    const startOffset = haystack.rawIndex[at];
-    const last = haystack.rawIndex[at + needle.length - 1];
-    if (startOffset === undefined || last === undefined) {
-      return panic("A compact match lies outside its own text");
-    }
-    occurrences.push({ startOffset, endOffset: last + 1 });
-    from = at + 1;
-  }
-};
 
 type LocateContext = {
   blocks: readonly Block[];
@@ -143,22 +93,18 @@ const quoteNotFoundMessage = (block: Block | undefined): string => {
 /** How many candidate anchors an ambiguity issue names. */
 const AMBIGUITY_ANCHORS_SHOWN = 8;
 
-// Both sides are matched as Unicode scalar values: an isolated surrogate
-// becomes U+FFFD (one UTF-16 unit, so offsets are unchanged) and can never
-// match half of a surrogate pair.
-const matchesIn = (blocks: readonly Block[], rawQuote: string) => {
-  const quote = rawQuote.toWellFormed();
-  return blocks.flatMap((block) =>
-    readerAnchorPiecesOf(block).flatMap((rawPiece) => {
-      const piece = { ...rawPiece, text: rawPiece.text.toWellFormed() };
-      return findOccurrences(piece.text, quote).map((occurrence) => ({
+// Matched the way a stored mark is found again (`reader-text-quote`), so a
+// mark an agent places is one the reader can place again after a re-parse.
+const matchesIn = (blocks: readonly Block[], quote: string) =>
+  blocks.flatMap((block) =>
+    readerAnchorPiecesOf(block).flatMap((piece) =>
+      readerTextQuoteOccurrences(piece.text, quote).map((occurrence) => ({
         block,
         occurrence,
         piece,
-      }));
-    }),
+      })),
+    ),
   );
-};
 
 /**
  * A quote copied with the court's paragraph number the served text prints
@@ -278,7 +224,11 @@ const locateOne = (
     });
   }
   const { occurrence, piece } = match;
-  const stored = piece.text.slice(occurrence.startOffset, occurrence.endOffset);
+  // Stored as Unicode scalar values: an isolated surrogate the database
+  // cannot hold becomes U+FFFD, one UTF-16 unit, so offsets are unchanged.
+  const stored = piece.text
+    .slice(occurrence.startOffset, occurrence.endOffset)
+    .toWellFormed();
   if (stored.length > READER_ANNOTATION_QUOTE_MAX_LENGTH) {
     return issue({
       code: ANNOTATION_LOCATE_ISSUE.quoteTooLong,
@@ -293,6 +243,7 @@ const locateOne = (
       startOffset: occurrence.startOffset,
       endOffset: occurrence.endOffset,
       quote: stored,
+      ...readerTextQuoteContext(piece.text, occurrence),
     },
   };
 };

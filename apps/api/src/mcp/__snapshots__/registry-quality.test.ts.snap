@@ -5048,7 +5048,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -11709,7 +11709,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,
@@ -15867,7 +15867,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "destructiveHint": "List reader annotations does not change state.",
       "openWorldHint": "List reader annotations is confined to the private workspace or a bounded computation."
     },
-    "description": "List the highlights and comments on one case-law decision or one statute version that the user can see: their own, and those colleagues shared. Each mark lists the passages it covers by block anchor and quote, oldest first.",
+    "description": "List visible highlights and comments on a decision or statute version, oldest first. Passages give quoted words and their current block anchor when placed; orphaned passages have quote_not_found or quote_ambiguous. Report orphaned passages by quote, never at an anchor.",
     "annotations": {
       "title": "List reader annotations",
       "destructiveHint": false,

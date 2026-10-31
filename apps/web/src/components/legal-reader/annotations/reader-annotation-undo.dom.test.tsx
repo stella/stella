@@ -293,6 +293,8 @@ const scopeInput = {
       startOffset: 0,
       endOffset: PASSAGE.length,
       quote: PASSAGE,
+      quotePrefix: "",
+      quoteSuffix: "",
     },
   ],
 } satisfies CreateAnnotationInput;

@@ -4,7 +4,9 @@ import type {
   ReaderAnnotationColor as AnnotationColor,
   ReaderAnnotationStyle as AnnotationStyle,
 } from "@stll/api-contract/legal-reader-annotations";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { readerTextQuoteMatchesAt } from "@stll/legal-ast/reader-text-quote";
 import { TextMark } from "@stll/ui/text-mark";
 import type {
   TextMarkOptions,
@@ -22,6 +24,8 @@ export type AnnotationAnchorSource = {
   endOffset: number;
   id: string;
   kind: "highlight" | "comment";
+  /** The words the mark was made on: it is drawn only where they are. */
+  quote: string;
   startOffset: number;
   /** How a highlight is drawn; null for a comment. */
   style: AnnotationStyle | null;
@@ -200,12 +204,31 @@ export const annotationSegments = (
   return segments;
 };
 
-/** The anchors for one piece's marks, offset into the piece's own text. */
+/**
+ * The marks whose words are at their offsets in a piece's text: the only
+ * ones drawn there. A stored position can name other words once a re-parse
+ * has moved the document's blocks, and a mark is never drawn on words it was
+ * not made on, whoever placed it.
+ */
+export const annotationsDrawnIn = <T extends AnnotationAnchorSource>(
+  annotations: readonly T[],
+  text: string,
+): T[] =>
+  annotations.filter((annotation) =>
+    readerTextQuoteMatchesAt(text, annotation),
+  );
+
+/**
+ * The anchors for one piece's marks, offset into the piece's own text. The
+ * text is the piece's: a mark whose quote is not at its offsets in it is not
+ * drawn.
+ */
 export const annotationTextAnchors = (
   annotations: readonly AnnotationAnchorSource[],
+  text: string,
   offset = 0,
 ): TextAnchor[] =>
-  annotationSegments(annotations).map(
+  annotationSegments(annotationsDrawnIn(annotations, text)).map(
     ({ annotation, overlays, end, start }) => ({
       end: offset + end,
       key: `annotation:${annotation.id}:${String(start)}`,
@@ -223,34 +246,43 @@ export const annotationTextAnchors = (
 /**
  * Every mark by the piece it is drawn in. A mark is stored against the
  * element the reader selected in, which is a block's stable anchor in a
- * parsed document and the piece's own id everywhere else (a table cell, a
- * fulltext paragraph); `blocks` translates the first kind, and an anchor
- * that is already a piece id passes through. A mark whose piece the document
- * no longer has is dropped rather than drawn somewhere else.
+ * parsed document and the piece's own id in a table cell, and is drawn in
+ * the rendered piece that element is: the block's own id, or the cell. A
+ * mark whose anchor the document does not have, or whose words are not at
+ * its offsets there, is not drawn.
  */
 export const buildAnnotationAnchors = (
   annotations: readonly AnnotationAnchorSource[],
-  blocks: readonly Block[] = [],
+  blocks: readonly Block[],
 ): Record<string, TextAnchor[]> => {
-  const pieceIdByBlockAnchorId = new Map(
-    blocks.map((block) => [block.anchorId, block.id] as const),
-  );
-  const byPiece = new Map<string, AnnotationAnchorSource[]>();
+  const pieceByAnchorId = new Map<string, { pieceId: string; text: string }>();
+  for (const block of blocks) {
+    for (const { anchorId, text } of readerAnchorPiecesOf(block)) {
+      // A cell's anchor is its rendered piece id; a block renders as itself.
+      const pieceId = block.type === "table" ? anchorId : block.id;
+      pieceByAnchorId.set(anchorId, { pieceId, text });
+    }
+  }
+  const byAnchor = new Map<string, AnnotationAnchorSource[]>();
   for (const annotation of annotations) {
-    const pieceId =
-      pieceIdByBlockAnchorId.get(annotation.blockAnchorId) ??
-      annotation.blockAnchorId;
-    const existing = byPiece.get(pieceId);
+    const existing = byAnchor.get(annotation.blockAnchorId);
     if (existing === undefined) {
-      byPiece.set(pieceId, [annotation]);
+      byAnchor.set(annotation.blockAnchorId, [annotation]);
       continue;
     }
     existing.push(annotation);
   }
 
   const anchorsByPieceId: Record<string, TextAnchor[]> = {};
-  for (const [pieceId, pieceAnnotations] of byPiece) {
-    anchorsByPieceId[pieceId] = annotationTextAnchors(pieceAnnotations);
+  for (const [anchorId, pieceAnnotations] of byAnchor) {
+    const piece = pieceByAnchorId.get(anchorId);
+    if (piece === undefined) {
+      continue;
+    }
+    anchorsByPieceId[piece.pieceId] = annotationTextAnchors(
+      pieceAnnotations,
+      piece.text,
+    );
   }
   return anchorsByPieceId;
 };

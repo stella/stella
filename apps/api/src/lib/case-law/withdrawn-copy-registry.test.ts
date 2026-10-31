@@ -6,7 +6,7 @@ import { caseLawDecisions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 import type { DecisionCopyTableNames } from "./withdrawn-copy-registry";
-import { unregisteredDecisionCopyStores } from "./withdrawn-copy-registry";
+import { unregisteredDecisionCopyStores } from "./withdrawn-copy-registry-census";
 
 test("every decision-associated tenant table is classified", () => {
   expect(unregisteredDecisionCopyStores()).toEqual([]);

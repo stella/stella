@@ -31,6 +31,8 @@ const claimComment = (userId: string) => ({
   startOffset: 0,
   endOffset: 5,
   quote: "Claim",
+  quotePrefix: "",
+  quoteSuffix: "",
   body: "The author's comment",
   createdAt,
   updatedAt,
@@ -55,10 +57,12 @@ const sharedDocumentHighlight = {
   startOffset: 4,
   endOffset: 19,
   quote: "deliver the goods",
+  quotePrefix: "The seller shall ",
+  quoteSuffix: " within thirty days.",
   body: null,
   createdAt,
   updatedAt,
-};
+} satisfies Parameters<typeof projectPrivateAnnotationForAccountExport>[0];
 
 describe("claim comments in a personal-data response", () => {
   test("includes the author's shared comment and its claim linkage", () => {
@@ -83,6 +87,8 @@ describe("claim comments in a personal-data response", () => {
       startOffset: 0,
       endOffset: 5,
       quote: "Claim",
+      quotePrefix: "",
+      quoteSuffix: "",
       body: "The author's comment",
       createdAt: createdAt.toISOString(),
       updatedAt: updatedAt.toISOString(),
@@ -99,6 +105,8 @@ describe("matter document marks in a personal-data response", () => {
       targetId: fieldId,
       entityId,
       pageTextSha256: "a".repeat(64),
+      quotePrefix: sharedDocumentHighlight.quotePrefix,
+      quoteSuffix: sharedDocumentHighlight.quoteSuffix,
       blockAnchorId: "page-2",
       visibility: "shared",
     });

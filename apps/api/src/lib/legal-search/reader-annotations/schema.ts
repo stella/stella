@@ -17,6 +17,7 @@ import type {
   ReaderAnnotationVisibility,
   ReaderDocumentTargetType,
 } from "@stll/api-contract/legal-reader-annotations";
+import { READER_TEXT_QUOTE_CONTEXT_LENGTH } from "@stll/legal-ast/reader-text-quote";
 
 import { resourceIdSchema, uuidSchema } from "@/api/lib/custom-schema";
 
@@ -154,7 +155,17 @@ const targetSchemaFields = {
   targetId: uuidSchema,
 } as const;
 
-/** Where on the document one paragraph's share of the annotation sits. */
+/** The text either side of a quote in its block; empty at a block edge. */
+const quoteContextSchema = v.pipe(
+  v.string(),
+  v.maxLength(READER_TEXT_QUOTE_CONTEXT_LENGTH),
+);
+
+/**
+ * Where on the document one paragraph's share of the annotation sits, and
+ * the words it covers with their context: after a re-parse the position can
+ * name other words, the quote cannot.
+ */
 const spanSchema = v.object({
   blockAnchorId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
   startOffset: v.pipe(v.number(), v.integer(), v.minValue(0)),
@@ -164,6 +175,11 @@ const spanSchema = v.object({
     v.minLength(1),
     v.maxLength(READER_ANNOTATION_QUOTE_MAX_LENGTH),
   ),
+  // Optional so a reader page loaded before the context was kept can still
+  // save: a span without it is stored with none, and placed by its stored
+  // position and words like a mark made before the context existed.
+  quotePrefix: v.optional(quoteContextSchema, ""),
+  quoteSuffix: v.optional(quoteContextSchema, ""),
 });
 
 const spansSchema = v.pipe(

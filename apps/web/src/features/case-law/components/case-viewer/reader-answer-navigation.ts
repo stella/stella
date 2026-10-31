@@ -13,6 +13,7 @@ export const readerAnswerAnchors = (
     anchor.spans.map((span) => ({
       id,
       blockAnchorId: span.paragraphId,
+      quote: span.quote,
       startOffset: span.startOffset,
       endOffset: span.endOffset,
       kind: "highlight" as const,

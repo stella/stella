@@ -10,6 +10,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { storedAnnotationMatchesRequest } from "@/api/lib/legal-search/reader-annotations/create.logic";
+import type { AnnotationReplayIdentity } from "@/api/lib/legal-search/reader-annotations/create.logic";
 import {
   requireAnnotationColor,
   requireAnnotationStyle,
@@ -22,6 +23,25 @@ import type {
   AnnotationAuthorScope,
   AnnotationPlacement,
 } from "@/api/lib/legal-search/reader-annotations/target";
+
+/** What a replayed request is compared with: every row of the stored mark. */
+const REPLAY_COLUMNS = {
+  blockAnchorId: legalReaderAnnotations.blockAnchorId,
+  body: legalReaderAnnotations.body,
+  color: legalReaderAnnotations.color,
+  endOffset: legalReaderAnnotations.endOffset,
+  groupId: legalReaderAnnotations.groupId,
+  id: legalReaderAnnotations.id,
+  kind: legalReaderAnnotations.kind,
+  quote: legalReaderAnnotations.quote,
+  quotePrefix: legalReaderAnnotations.quotePrefix,
+  quoteSuffix: legalReaderAnnotations.quoteSuffix,
+  startOffset: legalReaderAnnotations.startOffset,
+  style: legalReaderAnnotations.style,
+  targetId: legalReaderAnnotations.targetId,
+  targetType: legalReaderAnnotations.targetType,
+  visibility: legalReaderAnnotations.visibility,
+} as const;
 
 const annotationVisibility = ({ visibility }: CreateAnnotationRequest) =>
   requireAnnotationVisibility(visibility ?? "private");
@@ -110,6 +130,8 @@ const placementColumns = (
  */
 type CreateReaderAnnotationProps = AnnotationAuthorScope & {
   body: CreateAnnotationRequest;
+  /** What a request replayed under the same `requestId` must match. */
+  replayIdentity: AnnotationReplayIdentity;
   /** Where the mark lands: the matter row a matter target's route read. */
   placement: AnnotationPlacement;
 };
@@ -119,6 +141,7 @@ export const createReaderAnnotationHandler = async function* ({
   organizationId,
   placement,
   recordAuditEvent,
+  replayIdentity,
   safeDb,
   userId,
 }: CreateReaderAnnotationProps) {
@@ -181,6 +204,8 @@ export const createReaderAnnotationHandler = async function* ({
         startOffset: span.startOffset,
         endOffset: span.endOffset,
         quote: span.quote,
+        quotePrefix: span.quotePrefix,
+        quoteSuffix: span.quoteSuffix,
       }));
       const firstValue = values.at(0);
       if (firstValue === undefined) {
@@ -218,21 +243,7 @@ export const createReaderAnnotationHandler = async function* ({
             return { status: "conflict" } as const;
           }
           const existingRows = await tx
-            .select({
-              blockAnchorId: legalReaderAnnotations.blockAnchorId,
-              body: legalReaderAnnotations.body,
-              color: legalReaderAnnotations.color,
-              endOffset: legalReaderAnnotations.endOffset,
-              groupId: legalReaderAnnotations.groupId,
-              id: legalReaderAnnotations.id,
-              kind: legalReaderAnnotations.kind,
-              quote: legalReaderAnnotations.quote,
-              startOffset: legalReaderAnnotations.startOffset,
-              style: legalReaderAnnotations.style,
-              targetId: legalReaderAnnotations.targetId,
-              targetType: legalReaderAnnotations.targetType,
-              visibility: legalReaderAnnotations.visibility,
-            })
+            .select(REPLAY_COLUMNS)
             .from(legalReaderAnnotations)
             .where(
               and(
@@ -243,7 +254,13 @@ export const createReaderAnnotationHandler = async function* ({
                   : eq(legalReaderAnnotations.groupId, existingGroupId),
               ),
             );
-          if (!storedAnnotationMatchesRequest({ body, rows: existingRows })) {
+          if (
+            !storedAnnotationMatchesRequest({
+              body,
+              identity: replayIdentity,
+              rows: existingRows,
+            })
+          ) {
             return { status: "conflict" } as const;
           }
           return {

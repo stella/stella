@@ -29,7 +29,7 @@ describe("locatePassages", () => {
       [{ anchor: "p-1", quote: "Soud rozhodl" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -37,6 +37,28 @@ describe("locatePassages", () => {
           startOffset: 2,
           endOffset: 14,
           quote: "Soud rozhodl",
+        },
+      ],
+    });
+  });
+
+  test("stores the words either side, so a re-parse can find the mark again", () => {
+    const raw = "  Soud rozhodl, že žaloba se zamítá.";
+    const result = locatePassages(
+      [paragraph("p-1", raw)],
+      [{ anchor: "p-1", quote: "žaloba" }],
+    );
+
+    expect(result).toEqual({
+      status: "located",
+      spans: [
+        {
+          blockAnchorId: "p-1",
+          startOffset: 19,
+          endOffset: 25,
+          quote: "žaloba",
+          quotePrefix: "  Soud rozhodl, že ",
+          quoteSuffix: " se zamítá.",
         },
       ],
     });
@@ -87,6 +109,8 @@ describe("locatePassages", () => {
       startOffset: 0,
       endOffset: "Zob.: pkt 2".length,
       quote: "Zob.: pkt 2",
+      quotePrefix: "",
+      quoteSuffix: " wyjaśnień.",
     };
 
     expect(
@@ -133,6 +157,8 @@ describe("locatePassages", () => {
       startOffset: 0,
       endOffset: "The applicant lodged".length,
       quote: "The applicant lodged",
+      quotePrefix: "",
+      quoteSuffix: " an appeal.",
     };
 
     expect(
@@ -174,7 +200,7 @@ describe("locatePassages", () => {
       [{ anchor: "t-1", quote: "Žalobce" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -198,7 +224,7 @@ describe("locatePassages", () => {
       [{ anchor: "p-1", quote: "target" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -217,7 +243,7 @@ describe("locatePassages", () => {
       [{ anchor: "h-1", quote: "ROZSUDEK" }],
     );
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       status: "located",
       spans: [
         {
@@ -239,7 +265,7 @@ describe("locatePassages", () => {
 
     expect(
       locatePassages(blocks, [{ quote: "Costs follow the event" }]),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -324,7 +350,7 @@ describe("annotation literal matching policy", () => {
         },
         { anchor: "cl_4-ods_1-pism_b", quote: "Čl. 4 ods. 1 písm. b)" },
       ]),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -347,7 +373,9 @@ describe("annotation literal matching policy", () => {
     const passage = { anchor: "par_7", quote: "právo na náhradu škody" };
     const newerText = "Nová veta. Podľa § 7 vzniká právo na náhradu škody.";
 
-    expect(locatePassages([paragraph("par_7", newerText)], [passage])).toEqual({
+    expect(
+      locatePassages([paragraph("par_7", newerText)], [passage]),
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -380,7 +408,7 @@ describe("annotation literal matching policy", () => {
           { anchor: "p", quote: "cdef" },
         ],
       ),
-    ).toEqual({
+    ).toMatchObject({
       status: "located",
       spans: [
         {
@@ -446,7 +474,7 @@ describe("annotation literal matching policy", () => {
     expect(locatePassages([], [{ quote: "Nováková" }])).toMatchObject({
       status: "rejected",
     });
-    expect(locatePassages(blocks, [])).toEqual({
+    expect(locatePassages(blocks, [])).toMatchObject({
       status: "located",
       spans: [],
     });
@@ -462,7 +490,7 @@ test("annotation quotes use scalar matching after isolated-surrogate replacement
   });
   expect(
     locatePassages([paragraph("p", "x\ud801y")], [{ quote: "\ud800" }]),
-  ).toEqual({
+  ).toMatchObject({
     status: "located",
     spans: [{ blockAnchorId: "p", startOffset: 1, endOffset: 2, quote: "�" }],
   });

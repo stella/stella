@@ -10,7 +10,10 @@ import type { ReaderAnswerSpans } from "@stll/api-contract/reader-answers";
 import type { DecisionDocumentState } from "@stll/decision-reader/decision-body-state.logic";
 import { prepareDecisionProvisionCards } from "@stll/decision-reader/decision-text";
 import type { DecisionProvisionCard } from "@stll/decision-reader/decision-text";
-import { decisionCaseName } from "@stll/decision-reader/decision-text.logic";
+import {
+  decisionCaseName,
+  decisionReaderTextPieces,
+} from "@stll/decision-reader/decision-text.logic";
 import { ReaderAiLabel } from "@stll/decision-reader/reader-ai-label";
 import {
   readerSelectionMatches,
@@ -41,6 +44,7 @@ import {
 } from "@/components/inspector/case-decision-view";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
+import { OrphanedAnnotationsNotice } from "@/components/legal-reader/annotations/orphaned-annotations-notice";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
@@ -444,6 +448,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     marks: MARKS_FOR_NOTES_FILTER[notesFilter],
     scrollContainerRef: mainRef,
     target: annotationTarget,
+    text: decisionReaderTextPieces(decision),
   });
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -943,6 +948,10 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
         </ChromeHeaderActions>
       )}
       <GuestAnnotationPrompt count={annotations.guestCount} />
+      <OrphanedAnnotationsNotice
+        onRemove={annotations.removeOrphaned}
+        orphaned={annotations.orphaned}
+      />
       <h1 className="sr-only" data-slot="decision-title">
         <BidiText as="span">{decision.caseNumber}</BidiText>
       </h1>

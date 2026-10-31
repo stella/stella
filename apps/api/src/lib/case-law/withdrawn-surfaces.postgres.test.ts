@@ -215,6 +215,8 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
         startOffset: 0,
         endOffset: secret.length,
         quote: secret,
+        quotePrefix: secret.slice(0, 32),
+        quoteSuffix: secret.slice(-32),
         body: own,
       });
       await tx.insert(legalReaderAnswers).values({
@@ -470,6 +472,17 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           expect(JSON.stringify(output)).not.toContain(secret);
         }
         expect(JSON.stringify([annotations, answers, links])).toContain(own);
+        expect(annotations.items).toMatchObject([
+          {
+            quote: marker,
+            quotePrefix: marker,
+            quoteSuffix: marker,
+            body: own,
+            blockAnchorId: "p1",
+            startOffset: 0,
+            endOffset: secret.length,
+          },
+        ]);
         expect(research.at(0)).toMatchObject({
           state: "withdrawn",
           answer: null,
@@ -662,6 +675,21 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           expect(JSON.stringify(rows)).toContain(marker);
           expect(JSON.stringify(rows)).toContain(own);
           expect(JSON.stringify(rows)).not.toContain(secret);
+          if (table === "legal_reader_annotations") {
+            expect(rows).toMatchObject([
+              {
+                data: {
+                  quote: marker,
+                  quotePrefix: marker,
+                  quoteSuffix: marker,
+                  body: own,
+                  blockAnchorId: "p1",
+                  startOffset: 0,
+                  endOffset: secret.length,
+                },
+              },
+            ]);
+          }
         }
         const stored = await scopedDb((tx) =>
           tx

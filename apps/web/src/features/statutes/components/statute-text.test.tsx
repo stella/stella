@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
 import type { AnnotationAnchorSource } from "@stll/decision-reader/annotation-anchors";
+import { readerAnchorPiecesOf } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { E_SBIRKA_LIST_SCHEME } from "@stll/legal-ast/statute-list";
 
@@ -315,6 +316,7 @@ describe("StatuteText", () => {
           endOffset: 4,
           id: "019b0121-9dd7-7000-8000-0000000000aa",
           kind: "highlight",
+          quote: readerAnchorPiecesOf(marked).at(0)?.text.slice(0, 4) ?? "",
           startOffset: 0,
           style: "highlight",
         },
@@ -340,6 +342,10 @@ describe("StatuteText", () => {
           endOffset: 4,
           id: "019b0121-9dd7-7000-8000-0000000000bb",
           kind: "highlight",
+          quote:
+            readerAnchorPiecesOf(table)
+              .find((piece) => piece.anchorId === cellPieceId)
+              ?.text.slice(0, 4) ?? "",
           startOffset: 0,
           style: "highlight",
         },

@@ -1,0 +1,402 @@
+import { Result } from "better-result";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import * as v from "valibot";
+
+import type { Block } from "@stll/legal-ast/document-ast";
+
+import { member, organization, user } from "@/api/db/auth-schema";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { legalReaderAnnotations } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
+import type { SafeId } from "@/api/lib/branded-types";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import { createAnnotationBodySchema } from "@/api/lib/legal-search/reader-annotations/schema";
+import { PUBLIC_LAW_ANNOTATION_PLACEMENT } from "@/api/lib/legal-search/reader-annotations/target";
+import { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
+import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import { handleMcpToolCall } from "@/api/mcp/tools";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+/**
+ * A mark is stored against a block anchor and offsets, and a parser change
+ * that re-parses the corpus renumbers both. These calls run the real tools
+ * against a real database: a mark is placed on one parse of a decision, the
+ * decision is re-parsed, and the listing must name where the marked words are
+ * now, or report the mark orphaned, and never hand back an anchor that names
+ * other words.
+ */
+
+const paragraph = (anchorId: string, text: string): Block => ({
+  anchorId,
+  id: `id-${anchorId}`,
+  inlines: [{ text, type: "text" }],
+  plainText: text,
+  type: "paragraph",
+});
+
+// The publisher's hard-wrapped reasons, read as separate paragraphs.
+const FIRST_PARSE = [
+  paragraph("p-reasons-1", "Sąd rozważył"),
+  paragraph("p-reasons-2", "przepisy ustawy."),
+  paragraph("p-reasons-3", "Skarga została oddalona."),
+  paragraph(
+    "p-reasons-4",
+    "Na podstawie art. 5 ustawy sąd oddalił skargę w całości.",
+  ),
+  paragraph(
+    "p-reasons-5",
+    "Na podstawie art. 5 ustawy organ umorzył postępowanie.",
+  ),
+  paragraph("p-reasons-6", "Wyrok jest prawomocny."),
+];
+
+// Re-parsed: the wrapped first two lines join into one paragraph, which
+// renumbers every anchor after it, and a closing sentence is no longer
+// part of the decision's text.
+const SECOND_PARSE = [
+  paragraph("p-reasons-1", "Sąd rozważył przepisy ustawy."),
+  paragraph("p-reasons-2", "Skarga została oddalona."),
+  paragraph(
+    "p-reasons-3",
+    "Na podstawie art. 5 ustawy sąd oddalił skargę w całości.",
+  ),
+  paragraph(
+    "p-reasons-4",
+    "Na podstawie art. 5 ustawy organ umorzył postępowanie.",
+  ),
+];
+
+let testDb: TestDatabase;
+
+beforeAll(async () => {
+  testDb = await getTestDb();
+});
+
+afterAll(async () => {
+  await releaseTestDb();
+});
+
+type Caller = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+const createCaller = async (): Promise<Caller> => {
+  const organizationId = mintAuthProviderId<"organization">();
+  const userId = mintAuthProviderId<"user">();
+  await testDb
+    .insert(user)
+    .values({ id: userId, name: "Reader", email: `${userId}@example.test` });
+  await testDb.insert(organization).values({
+    id: organizationId,
+    name: "Firm",
+    slug: `firm-${organizationId}`,
+    createdAt: new Date(),
+  });
+  await testDb.insert(member).values({
+    id: mintAuthProviderIdValue(),
+    organizationId,
+    userId,
+    role: "owner",
+    createdAt: new Date(),
+  });
+  return { organizationId, userId };
+};
+
+/** One MCP request against the given parse of the decision. */
+const requestContext = (
+  { organizationId, userId }: Caller,
+  blocks: readonly Block[],
+): AuthorizedMcpRequestContext => {
+  const identity = { organizationId, serverValidatedWorkspaceIds: [], userId };
+  return asTestRaw<AuthorizedMcpRequestContext>({
+    accessibleWorkspaceIds: [],
+    accessibleWorkspaceIdSet: new Set(),
+    accessibleWorkspaceStatusById: new Map(),
+    accessibleWorkspaces: [],
+    grantedScopes: MCP_ALL_RESOURCE_SCOPES,
+    memberRole: "owner",
+    organizationId,
+    recordAuditEvent: async () => undefined,
+    safeDb: asTestRaw<SafeDb>(createMembershipSafeDb(testDb, identity)),
+    scopedDb: asTestRaw<ScopedDb>(createMembershipScopedDb(testDb, identity)),
+    toolConfirmation: TOOL_CONFIRMATION.caller,
+    userId,
+    userEmail: "reader@example.test",
+    testDependencies: {
+      readWithdrawnCopies: async () =>
+        new WithdrawnCopyProjection([], "Withdrawn by publisher"),
+      // The corpus gate has its own tests; here the decision is open to the
+      // agent, in whichever parse the step reads.
+      resolveAnnotationTarget: async () =>
+        await Promise.resolve({
+          status: "available" as const,
+          readBlocks: async () => await Promise.resolve(blocks),
+        }),
+    },
+  });
+};
+
+type ListedPayload = {
+  annotations: { passages: Record<string, unknown>[] }[];
+};
+
+const payloadOf = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+): ListedPayload => {
+  const item = result.content.at(0);
+  // The response text names a failing call.
+  expect({
+    isError: result.isError === true,
+    response: item?.type === "text" ? item.text : null,
+  }).toMatchObject({ isError: false });
+  return asTestRaw<ListedPayload>(result.structuredContent);
+};
+
+const DECISION_ID = "00000000-0000-4000-8000-0000000d0001";
+
+const mark = async (
+  caller: Caller,
+  passage: { anchor: string; quote: string },
+) =>
+  payloadOf(
+    await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "create_reader_annotation",
+      context: requestContext(caller, FIRST_PARSE),
+      args: {
+        target_type: "decision",
+        target_id: DECISION_ID,
+        mark: { kind: "highlight" },
+        passages: [passage],
+      },
+    }),
+  );
+
+const listAfterReparse = async (caller: Caller, blocks: readonly Block[]) =>
+  payloadOf(
+    await handleMcpToolCall({
+      mode: "advanced",
+      toolName: "list_reader_annotations",
+      context: requestContext(caller, blocks),
+      args: { target_type: "decision", target_id: DECISION_ID },
+    }),
+  );
+
+/**
+ * A highlight saved through the reader route's own body schema with spans
+ * that carry no context: what a reader page loaded before the context was
+ * kept sends.
+ */
+const createWithoutContext = async (
+  { organizationId, userId }: Caller,
+  span: {
+    blockAnchorId: string;
+    startOffset: number;
+    endOffset: number;
+    quote: string;
+  },
+) => {
+  const body = v.parse(createAnnotationBodySchema, {
+    targetType: "decision",
+    targetId: DECISION_ID,
+    kind: "highlight",
+    color: "yellow",
+    style: "highlight",
+    spans: [span],
+  });
+  const created = await Result.gen(() =>
+    createReaderAnnotationHandler({
+      body,
+      organizationId,
+      recordAuditEvent: async () => await Promise.resolve(),
+      replayIdentity: "spans",
+      placement: PUBLIC_LAW_ANNOTATION_PLACEMENT,
+      safeDb: asTestRaw<SafeDb>(
+        createMembershipSafeDb(testDb, {
+          organizationId,
+          serverValidatedWorkspaceIds: [],
+          userId,
+        }),
+      ),
+      userId,
+    }),
+  );
+  if (Result.isError(created)) {
+    throw created.error;
+  }
+  return created.value;
+};
+
+describe("reader marks across a re-parse of their decision", () => {
+  test("each mark names where its words are now, or is orphaned", async () => {
+    const caller = await createCaller();
+    await mark(caller, { anchor: "p-reasons-2", quote: "przepisy ustawy." });
+    await mark(caller, { anchor: "p-reasons-3", quote: "oddalona" });
+    // The same words in two paragraphs: the text around them decides.
+    await mark(caller, { anchor: "p-reasons-5", quote: "art. 5 ustawy" });
+    await mark(caller, { anchor: "p-reasons-6", quote: "prawomocny" });
+
+    // Unchanged text: every mark is where it was made.
+    expect(
+      (await listAfterReparse(caller, FIRST_PARSE)).annotations.map(
+        (listed) => listed.passages,
+      ),
+    ).toEqual([
+      [
+        {
+          placement: "placed",
+          anchor: "p-reasons-2",
+          quote: "przepisy ustawy.",
+        },
+      ],
+      [{ placement: "placed", anchor: "p-reasons-3", quote: "oddalona" }],
+      [{ placement: "placed", anchor: "p-reasons-5", quote: "art. 5 ustawy" }],
+      [{ placement: "placed", anchor: "p-reasons-6", quote: "prawomocny" }],
+    ]);
+
+    const listed = await listAfterReparse(caller, SECOND_PARSE);
+    expect(listed.annotations.map((entry) => entry.passages)).toEqual([
+      // The stored `p-reasons-2` now names "Skarga została oddalona.".
+      [
+        {
+          placement: "placed",
+          anchor: "p-reasons-1",
+          quote: "przepisy ustawy.",
+        },
+      ],
+      [{ placement: "placed", anchor: "p-reasons-2", quote: "oddalona" }],
+      // The stored `p-reasons-5` is gone; the twin in `p-reasons-3` is
+      // followed by other words, so the mark goes to `p-reasons-4`.
+      [{ placement: "placed", anchor: "p-reasons-4", quote: "art. 5 ustawy" }],
+      [
+        {
+          placement: "orphaned",
+          reason: "quote_not_found",
+          quote: "prawomocny",
+        },
+      ],
+    ]);
+  });
+
+  test("a quote the new text repeats with nothing to tell it apart is orphaned", async () => {
+    const caller = await createCaller();
+    await mark(caller, { anchor: "p-reasons-2", quote: "przepisy ustawy." });
+
+    const listed = await listAfterReparse(caller, [
+      paragraph("p-1", "przepisy ustawy."),
+      paragraph("p-2", "Wstęp"),
+      paragraph("p-3", "przepisy ustawy."),
+    ]);
+
+    expect(listed.annotations.at(0)?.passages).toEqual([
+      {
+        placement: "orphaned",
+        reason: "quote_ambiguous",
+        quote: "przepisy ustawy.",
+      },
+    ]);
+  });
+
+  test("an agent's retry after a whitespace-only re-parse replays its mark", async () => {
+    const caller = await createCaller();
+    const call = async (blocks: readonly Block[]) =>
+      handleMcpToolCall({
+        mode: "advanced",
+        toolName: "create_reader_annotation",
+        context: requestContext(caller, blocks),
+        args: {
+          target_type: "decision",
+          target_id: DECISION_ID,
+          mark: { kind: "highlight" },
+          passages: [{ anchor: "p-reasons-3", quote: "oddalona" }],
+        },
+      });
+    const first = asTestRaw<{ annotationId: string }>(
+      (await call(FIRST_PARSE)).structuredContent,
+    );
+    // The response was lost; meanwhile the text was re-parsed with other
+    // spacing, which moves the passage's offsets and its stored context.
+    const respaced = FIRST_PARSE.map((block) =>
+      block.anchorId === "p-reasons-3"
+        ? paragraph("p-reasons-3", "Skarga  została\noddalona.")
+        : block,
+    );
+    const retried = await call(respaced);
+
+    expect(retried.isError === true).toBe(false);
+    expect(
+      asTestRaw<{ annotationId: string }>(retried.structuredContent)
+        .annotationId,
+    ).toBe(first.annotationId);
+    expect((await listAfterReparse(caller, respaced)).annotations).toHaveLength(
+      1,
+    );
+  });
+
+  test("a mark saved without context is stored with none and placed like an older mark", async () => {
+    const caller = await createCaller();
+    const created = await createWithoutContext(caller, {
+      blockAnchorId: "p-reasons-3",
+      startOffset: 15,
+      endOffset: 23,
+      quote: "oddalona",
+    });
+    // A repeated quote, sent without context too: only its stored position
+    // tells its occurrences apart.
+    await createWithoutContext(caller, {
+      blockAnchorId: "p-reasons-5",
+      startOffset: 13,
+      endOffset: 26,
+      quote: "art. 5 ustawy",
+    });
+
+    const [stored] = await testDb
+      .select({
+        quotePrefix: legalReaderAnnotations.quotePrefix,
+        quoteSuffix: legalReaderAnnotations.quoteSuffix,
+      })
+      .from(legalReaderAnnotations)
+      .where(eq(legalReaderAnnotations.id, created.id));
+    expect(stored).toEqual({ quotePrefix: "", quoteSuffix: "" });
+
+    // In the text it was made on, each stays where it was put, the repeated
+    // quote included.
+    expect(
+      (await listAfterReparse(caller, FIRST_PARSE)).annotations.map(
+        (listed) => listed.passages,
+      ),
+    ).toEqual([
+      [{ placement: "placed", anchor: "p-reasons-3", quote: "oddalona" }],
+      [{ placement: "placed", anchor: "p-reasons-5", quote: "art. 5 ustawy" }],
+    ]);
+    // Re-parsed: words that occur once follow; a repeat whose stored
+    // position is gone has nothing to tell its occurrences apart.
+    expect(
+      (await listAfterReparse(caller, SECOND_PARSE)).annotations.map(
+        (listed) => listed.passages,
+      ),
+    ).toEqual([
+      [{ placement: "placed", anchor: "p-reasons-2", quote: "oddalona" }],
+      [
+        {
+          placement: "orphaned",
+          reason: "quote_ambiguous",
+          quote: "art. 5 ustawy",
+        },
+      ],
+    ]);
+  });
+});

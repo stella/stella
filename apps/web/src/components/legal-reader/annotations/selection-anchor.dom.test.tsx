@@ -91,6 +91,8 @@ test.each(inlineFixtures.map((inlines, index) => ({ inlines, index })))(
         startOffset: 0,
         endOffset: raw.length,
         quote: raw,
+        quotePrefix: "",
+        quoteSuffix: "",
       },
     ]);
   },
@@ -123,6 +125,9 @@ test("element boundaries around each line break use the same offsets as text aft
           startOffset: raw.indexOf("😀after"),
           endOffset: raw.length,
           quote: "😀after",
+          // The context is the block's own words, line breaks included.
+          quotePrefix: raw.slice(0, raw.indexOf("😀after")),
+          quoteSuffix: "",
         },
       ]);
     }
@@ -145,6 +150,8 @@ test("element boundaries around each line break use the same offsets as text aft
       startOffset: raw.indexOf("after"),
       endOffset: raw.length,
       quote: "after",
+      quotePrefix: raw.slice(0, raw.indexOf("after")),
+      quoteSuffix: "",
     },
   ]);
 });
