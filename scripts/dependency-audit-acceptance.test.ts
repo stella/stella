@@ -25,7 +25,10 @@ import {
   lapsedAcceptances,
   patchedAcceptanceWindows,
 } from "./dependency-audit-acceptance";
-import type { AdvisoryAssessment } from "./dependency-audit-assessment";
+import {
+  type AdvisoryAssessment,
+  assessAdvisories,
+} from "./dependency-audit-assessment";
 import {
   planDependencyAuditRemediation,
   updatedResolutionEntries,
@@ -253,6 +256,103 @@ describe("remediation verifies the resolver result", () => {
     ],
     action: "test action",
   };
+
+  test("a quarantined mailauth/joi resolution survives end-to-end verification", async () => {
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@7.1.1", "", { dependencies: { joi: "18.2.9" } }],
+        "mailauth/joi": ["joi@18.2.9", "", {}],
+      },
+    });
+    const assessments = assessAdvisories({
+      advisories: [
+        {
+          id: "GHSA-4528-x5fx-h6hg",
+          severity: "high",
+          package: "joi",
+          title: "test advisory",
+          vulnerableVersions: "<18.3.1",
+        },
+      ],
+      accepted: [],
+      lockfile: beforeLockfile,
+      manifest: { resolutions: { "mailauth/joi": "18.2.9" } },
+      versions: new Map([["joi", ["18.2.9"]]]),
+      quarantinedReleases: new Map([
+        [
+          "joi",
+          [
+            {
+              version: "18.3.1",
+              installableSince: "2026-11-01T04:44:07.718Z",
+            },
+          ],
+        ],
+      ]),
+    });
+    let reverted = false;
+
+    const plan = await verifyDependencyAuditRemediation({
+      assessments,
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile.replace("joi@18.2.9", "joi@18.3.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(false);
+    expect([...plan.pins]).toEqual([["mailauth/joi", "18.3.1"]]);
+    expect(plan.quarantineExclusions).toEqual([
+      {
+        package: "joi",
+        version: "18.3.1",
+        quarantineExpires: "2026-11-01T04:44:07.718Z",
+      },
+    ]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
+
+  test("a copy without a repository resolution cannot leave its parent range", async () => {
+    const exactParentAssessment = {
+      ...assessment,
+      resolutionPaths: [
+        {
+          copyPath: "parent/example",
+          resolution: "parent/example",
+          requirement: "*",
+        },
+      ],
+    } satisfies AdvisoryAssessment;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        "parent/example": ["example@1.4.0", "", {}],
+      },
+    });
+    let reverted = false;
+
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [exactParentAssessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile.replace("example@1.4.0", "example@1.4.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts).toHaveLength(1);
+  });
 
   test("two parent versions fall back to a draft when Bun keeps the vulnerable copy", async () => {
     let reverted = false;

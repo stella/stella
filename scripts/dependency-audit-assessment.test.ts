@@ -86,11 +86,13 @@ describe("every advisory is assessed against its actual resolutions", () => {
         sdk.id,
       ]);
       expect(result.at(1)?.disposition.status).toBe(
-        "pinned_resolution_blocked",
+        field === "resolutions" ? "fix_available" : "pinned_resolution_blocked",
       );
-      expect(result.at(1)?.action).toContain(
-        `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
-      );
+      if (field === "overrides") {
+        expect(result.at(1)?.action).toContain(
+          `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+        );
+      }
     }
   });
 
@@ -188,10 +190,14 @@ test("every direct manifest requirement participates in pin classification", () 
       manifest: { [field]: { "@modelcontextprotocol/sdk": "1.31.0" } },
       versions,
     });
-    expect(result?.disposition.status).toBe("pinned_resolution_blocked");
-    expect(result?.action).toContain(
-      `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+    expect(result?.disposition.status).toBe(
+      field === "resolutions" ? "fix_available" : "pinned_resolution_blocked",
     );
+    if (field !== "resolutions") {
+      expect(result?.action).toContain(
+        `package.json ${field}.@modelcontextprotocol/sdk=1.31.0`,
+      );
+    }
   }
 });
 
@@ -268,19 +274,19 @@ test("safe releases below the affected range never count as patched upgrades", (
     });
     const state = result?.disposition;
     expect(state?.status).toBe(
-      published.includes("2.3.1")
-        ? "pinned_resolution_blocked"
-        : "upstream_blocked",
+      published.includes("2.3.1") ? "fix_available" : "upstream_blocked",
     );
     if (
-      state?.status !== "pinned_resolution_blocked" &&
+      state?.status !== "fix_available" &&
       state?.status !== "upstream_blocked"
     ) {
       throw new Error("Expected a blocked upgrade");
     }
-    expect(state.patchedVersions).toEqual(
-      published.includes("2.3.1") ? ["2.3.1"] : [],
-    );
+    expect(
+      state.status === "fix_available"
+        ? state.installableVersions
+        : state.patchedVersions,
+    ).toEqual(published.includes("2.3.1") ? ["2.3.1"] : []);
     expect(result?.action).not.toContain("1.9.0");
   }
 });

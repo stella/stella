@@ -304,12 +304,21 @@ const lockfileCopies = (lockfile: string): Map<string, LockedCopy> => {
   );
 };
 
-const changedCopiesAreSafe = (
-  beforeLockfile: string,
-  afterLockfile: string,
-  targetedCopies: ReadonlySet<string>,
-  requirements: ReadonlyMap<string, readonly string[]>,
-): boolean => {
+type SafeCopyChangesOptions = {
+  beforeLockfile: string;
+  afterLockfile: string;
+  targetedCopies: ReadonlySet<string>;
+  requirements: ReadonlyMap<string, readonly string[]>;
+  plannedResolutions: ReadonlyMap<string, string>;
+};
+
+const changedCopiesAreSafe = ({
+  beforeLockfile,
+  afterLockfile,
+  targetedCopies,
+  requirements,
+  plannedResolutions,
+}: SafeCopyChangesOptions): boolean => {
   const before = lockfileCopies(beforeLockfile);
   const after = lockfileCopies(afterLockfile);
   const paths = new Set([...before.keys(), ...after.keys()]);
@@ -333,6 +342,13 @@ const changedCopiesAreSafe = (
         ?.some((requirement) => !accepts(newCopy.version, requirement)) === true
     ) {
       return false;
+    }
+    const plannedResolution = plannedResolutions.get(path);
+    if (plannedResolution !== undefined) {
+      if (newCopy.version !== plannedResolution) {
+        return false;
+      }
+      continue;
     }
     for (const field of [
       "dependencies",
@@ -403,11 +419,13 @@ export const verifyDependencyAuditRemediation = async ({
     const targets = new Set(group.map(advisoryKey));
     const targetRemains = [...targets].some((key) => remaining.has(key));
     const introducedAdvisory = [...remaining].some((key) => !initial.has(key));
-    const lockfileChangesAreSafe = changedCopiesAreSafe(
-      resolved.beforeLockfile,
-      resolved.afterLockfile,
-      new Set(group.flatMap(({ affectedPaths }) => affectedPaths)),
-      new Map(
+    const lockfileChangesAreSafe = changedCopiesAreSafe({
+      beforeLockfile: resolved.beforeLockfile,
+      afterLockfile: resolved.afterLockfile,
+      targetedCopies: new Set(
+        group.flatMap(({ affectedPaths }) => affectedPaths),
+      ),
+      requirements: new Map(
         group.flatMap(({ resolutionPaths }) =>
           resolutionPaths.map(
             ({ copyPath }) =>
@@ -420,7 +438,22 @@ export const verifyDependencyAuditRemediation = async ({
           ),
         ),
       ),
-    );
+      plannedResolutions: new Map(
+        group.flatMap(({ resolutionPaths }) =>
+          resolutionPaths.flatMap(
+            ({ copyPath, repositoryResolution, resolution }) => {
+              if (repositoryResolution !== true) {
+                return [];
+              }
+              const planned = proposal.pins.get(resolution);
+              return planned === undefined
+                ? []
+                : ([[copyPath, planned]] as const);
+            },
+          ),
+        ),
+      ),
+    });
     if (targetRemains || introducedAdvisory || !lockfileChangesAreSafe) {
       await resolved.revert();
       acceptanceDrafts.push(

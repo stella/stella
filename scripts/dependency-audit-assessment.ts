@@ -305,39 +305,45 @@ type ResolutionPathsOptions = {
   packages: ReturnType<typeof lockPackages>;
   owners: readonly RequirementOwner[];
   keys: ReadonlySet<string>;
-  sources: readonly ManifestSource[];
+  repositoryResolutions: ReadonlyMap<string, string>;
 };
-const movableResolution = (
-  sources: readonly ManifestSource[],
+const repositoryResolutions = (
+  manifest: unknown,
+): ReadonlyMap<string, string> => {
+  if (!record(manifest) || !record(manifest["resolutions"])) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(manifest["resolutions"]).flatMap(([key, value]) =>
+      typeof value === "string"
+        ? [[keyLocations(key).join("/"), key] as const]
+        : [],
+    ),
+  );
+};
+
+const governingRepositoryResolution = (
+  resolutions: ReadonlyMap<string, string>,
   copyPath: string,
   packageName: string,
 ): string | undefined =>
-  sources
-    .flatMap(({ manifest }) =>
-      MANIFEST_REQUIREMENT_FIELDS.flatMap((field) => {
-        const entries = manifest[field];
-        return record(entries)
-          ? Object.keys(entries).filter(
-              (key) =>
-                keyLocations(key).join("/") === copyPath &&
-                keyLocations(key).at(-1) === packageName,
-            )
-          : [];
-      }),
-    )
-    .at(0);
+  resolutions.get(copyPath) ?? resolutions.get(packageName);
 
 const dependencyResolutionPaths = ({
   packageName,
   packages,
   owners,
   keys,
-  sources,
+  repositoryResolutions: resolutionsByPath,
 }: ResolutionPathsOptions): AdvisoryAssessment["resolutionPaths"] =>
   packages
     .filter(({ name }) => name === packageName)
     .flatMap((node) =>
-      movableResolution(sources, node.key, packageName) === undefined
+      governingRepositoryResolution(
+        resolutionsByPath,
+        node.key,
+        packageName,
+      ) === undefined
         ? owners.flatMap((parent) => {
             for (const field of parent.fields) {
               const dependencies = parent.details[field];
@@ -370,8 +376,11 @@ const dependencyResolutionPaths = ({
             {
               copyPath: node.key,
               resolution:
-                movableResolution(sources, node.key, packageName) ??
-                panic("Missing movable resolution"),
+                governingRepositoryResolution(
+                  resolutionsByPath,
+                  node.key,
+                  packageName,
+                ) ?? panic("Missing movable resolution"),
               requirement: "*",
               repositoryResolution: true,
             },
@@ -396,6 +405,9 @@ const manifestPins = ({
   }
   for (const { label, manifest } of sources) {
     for (const field of MANIFEST_REQUIREMENT_FIELDS) {
+      if (label === "package.json" && field === "resolutions") {
+        continue;
+      }
       const entries = manifest[field];
       const requirement = record(entries) ? entries[packageName] : undefined;
       if (typeof requirement !== "string") {
@@ -457,6 +469,7 @@ export const assessAdvisories = ({
   const packages = lockPackages(lockfile);
   const keys = new Set(packages.map(({ key }) => key));
   const sources = manifestSources(manifest, lockfile);
+  const resolutions = repositoryResolutions(manifest);
   const owners = requirementOwners(packages, sources);
   return advisories.map((advisory) => {
     if (advisory.vulnerableVersions === "") {
@@ -512,15 +525,15 @@ export const assessAdvisories = ({
       packages,
       owners,
       keys,
-      sources,
+      repositoryResolutions: resolutions,
     });
     let selectableVersions = patchedVersions;
     const overridden = hasPackageWideResolution(sources, advisory.package);
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
       let selectableForNode = nodePatches;
-      const nodeResolution = movableResolution(
-        sources,
+      const nodeResolution = governingRepositoryResolution(
+        resolutions,
         node.key,
         advisory.package,
       );
