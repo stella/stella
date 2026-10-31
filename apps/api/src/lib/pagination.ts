@@ -170,8 +170,7 @@ export const parsePreciseDateTimePaginationCursorPart = (
     return null;
   }
   const parsed = Result.try(() => Temporal.Instant.from(value)).unwrapOr(null);
-  return parsed !== null &&
-    parsed.toString({ fractionalSecondDigits: 6 }) === value
+  return parsed?.toString({ fractionalSecondDigits: 6 }) === value
     ? value
     : null;
 };

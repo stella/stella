@@ -13,7 +13,7 @@ export const templateCursorCreatedAt = sql<string>`to_char(${templates.createdAt
 
 export const decodeTemplateListCursor = (cursor: string) => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 2) {
+  if (parts?.length !== 2) {
     return null;
   }
   const createdAt = parsePreciseDateTimePaginationCursorPart(parts.at(0));
