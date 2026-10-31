@@ -1,12 +1,13 @@
 import {
   organization,
-  orgPolicies,
+  organizationCheck,
   p,
   pUuid,
   safeOrganizationId,
   safeUuid,
   safeWorkspaceId,
   sql,
+  stella,
   timestamptz,
 } from "./common";
 import { workspaces } from "./contacts";
@@ -53,7 +54,23 @@ export const legalHolds = p.pgTable(
       .index("legal_holds_active_org_idx")
       .on(table.organizationId, table.workspaceId, table.entityId)
       .where(sql`${table.releasedAt} IS NULL`),
-    ...orgPolicies(),
+    // The app role places, reads and releases holds but never deletes one:
+    // the migration withholds DELETE, and no delete policy admits it.
+    p.pgPolicy("organization_select", {
+      for: "select",
+      to: stella,
+      using: organizationCheck,
+    }),
+    p.pgPolicy("organization_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: organizationCheck,
+    }),
+    p.pgPolicy("organization_update", {
+      for: "update",
+      to: stella,
+      using: organizationCheck,
+    }),
     p.pgPolicy("legal_holds_owner_access", {
       as: "permissive",
       for: "all",
