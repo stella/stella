@@ -1,9 +1,5 @@
 import type React from "react";
 
-type Props = React.PropsWithChildren<{
-  style: React.CSSProperties;
-}>;
-
 /** A full-width block, as a single-cell presentation table. */
 export const Section = ({ children, style }: Props) => (
   <table
@@ -22,3 +18,7 @@ export const Section = ({ children, style }: Props) => (
     </tbody>
   </table>
 );
+
+type Props = React.PropsWithChildren<{
+  style: React.CSSProperties;
+}>;
