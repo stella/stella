@@ -1,10 +1,22 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { apiDelete, apiPut } from "../helpers/api";
 import { seedSidebarState } from "../helpers/sidebar-state";
 import { expect, test } from "../helpers/test";
 import { createTestWorkspace, deleteTestWorkspace } from "../helpers/workspace";
+
+// A padding point stays inside a cell when its column reflows before the click.
+const CELL_SPACE_INSET = 4;
+
+const cellSpacePoint = async (cell: Locator) =>
+  await cell.evaluate((element, inset) => {
+    const bounds = element.getBoundingClientRect();
+    const x = inset;
+    const y = inset;
+    const target = document.elementFromPoint(bounds.left + x, bounds.top + y);
+    return { x, y, hitsLink: target?.closest("a") !== null };
+  }, CELL_SPACE_INSET);
 
 const semanticStructure = async (page: Page) =>
   await page.evaluate(() => ({
@@ -216,16 +228,7 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
-      const space = await cell.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        const x = bounds.width - 4;
-        const y = bounds.height / 2;
-        const target = document.elementFromPoint(
-          bounds.left + x,
-          bounds.top + y,
-        );
-        return { x, y, hitsLink: target?.closest("a") !== null };
-      });
+      const space = await cellSpacePoint(cell);
       expect(space.hitsLink).toBe(false);
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
@@ -237,3 +240,42 @@ for (const email of [null, "a@example.test"]) {
     }
   });
 }
+
+test.describe("cell-space coordinates", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  for (const width of [80, 160, 280]) {
+    test(`stay inside a cell after its table shrinks to ${width}px`, async ({
+      page,
+    }) => {
+      await page.setContent(`
+        <table style="table-layout:fixed;width:600px;border-collapse:collapse">
+          <tr><td id="email" style="padding:10px;height:24px"></td><td>Phone</td></tr>
+        </table>
+      `);
+      const cell = page.locator("#email");
+      const point = await cellSpacePoint(cell);
+      await page.getByRole("table").evaluate((table, resizedWidth) => {
+        table.setAttribute(
+          "style",
+          `table-layout:fixed;width:${resizedWidth}px;border-collapse:collapse`,
+        );
+      }, width);
+      const bounds = await cell.boundingBox();
+      expect(point.x).toBeGreaterThan(0);
+      expect(bounds?.width).toBeGreaterThan(point.x);
+      expect(point.y).toBeGreaterThan(0);
+      expect(bounds?.height).toBeGreaterThan(point.y);
+      expect(point.hitsLink).toBe(false);
+      await cell.evaluate((element) => {
+        if (element instanceof HTMLTableCellElement) {
+          element.addEventListener("click", () => {
+            element.dataset["clicked"] = "true";
+          });
+        }
+      });
+      await cell.click({ position: { x: point.x, y: point.y } });
+      await expect(cell).toHaveAttribute("data-clicked", "true");
+    });
+  }
+});
