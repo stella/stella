@@ -27,6 +27,7 @@ import {
   createTestPglite,
   withPublicLawReaderRole,
 } from "@/api/tests/pglite-test-db";
+import { orderedIndexScanHeader } from "@/api/tests/query-plans/plan-walker";
 
 const DECISIONS = 5000;
 const DB_TEST_TIMEOUT_MS = 120_000;
@@ -79,8 +80,8 @@ afterAll(async () => {
  * does not compile until it states the direction its plan must show.
  */
 const WALK_SCAN_NODE = {
-  newest: "Index Scan Backward",
-  oldest: "Index Scan",
+  newest: orderedIndexScanHeader("backward"),
+  oldest: orderedIndexScanHeader("forward"),
 } as const satisfies Record<DecisionListSort, string>;
 
 /**

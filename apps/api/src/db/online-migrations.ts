@@ -50,6 +50,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -405,7 +406,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   // Billing guideline file search over knowledge-file paths.
   {
-    introducedBy: "20261030103100_activity_billing_drafts",
+    introducedBy: "20261031014500_activity_billing_drafts",
     createSql:
       'CREATE INDEX CONCURRENTLY "agent_skill_resources_path_billing_trgm_idx" ON public."agent_skill_resources" USING gin ("path" gin_trgm_ops)',
     definitionBody:
@@ -984,6 +985,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
+  CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
 ];
 
 /**

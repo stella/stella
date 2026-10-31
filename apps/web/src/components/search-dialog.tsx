@@ -151,10 +151,6 @@ import { useCommandActions } from "@/features/command-palette/hooks/use-command-
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import {
-  isPublicLawPreviewEnabled,
-  usePublicLawPreviewEnabled,
-} from "@/hooks/use-public-law-preview";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import {
@@ -177,6 +173,7 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -608,7 +605,7 @@ const getRecentsSnapshotKey = (open: boolean, scope: SearchRecentsScope) =>
 type CitationSearchOptions = {
   open: boolean;
   mode: SearchDialogMode;
-  publicLawPreviewEnabled: boolean;
+  publicLawEnabled: boolean;
   searchScope: SearchScope;
   query: string;
   debouncedQuery: string;
@@ -618,7 +615,7 @@ type CitationSearchOptions = {
 const useCitationSearch = ({
   open,
   mode,
-  publicLawPreviewEnabled,
+  publicLawEnabled,
   searchScope,
   query,
   debouncedQuery,
@@ -628,7 +625,7 @@ const useCitationSearch = ({
   const citationEnabled =
     open &&
     mode.type === "browse" &&
-    publicLawPreviewEnabled &&
+    publicLawEnabled &&
     searchScope === "all" &&
     citationCountry !== null &&
     query === debouncedQuery &&
@@ -665,7 +662,7 @@ export const SearchDialog = ({
   const queryClient = useQueryClient();
   const user = useAuthenticatedUser();
   const isMobile = useIsMobile();
-  const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const publicLawEnabled = isPublicLawEnabled();
   const [closeActionQueue] = useState(createDialogCloseActionQueue);
   const owner = useStorageOwner();
   const searchRecentsScope = useMemo(
@@ -714,10 +711,7 @@ export const SearchDialog = ({
   }, [open]);
   const [query, setQuery] = useState("");
   const [selectedSearchScope, setSearchScope] = useState<SearchScope>("all");
-  const searchScope = resolveSearchScope(
-    selectedSearchScope,
-    publicLawPreviewEnabled,
-  );
+  const searchScope = resolveSearchScope(selectedSearchScope, publicLawEnabled);
   const [scopeFilterOpen, setScopeFilterOpen] = useState(false);
   const [registryExpanded, setRegistryExpanded] = useState(false);
   const [caseLawExpanded, setCaseLawExpanded] = useState(false);
@@ -788,7 +782,7 @@ export const SearchDialog = ({
   const updatedTo = resolveUpdatedTo(filters.time);
   const availableSearchTypes = GLOBAL_SEARCH_RESULT_TYPES.filter(
     (type) =>
-      isAvailableSearchKind(type, publicLawPreviewEnabled) &&
+      isAvailableSearchKind(type, publicLawEnabled) &&
       isSearchTypeInScope(type, searchScope),
   );
   const selectedSearchTypes = filters.types.filter(isSearchKindOption);
@@ -848,7 +842,7 @@ export const SearchDialog = ({
     expanded: registryExpanded,
     visible: showLazySearchGroups,
     registryVisible: scopeVisibility.registryVisible,
-    caseLawEnabled: publicLawPreviewEnabled,
+    caseLawEnabled: publicLawEnabled,
   });
   const companySearch = useCompanyRegistrySearch(
     scopeVisibility.companyQuery,
@@ -889,7 +883,7 @@ export const SearchDialog = ({
   } = useCitationSearch({
     open,
     mode,
-    publicLawPreviewEnabled,
+    publicLawEnabled,
     searchScope,
     query,
     debouncedQuery,
@@ -1517,7 +1511,7 @@ export const SearchDialog = ({
     }
 
     if (hit.type === "case-law") {
-      if (!isPublicLawPreviewEnabled()) {
+      if (!isPublicLawEnabled()) {
         onOpenChange(false);
         stellaToast.add({
           title: t("common.comingSoon"),
@@ -2002,7 +1996,7 @@ export const SearchDialog = ({
                   open={scopeFilterOpen}
                   onOpenChange={setScopeFilterOpen}
                   visible={mode.type === "browse"}
-                  caseLawEnabled={publicLawPreviewEnabled}
+                  caseLawEnabled={publicLawEnabled}
                   onChange={(scope) => {
                     setSearchScope(scope);
                     setFilters(initialFiltersForMode(mode, initialWorkspaceId));
@@ -2068,7 +2062,7 @@ export const SearchDialog = ({
                       hasSearchCriteria={hasSearchCriteria}
                       locale={locale}
                       mimeTypeBuckets={mimeTypeBuckets}
-                      publicLawPreviewEnabled={publicLawPreviewEnabled}
+                      publicLawEnabled={publicLawEnabled}
                       setFilters={setFilters}
                       typeBuckets={typeBuckets}
                       workspaceBuckets={workspaceBuckets}
@@ -2310,7 +2304,7 @@ type SearchFacetsBodyProps = {
   mimeTypeBuckets: ComponentProps<
     typeof SearchableFacetGroup
   >["defaultBuckets"];
-  publicLawPreviewEnabled: boolean;
+  publicLawEnabled: boolean;
   setFilters: (update: SearchFiltersUpdate) => void;
   typeBuckets: readonly ComponentProps<typeof FacetGroup>["buckets"][number][];
   workspaceBuckets: ComponentProps<
@@ -2325,7 +2319,7 @@ const SearchFacetsBody = ({
   hasSearchCriteria,
   locale,
   mimeTypeBuckets,
-  publicLawPreviewEnabled,
+  publicLawEnabled,
   setFilters,
   typeBuckets,
   workspaceBuckets,
@@ -2345,7 +2339,7 @@ const SearchFacetsBody = ({
       if (!isSearchKindOption(bucket.value)) {
         return [];
       }
-      if (!isAvailableSearchKind(bucket.value, publicLawPreviewEnabled)) {
+      if (!isAvailableSearchKind(bucket.value, publicLawEnabled)) {
         return [];
       }
       // Case law stays out of the main list until its group opens, so a

@@ -13,6 +13,7 @@ import billingDrafts from "./billing-drafts";
 import candidates from "./candidates";
 import create from "./create";
 import matters from "./matters";
+import narrative from "./narrative";
 
 export const desktopTimeEntriesRoute = mount(
   [
@@ -30,6 +31,7 @@ export const desktopTimeEntriesRoute = mount(
       "/matter-candidates": { GET: candidates },
       "/time-entries/batch": { PUT: batch },
       "/time-entries/batch/status": { PUT: batchStatus },
+      "/time-entries/narrative": { POST: narrative },
       "/matters": { GET: matters },
       "/time-entries/:workspaceId": { PUT: create },
     }),

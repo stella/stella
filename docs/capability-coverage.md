@@ -740,7 +740,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
 | auth_plumbing | 38 |
-| billing_ui | 1 |
+| billing_ui | 2 |
 | chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |

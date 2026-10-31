@@ -1635,6 +1635,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1715,6 +1716,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
