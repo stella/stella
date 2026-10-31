@@ -7,6 +7,7 @@ import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  chatThreads,
   contacts,
   entities,
   entityDeletionCleanupRequests,
@@ -19,6 +20,8 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import { EMPTY_CHAT_HISTORY_SNAPSHOT } from "@/api/handlers/chat/history-window";
+import { rollbackUnpersistedChatSideEffects } from "@/api/handlers/chat/send-message-side-effects";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
 import { moveEntities } from "@/api/handlers/entities/move";
@@ -708,6 +711,117 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(organization)
             .where(eq(organization.id, otherOrganizationId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    });
+
+    test("a matter hold placed after thread creation refuses rollback and preserves the thread", async () => {
+      if (!databaseUrl) {
+        throw new TypeError("DATABASE_URL is required for Postgres tests");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        const workspaceId = createSafeId<"workspace">();
+        const threadId = createSafeId<"chatThread">();
+        const rollbackToken = "held-thread-rollback";
+        const recordAuditEvent = createAuditRecorder({
+          organizationId,
+          workspaceId,
+          userId,
+          request: new Request("http://localhost/legal-holds/thread-rollback"),
+          server: null,
+        });
+        try {
+          await db.insert(user).values({
+            id: userId,
+            name: "Rollback hold owner",
+            email: `${userId}@hold.test`,
+          });
+          await db.insert(organization).values({
+            id: organizationId,
+            name: "Rollback hold organization",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            userId,
+            role: "owner",
+            createdAt: new Date(),
+          });
+          await db.insert(workspaces).values({
+            id: workspaceId,
+            organizationId,
+            name: "Rollback hold matter",
+            reference: "HOLD-ROLLBACK",
+          });
+          await db.insert(chatThreads).values({
+            id: threadId,
+            organizationId,
+            workspaceId,
+            userId,
+            title: "Unpersisted thread",
+            rollbackToken,
+            dataWorkspaceIds: [workspaceId],
+          });
+          await db.insert(legalHolds).values({
+            id: createSafeId<"legalHold">(),
+            organizationId,
+            scopeType: "matter",
+            workspaceId,
+            reason: "Retain newly created chat",
+            placedBy: userId,
+          });
+
+          const rollback = await rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb: createSafeDb(
+              markRlsDatabase(db),
+              [workspaceId],
+              organizationId,
+              userId,
+            ),
+            threadId,
+            threadState: {
+              type: "created",
+              rollbackToken,
+              data: {
+                id: threadId,
+                workspaceId,
+                contextMatterIds: [],
+                dataWorkspaceIds: [workspaceId],
+                webSearchEnabled: false,
+                chatModel: null,
+                chatReasoningEffort: null,
+                messages: [],
+                historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
+              },
+            },
+            uploadedFiles: [],
+            userId,
+          });
+
+          expect(rollback.isErr()).toBe(true);
+          if (rollback.isErr()) {
+            expect(resolveHandlerError(rollback.error)).toMatchObject({
+              status: 409,
+              code: LEGAL_HOLD_ACTIVE,
+            });
+          }
+          expect(
+            await db
+              .select({ id: chatThreads.id })
+              .from(chatThreads)
+              .where(eq(chatThreads.id, threadId)),
+          ).toEqual([{ id: threadId }]);
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
           await db.delete(user).where(eq(user.id, userId));
         }
       });

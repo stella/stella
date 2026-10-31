@@ -10,6 +10,7 @@ const PROTECTED_TABLES = new Set([
   "workspaces",
   "entities",
   "entityVersions",
+  "chatThreads",
   "userFiles",
   "contacts",
   "organizationFileObjects",

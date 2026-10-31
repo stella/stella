@@ -19,6 +19,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 
 type UploadMessageFilesWithRollbackProps = {
@@ -90,6 +92,7 @@ export const uploadMessageFilesWithRollback = async ({
 };
 
 export const rollbackUnpersistedChatSideEffects = async ({
+  checkHold = requireNoHold,
   recordAuditEvent,
   safeDb,
   threadId,
@@ -97,6 +100,7 @@ export const rollbackUnpersistedChatSideEffects = async ({
   uploadedFiles,
   userId,
 }: {
+  checkHold?: typeof requireNoHold;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -104,7 +108,7 @@ export const rollbackUnpersistedChatSideEffects = async ({
   uploadedFiles: UploadedChatFile[];
   userId: SafeId<"user">;
 }): Promise<
-  Result<void, HandlerError<500> | LegalHoldActiveError | SafeDbError>
+  Result<void, HandlerError<409 | 500> | LegalHoldActiveError | SafeDbError>
 > => {
   const fileRollbackResult = await deleteUploadedChatFiles({
     files: uploadedFiles,
@@ -123,6 +127,25 @@ export const rollbackUnpersistedChatSideEffects = async ({
   }
 
   const threadRollbackResult = await safeDb(async (tx) => {
+    const thread = await tx.query.chatThreads.findFirst({
+      where: {
+        id: { eq: threadId },
+        userId: { eq: userId },
+        rollbackToken: { eq: threadState.rollbackToken },
+      },
+      columns: { organizationId: true },
+    });
+    if (thread === undefined) {
+      return Result.ok();
+    }
+    const hold = await checkHold({
+      tx,
+      organizationId: thread.organizationId,
+      target: { type: "thread", threadId },
+    });
+    if (hold.isErr()) {
+      return Result.err(legalHoldRefusal(hold.error));
+    }
     const deletedThreads = await tx
       .delete(chatThreads)
       .where(
@@ -141,7 +164,7 @@ export const rollbackUnpersistedChatSideEffects = async ({
       .returning({ id: chatThreads.id });
 
     if (deletedThreads.length === 0) {
-      return;
+      return Result.ok();
     }
 
     await recordAuditEvent(tx, {
@@ -151,7 +174,8 @@ export const rollbackUnpersistedChatSideEffects = async ({
       workspaceId: threadState.data.workspaceId,
       metadata: { reason: "rollback_unpersisted_chat_side_effects" },
     });
+    return Result.ok();
   });
 
-  return threadRollbackResult;
+  return threadRollbackResult.andThen((result) => result);
 };

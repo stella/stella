@@ -18,7 +18,12 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { createFileKey } from "@/api/lib/file-key";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  type DeleteOrganizationFileError,
+  deleteOrganizationFileWithSignal,
+} from "@/api/lib/files/delete-organization-file";
+import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
+import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
@@ -29,7 +34,13 @@ type DeleteObject = (
   key: string,
   signal: AbortSignal,
 ) => Promise<
-  Awaited<ReturnType<typeof deleteOrganizationFileWithSignal>> | undefined
+  | Result<
+      void,
+      | DeleteOrganizationFileError
+      | LegalHoldActiveError
+      | OrganizationFileUsageError
+    >
+  | undefined
 >;
 
 export const BUFFER_INTENT_TTL_MS = 5 * 60 * 1000;

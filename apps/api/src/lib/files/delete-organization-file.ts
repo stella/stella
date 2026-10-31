@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { declareFingerprintFields } from "@stll/errors";
 
 import { organization } from "@/api/db/auth-schema";
 import { chatThreads, userFiles } from "@/api/db/schema";
@@ -9,7 +10,7 @@ import { envDocumentProcessingWorker } from "@/api/env-document-processing-worke
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
-import type { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
@@ -17,6 +18,18 @@ import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 type DeleteOrganizationFileOptions = {
   fileUsageDb?: Pick<MaintenanceDb, "transaction">;
 };
+
+export class DeleteOrganizationFileError extends TaggedError(
+  "DeleteOrganizationFileError",
+)<{
+  message: string;
+  stage: "storage" | "usage_removal";
+  cause: OrganizationFileUsageError;
+}> {
+  static {
+    declareFingerprintFields(this, ["stage"]);
+  }
+}
 
 const DELETE_CONCURRENCY = 50;
 const DELETE_CHUNK_TIMEOUT_MS = 30_000;
@@ -81,7 +94,9 @@ export const deleteOrganizationFileWithSignal = async (
   key: string,
   signal: AbortSignal,
   { fileUsageDb }: DeleteOrganizationFileOptions = {},
-): Promise<Result<void, OrganizationFileUsageError | LegalHoldActiveError>> => {
+): Promise<
+  Result<void, DeleteOrganizationFileError | LegalHoldActiveError>
+> => {
   const checked = await deleteUnheldObjectChunk({
     keys: [key],
     signal: AbortSignal.any([
@@ -91,15 +106,27 @@ export const deleteOrganizationFileWithSignal = async (
     fileUsageDb,
   });
   if (checked.isErr()) {
-    return Result.err(checked.error);
+    return LegalHoldActiveError.is(checked.error)
+      ? Result.err(checked.error)
+      : Result.err(
+          new DeleteOrganizationFileError({
+            message: "Organization files could not be deleted",
+            stage: "storage",
+            cause: checked.error,
+          }),
+        );
   }
   const deletion = checked.value.at(0);
   if (deletion?.status === "rejected") {
     return Result.err(
-      new OrganizationFileUsageError({
+      new DeleteOrganizationFileError({
         message: "Organization files could not be deleted",
-        reason: "storage_unavailable",
-        cause: deletion.reason,
+        stage: "storage",
+        cause: new OrganizationFileUsageError({
+          message: "Organization files could not be deleted",
+          reason: "storage_unavailable",
+          cause: deletion.reason,
+        }),
       }),
     );
   }
@@ -108,7 +135,17 @@ export const deleteOrganizationFileWithSignal = async (
   }
   const { removeOrganizationFileBytes } =
     await import("@/api/lib/files/organization-file-usage");
-  return await removeOrganizationFileBytes(key, fileUsageDb);
+  const removed = await removeOrganizationFileBytes(key, fileUsageDb);
+  if (Result.isError(removed)) {
+    return Result.err(
+      new DeleteOrganizationFileError({
+        message: "Organization file usage could not be removed",
+        stage: "usage_removal",
+        cause: removed.error,
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 type DeleteUnheldObjectChunkOptions = {

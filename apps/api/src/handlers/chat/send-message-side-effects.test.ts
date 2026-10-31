@@ -24,11 +24,13 @@ let fake: FakeS3;
 
 const threadId = toSafeId<"chatThread">("00000000-0000-0000-0000-000000000001");
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000002");
+const organizationId = toSafeId<"organization">("organization_test");
 const workspaceId = toSafeId<"workspace">(
   "00000000-0000-0000-0000-000000000003",
 );
 const rollbackToken = "rollback-token";
 const pgDialect = new PgDialect();
+const allowDeletion = async () => Result.ok();
 
 const selectNoChatMessages = () => ({
   from: () => ({
@@ -72,9 +74,13 @@ describe("send-message side-effect rollback", () => {
         where,
       }),
       select: selectNoChatMessages,
+      query: {
+        chatThreads: { findFirst: async () => ({ organizationId }) },
+      },
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -104,9 +110,13 @@ describe("send-message side-effect rollback", () => {
         where,
       }),
       select: selectNoChatMessages,
+      query: {
+        chatThreads: { findFirst: async () => ({ organizationId }) },
+      },
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
+      checkHold: allowDeletion,
       recordAuditEvent,
       safeDb,
       threadId,
@@ -150,7 +160,7 @@ describe("send-message side-effect rollback", () => {
       query: {
         chatThreads: {
           findFirst: async () => ({
-            organizationId: toSafeId<"organization">("organization_test"),
+            organizationId,
           }),
         },
       },

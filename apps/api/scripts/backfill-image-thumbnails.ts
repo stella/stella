@@ -28,7 +28,10 @@ import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { enqueueImageThumbnailOrMarkFailed } from "@/api/lib/file-derivative-queue";
 import { createUserFileThumbnailKey } from "@/api/lib/file-key";
-import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  DeleteOrganizationFileError,
+  deleteOrganizationFileWithSignal,
+} from "@/api/lib/files/delete-organization-file";
 import {
   generateImageThumbnail,
   THUMBNAIL_MIME_TYPE,
@@ -78,6 +81,15 @@ const deleteThumbnailsBestEffort = async (thumbnailKeys: string[]) => {
       { fileUsageDb: db },
     );
     if (Result.isError(cleanup)) {
+      if (
+        DeleteOrganizationFileError.is(cleanup.error) &&
+        cleanup.error.stage === "usage_removal"
+      ) {
+        throw new ThumbnailBackfillWriteError({
+          message: `Thumbnail usage removal failed for ${thumbnailKey}`,
+          cause: cleanup.error,
+        });
+      }
       console.warn(`  chat: thumbnail cleanup failed for ${thumbnailKey}`);
     }
   }

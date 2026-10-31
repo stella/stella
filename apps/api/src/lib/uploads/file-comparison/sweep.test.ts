@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
+import { DeleteOrganizationFileError } from "@/api/lib/files/delete-organization-file";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import {
   FileComparisonSweepError,
@@ -88,9 +89,13 @@ const createHarness = ({
             }
             if (ledgerFailsFor.has(key)) {
               return Result.err(
-                new OrganizationFileUsageError({
+                new DeleteOrganizationFileError({
                   message: "Ledger unavailable",
-                  reason: "storage_unavailable",
+                  stage: "usage_removal",
+                  cause: new OrganizationFileUsageError({
+                    message: "Ledger unavailable",
+                    reason: "storage_unavailable",
+                  }),
                 }),
               );
             }
