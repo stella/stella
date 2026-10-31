@@ -3722,6 +3722,7 @@ const config = defineConfig({
       files: [
         "apps/web/src/components/inspector/**/*.tsx",
         "apps/web/src/**/*{inspector,side-panel}*.tsx",
+        ".oxlint-plugins/__fixtures__/inspector-header-title.fixture.tsx",
       ],
       rules: {
         "inspector-header-title/inspector-header-title": "error",
