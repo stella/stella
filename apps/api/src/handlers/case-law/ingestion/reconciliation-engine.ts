@@ -1207,7 +1207,8 @@ const writeInOrder = async (
     return panic("writeInOrder needs a row to write");
   }
   const processed = await write(first);
-  return processed.status === PROCESS_DECISION_STATUS.RETRYABLE ||
+  return processed.isErr() ||
+    processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE ||
     rest.length === 0
     ? processed
     : await writeInOrder(rest, write);
@@ -1228,6 +1229,31 @@ type IngestItemOptions = {
   summary: ReconciliationUnitSummary;
   failureDisposition?: "park" | "hold";
   signal?: AbortSignal | undefined;
+};
+
+type WriteListedDecisionOptions = Pick<
+  IngestItemOptions,
+  "lease" | "scopedDb" | "sourceId" | "now" | "resolveSourceContract"
+> & { input: IngestionResult };
+
+const writeListedDecision = async ({
+  input,
+  lease,
+  scopedDb,
+  sourceId,
+  now,
+  resolveSourceContract,
+}: WriteListedDecisionOptions): Promise<Processed> => {
+  await lease.beforeDatabaseMark();
+  const observationOrder = await allocateSourceObservationOrder({
+    leaseToken: lease.leaseToken,
+    scopedDb,
+    sourceId,
+  });
+  return await processDecision(
+    { input, sourceId, scopedDb, observedAt: now, observationOrder },
+    resolveSourceContract,
+  );
 };
 
 /**
@@ -1281,6 +1307,40 @@ const ingestListedItem = async ({
     }
   };
 
+  const failed = async (error: unknown) => {
+    if (signal?.aborted === true) {
+      throw error;
+    }
+    summary.failed += 1;
+    logger.warn("case_law.reconciliation.item_failed", {
+      adapterKey,
+      slice,
+      identityKey: item.identityKey,
+      // The park below keeps only the tag, which cannot separate a publisher
+      // refusing one document from the corpus refusing to store it. These
+      // carry that distinction as fixed vocabulary (driver and system codes,
+      // the SQLSTATE, the schema identifiers Postgres names) rather than as
+      // message text, which quotes the statement and can quote the row that
+      // failed; the logger's sanitizer is a key denylist, so text this sink
+      // emitted would reach telemetry verbatim.
+      //
+      // `errorFingerprint` is first so the two below keep the last word on
+      // every key they state. It adds what the vocabulary above cannot
+      // supply for a throw that carries no code at all — a bare `TypeError`
+      // from a helper reports its tag and nothing else, which names the
+      // class of defect but not the site. `error.frame` is the top stack
+      // frame as `file:line:col`: code identity, not row data, and so inside
+      // the same policy as the codes.
+      ...errorFingerprint(error),
+      ...errorSystemFields(error),
+      ...pgErrorFields(error),
+    });
+    if (failureDisposition === "hold") {
+      return;
+    }
+    await park(errorTag(error));
+  };
+
   try {
     const timeoutSignal = AbortSignal.timeout(ITEM_FETCH_TIMEOUT_MS);
     const built = await buildDecision(
@@ -1324,24 +1384,15 @@ const ingestListedItem = async ({
         return;
       }
       case "built": {
-        const write = async (input: IngestionResult): Promise<Processed> => {
-          await lease.beforeDatabaseMark();
-          const observationOrder = await allocateSourceObservationOrder({
-            leaseToken: lease.leaseToken,
+        const write = async (input: IngestionResult) =>
+          await writeListedDecision({
+            input,
+            lease,
             scopedDb,
             sourceId,
-          });
-          return await processDecision(
-            {
-              input,
-              sourceId,
-              scopedDb,
-              observedAt: now,
-              observationOrder,
-            },
+            now,
             resolveSourceContract,
-          );
-        };
+          });
         // The decision first, then what its page states beside it. A
         // companion that cannot be written parks the item: a rebuild writes
         // both again under the same identities.
@@ -1351,8 +1402,12 @@ const ingestListedItem = async ({
             : [built.decision, ...built.companions],
           write,
         );
-        if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${processed.reason}`);
+        if (processed.isErr()) {
+          await failed(processed.error);
+          return;
+        }
+        if (processed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${processed.value.reason}`);
           return;
         }
         summary.written += 1;
@@ -1391,8 +1446,12 @@ const ingestListedItem = async ({
           },
           resolveSourceContract,
         );
-        if (placed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
-          await park(`retryable:${placed.reason}`);
+        if (placed.isErr()) {
+          await failed(placed.error);
+          return;
+        }
+        if (placed.value.status === PROCESS_DECISION_STATUS.RETRYABLE) {
+          await park(`retryable:${placed.value.reason}`);
           return;
         }
         // A judgment can be unreadable and return COMPLETE without writing
@@ -1429,37 +1488,7 @@ const ingestListedItem = async ({
       }
     }
   } catch (error) {
-    if (signal?.aborted === true) {
-      throw error;
-    }
-    summary.failed += 1;
-    logger.warn("case_law.reconciliation.item_failed", {
-      adapterKey,
-      slice,
-      identityKey: item.identityKey,
-      // The park below keeps only the tag, which cannot separate a publisher
-      // refusing one document from the corpus refusing to store it. These
-      // carry that distinction as fixed vocabulary (driver and system codes,
-      // the SQLSTATE, the schema identifiers Postgres names) rather than as
-      // message text, which quotes the statement and can quote the row that
-      // failed; the logger's sanitizer is a key denylist, so text this sink
-      // emitted would reach telemetry verbatim.
-      //
-      // `errorFingerprint` is first so the two below keep the last word on
-      // every key they state. It adds what the vocabulary above cannot
-      // supply for a throw that carries no code at all — a bare `TypeError`
-      // from a helper reports its tag and nothing else, which names the
-      // class of defect but not the site. `error.frame` is the top stack
-      // frame as `file:line:col`: code identity, not row data, and so inside
-      // the same policy as the codes.
-      ...errorFingerprint(error),
-      ...errorSystemFields(error),
-      ...pgErrorFields(error),
-    });
-    if (failureDisposition === "hold") {
-      return;
-    }
-    await park(errorTag(error));
+    await failed(error);
   }
 };
 

@@ -27,6 +27,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { readDecisionWork } from "@/api/lib/case-law/decision-work";
 import {
   CASE_LAW_SURFACE_COUNTRIES,
   withRedistributableSubject,
@@ -330,7 +331,7 @@ if (!databaseUrl || !runPostgresTests) {
             await listIncomingDecisionCitations({
               tx: readerTx,
               cursor: undefined,
-              decisionId,
+              work: await readDecisionWork(readerTx, decisionId),
               countries: CASE_LAW_SURFACE_COUNTRIES.pages,
             }),
         );

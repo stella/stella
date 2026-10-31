@@ -350,7 +350,7 @@ export const runPostgresWorkers = async ({
       const clusterStarted = now();
       statuses.push(await runBatch([file], 0));
       log(
-        `Postgres cluster migration ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
+        `Postgres cluster-exclusive ${file}: ${((now() - clusterStarted) / 1000).toFixed(1)}s`,
       );
     }
     const slowest = [...files]

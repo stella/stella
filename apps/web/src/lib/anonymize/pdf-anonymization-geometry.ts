@@ -2,12 +2,16 @@ import type { PDFPage } from "@libpdf/core";
 import { Result } from "better-result";
 
 import {
+  mergePdfTextBoxes,
+  readPdfPageGlyphText,
+} from "@stll/api-contract/pdf-mark-placement";
+
+import {
   findFileAnonymizationMatches,
   prepareFileAnonymizationText,
 } from "@/lib/anonymize/file-anonymization-matches.logic";
 import type { PreparedAnonymizationText } from "@/lib/anonymize/file-anonymization-matches.logic";
 import { ClientOperationError } from "@/lib/errors/client";
-import { buildPageSearchText, mergePDFSearchBoxes } from "@/lib/pdf/pdf-search";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 
 /**
@@ -36,7 +40,7 @@ export const extractPdfAnonymizationText = (
       textParts.push("\n");
       glyphs.push(null);
     }
-    const extracted = buildPageSearchText(page.extractText());
+    const extracted = readPdfPageGlyphText(page.extractText());
     textParts.push(extracted.text);
     for (const box of extracted.boxesByOffset) {
       glyphs.push(box === null ? null : { pageIndex, box });
@@ -148,7 +152,7 @@ export const glyphBoxesByPage = (
   return new Map(
     [...byPage].map(([pageIndex, boxes]) => [
       pageIndex,
-      mergePDFSearchBoxes(boxes),
+      mergePdfTextBoxes(boxes),
     ]),
   );
 };

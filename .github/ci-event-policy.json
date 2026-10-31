@@ -27,6 +27,7 @@
     "release.yml/promote-staging": "main",
     "release.yml/release-health-gate": "main",
     "release.yml/dispatch-release-health": "main",
+    "release-rehearsal.yml/rehearse": "main",
     "release.yml/publish-chrome-extension": "main",
     "release-health.yml/window": "main",
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
@@ -206,6 +207,7 @@
     "ci.yml/pr-heavy-gate": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
+    "api-served-mcp.yml/journeys": "pr-fast",
     "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
@@ -275,6 +277,10 @@
     "dependency-audit.yml": {
       "role": "analysis",
       "cancelInProgress": false
+    },
+    "release-rehearsal.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
     }
   },
   "periodicJobs": ["ci.yml/release-typecheck"]
