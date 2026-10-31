@@ -142,7 +142,10 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               .from(organizationDataExports)
               .orderBy(asc(organizationDataExports.id))
               .limit(12_000);
-          const measuredPages = new Map<string, number>();
+          const measuredRuns = new Map<
+            string,
+            Awaited<ReturnType<typeof measureScheduledJobRun>>
+          >();
           for (const rows of [6000, 12_000]) {
             const scenario = {
               type: "data-exports",
@@ -190,16 +193,26 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               expect(changed).toEqual(original);
               expect(audits).toBe(0);
             }
-            const smaller = measuredPages.get(cohort);
+            const smaller = measuredRuns.get(cohort);
             if (smaller !== undefined) {
               expect(
                 scaleViolations({
-                  size: smaller,
+                  size: smaller.metrics.sharedBlocks,
                   double: measured.metrics.sharedBlocks,
+                }),
+                JSON.stringify({
+                  planCacheMode,
+                  cohort,
+                  statementMetrics: [smaller, measured].map(({ statements }) =>
+                    statements.map(({ statement, metrics }) => ({
+                      statement,
+                      metrics,
+                    })),
+                  ),
                 }),
               ).toEqual([]);
             }
-            measuredPages.set(cohort, measured.metrics.sharedBlocks);
+            measuredRuns.set(cohort, measured);
             expect(measured.statements.length).toBeGreaterThan(0);
             expect(
               measured.statements.some(({ statement }) =>
