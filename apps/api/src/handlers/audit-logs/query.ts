@@ -32,9 +32,16 @@ import {
   withDescription,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
-import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessPrincipal,
+  FeatureAccessSnapshot,
+} from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
@@ -234,20 +241,109 @@ export const validateAuditLogFilter = (
   return null;
 };
 
+type AuditLogRow = typeof auditLogs.$inferSelect;
+
 /**
  * The name a reader recognises: the member's name, or the name a background
  * service declared, before the stored actor id.
  */
 const auditActorName = (
-  row: Pick<
-    typeof auditLogs.$inferSelect,
-    "userId" | "performerType" | "performerName"
-  >,
+  row: Pick<AuditLogRow, "userId" | "performerType" | "performerName">,
   members: ReadonlyMap<string, string>,
 ) =>
   (row.performerType === "service" ? row.performerName : null) ??
   members.get(row.userId) ??
   row.userId;
+
+type AuditLogPageRow = Pick<
+  AuditLogRow,
+  | "id"
+  | "createdAt"
+  | "userId"
+  | "performerType"
+  | "performerName"
+  | "action"
+  | "resourceType"
+  | "resourceId"
+  | "changes"
+  | "metadata"
+> & { createdAtCursor: string };
+
+const toAuditLogPageItem = ({
+  row,
+  members,
+  featureAccessSnapshot,
+  principal,
+}: {
+  row: AuditLogPageRow;
+  members: ReadonlyMap<string, string>;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
+  principal: FeatureAccessPrincipal;
+}) => ({
+  id: row.id,
+  createdAt: row.createdAt,
+  action: row.action,
+  resourceType: row.resourceType,
+  resourceId: row.resourceId,
+  ...projectAuditReadChanges({
+    resourceType: row.resourceType,
+    changes: row.changes,
+    metadata: row.metadata,
+    featureAccessSnapshot,
+    principal,
+  }),
+  createdAtCursor: row.createdAtCursor,
+  userId: row.userId,
+  performerType: row.performerType,
+  actor: auditActorName(row, members),
+});
+
+// Columns the compliance read does not send to the client.
+const UNPROJECTED_AUDIT_LOG_COLUMNS = [
+  // Tenant scope, implied by the caller's active organization.
+  "organizationId",
+  // Matter scope is a filter on this read, not a per-entry field.
+  "workspaceId",
+  // Read only to pick the detail policy that shapes `changes`.
+  "metadata",
+  // Folded into `actor`, the name a reader recognises.
+  "performerName",
+  // Agent run, trigger and approval provenance belong to the matter activity
+  // feed; the compliance read reports who performed what.
+  "performerId",
+  "triggerType",
+  "triggerUserId",
+  "triggerSource",
+  "triggerSourceId",
+  "runId",
+  "groupId",
+  "approvalStatus",
+  "approvedByUserId",
+  "activityCategory",
+] as const satisfies readonly (keyof AuditLogRow)[];
+
+// `changesStatus`, `actor` and the page cursor are derived, not columns.
+type AuditLogPageItem = Omit<
+  ReturnType<typeof toAuditLogPageItem>,
+  "changesStatus" | "actor" | "createdAtCursor"
+>;
+
+// Totality guard, bidirectional: every schema column must be projected onto
+// the response or explicitly excused above, and the projection cannot carry
+// a field that traces back to no real column.
+type MissingProjectedAuditLogColumn = UnprojectedColumns<
+  AuditLogRow,
+  AuditLogPageItem,
+  (typeof UNPROJECTED_AUDIT_LOG_COLUMNS)[number]
+>;
+type UnexpectedProjectedAuditLogColumn = UnbackedProjectionKeys<
+  AuditLogRow,
+  AuditLogPageItem,
+  (typeof UNPROJECTED_AUDIT_LOG_COLUMNS)[number]
+>;
+
+true satisfies MissingProjectedAuditLogColumn extends never ? true : never;
+true satisfies UnexpectedProjectedAuditLogColumn extends never ? true : never;
 
 // Runs the validated compliance-read query. Callers must invoke
 // `validateAuditLogFilter` first; this only builds the org-scoped conditions,
@@ -325,28 +421,14 @@ export const queryAuditLogPage = async function* ({
         resourceId: ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
       });
 
-      const rowsWithActors = [];
-      for (const row of auditRows) {
-        rowsWithActors.push({
-          id: row.id,
-          createdAt: row.createdAt,
-          action: row.action,
-          resourceType: row.resourceType,
-          resourceId: row.resourceId,
-          ...projectAuditReadChanges({
-            resourceType: row.resourceType,
-            changes: row.changes,
-            metadata: row.metadata,
-            featureAccessSnapshot,
-            principal: { organizationId, userId },
-          }),
-          createdAtCursor: row.createdAtCursor,
-          userId: row.userId,
-          performerType: row.performerType,
-          actor: auditActorName(row, userMap),
-        });
-      }
-      return rowsWithActors;
+      return auditRows.map((row) =>
+        toAuditLogPageItem({
+          row,
+          members: userMap,
+          featureAccessSnapshot,
+          principal: { organizationId, userId },
+        }),
+      );
     }),
   );
 
