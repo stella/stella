@@ -418,7 +418,11 @@ describe("crawl cancellation", () => {
             return await scopedDb(operation);
           };
           czNsAdapter.fetchPage = async () =>
-            Result.ok({ decisions, nextCursor: "next-page" });
+            Result.ok({
+              decisions,
+              nextCursor: "next-page",
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            });
           const sourceLease = await leaseFor(sourceId);
           try {
             const result = await runIngestionPipeline({
@@ -474,7 +478,11 @@ describe("crawl cancellation", () => {
     const sourceId = await crawlSource();
     const sourceLease = await leaseFor(sourceId);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(3), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     let batches = 0;
     try {
       const result = await runIngestionPipeline({
@@ -509,7 +517,11 @@ describe("crawl cancellation", () => {
       return await scopedDb(operation);
     };
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(1), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(1),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     try {
       const result = await runIngestionPipeline({
         source: sourceLease.source,

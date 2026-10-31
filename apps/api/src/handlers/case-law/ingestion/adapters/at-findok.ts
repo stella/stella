@@ -67,6 +67,7 @@ import type {
   SourceRawParts,
   SourceSurfaceCensus,
   SourceSurfaceDisposition,
+  SyncPage,
 } from "@/api/lib/legal-search/ingestion-types";
 import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
