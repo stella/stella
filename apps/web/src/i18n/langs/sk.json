@@ -5318,6 +5318,7 @@
         "legal_list_item": "položka právneho zoznamu",
         "legal_list_verification": "overenie právneho zoznamu",
         "legal_resolve": "dohľadanie právneho odkazu",
+        "legislation_matter_link": "prepojenie predpisu so spisom",
         "machine_api_key": "strojový kľúč API",
         "mcp_connection": "pripojenie MCP",
         "mcp_gateway_tool": "nástroj brány MCP",

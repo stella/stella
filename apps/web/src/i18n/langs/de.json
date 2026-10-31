@@ -5318,6 +5318,7 @@
         "legal_list_item": "Rechtslisteneintrag",
         "legal_list_verification": "Rechtslistenprüfung",
         "legal_resolve": "Abfrage eines Rechtsverweises",
+        "legislation_matter_link": "Verknüpfung von Rechtsvorschriften mit einer Akte",
         "machine_api_key": "Maschinen-API-Schlüssel",
         "mcp_connection": "MCP-Verbindung",
         "mcp_gateway_tool": "MCP-Gateway-Werkzeug",

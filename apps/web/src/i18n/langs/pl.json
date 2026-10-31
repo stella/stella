@@ -5318,6 +5318,7 @@
         "legal_list_item": "pozycja listy prawnej",
         "legal_list_verification": "weryfikacja listy prawnej",
         "legal_resolve": "wyszukanie odniesienia prawnego",
+        "legislation_matter_link": "powiązanie przepisu ze sprawą",
         "machine_api_key": "maszynowy klucz API",
         "mcp_connection": "połączenie MCP",
         "mcp_gateway_tool": "narzędzie bramy MCP",
