@@ -14,11 +14,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assemblePlUodoDecision,
   classifyPlUodoRow,
   encodePlUodoCursor,
@@ -38,6 +33,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -789,6 +790,7 @@ describe("the crawl over modification time", () => {
     expect(Result.isOk(again) && again.value).toEqual({
       decisions: [],
       nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
     });
     expect(model.requests).toEqual([]);
   });

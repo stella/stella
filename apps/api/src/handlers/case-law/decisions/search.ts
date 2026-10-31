@@ -136,6 +136,8 @@ import {
   decisionTypeFilterSql,
   decisionTypeKindSql,
 } from "@/api/lib/case-law/decision-type-filter-sql";
+import { classifiedDecisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
+import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
@@ -419,6 +421,23 @@ export const searchDecisionsHandler = async ({
   if (pageRefusal !== null) {
     return status(400, { message: pageRefusal });
   }
+  const filterScope = await readCaseLawFilterScope({
+    country,
+    courts: body.courts,
+    filters: {
+      court: body.court,
+      lang: body.language,
+      type: body.decisionType,
+      sourceId: body.sourceId,
+    },
+    caseLawDb,
+  });
+  if (filterScope.removed.length > 0) {
+    return status(400, {
+      message: `Filters do not belong to ${country}: ${filterScope.removed.map((filter) => filter.field).join(", ")}`,
+    });
+  }
+
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     const { provision } = scopedBody;
@@ -992,6 +1011,9 @@ const presentPostgresSearchPage = async ({
       languageAlternates: alternatesByGroupKey.alternatesFor(languageGroupKey),
       decisionDate: toNullableString(row["decision_date"]),
       decisionType: toNullableString(row["decision_type"]),
+      decisionTypeKind: classifiedDecisionTypeKind(
+        toNullableString(row["decision_type"]),
+      ),
       sourceUrl: toNullableString(row["source_url"]),
       textAvailability: readSearchDocumentPresence(row["has_document"])
         ? DECISION_TEXT_AVAILABILITY.AVAILABLE
@@ -2313,6 +2335,7 @@ export const decisionHitsPage = ({
         ),
         decisionDate: row.decisionDate,
         decisionType: row.decisionType,
+        decisionTypeKind: classifiedDecisionTypeKind(row.decisionType),
         sourceUrl: row.sourceUrl,
         textAvailability: row.hasDocument
           ? DECISION_TEXT_AVAILABILITY.AVAILABLE

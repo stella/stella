@@ -70,6 +70,7 @@ const decision = {
     name: "Fixture source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: null,
   textFields: {
     abstract: absentText,
@@ -168,6 +169,10 @@ export const publicFixtureResponse = (
         organizationName: null,
         sanctionsMonitoringMode: "included",
         displayName: "Fixture contact",
+        externalSource: null,
+        externalId: null,
+        externalChangeKey: null,
+        importedAt: null,
         notes: null,
         emails: [],
         phones: [],

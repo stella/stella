@@ -13,7 +13,12 @@ import {
   checkParserVersions,
   comparisonBase,
   readGitTree,
+  valueImportGraph,
 } from "./check-parser-versions";
+import {
+  PARSER_ENTRY_DIRECTORY,
+  PARSER_REGISTRY_OUTPUT,
+} from "./parser-registry";
 
 const INGESTION = "apps/api/src/handlers/case-law/ingestion/";
 const ADAPTERS = `${INGESTION}adapters/`;
@@ -33,6 +38,7 @@ type FixtureOptions = {
   markerSource?: string;
   missingVersion?: "A" | "B" | "C";
   bareVersion?: boolean;
+  entryLayout?: boolean;
 };
 
 const fixture = ({
@@ -43,6 +49,7 @@ const fixture = ({
   markerSource = "",
   missingVersion,
   bareVersion = false,
+  entryLayout = false,
 }: FixtureOptions = {}): Map<string, string> => {
   const entries = adapters
     .map((key) => `[ADAPTER_KEYS.${key}]: Adapter${key}`)
@@ -112,11 +119,92 @@ const fixture = ({
       ].join("\n"),
     );
   }
+  if (entryLayout) {
+    files.set(
+      `${INGESTION}ingestion-constants.ts`,
+      'export { ADAPTER_KEYS, PARSER_VERSIONS } from "../../../lib/legal-search/parser-registry.gen";\n',
+    );
+    const keyEntries = ["A", "B", "C"]
+      .map((key) => `${key}: "test-${key.toLowerCase()}"`)
+      .join(", ");
+    const inlineVersionEntries = adapters
+      .map((key) => `"test-${key.toLowerCase()}": ${versions[key] ?? 1}`)
+      .join(", ");
+    const fingerprintEntries = ["A", "B", "C"]
+      .map((key) => `"test-${key.toLowerCase()}": 0`)
+      .join(", ");
+    const scopeEntries = adapters
+      .map((key) => {
+        const sourceKey = `test-${key.toLowerCase()}`;
+        const version = versions[key] ?? 1;
+        return `"${sourceKey}": { version: ${version}, scope: { type: "all", reason: "fixture" } }`;
+      })
+      .join(", ");
+    files.set(
+      PARSER_REGISTRY_OUTPUT,
+      [
+        `export const ADAPTER_KEYS = { ${keyEntries} };`,
+        "export const IMPORT_SOURCE_KEYS = {};",
+        `export const PARSER_VERSIONS = { ${inlineVersionEntries} };`,
+        `export const SOURCE_FINGERPRINT_VERSIONS = { ${fingerprintEntries} };`,
+        `export const PARSER_VERSION_SCOPES = { ${scopeEntries} };`,
+      ].join("\n"),
+    );
+  }
   return files;
 };
 
 const changed = (base: Map<string, string>, head: Map<string, string>) =>
   checkParserVersions({ base, head });
+
+class LazySourceTree extends Map<string, string> {
+  private readonly sources: ReadonlyMap<string, string>;
+
+  constructor(sources: ReadonlyMap<string, string>) {
+    super([...sources.keys()].map((file) => [file, ""]));
+    this.sources = new Map(sources);
+  }
+
+  override get(file: string): string | undefined {
+    const cached = super.get(file);
+    if (cached !== "" || !this.has(file)) {
+      return cached;
+    }
+    const source = this.sources.get(file);
+    if (source !== undefined) {
+      this.set(file, source);
+    }
+    return source;
+  }
+
+  peek(file: string): string | undefined {
+    return super.get(file);
+  }
+}
+
+test("value import graphs read lazy sources without registry generation", () => {
+  const files = fixture({ entryLayout: true });
+  files.set(`${PARSER_ENTRY_DIRECTORY}unread.json`, "not a TypeScript module");
+  const lazy = new LazySourceTree(files);
+  const graph = valueImportGraph(lazy);
+  const parser = `${PARSERS}parser-a.ts`;
+  const helper = `${PARSERS}shared-helper.ts`;
+
+  expect(graph.imports(parser)).toContain(helper);
+  expect(graph.closure(parser).has(helper)).toBe(true);
+  expect(lazy.peek(`${PARSER_ENTRY_DIRECTORY}unread.json`)).toBe("");
+});
+
+test("dependency graphs follow imports through the generated registry", () => {
+  const files = fixture({ entryLayout: true });
+  const parser = `${PARSERS}parser-a.ts`;
+  files.set(
+    PARSER_REGISTRY_OUTPUT,
+    `import { parseA } from "@/api/handlers/case-law/ingestion/parsers/parser-a"; export const value = parseA;`,
+  );
+  const graph = valueImportGraph(new LazySourceTree(files));
+  expect(graph.closure(PARSER_REGISTRY_OUTPUT).has(parser)).toBe(true);
+});
 
 test("a parser change passes when its registered adapter version increases", () => {
   const base = fixture();
@@ -345,6 +433,8 @@ test("output boundaries cannot lie in any output-shaping root", () => {
     "packages/text-normalize/boundary.ts",
     "packages/sha256/boundary.ts",
     "apps/api/src/lib/legal-search/ingestion-constants.ts",
+    PARSER_REGISTRY_OUTPUT,
+    `${PARSER_ENTRY_DIRECTORY}a.json`,
   ];
   for (const boundary of roots) {
     const base = fixture();
@@ -814,7 +904,7 @@ test("registry additions are discovered automatically and still require versions
   expect(changed(base, fixture({ missingVersion: "A" }))).toEqual(
     expect.arrayContaining([
       expect.stringContaining(
-        "Registry entry ADAPTER_KEYS.A has no resolvable adapter or parser version",
+        'Registry entry "test-a" has no resolvable adapter or parser version',
       ),
     ]),
   );
@@ -829,6 +919,94 @@ test("bare imported version constants remain supported", () => {
   });
 
   expect(changed(base, head)).toEqual([]);
+});
+
+test("independent parser entries enforce the current version floor", () => {
+  const base = fixture({ entryLayout: true, versions: { A: 3 } });
+  const lowered = fixture({ entryLayout: true, versions: { A: 2 } });
+
+  expect(changed(base, lowered)).toEqual([
+    expect.stringContaining(
+      "test-a: parser version 2 must not be lower than base 3",
+    ),
+  ]);
+});
+
+test("independent parser entries accept the matching parser bump", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    versions: { A: 2 },
+    parserSources: { A: "export const parseA = () => 'changed';\n" },
+  });
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("an unrelated entry version change does not add a parser bump requirement", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    versions: { A: 2, B: 2 },
+    parserSources: { A: "export const parseA = () => 'changed';\n" },
+  });
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("duplicate source keys in the committed index fail static resolution", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({ entryLayout: true });
+  head.set(
+    PARSER_REGISTRY_OUTPUT,
+    (head.get(PARSER_REGISTRY_OUTPUT) ?? "").replace(
+      'B: "test-b"',
+      'B: "test-a"',
+    ),
+  );
+
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("Cannot statically read ADAPTER_REGISTRY"),
+    ]),
+  );
+});
+
+test("entry additions and version changes do not hide shared parser helper changes", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({
+    entryLayout: true,
+    adapters: ["A", "B", "C"],
+    versions: { B: 2 },
+  });
+  head.set(
+    `${PARSERS}shared-helper.ts`,
+    "export const helper = () => 'changed';\n",
+  );
+
+  expect(changed(base, head)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+    ]),
+  );
+});
+
+test("parser entry files cannot be declared as output boundaries", () => {
+  const base = fixture({ entryLayout: true });
+  const head = fixture({ entryLayout: true });
+  const entry = `${PARSER_ENTRY_DIRECTORY}a.json`;
+  base.set(entry, "{}");
+  head.set(entry, "{}");
+
+  expect(
+    checkParserVersions({
+      base,
+      head,
+      boundaries: [{ path: entry, reason: "invalid parser entry boundary" }],
+    }),
+  ).toContain(
+    `Parser output boundary lies in an output-shaping root: ${entry}`,
+  );
 });
 
 test("adapter-local output changes require a bump", () => {

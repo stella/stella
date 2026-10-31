@@ -5,6 +5,7 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { signOutAndRelease } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -74,12 +75,18 @@ export const OAuthAccountRow = ({
       <dt className="text-muted-foreground self-start sm:self-center">
         {tAccount("title")}
       </dt>
-      <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
-        <bdi className="min-w-0 break-all">{email}</bdi>
+      <dd className="flex min-w-0 flex-col items-start gap-x-3">
+        <TruncatedText
+          className="max-w-full"
+          render={<bdi />}
+          tooltip={<bdi>{email}</bdi>}
+        >
+          {email}
+        </TruncatedText>
         <Button
           variant="link"
           size="xs"
-          className="-ms-2 min-h-11 self-start sm:ms-0 sm:self-auto"
+          className="-ms-2 min-h-11 self-start"
           disabled={disabled}
           onClick={onAccountSwitch}
         >

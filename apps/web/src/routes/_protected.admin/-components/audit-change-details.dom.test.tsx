@@ -8,7 +8,7 @@ import messages from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { AuditChangeDetails } = await import("./audit-change-details");
 
@@ -57,12 +57,60 @@ test("visible entries without changes keep their empty marker", () => {
   ).toBeNull();
 });
 
-test("visible changes keep their text and tooltip", () => {
-  const changes = { amount: { old: 100, new: 200 } };
+test("changes for an unrecognized resource show a withheld note", () => {
+  const view = mount({
+    changes: null,
+    changesStatus: AUDIT_CHANGES_STATUS.unrecognizedResource,
+  });
+  const cell = view.getByRole("cell");
+  expect(cell.textContent).toBe(
+    messages.common.detailsHiddenUnrecognizedResource,
+  );
+  expect(cell.classList.contains("text-muted-foreground")).toBe(true);
+});
+
+test("visible changes render old and new envelopes", () => {
+  const changes = {
+    amount: { old: 100, new: 200 },
+  };
   const view = mount({ changes, changesStatus: AUDIT_CHANGES_STATUS.visible });
-  expect(view.getByRole("cell").textContent).toBe(JSON.stringify(changes));
-  expect(view.getByRole("cell").getAttribute("title")).toBe(
-    JSON.stringify(changes),
+  expect(view.getByRole("term").textContent).toBe("Amount");
+  expect(view.getByRole("definition").textContent).toBe("100 → 200");
+  expect(
+    view.container.querySelector('[data-slot="details-grid"]'),
+  ).not.toBeNull();
+  const detailsTrigger = view.getByRole("button", {
+    name: messages.common.details,
+  });
+  expect(detailsTrigger.getAttribute("aria-expanded")).toBe("false");
+  fireEvent.click(detailsTrigger);
+  expect(detailsTrigger.getAttribute("aria-expanded")).toBe("true");
+  expect(view.container.querySelector("pre")?.textContent).toBe(
+    JSON.stringify(changes, null, 2),
+  );
+});
+
+test("visible changes render before and after envelopes", () => {
+  const view = mount({
+    changes: {
+      due_date: { before: "2026-01-01", after: "2026-02-01" },
+    },
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  expect(view.getByRole("term").textContent).toBe("Due date");
+  expect(view.getByRole("definition").textContent).toBe(
+    "2026-01-01 → 2026-02-01",
+  );
+});
+
+test("visible changes render object-valued fields as the new value", () => {
+  const view = mount({
+    changes: { metadata: { category: "legal" } },
+    changesStatus: AUDIT_CHANGES_STATUS.visible,
+  });
+  expect(view.getByRole("term").textContent).toBe("Metadata");
+  expect(view.getByRole("definition").textContent).toBe(
+    '— → {"category":"legal"}',
   );
 });
 
