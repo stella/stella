@@ -503,6 +503,24 @@ const hasParagraphGap = ({
   );
 };
 
+type ReaderBreakOptions = ParagraphGapOptions & {
+  join: ReturnType<typeof sentenceContinuations>[number] | undefined;
+};
+
+/**
+ * The shared PDF reader's break is layout evidence (pitch, margins, short
+ * final lines). Without page geometry on both lines its text-only fallback
+ * cannot end a paragraph that the font-metric gap continues.
+ */
+const readerEndsParagraph = ({
+  previous,
+  current,
+  join,
+}: ReaderBreakOptions): boolean =>
+  previous?.layout !== undefined &&
+  current.layout !== undefined &&
+  join === LINE_JOIN.BREAK;
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
   const continuations = sentenceContinuations(lines);
@@ -565,7 +583,11 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       paragraphGap ||
       structuralStart ||
       prev.bold ||
-      continuations[index] === LINE_JOIN.BREAK;
+      readerEndsParagraph({
+        previous: lines[index - 1],
+        current: line,
+        join: continuations[index],
+      });
 
     if (startNew) {
       merged.push({

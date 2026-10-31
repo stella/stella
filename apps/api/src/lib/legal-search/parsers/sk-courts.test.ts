@@ -1006,11 +1006,13 @@ describe("unnumbered PDF paragraph boundaries", () => {
     },
   );
 
+  // Paragraph gaps derive from font metrics, so a wide pitch stays ordinary
+  // leading only below the font-metric gap, however often it repeats.
   test("an established wide line pitch keeps a multi-sentence paragraph together", async () => {
     const pdf = PDF.create();
     const page = pdf.addPage({ size: "letter" });
     const text = "The court considered the application.";
-    for (const y of [700, 670, 640]) {
+    for (const y of [700, 682, 664]) {
       page.drawText(text, { x: 70, y, size: 10 });
     }
     const { documentAst } = await parseSkDecisionPdf({
