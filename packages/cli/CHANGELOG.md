@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 6.2.2
+
+### Patch Changes
+
+- [#7604](https://github.com/stella/stella/pull/7604) [`71cfcf3`](https://github.com/stella/stella/commit/71cfcf376f59bdabb1358ebace6692c8db6fe3e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Resolve Slovak statute citations and look up acts by number.
+
+## 6.2.1
+
+### Patch Changes
+
+- [#7351](https://github.com/stella/stella/pull/7351) [`ed2a1a6`](https://github.com/stella/stella/commit/ed2a1a6c7d277f9c87034b3dd35b67042da9df05) Thanks [@jan-kubica](https://github.com/jan-kubica)! - matters.update accepts expectedClientId and refuses a client change when the matter client no longer matches it.
+
 ## 6.2.0
 
 ### Minor Changes

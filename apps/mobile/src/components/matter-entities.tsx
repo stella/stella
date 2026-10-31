@@ -107,6 +107,18 @@ const LoadedEntities = ({
   const colors = useAppColors();
   const router = useRouter();
   const current = use(load);
+  const [openFolders, setOpenFolders] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleFolder = (folderId: string) => {
+    setOpenFolders((open) => {
+      const next = new Set(open);
+      if (!next.delete(folderId)) {
+        next.add(folderId);
+      }
+      return next;
+    });
+  };
 
   // The session provider is already returning to sign-in.
   if (current.error?._tag === "SignedOutError") {
@@ -170,7 +182,7 @@ const LoadedEntities = ({
       alwaysBounceVertical={current.entities.length > 0}
       contentContainerStyle={styles.content}
       contentInsetAdjustmentBehavior="automatic"
-      keyExtractor={(entity) => entity.entityId}
+      keyExtractor={(tree) => tree.entity.entityId}
       ListEmptyComponent={
         current.error !== null && current.entities.length === 0 ? (
           <LoadFailedCard
@@ -194,11 +206,19 @@ const LoadedEntities = ({
           tintColor={colors.muted}
         />
       }
-      renderItem={({ item }) => (
+      renderItem={({ item: tree }) => (
         <EntityRow
-          entity={item}
+          depth={tree.depth}
+          entity={tree.entity}
+          folder={tree.type === "folder" ? { open: tree.open } : null}
           onPress={() => {
-            // A document opens to its pages; a folder or task to its details.
+            const item = tree.entity;
+            // A folder opens and closes in place, as on the web; a document
+            // opens to its pages; a task to its details.
+            if (tree.type === "folder") {
+              toggleFolder(item.entityId);
+              return;
+            }
             if (item.kind === "document") {
               router.push({
                 pathname: "/document/[workspaceId]/[entityId]",
@@ -225,7 +245,7 @@ const LoadedEntities = ({
           {t(section.key)}
         </Text>
       )}
-      sections={entitySections(current.entities)}
+      sections={entitySections(current.entities, openFolders)}
       stickySectionHeadersEnabled={false}
     />
   );
