@@ -5285,6 +5285,13 @@
       "renameDescription": "Liikmed näevad uut nime kohe.",
       "renameTitle": "Nimeta organisatsioon ümber",
       "renameTypeToConfirm": "Kinnitamiseks sisesta uus nimi: {name}",
+      "slug": {
+        "change": "Muuda tunnust",
+        "conflict": "See tunnus on juba teise organisatsiooni kasutusel.",
+        "description": "Valige uus tunnus või looge juhuslik tunnus. Senine tunnus ei ole enam kasutatav.",
+        "opaque": "Loo juhuslik tunnus",
+        "title": "Organisatsiooni tunnus"
+      },
       "timePolicy": {
         "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",
         "editWindow": "Muutmise tähtaeg (päevades)",

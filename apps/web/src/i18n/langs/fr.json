@@ -5285,6 +5285,13 @@
       "renameDescription": "Les membres verront immédiatement le nouveau nom.",
       "renameTitle": "Renommer l’organisation",
       "renameTypeToConfirm": "Saisissez le nouveau nom pour confirmer : {name}",
+      "slug": {
+        "change": "Modifier l’identifiant",
+        "conflict": "Cet identifiant est déjà utilisé par une autre organisation.",
+        "description": "Choisissez un nouvel identifiant ou générez-en un aléatoire. L’ancien identifiant ne fonctionnera plus.",
+        "opaque": "Générer un identifiant aléatoire",
+        "title": "Identifiant de l’organisation"
+      },
       "timePolicy": {
         "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",
         "editWindow": "Délai de modification (jours)",
