@@ -14,7 +14,10 @@ import {
 } from "@/connection/platform";
 import { restoredSource, sourceFor } from "@/connection/restored-session";
 import { isCurrentSessionSource } from "@/connection/session";
-import type { AccessTokenSource } from "@/connection/session";
+import type {
+  AccessTokenSource,
+  SessionGeneration,
+} from "@/connection/session";
 import { signOutSession } from "@/connection/session-actions";
 import {
   type BeforeSessionEnd,
@@ -85,6 +88,19 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   // Several requests can find the same session refused at once; its
   // handlers run for the first only.
   const [ending] = useState(() => new WeakSet<AccessTokenSource>());
+  const [endFailure, setEndFailure] = useState<{
+    generation: SessionGeneration;
+    error: unknown;
+  }>();
+  if (
+    endFailure !== undefined &&
+    deviceSessionStore.isCurrent(endFailure.generation)
+  ) {
+    panic(
+      "Session cleanup rejected outside its handled outcomes",
+      endFailure.error,
+    );
+  }
 
   const value: SessionContextValue = {
     state,
@@ -205,7 +221,11 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
             ) ?? current,
         );
       };
-      return signOutAfterHandlers();
+      signOutAfterHandlers().catch((error: unknown) => {
+        deviceSessionStore.commit(generation, () =>
+          setEndFailure({ generation, error }),
+        );
+      });
     },
     registerBeforeSessionEnd: boundary.register,
   };
