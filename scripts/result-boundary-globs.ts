@@ -108,6 +108,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/work-obligations/**/*.ts",
   "apps/api/src/lib/account-export/**/*.ts",
   "apps/api/src/lib/ai-generation/**/*.ts",
+  "apps/api/src/lib/chat/artefact-provenance.ts",
   "apps/api/src/lib/bbox/**/*.ts",
   "apps/api/src/lib/billing/**/*.ts",
   "apps/api/src/lib/clauses/**/*.ts",

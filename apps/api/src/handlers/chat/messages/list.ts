@@ -28,11 +28,11 @@ import {
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/ai-generation/provenance";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";

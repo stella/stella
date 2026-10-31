@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 
 import {
@@ -137,7 +137,11 @@ test("assistant text links retain their decision association without a citation 
   };
   expect(
     projection.answerMessage(row, "00000000-0000-4000-8000-000000000002"),
-  ).toEqual({ ...row, content: marker, citations: [] });
+  ).toEqual({
+    ...row,
+    content: marker,
+    citations: [],
+  });
 });
 
 describe("thread title withdrawal projection", () => {
@@ -238,15 +242,11 @@ describe("thread title withdrawal projection", () => {
   });
 
   test("legacy missing or null title origin keeps the subject decision rule", () => {
-    const legacy = {
-      title: "A title without a decision reference",
-      titleSource: "ai" satisfies "ai" | "user",
-      subjectDecisionId: id,
-      generationProvenance: null,
-    };
-    expect(projection.thread(legacy).title).toBe(marker);
     expect(
-      projection.thread({ ...legacy, generationProvenance: null }).title,
+      projection.thread({ ...thread("ai"), subjectDecisionId: id }).title,
+    ).toBe(marker);
+    expect(
+      projection.thread({ ...thread("ai", null), subjectDecisionId: id }).title,
     ).toBe(marker);
   });
 });

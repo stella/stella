@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { searchHandler } from "@/api/handlers/search/search";
-import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 
 const searchMock = mock();

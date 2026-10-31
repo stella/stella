@@ -7,11 +7,11 @@ import type { ChatTitleSource } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
   generateArtefact,
-  readArtefactOrigin,
   writeThreadArtefactTitle,
 } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readArtefactOrigin } from "@/api/lib/chat/artefact-provenance";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,

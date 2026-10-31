@@ -1112,6 +1112,11 @@ test("generated artefact provenance declares exactly its module and table proper
       reason: expect.stringMatching(/\S/u),
     },
     {
+      type: "module",
+      file: "apps/api/src/lib/chat/artefact-provenance.ts",
+      reason: expect.stringMatching(/\S/u),
+    },
+    {
       type: "table-definition",
       file: "apps/api/src/db/schema/chat.ts",
       table: "chat_threads",

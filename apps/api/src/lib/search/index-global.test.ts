@@ -3,8 +3,8 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
-import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";

@@ -1,6 +1,6 @@
 import { classifyFailure } from "@stll/errors";
 
-import type { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

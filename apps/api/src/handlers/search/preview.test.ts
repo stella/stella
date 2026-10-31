@@ -8,8 +8,8 @@ import {
   searchPreviewBodySchema,
   searchPreviewHandler,
 } from "@/api/handlers/search/preview";
-import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 describe("search preview request", () => {

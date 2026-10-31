@@ -26,6 +26,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import {
+  ARTEFACT_SOURCE_DECISION_LIMIT,
+  type ArtefactOrigin,
+  readArtefactOrigin,
+} from "@/api/lib/chat/artefact-provenance";
 import { readChatExportSource } from "@/api/lib/chat/export-source";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
@@ -45,11 +50,8 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
-  ARTEFACT_SOURCE_DECISION_LIMIT,
-  type ArtefactOrigin,
   authorArtefact,
   generateArtefact,
-  readArtefactOrigin,
   readArtefactText,
   writeThreadArtefactTitle,
 } from "./provenance";
@@ -628,10 +630,11 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
           scopedDb,
         )
       ).unwrap();
-      expect(preview).toEqual({
-        type: "plain-text",
-        content: exportSource?.title,
-      });
+      expect(preview.type).toBe("plain-text");
+      if (preview.type !== "plain-text") {
+        return;
+      }
+      expect(preview.content).toBe(exportSource?.title);
     },
   );
 

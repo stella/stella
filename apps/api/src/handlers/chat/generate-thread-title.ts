@@ -167,7 +167,7 @@ export const generateAdmittedThreadTitle = async ({
       }),
     catch: (cause) => cause,
   });
-  const outcome = Result.isError(generated) ? generated : generated.value;
+  const outcome = Result.flatten(generated);
   if (Result.isError(outcome)) {
     aiAnalytics.captureError(outcome.error);
     if (

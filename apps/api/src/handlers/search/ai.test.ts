@@ -8,9 +8,9 @@ import {
   refineSearchOutputSchema,
   searchSummaryOutputSchema,
 } from "@/api/handlers/search/ai";
-import { ArtefactProvenanceDecodeError } from "@/api/lib/ai-generation/provenance";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { toJsonSchema } from "@/api/lib/json-schema/valibot-to-json-schema";
 import {
   clearRootDbMocks,

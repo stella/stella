@@ -4,8 +4,8 @@ import { sql } from "drizzle-orm";
 import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
-import { decodeRawThreadArtefactProvenance } from "@/api/lib/ai-generation/provenance";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";

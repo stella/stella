@@ -5,15 +5,24 @@ import { chatThreads } from "@/api/db/schema";
 import { createMockDatabase } from "@/api/db/sql-client";
 import { toSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
-
-import type { ArtefactOrigin } from "./provenance";
 import {
-  authorArtefact,
+  ARTEFACT_SOURCE_DECISION_LIMIT,
+  ArtefactProvenanceDecodeError,
   copyThreadArtefactTitle,
-  generateArtefact,
-  projectArtefactText,
+  decodeRawThreadArtefactProvenance,
   projectThreadArtefactProvenance,
   readArtefactOrigin,
+} from "@/api/lib/chat/artefact-provenance";
+import type {
+  ArtefactOrigin,
+  StoredArtefactProvenance,
+} from "@/api/lib/chat/artefact-provenance";
+
+import {
+  ArtefactSourceLimitError,
+  authorArtefact,
+  generateArtefact,
+  projectArtefactText,
   readArtefactText,
 } from "./provenance";
 
@@ -148,8 +157,6 @@ test("stored provenance rejects invalid recorded states instead of treating them
 test.each(["direct", "inherited"])(
   "%s source overflow returns a tagged error before dispatch",
   async (input) => {
-    const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-      await import("./provenance");
     let dispatched = false;
     const decisionIds = Array.from(
       { length: ARTEFACT_SOURCE_DECISION_LIMIT + 1 },
@@ -188,8 +195,6 @@ test.each(["direct", "inherited"])(
 );
 
 test("an ignored tool source overflow prevents publishing an artefact", async () => {
-  const { ARTEFACT_SOURCE_DECISION_LIMIT, ArtefactSourceLimitError } =
-    await import("./provenance");
   const decisionIds = Array.from(
     { length: ARTEFACT_SOURCE_DECISION_LIMIT },
     (_, index) =>
@@ -233,7 +238,7 @@ test("thread copies retain the title origin without copying other slots", () => 
     generator,
     decisionIds: [first],
     coverage: "complete",
-  } as const;
+  } as const satisfies ArtefactOrigin;
   const source = {
     title: text,
     titleSource: "ai" as const,
@@ -271,7 +276,7 @@ test("provenance selection constants are immutable and cannot manufacture stored
   const {
     THREAD_ARTEFACT_PROVENANCE_SELECTION,
     THREAD_ARTEFACT_PROVENANCE_COLUMNS,
-  } = await import("./provenance");
+  } = await import("@/api/lib/chat/artefact-provenance");
   expect(Object.keys(THREAD_ARTEFACT_PROVENANCE_SELECTION)).toEqual([
     "generationProvenance",
   ]);
@@ -300,8 +305,7 @@ test("provenance selection constants are immutable and cannot manufacture stored
     .toSQL();
 });
 
-test("raw provenance decoding accepts only null or validated stored records", async () => {
-  const { decodeRawThreadArtefactProvenance } = await import("./provenance");
+test("raw provenance decoding accepts only null or validated stored records", () => {
   const record = {
     version: 1,
     slots: {
@@ -313,19 +317,19 @@ test("raw provenance decoding accepts only null or validated stored records", as
       },
       recap: { type: "authored" },
     },
-  };
+  } as const satisfies StoredArtefactProvenance;
   for (const value of [null, record]) {
     const decoded = decodeRawThreadArtefactProvenance({
       generation_provenance: value,
     });
-    expect(decoded.isOk()).toBe(true);
-    expect(decoded.unwrap()).toEqual({ generationProvenance: value });
+    if (decoded.isErr()) {
+      throw decoded.error;
+    }
+    expect(decoded.value).toEqual({ generationProvenance: value });
   }
 });
 
 test("raw provenance decoding rejects absent fields and malformed metadata with a typed error", async () => {
-  const { decodeRawThreadArtefactProvenance, ArtefactProvenanceDecodeError } =
-    await import("./provenance");
   for (const value of [
     undefined,
     {},

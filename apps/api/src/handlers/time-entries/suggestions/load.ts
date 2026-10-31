@@ -33,12 +33,12 @@ import {
   subtractRecordedTime,
   type SuggestionCluster,
 } from "@/api/handlers/time-entries/suggestions/cluster";
-import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/ai-generation/provenance";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditResourceType } from "@/api/lib/audit-log";
 import { auditReadChangesSql } from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";

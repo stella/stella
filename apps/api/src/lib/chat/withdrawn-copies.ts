@@ -7,10 +7,10 @@ import {
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
-import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/ai-generation/provenance";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionReferencesIn } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { THREAD_ARTEFACT_PROVENANCE_SELECTION } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 

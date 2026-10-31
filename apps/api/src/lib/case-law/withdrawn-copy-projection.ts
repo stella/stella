@@ -14,7 +14,7 @@ import type {
   legalReaderAnswerMessages,
   legalReaderAnswers,
 } from "@/api/db/schema";
-import { readArtefactOrigin } from "@/api/lib/ai-generation/provenance";
+import { readArtefactOrigin } from "@/api/lib/chat/artefact-provenance";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -146,14 +146,13 @@ export class WithdrawnCopyProjection {
     return marker === null ? row : { ...row, content: marker, citations: [] };
   }
 
-  threadTitleMarker<
-    T extends {
-      title: unknown;
-      titleSource: unknown;
-      subjectDecisionId?: string | null;
-      generationProvenance: unknown;
-    },
-  >(row: T): string | null {
+  threadTitleMarker(row: {
+    [key: string]: unknown;
+    title: unknown;
+    titleSource: unknown;
+    subjectDecisionId?: string | null;
+    generationProvenance: unknown;
+  }): string | null {
     if (row.titleSource === "user") {
       return null;
     }

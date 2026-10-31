@@ -13,7 +13,7 @@ import {
   CHAT_TURN_INTERACTION_TYPES,
   CHAT_TURN_INTERRUPTION_REASONS,
 } from "@/api/handlers/chat/chat-turn-state";
-import type { StoredArtefactProvenance } from "@/api/lib/ai-generation/provenance";
+import type { StoredArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import type { ChatRunReferenceState } from "@/api/lib/chat/run-log-reference-state";
 import {
   CHAT_THREAD_NAME_KIND,
