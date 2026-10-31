@@ -11,7 +11,11 @@ import {
 } from "@stll/api-contract/currency-code";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
-import { localeInputText, parseLocaleMinorUnits } from "@stll/money";
+import {
+  EMPTY_LOCALE_INPUT_TEXT,
+  localeInputText,
+  parseLocaleMinorUnits,
+} from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
@@ -742,7 +746,7 @@ const CreateRateEntryForm = ({
         userId: "",
         role: null,
         activityCodeId: "",
-        hourlyRate: localeInputText(""),
+        hourlyRate: EMPTY_LOCALE_INPUT_TEXT,
         effectiveFrom: today,
         effectiveTo: "",
       },
@@ -829,7 +833,7 @@ const CreateRateEntryForm = ({
                   inputMode="decimal"
                   onBlur={field.handleBlur}
                   onChange={(e) =>
-                    field.handleChange(localeInputText(e.currentTarget.value))
+                    field.handleChange(localeInputText(e.currentTarget))
                   }
                   placeholder="350.00"
                   value={field.state.value}

@@ -177,11 +177,28 @@ export type LocaleInputText = string & {
   readonly [localeInputTextBrand]: "LocaleInputText";
 };
 
-/** Mark text read directly from an input element as locale input text. */
-export function localeInputText(value: string): LocaleInputText;
-export function localeInputText(value: string): string {
+/** The control a person typed into: an input or textarea element. */
+export type LocaleInputSource = {
+  readonly value: string;
+  readonly tagName: string;
+};
+
+function brandLocaleInputText(value: string): LocaleInputText;
+function brandLocaleInputText(value: string): string {
   return value;
 }
+
+/**
+ * The text of the control a person typed into. It takes the element, not its
+ * string, so canonical stored text cannot be passed off as locale input; stored
+ * values reach a field only through the redisplay formatters below.
+ */
+export const localeInputText = (source: LocaleInputSource): LocaleInputText =>
+  brandLocaleInputText(source.value);
+
+/** The text of a cleared locale input. */
+export const EMPTY_LOCALE_INPUT_TEXT: LocaleInputText =
+  brandLocaleInputText("");
 
 /** Normalize a human-entered locale decimal without converting through a float. */
 export const parseLocaleDecimal = ({
@@ -356,7 +373,9 @@ export const formatLocaleDecimalInput = ({
   const canonical = `${groups["sign"] ?? ""}${whole || "0"}${
     fraction === undefined ? "" : `${separators.decimal}${fraction}`
   }`;
-  return localeInputText(localizeAsciiDigits(canonical, separators.digits));
+  return brandLocaleInputText(
+    localizeAsciiDigits(canonical, separators.digits),
+  );
 };
 
 /** Render stored minor units as locale input text that parses back unchanged. */

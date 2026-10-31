@@ -58,7 +58,7 @@ export const EditableRow = ({
   const rateNeedsCurrency = field === "defaultHourlyRate" && !contact.currency;
   const displayValue =
     field === "defaultHourlyRate"
-      ? contactRateInput(contact.defaultHourlyRate, contact.currency)
+      ? contactRateInput(contact.defaultHourlyRate, contact.currency, locale)
       : value;
   const rename = useInlineRename({
     initial: displayValue ?? "",

@@ -393,9 +393,7 @@ const RecordPaymentForm = ({
                     }
                   }}
                   onChange={(event) =>
-                    field.handleChange(
-                      localeInputText(event.currentTarget.value),
-                    )
+                    field.handleChange(localeInputText(event.currentTarget))
                   }
                   value={field.state.value}
                 />

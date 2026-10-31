@@ -236,7 +236,7 @@ export const InvoiceLineEditor = ({
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) =>
-                    field.handleChange(localeInputText(event.target.value))
+                    field.handleChange(localeInputText(event.target))
                   }
                 />
                 <FieldError />
@@ -254,7 +254,7 @@ export const InvoiceLineEditor = ({
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(event) =>
-                    field.handleChange(localeInputText(event.target.value))
+                    field.handleChange(localeInputText(event.target))
                   }
                 />
                 <FieldError />

@@ -116,8 +116,11 @@ export const buildNumericContactPayload = (
 export const contactRateInput = (
   amount: number | null,
   currency: string | null,
+  locale: string,
 ): string | null =>
-  amount === null || !currency ? null : majorUnitInput(amount, currency);
+  amount === null || !currency
+    ? null
+    : majorUnitInput(amount, currency, locale);
 
 type ContactRatePayloadOptions = {
   trimmedInput: string;

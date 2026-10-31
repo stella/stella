@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/currency-code";
 import {
   currencyMinorUnitDigits,
+  EMPTY_LOCALE_INPUT_TEXT,
   formatLocaleMinorUnitsInput,
   localeInputText,
   parseLocaleMinorUnits,
@@ -161,7 +162,7 @@ export const ExpenseForm = ({
                 currency: initialCurrency,
                 locale,
               })
-            : localeInputText(""),
+            : EMPTY_LOCALE_INPUT_TEXT,
       },
       onSubmit: async ({ value }) => {
         await onSubmit(value);
@@ -272,7 +273,7 @@ export const ExpenseForm = ({
                   field.handleChange(normalized);
                 }}
                 onChange={(e) => {
-                  const nextValue = localeInputText(e.currentTarget.value);
+                  const nextValue = localeInputText(e.currentTarget);
                   field.handleChange(nextValue);
                 }}
                 placeholder={new Intl.NumberFormat(locale, {

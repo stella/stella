@@ -22,7 +22,7 @@ import {
 export const majorUnitInput = (
   amountCents: number,
   currency: string,
-  locale = "en",
+  locale: string,
 ): LocaleInputText =>
   formatLocaleMinorUnitsInput({ amountCents, currency, locale });
 

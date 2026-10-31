@@ -214,7 +214,7 @@ describe("contact hourly rates", () => {
     },
   ]) {
     test(`${currency} displays and saves major units`, () => {
-      const displayed = contactRateInput(minorUnits, currency);
+      const displayed = contactRateInput(minorUnits, currency, "en");
       expect(displayed).toBe(text);
       expect(
         buildContactRatePayload({
@@ -226,13 +226,28 @@ describe("contact hourly rates", () => {
         status: "valid",
         payload: { defaultHourlyRate: cents(minorUnits) },
       });
-      expect(contactRateInput(0, currency)).toBe(zeroText);
+      expect(contactRateInput(0, currency, "en")).toBe(zeroText);
     });
   }
 
+  test("a saved rate redisplays in the locale it is edited in", () => {
+    const displayed = contactRateInput(150_500, "KWD", "sk");
+    expect(displayed).toBe("150,500");
+    expect(
+      buildContactRatePayload({
+        locale: "sk",
+        trimmedInput: displayed ?? "",
+        currency: "KWD",
+      }),
+    ).toEqual({
+      status: "valid",
+      payload: { defaultHourlyRate: cents(150_500) },
+    });
+  });
+
   test("requires currency for a nonempty rate and allows clearing", () => {
-    expect(contactRateInput(15_050, null)).toBeNull();
-    expect(contactRateInput(null, "EUR")).toBeNull();
+    expect(contactRateInput(15_050, null, "en")).toBeNull();
+    expect(contactRateInput(null, "EUR", "en")).toBeNull();
     expect(
       buildContactRatePayload({
         locale: "en",

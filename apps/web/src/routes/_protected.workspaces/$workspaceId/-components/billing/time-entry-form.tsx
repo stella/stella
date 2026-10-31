@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
 import {
+  EMPTY_LOCALE_INPUT_TEXT,
   type LocaleInputText,
   localeInputText,
   parseLocaleMinorUnits,
@@ -95,6 +96,7 @@ const timeEntryFormSchema = (
   });
 const initialPricingSelection = (
   entry: TimeEntryFormProps["defaultValues"],
+  locale: string,
 ): TimeEntryPricingSelection =>
   (entry?.rateAtEntry ?? 0) > 0
     ? {
@@ -102,6 +104,7 @@ const initialPricingSelection = (
         draft: majorUnitInput(
           entry?.rateAtEntry ?? 0,
           entry?.currency ?? DEFAULT_CURRENCY,
+          locale,
         ),
         currency: entry?.currency ?? DEFAULT_CURRENCY,
       }
@@ -378,7 +381,7 @@ const TimeEntryRateInput = ({
               );
             }}
             onChange={(e) =>
-              setRateInputValue(localeInputText(e.currentTarget.value))
+              setRateInputValue(localeInputText(e.currentTarget))
             }
             placeholder="350.00"
             value={rateInputValue}
@@ -450,7 +453,7 @@ const useTimeEntryFormState = ({
   const locale = useFormattingLocale();
   const queryClient = useQueryClient();
   const [pricingSelection, setPricingSelection] = useState(() =>
-    initialPricingSelection(defaultValues),
+    initialPricingSelection(defaultValues, locale),
   );
 
   const taskCodesQuery = useQuery(billingCodesOptions(workspaceId, "task"));
@@ -517,8 +520,8 @@ const useTimeEntryFormState = ({
   const rateInputValue =
     pricingSelection.type === "manual"
       ? pricingSelection.draft
-      : localeInputText("");
-  const initialSelection = initialPricingSelection(defaultValues);
+      : EMPTY_LOCALE_INPUT_TEXT;
+  const initialSelection = initialPricingSelection(defaultValues, locale);
   const pricingDirty =
     pricingSelection.type !== initialSelection.type ||
     (pricingSelection.type === "manual" &&
@@ -546,8 +549,8 @@ const useTimeEntryFormState = ({
         currency: currentCurrency,
         draft:
           currentRate > 0
-            ? majorUnitInput(currentRate, currentCurrency)
-            : localeInputText(""),
+            ? majorUnitInput(currentRate, currentCurrency, locale)
+            : EMPTY_LOCALE_INPUT_TEXT,
       }),
     rateInputValue,
     setRateInputValue: (draft: LocaleInputText) =>
@@ -555,7 +558,7 @@ const useTimeEntryFormState = ({
     setManualCurrency: (currency: string) =>
       setPricingSelection({ type: "manual", currency, draft: rateInputValue }),
     resetPricing: () =>
-      setPricingSelection(initialPricingSelection(defaultValues)),
+      setPricingSelection(initialPricingSelection(defaultValues, locale)),
     pricingStatus: pricing.status,
     taskCodesView,
     activityCodesView,

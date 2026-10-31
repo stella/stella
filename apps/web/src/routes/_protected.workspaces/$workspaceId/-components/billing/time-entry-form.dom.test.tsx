@@ -201,7 +201,7 @@ describe("TimeEntryForm activity pricing", () => {
     automatic: { type: "automatic" },
     manual: {
       type: "manual",
-      draft: localeInputText("275.50"),
+      draft: localeInputText({ value: "275.50", tagName: "INPUT" }),
       currency: "EUR",
     },
   } as const satisfies Record<
