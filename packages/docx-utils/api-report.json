@@ -1,0 +1,204 @@
+{
+  "package": "@stll/docx-utils",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ATTACHED_TEMPLATE_SECURITY_RULE",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ATTACHED_TEMPLATE_TARGET_KIND",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ArchiveOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AttachedTemplateRelationshipFinding",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AttachedTemplateTargetKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DOCX_COMPRESSION",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DOCX_MAX_ENTRIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DOCX_MAX_ENTRY_BYTES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DOCX_MAX_TOTAL_BYTES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DocxArchive",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DocxArchiveError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "OOXML_NS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "OoxmlPrefix",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ZipEntryContent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "classifyAttachedTemplateTarget",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ensureContentType",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ensureRelationship",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "extractBinary",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "extractText",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "findNextRId",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isOpcRelationshipPartPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "loadDocx",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "loadDocxArchive",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "relationshipSourcePartPath",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "repackZip",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "sanitizeAttachedTemplateRelationships",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "sanitizeAttachedTemplateSource",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "writeZipEntry",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./office-formats": {
+      "type": "module",
+      "file": "./src/office-formats.d.ts",
+      "exports": [
+        {
+          "name": "OFFICE_ARCHIVE_FORMATS",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./office-metadata": {
+      "type": "module",
+      "file": "./src/office-metadata.d.ts",
+      "exports": [
+        {
+          "name": "OfficeIdentityField",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isOfficeCollaborationPart",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isOfficeIdentityPart",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "officeIdentityAttributePolicy",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "officeIdentityFields",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/archive.d.ts": "import JSZip from \"jszip\";\nexport declare const DOCX_MAX_ENTRY_BYTES: number;\nexport declare const DOCX_MAX_TOTAL_BYTES: number;\nexport declare const DOCX_MAX_ENTRIES = 4096;\ndeclare const DocxArchiveError_base: import(\"better-result\").TaggedErrorClass<\"DocxArchiveError\">;\nexport declare class DocxArchiveError extends DocxArchiveError_base<{\n    message: string;\n    reason: \"load-failed\" | \"too-many-entries\" | \"entry-too-large\" | \"total-too-large\" | \"invalid-entry-name\";\n    cause?: unknown;\n}> {\n}\nexport type ArchiveOptions = {\n    maxEntryBytes?: number;\n    maxTotalBytes?: number;\n    maxEntries?: number;\n};\nexport type DocxArchive = {\n    zip: JSZip;\n    readEntryString: (path: string) => Promise<string | null>;\n    readEntryUint8: (path: string) => Promise<Uint8Array | null>;\n};\nexport declare const loadDocx: (buffer: ArrayBuffer | Uint8Array | Buffer, options?: ArchiveOptions) => Promise<JSZip>;\nexport declare const loadDocxArchive: (buffer: ArrayBuffer | Uint8Array | Buffer, options?: ArchiveOptions) => Promise<DocxArchive>;\nexport {};\n",
+    "./src/attached-template.d.ts": "export declare const ATTACHED_TEMPLATE_SECURITY_RULE: \"ooxml_attached_template\";\nexport declare const ATTACHED_TEMPLATE_TARGET_KIND: {\n    readonly local: \"local\";\n    readonly network: \"network\";\n    readonly unknown: \"unknown\";\n};\nexport type AttachedTemplateTargetKind = (typeof ATTACHED_TEMPLATE_TARGET_KIND)[keyof typeof ATTACHED_TEMPLATE_TARGET_KIND];\nexport type AttachedTemplateRelationshipFinding = {\n    rule: typeof ATTACHED_TEMPLATE_SECURITY_RULE;\n    targetKind: AttachedTemplateTargetKind;\n};\ntype SanitizedAttachedTemplateRelationships = {\n    findings: readonly AttachedTemplateRelationshipFinding[];\n    removedRelationshipIds: readonly string[];\n    sourcePartPath: string | null;\n    xml: string;\n};\ntype SanitizedAttachedTemplateSource = {\n    removed: number;\n    xml: string;\n};\nexport declare const classifyAttachedTemplateTarget: (target: string | null) => AttachedTemplateTargetKind;\nexport declare const relationshipSourcePartPath: (relationshipsPartPath: string) => string | null;\nexport declare const isOpcRelationshipPartPath: (path: string) => boolean;\nexport declare const sanitizeAttachedTemplateRelationships: (xml: string, relationshipsPartPath: string) => SanitizedAttachedTemplateRelationships;\nexport declare const sanitizeAttachedTemplateSource: (xml: string, removedRelationshipIds: readonly string[]) => SanitizedAttachedTemplateSource;\nexport {};\n",
+    "./src/index.d.ts": "export { OOXML_NS, type OoxmlPrefix } from \"./namespaces.ts\";\nexport { DOCX_COMPRESSION, loadDocx, extractText, extractBinary, repackZip, } from \"./zip.ts\";\nexport { writeZipEntry, type ZipEntryContent } from \"./zip-entry.ts\";\nexport { findNextRId, ensureContentType, ensureRelationship, } from \"./relationships.ts\";\nexport { ATTACHED_TEMPLATE_SECURITY_RULE, ATTACHED_TEMPLATE_TARGET_KIND, classifyAttachedTemplateTarget, isOpcRelationshipPartPath, relationshipSourcePartPath, sanitizeAttachedTemplateRelationships, sanitizeAttachedTemplateSource, type AttachedTemplateRelationshipFinding, type AttachedTemplateTargetKind, } from \"./attached-template.ts\";\nexport { DOCX_MAX_ENTRIES, DOCX_MAX_ENTRY_BYTES, DOCX_MAX_TOTAL_BYTES, DocxArchiveError, loadDocxArchive, type ArchiveOptions, type DocxArchive, } from \"./archive.ts\";\n",
+    "./src/namespaces.d.ts": "export declare const OOXML_NS: {\n    readonly w: \"http://schemas.openxmlformats.org/wordprocessingml/2006/main\";\n    readonly a: \"http://schemas.openxmlformats.org/drawingml/2006/main\";\n    readonly r: \"http://schemas.openxmlformats.org/officeDocument/2006/relationships\";\n    readonly wp: \"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\";\n    readonly wp14: \"http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing\";\n    readonly wps: \"http://schemas.microsoft.com/office/word/2010/wordprocessingShape\";\n    readonly wpc: \"http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas\";\n    readonly wpg: \"http://schemas.microsoft.com/office/word/2010/wordprocessingGroup\";\n    readonly pic: \"http://schemas.openxmlformats.org/drawingml/2006/picture\";\n    readonly m: \"http://schemas.openxmlformats.org/officeDocument/2006/math\";\n    readonly mc: \"http://schemas.openxmlformats.org/markup-compatibility/2006\";\n    readonly v: \"urn:schemas-microsoft-com:vml\";\n    readonly o: \"urn:schemas-microsoft-com:office:office\";\n    readonly w14: \"http://schemas.microsoft.com/office/word/2010/wordml\";\n    readonly w15: \"http://schemas.microsoft.com/office/word/2012/wordml\";\n    readonly ct: \"http://schemas.openxmlformats.org/package/2006/content-types\";\n    readonly pr: \"http://schemas.openxmlformats.org/package/2006/relationships\";\n};\nexport type OoxmlPrefix = keyof typeof OOXML_NS;\n",
+    "./src/office-formats.d.ts": "export declare const OFFICE_ARCHIVE_FORMATS: {\n    readonly docx: {\n        readonly family: \"word\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.wordprocessingml.document\";\n    };\n    readonly docm: {\n        readonly family: \"word\";\n        readonly mimeType: \"application/vnd.ms-word.document.macroEnabled.12\";\n    };\n    readonly dotx: {\n        readonly family: \"word\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.wordprocessingml.template\";\n    };\n    readonly dotm: {\n        readonly family: \"word\";\n        readonly mimeType: \"application/vnd.ms-word.template.macroEnabled.12\";\n    };\n    readonly xlsx: {\n        readonly family: \"sheet\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\";\n    };\n    readonly xlsm: {\n        readonly family: \"sheet\";\n        readonly mimeType: \"application/vnd.ms-excel.sheet.macroEnabled.12\";\n    };\n    readonly xlsb: {\n        readonly family: \"sheet\";\n        readonly mimeType: \"application/vnd.ms-excel.sheet.binary.macroEnabled.12\";\n    };\n    readonly xltx: {\n        readonly family: \"sheet\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.spreadsheetml.template\";\n    };\n    readonly xltm: {\n        readonly family: \"sheet\";\n        readonly mimeType: \"application/vnd.ms-excel.template.macroEnabled.12\";\n    };\n    readonly pptx: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.presentationml.presentation\";\n    };\n    readonly pptm: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.ms-powerpoint.presentation.macroEnabled.12\";\n    };\n    readonly ppsx: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.presentationml.slideshow\";\n    };\n    readonly ppsm: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.ms-powerpoint.slideshow.macroEnabled.12\";\n    };\n    readonly potx: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.openxmlformats-officedocument.presentationml.template\";\n    };\n    readonly potm: {\n        readonly family: \"presentation\";\n        readonly mimeType: \"application/vnd.ms-powerpoint.template.macroEnabled.12\";\n    };\n    readonly odt: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.text\";\n    };\n    readonly ods: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.spreadsheet\";\n    };\n    readonly odp: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.presentation\";\n    };\n    readonly ott: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.text-template\";\n    };\n    readonly ots: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.spreadsheet-template\";\n    };\n    readonly otp: {\n        readonly family: \"odf\";\n        readonly mimeType: \"application/vnd.oasis.opendocument.presentation-template\";\n    };\n};\n",
+    "./src/office-metadata.d.ts": "import type { Attr, Document, Element } from \"slimdom\";\nexport declare const officeIdentityAttributePolicy: (name: string) => {\n    readonly type: \"replace\";\n    readonly replacement: \"Author\";\n} | {\n    readonly type: \"replace\";\n    readonly replacement: \"A\";\n} | {\n    readonly type: \"remove\";\n} | {\n    readonly type: \"remove\";\n} | {\n    readonly type: \"replace\";\n    readonly replacement: \"Author\";\n} | {\n    readonly type: \"remove\";\n} | {\n    readonly type: \"remove\";\n} | {\n    readonly type: \"replace\";\n    readonly replacement: \"Author\";\n} | undefined;\nexport declare const isOfficeCollaborationPart: (part: string) => boolean;\nexport declare const isOfficeIdentityPart: (part: string) => boolean;\nexport type OfficeIdentityField = {\n    type: \"text\";\n    node: Element;\n    field: string;\n} | {\n    type: \"attribute\";\n    node: Attr;\n    field: string;\n};\nexport declare const officeIdentityFields: (document: Document, part: string) => OfficeIdentityField[];\n",
+    "./src/relationships.d.ts": "export declare const findNextRId: (relsXml: string) => string;\nexport declare const ensureContentType: (contentTypesXml: string, partName: string, contentType: string) => string;\nexport declare const ensureRelationship: (relsXml: string, rId: string, type: string, target: string) => string;\n",
+    "./src/zip-entry.d.ts": "import type JSZip from \"jszip\";\nexport type ZipEntryContent = string | Uint8Array | ArrayBuffer;\nexport declare const writeZipEntry: (zip: JSZip, path: string, content: ZipEntryContent, options?: JSZip.JSZipFileOptions) => JSZip;\n",
+    "./src/zip.d.ts": "import type JSZip from \"jszip\";\nexport declare const DOCX_COMPRESSION: {\n    type: \"arraybuffer\";\n    compression: \"DEFLATE\";\n    compressionOptions: {\n        level: number;\n    };\n};\nexport { loadDocx } from \"./archive.ts\";\nexport declare const extractText: (zip: JSZip, path: string) => Promise<string | null>;\nexport declare const extractBinary: (zip: JSZip, path: string) => Promise<ArrayBuffer | null>;\nexport declare const repackZip: (zip: JSZip) => Promise<ArrayBuffer>;\n"
+  }
+}

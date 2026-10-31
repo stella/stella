@@ -1,5 +1,11 @@
 {
   "ci-checks-policy": {
+    "Published package API reports": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
+    },
     "Format": {
       "minutes": 5,
       "samples": 19,

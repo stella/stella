@@ -1,0 +1,454 @@
+{
+  "package": "@stll/agent-input",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ABSENT_PLACEHOLDERS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AGENT_INPUT_NORMALIZATION_KEY",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AGENT_INPUT_NORMALIZATION_KIND",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "AgentInputCountryAnnotation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputNormalizationAnnotation",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputNormalizationIssue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputNormalizationKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputNormalizationResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputPlaceholderPolicy",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "AgentInputReaders",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "COUNTRY_INPUT_MAX_CHARS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CountryAlpha2",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryAlpha3",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountrySpelling",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DATE_FORMAT_SPEC_HINT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DATE_VALUE_HINT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DateBound",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DateBoundOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DateValueOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "EliOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "Normalized",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedAbsent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedAsk",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NormalizedOptional",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NumberInRangeOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NumberOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SENTINEL_UUIDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "StringListOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "UuidOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "VocabularyEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "VocabularyOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "agentInputNormalization",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "agentInputNormalizationGuidance",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "agentInputNormalizationMetadata",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "askForFix",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "askSentence",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "countryCodeIn",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isAbsentPlaceholder",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isPlausibleLocale",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isSentinelUuid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeAgentInput",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeBoolean",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeCountry",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeDateBound",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeDateFormatSpec",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeDateValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeEli",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeEnumValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeLocale",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeNumber",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeNumberInRange",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeStringList",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeUuid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeVocabularyValue",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "readAsAbsent",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./country": {
+      "type": "module",
+      "file": "./src/country.d.ts",
+      "exports": [
+        {
+          "name": "COUNTRY_INPUT_MAX_CHARS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CountryAlpha2",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryAlpha3",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountrySpelling",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CountryValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "countryCodeIn",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeCountry",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./date-value": {
+      "type": "module",
+      "file": "./src/date-value.d.ts",
+      "exports": [
+        {
+          "name": "DATE_VALUE_HINT",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DateBound",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DateBoundOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DateValueOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "normalizeDateBound",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeDateValue",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./locale": {
+      "type": "module",
+      "file": "./src/locale.d.ts",
+      "exports": [
+        {
+          "name": "isPlausibleLocale",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeLocale",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./numeric-token": {
+      "type": "module",
+      "file": "./src/numeric-token.d.ts",
+      "exports": [
+        {
+          "name": "InvalidNumericTokenError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "NumericTokenOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "parseDecimalToken",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "parseIntegerToken",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./string-list": {
+      "type": "module",
+      "file": "./src/string-list.d.ts",
+      "exports": [
+        {
+          "name": "StringListOptions",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "normalizeStringList",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/absent.d.ts": "export declare const ABSENT_PLACEHOLDERS: readonly [\n    \"-\",\n    \"--\",\n    \"–\",\n    \"—\",\n    \"*\",\n    \"all\",\n    \"any\",\n    \"none\",\n    \"null\",\n    \"nil\",\n    \"undefined\",\n    \"n/a\",\n    \"(none)\",\n    \"<none>\",\n    \"(any)\",\n    \"(all)\"\n];\nexport declare const isAbsentPlaceholder: (input: unknown) => boolean;\n",
+    "./src/boolean.d.ts": "import type { Normalized } from \"./normalized\";\nexport declare const normalizeBoolean: (input: unknown) => Normalized<boolean>;\n",
+    "./src/country.d.ts": "import type { CountryAlpha3Code, CountryCode } from \"@stll/country-codes\";\nimport type { Normalized } from \"./normalized\";\ndeclare const SUPRANATIONAL_CODES: readonly [\n    \"EU\"\n];\ntype SupranationalCode = (typeof SUPRANATIONAL_CODES)[number];\nexport type CountryAlpha3 = CountryAlpha3Code | SupranationalCode;\nexport type CountryAlpha2 = CountryCode | SupranationalCode;\nexport type CountryValue = {\n    readonly alpha3: CountryAlpha3;\n    readonly alpha2: CountryAlpha2;\n};\nexport declare const COUNTRY_INPUT_MAX_CHARS = 64;\nexport type CountrySpelling = \"alpha-3\" | \"alpha-2\";\nexport type CountryOptions = {\n    spelling?: CountrySpelling | undefined;\n    admitted?: readonly string[] | undefined;\n    tool?: string | undefined;\n    parameter?: string | undefined;\n};\nexport declare const countryCodeIn: (value: CountryValue, spelling?: CountrySpelling) => string;\nexport declare const normalizeCountry: (input: unknown, options?: CountryOptions) => Normalized<CountryValue>;\nexport {};\n",
+    "./src/date-format-spec.d.ts": "import type { DateFormatStyle } from \"@stll/template-conditions\";\nimport type { Normalized } from \"./normalized\";\nexport type DateFormatSpec = {\n    locale: string;\n    style: DateFormatStyle;\n};\nexport declare const DATE_FORMAT_SPEC_HINT: string;\nexport declare const normalizeDateFormatSpec: (input: unknown) => Normalized<DateFormatSpec>;\n",
+    "./src/date-value.d.ts": "import type { Normalized, NormalizedOptional } from \"./normalized\";\nexport declare const DATE_VALUE_HINT: string;\nexport type DateValueOptions = {\n    locales?: readonly string[] | undefined;\n    bound?: DateBound | undefined;\n};\nexport type DateBound = \"start\" | \"end\";\nexport declare const normalizeDateValue: (input: unknown, options?: DateValueOptions) => Normalized<string>;\nexport type DateBoundOptions = {\n    bound: DateBound;\n    locales?: readonly string[] | undefined;\n};\nexport declare const normalizeDateBound: (input: unknown, options: DateBoundOptions) => NormalizedOptional<string>;\n",
+    "./src/eli.d.ts": "import type { Normalized } from \"./normalized\";\nexport type EliOptions = {\n    hosts: Readonly<Record<string, string>>;\n    readCitation?: ((text: string) => string | undefined) | undefined;\n    hint?: string | undefined;\n};\nexport declare const normalizeEli: (input: unknown, options: EliOptions) => Normalized<string>;\n",
+    "./src/enum-value.d.ts": "import type { Normalized } from \"./normalized\";\nexport type EnumValueOptions = {\n    label?: string;\n    expected?: string;\n};\nexport declare const normalizeEnumValue: <TValue extends string>(input: unknown, allowed: readonly TValue[], options?: EnumValueOptions) => Normalized<TValue>;\n",
+    "./src/index.d.ts": "export { ABSENT_PLACEHOLDERS, isAbsentPlaceholder } from \"./absent\";\nexport { normalizeBoolean } from \"./boolean\";\nexport { COUNTRY_INPUT_MAX_CHARS, countryCodeIn, normalizeCountry, } from \"./country\";\nexport type { CountryAlpha2, CountryAlpha3, CountryOptions, CountrySpelling, CountryValue, } from \"./country\";\nexport { DATE_FORMAT_SPEC_HINT, normalizeDateFormatSpec, } from \"./date-format-spec\";\nexport { DATE_VALUE_HINT, normalizeDateBound, normalizeDateValue, } from \"./date-value\";\nexport type { DateBound, DateBoundOptions, DateValueOptions, } from \"./date-value\";\nexport { normalizeEli } from \"./eli\";\nexport type { EliOptions } from \"./eli\";\nexport { normalizeEnumValue } from \"./enum-value\";\nexport { isPlausibleLocale, normalizeLocale } from \"./locale\";\nexport type { Normalized, NormalizedAbsent, NormalizedAsk, NormalizedOptional, } from \"./normalized\";\nexport { askForFix, askSentence, readAsAbsent } from \"./normalized\";\nexport { normalizeNumber, normalizeNumberInRange } from \"./number\";\nexport type { NumberInRangeOptions, NumberOptions } from \"./number\";\nexport { normalizeStringList } from \"./string-list\";\nexport type { StringListOptions } from \"./string-list\";\nexport { isSentinelUuid, normalizeUuid, SENTINEL_UUIDS } from \"./uuid\";\nexport type { UuidOptions } from \"./uuid\";\nexport { normalizeVocabularyValue } from \"./vocabulary\";\nexport type { VocabularyEntry, VocabularyOptions } from \"./vocabulary\";\nexport { AGENT_INPUT_NORMALIZATION_KEY, AGENT_INPUT_NORMALIZATION_KIND, agentInputNormalization, agentInputNormalizationGuidance, agentInputNormalizationMetadata, normalizeAgentInput, } from \"./schema\";\nexport type { AgentInputPlaceholderPolicy, AgentInputReaders, AgentInputCountryAnnotation, AgentInputNormalizationAnnotation, AgentInputNormalizationIssue, AgentInputNormalizationKind, AgentInputNormalizationResult, } from \"./schema\";\n",
+    "./src/locale.d.ts": "import type { Normalized } from \"./normalized\";\nexport declare const isPlausibleLocale: (value: string) => boolean;\nexport declare const normalizeLocale: (input: unknown) => Normalized<string>;\n",
+    "./src/normalized.d.ts": "export type NormalizedAsk = {\n    ok: false;\n    received: string;\n    expected: string;\n    hint: string;\n};\nexport type Normalized<TValue> = {\n    ok: true;\n    value: TValue;\n    note?: string;\n} | NormalizedAsk;\nexport declare const readValue: <TValue>(value: TValue) => Normalized<TValue>;\nexport declare const readValueAs: <TValue>(input: unknown, value: TValue, canonical?: string) => Normalized<TValue>;\nexport declare const askForFix: ({ input, expected, hint, }: {\n    input: unknown;\n    expected: string;\n    hint: string;\n}) => NormalizedAsk;\nexport declare const askSentence: (ask: NormalizedAsk) => string;\nexport type NormalizedAbsent = {\n    ok: \"absent\";\n    received: string;\n    note: string;\n};\nexport type NormalizedOptional<TValue> = Normalized<TValue> | NormalizedAbsent;\nexport declare const readAsAbsent: (input: unknown, reason?: string) => NormalizedAbsent;\n",
+    "./src/number.d.ts": "import type { Normalized } from \"./normalized\";\nexport type NumberOptions = {\n    locale?: string | undefined;\n};\nexport declare const normalizeNumber: (input: unknown, options?: NumberOptions) => Normalized<number>;\nexport type NumberInRangeOptions = NumberOptions & {\n    minimum?: number | undefined;\n    maximum?: number | undefined;\n    integer?: boolean | undefined;\n};\nexport declare const normalizeNumberInRange: (input: unknown, options: NumberInRangeOptions) => Normalized<number>;\n",
+    "./src/numeric-token.d.ts": "import { Result } from \"better-result\";\ndeclare const InvalidNumericTokenError_base: import(\"better-result\").TaggedErrorClass<\"InvalidNumericTokenError\">;\nexport declare class InvalidNumericTokenError extends InvalidNumericTokenError_base<{\n    message: string;\n    reason: \"syntax\" | \"unsafe-integer\" | \"non-finite\" | \"out-of-range\";\n}> {\n}\nexport type NumericTokenOptions = {\n    sign?: \"signed\" | \"unsigned\";\n    min?: number;\n    max?: number;\n};\nexport declare const parseIntegerToken: (input: unknown, options?: NumericTokenOptions) => Result<number, InvalidNumericTokenError>;\nexport declare const parseDecimalToken: (input: unknown, options?: NumericTokenOptions) => Result<number, InvalidNumericTokenError>;\nexport {};\n",
+    "./src/schema.d.ts": "import type { CountrySpelling } from \"./country\";\nimport type { EliOptions } from \"./eli\";\nexport declare const AGENT_INPUT_NORMALIZATION_KEY = \"x-stella-agent-input\";\nexport declare const AGENT_INPUT_NORMALIZATION_KIND: {\n    readonly boolean: \"boolean\";\n    readonly country: \"country\";\n    readonly date: \"date\";\n    readonly dateFormat: \"date-format\";\n    readonly eli: \"eli\";\n    readonly enum: \"enum\";\n    readonly filter: \"filter\";\n    readonly locale: \"locale\";\n    readonly number: \"number\";\n    readonly stringList: \"string-list\";\n    readonly uuid: \"uuid\";\n};\nexport type AgentInputNormalizationKind = (typeof AGENT_INPUT_NORMALIZATION_KIND)[keyof typeof AGENT_INPUT_NORMALIZATION_KIND];\nexport type AgentInputCountryAnnotation = {\n    spelling: CountrySpelling;\n    admitted?: readonly string[];\n    tool?: string;\n};\ntype AgentInputAnnotationCommon = {\n    invalidValueDisposition?: \"handler-owned\";\n    locale?: string;\n    bound?: \"start\" | \"end\";\n    range?: \"clamp\";\n};\nexport type AgentInputNormalizationAnnotation = (AgentInputAnnotationCommon & {\n    kind: Exclude<AgentInputNormalizationKind, typeof AGENT_INPUT_NORMALIZATION_KIND.country>;\n    country?: never;\n}) | (AgentInputAnnotationCommon & {\n    kind: typeof AGENT_INPUT_NORMALIZATION_KIND.country;\n    country: AgentInputCountryAnnotation;\n});\nexport declare const agentInputNormalization: (annotation: AgentInputNormalizationAnnotation) => Record<typeof AGENT_INPUT_NORMALIZATION_KEY, AgentInputNormalizationAnnotation>;\nexport declare const agentInputNormalizationGuidance: (annotation: AgentInputNormalizationAnnotation) => string;\nexport declare const agentInputNormalizationMetadata: (annotation: AgentInputNormalizationAnnotation, description?: string) => ReturnType<typeof agentInputNormalization> & {\n    description: string;\n};\nexport type AgentInputNormalizationIssue = {\n    path: string;\n    received: string;\n    expected: string;\n    hint: string;\n};\nexport type AgentInputNormalizationResult = {\n    ok: true;\n    value: unknown;\n    notes: readonly string[];\n} | {\n    ok: false;\n    issues: readonly AgentInputNormalizationIssue[];\n};\nexport type AgentInputReaders = {\n    eli?: EliOptions;\n};\nexport type AgentInputPlaceholderPolicy = \"absent\" | \"ask\";\nexport declare const normalizeAgentInput: ({ path, placeholders, readers, schema, value, }: {\n    path?: string;\n    placeholders?: AgentInputPlaceholderPolicy;\n    readers?: AgentInputReaders;\n    schema: unknown;\n    value: unknown;\n}) => AgentInputNormalizationResult;\nexport {};\n",
+    "./src/string-list.d.ts": "import type { Normalized } from \"./normalized\";\nexport type StringListOptions = {\n    split: \"never\" | \"delimiters\";\n};\nexport declare const normalizeStringList: (input: unknown, options: StringListOptions) => Normalized<string[]>;\n",
+    "./src/uuid.d.ts": "import type { NormalizedOptional } from \"./normalized\";\nexport declare const SENTINEL_UUIDS: readonly [\n    \"123e4567-e89b-12d3-a456-426614174000\",\n    \"123e4567-e89b-12d3-a456-426655440000\",\n    \"01234567-89ab-cdef-0123-456789abcdef\",\n    \"12345678-1234-1234-1234-123456789012\",\n    \"12345678-1234-5678-1234-567812345678\",\n    \"12345678-90ab-cdef-1234-567890abcdef\",\n    \"00000000-0000-0000-0000-000000000001\"\n];\nexport declare const isSentinelUuid: (canonical: string) => boolean;\nexport type UuidOptions = {\n    expected?: string | undefined;\n    hint?: string | undefined;\n};\nexport declare const normalizeUuid: (input: unknown, options?: UuidOptions) => NormalizedOptional<string>;\n",
+    "./src/vocabulary.d.ts": "import type { NormalizedOptional } from \"./normalized\";\nexport type VocabularyEntry = {\n    value: string;\n    aliases?: readonly string[];\n};\nexport type VocabularyOptions = {\n    label?: string;\n    expected?: string;\n    maxListed?: number;\n};\nexport declare const normalizeVocabularyValue: (input: unknown, entries: readonly VocabularyEntry[], options?: VocabularyOptions) => NormalizedOptional<string>;\n"
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "package": "@stll/money",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ApplyMarkupCentsInput",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CentsAmount",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CurrencyCents",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "FormatMoneyCentsParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MoneyTotals",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "MoneyTotalsEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ProrateHourlyCentsInput",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToMajorUnitsParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ToMinorUnitsParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "addCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "applyMarkupCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "cents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "currencyCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "currencyMinorUnitDigits",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "formatMoneyCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "prorateHourlyCents",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "timeEntryAmount",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toMajorUnits",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "toMinorUnits",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "tryToMinorUnits",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "unsafeCents",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/cents.d.ts": "declare const __cents: unique symbol;\nexport type CentsAmount = number & {\n    readonly [__cents]: \"CentsAmount\";\n};\nexport declare const isMinorUnitAmount: (value: number) => value is CentsAmount;\nexport declare const cents: (value: number) => CentsAmount;\nexport declare const unsafeCents: (value: number) => CentsAmount;\nexport {};\n",
+    "./src/format.d.ts": "import { type CentsAmount } from \"./cents\";\nexport declare const currencyMinorUnitDigits: (currency: string) => number;\nexport type ToMinorUnitsParams = {\n    amount: number | string;\n    currency: string;\n};\nexport declare const toMinorUnits: (params: ToMinorUnitsParams) => CentsAmount;\nexport declare const tryToMinorUnits: ({ amount, currency, }: ToMinorUnitsParams) => CentsAmount | null;\nexport type ToMajorUnitsParams = {\n    amountCents: number;\n    currency: string;\n};\nexport declare const toMajorUnits: ({ amountCents, currency, }: ToMajorUnitsParams) => number;\nexport type FormatMoneyCentsParams = {\n    amountCents: number;\n    currency: string;\n    locale: string;\n    fractionDigits?: number;\n};\nexport declare const formatMoneyCents: ({ amountCents, currency, locale, fractionDigits, }: FormatMoneyCentsParams) => string;\n",
+    "./src/index.d.ts": "import { type CentsAmount } from \"./cents\";\nexport { type CentsAmount, cents, unsafeCents } from \"./cents\";\nexport type ProrateHourlyCentsInput = {\n    billedMinutes: number;\n    hourlyRateCents: CentsAmount;\n};\nexport declare const prorateHourlyCents: ({ billedMinutes, hourlyRateCents, }: ProrateHourlyCentsInput) => CentsAmount;\ntype TimeEntryAmountInput = {\n    billedMinutes: number;\n    rateAtEntry: CentsAmount;\n    noCharge: boolean;\n};\nexport declare const timeEntryAmount: (entry: TimeEntryAmountInput) => CentsAmount;\nexport type ApplyMarkupCentsInput = {\n    amountCents: CentsAmount;\n    markupPercent: number;\n};\nexport declare const applyMarkupCents: ({ amountCents, markupPercent, }: ApplyMarkupCentsInput) => CentsAmount;\ndeclare const __currency: unique symbol;\nexport type CurrencyCents<C extends string = string> = CentsAmount & {\n    readonly [__currency]: C;\n};\nexport declare const currencyCents: <C extends string>(currency: C, amount: number) => CurrencyCents<C>;\ntype UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (x: infer I) => void ? I : never;\ntype IsSingletonCurrency<C extends string> = string extends C ? never : [\n    C\n] extends [\n    UnionToIntersection<C>\n] ? C : never;\nexport declare const addCents: <A extends string, B extends A = A>(a: IsSingletonCurrency<A> extends never ? never : CurrencyCents<A>, b: IsSingletonCurrency<B> extends never ? never : CurrencyCents<B>) => CurrencyCents<A>;\nexport type MoneyTotalsEntry = {\n    currency: string;\n    amountCents: CentsAmount;\n};\nexport declare class MoneyTotals {\n    #private;\n    add(currency: string, amountCents: CentsAmount): void;\n    entries(): MoneyTotalsEntry[];\n}\nexport { currencyMinorUnitDigits, formatMoneyCents, type FormatMoneyCentsParams, toMajorUnits, type ToMajorUnitsParams, toMinorUnits, type ToMinorUnitsParams, tryToMinorUnits, } from \"./format\";\n"
+  }
+}

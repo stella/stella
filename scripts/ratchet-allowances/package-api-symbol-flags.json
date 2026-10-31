@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "The TypeScript compiler API exposes symbol categories as bitmasks. One no-bitwise directive is confined to the shared flag predicate used by published-package API reporting."
+}

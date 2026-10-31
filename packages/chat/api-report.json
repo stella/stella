@@ -1,0 +1,389 @@
+{
+  "package": "@stll/chat",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "ChatComposerActionMode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatComposerActionState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatConfigurationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatMessage",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatMessageStream",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatMessageStreamProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatModelOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatModelSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatModelSelector",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatModelSelectorProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatProviderConfiguration",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatRuntime",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatRuntimeSnapshot",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatStreamError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatStreamEvent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatTransport",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "compactModelDisplayName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "createChatRuntime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "groupReasoningEfforts",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "modelSelectionLabel",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveChatComposerAction",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveChatModelSelection",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./composer": {
+      "type": "module",
+      "file": "./src/composer.d.ts",
+      "exports": [
+        {
+          "name": "ChatComposerActionMode",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatComposerActionState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "resolveChatComposerAction",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./durable-transport": {
+      "type": "module",
+      "file": "./src/durable-transport.d.ts",
+      "exports": [
+        {
+          "name": "ChatReconnectError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatResumeProbe",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createDurableChatTransport",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./link": {
+      "type": "module",
+      "file": "./src/link.d.ts",
+      "exports": [
+        {
+          "name": "CHAT_LINK_ATTRIBUTES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CHAT_LINK_CLASS_NAME",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatLink",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatLinkIconSource",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "hasBundledChatLinkIcon",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./link-detection": {
+      "type": "module",
+      "file": "./src/link-detection.d.ts",
+      "exports": [
+        {
+          "name": "ChatLinkSpan",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "detectChatLinks",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getChatLinkSite",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "normalizeChatLink",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./link-editor": {
+      "type": "module",
+      "file": "./src/link-editor.d.ts",
+      "exports": [
+        {
+          "name": "ChatComposerLinks",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./link-markdown": {
+      "type": "module",
+      "file": "./src/link-markdown.d.ts",
+      "exports": [
+        {
+          "name": "rehypeChatLinks",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./model-selector": {
+      "type": "module",
+      "file": "./src/model-selector.d.ts",
+      "exports": [
+        {
+          "name": "ChatModelSelector",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatModelSelectorProps",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "compactModelDisplayName",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "groupReasoningEfforts",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "modelSelectionLabel",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./resume-contract": {
+      "type": "module",
+      "file": "./src/resume-contract.d.ts",
+      "exports": [
+        {
+          "name": "ChatTurnResumeProbe",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "chatResumeSnapshotSchema",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "chatTurnResumeProbeSchema",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./runtime": {
+      "type": "module",
+      "file": "./src/runtime.d.ts",
+      "exports": [
+        {
+          "name": "ChatConfigurationError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatMessage",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatModelOption",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatModelSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatProviderConfiguration",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatRuntime",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatRuntimeSnapshot",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatStreamError",
+          "kind": "class",
+          "space": "type+value"
+        },
+        {
+          "name": "ChatStreamEvent",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ChatTransport",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "createChatRuntime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "resolveChatModelSelection",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./stream": {
+      "type": "module",
+      "file": "./src/stream.d.ts",
+      "exports": [
+        {
+          "name": "ChatMessageStream",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ChatMessageStreamProps",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/composer.d.ts": "export type ChatComposerActionState = {\n    canSend: boolean;\n    isGenerating: boolean;\n    onRetry?: (() => void) | undefined;\n    onSend: () => void;\n    onStop?: (() => void) | undefined;\n};\nexport type ChatComposerActionMode = \"retry\" | \"send\" | \"stop\";\nexport declare const resolveChatComposerAction: ({ isGenerating, onRetry, onStop, }: Pick<ChatComposerActionState, \"isGenerating\" | \"onRetry\" | \"onStop\">) => ChatComposerActionMode;\n",
+    "./src/durable-transport.d.ts": "import { EventType } from \"@ag-ui/core\";\nimport type { UIMessage } from \"@tanstack/ai-client\";\nimport type { ChatTurnResumeProbe } from \"./resume-contract\";\ndeclare const ChatReconnectError_base: import(\"better-result\").TaggedErrorClass<\"ChatReconnectError\">;\nexport declare class ChatReconnectError extends ChatReconnectError_base<{\n    cause?: unknown;\n    code?: \"invalid-response\" | \"refused\";\n    message: string;\n}> {\n}\nexport type ChatResumeProbe = ChatTurnResumeProbe;\ndeclare const waitForReconnect: (delay: number, signal: AbortSignal | null | undefined) => Promise<void>;\ntype ChatLoadedTurn = {\n    type: \"active\";\n} | {\n    type: \"parked\";\n    runId: string;\n} | {\n    type: \"settled\";\n};\ntype DurableChatTransportOptions<TMessages extends UIMessage[]> = {\n    initialMessages: TMessages;\n    initialTurn: ChatLoadedTurn;\n    threadId: string;\n    probe: (signal?: AbortSignal | null) => Promise<ChatResumeProbe>;\n    joinUrl: () => string;\n    sendUrl: string;\n    fetchClient: typeof fetch;\n    onReconnectChange: (reconnecting: boolean) => void;\n    onTranscript: () => void;\n    onError: (error: ChatReconnectError) => void;\n    random?: () => number;\n    now?: () => number;\n    wait?: typeof waitForReconnect;\n};\nexport declare const createDurableChatTransport: <TMessages extends UIMessage[]>({ initialMessages, initialTurn, threadId, probe, joinUrl, sendUrl, fetchClient, onReconnectChange, onTranscript, onError, random, now, wait, }: DurableChatTransportOptions<TMessages>) => {\n    connection: {\n        connect(messages: import(\"@tanstack/ai\").UIMessage<unknown>[] | import(\"@tanstack/ai\").ModelMessage<string | import(\"@tanstack/ai\").ContentPart<unknown, unknown, unknown, unknown, unknown>[] | null>[], data?: Record<string, any> | undefined, abortSignal?: AbortSignal | undefined, runContext?: import(\"@tanstack/ai-client\").RunAgentInputContext | undefined): AsyncGenerator<import(\"@tanstack/ai\").AGUIEvent, void, unknown>;\n        joinRun(runId: string, signal?: AbortSignal): AsyncGenerator<import(\"@tanstack/ai\").ActivitySnapshotEvent | import(\"@tanstack/ai\").ActivityDeltaEvent | import(\"@tanstack/ai\").RawEvent | import(\"@tanstack/ai\").TextMessageChunkEvent | import(\"@tanstack/ai\").ToolCallChunkEvent | import(\"@tanstack/ai\").ReasoningMessageChunkEvent | import(\"@tanstack/ai\").RunStartedEvent | import(\"@tanstack/ai\").RunFinishedEvent | import(\"@tanstack/ai\").RunErrorEvent | import(\"@tanstack/ai\").TextMessageStartEvent | import(\"@tanstack/ai\").TextMessageContentEvent | import(\"@tanstack/ai\").TextMessageEndEvent | import(\"@tanstack/ai\").ToolCallStartEvent | import(\"@tanstack/ai\").ToolCallArgsEvent | import(\"@tanstack/ai\").ToolCallEndEvent | import(\"@tanstack/ai\").ToolCallResultEvent | import(\"@tanstack/ai\").StepStartedEvent | import(\"@tanstack/ai\").StepFinishedEvent | import(\"@tanstack/ai\").MessagesSnapshotEvent | import(\"@tanstack/ai\").StateSnapshotEvent | import(\"@tanstack/ai\").StateDeltaEvent | import(\"@tanstack/ai\").CustomEvent | import(\"@tanstack/ai\").ReasoningStartEvent | import(\"@tanstack/ai\").ReasoningMessageStartEvent | import(\"@tanstack/ai\").ReasoningMessageContentEvent | import(\"@tanstack/ai\").ReasoningMessageEndEvent | import(\"@tanstack/ai\").ReasoningEndEvent | import(\"@tanstack/ai\").ReasoningEncryptedValueEvent | import(\"@tanstack/ai\").SubagentStartedEvent | import(\"@tanstack/ai\").SubagentFinishedEvent | import(\"@tanstack/ai\").SubagentErrorEvent | {\n            readonly type: EventType.CUSTOM;\n            readonly name: \"stella.chat.rejoin-attached\";\n            readonly value: {\n                readonly runId: string;\n                readonly threadId: string;\n            };\n        }, void, unknown>;\n    };\n    persistence: {\n        getItem: (resumedThreadId: string) => Promise<{\n            resume?: {\n                resumeState: {\n                    threadId: string;\n                    runId: string;\n                };\n                pendingInterrupts?: import(\"@ag-ui/core\").Interrupt[] | undefined;\n            } | undefined;\n            messages: TMessages;\n        } | undefined>;\n        setItem: () => undefined;\n        removeItem: () => undefined;\n    };\n};\nexport {};\n",
+    "./src/index.d.ts": "export { resolveChatComposerAction } from \"./composer\";\nexport type { ChatComposerActionMode, ChatComposerActionState, } from \"./composer\";\nexport { ChatModelSelector, compactModelDisplayName, groupReasoningEfforts, modelSelectionLabel, } from \"./model-selector\";\nexport type { ChatModelSelectorProps } from \"./model-selector\";\nexport { ChatConfigurationError, ChatStreamError, createChatRuntime, resolveChatModelSelection, } from \"./runtime\";\nexport type { ChatMessage, ChatModelOption, ChatModelSelection, ChatProviderConfiguration, ChatRuntime, ChatRuntimeSnapshot, ChatStreamEvent, ChatTransport, } from \"./runtime\";\nexport { ChatMessageStream } from \"./stream\";\nexport type { ChatMessageStreamProps } from \"./stream\";\n",
+    "./src/link-detection.d.ts": "export type ChatLinkSpan = {\n    start: number;\n    end: number;\n    text: string;\n    href: string;\n    hostname: string;\n};\nexport declare const normalizeChatLink: (input: string) => {\n    href: string;\n    hostname: string;\n} | null;\nexport declare const getChatLinkSite: (hostname: string) => string | null;\nexport declare const detectChatLinks: (text: string) => ChatLinkSpan[];\n",
+    "./src/link-editor.d.ts": "import { Extension } from \"@tiptap/core\";\nexport declare const ChatComposerLinks: Extension<any, any>;\n",
+    "./src/link-markdown.d.ts": "import type { Root } from \"hast\";\nexport declare const rehypeChatLinks: () => (tree: Root) => void;\n",
+    "./src/link.d.ts": "import type { AnchorHTMLAttributes } from \"react\";\nexport declare const CHAT_LINK_ATTRIBUTES: {\n    readonly target: \"_blank\";\n    readonly rel: \"noopener noreferrer\";\n};\nexport declare const CHAT_LINK_CLASS_NAME = \"text-foreground decoration-border hover:decoration-foreground rounded-xs underline underline-offset-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring\";\nexport declare const hasBundledChatLinkIcon: (hostname: string) => boolean;\nexport type ChatLinkIconSource = {\n    type: \"proxy\";\n    src: string;\n};\ntype ChatLinkProps = Omit<AnchorHTMLAttributes<HTMLAnchorElement>, \"href\" | \"target\" | \"rel\" | \"className\"> & {\n    href: string;\n    appearance?: \"inline\" | \"tray\";\n    iconSource?: ChatLinkIconSource | undefined;\n    newTabLabel?: string;\n};\nexport declare const ChatLink: ({ appearance, children, href, iconSource, newTabLabel, title, ...anchorProps }: ChatLinkProps) => import(\"react\").JSX.Element;\nexport {};\n",
+    "./src/model-selector.d.ts": "import type { ReasoningEffort } from \"@stll/ai-catalog\";\nimport type { ChatModelOption, ChatModelSelection } from \"./runtime\";\nexport declare const compactModelDisplayName: (displayName: string) => string;\nexport declare const groupReasoningEfforts: (efforts: readonly ReasoningEffort[]) => {\n    extended: ReasoningEffort[];\n    standard: ReasoningEffort[];\n};\nexport declare const modelSelectionLabel: ({ defaultEffortLabel, displayName, formatSelectionLabel, providerDefaultEffort, reasoningEffort, translateEffort, }: {\n    defaultEffortLabel: string;\n    displayName: string;\n    formatSelectionLabel: (values: {\n        effort: string;\n        model: string;\n    }) => string;\n    providerDefaultEffort: ReasoningEffort | null;\n    reasoningEffort: ReasoningEffort | null;\n    translateEffort: (effort: ReasoningEffort) => string;\n}) => string;\nexport type ChatModelSelectorProps = {\n    autoLabel: string;\n    disabled?: boolean | undefined;\n    label: string;\n    onSelectionChange: (selection: ChatModelSelection) => void;\n    options: readonly ChatModelOption[];\n    selection: ChatModelSelection;\n};\nexport declare const ChatModelSelector: ({ autoLabel, disabled, label, onSelectionChange, options, selection, }: ChatModelSelectorProps) => import(\"react\").JSX.Element;\n",
+    "./src/resume-contract.d.ts": "import type { Interrupt } from \"@ag-ui/core\";\nimport * as v from \"valibot\";\nexport declare const chatResumeSnapshotSchema: v.ObjectSchema<{\n    readonly resumeState: v.ObjectSchema<{\n        readonly threadId: v.StringSchema<undefined>;\n        readonly runId: v.StringSchema<undefined>;\n    }, undefined>;\n    readonly pendingInterrupts: v.ExactOptionalSchema<v.ArraySchema<v.CustomSchema<Interrupt, undefined>, undefined>, undefined>;\n}, undefined>;\nexport declare const chatTurnResumeProbeSchema: v.VariantSchema<\"type\", [\n    v.ObjectSchema<{\n        readonly type: v.LiteralSchema<\"preparing\", undefined>;\n        readonly turnId: v.StringSchema<undefined>;\n    }, undefined>,\n    v.ObjectSchema<{\n        readonly type: v.LiteralSchema<\"running\", undefined>;\n        readonly turnId: v.StringSchema<undefined>;\n        readonly runId: v.StringSchema<undefined>;\n    }, undefined>,\n    v.ObjectSchema<{\n        readonly type: v.LiteralSchema<\"transcript\", undefined>;\n        readonly turnId: v.StringSchema<undefined>;\n        readonly resumeSnapshot: v.ExactOptionalSchema<v.ObjectSchema<{\n            readonly resumeState: v.ObjectSchema<{\n                readonly threadId: v.StringSchema<undefined>;\n                readonly runId: v.StringSchema<undefined>;\n            }, undefined>;\n            readonly pendingInterrupts: v.ExactOptionalSchema<v.ArraySchema<v.CustomSchema<Interrupt, undefined>, undefined>, undefined>;\n        }, undefined>, undefined>;\n    }, undefined>\n], undefined>;\nexport type ChatTurnResumeProbe = v.InferOutput<typeof chatTurnResumeProbeSchema>;\n",
+    "./src/runtime.d.ts": "import type { AIProvider, ReasoningEffort } from \"@stll/ai-catalog\";\nexport type ChatModelOption = {\n    defaultReasoningEffort: ReasoningEffort | null;\n    displayName: string;\n    modelId: string;\n    provider: AIProvider;\n    reasoningEfforts: readonly ReasoningEffort[] | null;\n};\nexport type ChatModelSelection = {\n    modelId: string | null;\n    provider: AIProvider | null;\n    reasoningEffort: ReasoningEffort | null;\n};\nexport type ChatProviderConfiguration = {\n    modelIds: readonly string[];\n    provider: AIProvider;\n};\ndeclare const ChatConfigurationError_base: import(\"better-result\").TaggedErrorClass<\"ChatConfigurationError\">;\nexport declare class ChatConfigurationError extends ChatConfigurationError_base<{\n    code: \"duplicate-model\" | \"empty-model-id\" | \"empty-provider\" | \"unknown-provider\" | \"unconfigured-model\";\n    message: string;\n    modelId?: string | undefined;\n    provider?: string | undefined;\n}> {\n}\ndeclare const ChatStreamError_base: import(\"better-result\").TaggedErrorClass<\"ChatStreamError\">;\nexport declare class ChatStreamError extends ChatStreamError_base<{\n    cause: unknown;\n    message: string;\n}> {\n}\nexport declare const resolveChatModelSelection: ({ providers, selection, }: {\n    providers: readonly ChatProviderConfiguration[];\n    selection: ChatModelSelection;\n}) => ChatModelSelection;\nexport type ChatMessage<Metadata = undefined> = {\n    content: string;\n    id: string;\n    metadata: Metadata;\n    role: \"assistant\" | \"system\" | \"user\";\n};\nexport type ChatStreamEvent<Metadata = undefined> = {\n    message: ChatMessage<Metadata>;\n    type: \"message\";\n} | {\n    message: ChatMessage<Metadata>;\n    type: \"replace-message\";\n};\nexport type ChatTransport<Metadata = undefined> = (input: {\n    messages: readonly ChatMessage<Metadata>[];\n    signal: AbortSignal;\n}) => AsyncIterable<ChatStreamEvent<Metadata>>;\nexport type ChatRuntimeSnapshot<Metadata = undefined> = {\n    error: ChatStreamError | undefined;\n    isStreaming: boolean;\n    messages: readonly ChatMessage<Metadata>[];\n};\nexport type ChatRuntime<Metadata = undefined> = {\n    getSnapshot: () => ChatRuntimeSnapshot<Metadata>;\n    send: (message: ChatMessage<Metadata>) => Promise<void>;\n    stop: () => void;\n    subscribe: (listener: () => void) => () => void;\n};\nexport declare const createChatRuntime: <Metadata = undefined>({ initialMessages, transport, }: {\n    initialMessages?: readonly ChatMessage<Metadata>[];\n    transport: ChatTransport<Metadata>;\n}) => ChatRuntime<Metadata>;\nexport {};\n",
+    "./src/stream.d.ts": "import type { ReactElement } from \"react\";\nimport type { ChatMessage } from \"./runtime\";\nexport type ChatMessageStreamProps<Metadata> = {\n    className?: string | undefined;\n    empty?: ReactElement | undefined;\n    messages: readonly ChatMessage<Metadata>[];\n    renderMessage: (message: ChatMessage<Metadata>) => ReactElement;\n};\nexport declare const ChatMessageStream: <Metadata>({ className, empty, messages, renderMessage, }: ChatMessageStreamProps<Metadata>) => ReactElement | null;\n"
+  }
+}

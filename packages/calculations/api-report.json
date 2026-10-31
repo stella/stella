@@ -1,0 +1,74 @@
+{
+  "package": "@stll/calculations",
+  "entrypoints": {
+    ".": {
+      "type": "module",
+      "file": "./src/index.d.ts",
+      "exports": [
+        {
+          "name": "CALCULATION_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "CalculationKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationResult",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationUnsupportedReason",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CalculationValue",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "CentsAmount",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MoneyTotalsEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "NUMERIC_CALCULATION_KINDS",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "NumericCalculationKind",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "RunCalculationParams",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "isNumericCalculationKind",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "runCalculation",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    }
+  },
+  "declarations": {
+    "./src/index.d.ts": "import type { CentsAmount, MoneyTotalsEntry } from \"@stll/money\";\nexport declare const CALCULATION_KINDS: readonly [\n    \"count\",\n    \"count-unique\",\n    \"count-empty\",\n    \"count-filled\",\n    \"percent-empty\",\n    \"percent-filled\",\n    \"sum\",\n    \"average\",\n    \"median\",\n    \"min\",\n    \"max\",\n    \"range\",\n    \"percent-of-total\"\n];\nexport type CalculationKind = (typeof CALCULATION_KINDS)[number];\nexport declare const NUMERIC_CALCULATION_KINDS: readonly [\n    \"sum\",\n    \"average\",\n    \"median\",\n    \"min\",\n    \"max\",\n    \"range\",\n    \"percent-of-total\"\n];\nexport type NumericCalculationKind = (typeof NUMERIC_CALCULATION_KINDS)[number];\nexport declare const isNumericCalculationKind: (kind: CalculationKind) => kind is NumericCalculationKind;\nexport type CalculationValue = {\n    type: \"empty\";\n} | {\n    type: \"number\";\n    value: number;\n} | {\n    type: \"money\";\n    amountCents: CentsAmount;\n    currency: string;\n} | {\n    type: \"text\";\n    value: string;\n};\nexport type CalculationUnsupportedReason = \"non-numeric\" | \"mixed-units\" | \"no-values\" | \"no-scope\";\nexport type CalculationResult = {\n    type: \"count\";\n    kind: CalculationKind;\n    value: number;\n} | {\n    type: \"ratio\";\n    kind: CalculationKind;\n    value: number;\n} | {\n    type: \"number\";\n    kind: CalculationKind;\n    value: number;\n} | {\n    type: \"money\";\n    kind: CalculationKind;\n    totals: readonly MoneyTotalsEntry[];\n} | {\n    type: \"unsupported\";\n    kind: CalculationKind;\n    reason: CalculationUnsupportedReason;\n};\nexport type RunCalculationParams = {\n    kind: CalculationKind;\n    values: readonly CalculationValue[];\n    scopeValues?: readonly CalculationValue[] | undefined;\n};\nexport declare const runCalculation: ({ kind, values, scopeValues, }: RunCalculationParams) => CalculationResult;\nexport type { CentsAmount, MoneyTotalsEntry };\n"
+  }
+}

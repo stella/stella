@@ -759,6 +759,7 @@
     "Test depth repository scripts": ["**"]
   },
   "ci-checks-policy": {
+    "Published package API reports": ["**"],
     "Resolve static check receipts": ["**"],
     "Run policy checks": ["**"],
     "Record static check receipts": ["**"],
