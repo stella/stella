@@ -133,7 +133,9 @@
     },
     "add": "Pievienot",
     "scanDocument": "Skenēt dokumentu",
-    "newTask": "Jauns uzdevums"
+    "newTask": "Jauns uzdevums",
+    "uploadDocument": "Augšupielādēt dokumentu",
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
   },
   "entity": {
     "type": "Veids",
