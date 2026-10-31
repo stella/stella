@@ -6808,7 +6808,7 @@
         "addAnother": "Añadir otra columna",
         "createFailed": "No se pudieron crear las columnas",
         "createMany": "Crear {count} columnas",
-        "createdMany": "Se crearon {count} columnas",
+        "createdMany": "{count, plural, one {Se creó # columna} many {Se crearon # de columnas} other {Se crearon # columnas}}",
         "createdOne": "Columna creada",
         "promptPlaceholder": "¿Qué debe extraer esta columna? Para usar / y @, ajústala en el cuadro de diálogo de la columna.",
         "title": "Añadir columnas"

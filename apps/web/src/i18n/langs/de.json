@@ -6808,7 +6808,7 @@
         "addAnother": "Weitere Spalte hinzufügen",
         "createFailed": "Spalten konnten nicht erstellt werden",
         "createMany": "{count} Spalten erstellen",
-        "createdMany": "{count} Spalten erstellt",
+        "createdMany": "{count, plural, one {# Spalte erstellt} other {# Spalten erstellt}}",
         "createdOne": "Spalte erstellt",
         "promptPlaceholder": "Was soll diese Spalte extrahieren? Verfeinern Sie sie im Spaltendialog, um / und @ zu verwenden.",
         "title": "Spalten hinzufügen"

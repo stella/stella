@@ -336,7 +336,7 @@
         "pinUnresolved": "Verziu dokumentu, pri ktorej sa toto overenie začalo, sa už nedarí nájsť.",
         "unsupportedFormat": "Overiť možno len súbory DOCX, PDF a súbory s vygenerovanou verziou PDF."
       },
-      "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktom} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
+      "evidencePinned": "Overené voči {count, plural, one {# faktu} few {# faktom} many {# faktu} other {# faktom}} v stave ku dňu {checkedAt}. Neskoršie úpravy zoznamu toto overenie nemenia.",
       "failedTitle": "Overenie zlyhalo",
       "history": {
         "label": "História overení",
@@ -424,7 +424,7 @@
       "title": "Dvojjazyčnú verziu sa nepodarilo vytvoriť"
     },
     "success": {
-      "description": "<bdi>{fileName}</bdi> je pripravený, na preklad {rowCount, plural, one {je # riadok} few {sú # riadky} other {je # riadkov} many {je # riadkov}}.",
+      "description": "<bdi>{fileName}</bdi> je pripravený, na preklad {rowCount, plural, one {je # riadok} few {sú # riadky} other {je # riadkov} many {je # riadka}}.",
       "title": "Dvojjazyčná verzia vytvorená"
     }
   },
@@ -483,7 +483,7 @@
       "model": "AI"
     },
     "review": {
-      "droppedRows": "{count, plural, one {# riadok bol vynechaný} few {# riadky boli vynechané} other {# riadkov bolo vynechaných} many {# riadkov bolo vynechaných}}: neobsahujú text, ktorý sa dá preložiť.",
+      "droppedRows": "{count, plural, one {# riadok bol vynechaný} few {# riadky boli vynechané} other {# riadkov bolo vynechaných} many {# riadka bolo vynechané}}: neobsahujú text, ktorý sa dá preložiť.",
       "start": "Spustiť preklad",
       "starting": "Spúšťa sa…"
     },
@@ -496,12 +496,12 @@
     },
     "run": {
       "cancelled": "Preklad bol zrušený.",
-      "doneSummary": "{count, plural, one {Preložený # riadok} few {Preložené # riadky} other {Preložených # riadkov} many {Preložených # riadkov}}.",
+      "doneSummary": "{count, plural, one {Preložený # riadok} few {Preložené # riadky} other {Preložených # riadkov} many {Preložené # riadka}}.",
       "doneTitle": "Preklad dokončený",
-      "failedRows": "{count, plural, one {# riadok sa nepodarilo preložiť} few {# riadky sa nepodarilo preložiť} other {# riadkov sa nepodarilo preložiť} many {# riadkov sa nepodarilo preložiť}}.",
+      "failedRows": "{count, plural, one {# riadok sa nepodarilo preložiť} few {# riadky sa nepodarilo preložiť} other {# riadkov sa nepodarilo preložiť} many {# riadka sa nepodarilo preložiť}}.",
       "failedTitle": "Preklad bol zastavený",
       "hint": "Preklad beží na serveri. Nechajte toto okno otvorené, aby ste ho mohli sledovať.",
-      "moreRows": "{count, plural, one {ďalší # riadok} few {ďalšie # riadky} other {ďalších # riadkov} many {ďalších # riadkov}}",
+      "moreRows": "{count, plural, one {ďalší # riadok} few {ďalšie # riadky} other {ďalších # riadkov} many {ďalšie # riadka}}",
       "progress": "Preložených {completed} z {total} riadkov",
       "title": "Prebieha preklad…",
       "warningsTitle": "Riadky na kontrolu"
@@ -752,7 +752,7 @@
         "void": "Zrušená"
       },
       "totalAmount": "Celková čiastka",
-      "totalEntries": "{count, plural, one {# záznam} few {# záznamy} other {# záznamov} many {# záznamov}}",
+      "totalEntries": "{count, plural, one {# záznam} few {# záznamy} other {# záznamov} many {# záznamu}}",
       "void": "Zrušiť"
     },
     "loading": "Načítava sa...",
@@ -824,7 +824,7 @@
       "ongoing": "Priebežná",
       "override": "Prepísať",
       "perHour": "/hod",
-      "rateCount": "{count, plural, one {# sadzba} few {# sadzby} other {# sadzieb} many {# sadzieb}}",
+      "rateCount": "{count, plural, one {# sadzba} few {# sadzby} other {# sadzieb} many {# sadzby}}",
       "rateEntries": "Záznamy sadzieb",
       "rateResolved": "Sadzba určená",
       "rateTables": "Tabuľky sadzieb",
@@ -840,7 +840,7 @@
     },
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
-    "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných} many {# vybraných}}",
+    "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných} many {# vybraného}}",
     "sellerProfiles": {
       "add": "Pridať profil dodávateľa",
       "archiveConfirm": "Archivovať tento profil dodávateľa? Nebude už dostupný pre nové faktúry.",
@@ -882,10 +882,10 @@
     },
     "stopTimer": "Zastaviť",
     "suggestions": {
-      "actionCount": "{count, plural, one {# akcia} few {# akcie} other {# akcií} many {# akcií}}",
+      "actionCount": "{count, plural, one {# akcia} few {# akcie} other {# akcií} many {# akcie}}",
       "activeVsLogged": "Aktivita {active} · Vykázané {logged}",
       "alreadyCovered": "Už pokryté zaznamenaným časom",
-      "chatEvidence": "{count, plural, one {# správa} few {# správy} other {# správ} many {# správ}} v konverzácii „{title}“",
+      "chatEvidence": "{count, plural, one {# správa} few {# správy} other {# správ} many {# správy}} v konverzácii „{title}“",
       "engagedTime": "{duration} skutočnej aktivity",
       "keyboardHint": "Enter prijme, E upraví pred prijatím, Delete zamietne",
       "privacyNote": "Vidíte ich len vy. Nič sa nezaznamená, kým návrh neprijmete.",
@@ -985,13 +985,13 @@
       "citedAtLeast": "Citované najmenej {count}-krát",
       "citedSummary": "{count, plural, =0 {Necitované} one {Citované raz} few {Citované #-krát} other {Citované #-krát} many {Citované #-krát}}",
       "dateUnavailable": "Dátum neuvedený",
-      "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutí}}",
+      "decisionCount": "{count, plural, =0 {Žiadne rozhodnutia} one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutia}}",
       "goToMention": "Prejsť na {number}. zmienku",
       "goToParagraph": "Prejsť na bod {paragraph}",
       "lastNegative": "posledná negatívna citácia v roku {year}",
       "mentionMark": "{number}. zmienka",
       "mentionsInDecision": "{count, plural, one {V tomto rozhodnutí citované raz} few {V tomto rozhodnutí citované #-krát} other {V tomto rozhodnutí citované #-krát} many {V tomto rozhodnutí citované #-krát}}",
-      "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnych} other {# negatívnych}}",
+      "negativeCount": "{count, plural, one {# negatívna} few {# negatívne} many {# negatívnej} other {# negatívnych}}",
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
       "notInStella": "Zatiaľ nie je v stelle",
       "openAtCitation": "Otvoriť na mieste citácie",
@@ -1001,9 +1001,9 @@
       "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph}",
       "partialSummary": "Súčty citácií a časová os sú neúplné.",
       "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
-      "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",
+      "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnej} other {# pozitívnych}}",
       "referenceLabel": "{court}, {caseNumber}, {date}",
-      "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetkých # rozhodnutí} other {Zobraziť všetkých # rozhodnutí}}",
+      "showAll": "{count, plural, one {Zobraziť # rozhodnutie} few {Zobraziť všetky # rozhodnutia} many {Zobraziť všetky # rozhodnutia} other {Zobraziť všetkých # rozhodnutí}}",
       "stripLabel": "Citácie podľa rokov",
       "treatment": {
         "mixed": "Zmiešané",
@@ -1015,7 +1015,7 @@
       },
       "unresolved": "Nepriradené k rozhodnutiu",
       "whereCited": "Kde cituje toto rozhodnutie",
-      "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií} many {# citácií}}"
+      "yearTitle": "{year}: {count, plural, one {# citácia} few {# citácie} other {# citácií} many {# citácie}}"
     },
     "columns": {
       "caseNumber": "Spisová značka",
@@ -1042,7 +1042,7 @@
       "countryNavigation": "Prejsť na krajinu",
       "courtsHeading": "Podľa súdu",
       "decisionYears": "Roky rozhodnutí",
-      "decisionsAcross": "rozhodnutí z {count, plural, one {# jurisdikcie} few {# jurisdikcií} other {# jurisdikcií} many {# jurisdikcií}}",
+      "decisionsAcross": "rozhodnutí z {count, plural, one {# jurisdikcie} few {# jurisdikcií} other {# jurisdikcií} many {# jurisdikcie}}",
       "description": "Koľko judikatúry korpus obsahuje podľa krajín a súdov a aký aktuálny je každý zdroj.",
       "generatedAt": "Údaje k {date}",
       "healthCurrent": "Aktuálne",
@@ -1056,7 +1056,7 @@
       "notCountedYet": "Zatiaľ nespočítané",
       "notMeasuredYet": "Zatiaľ nemerané",
       "searchable": "Dostupné na vyhľadanie",
-      "sourceExceptions": "{count, plural, one {# zdroj vyžaduje pozornosť} few {# zdroje vyžadujú pozornosť} other {# zdrojov vyžaduje pozornosť} many {# zdrojov vyžaduje pozornosť}}",
+      "sourceExceptions": "{count, plural, one {# zdroj vyžaduje pozornosť} few {# zdroje vyžadujú pozornosť} other {# zdrojov vyžaduje pozornosť} many {# zdroja vyžaduje pozornosť}}",
       "sourcesCurrent": "Aktuálne zdroje",
       "syncedAt": "Synchronizované {time}",
       "title": "Pokrytie judikatúry",
@@ -1099,7 +1099,7 @@
       "showInCountry": "Zobraziť {filter} pre krajinu {country}"
     },
     "languages": {
-      "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov} many {# jazykov}}",
+      "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov} many {# jazyka}}",
       "matchedIn": "Zhoda v jazyku {language}"
     },
     "loadingMore": "Načítavajú sa ďalšie...",
@@ -1110,19 +1110,19 @@
       "unnumberedParagraph": "{count, plural, =0 {V tomto odseku nie je citované žiadne ustanovenie} one {# ustanovenie citované v tomto odseku} few {# ustanovenia citované v tomto odseku} many {# ustanovenia citovaného v tomto odseku} other {# ustanovení citovaných v tomto odseku}}"
     },
     "matterLinks": {
-      "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených} many {# rozhodnutí tu už bolo uložených}}",
+      "alreadySaved": "{count, plural, one {# rozhodnutie tu už bolo uložené} few {# rozhodnutia tu už boli uložené} other {# rozhodnutí tu už bolo uložených} many {# rozhodnutia tu už bolo uložené}}",
       "empty": "V tomto spise zatiaľ nie je uložená žiadna judikatúra.",
       "emptyAction": "Hľadať v judikatúre",
       "note": "Poznámka",
       "notePlaceholder": "Prečo sú tieto rozhodnutia dôležité práve tu…",
-      "rejectedLimit": "{count, plural, one {# rozhodnutie sa neuložilo: spis je plný} few {# rozhodnutia sa neuložili: spis je plný} other {# rozhodnutí sa neuložilo: spis je plný} many {# rozhodnutí sa neuložilo: spis je plný}}",
-      "rejectedMissing": "{count, plural, one {# rozhodnutie sa nepodarilo nájsť} few {# rozhodnutia sa nepodarilo nájsť} other {# rozhodnutí sa nepodarilo nájsť} many {# rozhodnutí sa nepodarilo nájsť}}",
+      "rejectedLimit": "{count, plural, one {# rozhodnutie sa neuložilo: spis je plný} few {# rozhodnutia sa neuložili: spis je plný} other {# rozhodnutí sa neuložilo: spis je plný} many {# rozhodnutia sa neuložilo: spis je plný}}",
+      "rejectedMissing": "{count, plural, one {# rozhodnutie sa nepodarilo nájsť} few {# rozhodnutia sa nepodarilo nájsť} other {# rozhodnutí sa nepodarilo nájsť} many {# rozhodnutia sa nepodarilo nájsť}}",
       "remove": "Odstrániť zo spisu",
       "save": "Uložiť do spisu",
-      "savePage": "Z tejto stránky {count, plural, one {sa uloží # rozhodnutie} few {sa uložia # rozhodnutia} other {sa uloží # rozhodnutí} many {sa uloží # rozhodnutí}}.",
-      "saveSelection": "{count, plural, one {Uloží sa # vybrané rozhodnutie} few {Uložia sa # vybrané rozhodnutia} other {Uloží sa # vybraných rozhodnutí} many {Uloží sa # vybraných rozhodnutí}}.",
+      "savePage": "Z tejto stránky {count, plural, one {sa uloží # rozhodnutie} few {sa uložia # rozhodnutia} other {sa uloží # rozhodnutí} many {sa uloží # rozhodnutia}}.",
+      "saveSelection": "{count, plural, one {Uloží sa # vybrané rozhodnutie} few {Uložia sa # vybrané rozhodnutia} other {Uloží sa # vybraných rozhodnutí} many {Uloží sa # vybraného rozhodnutia}}.",
       "saveTitle": "Uložiť do spisu",
-      "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí} many {bolo uložených # rozhodnutí}}"
+      "saved": "Do spisu {matter} {count, plural, one {bolo uložené # rozhodnutie} few {boli uložené # rozhodnutia} other {bolo uložených # rozhodnutí} many {bolo uložené # rozhodnutia}}"
     },
     "newestDecisions": "Najnovšie rozhodnutia",
     "noResults": {
@@ -1140,11 +1140,11 @@
       "pageOfCount": "Stránka {page} z {pageCount}",
       "pageOfEstimatedCount": "Stránka {page} z ~{pageCount}",
       "pageOfEstimatedCountLabel": "Stránka {page} z približne {pageCount}",
-      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočných zhôd}} na tejto stránke",
-      "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledkov}}",
-      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presných zhôd}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočných zhôd}} na tejto stránke",
-      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočných zhôd}} na tejto stránke",
-      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledkov}}",
+      "pageWithEstimatedMatchCounts": "Stránka {page} · približne {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presnej zhody}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithEstimatedResultCount": "Stránka {page} · približne {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledku}}",
+      "pageWithMatchCounts": "Stránka {page} · {exactCount, plural, one {# presná zhoda} few {# presné zhody} other {# presných zhôd} many {# presnej zhody}} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithPartialMatchCount": "Stránka {page} · {relaxedCount, plural, one {# čiastočná zhoda} few {# čiastočné zhody} other {# čiastočných zhôd} many {# čiastočnej zhody}} na tejto stránke",
+      "pageWithResultCount": "Stránka {page} · {count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledku}}",
       "perPage": "Na stránku",
       "refineForMore": "Spresnite vyhľadávanie, aby ste videli ďalšie výsledky"
     },
@@ -1192,7 +1192,7 @@
       "removeFromSearch": "Odstrániť z tohto vyhľadávania",
       "runAll": "Odpovedať na všetko",
       "runConfirm": "Odpovedať teraz",
-      "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutí}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok} many {# otázok}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí} many {vznikne # odpovedí}}.",
+      "runEstimate": "{rows, plural, one {# rozhodnutie} few {# rozhodnutia} other {# rozhodnutí} many {# rozhodnutia}} × {columns, plural, one {# otázka} few {# otázky} other {# otázok} many {# otázky}} na tejto stránke: {cells, plural, one {vznikne # odpoveď} few {vzniknú # odpovede} other {vznikne # odpovedí} many {vznikne # odpovede}}.",
       "runTitle": "Odpovedať na tejto stránke",
       "savedQuestions": "Uložené otázky",
       "title": "Rešeršné tabuľky"
@@ -1209,7 +1209,7 @@
       "line": "Pre <bdi>{original}</bdi> nič presne nezodpovedá; zobrazujeme výsledky pre <bdi>{query}</bdi>",
       "searchOriginal": "Hľadať moje pôvodné slová"
     },
-    "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie} many {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
+    "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie} many {# rozhodnutia nesie}} túto spisovú značku. Vyberte súd.",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1272,7 +1272,7 @@
       "popularName": "Populárny názov",
       "portraitCredit": "Zdroj portrétov: {source}",
       "provisionMentions": "{count, number}×",
-      "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok} many {# zmienok}}",
+      "provisionMentionsLabel": "{count, plural, one {# zmienka} few {# zmienky} other {# zmienok} many {# zmienky}}",
       "provisionsCited": "Dotknuté ustanovenia",
       "provisionsFailed": "Spracovanie citácií zlyhalo",
       "provisionsNoneFound": "Nenašli sa žiadne citované ustanovenia",
@@ -1317,15 +1317,15 @@
     "firstParty": "stella",
     "firstPartyTooltip": "Vytvorené tímom stella",
     "installFailed": "Inštalácia zlyhala",
-    "installPack": "Nainštalovať {count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástrojov}}",
+    "installPack": "Nainštalovať {count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástroja}}",
     "installed": "Nainštalované: {name}",
     "installedShort": "Nainštalované",
     "onboarding": {
       "packTitle": "Odporúčané pre vašu jurisdikciu"
     },
     "openHomepage": "Otvoriť domovskú stránku",
-    "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástrojov}} vybraných pre vašu prax. Nainštalujte jedným kliknutím alebo vyberte nižšie.",
-    "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných} many {# nástrojov nainštalovaných}}",
+    "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojov} many {# nástroja}} vybraných pre vašu prax. Nainštalujte jedným kliknutím alebo vyberte nižšie.",
+    "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných} many {# nástroja nainštalované}}",
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
     "removed": "Tento nástroj už nie je dostupný.",
     "sectionOthers": "Ostatné",
@@ -1582,7 +1582,7 @@
     },
     "historyContext": {
       "overflow": "+{count, number}",
-      "unnamed": "{count, plural, one {# ďalší} few {# ďalšie} other {# ďalších} many {# ďalších}}"
+      "unnamed": "{count, plural, one {# ďalší} few {# ďalšie} other {# ďalších} many {# ďalšieho}}"
     },
     "historyTrimmed": "Staršie správy sa nepodarilo zhrnúť, preto táto odpoveď vychádza len z poslednej časti konverzácie.",
     "improvePrompt": "Vylepšiť zadanie",
@@ -1670,17 +1670,17 @@
     "pastedChars": "Vložené · {count} znakov",
     "pastedText": {
       "expand": "Zobraziť celý text",
-      "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov} many {# znakov}}",
+      "fromClipboard": "Vložené {count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
       "fromPromptFallback": "Zručnosť",
       "showInTextField": "Zobraziť v textovom poli",
       "title": "Vložený text"
     },
     "placeholder": "Sem napíšte svoju otázku, / pre zručnosti, @ na pridanie kontextu",
     "processSummary": {
-      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýz}}",
-      "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uložených zmien}}",
-      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úprav dokumentu}}",
-      "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# preverených zdrojov}}"
+      "analyses": "{count, plural, one {# analýza} few {# analýzy} other {# analýz} many {# analýzy}}",
+      "changesSaved": "{count, plural, one {# uložená zmena} few {# uložené zmeny} other {# uložených zmien} many {# uloženej zmeny}}",
+      "documentEdits": "{count, plural, one {# úprava dokumentu} few {# úpravy dokumentu} other {# úprav dokumentu} many {# úpravy dokumentu}}",
+      "sourcesChecked": "{count, plural, one {# preverený zdroj} few {# preverené zdroje} other {# preverených zdrojov} many {# prevereného zdroja}}"
     },
     "promptImprovementStrategies": {
       "decompose": {
@@ -1704,10 +1704,10 @@
       "noResults": "Žiadne zhodné zručnosti",
       "tryOne": "Začni s jedným z týchto"
     },
-    "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# príloh}}",
+    "queuedAttachmentCount": "{count, plural, one {# príloha} few {# prílohy} other {# príloh} many {# prílohy}}",
     "queuedNotice": "V poradí – odošle sa po dokončení aktuálnej odpovede",
     "reasoning": "Uvažovanie",
-    "reasoningTokens": "{count, plural, one {# token uvažovania} few {# tokeny uvažovania} other {# tokenov uvažovania} many {# tokenov uvažovania}}",
+    "reasoningTokens": "{count, plural, one {# token uvažovania} few {# tokeny uvažovania} other {# tokenov uvažovania} many {# tokenu uvažovania}}",
     "recapLoading": "Zhrnutie konverzácie…",
     "removeSuggestion": "(odstrániť)",
     "renameThread": "Premenovať konverzáciu",
@@ -1846,8 +1846,8 @@
       "describe-stella-function": "Pripravujem vyhľadanie dát",
       "describe_template": "Čítanie polí vzoru",
       "discover_tools": "Pripravujem vyhľadanie dát",
-      "docxEditMore": "{count, plural, one {# ďalšia úprava} few {# ďalšie úpravy} other {# ďalších úprav} many {# ďalších úprav}}",
-      "docxEditSummary": "{count, plural, one {# navrhnutá úprava} few {# navrhnuté úpravy} other {# navrhnutých úprav} many {# navrhnutých úprav}}",
+      "docxEditMore": "{count, plural, one {# ďalšia úprava} few {# ďalšie úpravy} other {# ďalších úprav} many {# ďalšej úpravy}}",
+      "docxEditSummary": "{count, plural, one {# navrhnutá úprava} few {# navrhnuté úpravy} other {# navrhnutých úprav} many {# navrhnutej úpravy}}",
       "execute-typescript": "Čítam dáta spisu",
       "execute_typescript": "Čítam dáta spisu",
       "expand-chat-history": "Čítanie histórie chatu",
@@ -1910,7 +1910,7 @@
       "web_search": "Vyhľadávanie na webe"
     },
     "toolCall": {
-      "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znakov}}",
+      "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov} many {# znaku}}",
       "consoleLogs": "Výstup konzoly",
       "exactCall": "Presné volanie",
       "failed": "Tento krok zlyhal — stella si poradí inak.",
@@ -1956,7 +1956,7 @@
     "body": "Obsah",
     "categoryDeleteConfirm": "Ustanovenia v tejto kategórii budú presunuté medzi nekategorizované.",
     "categoryNamePlaceholder": "napr. Dôvernosť",
-    "clauseCount": "{count, plural, one {# ustanovenie} few {# ustanovenia} other {# ustanovení} many {# ustanovení}}",
+    "clauseCount": "{count, plural, one {# ustanovenie} few {# ustanovenia} other {# ustanovení} many {# ustanovenia}}",
     "clauseCreated": "Ustanovenie vytvorené",
     "clauseDeleted": "Ustanovenie odstránené",
     "clauseDeletedHint": "Toto prepojenie už nič nevypĺňa; odpojte ho, aby vzor ostal prehľadný.",
@@ -1980,8 +1980,8 @@
     "exportFailed": "Export ustanovení sa nepodaril",
     "formattingPreviewHint": "Číslovanie a formátovanie je tu len náhľad. Vygenerovaný dokument použije vlastné formátovanie zoznamov, čísla preto nepíšte ručne.",
     "importFailed": "Import ustanovení sa nepodaril",
-    "importResult": "{created, plural, one {# vytvorená} few {# vytvorené} other {# vytvorených} many {# vytvorených}}, {skipped, plural, one {# preskočená} few {# preskočené} other {# preskočených} many {# preskočených}}",
-    "importSuccess": "{count, plural, one {# ustanovenie importované} few {# ustanovenia importované} other {# ustanovení importovaných} many {# ustanovení importovaných}}",
+    "importResult": "{created, plural, one {# vytvorená} few {# vytvorené} other {# vytvorených} many {# vytvorené}}, {skipped, plural, one {# preskočená} few {# preskočené} other {# preskočených} many {# preskočené}}",
+    "importSuccess": "{count, plural, one {# ustanovenie importované} few {# ustanovenia importované} other {# ustanovení importovaných} many {# ustanovenia importované}}",
     "importing": "Importujem…",
     "keepMyText": "Ponechať môj text",
     "languagePlaceholder": "napr. sk",
@@ -2026,7 +2026,7 @@
     "syncFailed": "Synchronizácia sa nepodarila",
     "syncVersion": "Synchronizovať na najnovšiu",
     "synced": "Synchronizované na najnovšiu verziu",
-    "syncedAllResult": "{count, plural, =0 {Všetko je už aktuálne} one {Synchronizované # ustanovenie} few {Synchronizované # ustanovenia} many {Synchronizovaných # ustanovení} other {Synchronizovaných # ustanovení}}",
+    "syncedAllResult": "{count, plural, =0 {Všetko je už aktuálne} one {Synchronizované # ustanovenie} few {Synchronizované # ustanovenia} many {Synchronizované # ustanovenia} other {Synchronizovaných # ustanovení}}",
     "takeTheirText": "Použiť uložený text",
     "titleLabel": "Názov",
     "titlePlaceholder": "napr. Ustanovenie o dôvernosti",
@@ -2051,7 +2051,7 @@
     "variantPromoted": "Variant nastavený ako hlavné telo",
     "variantUpdated": "Variant upravený",
     "variants": "Varianty",
-    "versionCount": "{count, plural, one {# verzia} few {# verzie} other {# verzií} many {# verzií}}",
+    "versionCount": "{count, plural, one {# verzia} few {# verzie} other {# verzií} many {# verzie}}",
     "versionLimitReached": "Bol dosiahnutý limit verzií tohto ustanovenia",
     "versionRestored": "Verzia obnovená"
   },
@@ -2147,7 +2147,7 @@
     "delete": "Vymazať",
     "deleteCategory": "Odstrániť kategóriu",
     "deleteConfirmDescription": "Naozaj chcete vymazať „{name}“? Túto akciu nie je možné vrátiť.",
-    "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných} many {# položiek zmazaných}}",
+    "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných} many {# položky zmazané}}",
     "description": "Popis",
     "details": "Detaily",
     "detailsHiddenFeatureUnavailable": "Podrobnosti sú skryté: funkcia nie je zapnutá",
@@ -2173,7 +2173,7 @@
       "movingNear": "{count, plural, one {Presúvanie položky {itemName} vedľa {destinationName}.} few {Presúvanie položiek {itemName} vedľa {destinationName}.} other {Presúvanie položiek {itemName} vedľa {destinationName}.} many {Presúvanie položiek {itemName} vedľa {destinationName}.}}",
       "movingTo": "{count, plural, one {Presúvanie položky {itemName} do umiestnenia {destinationName}.} few {Presúvanie položiek {itemName} do umiestnenia {destinationName}.} other {Presúvanie položiek {itemName} do umiestnenia {destinationName}.} many {Presúvanie položiek {itemName} do umiestnenia {destinationName}.}}",
       "pickedUp": "{count, plural, one {Položka {itemName} bola uchopená.} few {{itemName} boli uchopené.} other {{itemName} bolo uchopených.} many {{itemName} bolo uchopených.}}",
-      "selectedItems": "{count, plural, one {# vybraná položka} few {# vybrané položky} other {# vybraných položiek} many {# vybraných položiek}}"
+      "selectedItems": "{count, plural, one {# vybraná položka} few {# vybrané položky} other {# vybraných položiek} many {# vybranej položky}}"
     },
     "duplicate": "Duplikovať",
     "duplicated": "Duplikované",
@@ -2448,7 +2448,7 @@
     "scopeTemplates": "Zobrazenie, vypĺňanie a vytváranie vašich vzorov dokumentov",
     "scopeTemplatesAnonymized": "Zobraziť, vyplniť a vytvoriť anonymizované verzie vašich vzorov dokumentov",
     "sensitiveAccess": "Zahŕňa prístup, ktorý môže odstraňovať údaje alebo meniť vašu organizáciu",
-    "showAllPermissions": "{count, plural, one {Zobraziť povolenie} few {Zobraziť všetky # povolenia} many {Zobraziť všetkých # povolení} other {Zobraziť všetkých # povolení}}",
+    "showAllPermissions": "{count, plural, one {Zobraziť povolenie} few {Zobraziť všetky # povolenia} many {Zobraziť všetky # povolenia} other {Zobraziť všetkých # povolení}}",
     "signedInAs": "Prihlásený ako <email>{accountEmail}</email>",
     "summaryAdminRead": "protokol auditu",
     "summaryAdminWrite": "členovia a nastavenia organizácie",
@@ -2481,7 +2481,7 @@
     "verifiedPublisher": "Overená aplikácia od {publisher}"
   },
   "contacts": {
-    "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch} many {# ďalších spisoch}}",
+    "alsoPartyIn": "Vystupuje tiež ako strana v {count, plural, one {# ďalšom spise} few {# ďalších spisoch} other {# ďalších spisoch} many {# ďalšieho spisu}}",
     "attorneys": {
       "none": "Nepriradený",
       "originating": "Hlavný kontakt",
@@ -2596,8 +2596,8 @@
     "filterPersons": "Osoby",
     "import": {
       "confirmAction": "Potvrdiť import",
-      "previewSummary": "{valid, plural, one {# pripravený} few {# pripravené} other {# pripravených} many {# pripravených}}, {invalid, plural, one {# s chybou} few {# s chybami} other {# s chybami} many {# s chybami}}",
-      "resultsSummary": "{created, plural, one {# vytvorený} few {# vytvorené} other {# vytvorených} many {# vytvorených}}, {skipped, plural, one {# preskočený} few {# preskočené} other {# preskočených} many {# preskočených}}",
+      "previewSummary": "{valid, plural, one {# pripravený} few {# pripravené} other {# pripravených} many {# pripravené}}, {invalid, plural, one {# s chybou} few {# s chybami} other {# s chybami} many {# s chybami}}",
+      "resultsSummary": "{created, plural, one {# vytvorený} few {# vytvorené} other {# vytvorených} many {# vytvorené}}, {skipped, plural, one {# preskočený} few {# preskočené} other {# preskočených} many {# preskočené}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
       "skippedDuplicateExternalRef": "Preskočené: rovnaký zdroj a externé ID sa vyskytujú dvakrát",
@@ -2634,11 +2634,11 @@
         "type": "Typ kontaktu"
       },
       "fileInvalid": "Vyberte jeden súbor CSV, TSV alebo TXT.",
-      "fileSummary": "{name}, {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov} many {# kontaktov}}",
+      "fileSummary": "{name}, {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov} many {# kontaktu}}",
       "generateDisplayName": "Vytvoriť zobrazované názvy z priradených polí mena",
       "ignore": "Neimportovať",
       "importAnother": "Importovať ďalší súbor",
-      "importCount": "Importovať {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov} many {# kontaktov}}",
+      "importCount": "Importovať {count, plural, one {# kontakt} few {# kontakty} other {# kontaktov} many {# kontaktu}}",
       "importFailed": "Kontakty sa nepodarilo importovať.",
       "inspectFailed": "Tento súbor s kontaktmi sa nepodarilo prečítať.",
       "issue": {
@@ -2661,7 +2661,7 @@
       "preview": "Skontrolovať import",
       "previewFailed": "Nepodarilo sa vytvoriť náhľad importu.",
       "reviewDescription": "Zatiaľ sa nič neimportovalo. Upravte ľubovoľný riadok nižšie a potom importujte pripravené kontakty.",
-      "reviewSummary": "{ready, plural, one {# kontakt je pripravený} few {# kontakty sú pripravené} other {# kontaktov je pripravených} many {# kontaktov je pripravených}}. {errors, plural, =0 {Žiadne chyby.} one {Treba opraviť # chybu.} few {Treba opraviť # chyby.} other {Treba opraviť # chýb.} many {Treba opraviť # chýb.}}",
+      "reviewSummary": "{ready, plural, one {# kontakt je pripravený} few {# kontakty sú pripravené} other {# kontaktov je pripravených} many {# kontaktu je pripravené}}. {errors, plural, =0 {Žiadne chyby.} one {Treba opraviť # chybu.} few {Treba opraviť # chyby.} other {Treba opraviť # chýb.} many {Treba opraviť # chyby.}}",
       "sampleValues": "Ukážkové hodnoty",
       "sourceColumn": "Zdrojový stĺpec",
       "sourceRow": "Riadok {index}",
@@ -2775,11 +2775,11 @@
       "deleteParagraph": "Vymazať odsek",
       "replacement": "„{find}“ → „{replace}“"
     },
-    "countHigh": "{count, plural, one {# vysoká} few {# vysoké} other {# vysokých} many {# vysokých}}",
-    "countLow": "{count, plural, one {# nízka} few {# nízke} other {# nízkych} many {# nízkych}}",
-    "countMedium": "{count, plural, one {# stredná} few {# stredné} other {# stredných} many {# stredných}}",
-    "countUnspecified": "{count, plural, one {# neurčená} few {# neurčené} other {# neurčených} many {# neurčených}}",
-    "finalizePendingNote": "{count, plural, one {# návrh stále čaká na revíziu.} few {# návrhy stále čakajú na revíziu.} other {# návrhov stále čaká na revíziu.} many {# návrhov stále čaká na revíziu.}}",
+    "countHigh": "{count, plural, one {# vysoká} few {# vysoké} other {# vysokých} many {# vysokej}}",
+    "countLow": "{count, plural, one {# nízka} few {# nízke} other {# nízkych} many {# nízkej}}",
+    "countMedium": "{count, plural, one {# stredná} few {# stredné} other {# stredných} many {# strednej}}",
+    "countUnspecified": "{count, plural, one {# neurčená} few {# neurčené} other {# neurčených} many {# neurčenej}}",
+    "finalizePendingNote": "{count, plural, one {# návrh stále čaká na revíziu.} few {# návrhy stále čakajú na revíziu.} other {# návrhov stále čaká na revíziu.} many {# návrhu stále čaká na revíziu.}}",
     "hideAccepted": "Skryť prijaté návrhy",
     "keepInReview": "Ponechať v revízii",
     "notApplied": "Zmena nebola použitá",
@@ -3006,7 +3006,7 @@
   "fileDetail": {
     "base": "Základ",
     "cannotDeleteLastVersion": "Nemožno odstrániť jedinú zostávajúcu verziu",
-    "changesDetected": "{count, plural, one {# zmena} few {# zmeny} other {# zmien} many {# zmien}}",
+    "changesDetected": "{count, plural, one {# zmena} few {# zmeny} other {# zmien} many {# zmeny}}",
     "changesSince": "Zmeny od {version}",
     "compare": "Porovnať",
     "compareAcceptedChangesDescription": "Pred porovnaním sa sledované zmeny vo verziách {baseVersion} a {targetVersion} budú považovať za prijaté. Náhľad sledovaných zmien zobrazí iba rozdiel medzi finálnymi textami oboch dokumentov.",
@@ -3040,7 +3040,7 @@
     "compareRedlineUnavailable": "Porovnanie bolo uložené, ale jeho súbor nebolo možné otvoriť. Obnovte históriu verzií a skúste to znova.",
     "compareRequestFailed": "Verzie sa nedali porovnávať.",
     "compareTo": "Porovnať s",
-    "compareUnsupported": "{count, plural, one {# časť nebola porovnaná} few {# časti neboli porovnané} other {# častí nebolo porovnaných} many {# častí nebolo porovnaných}}",
+    "compareUnsupported": "{count, plural, one {# časť nebola porovnaná} few {# časti neboli porovnané} other {# častí nebolo porovnaných} many {# časti nebolo porovnané}}",
     "compareUnsupportedDescription": "Tieto časti dokumentu neboli porovnávané:",
     "compareUnsupportedReasons": {
       "missingInBase": "Časť dokumentu existuje iba v cieli",
@@ -3049,7 +3049,7 @@
       "unsupportedContent": "Táto verzia obsahuje obsah, ktorý zatiaľ nemožno porovnať."
     },
     "compareUnverified": "Neoverené porovnanie",
-    "compareVerificationFailures": "{count, plural, one {Jedna obojsmerná kontrola zlyhala. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} few {# obojsmerné kontroly zlyhali. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} other {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} many {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.}}",
+    "compareVerificationFailures": "{count, plural, one {Jedna obojsmerná kontrola zlyhala. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} few {# obojsmerné kontroly zlyhali. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} other {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} many {# obojsmernej kontroly zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.}}",
     "compareVerified": "Overené porovnanie",
     "compareVersions": "{targetVersion} oproti {baseVersion}",
     "compareVersionsDescription": "Vyberte staršiu verziu ako základnú a novšiu verziu ako cieľovú.",
@@ -3737,7 +3737,7 @@
       "remove": "Zrušiť zoskupenie kariet",
       "rename": "Premenovať skupinu",
       "saveFailed": "V tomto prehliadači sa nepodarilo uložiť skupiny kariet.",
-      "tabCount": "{count, plural, one {# karta} few {# karty} other {# kariet} many {# kariet}}",
+      "tabCount": "{count, plural, one {# karta} few {# karty} other {# kariet} many {# karty}}",
       "ungroup": "Odstrániť zo skupiny"
     },
     "hidePane": "Skryť panel",
@@ -3814,10 +3814,10 @@
         "missingFromTarget": "Chýba v cieľovom dokumente",
         "notComparable": "Nedá sa porovnať"
       },
-      "basisCombined": "{count, plural, one {Kontrola podľa {name} a porovnanie s # referenčným dokumentom} few {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} other {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} many {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi}}",
+      "basisCombined": "{count, plural, one {Kontrola podľa {name} a porovnanie s # referenčným dokumentom} few {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} other {Kontrola podľa {name} a porovnanie s # referenčnými dokumentmi} many {Kontrola podľa {name} a porovnanie s # referenčného dokumentu}}",
       "basisDivider": "a / alebo",
       "basisPlaybook": "Kontrola podľa {name}",
-      "basisReferences": "{count, plural, one {Porovnanie s # referenčným dokumentom} few {Porovnanie s # referenčnými dokumentmi} other {Porovnanie s # referenčnými dokumentmi} many {Porovnanie s # referenčnými dokumentmi}}",
+      "basisReferences": "{count, plural, one {Porovnanie s # referenčným dokumentom} few {Porovnanie s # referenčnými dokumentmi} other {Porovnanie s # referenčnými dokumentmi} many {Porovnanie s # referenčného dokumentu}}",
       "basisToggle": "Podklady kontroly",
       "changeBasis": "Zmeniť podklady kontroly",
       "chatDraft": {
@@ -3829,7 +3829,7 @@
       },
       "checks": "Posudzuje sa:",
       "commentFailed": "Komentár sa nepodarilo pridať",
-      "comparedWithReferences": "{count, plural, one {Porovnané s # referenčným dokumentom} few {Porovnané s # referenčnými dokumentmi} other {Porovnané s # referenčnými dokumentmi} many {Porovnané s # referenčnými dokumentmi}}",
+      "comparedWithReferences": "{count, plural, one {Porovnané s # referenčným dokumentom} few {Porovnané s # referenčnými dokumentmi} other {Porovnané s # referenčnými dokumentmi} many {Porovnané s # referenčného dokumentu}}",
       "decidedCount": "rozhodnuté {count, number}",
       "decision": "Rozhodnutie",
       "decisionFailed": "Rozhodnutie sa nepodarilo uložiť",
@@ -3855,13 +3855,13 @@
       "filterCoverage": "Pokrytie",
       "filterDeviations": "Odchýlky",
       "flag": "Označiť",
-      "flaggedPositions": "{total, plural, one {označené {flagged, number} z # pozície} few {označené {flagged, number} z # pozícií} other {označené {flagged, number} z # pozícií} many {označené {flagged, number} z # pozícií}}",
+      "flaggedPositions": "{total, plural, one {označené {flagged, number} z # pozície} few {označené {flagged, number} z # pozícií} other {označené {flagged, number} z # pozícií} many {označené {flagged, number} z # pozície}}",
       "fromChat": "Z chatu",
       "fromThisMatter": "Z tohto spisu",
       "history": {
         "backToLatest": "Späť na najnovšiu",
         "decided": "rozhodnuté {decided, number} z {total, number}",
-        "references": "{count, plural, one {# referencia} few {# referencie} other {# referencií} many {# referencií}}"
+        "references": "{count, plural, one {# referencia} few {# referencie} other {# referencií} many {# referencie}}"
       },
       "impact": {
         "favourable": "Výhodné",
@@ -3906,7 +3906,7 @@
         "review": "Hlavný: zistenia v širokom paneli"
       },
       "passageUnavailable": "Text referencie nie je dostupný",
-      "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží} many {# pasáží}}",
+      "passagesCount": "{count, plural, one {# pasáž} few {# pasáže} other {# pasáží} many {# pasáže}}",
       "passagesToggle": "Pasáže",
       "pendingCount": "{count, plural, one {# čaká} few {# čakajú} other {# čaká} many {# čaká}}",
       "perspective": {
@@ -3924,7 +3924,7 @@
         "absent": "Nie",
         "present": "Áno"
       },
-      "progressPositions": "{total, plural, one {{completed, number} z # pozície} few {{completed, number} z # pozícií} other {{completed, number} z # pozícií} many {{completed, number} z # pozícií}}",
+      "progressPositions": "{total, plural, one {{completed, number} z # pozície} few {{completed, number} z # pozícií} other {{completed, number} z # pozícií} many {{completed, number} z # pozície}}",
       "proposedChange": "Navrhovaná zmena",
       "proposing": "Navrhujú sa pozície… {count, number}",
       "readOnlyRun": "Rozhodnuté v tejto kontrole",
@@ -3942,7 +3942,7 @@
       "results": "Výsledky kontroly",
       "reviewAgain": "Spustiť ďalšiu kontrolu",
       "reviewPositionsFirst": "Najprv skontrolovať pozície",
-      "reviewedAgainstCombined": "{count, plural, one {Skontrolované podľa {name} a porovnané s # referenčným dokumentom} few {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} other {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} many {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi}}",
+      "reviewedAgainstCombined": "{count, plural, one {Skontrolované podľa {name} a porovnané s # referenčným dokumentom} few {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} other {Skontrolované podľa {name} a porovnané s # referenčnými dokumentmi} many {Skontrolované podľa {name} a porovnané s # referenčného dokumentu}}",
       "reviewing": "Kontrola prebieha…",
       "reviewingHint": "Pri rozsiahlych dokumentoch to môže trvať niekoľko minút.",
       "run": "Spustiť kontrolu",
@@ -4008,9 +4008,9 @@
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
       "disableSkill": "Vypnúť zručnosť",
       "discoverSkills": "Nájsť zručnosti",
-      "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdených # zručností}}",
+      "discoveredSkills": "{count, plural, one {Nájdená # zručnosť} few {Nájdené # zručnosti} other {Nájdených # zručností} many {Nájdené # zručnosti}}",
       "discoveryEmpty": "V tomto repozitári ani priečinku sa nenašli žiadne zručnosti.",
-      "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatných zručností bolo preskočených}}",
+      "discoverySkippedInvalid": "{count, plural, one {# neplatná zručnosť bola preskočená} few {# neplatné zručnosti boli preskočené} other {# neplatných zručností bolo preskočených} many {# neplatnej zručnosti bolo preskočené}}",
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
@@ -4024,7 +4024,7 @@
       "importSelected": "Importovať vybrané ({count})",
       "importSkill": "Importovať z URL",
       "importTitle": "Importovať zručnosť",
-      "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností} many {Importovaných # zručností}}",
+      "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností} many {Importované # zručnosti}}",
       "invalidPath": "Cesta smie obsahovať iba malé písmená, číslice, bodky, spojovníky alebo podčiarkovníky",
       "invocationAuto": "Automaticky",
       "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
@@ -4040,7 +4040,7 @@
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v tíme",
       "selectionLimit": "Naraz môžete vybrať najviac {count} zručností.",
-      "skippedFiles": "{count, plural, one {# súbor nebol importovaný} few {# súbory neboli importované} other {# súborov nebolo importovaných} many {# súborov nebolo importovaných}}",
+      "skippedFiles": "{count, plural, one {# súbor nebol importovaný} few {# súbory neboli importované} other {# súborov nebolo importovaných} many {# súboru nebolo importované}}",
       "skippedReasonNotUtf8Text": "Nie je text v kódovaní UTF-8",
       "skippedReasonOutsideSkillFolder": "Mimo priečinka zručnosti",
       "skippedReasonUnsupportedExtension": "Nepodporovaný typ súboru",
@@ -4135,7 +4135,7 @@
       "autosave": {
         "failed": "Nepodarilo sa uložiť",
         "nameMissing": "Neuložené: zadajte názov",
-        "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje} many {# pozícií vyžaduje}} pozornosť"
+        "positionsNeedAttention": "Neuložené: {count, plural, one {# pozícia vyžaduje} few {# pozície vyžadujú} other {# pozícií vyžaduje} many {# pozície vyžaduje}} pozornosť"
       },
       "buildWithAi": {
         "description": "Odpovedzte v chate na niekoľko otázok a playbook sa bude priebežne ukladať.",
@@ -4165,7 +4165,7 @@
       "created": "Playbook vytvorený",
       "customizeAnswer": "Zmeniť získavanú odpoveď",
       "customizeAnswerHint": "Upraviť otázku alebo formát odpovede.",
-      "decisionLine": "{runs, plural, one {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolou} few {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} other {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} many {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami}}",
+      "decisionLine": "{runs, plural, one {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolou} few {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} other {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontrolami} many {prijaté {accepted, number} · zamietnuté {dismissed, number} · naprieč # kontroly}}",
       "deleteFailed": "Playbook sa nepodarilo odstrániť",
       "deletePlaybook": "Odstrániť playbook",
       "deletePosition": "Odstrániť pozíciu",
@@ -4275,7 +4275,7 @@
       "starters": {
         "addedToast": "Playbook pridaný",
         "browseButton": "Prehľadávať úvodné playbooky",
-        "positionCount": "{count, plural, one {# pozícia} few {# pozície} other {# pozícií} many {# pozícií}}",
+        "positionCount": "{count, plural, one {# pozícia} few {# pozície} other {# pozícií} many {# pozície}}",
         "title": "Úvodné playbooky",
         "useStarter": "Použiť tento playbook"
       },
@@ -4554,7 +4554,7 @@
     "loadOlder": "Načítať staršie",
     "markAllRead": "Označiť všetko ako prečítané",
     "title": "Oznámenia",
-    "unreadLabel": "{count, plural, one {# neprečítané oznámenie} few {# neprečítané oznámenia} other {# neprečítaných oznámení} many {# neprečítaných oznámení}}"
+    "unreadLabel": "{count, plural, one {# neprečítané oznámenie} few {# neprečítané oznámenia} other {# neprečítaných oznámení} many {# neprečítaného oznámenia}}"
   },
   "onboarding": {
     "aiConfigFailed": "Nastavenie AI sa nepodarilo uložiť. Môžete ho dokončiť v nastaveniach.",
@@ -4565,7 +4565,7 @@
     "browserExtensionCardDescription": "Chat môže pracovať s webmi, ktoré už používate, na karte Chromu, ktorú zvolíte.",
     "catalogueAlwaysOn": "Vždy zapnuté",
     "catalogueCommunityHeading": "Ostatné",
-    "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi} many {Pokračovať s # nástrojmi}}",
+    "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi} many {Pokračovať s # nástroja}}",
     "catalogueDetailAbout": "O nástroji",
     "catalogueDetailCost": "Cena",
     "catalogueDetailJurisdictions": "Jurisdikcie",
@@ -4574,7 +4574,7 @@
     "catalogueFootnote": "Vlastné nástroje môžete vytvoriť neskôr priamo v aplikácii, alebo <link>požiadať o ich pridanie cez GitHub</link>.",
     "cataloguePartial": "Nainštalované {installed}, zlyhalo {failed}",
     "cataloguePreviewBaseline": "Vstavané",
-    "cataloguePreviewCount": "{count, plural, =0 {Žiadne schopnosti} one {# schopnosť} few {# schopnosti} other {# schopností} many {# schopností}}",
+    "cataloguePreviewCount": "{count, plural, =0 {Žiadne schopnosti} one {# schopnosť} few {# schopnosti} other {# schopností} many {# schopnosti}}",
     "cataloguePreviewEmpty": "Vyberte z odporúčaného balíka alebo objavte ďalšie nástroje nižšie.",
     "cataloguePreviewYourStack": "Vaša sada",
     "catalogueProposeTool": "Navrhnúť nový nástroj",
@@ -4608,7 +4608,7 @@
     "orgSubtitle": "Ak sa pripájate k existujúcemu tímu, požiadajte niektorého z jeho členov o odkaz s pozvánkou.",
     "orgTitle": "Pomenujte svoj tím",
     "skipStep": "Preskočiť",
-    "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo} many {# pozvánok zlyhalo}}",
+    "someInvitesFailed": "{count, plural, one {# pozvánka zlyhala} few {# pozvánky zlyhali} other {# pozvánok zlyhalo} many {# pozvánky zlyhalo}}",
     "stepAi": "AI",
     "stepApps": "Aplikácie a nástroje",
     "stepJurisdiction": "Jurisdikcia",
@@ -4928,7 +4928,7 @@
     "expand": "Rozbaliť odpoveď",
     "explain": "Vysvetliť",
     "followUp": "Položiť doplňujúcu otázku",
-    "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.} many {# citácií sa nepodarilo overiť.}}",
+    "invalidCitations": "{count, plural, one {# citáciu sa nepodarilo overiť.} few {# citácie sa nepodarilo overiť.} other {# citácií sa nepodarilo overiť.} many {# citácie sa nepodarilo overiť.}}",
     "loading": "Generovanie odpovede…",
     "minimise": "Zbaliť odpoveď",
     "modelError": "Model nedokázal túto odpoveď dokončiť.",
@@ -4962,7 +4962,7 @@
     "deleteSearchTitle": "Odstrániť uložené vyhľadávanie",
     "editedBy": "Upravil/a",
     "emptyState": "Začnite písať a vyhľadajte vo všetkých spisoch.",
-    "estimatedResultCount": "{count, plural, one {Približne # výsledok} few {Približne # výsledky} other {Približne # výsledkov} many {Približne # výsledkov}}",
+    "estimatedResultCount": "{count, plural, one {Približne # výsledok} few {Približne # výsledky} other {Približne # výsledkov} many {Približne # výsledku}}",
     "hintAskAI": "<kbd>Tab</kbd> opýtať sa AI",
     "hintClear": "<kbd>Esc</kbd> vymazať",
     "hintClose": "<kbd>Esc</kbd> zavrieť",
@@ -5005,7 +5005,7 @@
     "requestCountry": "Požiadať o pridanie novej krajiny",
     "resizeFilters": "Zmeniť šírku stĺpca filtrov",
     "resizePreview": "Zmeniť šírku stĺpca náhľadu",
-    "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledkov}}",
+    "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov} many {# výsledku}}",
     "saveSearch": "Uložiť vyhľadávanie",
     "saveSearchNamePlaceholder": "napr. Nedávne súbory PDF",
     "saveSearchTitle": "Uložiť vyhľadávanie",
@@ -5334,12 +5334,12 @@
       "usagePlanSeats": "Miesta",
       "usagePlansDescription": "Vyberte tarif pre svoju organizáciu.",
       "usagePlansTitle": "Tarify",
-      "usageSeats": "{count, plural, one {# miesto} few {# miesta} other {# miest} many {# miest}}",
+      "usageSeats": "{count, plural, one {# miesto} few {# miesta} other {# miest} many {# miesta}}",
       "usageStatusCancelled": "Zrušené",
       "usageStatusPastDue": "Po splatnosti",
       "usageStatusPaused": "Pozastavené",
       "usageStatusTrialing": "Skúšobná verzia",
-      "usageUnitCount": "{count, plural, one {# jednotka} few {# jednotky} other {# jednotiek} many {# jednotiek}}",
+      "usageUnitCount": "{count, plural, one {# jednotka} few {# jednotky} other {# jednotiek} many {# jednotky}}",
       "usageUnitsBalanceTemplate": "K dispozícii je {remaining} jednotiek",
       "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie"
     }
@@ -5689,7 +5689,7 @@
     "categoryDeleteConfirm": "Kategória bude odstránená. Vzory v tejto kategórii budú presunuté medzi nekategorizované.",
     "categoryDeleteFailed": "Odstránenie kategórie sa nepodarilo",
     "categorySaveFailed": "Uloženie kategórie sa nepodarilo",
-    "checkErrors": "{count, plural, one {# chyba} few {# chyby} other {# chýb} many {# chýb}}",
+    "checkErrors": "{count, plural, one {# chyba} few {# chyby} other {# chýb} many {# chyby}}",
     "checkFailed": "Kontrola vzoru sa nepodarila",
     "checkFindingConditionUnknownPath": "Podmienka odkazuje na {reference}, čo nie je pole ani pomenovaná podmienka",
     "checkFindingFieldMissingInputType": "Pole nemá typ vstupu; použije sa obyčajné textové pole",
@@ -5705,11 +5705,11 @@
     "checkNoIssues": "Nenašli sa žiadne problémy. Vzor je pripravený na použitie.",
     "checkResultsTitle": "Kontrola vzoru",
     "checkTemplate": "Skontrolovať vzor",
-    "checkWarnings": "{count, plural, one {# varovanie} few {# varovania} other {# varovaní} many {# varovaní}}",
+    "checkWarnings": "{count, plural, one {# varovanie} few {# varovania} other {# varovaní} many {# varovania}}",
     "clearMyLookupFormatDefault": "Zrušiť moje predvolené",
     "conditionAddGroup": "Pridať skupinu",
     "conditionAddRule": "Pridať pravidlo",
-    "conditionCount": "{count, plural, one {# podmienka} few {# podmienky} other {# podmienok} many {# podmienok}}",
+    "conditionCount": "{count, plural, one {# podmienka} few {# podmienky} other {# podmienok} many {# podmienky}}",
     "conditionDecidedNo": "Nie · {probability}",
     "conditionDecidedOnGenerate": "Rozhodne sa pri generovaní",
     "conditionDecidedYes": "Áno · {probability}",
@@ -5772,8 +5772,8 @@
     "dragAndDrop": "alebo presuňte sem",
     "dropToCreate": "Presuňte sem .docx na vytvorenie vzoru",
     "editFields": "Upraviť polia",
-    "emptyFieldsWarning": "{count, plural, one {# pole je stále prázdne} few {# polia sú stále prázdne} other {# polí je stále prázdnych} many {# polí je stále prázdnych}}: {names}",
-    "fieldCount": "{count, plural, one {# pole} few {# polia} other {# polí} many {# polí}}",
+    "emptyFieldsWarning": "{count, plural, one {# pole je stále prázdne} few {# polia sú stále prázdne} other {# polí je stále prázdnych} many {# poľa je stále prázdne}}: {names}",
+    "fieldCount": "{count, plural, one {# pole} few {# polia} other {# polí} many {# poľa}}",
     "fieldFormat": "Výsledný formát",
     "fieldFormatHint": "Pomocou '{{key}}' vložíte časť.",
     "fieldFormulaEnable": "Vzorec (vypočítaná hodnota)",
@@ -5834,7 +5834,7 @@
     "orImportFromDocument": "alebo importovať z dokumentu",
     "pdfConversionFailed": "Konverzia do PDF sa nepodarila",
     "pickTemplate": "Vyberte vzor, z ktorého chcete vychádzať.",
-    "prefillApplied": "{count, plural, one {Predvyplnené # pole} few {Predvyplnené # polia} other {Predvyplnených # polí} many {Predvyplnených # polí}}",
+    "prefillApplied": "{count, plural, one {Predvyplnené # pole} few {Predvyplnené # polia} other {Predvyplnených # polí} many {Predvyplnené # poľa}}",
     "prefillBadgeLabel": "Predvyplnené zo zdroja",
     "prefillDescription": "Pridajte zdrojový dokument alebo vložený text; nájdené hodnoty polí sa navrhnú na kontrolu.",
     "prefillDropHint": "Presuňte sem DOCX alebo PDF, alebo kliknite pre výber",
@@ -5853,7 +5853,7 @@
     "previewSectionFooter": "Päta",
     "previewSectionHeader": "Hlavička",
     "registryAutofill": "Vyplniť z obchodného registra",
-    "registryFilled": "Vyplnené {count, plural, one {# pole} few {# polia} other {# polí} many {# polí}} z registra",
+    "registryFilled": "Vyplnené {count, plural, one {# pole} few {# polia} other {# polí} many {# poľa}} z registra",
     "registryIdPlaceholder": "IČO spoločnosti (napr. číslo KRS)",
     "registryLookup": "Vyhľadať",
     "registryNotFound": "Pre toto IČO sa nenašla žiadna spoločnosť",
@@ -5863,7 +5863,7 @@
     "searchTemplates": "Hľadať vzory…",
     "structureErrorsInDocument": "Direktívy vzoru, ktoré nebolo možné použiť: {count}. Skontrolujte dokument.",
     "structureWarningParagraph": "Odsek {paragraph, number}",
-    "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry} many {# varovaní štruktúry}}",
+    "structureWarnings": "{count, plural, one {# varovanie štruktúry} few {# varovania štruktúry} other {# varovaní štruktúry} many {# varovania štruktúry}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Voliteľné: ako má AI upraviť znenie (napr. prispôsobiť okolitej gramatike)",
       "aiDrafted": "Koncept od AI",
@@ -5996,7 +5996,7 @@
     "templateSaved": "Vzor uložený",
     "unmatchedPlaceholders": "Niektoré zástupné znaky neboli vyplnené: {list}",
     "untitledTemplate": "Vzor bez názvu",
-    "unusedFields": "{count, plural, one {# nepoužité pole} few {# nepoužité polia} other {# nepoužitých polí} many {# nepoužitých polí}}",
+    "unusedFields": "{count, plural, one {# nepoužité pole} few {# nepoužité polia} other {# nepoužitých polí} many {# nepoužitého poľa}}",
     "unusedValues": "Niektoré hodnoty neboli použité: {list}",
     "upToNItems": "Až {max}",
     "updatedAgo": "Aktualizované {time}",
@@ -6146,7 +6146,7 @@
       "copied": "Skopírované do spisu",
       "copyOption": "Kopírovať (ponechať originál)",
       "description": "Skopírovať alebo presunúť \"{name}\" do iného spisu",
-      "descriptionCount": "Skopírovať alebo presunúť {count, plural, one {# položku} few {# položky} other {# položiek} many {# položiek}} do iného spisu",
+      "descriptionCount": "Skopírovať alebo presunúť {count, plural, one {# položku} few {# položky} other {# položiek} many {# položky}} do iného spisu",
       "dragFolder": "Potiahnutím presunúť priečinok",
       "goToMatter": "Prejsť do spisu",
       "menuItem": "Kopírovať/Presunúť do spisu",
@@ -6173,16 +6173,16 @@
     "createNewWorkspace": "Vytvoriť nový spis",
     "defaultName": "Bez názvu",
     "deleteItem": "Vymazať položku",
-    "deleteItems": "Vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položiek}}",
-    "deleteItemsDescription": "Naozaj chcete vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položiek}}? Túto akciu nemožno vrátiť späť.",
+    "deleteItems": "Vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položky}}",
+    "deleteItemsDescription": "Naozaj chcete vymazať {count, plural, one {# položku} few {# položky} other {# položiek} many {# položky}}? Túto akciu nemožno vrátiť späť.",
     "deleteSelectedRows": "Vymazať vybrané riadky",
-    "deleteSelectedRowsDescription": "{count, plural, one {Naozaj chcete vymazať # vybraný riadok? Túto akciu nemožno vrátiť.} few {Naozaj chcete vymazať # vybrané riadky? Túto akciu nemožno vrátiť.} other {Naozaj chcete vymazať # vybraných riadkov? Túto akciu nemožno vrátiť.} many {Naozaj chcete vymazať # vybraných riadkov? Túto akciu nemožno vrátiť.}}",
+    "deleteSelectedRowsDescription": "{count, plural, one {Naozaj chcete vymazať # vybraný riadok? Túto akciu nemožno vrátiť.} few {Naozaj chcete vymazať # vybrané riadky? Túto akciu nemožno vrátiť.} other {Naozaj chcete vymazať # vybraných riadkov? Túto akciu nemožno vrátiť.} many {Naozaj chcete vymazať # vybraného riadka? Túto akciu nemožno vrátiť.}}",
     "deleteSelection": "Vymazať výber",
     "deleteWorkspace": "Vymazať spis",
     "deleteWorkspaceConfirmDescription": "Naozaj chcete vymazať tento spis? Túto akciu nemožno vrátiť.",
     "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
-    "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov} many {# dokumentov}}",
+    "documentsCount": "{count, plural, one {# dokument} few {# dokumenty} other {# dokumentov} many {# dokumentu}}",
     "dropToUploadFiles": "Presuňte súbory pre nahranie",
     "duplicateMatter": "Duplikovať spis",
     "duplicateMatterDescription": "Duplikujete spis, jeho názov, klienta, členov tímu, strany a zobrazenia.",
@@ -6197,7 +6197,7 @@
       "description": "Vytvorte spis na organizáciu dokumentov, kontaktov, úloh a tímovej aktivity na jednom mieste.",
       "title": "Vytvorte prvý spis"
     },
-    "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položiek} many {# položiek}}",
+    "entitiesCount": "{count, plural, one {# položka} few {# položky} other {# položiek} many {# položky}}",
     "exportToCsv": "Exportovať do CSV",
     "fields": {
       "calculating": "Počíta sa...",
@@ -6333,16 +6333,16 @@
       "rateLimited": "Obmedzenie rýchlosti; pokračovanie za {seconds, number} s",
       "referencedUpload": {
         "choiceLabel": "Čo urobiť so súborom {fileName}",
-        "description": "{count, plural, one {# súbor nesie referenčné číslo dokumentu, ktorý už máte.} few {# súbory nesú referenčné čísla dokumentov, ktoré už máte.} other {# súborov nesie referenčné čísla dokumentov, ktoré už máte.} many {# súborov nesie referenčné čísla dokumentov, ktoré už máte.}} Vyberte, ako naložiť s každým.",
+        "description": "{count, plural, one {# súbor nesie referenčné číslo dokumentu, ktorý už máte.} few {# súbory nesú referenčné čísla dokumentov, ktoré už máte.} other {# súborov nesie referenčné čísla dokumentov, ktoré už máte.} many {# súboru nesie referenčné čísla dokumentov, ktoré už máte.}} Vyberte, ako naložiť s každým.",
         "matchedDocument": "Verzia {version, number} dokumentu <bdi>{documentName}</bdi> (<bdi>{reference}</bdi>) v spise <bdi>{matterName}</bdi>",
         "title": "Založiť ich ako nové verzie?",
         "uploadAsNewDocument": "Nahrať ako nový dokument"
       },
       "removeMetadata": "Odstrániť metadáta dokumentu",
-      "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom} many {# súborov premenovaných kvôli konfliktom}}",
-      "retryFailed": "Opakovať {count, plural, one {# súbor} few {# súbory} other {# súborov} many {# súborov}}",
+      "renamedToAvoidConflicts": "{count, plural, one {# súbor premenovaný kvôli konfliktu} few {# súbory premenované kvôli konfliktom} other {# súborov premenovaných kvôli konfliktom} many {# súboru premenované kvôli konfliktom}}",
+      "retryFailed": "Opakovať {count, plural, one {# súbor} few {# súbory} other {# súborov} many {# súboru}}",
       "scrubFailed": "Metadáta tohto súboru sa nepodarilo odstrániť, preto sa nič nestiahlo",
-      "uploadedPartially": "{failed, plural, one {# súbor zlyhal} few {# súbory zlyhali} other {# súborov zlyhalo} many {# súborov zlyhalo}} z {total, number}",
+      "uploadedPartially": "{failed, plural, one {# súbor zlyhal} few {# súbory zlyhali} other {# súborov zlyhalo} many {# súboru zlyhalo}} z {total, number}",
       "uploadedSuccessfully": "Súbory úspešne nahrané",
       "uploading": "Nahrávanie súborov",
       "uploadingDescription": "Nezatvárajte túto stránku, kým sa súbory nenahrajú",
@@ -6374,22 +6374,22 @@
     "filesystem": {
       "collapseAll": "Zbaliť všetky priečinky",
       "expandAll": "Rozbaliť všetky priečinky",
-      "fileCount": "{count, plural, one {# súbor} few {# súbory} other {# súborov} many {# súborov}}",
-      "matchingFileCount": "{count, plural, one {# zodpovedajúci súbor} few {# zodpovedajúce súbory} other {# zodpovedajúcich súborov} many {# zodpovedajúcich súborov}}",
+      "fileCount": "{count, plural, one {# súbor} few {# súbory} other {# súborov} many {# súboru}}",
+      "matchingFileCount": "{count, plural, one {# zodpovedajúci súbor} few {# zodpovedajúce súbory} other {# zodpovedajúcich súborov} many {# zodpovedajúceho súboru}}",
       "moveToRoot": "Presuňte sem pre presun do koreňovej úrovne",
       "newSubfolder": "Nový podpriečinok",
       "noFilesYet": "Zatiaľ žiadne súbory"
     },
     "filters": {
       "chips": {
-        "client": "{count, plural, one {Klient: vybraný #} few {Klienti: vybraní #} other {Klienti: vybraných #} many {Klienti: vybraných #}}",
+        "client": "{count, plural, one {Klient: vybraný #} few {Klienti: vybraní #} other {Klienti: vybraných #} many {Klienti: vybrané #}}",
         "createdAt": "Vytvorené: {label}",
         "items": "Položky: {label}",
         "lastActivityAt": "Naposledy aktívne: {label}",
         "lead": "Vedúci: {label}",
         "leadAny": "ktorýkoľvek",
         "leadNone": "žiadny",
-        "team": "{count, plural, one {Tím: vybraný #} few {Tím: vybraní #} other {Tím: vybraných #} many {Tím: vybraných #}}"
+        "team": "{count, plural, one {Tím: vybraný #} few {Tím: vybraní #} other {Tím: vybraných #} many {Tím: vybrané #}}"
       },
       "clear": "Zrušiť filter",
       "clearAll": "Zrušiť všetky filtre",
@@ -6431,9 +6431,9 @@
       "apply": "Použiť zmeny",
       "applying": "Reorganizujem súbory…",
       "collapseFolder": "Zbaliť priečinok",
-      "description": "{count, plural, =0 {Žiadne súbory na usporiadanie} one {Navrhované presuny a premenovania pre # súbor} few {Navrhované presuny a premenovania pre # súbory} other {Navrhované presuny a premenovania pre # súborov} many {Navrhované presuny a premenovania pre # súborov}}",
+      "description": "{count, plural, =0 {Žiadne súbory na usporiadanie} one {Navrhované presuny a premenovania pre # súbor} few {Navrhované presuny a premenovania pre # súbory} other {Navrhované presuny a premenovania pre # súborov} many {Navrhované presuny a premenovania pre # súboru}}",
       "empty": "Žiadne súbory na usporiadanie",
-      "emptyFoldersToDelete": "{count, plural, one {# prázdny priečinok na zmazanie} few {# prázdne priečinky na zmazanie} other {# prázdnych priečinkov na zmazanie} many {# prázdnych priečinkov na zmazanie}}",
+      "emptyFoldersToDelete": "{count, plural, one {# prázdny priečinok na zmazanie} few {# prázdne priečinky na zmazanie} other {# prázdnych priečinkov na zmazanie} many {# prázdneho priečinka na zmazanie}}",
       "expandFolder": "Rozbaliť priečinok",
       "failed": "Usporiadanie zlyhalo",
       "folderPlaceholder": "napr. Compliance/2025",
@@ -6458,12 +6458,12 @@
     "infosoud": {
       "courtPlaceholder": "Vyhľadajte súd alebo kód",
       "courtsFailed": "Súdy z InfoSoudu sa nepodarilo načítať",
-      "eventCount": "{count, plural, one {# udalosť} few {# udalosti} other {# udalostí} many {# udalostí}}",
+      "eventCount": "{count, plural, one {# udalosť} few {# udalosti} other {# udalostí} many {# udalosti}}",
       "events": "Udalosti",
       "hearings": "Pojednávania",
       "importAgenda": "Uložiť do Agendy",
       "importAgendaFailed": "Položky z InfoSoudu sa nepodarilo uložiť do Agendy",
-      "importAgendaResult": "{count, plural, one {# položka uložená do Agendy} few {# položky uložené do Agendy} other {# položiek uložených do Agendy} many {# položiek uložených do Agendy}}",
+      "importAgendaResult": "{count, plural, one {# položka uložená do Agendy} few {# položky uložené do Agendy} other {# položiek uložených do Agendy} many {# položky uložené do Agendy}}",
       "importAgendaUpToDate": "Agenda je už aktuálna",
       "lookup": "Vyhľadať",
       "lookupFailed": "Vyhľadanie v InfoSoude zlyhalo",
@@ -6495,7 +6495,7 @@
     },
     "lockMatter": "Zamknúť",
     "matterInfo": "Informácie o spise",
-    "mattersCount": "{count, plural, one {# spis} few {# spisy} other {# spisov} many {# spisov}}",
+    "mattersCount": "{count, plural, one {# spis} few {# spisy} other {# spisov} many {# spisu}}",
     "members": {
       "addMember": "Pridať do spisu",
       "addMemberDescription": "Vyberte existujúceho člena tímu, ktorého chcete pridať k tomuto spisu",
@@ -6550,7 +6550,7 @@
           "webhook": "Webové volanie"
         },
         "documentReview": {
-          "decided": "Rozhodol(a) o {count, plural, one {# zistení} few {# zisteniach} other {# zisteniach} many {# zisteniach}} v kontrole dokumentu",
+          "decided": "Rozhodol(a) o {count, plural, one {# zistení} few {# zisteniach} other {# zisteniach} many {# zistenia}} v kontrole dokumentu",
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
@@ -6590,7 +6590,7 @@
           "scheduled": "Spustené podľa plánu",
           "scheduledBy": "Naplánovaná automatizácia vlastníka {user}"
         },
-        "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivít} many {# aktivít}}",
+        "runCount": "{count, plural, one {# aktivita} few {# aktivity} other {# aktivít} many {# aktivity}}",
         "sources": {
           "chat": "Konverzácia v chate",
           "mcp": "Pripojený nástroj"
@@ -6620,7 +6620,7 @@
       "atAGlance": "Prehľad",
       "getStarted": "Začnite nahraním dokumentov alebo vytvorením prvého priečinka.",
       "matterDetails": "Detaily spisu",
-      "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov} many {# členov}}",
+      "membersCount": "{count, plural, one {# člen} few {# členovia} other {# členov} many {# člena}}",
       "nextDeadline": "Ďalší termín",
       "openTasks": "Otvorená agenda",
       "recentActivity": "Nedávna aktivita",
@@ -6693,7 +6693,7 @@
           "cleaned": "Vyčistené",
           "cleaning": "Čistenie strany",
           "contentCrop": "Orezať na obsah",
-          "description": "{count, plural, one {Skôr než vyčistenú stranu použijete, skontrolujte ju. Dokument sa zmení až potom.} few {Skôr než # vyčistené strany použijete, skontrolujte ich. Dokument sa zmení až potom.} other {Skôr než # vyčistených strán použijete, skontrolujte ich. Dokument sa zmení až potom.} many {Skôr než # vyčistených strán použijete, skontrolujte ich. Dokument sa zmení až potom.}}",
+          "description": "{count, plural, one {Skôr než vyčistenú stranu použijete, skontrolujte ju. Dokument sa zmení až potom.} few {Skôr než # vyčistené strany použijete, skontrolujte ich. Dokument sa zmení až potom.} other {Skôr než # vyčistených strán použijete, skontrolujte ich. Dokument sa zmení až potom.} many {Skôr než # vyčistenej strany použijete, skontrolujte ich. Dokument sa zmení až potom.}}",
           "deskew": "Narovnať",
           "failedEngine": "Čistenie zlyhalo. Strana zostane bez zmeny.",
           "failedRender": "Stranu sa nepodarilo pripraviť na čistenie. Zostane bez zmeny.",
@@ -6708,12 +6708,12 @@
           "reject": "Ponechať originál",
           "rejectPage": "Ponechať pôvodnú stranu {number}",
           "rejected": "Originál ponechaný",
-          "scope": "{count, plural, =0 {Narovnať a vyčistiť všetky strany} one {Narovnať a vyčistiť vybranú stranu} few {Narovnať a vyčistiť # vybrané strany} other {Narovnať a vyčistiť # vybraných strán} many {Narovnať a vyčistiť # vybraných strán}}",
+          "scope": "{count, plural, =0 {Narovnať a vyčistiť všetky strany} one {Narovnať a vyčistiť vybranú stranu} few {Narovnať a vyčistiť # vybrané strany} other {Narovnať a vyčistiť # vybraných strán} many {Narovnať a vyčistiť # vybranej strany}}",
           "unrecognized": "Strana nebola rozpoznaná ako sken. Zostane bez zmeny.",
           "unrecognizedNoContent": "Na strane sa nenašiel žiadny obsah. Zostane bez zmeny.",
           "unrecognizedNoPage": "Okraje strany sa nepodarilo nájsť. Strana zostane bez zmeny.",
           "unrecognizedTooLarge": "Strana je príliš veľká na vyčistenie. Zostane bez zmeny.",
-          "use": "{count, plural, =0 {Použiť vyčistené strany} one {Použiť # vyčistenú stranu} few {Použiť # vyčistené strany} other {Použiť # vyčistených strán} many {Použiť # vyčistených strán}}"
+          "use": "{count, plural, =0 {Použiť vyčistené strany} one {Použiť # vyčistenú stranu} few {Použiť # vyčistené strany} other {Použiť # vyčistených strán} many {Použiť # vyčistenej strany}}"
         },
         "crop": "Orezať",
         "cropAdvanced": "Rozšírené nastavenia",
@@ -6751,7 +6751,7 @@
         "duplicate": "Duplikovať",
         "editPages": "Upraviť stránky",
         "multiSelectHint": "Podržaním klávesu {modifier} vyberiete viac strán",
-        "pageCount": "{count, plural, one {# strana} few {# strany} other {# strán} many {# strán}}",
+        "pageCount": "{count, plural, one {# strana} few {# strany} other {# strán} many {# strany}}",
         "pageNumber": "Strana {number}",
         "pages": "Strany",
         "redo": "Zopakovať úpravu strany",
@@ -6787,14 +6787,14 @@
     "playbooks": {
       "autoRun": "Automatické spustenie",
       "autoRunHint": "Automaticky rozpozná a spustí každý playbook zodpovedajúci typom dokumentov",
-      "autoRunStarted": "Spúšťa sa {count, plural, one {# playbook} few {# playbooky} other {# playbookov} many {# playbookov}}",
+      "autoRunStarted": "Spúšťa sa {count, plural, one {# playbook} few {# playbooky} other {# playbookov} many {# playbooku}}",
       "projection": "Zobraziť výsledky ako",
       "projectionColumns": "Stĺpce tabuľky",
       "projectionNone": "Iba kontrola",
-      "reviewStarted": "Kontrola {count, plural, one {# dokumentu} few {# dokumentov} other {# dokumentov} many {# dokumentov}}",
+      "reviewStarted": "Kontrola {count, plural, one {# dokumentu} few {# dokumentov} other {# dokumentov} many {# dokumentu}}",
       "run": "Spustiť playbook",
       "runFailed": "Nepodarilo sa spustiť playbook",
-      "runStarted": "Spúšťanie playbooku ({count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov} many {# stĺpcov}})"
+      "runStarted": "Spúšťanie playbooku ({count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov} many {# stĺpca}})"
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
@@ -6807,8 +6807,8 @@
       "bulk": {
         "addAnother": "Pridať ďalší stĺpec",
         "createFailed": "Stĺpce sa nepodarilo vytvoriť",
-        "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} many {# stĺpcov} other {# stĺpcov}}",
-        "createdMany": "{count, plural, one {Vytvorený # stĺpec} few {Vytvorené # stĺpce} many {Vytvorených # stĺpcov} other {Vytvorených # stĺpcov}}",
+        "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} many {# stĺpca} other {# stĺpcov}}",
+        "createdMany": "{count, plural, one {Vytvorený # stĺpec} few {Vytvorené # stĺpce} many {Vytvorené # stĺpca} other {Vytvorených # stĺpcov}}",
         "createdOne": "Stĺpec vytvorený",
         "promptPlaceholder": "Čo má tento stĺpec extrahovať? Ak chcete použiť / a @, upresnite ho v dialógovom okne stĺpca.",
         "title": "Pridať stĺpce"
@@ -6859,8 +6859,8 @@
       "markAllAsReviewed": "Označiť všetko ako skontrolované",
       "markThisGroupAsLocked": "Uzamknúť túto skupinu",
       "markThisGroupAsReviewed": "Označiť túto skupinu ako skontrolovanú",
-      "markedAsLocked": "{count, plural, one {Uzamknutá # bunka} few {Uzamknuté # bunky} other {Uzamknutých # buniek} many {Uzamknutých # buniek}}",
-      "markedAsReviewed": "{count, plural, one {# bunka označená ako skontrolovaná} few {# bunky označené ako skontrolované} other {# buniek označených ako skontrolované} many {# buniek označených ako skontrolované}}",
+      "markedAsLocked": "{count, plural, one {Uzamknutá # bunka} few {Uzamknuté # bunky} other {Uzamknutých # buniek} many {Uzamknuté # bunky}}",
+      "markedAsReviewed": "{count, plural, one {# bunka označená ako skontrolovaná} few {# bunky označené ako skontrolované} other {# buniek označených ako skontrolované} many {# bunky označené ako skontrolované}}",
       "money": "Čiastka",
       "multiSelect": "Viacnásobný výber",
       "nameProperty": "Vlastnosť názvu",
@@ -6900,7 +6900,7 @@
       "sortDescendingDate": "Od najnovších",
       "sortDescendingNumber": "Od najvyššej hodnoty",
       "sortDescendingText": "Ž → A",
-      "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností} many {Rozdeliť na # možností}}",
+      "splitOptions": "{count, plural, one {Rozdeliť na # možnosť} few {Rozdeliť na # možnosti} other {Rozdeliť na # možností} many {Rozdeliť na # možnosti}}",
       "suggestWithAI": "Navrhnúť pomocou AI",
       "text": "Text",
       "typeChangeWarning": "Existujúce dáta sa pri uložení vymažú a znovu vypočítajú.",
@@ -6909,7 +6909,7 @@
       "untitledColumn": "Názov stĺpca, napr. Dátum účinnosti"
     },
     "reference": "Referenčné číslo",
-    "referenceChangeConfirmDescription": "{count, plural, one {# verzia dokumentu nesie} few {# verzie dokumentov nesú} other {# verzií dokumentov nesie} many {# verzií dokumentov nesie}} referenčné číslo <bdi>{oldReference}</bdi>. Vytlačené kópie si ho ponechajú a stále sa otvoria podľa svojho overovacieho kódu. Nové verzie sa budú číslovať pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> zostáva vyhradené tomuto spisu a nemožno ho prideliť inému.",
+    "referenceChangeConfirmDescription": "{count, plural, one {# verzia dokumentu nesie} few {# verzie dokumentov nesú} other {# verzií dokumentov nesie} many {# verzie dokumentu nesie}} referenčné číslo <bdi>{oldReference}</bdi>. Vytlačené kópie si ho ponechajú a stále sa otvoria podľa svojho overovacieho kódu. Nové verzie sa budú číslovať pod <bdi>{newReference}</bdi>. <bdi>{oldReference}</bdi> zostáva vyhradené tomuto spisu a nemožno ho prideliť inému.",
     "referenceChangeConfirmTitle": "Zmeniť referenčné číslo spisu?",
     "referenceConventionHint": "Preferovaný formát: {example}",
     "referenceFormatWarning": "Nezhoduje sa s preferovaným formátom.",
@@ -6953,7 +6953,7 @@
       "tightContent": "Tesne",
       "wrapContent": "Zalomiť text"
     },
-    "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položiek agendy} many {# položiek agendy}}",
+    "tasksCount": "{count, plural, one {# položka agendy} few {# položky agendy} other {# položiek agendy} many {# položky agendy}}",
     "team": "Tím",
     "tools": {
       "aiModel": "AI model",
@@ -6964,7 +6964,7 @@
     "views": {
       "addAdvancedFilter": "Pridať rozšírený filter",
       "addFields": "Pridať polia",
-      "advancedFilterCount": "{count, plural, =0 {ľubovoľné} one {# pravidlo} few {# pravidlá} other {# pravidiel} many {# pravidiel}}",
+      "advancedFilterCount": "{count, plural, =0 {ľubovoľné} one {# pravidlo} few {# pravidlá} other {# pravidiel} many {# pravidla}}",
       "aiGenerated": "Vygenerované AI",
       "calendar": {
         "addDates": "+ Dátumy",
@@ -6989,10 +6989,10 @@
       "exportTable": "Exportovať tabuľku",
       "exportXlsx": "Exportovať XLSX",
       "fields": "Polia:",
-      "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných} many {# vybraných}}",
+      "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných} many {# vybraného}}",
       "filter": "Filtrovať",
       "filterByPlaceholder": "Filtrovať podľa…",
-      "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov} many {# filtrov}}",
+      "filtersWithCount": "{count, plural, one {# filter} few {# filtre} other {# filtrov} many {# filtra}}",
       "findAllColumns": "Všetky stĺpce",
       "findColumnMetadataNotSearchable": "Tento stĺpec radšej zoraďte, než v ňom hľadajte",
       "findColumnNotSearchable": "Tento stĺpec radšej filtrujte, než v ňom hľadajte",
@@ -7000,11 +7000,11 @@
       "findInTable": "Nájsť v tabuľke",
       "findInTableHint": "Hľadá v riadkoch na tejto stránke",
       "findPlaceholder": "Hľadať v riadkoch…",
-      "findScopeColumns": "{count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov} many {# stĺpcov}}",
-      "findTermTooShort": "{count, plural, one {Zadajte aspoň # znak} few {Zadajte aspoň # znaky} other {Zadajte aspoň # znakov} many {Zadajte aspoň # znakov}}",
+      "findScopeColumns": "{count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov} many {# stĺpca}}",
+      "findTermTooShort": "{count, plural, one {Zadajte aspoň # znak} few {Zadajte aspoň # znaky} other {Zadajte aspoň # znakov} many {Zadajte aspoň # znaku}}",
       "group": "Skupina",
       "groupBy": "Zoskupiť podľa:",
-      "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položiek} many {# položiek}}",
+      "groupItemCount": "{count, plural, one {# položka} few {# položky} other {# položiek} many {# položky}}",
       "hideColumn": "Skryť stĺpec",
       "layouts": {
         "avt": "AVT",

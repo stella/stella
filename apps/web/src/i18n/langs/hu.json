@@ -6808,7 +6808,7 @@
         "addAnother": "Másik oszlop hozzáadása",
         "createFailed": "Nem sikerült létrehozni az oszlopokat",
         "createMany": "{count} oszlop létrehozása",
-        "createdMany": "{count} oszlop létrehozva",
+        "createdMany": "{count, plural, one {# oszlop létrehozva} other {# oszlop létrehozva}}",
         "createdOne": "Oszlop létrehozva",
         "promptPlaceholder": "Mit nyerjen ki ez az oszlop? A / és a @ használatához pontosítsa az oszlop párbeszédpaneljén.",
         "title": "Oszlopok hozzáadása"

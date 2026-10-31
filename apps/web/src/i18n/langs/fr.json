@@ -6808,7 +6808,7 @@
         "addAnother": "Ajouter une autre colonne",
         "createFailed": "Impossible de créer les colonnes",
         "createMany": "Créer {count} colonnes",
-        "createdMany": "{count} colonnes créées",
+        "createdMany": "{count, plural, one {# colonne créée} many {# de colonnes créées} other {# colonnes créées}}",
         "createdOne": "Colonne créée",
         "promptPlaceholder": "Que doit extraire cette colonne ? Affinez-la dans la boîte de dialogue de la colonne pour utiliser / et @.",
         "title": "Ajouter des colonnes"
