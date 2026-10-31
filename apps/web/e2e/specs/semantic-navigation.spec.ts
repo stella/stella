@@ -216,6 +216,9 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
+      // elementFromPoint answers null outside the viewport; a wide table can
+      // leave the email column's edge off screen.
+      await cell.scrollIntoViewIfNeeded();
       const space = await cell.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         const x = bounds.width - 4;
@@ -224,9 +227,16 @@ for (const email of [null, "a@example.test"]) {
           bounds.left + x,
           bounds.top + y,
         );
-        return { x, y, hitsLink: target?.closest("a") !== null };
+        if (target === null) {
+          return { x, y, hit: "outside-viewport" };
+        }
+        return {
+          x,
+          y,
+          hit: target.closest("a") === null ? "cell-space" : "link",
+        };
       });
-      expect(space.hitsLink).toBe(false);
+      expect(space.hit).toBe("cell-space");
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
     } finally {
