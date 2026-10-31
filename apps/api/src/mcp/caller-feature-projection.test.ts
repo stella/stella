@@ -236,7 +236,6 @@ for (const transport of [
           )["result"];
         } else {
           const handlerCtx = await capabilityHandlerContext({
-            idempotency: undefined,
             context,
             capabilityId: capability,
             request: context.request,

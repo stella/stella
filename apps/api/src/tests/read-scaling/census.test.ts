@@ -33,6 +33,7 @@ import { mobileClientMetadataScalingScenario } from "./mobile-client-metadata";
 import { mobileUpdateScalingScenario } from "./mobile-updates";
 import { myOpenTasksScalingScenario } from "./my-open-tasks";
 import { organizationCreateScalingScenario } from "./organization-create";
+import { organizationSlugScalingScenario } from "./organization-slug";
 import {
   readScenarioRegistry,
   scenarioMembershipViolations,
@@ -68,6 +69,7 @@ const measuredApiScenarios = [
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
   dictationScalingScenario,
+  organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes
   .filter(({ definition }) =>

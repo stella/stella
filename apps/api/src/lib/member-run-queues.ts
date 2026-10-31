@@ -169,6 +169,12 @@ export const QUEUE_AUTHORITY = {
       "apps/api/src/lib/lists/verification/run-worker-inputs.integration.test.ts",
     reason: "A verification the requesting member started.",
   },
+  "push-notifications": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/push/push-delivery-worker.ts",
+    reason:
+      "Alerts a notification's recipient on their own registered devices; the job names only the notification, and the recipient's current membership decides whether it is still theirs to see before anything is sent.",
+  },
   "report-exports": {
     authority: "member-run",
     worker: "apps/api/src/handlers/reports/report-export-queue.ts",

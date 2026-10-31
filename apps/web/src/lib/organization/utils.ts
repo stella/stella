@@ -26,7 +26,7 @@ export const getOrganizationSchema = () => {
       v.optional(
         v.pipe(
           v.string(),
-          v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH),
+          v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH, t("validation.slugFormat")),
           v.regex(ORGANIZATION_SLUG_PATTERN, t("validation.slugFormat")),
         ),
       ),

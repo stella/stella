@@ -245,6 +245,7 @@ export const apiRoutes = mount([
       sharepointRoute,
       catalogueRoute,
       organizationSettingsRoute,
+      organizationsRoute,
       apiKeysRoute,
       desktopRegistryRoute,
       aiConfigPublicRoute,

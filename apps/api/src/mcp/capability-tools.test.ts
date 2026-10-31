@@ -52,6 +52,7 @@ import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { MCP_ERROR_CODES, projectMcpRefusal } from "@/api/mcp/error-codes";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
+import type { InternalToolStructuredError } from "@/api/mcp/tool-types";
 import { MAX_LIST_LIMIT } from "@/api/mcp/tool-utils";
 import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 import { aggregateExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
@@ -149,12 +150,7 @@ const parseToolPayload = asTestRaw<<T = unknown>(result: ToolCallResult) => T>(
   },
 );
 
-type ErrorEnvelope = {
-  code: string;
-  message: string;
-  hint?: string;
-  issues?: unknown;
-};
+type ErrorEnvelope = Omit<InternalToolStructuredError, "type">;
 
 const errorEnvelope = (result: ToolCallResult): ErrorEnvelope => {
   const payload = parseToolPayload(result);
@@ -2309,7 +2305,6 @@ describe("handlerCtx capability authorization lifetime", () => {
     });
     expect(await request.json()).toEqual({ method: "tools/call" });
     const handlerCtx = await capabilityHandlerContext({
-      idempotency: undefined,
       capabilityId: "playbooks.list",
       context: createContext(),
       input: { body: {}, params: {}, query: {} },
@@ -2337,7 +2332,9 @@ describe("handlerCtx capability authorization lifetime", () => {
       });
       const handlerCtx = await capabilityHandlerContext({
         capabilityId: entry.id,
-        idempotency: endpoint.config.idempotency,
+        ...(endpoint.config.idempotency === undefined
+          ? {}
+          : { idempotency: endpoint.config.idempotency }),
         context: createContext(),
         input: { body: {}, params: {}, query: {} },
         request,
@@ -2356,6 +2353,74 @@ describe("handlerCtx capability authorization lifetime", () => {
     expect(replayCapabilities.length).toBeGreaterThan(1);
   });
 
+  test("replay-enabled handlers receive the per-call transport key after the RPC body is consumed", async () => {
+    const request = new Request("http://localhost/mcp", {
+      method: "POST",
+      body: JSON.stringify({ method: "tools/call" }),
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    await request.json();
+    const handlerCtx = await capabilityHandlerContext({
+      capabilityId: "saved-time-narratives.create",
+      idempotency: { type: "replay" },
+      context: createContext(),
+      input: { body: { name: "Narrative" }, params: {}, query: {} },
+      request,
+      workspaceId: undefined,
+    });
+    expect(handlerCtx.request.headers.get("Idempotency-Key")).toBe(
+      "batch-item-key",
+    );
+    expect(handlerCtx.body).toEqual({ name: "Narrative" });
+  });
+
+  test("catalog replay support matches every live handler declaration", async () => {
+    for (const entry of capabilityCatalog) {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      expect(endpoint).not.toBeNull();
+      expect(entry.idempotency).toEqual(endpoint?.config.idempotency);
+    }
+  });
+
+  test("a declared receipt replay returns the original structured capability result", async () => {
+    const endpoint = await loadCapabilityEndpoint(
+      "saved-time-narratives.create",
+    );
+    expect(endpoint).not.toBeNull();
+    if (endpoint === null) {
+      return;
+    }
+    expect(endpoint.config.idempotency).toEqual({ type: "replay" });
+    const context = createContext();
+    context.request = new Request("http://localhost/mcp", {
+      method: "POST",
+      headers: { "Idempotency-Key": "batch-item-key" },
+    });
+    context.testDependencies = {
+      ...context.testDependencies,
+      loadCapabilityEndpoint: async () => ({
+        ...endpoint,
+        handler: async () =>
+          Response.json(
+            { id: "retained-narrative", name: "Narrative" },
+            { headers: { "Idempotency-Replayed": "true" } },
+          ),
+      }),
+    };
+    const result = await handleCapabilityCall({
+      args: {
+        capability: "saved-time-narratives.create",
+        input: { body: { name: "Narrative", narrative: "Review documents" } },
+      },
+      context,
+    });
+    expect(result.isError).not.toBe(true);
+    expect(parseToolPayload(result)).toEqual({
+      id: "retained-narrative",
+      name: "Narrative",
+    });
+  });
+
   test("preserves MCP provenance in recorders rebound to another workspace", async () => {
     let inserted: Record<string, unknown>[] = [];
     const context = createContext({ workspaceIds: ["ws_1", "ws_2"] });
@@ -2368,7 +2433,6 @@ describe("handlerCtx capability authorization lifetime", () => {
       },
     };
     const handlerCtx = await capabilityHandlerContext({
-      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2416,7 +2480,6 @@ describe("handlerCtx capability authorization lifetime", () => {
       }),
     });
     const handlerCtx = await capabilityHandlerContext({
-      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2444,7 +2507,6 @@ describe("handlerCtx capability authorization lifetime", () => {
     // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
     // type-aware lint; capture the rejection explicitly instead.
     const rejection = await capabilityHandlerContext({
-      idempotency: undefined,
       capabilityId: "entities.copy",
       context,
       input: { body: {}, params: {}, query: {} },
@@ -2972,6 +3034,7 @@ describe("capability executor rate limit (fix-3)", () => {
     const error = errorEnvelope(result);
     expect(error.code).toBe("rate_limited");
     expect(error.hint).toContain("60 seconds");
+    expect(error.retryAfterMs).toBe(60_000);
     // Refused before the handler ran: the org-settings loader was not consulted.
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });

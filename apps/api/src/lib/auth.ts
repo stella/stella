@@ -169,6 +169,10 @@ import {
 } from "@/api/lib/auth/oauth-registration-policy";
 import { currentOrganizationCreationTransaction } from "@/api/lib/auth/organization-creation-transaction";
 import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
+import {
+  beforeOrganizationSlugCreation,
+  beforeOrganizationSlugUpdate,
+} from "@/api/lib/auth/organization-slug-hooks";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   professionalUseColumns,
@@ -1799,7 +1803,9 @@ export const createAuth = (
     roles,
     organizationHooks: {
       ...organizationLifecycleHooks,
-      async beforeCreateOrganization({ user }) {
+      beforeUpdateOrganization: beforeOrganizationSlugUpdate,
+      async beforeCreateOrganization({ user, organization: org }) {
+        await beforeOrganizationSlugCreation({ slug: org.slug });
         requireDemoAccountAccess(
           checkConfiguredDemoAccountAccess({
             email: user.email,
@@ -2920,6 +2926,7 @@ export const createAuth = (
   });
   return Object.assign(isLocalDevOpen() ? instrumentQueryOrigins(auth) : auth, {
     organizationCreateEndpoint: organizationPlugin.endpoints.createOrganization,
+    organizationUpdateEndpoint: organizationPlugin.endpoints.updateOrganization,
   });
 };
 

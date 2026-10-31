@@ -414,7 +414,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `organizations.create` | write | stella:organization_create | — | generic invoke → `stella capability organizations create` |
+| `organizations.slug.update` | write | stella:admin_write | — | generic invoke → `stella capability organizations slug-update` |
 
 ## playbooks
 
@@ -759,6 +759,7 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 2 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |

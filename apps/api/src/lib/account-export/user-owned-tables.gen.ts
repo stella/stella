@@ -86,6 +86,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "pending_uploads",
   "playbook_definition_versions",
   "playbook_definitions",
+  "push_devices",
   "rate_entries",
   "report_exports",
   "request_idempotency_receipts",

@@ -4,10 +4,13 @@ import { isAbsentPlaceholder } from "./absent";
 import { normalizeBoolean } from "./boolean";
 import type { CountrySpelling } from "./country";
 import { countryCodeIn, normalizeCountry } from "./country";
+import { normalizeCurrencyCode } from "./currency-code";
+import { normalizeDataBoxId } from "./data-box-id";
 import { normalizeDateFormatSpec } from "./date-format-spec";
 import { normalizeDateBound, normalizeDateValue } from "./date-value";
 import type { EliOptions } from "./eli";
 import { normalizeEli } from "./eli";
+import { normalizeEmailAddress } from "./email-address";
 import { normalizeEnumValue } from "./enum-value";
 import { normalizeLocale } from "./locale";
 import type { Normalized, NormalizedOptional } from "./normalized";
@@ -22,6 +25,9 @@ export const AGENT_INPUT_NORMALIZATION_KEY = "x-stella-agent-input";
 export const AGENT_INPUT_NORMALIZATION_KIND = {
   boolean: "boolean",
   country: "country",
+  currency: "currency",
+  dataBox: "data-box",
+  email: "email",
   date: "date",
   dateFormat: "date-format",
   eli: "eli",
@@ -94,7 +100,9 @@ export const agentInputNormalization = (
 ): Record<
   typeof AGENT_INPUT_NORMALIZATION_KEY,
   AgentInputNormalizationAnnotation
-> => ({ [AGENT_INPUT_NORMALIZATION_KEY]: annotation });
+> => ({
+  [AGENT_INPUT_NORMALIZATION_KEY]: annotation,
+});
 
 /** Concise model guidance derived from the same kind dispatch executes. */
 export const agentInputNormalizationGuidance = (
@@ -105,6 +113,12 @@ export const agentInputNormalizationGuidance = (
       return "Use a JSON boolean; common unambiguous yes/no words are normalized.";
     case "country":
       return "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read.";
+    case "currency":
+      return "Use a three-letter currency code; case and surrounding whitespace are normalized.";
+    case "data-box":
+      return "Use the seven-character data box ID; surrounding whitespace is trimmed.";
+    case "email":
+      return "Use an email address; surrounding whitespace is trimmed.";
     case "date":
       return annotation.bound === undefined
         ? "Use ISO YYYY-MM-DD; unambiguous localized calendar dates are normalized."
@@ -366,6 +380,12 @@ const normalizeLeaf = ({
       return normalizeBoolean(value);
     case "country":
       return normalizeCountryLeaf({ country: annotation.country, path, value });
+    case "currency":
+      return normalizeCurrencyCode(value);
+    case "data-box":
+      return normalizeDataBoxId(value);
+    case "email":
+      return normalizeEmailAddress(value);
     case "date": {
       const locales =
         annotation.locale === undefined ? undefined : [annotation.locale];

@@ -411,7 +411,7 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   save_task: {
     chatProjectable: true,
     // `task_id` and `link_entity_id` are entity refs; `matter_id` a matter ref.
-    // `add_assignee_user_id`/`remove_assignee_user_id` are user handles and
+    // `assignee`/`remove_assignee_user_id` are user handles and
     // `unlink_link_id` is an entity-link handle: none carry a chat ref kind, so
     // they pass through as-is.
     inputRefs: [

@@ -3,7 +3,10 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
-import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import {
+  AUDIT_CHANGES_STATUS,
+  AUDIT_RESOURCE_TYPE,
+} from "@stll/api-contract/audit-log";
 import {
   ORGANIZATION_EVALUATION_LIMIT,
   ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
@@ -193,7 +196,9 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "Read organization audits newest first. Filter and paginate with the fields below. Requires audit-log access.",
+    "Read organization audits newest first. Change detail is null unless " +
+    'changesStatus is "visible". Filter and paginate with the fields below. ' +
+    "Requires audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
@@ -221,6 +226,21 @@ const LIST_AUDIT_LOG_OUTPUT_SCHEMA = v.strictObject({
       action: v.string(),
       resourceType: v.string(),
       resourceId: v.string(),
+      resource: v.variant("kind", [
+        v.strictObject({
+          kind: v.picklist(Object.values(AUDIT_RESOURCE_TYPE)),
+          id: v.string(),
+          name: v.nullable(v.string()),
+          available: v.boolean(),
+        }),
+        v.strictObject({
+          kind: v.literal("unknown"),
+          rawKind: v.string(),
+          id: v.string(),
+          name: v.null(),
+          available: v.literal(false),
+        }),
+      ]),
       changes: v.unknown(),
       changesStatus: v.picklist(Object.values(AUDIT_CHANGES_STATUS)),
     }),
@@ -681,6 +701,7 @@ const handleListAuditLogTool: McpToolHandler<
         action: item.action,
         resourceType: item.resourceType,
         resourceId: item.resourceId,
+        resource: item.resource,
         changes: item.changes,
         changesStatus: item.changesStatus,
       })),

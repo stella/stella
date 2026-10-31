@@ -63,6 +63,45 @@ describe("resolveInvokeRateLimit", () => {
 });
 
 describe("consumeInvokeCapabilityRateLimit", () => {
+  test("organization slug changes share the REST budget across callers", async () => {
+    const guards = freshGuards();
+    const capabilityId = "organizations.slug.update";
+    const limit = resolveInvokeRateLimit(capabilityId);
+    expect(limit).toEqual({ max: 5, windowMs: 60_000 });
+    for (let i = 0; i < limit.max; i += 1) {
+      expect(
+        (
+          await consumeInvokeCapabilityRateLimit({
+            capabilityId,
+            guards,
+            organizationId: org("slug_a"),
+            userId: user(`caller_${i}`),
+          })
+        ).ok,
+      ).toBe(true);
+    }
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId,
+          guards,
+          organizationId: org("slug_a"),
+          userId: user("another"),
+        })
+      ).ok,
+    ).toBe(false);
+    expect(
+      (
+        await consumeInvokeCapabilityRateLimit({
+          capabilityId,
+          guards,
+          organizationId: org("slug_b"),
+          userId: user("another"),
+        })
+      ).ok,
+    ).toBe(true);
+  });
+
   test("allows up to the limit, then refuses", async () => {
     const guards = freshGuards();
     const max = resolveInvokeRateLimit("document-translations.runs.create").max;

@@ -5,7 +5,6 @@ import type { HandlerContext } from "@/api/http/context";
 import type { RawHeaders } from "@/api/http/route-input";
 import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type {
@@ -94,7 +93,13 @@ const mcpMemberCaller = async (
 
   return {
     user: { id: context.userId, email: context.userEmail },
-    session: { id: null, activeOrganizationId: context.organizationId },
+    session: {
+      id: null,
+      activeOrganizationId: context.organizationId,
+      ...(context.sessionCredentialType === undefined
+        ? {}
+        : { credentialType: context.sessionCredentialType }),
+    },
     ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -134,24 +139,25 @@ const mcpMemberCaller = async (
  */
 export const capabilityHandlerContext = async ({
   capabilityId,
+  idempotency,
   context,
   input,
-  idempotency,
   request: rpcRequest,
   workspaceId,
 }: {
   capabilityId: string;
-  idempotency: HandlerConfig["idempotency"];
+  idempotency?: { type: "replay" };
   context: McpRequestResources;
   input: { body: unknown; params: unknown; query: unknown };
   request: Request;
   workspaceId: SafeId<"workspace"> | undefined;
 }): Promise<CapabilityHandlerContext> => {
   const headers = new Headers(rpcRequest.headers);
-  if (idempotency?.type !== "replay") {
+  if (idempotency === undefined) {
     headers.delete("Idempotency-Key");
   }
-  // Only replay-capable handlers accept a call retry key from the transport.
+  // Only a replay-enabled handler can consume a per-call transport key.
+  // Its receipt fingerprints the validated capability input, not the RPC body.
   const request = new Request(rpcRequest.url, {
     method: rpcRequest.method,
     headers,

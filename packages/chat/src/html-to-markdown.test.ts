@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
+import { htmlToMarkdown } from "./html-to-markdown";
 
 describe("htmlToMarkdown", () => {
   test("returns empty string for empty or whitespace input", () => {

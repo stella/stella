@@ -2968,7 +2968,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "Matter reference (file number)"
         },
         "billing_reference": {
           "anyOf": [
@@ -2980,7 +2980,7 @@
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference; pass null to clear"
         },
         "status": {
           "enum": ["active", "archived"],
@@ -3088,6 +3088,508 @@
       "required": [],
       "additionalProperties": false,
       "properties": {
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name prefix"
+        },
+        "middle_name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 256
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Middle name"
+        },
+        "suffix": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Name suffix"
+        },
+        "emails": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": ["work", "personal", "other"],
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string",
+                    "pattern": "^[\\w+-]+(?:\\.[\\w+-]+)*@[\\da-zA-Z]+(?:[.-][\\da-zA-Z]+)*\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["type", "address", "is_primary"],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Email addresses"
+        },
+        "phones": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": ["mobile", "office", "home", "fax", "other"],
+                    "type": "string"
+                  },
+                  "number": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  }
+                },
+                "required": ["type", "number", "is_primary"],
+                "additionalProperties": false
+              },
+              "maxItems": 20
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Phone numbers"
+        },
+        "addresses": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "office",
+                      "mailing",
+                      "billing",
+                      "service",
+                      "home",
+                      "other"
+                    ],
+                    "type": "string"
+                  },
+                  "line1": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "line2": {
+                    "type": "string",
+                    "maxLength": 512
+                  },
+                  "city": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "state": {
+                    "type": "string",
+                    "maxLength": 256
+                  },
+                  "country": {
+                    "type": "string",
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                  },
+                  "label": {
+                    "type": "string",
+                    "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
+                  }
+                },
+                "required": ["type", "line1", "is_primary"],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Postal addresses"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "data_boxes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
+                      },
+                      "label": {
+                        "type": "string",
+                        "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": ["id", "is_primary"],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 20
+                },
+                "custom_fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      "label": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "value": {
+                        "type": "string",
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": ["id", "label", "value"],
+                    "additionalProperties": false
+                  },
+                  "maxItems": 50
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Data boxes and custom fields"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 50
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tags"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 32
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display color"
+        },
+        "registration_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Registration number"
+        },
+        "tax_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Tax identifier"
+        },
+        "vat_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT identifier"
+        },
+        "vat_payer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "VAT payer"
+        },
+        "bank_accounts": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "iban": {
+                    "type": "string",
+                    "maxLength": 34
+                  },
+                  "bic": {
+                    "type": "string",
+                    "maxLength": 11
+                  },
+                  "currency": {
+                    "type": "string",
+                    "minLength": 3,
+                    "maxLength": 3,
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
+                  }
+                },
+                "required": [],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Bank accounts"
+        },
+        "billing_address": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "line1": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "line2": {
+                  "type": "string",
+                  "maxLength": 512
+                },
+                "city": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "state": {
+                  "type": "string",
+                  "maxLength": 256
+                },
+                "country": {
+                  "type": "string",
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
+                }
+              },
+              "required": [],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Billing address"
+        },
+        "default_hourly_rate": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Hourly rate in minor currency units"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 3
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Currency code"
+        },
+        "payment_term_days": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 365
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Payment term in days"
+        },
+        "invoice_language": {
+          "anyOf": [
+            {
+              "enum": [
+                "ar",
+                "cs",
+                "de",
+                "en",
+                "es",
+                "et",
+                "fr",
+                "hu",
+                "lt",
+                "lv",
+                "pl",
+                "pt-BR",
+                "sk"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Invoice language"
+        },
+        "originating_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Originating attorney user ID"
+        },
+        "responsible_attorney_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Responsible attorney user ID"
+        },
         "contact_id": {
           "type": "string",
           "format": "uuid",
@@ -3711,7 +4213,7 @@
       "scope": "matters_write"
     },
     "name": "save_task",
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -3758,7 +4260,7 @@
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -3768,7 +4270,7 @@
               "type": "null"
             }
           ],
-          "description": "List item description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [
@@ -3789,10 +4291,11 @@
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
-          "description": "User ID to assign to the task (must be a matter member)"
+          "maxLength": 320,
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -5244,47 +5747,47 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Consolidated legislation full-text query"
+          "description": "Free-text search over consolidated legislation"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Title text"
+          "description": "Filter search results by title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Department code"
+          "description": "Filter search results by department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Legal-range code (law rank)"
+          "description": "Filter search results by legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Subject-matter code"
+          "description": "Filter search results by subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Published on or after YYYYMMDD"
+          "description": "Only laws published on or after this date (YYYYMMDD)"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Published on or before YYYYMMDD"
+          "description": "Only laws published on or before this date (YYYYMMDD)"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -5298,22 +5801,22 @@
         },
         "law_id": {
           "type": "string",
-          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
+          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id: read this block instead of the law"
+          "description": "With law_id, return this text block's content instead of the whole law"
         },
         "relation_type": {
           "enum": ["modifies", "modifiedBy", "derogates", "derogatedBy", "all"],
           "type": "string",
-          "description": "With law_id: list this relation kind instead of the law"
+          "description": "With law_id, list related laws of this relation kind instead of the law body"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id only: include consolidated full text"
+          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
         }
       }
     },
@@ -5331,7 +5834,7 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read organization audits newest first. Filter and paginate with the fields below. Requires audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5345,32 +5848,32 @@
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Audit action"
+          "description": "Only entries with this audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Resource type"
+          "description": "Only entries about this resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Resource id; requires resource_type"
+          "description": "Only entries about this resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Actor user id"
+          "description": "Only entries whose actor is this user"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
+          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
+          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -5386,7 +5889,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Next-page cursor from list_audit_log"
+          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
         }
       }
     },
@@ -5435,7 +5938,7 @@
       "scope": "admin_write"
     },
     "name": "remove_matter_member",
-    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5486,7 +5989,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -5496,7 +5999,7 @@
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show matter numbers in titles"
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -5554,49 +6057,6 @@
       "readOnlyHint": false,
       "destructiveHint": false,
       "idempotentHint": true,
-      "openWorldHint": false
-    }
-  },
-  {
-    "cli": {
-      "confirmPassthrough": true,
-      "command": ["organization", "create"],
-      "scope": "organization_create"
-    },
-    "name": "create_organization",
-    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
-    "inputSchema": {
-      "type": "object",
-      "required": ["name"],
-      "additionalProperties": false,
-      "properties": {
-        "name": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 50,
-          "description": "Name of the new organization."
-        },
-        "slug": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 100,
-          "pattern": "^[a-z0-9-]+$",
-          "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
-          "x-stella-agent-input": {
-            "kind": "slug"
-          }
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "True after human approval"
-        }
-      }
-    },
-    "annotations": {
-      "title": "Create organization",
-      "readOnlyHint": false,
-      "destructiveHint": false,
-      "idempotentHint": false,
       "openWorldHint": false
     }
   },
