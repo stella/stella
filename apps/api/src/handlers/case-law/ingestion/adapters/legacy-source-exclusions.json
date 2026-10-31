@@ -245,7 +245,6 @@
     "notice.WORK/SAMEAS": "the CELEX and ECLI forms of this work's address, both read from their own fields",
     "notice.WORK/TYPE": "the ontology classes of the record, which describe the repository's model rather than the decision",
     "notice.WORK/URI": "the repository address of the work, which the row holds as the address the document was served from",
-    "notice.WORK/WORK_HAS_EXPRESSION": "the other language expressions of this work, each of which is a row of its own",
     "notice.WORK/WORK_ID_DOCUMENT": "the CELEX number with its scheme prefixed",
     "notice.WORK/WORK_PART_OF_DOSSIER/CONTAINS": "the works of the case file under a generic relation, which the case event lists",
     "notice.WORK/WORK_PART_OF_DOSSIER/DOSSIER_CONTAINS_WORK": "this decision restated as a member of its own case file",
