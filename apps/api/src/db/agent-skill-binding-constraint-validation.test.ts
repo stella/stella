@@ -39,7 +39,12 @@ test("every skill binding constraint is added without validation and registered 
       },
     ];
   });
-  expect(declarations).toEqual([...AGENT_SKILL_BINDING_CONSTRAINTS]);
+  expect(declarations).toEqual(
+    AGENT_SKILL_BINDING_CONSTRAINTS.map(({ tableName, constraintName }) => ({
+      tableName,
+      constraintName,
+    })),
+  );
   expect(
     statements.some(({ text }) => /\bVALIDATE\s+CONSTRAINT\b/iu.test(text)),
   ).toBe(false);

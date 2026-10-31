@@ -7,6 +7,10 @@ import { numberFromString } from "@stll/api-contract/http-input";
 import { invoices } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
+  invoicePaidAmountSql,
+  invoicePaymentAmounts,
+} from "@/api/lib/billing/invoice-payments";
+import {
   invoiceMatterShare,
   invoiceTouchesMatter,
 } from "@/api/lib/billing/invoice-scope";
@@ -51,7 +55,7 @@ const readInvoices = createSafeHandler(
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
       "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, language, " +
-      "and total, but not its line items. Use invoices.get to read the " +
+      "total, and paid and outstanding amounts, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -103,6 +107,7 @@ const readInvoices = createSafeHandler(
             currency: invoices.currency,
             language: invoices.language,
             totalAmount: invoices.totalAmount,
+            paidAmount: invoicePaidAmountSql(invoices),
             billingMode: invoices.billingMode,
             flatFeeAmount: invoices.flatFeeAmount,
             createdAt: invoices.createdAt,
@@ -139,6 +144,7 @@ const readInvoices = createSafeHandler(
         currency: row.currency,
         language: row.language,
         totalAmount: row.totalAmount,
+        ...invoicePaymentAmounts(row),
         billingMode: row.billingMode,
         flatFeeAmount: row.flatFeeAmount,
         createdAt: row.createdAt.toISOString(),

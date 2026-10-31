@@ -114,6 +114,10 @@ import { PageOrganizerCrop } from "./page-organizer-crop";
 import { PageOrganizerSignAction } from "./page-organizer-sign";
 import type { PageOrganizerSign } from "./page-organizer-sign";
 import {
+  commitCompletedUpload,
+  createPageOrganizerUploadOwner,
+} from "./page-organizer-upload.logic";
+import {
   createPageOrganizerState,
   DEFAULT_CLEAN_SCAN_OPTIONS,
   getPageMoveDestination,
@@ -738,6 +742,7 @@ const LoadedPDFPageOrganizer = ({
   const queryClient = useQueryClient();
   const savedRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
+  const uploadOwnerRef = useRef(createPageOrganizerUploadOwner());
   const cleanScanAbortRef = useRef<AbortController | null>(null);
   const isMountedRef = useRef(true);
   const addedSourceDocumentsRef = useRef(new Set<PDFDocument>());
@@ -790,6 +795,7 @@ const LoadedPDFPageOrganizer = ({
   useMountEffect(() => () => {
     isMountedRef.current = false;
     abortRef.current?.abort();
+    uploadOwnerRef.current.cancelCurrent();
     cleanScanAbortRef.current?.abort();
     for (const document of addedSourceDocumentsRef.current) {
       detached(
@@ -922,6 +928,7 @@ const LoadedPDFPageOrganizer = ({
     setOperation({ type: "uploading" });
     const uploadController = new AbortController();
     abortRef.current = uploadController;
+    const pendingUpload = uploadOwnerRef.current.begin();
     return await withCleanup(
       async () => {
         const uploadResult = await uploadEntityVersion({
@@ -934,12 +941,20 @@ const LoadedPDFPageOrganizer = ({
           case ENTITY_VERSION_UPLOAD_RESULT.uploaded:
             break;
           case ENTITY_VERSION_UPLOAD_RESULT.cancelled:
-            return panic("Generated PDF version upload was cancelled");
+            uploadOwnerRef.current.cancel(pendingUpload);
+            return { type: "cancelled" } as const;
           default:
             uploadResult satisfies never;
             return panic(
               `Unhandled entity version upload: ${String(uploadResult)}`,
             );
+        }
+        const provisional = uploadOwnerRef.current.prepareCompletion(
+          pendingUpload,
+          uploadResult,
+        );
+        if (provisional.type !== "provisional") {
+          return provisional;
         }
         await Promise.all([
           queryClient.invalidateQueries({
@@ -947,12 +962,16 @@ const LoadedPDFPageOrganizer = ({
           }),
           queryClient.invalidateQueries({ queryKey: filesKeys.all() }),
         ]);
+        const outcome = uploadOwnerRef.current.commit(provisional);
+        if (outcome.type !== "completed") {
+          return outcome;
+        }
         stellaToast.add({
           title: tPageEditor("versionSaved"),
           type: "success",
         });
         savedRef.current = true;
-        return uploadResult;
+        return outcome;
       },
       () => {
         abortRef.current = null;
@@ -962,7 +981,7 @@ const LoadedPDFPageOrganizer = ({
   };
 
   const handleSaveVersion = async () => {
-    if ((await saveVersion()).type === ENTITY_VERSION_UPLOAD_RESULT.uploaded) {
+    if ((await saveVersion()).type === "completed") {
       onClose();
     }
   };
@@ -978,15 +997,19 @@ const LoadedPDFPageOrganizer = ({
     const result = await Result.tryPromise({
       try: async () => {
         const savedVersion = await saveVersion();
-        if (savedVersion.type === "skipped") {
+        if (savedVersion.type !== "completed") {
           return Result.ok(null);
         }
         onClose();
-        const saved = await readSavedPdfSignTarget({
-          entityVersionId: savedVersion.entityVersionId,
-          fileId: savedVersion.fileId,
-          target,
-        });
+        const saved = await commitCompletedUpload(
+          savedVersion,
+          async (upload) =>
+            await readSavedPdfSignTarget({
+              entityVersionId: upload.entityVersionId,
+              fileId: upload.fileId,
+              target,
+            }),
+        );
         if (saved === null) {
           return Result.err(
             new ClientOperationError({
@@ -1446,6 +1469,7 @@ const LoadedPDFPageOrganizer = ({
         </Button>
         {pdfSign !== null && (
           <PageOrganizerSignAction
+            closeEditor={onClose}
             disabled={isBusy || (isDirty && !canSaveVersion)}
             isDirty={isDirty}
             saveVersion={async () =>

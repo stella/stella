@@ -43,6 +43,7 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
 import { ComposerVeil } from "@/components/chat/composer-veil";
+import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -802,6 +803,7 @@ export const ChatThreadPage = ({
                   threadId={threadRef.threadId}
                 />
                 {env.VITE_FEATURE_USAGE && <UsageFallbackNotice />}
+                <McpReconnectNotice editor={controller.editor} />
                 {/* Glass tray behind the composer + status row: the shared
                   `ComposerVeil` (one owner of the blur/tint values across
                   every chat surface) fills this `relative isolate` wrapper

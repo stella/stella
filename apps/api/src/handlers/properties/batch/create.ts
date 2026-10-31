@@ -26,6 +26,7 @@ import { lockWorkspacePropertyWrites } from "@/api/lib/properties/property-lock"
 
 const config = {
   contract: "patch",
+  idempotency: { type: "replay" },
   description:
     "Add up to ten properties (columns) to a matter in a single transaction, " +
     "under the same rules as properties.create: all of them land or none do, " +

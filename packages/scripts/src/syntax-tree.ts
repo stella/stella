@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import {
   type Comment,
   type EcmaScriptModule,
+  type ImportDeclaration,
   type Node,
   type ObjectProperty,
   parseSync,
@@ -31,6 +32,41 @@ export type ParsedSource = {
   readonly sourceText: string;
   /** Location of a node's `start` or `end` (UTF-16 offsets). */
   readonly locate: (offset: number) => SourceLocation;
+};
+
+const IMPORT_KEYWORD_LENGTH = "import".length;
+
+/**
+ * Whether an import has no clause (`import "module"`). Comments and whitespace
+ * are parser-owned trivia, so they cannot change the classification.
+ */
+export const isSideEffectImport = (
+  node: ImportDeclaration,
+  source: Pick<ParsedSource, "comments" | "sourceText">,
+): boolean => {
+  if (node.specifiers.length > 0 || node.importKind === "type") {
+    return false;
+  }
+
+  const triviaStart = node.start + IMPORT_KEYWORD_LENGTH;
+  const triviaEnd = node.source.start;
+  let cursor = triviaStart;
+  for (const comment of source.comments) {
+    if (comment.end <= triviaStart) {
+      continue;
+    }
+    if (comment.start >= triviaEnd) {
+      break;
+    }
+    if (
+      comment.start < cursor ||
+      !/^\s*$/u.test(source.sourceText.slice(cursor, comment.start))
+    ) {
+      return false;
+    }
+    cursor = comment.end;
+  }
+  return /^\s*$/u.test(source.sourceText.slice(cursor, triviaEnd));
 };
 
 /**

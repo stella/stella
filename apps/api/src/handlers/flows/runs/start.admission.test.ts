@@ -32,7 +32,7 @@ describe("manual flow start admission response", () => {
     "busy",
     "period_exhausted",
     "not_enabled",
-    "unavailable",
+    "store_unavailable",
     "configuration_unavailable",
   ] as const)(
     "%s reaches shared resolution and returns its HTTP refusal without inserting or auditing",
@@ -80,7 +80,10 @@ describe("manual flow start admission response", () => {
         modelId: BYOK_DEFAULT_MODELS.openai.chat.modelId,
       } as const;
       const refusal = new ActionAdmissionError({
-        reason: reason === "configuration_unavailable" ? "unavailable" : reason,
+        reason:
+          reason === "configuration_unavailable"
+            ? "configuration_incomplete"
+            : reason,
         message: "Private admission detail",
       });
       const contactUrl = "https://example.test/contact";

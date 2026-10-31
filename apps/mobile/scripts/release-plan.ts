@@ -28,12 +28,12 @@ const RELEASED_VARIANTS = ["preview", "production"] as const;
 
 type ReleasedVariant = (typeof RELEASED_VARIANTS)[number];
 
-const fingerprintSchema = v.object({
+export const fingerprintSchema = v.object({
   hash: v.string(),
   sources: v.array(
     v.object({
       source: v.string(),
-      type: v.picklist(["file", "dir", "contents"]),
+      type: v.picklist(["file", "dir", "contents", "package"]),
       hash: v.nullable(v.string()),
     }),
   ),

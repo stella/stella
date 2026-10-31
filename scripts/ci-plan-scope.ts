@@ -73,6 +73,17 @@ const widenScope = (message: string) => {
   console.log(`::warning title=Changed-file scope::${message}`);
 };
 
+const reportDetectorCrash = (name: string, error: unknown) => {
+  console.log(
+    `::error title=Changed-file scope detector::kind=infra class=scope-detector detector=${JSON.stringify(name)} error=${JSON.stringify(String(error))}`,
+  );
+};
+
+class MigrationDetectorError extends Error {
+  override name = "MigrationDetectorError";
+  readonly _tag = "MigrationDetectorError";
+}
+
 // A detector that throws or answers a non-boolean cannot prove a scope
 // unaffected, so its checks run and the run says why. The planner runs before
 // the dependency install, so this boundary catches without better-result.
@@ -86,6 +97,7 @@ const failClosedDetector = (name: string, detect: () => unknown) => {
       `${name} detector failed (a non-boolean answer); running its checks`,
     );
   } catch (error) {
+    reportDetectorCrash(name, error);
     widenScope(
       `${name} detector failed (${String(error)}); running its checks`,
     );
@@ -107,20 +119,29 @@ const migrationsChanged = (files: readonly string[], root = REPO_ROOT) => {
     { cwd: root, stdout: "pipe", stderr: "pipe" },
   );
   const answer = result.stdout.toString().trim();
-  if (result.exitCode !== 0 || (answer !== TRUE && answer !== FALSE)) {
-    return undefined;
+  if (result.exitCode !== 0) {
+    throw new MigrationDetectorError(
+      `migration detector exited ${String(result.exitCode)}: ${result.stderr.toString().trim()}`,
+    );
+  }
+  if (answer !== TRUE && answer !== FALSE) {
+    throw new MigrationDetectorError(
+      `migration detector returned ${JSON.stringify(answer)}`,
+    );
   }
   return answer === TRUE;
 };
 
 // A service-suite detector failure cannot prove any suite unaffected.
-const failClosedServiceSuites = (
+export const failClosedServiceSuites = (
   files: readonly string[],
   root: string | undefined,
+  detect = planServiceSuites,
 ) => {
   try {
-    return planServiceSuites(files, root);
+    return detect(files, root, REPO_ROOT);
   } catch (error) {
+    reportDetectorCrash("service suite", error);
     widenScope(
       `service suite detector failed (${String(error)}); running every service suite`,
     );
@@ -1011,6 +1032,11 @@ export const OUTPUT_RULES = {
             "patches/*",
             "scripts/check-published-exports.ts",
             "scripts/prepare-publish.ts",
+            "scripts/publish-declarations.ts",
+            "scripts/pack-reproducibly.sh",
+            "scripts/check-publish-reproducibility.sh",
+            "scripts/publish-packages.ts",
+            "scripts/generate-npm-release-jobs.ts",
             "scripts/publish-manifest.ts",
             "scripts/published-export-guards.ts",
             "bun.lock",
@@ -1243,6 +1269,10 @@ if (import.meta.main) {
     versionChangedInHead,
   });
   const output = `${scopeOutputLines(scope).join("\n")}\n`;
+  writeFileSync(
+    path.join(runnerTemp, "changed-scope.json"),
+    `${JSON.stringify(scope)}\n`,
+  );
   if (Bun.env["GITHUB_OUTPUT"]) {
     await Bun.write(Bun.file(Bun.env["GITHUB_OUTPUT"]), output);
   } else {

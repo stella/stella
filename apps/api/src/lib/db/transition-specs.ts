@@ -4,6 +4,7 @@ import {
   accountExports,
   caseLawDecisionCitationStatsState,
   caseLawReplayBatches,
+  caseLawSitemapDrainProgress,
   desktopEditSessions,
   desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
@@ -11,6 +12,7 @@ import {
   euCompletionControls,
   euCompletionReceipts,
   folioCollabRooms,
+  invoices,
   legalReaderAnswerMessages,
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
@@ -44,6 +46,7 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -103,6 +106,22 @@ const TIME_ENTRY_TRANSITIONS = defineTransitions(
   { terminal: [] },
 );
 
+// An invoice's lifecycle. Recorded payments move a finalized or sent invoice
+// to paid and back (`lib/billing/invoice-payments`) through this spec;
+// finalize, send, revert and void are still direct writes of the transition
+// handler in the shrinking ledger.
+const INVOICE_TRANSITIONS = defineTransitions(
+  invoices,
+  {
+    draft: ["finalized"],
+    finalized: ["draft", "sent", "paid", "void"],
+    sent: ["paid", "void"],
+    paid: ["finalized", "sent", "void"],
+    void: [],
+  },
+  { terminal: ["void"] },
+);
+
 // A failed attempt retries until its budget is spent; a ready archive expires.
 const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
   accountExports,
@@ -133,6 +152,25 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
+});
+
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
 });
 
 // Readmission and recovery move the attempt and receipt status atomically.
@@ -399,6 +437,7 @@ export const TRANSITIONS = {
   caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -430,7 +469,7 @@ export const TRANSITIONS = {
   flowRunSteps: FLOW_RUN_STEP_TRANSITIONS_V1,
   folioCollabRooms: FOLIO_COLLAB_SEED_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  invoices: { unmanaged: UNMANAGED_REASONS.userWorkflow },
+  invoices: INVOICE_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   legalListGenerationCandidates: { unmanaged: UNMANAGED_REASONS.workerRun },
   legalListGenerationRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -456,6 +495,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,

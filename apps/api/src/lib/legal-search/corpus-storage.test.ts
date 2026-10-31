@@ -17,6 +17,7 @@ import {
   CorpusMemberDigestMismatchError,
   CorpusMemberTombstonedError,
   CorpusPayloadUnavailableError,
+  StoredCorpusValidationError,
   TimeoutError,
 } from "@/api/lib/errors/tagged-errors";
 import {
@@ -302,12 +303,12 @@ describe("persisted corpus JSON validation", () => {
     ).toThrow('Invalid type: Expected number but received "0"');
     expect(() =>
       parsePersistedCorpusAst({ version: 1, blocks: [{ type: "paragraph" }] }),
-    ).toThrow("Invalid type: Expected (Object | unknown) but received Object");
+    ).toThrow(StoredCorpusValidationError);
     expect(() => parsePersistedCorpusAst([])).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Array",
+      StoredCorpusValidationError,
     );
     expect(() => parsePersistedCorpusAst({ unexpected: true })).toThrow(
-      "Invalid type: Expected (Object | unknown) but received Object",
+      StoredCorpusValidationError,
     );
   });
 
@@ -349,6 +350,32 @@ describe("persisted corpus JSON validation", () => {
     // character the unknown inline carried.
     expect(parsed?.blocks.map((block) => block.id)).toEqual(["p1"]);
     expect(parsed?.blocks.at(0)?.plainText).toBe("NS");
+  });
+
+  test("serves a row stored with head matter after the body, in stored order", () => {
+    const paragraph = (id: string, role: string) => ({
+      id,
+      anchorId: id,
+      type: "paragraph",
+      role,
+      inlines: [{ type: "text", text: id }],
+    });
+    const parsed = parsePersistedCorpusAst(
+      {
+        version: 1,
+        blocks: [
+          paragraph("caption", "apparatus"),
+          paragraph("reasons", "argumentation"),
+          paragraph("publisher", "apparatus"),
+        ],
+      },
+      "decision-stored-before-order-rule",
+    );
+    expect(parsed?.blocks.map((block) => block.id)).toEqual([
+      "caption",
+      "reasons",
+      "publisher",
+    ]);
   });
 });
 
@@ -908,7 +935,7 @@ describe("deleteCorpusDocument", () => {
   });
 });
 
-test("standalone writes validate structure before comparing the stored payload", async () => {
+test("standalone writes repair repeated identities before comparing the stored payload", async () => {
   const invalidAst = {
     version: 1,
     source: {
@@ -943,13 +970,18 @@ test("standalone writes validate structure before comparing the stored payload",
       },
     ],
   } satisfies DocumentAst;
-  expect(v.safeParse(persistedDocumentAstSchema, invalidAst).success).toBe(
-    false,
-  );
+  const repaired = v.parse(persistedDocumentAstSchema, invalidAst);
+  expect(repaired).not.toEqual(invalidAst);
+  expect(
+    repaired.blocks.map(({ anchorId, plainText }) => [anchorId, plainText]),
+  ).toEqual([
+    ["p1", "Body."],
+    ["p1-2", "Body."],
+  ]);
   const payload = {
     text: "Synthetic decision.",
     sections: null,
-    ast: EMPTY_AST,
+    ast: repaired,
   };
   expect(corpusContentHash({ ...payload, ast: invalidAst })).not.toBe(
     corpusContentHash(payload),
@@ -963,17 +995,19 @@ test("standalone writes validate structure before comparing the stored payload",
   if (plan.type !== "put") {
     expect.unreachable("Fixture must carry text");
   }
-  // A rejected AST must converge to the already stored text-only payload. The
+  // The repaired AST must converge to the already stored document. The
   // aborted signal makes any unintended transfer fail before reaching S3.
-  const outcome = await writeCorpusDocument(
-    {
-      ...payload,
-      ast: invalidAst,
-      documentId: "synthetic",
-      jurisdiction: "SVK",
-      stored: plan.written,
-    },
-    { signal: AbortSignal.abort() },
-  );
+  const outcome = (
+    await writeCorpusDocument(
+      {
+        ...payload,
+        ast: invalidAst,
+        documentId: "synthetic",
+        jurisdiction: "SVK",
+        stored: plan.written,
+      },
+      { signal: AbortSignal.abort() },
+    )
+  ).unwrap();
   expect(outcome).toEqual({ type: "skipped-unchanged", written: plan.written });
 });

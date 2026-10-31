@@ -22,10 +22,15 @@ import {
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { type contacts, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import {
+  BILLING_STATUS,
+  type contacts,
+  INVOICE_BILLING_PURPOSE,
+} from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
@@ -40,6 +45,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
+import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import {
   deriveRefMediationEntry,
   projectForChat,
@@ -60,6 +66,10 @@ import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import { CASE_LAW_COVERAGE_FIXTURE } from "@/api/tests/helpers/case-law-coverage-fixture";
+import {
+  invoiceDetailRowFixture,
+  invoiceListRowFixture,
+} from "@/api/tests/helpers/invoice-tool-fixtures";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -253,6 +263,8 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
       userId: toSafeId<"user">("user_1"),
       userEmail: "standard@example.test",
       testDependencies: {
+        readWithdrawnCopies: async () =>
+          new WithdrawnCopyProjection([], "Withdrawn by publisher"),
         // Billing reads are enrolment-gated; this caller is enrolled so every
         // projectable read runs.
         featureAccessSnapshot: enrolledTimeBillingSnapshot({
@@ -494,6 +506,10 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
@@ -794,6 +810,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -802,6 +821,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [
@@ -1376,7 +1396,7 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         select: selectQueue([
           [
-            {
+            invoiceListRowFixture({
               id: uid(45),
               clientId: null,
               matterShare: 1000,
@@ -1389,12 +1409,14 @@ const CONTRACT_CORPUS = {
               dueDate: "2026-02-01",
               currency: "EUR",
               totalAmount: 1000,
+              paidAmount: 400,
               createdAtCursor: new Date("2026-01-01"),
-            },
+            }),
           ],
         ]),
       }),
       expectRefPaths: [],
+      expectPayloadContains: ['"paidAmount":400', '"outstandingAmount":600'],
     },
     {
       mode: "detail",
@@ -1402,102 +1424,135 @@ const CONTRACT_CORPUS = {
       tx: () => ({
         query: {
           invoices: {
-            findFirst: async () => ({
-              id: uid(46),
-              clientId: null,
-              workspaceId: WS,
-              invoiceNumber: "INV-2",
-              documentType: "invoice",
-              originalInvoiceId: null,
-              reference: "Acme February",
-              status: "draft",
-              invoiceDate: "2026-02-01",
-              taxableSupplyDate: "2026-02-01",
-              dueDate: "2026-03-01",
-              currency: "EUR",
-              totalAmount: 2000,
-              netAmount: 100,
-              vatAmount: 21,
-              notes: "Net 30",
-              sellerProfileId: uid(106),
-              buyerName: "Acme s.r.o.",
-              buyerRegistrationId: "12345678",
-              buyerVatId: "CZ12345678",
-              buyerAddressLine1: "Hlavni 1",
-              buyerAddressLine2: null,
-              buyerCity: "Praha",
-              buyerPostalCode: "110 00",
-              buyerCountry: "CZ",
-              paidAt: null,
-              createdAt: new Date("2026-02-01"),
-              updatedAt: new Date("2026-02-01"),
-              timeEntries: [
-                {
-                  id: uid(47),
-                  workspaceId: WS,
-                  workItemId: uid(48),
-                  workItemReference: { type: "available", id: uid(48) },
-                  dateWorked: "2026-02-01",
-                  billedMinutes: 60,
-                  rateAtEntry: 100,
-                  currency: "EUR",
-                  narrative: "Drafted the NDA",
-                  narrativeLanguage: null,
-                  invoiceNarrative: null,
-                  noCharge: false,
-                  status: "invoiced",
-                  workItem: { id: uid(48), name: "NDA draft" },
-                },
-              ],
-              expenses: [
-                {
-                  id: uid(49),
-                  workspaceId: WS,
-                  matterId: uid(50),
-                  matterReference: { type: "available", id: uid(50) },
-                  dateIncurred: "2026-02-01",
-                  amount: 100,
-                  currency: "EUR",
-                  category: "travel",
-                  description: "Court filing fee",
-                  invoiceDescription: null,
-                  billable: true,
-                  markup: 0,
-                  matter: { id: uid(50), name: "Filing bundle" },
-                },
-              ],
-              lines: [
-                {
-                  id: uid(105),
-                  workspaceId: WS,
-                  workspace: { id: WS, name: "Matter", color: null },
-                  recordedDescription: null,
-                  recordedQuantity: null,
-                  recordedUnit: null,
-                  recordedUnitPrice: null,
-                  recordedNetAmount: null,
-                  position: 0,
-                  description: "Drafted the NDA",
-                  quantity: "1.0000",
-                  unit: "h",
-                  unitPrice: 100,
-                  vatRateBps: 2100,
-                  vatTreatment: "domestic_vat",
-                  exemptionReason: null,
-                  netAmount: 100,
-                  vatAmount: 21,
-                  grossAmount: 121,
-                  source: "time_entry",
-                  billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
-                  timeEntryId: uid(47),
-                  expenseId: null,
-                  releasedAt: null,
-                },
-              ],
-            }),
+            findFirst: async () =>
+              invoiceDetailRowFixture({
+                id: toSafeId<"invoice">(uid(46)),
+                clientId: null,
+                workspaceId: toSafeId<"workspace">(WS),
+                invoiceNumber: "INV-2",
+                documentType: "invoice",
+                originalInvoiceId: null,
+                reference: "Acme February",
+                status: "draft",
+                invoiceDate: "2026-02-01",
+                taxableSupplyDate: "2026-02-01",
+                dueDate: "2026-03-01",
+                currency: "EUR",
+                totalAmount: cents(2000),
+                netAmount: cents(100),
+                vatAmount: cents(21),
+                notes: "Net 30",
+                sellerProfileId: toSafeId<"sellerProfile">(uid(106)),
+                buyerName: "Acme s.r.o.",
+                buyerRegistrationId: "12345678",
+                buyerVatId: "CZ12345678",
+                buyerAddressLine1: "Hlavni 1",
+                buyerAddressLine2: null,
+                buyerCity: "Praha",
+                buyerPostalCode: "110 00",
+                buyerCountry: "CZ",
+                paidAt: null,
+                createdAt: new Date("2026-02-01"),
+                updatedAt: new Date("2026-02-01"),
+                payments: [
+                  {
+                    id: toSafeId<"invoicePayment">(uid(107)),
+                    invoiceId: toSafeId<"invoice">(uid(46)),
+                    amount: cents(500),
+                    paidOn: "2026-02-01",
+                    method: "bank_transfer",
+                    reference: null,
+                    note: null,
+                    recordedBy: toSafeId<"user">(uid(108)),
+                    createdAt: new Date("2026-02-01"),
+                    voidedAt: null,
+                    voidedBy: null,
+                  },
+                ],
+                timeEntries: [
+                  {
+                    id: toSafeId<"timeEntry">(uid(47)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workItemId: toSafeId<"entity">(uid(48)),
+                    workItemReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(48)),
+                    },
+                    dateWorked: "2026-02-01",
+                    billedMinutes: 60,
+                    rateAtEntry: cents(100),
+                    currency: "EUR",
+                    narrative: "Drafted the NDA",
+                    invoiceNarrative: null,
+                    noCharge: false,
+                    status: BILLING_STATUS.BILLED,
+                    invoiceAttachment: "charged",
+                    workItem: {
+                      id: toSafeId<"entity">(uid(48)),
+                      name: "NDA draft",
+                    },
+                  },
+                ],
+                expenses: [
+                  {
+                    id: toSafeId<"expense">(uid(49)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    matterId: toSafeId<"entity">(uid(50)),
+                    matterReference: {
+                      type: "available",
+                      id: toSafeId<"entity">(uid(50)),
+                    },
+                    dateIncurred: "2026-02-01",
+                    amount: cents(100),
+                    currency: "EUR",
+                    category: "travel",
+                    description: "Court filing fee",
+                    invoiceDescription: null,
+                    billable: true,
+                    markup: 0,
+                    matter: {
+                      id: toSafeId<"entity">(uid(50)),
+                      name: "Filing bundle",
+                    },
+                  },
+                ],
+                lines: [
+                  {
+                    id: toSafeId<"invoiceLine">(uid(105)),
+                    workspaceId: toSafeId<"workspace">(WS),
+                    workspace: {
+                      id: toSafeId<"workspace">(WS),
+                      name: "Matter",
+                      color: null,
+                    },
+                    recordedDescription: null,
+                    recordedQuantity: null,
+                    recordedUnit: null,
+                    recordedUnitPrice: null,
+                    recordedNetAmount: null,
+                    position: 0,
+                    description: "Drafted the NDA",
+                    quantity: "1.0000",
+                    unit: "h",
+                    unitPrice: cents(100),
+                    vatRateBps: 2100,
+                    vatTreatment: "domestic_vat",
+                    exemptionReason: null,
+                    netAmount: cents(100),
+                    vatAmount: cents(21),
+                    grossAmount: cents(121),
+                    source: "time_entry",
+                    billingPurpose: INVOICE_BILLING_PURPOSE.ORDINARY,
+                    timeEntryId: toSafeId<"timeEntry">(uid(47)),
+                    expenseId: null,
+                    releasedAt: null,
+                  },
+                ],
+              }),
           },
         },
       }),
+      expectPayloadContains: ['"paidAmount":500', '"outstandingAmount":1500'],
       expectRefPaths: [
         "invoice.workspaceId",
         "invoice.timeEntries[].workspaceId",
@@ -1581,6 +1636,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1595,6 +1651,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match,
               headnote: { type: "absent", reason: "not_published" },
@@ -1660,6 +1717,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1674,6 +1732,7 @@ const CONTRACT_CORPUS = {
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
               textWithheldReason: null,
+              textAvailability: "available",
               matchingPassages: 3,
               match: "all_terms",
               headnote: { type: "absent", reason: "not_published" },
@@ -1700,6 +1759,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -1780,6 +1840,7 @@ const CONTRACT_CORPUS = {
           // GUID-bearing publisher URLs; see the statute fixture above.
           sourceUrl: `https://example.test/decision/${uid(93)}`,
           sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
+          sourceLanguages: null,
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
@@ -1866,6 +1927,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                extractionWarnings: [],
                 textWithheldReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
@@ -2546,6 +2608,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,
@@ -2608,6 +2671,7 @@ describe("decision text in chat projection", () => {
       },
       sourceUrl: "https://example.test/decision/source",
       sourceAttributionUrl: "https://example.test/decision/attribution",
+      sourceLanguages: null,
       createdAt: new Date("2020-05-01T00:00:00.000Z"),
       updatedAt: new Date("2020-05-01T00:00:00.000Z"),
     } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);

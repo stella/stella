@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { createHttpApp } from "@/api/http/app";
 import { toResponse } from "@/api/http/respond";
 import { mount, routes } from "@/api/http/route";
@@ -39,6 +41,7 @@ import {
   createRedisRateLimitRequestKey,
   RedisRateLimitContext,
 } from "@/api/lib/rate-limit/redis-context";
+import { LimiterStoreUnavailableError } from "@/api/lib/rate-limit/store-unavailable";
 import { consumeSignupOtpRateLimit } from "@/api/lib/signup-abuse";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { serveForTest } from "@/api/tests/helpers/test-server";
@@ -324,60 +327,64 @@ class FakeRedisClient {
   }
 }
 
-test("HTTP quota rejection emits its named policy once without the counter key", async () => {
-  const context = new TrackingRateLimitContext();
-  const logs = installRecordingLogger();
-  const metrics: string[] = [];
-  setMetricLineSinkForTesting((line) => {
-    metrics.push(line);
-  });
-  const server = serveLimited(
-    { "/limited": { POST: answering(() => "served") } },
-    [
-      rateLimit({
-        context,
-        duration: WINDOW_MS,
-        max: 1,
-        generator: () => "private-caller-credential",
-        budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
-      }),
-    ],
-  );
-  try {
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(200);
-    expect(metrics).toHaveLength(0);
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(429);
-    const rejections = logs.records.filter(
-      ({ message }) => message === "rate_limit.rejected",
-    );
-    expect(rejections).toHaveLength(1);
-    expect(rejections.at(0)?.attributes).toEqual({
-      budget: "mcp.transport.bearer",
-      "budget.keyKind": "bearer",
-      "budget.windowMs": WINDOW_MS,
-      "http.status_code": 429,
+test.each([429, 503] as const)(
+  "HTTP budget rejection reports its actual %i status without the counter key",
+  async (refusalStatus) => {
+    const context = new TrackingRateLimitContext();
+    const logs = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
     });
-    expect(metrics).toHaveLength(1);
-    expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
-      budgetName: "mcp.transport.bearer",
-      RateLimitRejected: 1,
-    });
-    expect(JSON.stringify(rejections)).not.toContain(
-      "private-caller-credential",
+    const server = serveLimited(
+      { "/limited": { POST: answering(() => "served") } },
+      [
+        rateLimit({
+          context,
+          refusalStatus,
+          duration: WINDOW_MS,
+          max: 1,
+          generator: () => "private-caller-credential",
+          budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
+        }),
+      ],
     );
-  } finally {
-    await server.stop();
-    logs.restore();
-    resetMetricLineSinkForTesting();
-    context.kill();
-  }
-});
+    try {
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(200);
+      expect(metrics).toHaveLength(0);
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(refusalStatus);
+      const rejections = logs.records.filter(
+        ({ message }) => message === "rate_limit.rejected",
+      );
+      expect(rejections).toHaveLength(1);
+      expect(rejections.at(0)?.attributes).toEqual({
+        budget: "mcp.transport.bearer",
+        "budget.keyKind": "bearer",
+        "budget.windowMs": WINDOW_MS,
+        "http.status_code": refusalStatus,
+      });
+      expect(metrics).toHaveLength(1);
+      expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
+        budgetName: "mcp.transport.bearer",
+        RateLimitRejected: 1,
+      });
+      expect(JSON.stringify(rejections)).not.toContain(
+        "private-caller-credential",
+      );
+    } finally {
+      await server.stop();
+      logs.restore();
+      resetMetricLineSinkForTesting();
+      context.kill();
+    }
+  },
+);
 
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {
@@ -705,17 +712,31 @@ describe("RedisRateLimitContext", () => {
       });
       context.init(RATE_LIMIT_OPTIONS);
 
-      const counter = await context.increment("api:client", WINDOW_MS, 1000);
-
-      expect(counter.count).toBe(
-        failurePolicy === "fail_open_local" ? 1 : Number.MAX_SAFE_INTEGER,
+      const increment = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await increment).count).toBe(1);
+      } else {
+        expect(await rejectionOf(increment)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment"] : [],
       );
-      expect(operations).toEqual(["increment"]);
       expect(clientCreations).toBe(1);
-      await context.increment("api:client", WINDOW_MS, 1000);
+      const nextIncrement = context.increment("api:client", WINDOW_MS, 1000);
+      if (failurePolicy === "fail_open_local") {
+        expect((await nextIncrement).count).toBe(2);
+      } else {
+        expect(await rejectionOf(nextIncrement)).toBeInstanceOf(
+          LimiterStoreUnavailableError,
+        );
+      }
       expect(clientCreations).toBe(1);
       expect(sendCalls).toBe(1);
-      expect(operations).toEqual(["increment", "increment"]);
+      expect(operations).toEqual(
+        failurePolicy === "fail_open_local" ? ["increment", "increment"] : [],
+      );
 
       context.kill();
     });
@@ -992,7 +1013,7 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
-  test("can fail closed with normal rate-limit counter semantics", async () => {
+  test("reports an unavailable store without inventing an exhausted window", async () => {
     const context = new RedisRateLimitContext({
       createRedis: () => ({
         send: async () => {
@@ -1004,14 +1025,9 @@ describe("RedisRateLimitContext", () => {
     });
     context.init(RATE_LIMIT_OPTIONS);
 
-    const counter = await context.increment(
-      "translate:client",
-      WINDOW_MS,
-      1000,
-    );
-
-    expect(counter.count).toBe(Number.MAX_SAFE_INTEGER);
-    expect(counter.nextReset).toEqual(new Date(2000));
+    expect(
+      await rejectionOf(context.increment("translate:client", WINDOW_MS, 1000)),
+    ).toBeInstanceOf(LimiterStoreUnavailableError);
     context.kill();
   });
 
