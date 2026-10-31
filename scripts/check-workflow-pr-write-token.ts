@@ -29,6 +29,8 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
   ".github/workflows/ci.yml:ci-plan":
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:ci-result":
+    "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
   ".github/workflows/ci.yml:ci-tests":
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
   ".github/workflows/ci.yml:code-quality-api":
@@ -241,8 +243,10 @@ const trustedCheckoutValue = ({
     // (`refs/heads/${{ ... }}`) is not an approved form.
     return !value.includes("${{");
   }
+  // On pull_request the workflow revision is the PR merge commit, so it is
+  // trusted only for events whose workflow runs from the base branch.
   if (checkoutExpression === "github.workflow_sha") {
-    return true;
+    return trigger !== "pull_request";
   }
   if (field === "repository" && checkoutExpression === "github.repository") {
     return true;
@@ -450,7 +454,7 @@ const stepRunsDirectory = ({
   const escaped = directory.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   // Any mention of the directory counts, including `cd untrusted && ...`.
   const repositoryPath = new RegExp(
-    `(?:^|[\\s'"=])\\.?/?${escaped}(?:/|$|[\\s'";&|)])`,
+    `(?:^|[\\s'"=/])\\.?/?${escaped}(?:/|$|[\\s'";&|)])`,
     "u",
   );
   return repositoryPath.test(command) || repositoryPath.test(uses);

@@ -80,6 +80,18 @@ describe("privileged workflow policy", () => {
       expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
     }
   });
+  test("does not trust the workflow revision on pull_request", () => {
+    const body = `    env:\n      KEY: \${{ secrets.KEY }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
+    expect(
+      check(workflow("pull_request", body, "contents: read")).some(
+        (item) => item.class === "class 2",
+      ),
+    ).toBeTrue();
+  });
+  test("recognizes workspace-qualified paths into a head checkout", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - run: bash "$GITHUB_WORKSPACE/untrusted/scripts/x.sh"`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
   test("treats an empty checkout ref like an omitted one", () => {
     const body = `    env:\n      KEY: \${{ secrets.KEY }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: ''\n      - run: bash scripts/x.sh`;
     expect(
@@ -195,9 +207,9 @@ jobs:
       ).some((item) => item.class === "class 3"),
     ).toBeFalse();
   });
-  test("accepts tooling pinned to the trusted workflow revision", () => {
+  test("accepts tooling pinned to the workflow revision of base-branch events", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
-    expect(check(workflow("pull_request", body))).toHaveLength(0);
+    expect(check(workflow("pull_request_target", body))).toHaveLength(0);
   });
   test("accepts literal refs", () => {
     for (const ref of ["main", "v1.2.3"]) {
