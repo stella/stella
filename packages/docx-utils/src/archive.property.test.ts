@@ -3,6 +3,7 @@ import fc from "fast-check";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { DocxArchiveError, loadDocx, loadDocxArchive } from "./archive";
 
