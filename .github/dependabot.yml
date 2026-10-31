@@ -13,8 +13,11 @@ updates:
       default-days: 5
     groups:
       stella-shared:
+        # Reusable workflows are named stella/.github/.github/workflows/<file>,
+        # so they need their own pattern to land in this one grouped update.
         patterns:
           - "stella/.github/*"
+          - "stella/.github/.github/workflows/*"
         update-types:
           - "major"
           - "minor"

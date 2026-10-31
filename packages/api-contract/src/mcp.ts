@@ -152,6 +152,7 @@ export const MCP_OAUTH_PROTOCOL_SCOPES = [
  */
 export const VERIFIED_OAUTH_CLIENT_BRANDS = [
   "stella",
+  "stella_ios",
   "claude",
   "claude_code",
   "chatgpt",
