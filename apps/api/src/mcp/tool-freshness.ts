@@ -5,9 +5,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { createCoalescedDrain } from "@stll/concurrency/coalesced-drain";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
-import { captureError, detached } from "@/api/lib/analytics/capture";
+import { detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   announceMcpToolProjectionChange,
   registerMcpToolProjectionDelivery,
@@ -236,18 +237,19 @@ export class McpToolFreshnessRegistry {
   }
 }
 
+const TOOL_FRESHNESS_FAILURE_SINK = failureSink({
+  event: "mcp.tool_freshness_failed",
+  expected: [],
+});
+
 const reportMcpToolFreshnessError: ReportMcpToolFreshnessError = (
   error,
   operation,
 ) => {
-  captureError(
-    error,
-    handlerErrorContext(`mcp.toolFreshness.${operation}`, {
-      operation,
-      phase: "tool_freshness",
-      source: "mcp",
-    }),
-  );
+  observeFailure(error, {
+    sink: TOOL_FRESHNESS_FAILURE_SINK,
+    ctx: { operation, phase: "tool_freshness", source: "mcp" },
+  });
 };
 
 let registry: McpToolFreshnessRegistry | undefined;
