@@ -41,4 +41,13 @@ export const devices = Object.freeze({
     hasTouch: true,
     defaultBrowserType: "webkit",
   } as const),
+  "iPhone SE (3rd gen)": Object.freeze({
+    userAgent:
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/603.1.30 (KHTML, like Gecko) Version/26.6 Mobile/19E241 Safari/602.1",
+    viewport: Object.freeze({ width: 375, height: 667 } as const),
+    deviceScaleFactor: 2,
+    isMobile: true,
+    hasTouch: true,
+    defaultBrowserType: "webkit",
+  } as const),
 } as const);

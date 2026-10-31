@@ -664,6 +664,7 @@
     "displayName": { "prefix": "route-smoke", "suffix": "" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
+      "Check phone layouts",
       "Check route network baseline",
       "Checkout",
       "Explain network baseline failure",
@@ -673,6 +674,7 @@
       "Setup Bun",
       "Setup production browser stack",
       "Upload browser test timings",
+      "Upload phone layout report",
       "Upload route smoke report",
       "Upload server logs"
     ],
