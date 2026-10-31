@@ -452,9 +452,10 @@ describe("workflow_run trust", () => {
   test("only marker workflows alert on cancellation, with trigger name coverage", () => {
     const workflows = allWorkflows();
     const alerting = failedRunAlerting(workflows);
-    const cancelledPaths = alerting.condition
-      .match(/conclusion == 'cancelled'\s*&& contains\(fromJSON\('([^']+)'\)/u)
-      ?.at(1);
+    const cancelledPaths =
+      /conclusion == 'cancelled'\s*&& contains\(fromJSON\('([^']+)'\)/u
+        .exec(alerting.condition)
+        ?.at(1);
     if (typeof cancelledPaths !== "string") {
       expect.unreachable("alerts require cancellation paths");
     }
@@ -585,7 +586,7 @@ describe("workflow_run trust", () => {
           expect(result.exitCode, result.stderr.toString()).toBe(0);
           expect(
             readFileSync(output, "utf-8").trim(),
-            `${file}: ${conclusions}`,
+            `${file}: ${conclusions.join(", ")}`,
           ).toBe(`send=${file === "release.yml" ? releaseSend : nightlySend}`);
         }
       }
@@ -1407,7 +1408,7 @@ describe("desktop recovery", () => {
             const fails = required.includes(changed) && result !== "success";
             expect(
               run.exitCode,
-              `${channel}/${shouldBuild}/${changed}/${result}: ${run.stderr}`,
+              `${channel}/${shouldBuild}/${changed}/${result}: ${run.stderr.toString()}`,
             ).toBe(fails ? 1 : 0);
             if (fails) {
               expect(run.stdout.toString()).toContain(

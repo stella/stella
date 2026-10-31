@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import {
+  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -62,7 +63,7 @@ describe("API deployment health receipt", () => {
       ).text(),
     );
     const script = workflowSteps(workflow, "scheduled-run-alerts.yml").find(
-      ({ run }) => run.includes('previous=$(bash "$GH_RETRY_SCRIPT" api'),
+      ({ run }) => run.includes("scripts/workflow-outage.ts"),
     )?.run;
     expect(script).toBeDefined();
     if (script === undefined) {
@@ -90,6 +91,38 @@ describe("API deployment health receipt", () => {
       );
       const outputPath = path.join(outputDir, "github-output");
       try {
+        mkdirSync(path.join(outputDir, ".gh-retry/scripts"), {
+          recursive: true,
+        });
+        mkdirSync(path.join(outputDir, ".gh-retry/.github/workflows"), {
+          recursive: true,
+        });
+        for (const file of ["workflow-outage.ts", "github-expression.ts"]) {
+          copyFileSync(
+            path.join(import.meta.dir, file),
+            path.join(outputDir, ".gh-retry/scripts", file),
+          );
+        }
+        copyFileSync(
+          path.resolve(
+            import.meta.dir,
+            "../.github/workflows/nightly-test.yml",
+          ),
+          path.join(outputDir, ".gh-retry/.github/workflows/nightly-test.yml"),
+        );
+        const eventPath = path.join(outputDir, "event.json");
+        writeFileSync(
+          eventPath,
+          JSON.stringify({
+            workflow_run: {
+              run_number: 100,
+              path: ".github/workflows/nightly-test.yml",
+              event: "schedule",
+              head_branch: "main",
+              conclusion: "failure",
+            },
+          }),
+        );
         const result = Bun.spawnSync(
           [
             "bash",
@@ -97,11 +130,13 @@ describe("API deployment health receipt", () => {
             `gh() { printf '%s' "$TEST_HISTORY"; }; export -f gh\n${script}`,
           ],
           {
+            cwd: outputDir,
             env: {
               ...process.env,
               GITHUB_OUTPUT: outputPath,
               GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
               GITHUB_REPOSITORY: "stella/stella",
+              GITHUB_EVENT_PATH: eventPath,
               RUN_NUMBER: "100",
               RUN_BRANCH: "main",
               RUN_EVENT: "schedule",
