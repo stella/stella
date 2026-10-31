@@ -3,7 +3,7 @@
 export const devices = Object.freeze({
   "Desktop Chrome": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.12 Safari/537.36",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.4 Safari/537.36",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1920, height: 1080 } as const),
     deviceScaleFactor: 1,
@@ -13,7 +13,7 @@ export const devices = Object.freeze({
   } as const),
   "Desktop Firefox": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:155.0) Gecko/20100101 Firefox/155.0",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:157.0) Gecko/20100101 Firefox/157.0",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1920, height: 1080 } as const),
     deviceScaleFactor: 1,
@@ -23,7 +23,7 @@ export const devices = Object.freeze({
   } as const),
   "Desktop Safari": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Safari/605.1.15",
     viewport: Object.freeze({ width: 1280, height: 720 } as const),
     screen: Object.freeze({ width: 1792, height: 1120 } as const),
     deviceScaleFactor: 2,
@@ -33,7 +33,7 @@ export const devices = Object.freeze({
   } as const),
   "iPhone 13": Object.freeze({
     userAgent:
-      "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Mobile/15E148 Safari/604.1",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 15_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/27.2 Mobile/15E148 Safari/604.1",
     viewport: Object.freeze({ width: 390, height: 664 } as const),
     screen: Object.freeze({ width: 390, height: 844 } as const),
     deviceScaleFactor: 3,
