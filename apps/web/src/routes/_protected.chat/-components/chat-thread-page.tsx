@@ -46,6 +46,8 @@ import { ComposerVeil } from "@/components/chat/composer-veil";
 import { McpReconnectNotice } from "@/components/chat/mcp-reconnect-notice";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
+import type { UserMessageEditActions } from "@/components/chat/user-message-edit";
+import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { RenderStormRegion } from "@/components/render-storm-canary";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -304,6 +306,24 @@ export const ChatThreadPage = ({
     threadRef,
     workspaceId,
   });
+  // An edit is a send: it passes the same AI check before the thread is
+  // truncated. One stable object, so the transcript's edit actions do not
+  // re-render on every streamed chunk.
+  const startEdit = useLatestCallback(() => {
+    startUserMessageEdit();
+  });
+  const submitEdit = useLatestCallback(
+    async (messageId: string, edit: UserMessageEdit) => {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      await editUserMessage(messageId, edit);
+    },
+  );
+  const [userMessageEdit] = useState<UserMessageEditActions>(() => ({
+    onStart: startEdit,
+    onSubmit: submitEdit,
+  }));
 
   const sentMessageHistory = getUserMessageHistory(messages);
 
@@ -728,10 +748,7 @@ export const ChatThreadPage = ({
                         stickyUserMessages
                         streamdownComponents={streamdownComponents}
                         threadRef={threadRef}
-                        userMessageEdit={{
-                          onStart: startUserMessageEdit,
-                          onSubmit: editUserMessage,
-                        }}
+                        userMessageEdit={userMessageEdit}
                         workspaceId={workspaceId}
                       />
                       <ChatThreadRecap

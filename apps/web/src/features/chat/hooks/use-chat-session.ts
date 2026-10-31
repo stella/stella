@@ -1072,13 +1072,20 @@ export const useChatSession = ({
    * (`planTruncatedReplay`) and the replay request names the same target
    * (`truncateAfterMessageId`), so the server drops the same persisted turns
    * before the model runs again.
+   *
+   * The plan reads the runtime's messages when the replay starts, not the
+   * rendered ones, so the callbacks built on it keep their identity while a
+   * turn streams and the transcript's edit actions do not re-render.
    */
   const replayFromTruncation = useCallback(
     async (
       target: TruncatedReplayTarget,
       replay: (options: ChatSendMessageOptions | undefined) => Promise<void>,
     ) => {
-      const plan = planTruncatedReplay(messages, target);
+      const plan = planTruncatedReplay(
+        projectCanonicalChatUIMessages(chat.getSnapshot().messages),
+        target,
+      );
       if (plan === null) {
         return;
       }
@@ -1092,7 +1099,7 @@ export const useChatSession = ({
         }),
       );
     },
-    [getSendMode, messages, setMessages],
+    [chat, getSendMode, setMessages],
   );
 
   /**
