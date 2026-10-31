@@ -333,12 +333,6 @@ updates:
           - "drizzle-kit"
         update-types:
           - "major"
-      react-email:
-        patterns:
-          - "react-email"
-          - "@react-email/*"
-        update-types:
-          - "major"
       rivetkit:
         patterns:
           - "rivetkit"

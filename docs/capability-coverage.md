@@ -119,7 +119,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.delete` | write, destructive | stella:contacts_write | — | curated tool `delete_contact` |
 | `contacts.export` | read | stella:read | — | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. contacts.list covers part of this: paginates the directory as JSON records without the portable import field set |
 | `contacts.get` | read | stella:read | — | curated tool `read_contact` |
-| `contacts.import` | write | stella:contacts_write | — | covered by `save_contact` |
+| `contacts.import` | write | stella:contacts_write | — | generic invoke → `stella capability contacts import` |
 | `contacts.list` | read | stella:read | — | curated tool `list_contacts` |
 | `contacts.sanctions.events.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-events-list` |
 | `contacts.sanctions.get` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-get` |
@@ -351,6 +351,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.justifications.list` | read | stella:read | — | generic invoke → `stella capability matters justifications-list` |
 | `matters.list` | read | stella:read | — | curated tool `list_matters` |
 | `matters.members.add` | write | stella:admin_write | — | curated tool `add_matter_member` |
+| `matters.members.list` | read | stella:read | — | covered by `list_matters` |
 | `matters.members.remove` | write, destructive | stella:admin_write | — | curated tool `remove_matter_member` |
 | `matters.search-preview.get` | read | stella:read | — | covered by `list_matters` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
