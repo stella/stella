@@ -64,10 +64,10 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import { recordTableLeaseProtocol } from "./record-table-lease-protocol";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import { createDatabase } from "./sql-client";
 import { terminateReserved } from "./sql-close";
-import { recordTableLeaseProtocol } from "./table-lease-protocol";
 import {
   acquireMigrationTableLeases,
   ensureTableLeaseQueue,

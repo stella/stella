@@ -35,7 +35,7 @@ import type {
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
-import { recordTableLeaseProtocol } from "../../db/table-lease-protocol";
+import { recordTableLeaseProtocol } from "../../db/record-table-lease-protocol";
 import {
   acquireJobTableLeases,
   canAcquireJobTableLeases,

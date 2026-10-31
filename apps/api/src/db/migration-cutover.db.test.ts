@@ -26,10 +26,8 @@ import {
 } from "./migration-lock-manifest";
 import { runMigrations } from "./migration-runner";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
-import {
-  recordTableLeaseProtocol,
-  TABLE_LEASE_PROTOCOL,
-} from "./table-lease-protocol";
+import { recordTableLeaseProtocol } from "./record-table-lease-protocol";
+import { TABLE_LEASE_PROTOCOL } from "./table-lease-protocol";
 import {
   ensureTableLeaseQueue,
   TABLE_LEASE_MIGRATION,
