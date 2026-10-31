@@ -324,6 +324,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/hosted-usage-provider/replay-audit.ts",
     "apps/api/src/lib/hosted-usage-provider/polar/contract.ts",
     "apps/api/src/lib/json-schema/null-optionals.ts",
+    "apps/api/src/lib/json-schema/utf8-byte-length.ts",
     "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
     "apps/api/src/lib/kill-switches/admission.ts",
     "apps/api/src/lib/kill-switches/registry.ts",
