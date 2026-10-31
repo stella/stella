@@ -3097,7 +3097,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Name prefix"
         },
         "middle_name": {
           "anyOf": [
@@ -3108,7 +3109,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Middle name"
         },
         "suffix": {
           "anyOf": [
@@ -3119,7 +3121,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Name suffix"
         },
         "emails": {
           "anyOf": [
@@ -3134,25 +3137,31 @@
                   },
                   "address": {
                     "type": "string",
-                    "format": "email",
-                    "maxLength": 320
-                  },
-                  "isPrimary": {
-                    "type": "boolean"
+                    "pattern": "^[\\w+-]+(?:\\.[\\w+-]+)*@[\\da-zA-Z]+(?:[.-][\\da-zA-Z]+)*\\.[a-zA-Z]{2,}$",
+                    "maxLength": 320,
+                    "x-stella-agent-input": {
+                      "kind": "email"
+                    },
+                    "description": "Use an email address; surrounding whitespace is trimmed."
                   },
                   "label": {
                     "type": "string",
                     "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
                   }
                 },
-                "required": ["type", "address", "isPrimary"]
+                "required": ["type", "address", "is_primary"],
+                "additionalProperties": false
               },
               "maxItems": 20
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Email addresses"
         },
         "phones": {
           "anyOf": [
@@ -3170,22 +3179,24 @@
                     "minLength": 1,
                     "maxLength": 32
                   },
-                  "isPrimary": {
-                    "type": "boolean"
-                  },
                   "label": {
                     "type": "string",
                     "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
                   }
                 },
-                "required": ["type", "number", "isPrimary"]
+                "required": ["type", "number", "is_primary"],
+                "additionalProperties": false
               },
               "maxItems": 20
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Phone numbers"
         },
         "addresses": {
           "anyOf": [
@@ -3221,58 +3232,73 @@
                     "type": "string",
                     "maxLength": 256
                   },
-                  "postalCode": {
-                    "type": "string",
-                    "maxLength": 32
-                  },
                   "country": {
                     "type": "string",
-                    "maxLength": 128
-                  },
-                  "isPrimary": {
-                    "type": "boolean"
+                    "maxLength": 128,
+                    "x-stella-agent-input": {
+                      "kind": "country",
+                      "country": {
+                        "spelling": "alpha-2",
+                        "tool": "save_contact"
+                      }
+                    },
+                    "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
                   },
                   "label": {
                     "type": "string",
                     "maxLength": 128
+                  },
+                  "is_primary": {
+                    "type": "boolean"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "maxLength": 32
                   }
                 },
-                "required": ["type", "line1", "isPrimary"]
+                "required": ["type", "line1", "is_primary"],
+                "additionalProperties": false
               },
               "maxItems": 10
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Postal addresses"
         },
         "metadata": {
           "anyOf": [
             {
               "type": "object",
               "properties": {
-                "dataBoxes": {
+                "data_boxes": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
                       "id": {
                         "type": "string",
-                        "pattern": "^[A-Za-z0-9]{7}$"
-                      },
-                      "isPrimary": {
-                        "type": "boolean"
+                        "pattern": "^[A-Za-z0-9]{7}$",
+                        "x-stella-agent-input": {
+                          "kind": "data-box"
+                        },
+                        "description": "Use the seven-character data box ID; surrounding whitespace is trimmed."
                       },
                       "label": {
                         "type": "string",
                         "maxLength": 128
+                      },
+                      "is_primary": {
+                        "type": "boolean"
                       }
                     },
-                    "required": ["id", "isPrimary"]
+                    "required": ["id", "is_primary"],
+                    "additionalProperties": false
                   },
                   "maxItems": 20
                 },
-                "customFields": {
+                "custom_fields": {
                   "type": "array",
                   "items": {
                     "type": "object",
@@ -3292,17 +3318,20 @@
                         "maxLength": 2000
                       }
                     },
-                    "required": ["id", "label", "value"]
+                    "required": ["id", "label", "value"],
+                    "additionalProperties": false
                   },
                   "maxItems": 50
                 }
               },
-              "required": []
+              "required": [],
+              "additionalProperties": false
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Data boxes and custom fields"
         },
         "tags": {
           "anyOf": [
@@ -3316,7 +3345,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Tags"
         },
         "color": {
           "anyOf": [
@@ -3327,7 +3357,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Display color"
         },
         "registration_number": {
           "anyOf": [
@@ -3338,7 +3369,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Registration number"
         },
         "tax_id": {
           "anyOf": [
@@ -3349,7 +3381,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Tax identifier"
         },
         "vat_id": {
           "anyOf": [
@@ -3360,7 +3393,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "VAT identifier"
         },
         "vat_payer": {
           "anyOf": [
@@ -3370,7 +3404,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "VAT payer"
         },
         "bank_accounts": {
           "anyOf": [
@@ -3387,29 +3422,35 @@
                     "type": "string",
                     "maxLength": 11
                   },
-                  "accountNumber": {
-                    "type": "string",
-                    "maxLength": 64
-                  },
-                  "bankName": {
-                    "type": "string",
-                    "maxLength": 256
-                  },
                   "currency": {
                     "type": "string",
                     "minLength": 3,
                     "maxLength": 3,
-                    "pattern": "^[A-Za-z]{3}$"
+                    "pattern": "^[A-Za-z]{3}$",
+                    "x-stella-agent-input": {
+                      "kind": "currency"
+                    },
+                    "description": "Use a three-letter currency code; case and surrounding whitespace are normalized."
+                  },
+                  "account_number": {
+                    "type": "string",
+                    "maxLength": 64
+                  },
+                  "bank_name": {
+                    "type": "string",
+                    "maxLength": 256
                   }
                 },
-                "required": []
+                "required": [],
+                "additionalProperties": false
               },
               "maxItems": 10
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Bank accounts"
         },
         "billing_address": {
           "anyOf": [
@@ -3432,21 +3473,31 @@
                   "type": "string",
                   "maxLength": 256
                 },
-                "postalCode": {
-                  "type": "string",
-                  "maxLength": 32
-                },
                 "country": {
                   "type": "string",
-                  "maxLength": 128
+                  "maxLength": 128,
+                  "x-stella-agent-input": {
+                    "kind": "country",
+                    "country": {
+                      "spelling": "alpha-2",
+                      "tool": "save_contact"
+                    }
+                  },
+                  "description": "An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read."
+                },
+                "postal_code": {
+                  "type": "string",
+                  "maxLength": 32
                 }
               },
-              "required": []
+              "required": [],
+              "additionalProperties": false
             },
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Billing address"
         },
         "default_hourly_rate": {
           "anyOf": [
@@ -3458,7 +3509,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Hourly rate in minor currency units"
         },
         "currency": {
           "anyOf": [
@@ -3470,7 +3522,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Currency code"
         },
         "payment_term_days": {
           "anyOf": [
@@ -3482,7 +3535,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Payment term in days"
         },
         "invoice_language": {
           "anyOf": [
@@ -3507,7 +3561,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Invoice language"
         },
         "originating_attorney_id": {
           "anyOf": [
@@ -3519,7 +3574,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Originating attorney user ID"
         },
         "responsible_attorney_id": {
           "anyOf": [
@@ -3531,7 +3587,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "description": "Responsible attorney user ID"
         },
         "contact_id": {
           "type": "string",
@@ -4192,7 +4249,7 @@
               "type": "null"
             }
           ],
-          "description": "Task description; pass null to clear"
+          "description": "Description for creation in list_id"
         },
         "due_date": {
           "anyOf": [

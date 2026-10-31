@@ -473,9 +473,9 @@
       "name": "save_contact",
       "nameChars": 12,
       "descriptionChars": 303,
-      "inputSchemaChars": 6091,
-      "totalChars": 6406,
-      "estimatedTokens": 2643
+      "inputSchemaChars": 7864,
+      "totalChars": 8179,
+      "estimatedTokens": 3382
     },
     {
       "name": "save_document",
@@ -513,9 +513,9 @@
       "name": "save_task",
       "nameChars": 9,
       "descriptionChars": 406,
-      "inputSchemaChars": 1852,
-      "totalChars": 2267,
-      "estimatedTokens": 911
+      "inputSchemaChars": 1851,
+      "totalChars": 2266,
+      "estimatedTokens": 910
     },
     {
       "name": "save_time_entry",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 131206,
-    "estimatedTokens": 52097
+    "characters": 132978,
+    "estimatedTokens": 52835
   }
 }

@@ -1,12 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, count, eq, ilike, inArray } from "drizzle-orm";
+import { and, count, eq, ilike } from "drizzle-orm";
 import * as v from "valibot";
 
-import { member } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import { resultTx } from "@/api/db/safe-db";
 import {
-  contacts,
   properties,
   workspaceMembers,
   workspaces,
@@ -26,6 +24,10 @@ import {
   resourceIdSchema,
   withDescription,
 } from "@/api/lib/custom-schema";
+import {
+  lockMatterCreationClient,
+  lockMatterCreationMembers,
+} from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -136,32 +138,17 @@ export const createWorkspaceHandler = async function* ({
             },
           }),
           body.clientId !== undefined
-            ? tx
-                .select({ id: contacts.id })
-                .from(contacts)
-                .where(
-                  and(
-                    eq(contacts.id, body.clientId),
-                    eq(contacts.organizationId, organizationId),
-                  ),
-                )
-                .for("update")
-                .limit(1)
-                .then((rows) => rows.at(0) ?? null)
+            ? lockMatterCreationClient({
+                tx,
+                organizationId,
+                contactId: body.clientId,
+              })
             : Promise.resolve(null),
-          tx
-            .select({ userId: member.userId })
-            .from(member)
-            .where(
-              and(
-                eq(member.organizationId, organizationId),
-                inArray(member.userId, grantedUserIds),
-              ),
-            )
-            // Same order as organization removal's membership locks.
-            .orderBy(member.userId)
-            .limit(grantedUserIds.length)
-            .for("update"),
+          lockMatterCreationMembers({
+            tx,
+            organizationId,
+            userIds: grantedUserIds,
+          }),
         ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
@@ -214,18 +201,21 @@ export const createWorkspaceHandler = async function* ({
       const padding =
         settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
       const now = new Date();
-      const referenceResult = await allocateMatterReference({
-        tx,
-        organizationId,
-        pattern,
-        now,
-        padding,
-      });
+      let reference = body.reference;
+      if (reference === undefined) {
+        const referenceResult = await allocateMatterReference({
+          tx,
+          organizationId,
+          pattern,
+          now,
+          padding,
+        });
 
-      if (Result.isError(referenceResult)) {
-        return Result.err(referenceResult.error);
+        if (Result.isError(referenceResult)) {
+          return Result.err(referenceResult.error);
+        }
+        reference = referenceResult.value;
       }
-      const reference = body.reference ?? referenceResult.value;
 
       // The database creates the matter in this transaction's organization
       // and, when the creator would not reach it otherwise, assigns them, so

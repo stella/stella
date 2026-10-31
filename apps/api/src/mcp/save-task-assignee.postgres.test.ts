@@ -5,6 +5,7 @@ import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
+  matterCounters,
   organizationAccessStates,
   taskAssignees,
   workspaceMembers,
@@ -131,6 +132,19 @@ describe.skipIf(!enabled)("save_task assignee updates", () => {
         userEmail: `${ownerId}@test.local`,
       });
 
+    const manualMatter = await handleMcpToolCall({
+      toolName: "save_matter",
+      args: { name: "Manual reference matter", reference: "MANUAL-1" },
+      context: contextFor([]),
+    });
+    expect(manualMatter.isError).toBeUndefined();
+    expect(
+      await testDb
+        .select({ lastValue: matterCounters.lastValue })
+        .from(matterCounters)
+        .where(eq(matterCounters.organizationId, organizationId)),
+    ).toEqual([]);
+
     const matterResult = await handleMcpToolCall({
       toolName: "save_matter",
       args: { name: "Assignment matter" },
@@ -153,7 +167,11 @@ describe.skipIf(!enabled)("save_task assignee updates", () => {
     const context = contextFor([workspaceId]);
     const taskResult = await handleMcpToolCall({
       toolName: "save_task",
-      args: { matter_id: workspaceId, name: "Assign me" },
+      args: {
+        matter_id: workspaceId,
+        name: "Assign me",
+        assignee: `${firstAssigneeId}@TEST.LOCAL`,
+      },
       context,
     });
     expect(taskResult.isError).toBeUndefined();
@@ -221,7 +239,7 @@ describe.skipIf(!enabled)("save_task assignee updates", () => {
       args: {
         task_id: taskId,
         name: "Assigned and renamed",
-        assignee: secondAssigneeEmail,
+        assignee: `${secondAssigneeId}@TEST.LOCAL`,
       },
       context,
     });

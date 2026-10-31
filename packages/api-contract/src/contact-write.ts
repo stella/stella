@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { DATA_BOX_ID_PATTERN, EMAIL_ADDRESS_PATTERN } from "@stll/agent-input";
+
 import { INVOICE_LANGUAGES } from "./billing";
 import { contactBirthDateSchema } from "./contact-date";
 import { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
@@ -24,7 +26,7 @@ export const contactNationalityCodesSchema = v.pipe(
   ),
 );
 
-export const contactBankAccountSchema = v.object({
+export const contactBankAccountSchema = v.strictObject({
   iban: v.exactOptional(v.pipe(v.string(), v.maxLength(34))),
   bic: v.exactOptional(v.pipe(v.string(), v.maxLength(11))),
   accountNumber: v.exactOptional(v.pipe(v.string(), v.maxLength(64))),
@@ -43,7 +45,7 @@ export const contactBillingAddressSchema = v.object({
 
 export const contactEmailSchema = v.object({
   type: v.picklist(["work", "personal", "other"]),
-  address: v.pipe(v.string(), v.email(), v.maxLength(320)),
+  address: v.pipe(v.string(), v.regex(EMAIL_ADDRESS_PATTERN), v.maxLength(320)),
   isPrimary: v.boolean(),
   label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
 });
@@ -56,7 +58,7 @@ export const contactPhoneSchema = v.object({
 });
 
 export const contactDataBoxSchema = v.object({
-  id: v.pipe(v.string(), v.regex(/^[A-Za-z0-9]{7}$/u)),
+  id: v.pipe(v.string(), v.regex(DATA_BOX_ID_PATTERN)),
   isPrimary: v.boolean(),
   label: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
 });

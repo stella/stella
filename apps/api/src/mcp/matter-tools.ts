@@ -12,7 +12,10 @@ import {
 } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { contactBirthDateSchema } from "@stll/api-contract/contact-date";
-import { updateContactBodySchema } from "@stll/api-contract/contact-write";
+import {
+  MAX_CONTACT_NATIONALITY_CODES,
+  updateContactBodySchema,
+} from "@stll/api-contract/contact-write";
 import {
   organizationMemberSelectorSchema,
   taskDescriptionSchema,
@@ -20,7 +23,11 @@ import {
 import { isCountryCode } from "@stll/country-codes";
 
 import { member, user } from "@/api/db/auth-schema";
-import { abortTransaction, safeDbFromScoped } from "@/api/db/safe-db";
+import {
+  abortableTx,
+  abortTransaction,
+  safeDbFromScoped,
+} from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { createContactHandler } from "@/api/handlers/contacts/create";
@@ -47,7 +54,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import { createErrorCapture } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -60,7 +67,6 @@ import {
   runEntityCheckShared,
 } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
-import { MAX_CONTACT_NATIONALITY_CODES } from "@/api/lib/business-registries/nationality-codes";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import {
@@ -78,10 +84,18 @@ import {
   SAVE_MATTER_PROJECTION,
   SAVE_TASK_PROJECTION,
 } from "@/api/lib/chat/projections";
+import {
+  emailColumnMatches,
+  normalizeEmail,
+} from "@/api/lib/email/normalized-email";
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import type { FlowRunCompletionNotice } from "@/api/lib/flows/flow-run-actor";
+import { notifyFlowRunActorOfCompletion } from "@/api/lib/flows/flow-run-completion-notice";
+import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
+import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
@@ -104,6 +118,7 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { CONTACT_NESTED_INPUT_SCHEMAS } from "@/api/mcp/contact-input";
 import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import type { McpRequestResources } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -683,29 +698,87 @@ const handleListContactsTool: TypedMcpToolHandler<
 const dateOfBirthInputSchema = contactBirthDateSchema;
 
 const CONTACT_SAVE_FIELD_SCHEMAS = {
-  prefix: updateContactBodySchema.entries.prefix,
-  middle_name: updateContactBodySchema.entries.middleName,
-  suffix: updateContactBodySchema.entries.suffix,
-  emails: updateContactBodySchema.entries.emails,
-  phones: updateContactBodySchema.entries.phones,
-  addresses: updateContactBodySchema.entries.addresses,
-  metadata: updateContactBodySchema.entries.metadata,
-  tags: updateContactBodySchema.entries.tags,
-  color: updateContactBodySchema.entries.color,
-  registration_number: updateContactBodySchema.entries.registrationNumber,
-  tax_id: updateContactBodySchema.entries.taxId,
-  vat_id: updateContactBodySchema.entries.vatId,
-  vat_payer: updateContactBodySchema.entries.vatPayer,
-  bank_accounts: updateContactBodySchema.entries.bankAccounts,
-  billing_address: updateContactBodySchema.entries.billingAddress,
-  default_hourly_rate: updateContactBodySchema.entries.defaultHourlyRate,
-  currency: updateContactBodySchema.entries.currency,
-  payment_term_days: updateContactBodySchema.entries.paymentTermDays,
-  invoice_language: updateContactBodySchema.entries.invoiceLanguage,
-  originating_attorney_id:
+  prefix: v.pipe(
+    updateContactBodySchema.entries.prefix,
+    v.description("Name prefix"),
+  ),
+  middle_name: v.pipe(
+    updateContactBodySchema.entries.middleName,
+    v.description("Middle name"),
+  ),
+  suffix: v.pipe(
+    updateContactBodySchema.entries.suffix,
+    v.description("Name suffix"),
+  ),
+  emails: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.emails,
+    v.description("Email addresses"),
+  ),
+  phones: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.phones,
+    v.description("Phone numbers"),
+  ),
+  addresses: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.addresses,
+    v.description("Postal addresses"),
+  ),
+  metadata: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.metadata,
+    v.description("Data boxes and custom fields"),
+  ),
+  tags: v.pipe(updateContactBodySchema.entries.tags, v.description("Tags")),
+  color: v.pipe(
+    updateContactBodySchema.entries.color,
+    v.description("Display color"),
+  ),
+  registration_number: v.pipe(
+    updateContactBodySchema.entries.registrationNumber,
+    v.description("Registration number"),
+  ),
+  tax_id: v.pipe(
+    updateContactBodySchema.entries.taxId,
+    v.description("Tax identifier"),
+  ),
+  vat_id: v.pipe(
+    updateContactBodySchema.entries.vatId,
+    v.description("VAT identifier"),
+  ),
+  vat_payer: v.pipe(
+    updateContactBodySchema.entries.vatPayer,
+    v.description("VAT payer"),
+  ),
+  bank_accounts: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.bank_accounts,
+    v.description("Bank accounts"),
+  ),
+  billing_address: v.pipe(
+    CONTACT_NESTED_INPUT_SCHEMAS.billing_address,
+    v.description("Billing address"),
+  ),
+  default_hourly_rate: v.pipe(
+    updateContactBodySchema.entries.defaultHourlyRate,
+    v.description("Hourly rate in minor currency units"),
+  ),
+  currency: v.pipe(
+    updateContactBodySchema.entries.currency,
+    v.description("Currency code"),
+  ),
+  payment_term_days: v.pipe(
+    updateContactBodySchema.entries.paymentTermDays,
+    v.description("Payment term in days"),
+  ),
+  invoice_language: v.pipe(
+    updateContactBodySchema.entries.invoiceLanguage,
+    v.description("Invoice language"),
+  ),
+  originating_attorney_id: v.pipe(
     updateContactBodySchema.entries.originatingAttorneyId,
-  responsible_attorney_id:
+    v.description("Originating attorney user ID"),
+  ),
+  responsible_attorney_id: v.pipe(
     updateContactBodySchema.entries.responsibleAttorneyId,
+    v.description("Responsible attorney user ID"),
+  ),
 } as const;
 
 type ContactNameParts = {
@@ -1054,15 +1127,17 @@ const handleSaveContactTool: TypedMcpToolHandler<
     return errorResult("Forbidden");
   }
   const contactId = brandPersistedContactId(input.contact_id);
+  const body = projectContactUpdateFields(input);
+  if (Object.keys(body).length === 0) {
+    return errorResult("Provide at least one field to change");
+  }
   const updated = await Result.gen(() =>
     updateContactHandler({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
       contactId,
       recordAuditEvent: context.recordAuditEvent,
-      body: {
-        ...projectContactUpdateFields(input),
-      },
+      body,
     }),
   );
   if (Result.isError(updated)) {
@@ -1804,7 +1879,7 @@ const saveTaskArgsSchema = nullAsAbsent(
       description: v.optional(
         v.pipe(
           taskDescriptionSchema,
-          v.description("Task description; pass null to clear"),
+          v.description("Description for creation in list_id"),
         ),
       ),
       due_date: v.optional(
@@ -1865,6 +1940,15 @@ const saveTaskArgsSchema = nullAsAbsent(
       ({ task_id, description }) =>
         task_id === undefined || description === undefined,
       "description applies when creating",
+    ),
+    v.forward(
+      v.partialCheck(
+        [["list_id"], ["description"]],
+        ({ list_id, description }) =>
+          description === undefined || list_id !== undefined,
+        "description requires list_id",
+      ),
+      ["description"],
     ),
     // Assignee/link operations and matter_id only apply to an existing task.
     v.partialCheck(
@@ -1934,7 +2018,10 @@ const resolveOrganizationMember = async (
       .where(
         and(
           eq(member.organizationId, context.organizationId),
-          or(eq(member.userId, selector), eq(user.email, selector)),
+          or(
+            eq(member.userId, selector),
+            emailColumnMatches(user.email, normalizeEmail(selector)),
+          ),
         ),
       )
       .limit(1),
@@ -2127,37 +2214,6 @@ const validateSaveTaskTargets = async ({
 
 const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
 
-const assignTaskAssignee = async ({
-  context,
-  recordAuditEvent,
-  assigneeUserId,
-  safeDb = context.safeDb,
-  taskId,
-  workspaceId,
-}: {
-  context: McpRequestResources;
-  recordAuditEvent: AuditRecorder;
-  assigneeUserId: string;
-  safeDb?: SafeDb;
-  taskId: SafeId<"entity">;
-  workspaceId: SafeId<"workspace">;
-}): Promise<ReturnType<typeof errorResult> | null> => {
-  const assigned = await Result.gen(() =>
-    addAssigneeHandler({
-      safeDb,
-      workspaceId,
-      recordAuditEvent,
-      body: { taskId, userId: brandPersistedUserId(assigneeUserId) },
-    }),
-  );
-  return Result.isError(assigned)
-    ? internalFailureResult(
-        assigned.error,
-        "mcp.handleSaveTaskTool.assigned_error",
-      )
-    : null;
-};
-
 const handleCreateTask = async ({
   context,
   input,
@@ -2281,72 +2337,82 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     input.item_type !== undefined ||
     input.due_date !== undefined ||
     input.workflow_reason !== undefined;
-  const saveTaskAndAssignee = async (safeDb: SafeDb) => {
+  const completionNotices: FlowRunCompletionNotice[] = [];
+  const saveTaskAndAssignee = async function* (safeDb: SafeDb) {
     if (hasTaskUpdate) {
-      const updated = await Result.gen(() =>
-        updateTaskHandler({
-          safeDb,
-          workspaceId,
-          userId: context.userId,
-          recordAuditEvent,
-          body: {
-            taskId,
-            ...(input.name === undefined ? {} : { name: input.name }),
-            ...(input.status === undefined ? {} : { status: input.status }),
-            ...(input.priority === undefined
-              ? {}
-              : { priority: input.priority }),
-            ...(input.item_type === undefined
-              ? {}
-              : { listItemType: input.item_type }),
-            ...(input.due_date === undefined
-              ? {}
-              : { dueDate: input.due_date }),
-            ...(input.workflow_reason === undefined
-              ? {}
-              : { workflowReason: input.workflow_reason }),
-          },
-        }),
-      );
-      if (Result.isError(updated)) {
-        return internalFailureResult(
-          updated.error,
-          "mcp.handleSaveTaskTool.updated_error",
-        );
-      }
-    }
-    if (assigneeUserId !== null) {
-      return await assignTaskAssignee({
-        context,
-        recordAuditEvent,
-        assigneeUserId,
+      yield* updateTaskHandler({
         safeDb,
-        taskId,
         workspaceId,
+        userId: context.userId,
+        recordAuditEvent,
+        // Standalone decisions commit before later field updates, so their notices must survive a later refusal.
+        decideGate:
+          assigneeUserId === null
+            ? decideGateForTask
+            : async (options) =>
+                await decideGateForTask(options, {
+                  notifyRunCompleted: (notice) => {
+                    completionNotices.push(notice);
+                  },
+                }),
+        body: {
+          taskId,
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.status === undefined ? {} : { status: input.status }),
+          ...(input.priority === undefined ? {} : { priority: input.priority }),
+          ...(input.item_type === undefined
+            ? {}
+            : { listItemType: input.item_type }),
+          ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
+          ...(input.workflow_reason === undefined
+            ? {}
+            : { workflowReason: input.workflow_reason }),
+        },
       });
     }
-    return null;
+    if (assigneeUserId !== null) {
+      yield* addAssigneeHandler({
+        recordAuditEvent,
+        safeDb,
+        workspaceId,
+        body: { taskId, userId: brandPersistedUserId(assigneeUserId) },
+      });
+    }
+    return Result.ok(undefined);
   };
 
-  if (hasTaskUpdate && assigneeUserId !== null) {
-    const saved = await context.safeDb(async (tx) => {
-      const error = await saveTaskAndAssignee(
-        safeDbFromScoped(async (run) => await run(tx)),
-      );
-      return error === null ? null : abortTransaction(error);
-    });
-    if (Result.isError(saved)) {
-      return internalFailureResult(
-        saved.error,
-        "mcp.handleSaveTaskTool.updated_and_assigned_error",
-      );
-    }
-  } else {
-    const error = await saveTaskAndAssignee(context.safeDb);
-    if (error) {
-      return error;
-    }
+  const saved =
+    hasTaskUpdate && assigneeUserId !== null
+      ? await abortableTx(context.safeDb, async (tx) => {
+          const result = await Result.gen(() =>
+            saveTaskAndAssignee(safeDbFromScoped(async (run) => await run(tx))),
+          );
+          if (result.isErr()) {
+            abortTransaction(result.error);
+          }
+          return result.value;
+        })
+      : await Result.gen(() => saveTaskAndAssignee(context.safeDb));
+  if (saved.isErr()) {
+    return internalFailureResult(
+      saved.error,
+      "mcp.handleSaveTaskTool.updated_and_assigned_error",
+    );
   }
+
+  // The owner connection files notices only after the combined write commits and releases its locks.
+  await Promise.all(
+    completionNotices.map(
+      async (notice) =>
+        await notifyFlowRunActorOfCompletion(notice).catch(
+          createErrorCapture(
+            handlerErrorContext(
+              "handleSaveTaskTool.notifyFlowRunActorOfCompletion",
+            ),
+          ),
+        ),
+    ),
+  );
 
   if (input.remove_assignee_user_id !== undefined) {
     const userId = brandPersistedUserId(input.remove_assignee_user_id);
@@ -2487,8 +2553,7 @@ const linkMatterContactArgsSchema = nullAsAbsent(
       matter_id: uuidInputSchema("Matter ID"),
       contact_id: v.optional(
         uuidInputSchema(
-          "Contact ID: with role to link the contact, or alone to unlink it " +
-            "from the matter",
+          "Contact ID: with role to link the contact, or alone to unlink it from the matter",
         ),
       ),
       role: v.optional(
@@ -2752,6 +2817,21 @@ export const MATTER_TOOL_DEFINITIONS = [
       "display_name accept null to clear them.",
     inputSchema: saveContactArgsSchema,
     inputNormalization: {
+      "bank_accounts[].currency": {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.currency,
+      },
+      "emails[].address": { kind: AGENT_INPUT_NORMALIZATION_KIND.email },
+      "metadata.data_boxes[].id": {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.dataBox,
+      },
+      "addresses[].country": countryNormalization({
+        spelling: "alpha-2",
+        tool: "save_contact",
+      }),
+      "billing_address.country": countryNormalization({
+        spelling: "alpha-2",
+        tool: "save_contact",
+      }),
       "nationality_codes[]": countryNormalization({
         spelling: "alpha-2",
         tool: "save_contact",
