@@ -10,6 +10,7 @@ const IMPORTED_HELPERS = "importedSleepHelpers";
 const IMPORTED_TIMERS = "importedNativeTimers";
 
 const rule = createTestDeterminismRule({
+  guard: RULE_NAME,
   baselinePath: BASELINE_PATHS.testRealTimers,
   message:
     "Use createTestClock, deferred, waitForEvent, settledWithin, or waitFor from @stll/test-kit instead of real timers in tests.",

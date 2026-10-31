@@ -53,6 +53,7 @@ const binaryTiming = ({
 };
 
 const rule = createTestDeterminismRule({
+  guard: RULE_NAME,
   baselinePath: BASELINE_PATHS.testWallclockAssertion,
   message:
     "Wall-clock assertions depend on machine load. Count the work for performance assertions; use @stll/test-kit createTestClock, settledWithin, or waitFor for deterministic timing.",
