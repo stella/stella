@@ -325,6 +325,13 @@ pub async fn is_autostart_enabled(app: tauri::AppHandle) -> Result<bool, String>
     .map_err(|e| format!("autostart check failed: {e}"))
 }
 
+/// Whether the Settings window shows its Activity tab: the feature decision
+/// only, never activity data.
+#[tauri::command]
+pub fn is_activity_enabled(app: tauri::AppHandle) -> bool {
+  crate::activity::is_enabled(&app)
+}
+
 #[tauri::command]
 pub async fn set_autostart(
   enabled: bool,

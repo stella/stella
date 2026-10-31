@@ -1,3 +1,4 @@
+import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
 import type { PermissionsSnapshot } from "../../../src/shared/permissions";
 import type {
   AppSnapshot,
@@ -69,3 +70,29 @@ export const APP_STATE = {
     updateReady: false,
   },
 } satisfies AppSnapshot;
+
+/** A recording account's activity settings, with a few apps on the day. */
+export const ACTIVITY_SETTINGS = {
+  date: "2026-10-27",
+  today: "2026-10-27",
+  earliestDate: "2026-09-28",
+  latestDate: "2026-10-27",
+  deletionStatus: "available",
+  persistence: "encrypted",
+  retention: "month",
+  excludedApps: [{ identifier: "com.example.music", name: "Example Music" }],
+  otherAccountHistoryDays: 2,
+  captureDetails: true,
+  detectCalls: true,
+  appNameOnlyApps: [{ identifier: "com.example.mail", name: "Example Mail" }],
+  detailsAccess: "ready",
+  browserApps: [{ identifier: "com.example.browser", name: "Example Browser" }],
+  browserTitleApps: [],
+  narrativeAssist: "ask",
+  apps: [
+    { identifier: "com.example.editor", name: "Example Editor" },
+    { identifier: "com.example.browser", name: "Example Browser" },
+    { identifier: "com.example.mail", name: "Example Mail" },
+  ],
+  sourceAppVisuals: [],
+} satisfies ActivitySettingsSnapshot;

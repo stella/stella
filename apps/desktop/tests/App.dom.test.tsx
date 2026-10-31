@@ -157,6 +157,9 @@ const installBackend = (order: ResponseOrder) => {
         }
         case "account_get_state":
           return ACCOUNT;
+        // Decides whether the Activity tab shows; this account has no timeline.
+        case "is_activity_enabled":
+          return false;
         default:
           unexpected.push(command);
           return panic(`Unexpected native command: ${command}`);

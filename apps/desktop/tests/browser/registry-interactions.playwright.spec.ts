@@ -302,6 +302,9 @@ const installNativeBoundary = async (
           }
           return null;
         },
+        // The Settings window asks whether to show its Activity tab; these
+        // accounts have no activity timeline.
+        is_activity_enabled: () => false,
         get_desktop_telemetry_enabled: () => telemetryEnabled,
         set_desktop_telemetry_enabled: (args) => {
           if (typeof args["enabled"] !== "boolean") {
