@@ -30,6 +30,7 @@ import {
 import { validatePersonDetails } from "@/api/handlers/contacts/person-details";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
+import { addAssigneeHandler } from "@/api/handlers/tasks/assignees/add";
 import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees/remove";
 import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links/create";
 import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links/delete";
@@ -44,6 +45,7 @@ import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
 import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete";
 import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -139,6 +141,7 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+import type { AuthorizedMcpRequestContext } from "@/api/mcp/write-tool-authority";
 
 type MatterToolName =
   | "save_matter"
@@ -429,8 +432,6 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       }),
     );
   }
-
-  // Update branch.
   if (!hasEffectiveAuthority(context, { workspace: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -1047,8 +1048,6 @@ const handleSaveContactTool: TypedMcpToolHandler<
       }),
     );
   }
-
-  // Update branch.
   if (!hasEffectiveAuthority(context, { contact: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -2126,6 +2125,108 @@ const validateSaveTaskTargets = async ({
 
 const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
 
+const assignTaskAssignee = async ({
+  context,
+  recordAuditEvent,
+  selector,
+  taskId,
+  workspaceId,
+}: {
+  context: McpRequestResources;
+  recordAuditEvent: AuditRecorder;
+  selector: string;
+  taskId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  const assigneeUserId = await resolveOrganizationMember(context, selector);
+  if (assigneeUserId === null) {
+    return notFoundResult("Organization member not found for assignee");
+  }
+  const assigned = await Result.gen(() =>
+    addAssigneeHandler({
+      safeDb: context.safeDb,
+      workspaceId,
+      recordAuditEvent,
+      body: { taskId, userId: brandPersistedUserId(assigneeUserId) },
+    }),
+  );
+  return Result.isError(assigned)
+    ? internalFailureResult(
+        assigned.error,
+        "mcp.handleSaveTaskTool.assigned_error",
+      )
+    : null;
+};
+
+const handleCreateTask = async ({
+  context,
+  input,
+}: {
+  context: AuthorizedMcpRequestContext;
+  input: v.InferOutput<typeof saveTaskArgsSchema>;
+}) => {
+  if (!hasEffectiveAuthority(context, { entity: ["create"] })) {
+    return errorResult("Forbidden");
+  }
+  const workspaceId = ensureActiveWorkspace({
+    context,
+    workspaceId: input.matter_id ?? "",
+  });
+  if (typeof workspaceId !== "string") {
+    return workspaceId;
+  }
+  const assigneeUserId =
+    input.assignee === undefined
+      ? null
+      : await resolveOrganizationMember(context, input.assignee);
+  if (input.assignee !== undefined && assigneeUserId === null) {
+    return notFoundResult("Organization member not found for assignee");
+  }
+  const created = await Result.gen(() =>
+    createTaskEntityHandler({
+      safeDb: context.safeDb,
+      workspaceId,
+      userId: context.userId,
+      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+      body: {
+        name: input.name ?? "",
+        ...(input.item_type === undefined
+          ? {}
+          : { listItemType: input.item_type }),
+        ...(input.status === undefined ? {} : { status: input.status }),
+        ...(input.priority === undefined ? {} : { priority: input.priority }),
+        ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
+        ...(input.list_id === undefined
+          ? {}
+          : { listId: brandPersistedLegalListId(input.list_id) }),
+        ...(input.list_section_id === undefined
+          ? {}
+          : {
+              listSectionId: brandPersistedLegalListSectionId(
+                input.list_section_id,
+              ),
+            }),
+        ...(input.description === undefined
+          ? {}
+          : { listDescription: input.description }),
+        ...(assigneeUserId === null
+          ? {}
+          : { assigneeIds: [brandPersistedUserId(assigneeUserId)] }),
+      },
+    }),
+  );
+  if (Result.isError(created)) {
+    return internalFailureResult(created.error, SAVE_TASK_CREATE_KEY);
+  }
+  const payload = projectionPayload(SAVE_TASK_PROJECTION, {
+    taskId: created.value.entityId,
+  });
+  return toolDataResult<
+    v.InferInput<typeof SAVE_TASK_PROJECTION>,
+    typeof payload
+  >(payload);
+};
+
 const handleSaveTaskTool: TypedMcpToolHandler<
   v.InferInput<typeof SAVE_TASK_PROJECTION>
 > = async ({ args, context }) => {
@@ -2135,69 +2236,10 @@ const handleSaveTaskTool: TypedMcpToolHandler<
   }
   const input = parsed.output;
 
-  // Create branch.
   if (input.task_id === undefined) {
-    if (!hasEffectiveAuthority(context, { entity: ["create"] })) {
-      return errorResult("Forbidden");
-    }
-    const workspaceId = ensureActiveWorkspace({
-      context,
-      workspaceId: input.matter_id ?? "",
-    });
-    if (typeof workspaceId !== "string") {
-      return workspaceId;
-    }
-    const assigneeUserId =
-      input.assignee === undefined
-        ? null
-        : await resolveOrganizationMember(context, input.assignee);
-    if (input.assignee !== undefined && assigneeUserId === null) {
-      return notFoundResult("Organization member not found for assignee");
-    }
-    const created = await Result.gen(() =>
-      createTaskEntityHandler({
-        safeDb: context.safeDb,
-        workspaceId,
-        userId: context.userId,
-        recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-        body: {
-          name: input.name ?? "",
-          ...(input.item_type === undefined
-            ? {}
-            : { listItemType: input.item_type }),
-          ...(input.status === undefined ? {} : { status: input.status }),
-          ...(input.priority === undefined ? {} : { priority: input.priority }),
-          ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
-          ...(input.list_id === undefined
-            ? {}
-            : { listId: brandPersistedLegalListId(input.list_id) }),
-          ...(input.list_section_id === undefined
-            ? {}
-            : {
-                listSectionId: brandPersistedLegalListSectionId(
-                  input.list_section_id,
-                ),
-              }),
-          ...(input.description === undefined
-            ? {}
-            : { listDescription: input.description }),
-          ...(assigneeUserId === null
-            ? {}
-            : { assigneeIds: [brandPersistedUserId(assigneeUserId)] }),
-        },
-      }),
-    );
-    if (Result.isError(created)) {
-      return internalFailureResult(created.error, SAVE_TASK_CREATE_KEY);
-    }
-    return toolDataResult(
-      projectionPayload(SAVE_TASK_PROJECTION, {
-        taskId: created.value.entityId,
-      }),
-    );
+    return await handleCreateTask({ context, input });
   }
 
-  // Update branch.
   if (!hasEffectiveAuthority(context, { entity: ["update"] })) {
     return errorResult("Forbidden");
   }
@@ -2210,14 +2252,11 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     return notFoundResult("Not found");
   }
   const workspaceId = owner.workspaceId;
-  // A task in an archived matter is read-only, matching the HTTP task routes
-  // that sit behind the active-only workspace group.
   const active = ensureActiveWorkspace({ context, workspaceId });
   if (typeof active !== "string") {
     return active;
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
-
   const targetError = await validateSaveTaskTargets({
     context,
     input,
@@ -2262,6 +2301,19 @@ const handleSaveTaskTool: TypedMcpToolHandler<
         updated.error,
         "mcp.handleSaveTaskTool.updated_error",
       );
+    }
+  }
+
+  if (input.assignee !== undefined) {
+    const assignmentError = await assignTaskAssignee({
+      context,
+      recordAuditEvent,
+      selector: input.assignee,
+      taskId,
+      workspaceId,
+    });
+    if (assignmentError) {
+      return assignmentError;
     }
   }
 
