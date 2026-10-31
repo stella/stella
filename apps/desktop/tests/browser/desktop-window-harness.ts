@@ -255,12 +255,28 @@ export const openSettingsWindow = async (
   await settle(page);
 };
 
-/** Waits for fonts, the language catalogue and any running animation. */
+/** Waits for fonts, the language catalogue and every animation that ends.
+ * A looping animation, such as a loading skeleton, never finishes; one
+ * cancelled because its element left the page has settled. */
 const settle = async (page: Page) => {
   await page.evaluate(async () => {
     await document.fonts.ready;
     await Promise.all(
-      document.getAnimations().map(async (animation) => animation.finished),
+      document
+        .getAnimations()
+        .filter(
+          (animation) =>
+            animation.effect?.getComputedTiming().endTime !== Infinity,
+        )
+        .map(async (animation) =>
+          animation.finished.catch((error: unknown) => {
+            if (!(
+              error instanceof DOMException && error.name === "AbortError"
+            )) {
+              throw error;
+            }
+          }),
+        ),
     );
   });
 };
