@@ -3,6 +3,8 @@ import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connec
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import readProfessionalUse from "@/api/handlers/me/professional-use";
+import registerPushDevice from "@/api/handlers/me/push-devices/register";
+import unregisterPushDevice from "@/api/handlers/me/push-devices/unregister";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
 import updateGuideProgress from "@/api/handlers/me/update-guide-progress";
@@ -28,6 +30,8 @@ export const meRoute = mount(
         POST: acceptProfessionalUse,
       },
       "/oauth-connections/:consentId": { DELETE: disconnectOAuthConnection },
+      "/push-devices": { PUT: registerPushDevice },
+      "/push-devices/:token": { DELETE: unregisterPushDevice },
     }),
     mount([
       routes(

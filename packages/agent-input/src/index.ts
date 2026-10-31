@@ -70,3 +70,5 @@ export {
   withModelPlaceholdersOmitted,
   withOptionalsNullable,
 } from "./null-optionals";
+export { EMAIL_ADDRESS_PATTERN } from "./email-address";
+export { DATA_BOX_ID_PATTERN } from "./data-box-id";

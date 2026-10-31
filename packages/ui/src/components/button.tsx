@@ -97,6 +97,12 @@ const BUTTON_VARIANT_CLASS_NAMES = {
   secondary: `${tokens("secondary")} [:active,[data-pressed]]:bg-secondary/80 [:hover,[data-pressed]]:bg-secondary/90`,
 } as const satisfies Record<ButtonVariant, string>;
 
+// How a web button lays out its label: `wrap` lets a long label take several
+// lines in a full-width row instead of overflowing a fixed height.
+const BUTTON_LAYOUT_CLASS_NAMES = {
+  wrap: "h-auto min-h-11 items-start justify-start py-2 text-start whitespace-normal sm:h-auto",
+} as const;
+
 const buttonVariants = cva(
   "focus-visible:ring-ring focus-visible:ring-offset-background relative inline-flex shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border text-base font-medium whitespace-nowrap outline-none select-none before:pointer-events-none before:absolute before:inset-0 before:rounded-[calc(var(--radius-lg)-1px)] focus-visible:ring-2 focus-visible:ring-offset-1 disabled:pointer-events-none disabled:opacity-64 sm:text-sm pointer-coarse:after:absolute pointer-coarse:after:size-full pointer-coarse:after:min-h-11 pointer-coarse:after:min-w-11 [&_svg]:pointer-events-none [&_svg]:-mx-0.5 [&_svg]:shrink-0 [&_svg:not([class*='opacity-'])]:opacity-80 [&_svg:not([class*='size-'])]:size-4.5 sm:[&_svg:not([class*='size-'])]:size-4",
   {
@@ -106,6 +112,7 @@ const buttonVariants = cva(
     },
     variants: {
       size: BUTTON_SIZE_CLASS_NAMES,
+      layout: BUTTON_LAYOUT_CLASS_NAMES,
       variant: BUTTON_VARIANT_CLASS_NAMES,
     },
   },
@@ -165,6 +172,7 @@ const implicitTooltip = (
 };
 
 type ButtonProps = Omit<ButtonContract, "children" | "disabled"> & {
+  layout?: keyof typeof BUTTON_LAYOUT_CLASS_NAMES;
   tooltip?: ReactNode;
   "data-accessible-disabled"?: "";
 } & useRender.ComponentProps<"button">;
@@ -174,6 +182,7 @@ function Button({
   variant,
   size,
   render,
+  layout,
   loading,
   icon,
   children,
@@ -221,7 +230,7 @@ function Button({
         size !== "row" &&
         variant !== "link" &&
         buttonPressClass,
-      buttonVariants({ className, size, variant }),
+      buttonVariants({ className, size, variant, layout }),
       (isAccessibleDisabled || isActivationPreservingDisabled) &&
         buttonAccessibleDisabledClass,
     ),

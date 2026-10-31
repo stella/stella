@@ -157,6 +157,7 @@ type CatalogEntry = {
   readClass?: McpReadClass;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope: string;
   additionalScopes?: readonly string[];
   /**
@@ -279,6 +280,9 @@ const isCapabilityTransport = (
   return false;
 };
 
+const isReplayPolicy = (value: unknown): value is { type: "replay" } =>
+  isRecord(value) && value["type"] === "replay";
+
 const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   isRecord(value) &&
   typeof value["id"] === "string" &&
@@ -295,6 +299,8 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   typeof value["destructive"] === "boolean" &&
   (value["confirmation"] === undefined ||
     value["confirmation"] === "required") &&
+  (value["idempotency"] === undefined ||
+    isReplayPolicy(value["idempotency"])) &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
     (Array.isArray(value["additionalScopes"]) &&
@@ -418,6 +424,7 @@ const renderTransport = (transport: CapabilityTransport): RenderedTransport => {
  * boundary.
  */
 type EndpointConfig = {
+  idempotency?: { type: "replay" };
   featureAccess?: FeatureAccessRequirement;
   mcp?: unknown;
   body?: v.GenericSchema;
@@ -448,6 +455,8 @@ const isInputSlot = (value: unknown): boolean =>
 const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
   isRecord(value) &&
   isRecord(value["config"]) &&
+  (value["config"]["idempotency"] === undefined ||
+    isReplayPolicy(value["config"]["idempotency"])) &&
   isInputSlot(value["config"]["body"]) &&
   isInputSlot(value["config"]["params"]) &&
   isInputSlot(value["config"]["query"]) &&
@@ -2481,11 +2490,15 @@ const executeInvoke = async ({
       code: "rate_limited",
       message: `Rate limit exceeded for capability "${id}"`,
       hint: `Too many invocations of this capability; retry in about ${rate.retryAfterSeconds} seconds.`,
+      retryAfterMs: rate.retryAfterSeconds * 1000,
     });
   }
 
   const ctx = await capabilityHandlerContext({
     capabilityId: id,
+    ...(endpoint.config.idempotency === undefined
+      ? {}
+      : { idempotency: endpoint.config.idempotency }),
     context,
     input: {
       body: validatedBody,
@@ -2496,7 +2509,35 @@ const executeInvoke = async ({
     workspaceId,
   });
 
-  const result = await endpoint.handler(ctx);
+  return await mapCapabilityResult({
+    id,
+    idempotency: endpoint.config.idempotency,
+    result: await endpoint.handler(ctx),
+  });
+};
+
+type MapCapabilityResultOptions = {
+  id: string;
+  idempotency: EndpointConfig["idempotency"];
+  result: unknown;
+};
+
+const mapCapabilityResult = async ({
+  id,
+  idempotency,
+  result,
+}: MapCapabilityResultOptions): Promise<McpToolResponse> => {
+  if (
+    idempotency?.type === "replay" &&
+    result instanceof Response &&
+    result.headers.get("Idempotency-Replayed") === "true"
+  ) {
+    const replayed =
+      result.status === 204 || result.status === 205
+        ? null
+        : await result.json();
+    return mapHandlerResult({ id, result: replayed });
+  }
   return mapHandlerResult({ id, result });
 };
 

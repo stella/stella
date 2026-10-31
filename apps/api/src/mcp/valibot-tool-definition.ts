@@ -106,6 +106,16 @@ const annotateSchemaPath = ({
       }
     }
   }
+  if (segment === "[]") {
+    const items = schema["items"];
+    return isSchemaRecord(items)
+      ? annotateSchemaPath({
+          schema: items,
+          path: path.slice(1),
+          annotation,
+        }) || found
+      : found;
+  }
   const arraySegment = segment.endsWith("[]");
   const propertyName = arraySegment ? segment.slice(0, -2) : segment;
   const properties = schema["properties"];
@@ -113,14 +123,14 @@ const annotateSchemaPath = ({
   if (!isSchemaRecord(property)) {
     return found;
   }
-  const target = arraySegment ? property["items"] : property;
-  return isSchemaRecord(target)
-    ? annotateSchemaPath({
-        schema: target,
-        path: path.slice(1),
-        annotation,
-      }) || found
-    : found;
+  // Resolve the property before its items so nullable arrays traverse their union.
+  return (
+    annotateSchemaPath({
+      schema: property,
+      path: arraySegment ? ["[]", ...path.slice(1)] : path.slice(1),
+      annotation,
+    }) || found
+  );
 };
 
 /**
