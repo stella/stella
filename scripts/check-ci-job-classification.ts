@@ -280,14 +280,17 @@ export const checkMergeGroupJobClassification = ({
   const mergeGroup = readMergeGroup();
   const headInputs = readClassificationInputs(root);
   const head = generateWithJobs(headInputs);
+  // NUL-separated: Git quotes non-ASCII, tab and newline names in line output,
+  // and a quoted name would never match a classification input.
   const changedFiles = gitOutput(root, [
     "diff",
     "--name-only",
+    "-z",
     "--no-renames",
     base,
     "HEAD",
   ])
-    .split("\n")
+    .split("\0")
     .filter(
       (file) =>
         file.length > 0 &&
@@ -431,7 +434,17 @@ const parseCli = (args: string[]): CliOptions => {
 // workflow revision either way.
 const pushTouchesClassification = (root: string, base: string) => {
   const result = Bun.spawnSync(
-    ["git", "-C", root, "diff", "--name-only", "--no-renames", base, "HEAD"],
+    [
+      "git",
+      "-C",
+      root,
+      "diff",
+      "--name-only",
+      "-z",
+      "--no-renames",
+      base,
+      "HEAD",
+    ],
     { stdout: "pipe", stderr: "pipe" },
   );
   if (result.exitCode !== 0) {
@@ -443,7 +456,7 @@ const pushTouchesClassification = (root: string, base: string) => {
   }
   return new TextDecoder()
     .decode(result.stdout)
-    .split("\n")
+    .split("\0")
     .some(isClassificationInput);
 };
 

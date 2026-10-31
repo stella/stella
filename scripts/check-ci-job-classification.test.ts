@@ -588,16 +588,18 @@ type CompositionOptions = {
   kind?: string;
   secondKind?: string;
   jobPermissions?: string;
+  actionDirectory?: string;
 };
 
 const compositionRepository = ({
   kind = "ordinary",
   secondKind = kind,
   jobPermissions,
+  actionDirectory = "check",
 }: CompositionOptions = {}) => {
   const permissions =
     jobPermissions === undefined ? "" : `permissions: ${jobPermissions}, `;
-  const baseWorkflow = `jobs: {check: {${permissions}steps: [{uses: ./.github/actions/check}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}`;
+  const baseWorkflow = `jobs: {check: {${permissions}steps: [{uses: ./.github/actions/${actionDirectory}}, {uses: acme/workflow@0000000000000000000000000000000000000000}]}}`;
   const workflowChange = baseWorkflow.replace(
     "0000000000000000000000000000000000000000",
     "2222222222222222222222222222222222222222",
@@ -611,7 +613,9 @@ const compositionRepository = ({
   const root = mkdtempSync(path.join(tmpdir(), "classification-compose-"));
   roots.push(root);
   mkdirSync(path.join(root, ".github/workflows"), { recursive: true });
-  mkdirSync(path.join(root, ".github/actions/check"), { recursive: true });
+  mkdirSync(path.join(root, ".github/actions", actionDirectory), {
+    recursive: true,
+  });
   mkdirSync(path.join(root, CLASSIFICATION_DECISIONS_PATH), {
     recursive: true,
   });
@@ -625,7 +629,7 @@ const compositionRepository = ({
   );
   writeFileSync(path.join(root, ".github/workflows/ci.yml"), baseWorkflow);
   writeFileSync(
-    path.join(root, ".github/actions/check/action.yml"),
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
     baseAction,
   );
   const git = (...args: string[]) => {
@@ -681,7 +685,7 @@ const compositionRepository = ({
   const first = gitOutput(root, "rev-parse", "HEAD");
   git("switch", "-c", "action-change", base);
   writeFileSync(
-    path.join(root, ".github/actions/check/action.yml"),
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
     actionChange,
   );
   if (secondKind !== kind) {
@@ -805,6 +809,50 @@ test("ordinary composition refuses content from no approving pull request", () =
         { number: 42, head: second },
       ],
     }),
+  });
+  expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
+    true,
+  );
+});
+
+test("composition sees a changed input whose name Git would quote", () => {
+  // Line-separated Git output quotes non-ASCII names, so the stale action
+  // would not match a classification input and composition would pass.
+  const actionDirectory = "kontrola-č";
+  const { root, base, first, second } = compositionRepository({
+    actionDirectory,
+  });
+  writeFileSync(
+    path.join(root, ".github/actions", actionDirectory, "action.yml"),
+    "name: check\nruns: {using: composite, steps: [{uses: acme/check@3333333333333333333333333333333333333333}]}\n",
+  );
+  const decisionDirectory = path.join(
+    root,
+    CLASSIFICATION_DECISIONS_PATH,
+    encodeURIComponent(keyOf("check")),
+  );
+  for (const file of new Bun.Glob("*.json").scanSync({
+    cwd: decisionDirectory,
+  })) {
+    if (file !== "decision.json") {
+      rmSync(path.join(decisionDirectory, file));
+    }
+  }
+  gitOutput(root, "add", ".");
+  gitOutput(
+    root,
+    "-c",
+    "user.name=Classification Test",
+    "-c",
+    "user.email=classification-test@example.invalid",
+    "commit",
+    "-m",
+    "unreviewed action",
+  );
+  const result = checkMergeGroupJobClassification({
+    root,
+    base,
+    readMergeGroup: twoMemberGroup(first, second),
   });
   expect(result.isErr() && result.error instanceof ReviewRequiredError).toBe(
     true,
