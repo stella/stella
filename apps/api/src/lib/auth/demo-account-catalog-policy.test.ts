@@ -93,6 +93,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/document-types/delete.ts",
   "apps/api/src/handlers/document-types/reorder.ts",
   "apps/api/src/handlers/document-types/update.ts",
+  "apps/api/src/handlers/entities/legal-holds/place.ts",
+  "apps/api/src/handlers/entities/legal-holds/release.ts",
   "apps/api/src/handlers/entities/zip/download.ts",
   "apps/api/src/handlers/feedback/create.ts",
   "apps/api/src/handlers/files/routes.ts#ocrExportEndpoint",
@@ -178,6 +180,8 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/workspaces/correspondence/address/delete.ts",
   "apps/api/src/handlers/workspaces/duplicate.ts",
   "apps/api/src/handlers/workspaces/export-overview-activity.ts",
+  "apps/api/src/handlers/workspaces/legal-holds/place.ts",
+  "apps/api/src/handlers/workspaces/legal-holds/release.ts",
   "apps/api/src/handlers/workspaces/members/add.ts",
   "apps/api/src/handlers/workspaces/members/remove.ts",
 ] as const;

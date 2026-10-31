@@ -4,6 +4,7 @@ import * as v from "valibot";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { placeLegalHold } from "@/api/lib/legal-holds/lifecycle";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export default createSafeHandler(
   {
@@ -11,7 +12,10 @@ export default createSafeHandler(
     description:
       "Place a legal hold on an item. Requires explicit human approval and a reason. Active holds prevent deletion.",
     permissions: { legalHold: ["place"] },
-    accountAccess: ACCOUNT_ACCESS.sandbox,
+    accountAccess: ACCOUNT_ACCESS.standard,
+    realtime: noResourceSetUpdates(
+      "Holds change no resource an open tab lists; deletion checks read them at use.",
+    ),
     params: workspaceParams({ entityId: resourceIdSchema("entity") }),
     body: v.object({
       reason: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(4000)),
