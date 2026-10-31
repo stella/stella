@@ -120,6 +120,7 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
+import { getMcpToolFreshnessRegistry } from "@/api/mcp/tool-freshness";
 import { withMcpRegistryVersionHeader } from "@/api/mcp/tool-freshness-response";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
@@ -1339,11 +1340,14 @@ export const createMcpHttpRequestHandler = ({
     };
 
     let toreDown = false;
+    let unregisterFreshness: (() => void) | undefined;
     const teardown = async () => {
       if (toreDown) {
         return;
       }
       toreDown = true;
+      unregisterFreshness?.();
+      unregisterFreshness = undefined;
       const [transportResult, serverResult] = await Promise.allSettled([
         transport.close(),
         server.close(),
@@ -1366,6 +1370,21 @@ export const createMcpHttpRequestHandler = ({
         await teardown();
         return response;
       }
+
+      const initialTools = await listMcpTools(context, mode, session.scopes);
+      unregisterFreshness = getMcpToolFreshnessRegistry().register({
+        id: Bun.randomUUIDv7(),
+        notifyToolsChanged: async () => await server.sendToolListChanged(),
+        organizationId: session.organizationId,
+        projectTools: async () => {
+          const freshContext = await resolveMcpSessionContext(session, {
+            request,
+          });
+          return await listMcpTools(freshContext, mode, session.scopes);
+        },
+        tools: initialTools,
+        userId: session.userId,
+      });
 
       const reader = takeStreamReaderOwnership(response.body);
       let readerReleased = false;
@@ -1724,6 +1743,10 @@ export const createMcpHttpRequestHandler = ({
                 requestId,
               });
             }
+            // Modern requests are stateless unless they open the SDK's separate
+            // subscription transport. Freshness signals therefore reach only the
+            // stateful legacy SSE sessions registered above; do not synthesize a
+            // notification for a request that has no long-lived session.
             // No teardown here on purpose. The handler owns instance lifetime and a
             // response body may still be streaming when this returns; closing it here
             // is what truncated the notification stream under the hand-wired transport.

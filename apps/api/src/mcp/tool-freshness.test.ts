@@ -34,9 +34,12 @@ describe("MCP tool freshness", () => {
       notifyToolsChanged: () => {
         notifications.push("unchanged");
       },
+      organizationId: "org",
+      projectTools: async () => [tool()],
       tools: [tool()],
+      userId: "user",
     });
-    await registry.publish(async () => [tool()]);
+    await registry.publish({ organizationId: "org" });
     expect(notifications).toEqual([]);
   });
 
@@ -49,16 +52,22 @@ describe("MCP tool freshness", () => {
       notifyToolsChanged: () => {
         notifications.push("newly-admitted");
       },
+      organizationId: "org",
+      projectTools: async () => expanded,
       tools: [tool()],
+      userId: "user",
     });
     registry.register({
       id: "already-admitted",
       notifyToolsChanged: () => {
         notifications.push("already-admitted");
       },
+      organizationId: "org",
+      projectTools: async () => expanded,
       tools: expanded,
+      userId: "user",
     });
-    await registry.publish(async () => expanded);
+    await registry.publish({ organizationId: "org" });
     expect(notifications).toEqual(["newly-admitted"]);
   });
 
@@ -68,9 +77,12 @@ describe("MCP tool freshness", () => {
       id: "broken",
       notifyToolsChanged: async () =>
         await Promise.reject(new Error("closed stream")),
+      organizationId: "org",
+      projectTools: async () => [tool("Expanded admission")],
       tools: [tool()],
+      userId: "user",
     });
-    await registry.publish(async () => [tool("Expanded admission")]);
+    await registry.publish({ organizationId: "org" });
   });
 
   test("per-tool versions change for every and only advertised contract field", () => {
