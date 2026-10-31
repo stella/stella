@@ -1,9 +1,11 @@
-import { panic } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
+import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -257,4 +259,116 @@ export const readVersionBlocks = async (
 ): Promise<readonly Block[]> => {
   const ast = await readVersionAst(options);
   return ast !== null && "blocks" in ast ? ast.blocks : [];
+};
+
+// A comparison batch retains at most 512 MiB of decoded payloads; the AST
+// cache's own heap budget cannot bound values retained by a caller.
+const VERSION_CHANGE_BATCH_MAX_DECODED_BYTES = 512 * 1024 * 1024;
+export const VERSION_CHANGE_COMPARISON_BATCH_MAX = 2;
+const VERSION_CHANGE_PAYLOAD_BATCH_MAX =
+  VERSION_CHANGE_COMPARISON_BATCH_MAX * 2;
+
+class VersionChangePayloadTooLargeError extends TaggedError(
+  "VersionChangePayloadTooLargeError",
+)<{
+  message: string;
+  documentId: SafeId<"legislationDocument">;
+}> {}
+const VERSION_CHANGE_OBJECT_CONCURRENCY = 2;
+
+export type VersionChangePayload =
+  | { type: "blocks"; blocks: readonly Block[]; payloadRevision: bigint }
+  | { type: "no-blocks"; payloadRevision: bigint }
+  | { type: "unreadable"; payloadRevision: bigint };
+
+type ReadVersionChangePayloadsOptions = {
+  db: ScopedDb;
+  ids: readonly SafeId<"legislationDocument">[];
+  mode?: CorpusStorageMode;
+  readObjectAst?: typeof versionAstCache.read;
+};
+
+type VersionChangePayloadRead = Result<
+  readonly [SafeId<"legislationDocument">, VersionChangePayload],
+  VersionChangePayloadTooLargeError
+>;
+
+/**
+ * A bounded comparison batch reads each canonical payload once. Object reads
+ * run after the SQL transaction closes. An unavailable object rejects the batch,
+ * leaving its summaries stale for retry instead of recording empty comparisons.
+ */
+export const readVersionChangePayloads = async ({
+  db,
+  ids,
+  mode = corpusStorageMode,
+  readObjectAst = versionAstCache.read,
+}: ReadVersionChangePayloadsOptions) => {
+  if (
+    VERSION_CHANGE_PAYLOAD_BATCH_MAX < 2 ||
+    ids.length > VERSION_CHANGE_PAYLOAD_BATCH_MAX ||
+    ids.length * LIMITS.corpusPayloadMaxDecompressedBytes >
+      VERSION_CHANGE_BATCH_MAX_DECODED_BYTES
+  ) {
+    return panic("Version comparison payload batch exceeds its bound");
+  }
+  if (ids.length === 0) {
+    return Result.ok(
+      new Map<SafeId<"legislationDocument">, VersionChangePayload>(),
+    );
+  }
+  const projection = versionAstColumnsFor(mode);
+  const payloadBytes = sql`COALESCE(octet_length(${projection.documentAst}::text), 0)`;
+  const rows = await db(
+    async (tx) =>
+      await tx
+        .select({
+          ...projection,
+          documentAst: sql<unknown>`CASE WHEN ${payloadBytes} <= ${LIMITS.corpusPayloadMaxDecompressedBytes} THEN ${projection.documentAst} END`,
+          oversized: sql<boolean>`${payloadBytes} > ${LIMITS.corpusPayloadMaxDecompressedBytes}`,
+          payloadRevision: legislationDocuments.payloadRevision,
+        })
+        .from(legislationDocuments)
+        .where(inArray(legislationDocuments.id, [...ids]))
+        .limit(ids.length),
+  );
+  const payloads = await mapWithConcurrency({
+    items: rows,
+    limit: VERSION_CHANGE_OBJECT_CONCURRENCY,
+    operation: async (row): Promise<VersionChangePayloadRead> => {
+      if (row.oversized) {
+        return Result.err(
+          new VersionChangePayloadTooLargeError({
+            message: "Version AST exceeds the corpus payload byte bound",
+            documentId: row.id,
+          }),
+        );
+      }
+      const { payloadRevision } = row;
+      const source = canonicalLegislationAstSource(row, mode);
+      const ast = await (async () => {
+        switch (source.type) {
+          case "object_storage":
+            return Result.ok(await readObjectAst(source.key));
+          case "database":
+            return Result.try(() => parsePersistedCorpusAst(row.documentAst));
+          default:
+            source satisfies never;
+            return panic("Unhandled version comparison payload source");
+        }
+      })();
+      if (ast.isErr()) {
+        return Result.ok([row.id, { type: "unreadable", payloadRevision }]);
+      }
+      const blocks =
+        ast.value !== null && "blocks" in ast.value ? ast.value.blocks : [];
+      return Result.ok([
+        row.id,
+        blocks.length === 0
+          ? { type: "no-blocks", payloadRevision }
+          : { type: "blocks", blocks, payloadRevision },
+      ]);
+    },
+  });
+  return Result.all(payloads).map((entries) => new Map(entries));
 };

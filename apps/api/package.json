@@ -72,6 +72,7 @@
     "db:backfill-search-previews": "bun scripts/backfill-search-previews.ts",
     "db:backfill-cz-us-judges": "bun run --env-file=.env src/scripts/backfill-cz-us-judges.ts",
     "db:backfill-statute-citation-counts": "bun run --env-file=.env src/scripts/backfill-statute-citation-counts.ts",
+    "db:backfill-legislation-version-changes": "bun run --env-file=.env src/scripts/backfill-legislation-version-changes.ts",
     "db:backfill-legislation-work-names": "bun run --env-file=.env src/scripts/backfill-legislation-work-names.ts",
     "db:import-cz-us-judges": "bun run --env-file=.env src/scripts/import-cz-us-roster.ts",
     "db:verify-decision-identifiers": "bun run --env-file=.env src/scripts/verify-decision-identifiers.ts",

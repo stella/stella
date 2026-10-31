@@ -41,6 +41,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-coverage-refresh": ["summaries", "countries"],
   "system:case-law-browse-facet-refresh": ["buckets"],
   "system:legislation-facet-refresh": ["buckets"],
+  "system:legislation-version-changes": ["summaries"],
   "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",

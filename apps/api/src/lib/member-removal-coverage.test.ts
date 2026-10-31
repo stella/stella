@@ -149,6 +149,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legal_reader_answer_messages.citations",
   "legal_reader_answer_messages.usage",
   "legal_reader_answers.continuation_spans",
+  // Revision references and aggregate public-text counts contain no member identifiers.
+  "legislation_documents.change_summary",
   "legislation_documents.sections",
   "legislation_documents.document_ast",
   "legislation_documents.metadata",

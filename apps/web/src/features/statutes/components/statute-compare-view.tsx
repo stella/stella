@@ -13,6 +13,17 @@ import {
   resolveDocumentHeadingAnchor,
 } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
+import {
+  compareStatuteBlocks,
+  groupCompareRows,
+} from "@stll/legal-ast/statute-compare";
+import type {
+  StatuteCompareGroup,
+  StatuteCompareMove,
+  StatuteCompareRow,
+} from "@stll/legal-ast/statute-compare";
+import { compareText, markSide } from "@stll/legal-ast/statute-diff-marks";
+import type { StatuteCompareSide } from "@stll/legal-ast/statute-diff-marks";
 import type { StatuteListScheme } from "@stll/legal-ast/statute-list";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -26,6 +37,8 @@ import {
   SelectTrigger,
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
+
+import { statuteComparisonAdapter } from "@/features/statutes/statute-comparison-adapter";
 // The move flash is the reader's own `[data-highlight]` animation.
 import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
@@ -45,9 +58,7 @@ import type {
 } from "@/features/statutes/queries/statutes";
 import {
   actCompareSide,
-  compareStatuteBlocks,
   comparisonAfterPick,
-  groupCompareRows,
   locateCompareRows,
   pairCompareSides,
   provisionCompareSide,
@@ -60,17 +71,12 @@ import type {
   CompareSideState,
   PairedCompareSides,
   ProvisionWording,
-  StatuteCompareGroup,
-  StatuteCompareMove,
-  StatuteCompareRow,
 } from "@/features/statutes/statute-compare";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type {
   StatuteCompareSearch,
   StatuteCompareShow,
 } from "@/features/statutes/statute-compare-search";
-import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
-import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
 import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
@@ -666,7 +672,10 @@ const TwoSidedComparison = ({
   sides,
 }: TwoSidedComparisonProps) => {
   const t = useTranslations();
-  const compared = compareStatuteBlocks(sides);
+  const compared = compareStatuteBlocks({
+    ...sides,
+    adapter: statuteComparisonAdapter,
+  });
 
   if (compared.isErr()) {
     return <CompareMessage>{t("statutes.compareUnavailable")}</CompareMessage>;
