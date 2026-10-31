@@ -20,6 +20,7 @@ import {
   folioCollabRooms,
   invoiceLines,
   invoices,
+  legalHolds,
   pendingUploads,
   propertyDependencies,
   styleSets,
@@ -147,6 +148,11 @@ export const WORKSPACE_DELETION_RETAINED_TABLES = [
 ] as const;
 
 type RetainedTable = (typeof WORKSPACE_DELETION_RETAINED_TABLES)[number];
+
+// Rows whose restrictive references refuse a matter or item deletion while
+// they are active: the deletion's own hold check refuses first, and the delete
+// backstop trigger removes released rows together with their matter or item.
+export const WORKSPACE_DELETION_BLOCKING_TABLES = [legalHolds] as const;
 
 const cascadesFrom = (child: PgTable, parent: PgTable) =>
   child !== parent &&
