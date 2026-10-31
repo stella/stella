@@ -73,12 +73,11 @@ const getTimeReport = createSafeRootHandler(
               ne(workspaces.status, "deleting"),
             ),
           ),
+          // Team aggregates need approval access, as in the matter time
+          // summary; anyone else reports on their own time only.
           canApproveTimeEntries(memberRole)
-            ? or(
-                eq(timeEntries.approverUserId, user.id),
-                isNull(timeEntries.approverUserId),
-              )
-            : eq(timeEntries.approverUserId, user.id),
+            ? undefined
+            : eq(timeEntries.userId, user.id),
         );
         const liveMatter = and(
           eq(timeEntries.workspaceId, workspaces.id),

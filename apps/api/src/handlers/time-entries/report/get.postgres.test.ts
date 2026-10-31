@@ -58,7 +58,7 @@ const read = async (
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "team time report",
   () => {
-    test("keeps tenant, matter and assigned approver boundaries when scope inputs are adversarial", async () => {
+    test("shows approvers the team and everyone else their own time, within tenant and matter boundaries", async () => {
       await withGatedTestClients(
         process.env["DATABASE_URL"] ?? panic("DATABASE_URL required"),
         async ({ openClient }) => {
@@ -77,7 +77,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               id: createSafeId<"timeEntry">(),
               organizationId: fixture.organizationId,
               workspaceId: fixture.workspaceId,
-              userId: fixture.userId,
+              userId: other.userId,
               approverUserId: other.userId,
               dateWorked: "2020-01-15",
               timezoneId: "UTC",
@@ -85,13 +85,18 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               billedMinutes: 99,
               rateAtEntry: cents(1000),
               currency: "USD",
-              narrative: "Other approver",
+              narrative: "Colleague's time with another approver",
               status: "submitted",
             });
+            // Without approval access a member reports only their own time.
             expect(
               (await read(fixture, {}, "member")).summary.current
                 .recordedMinutes,
             ).toBe(300);
+            // An approver sees the colleague's time whoever approves it.
+            expect((await read(fixture)).summary.current.recordedMinutes).toBe(
+              399,
+            );
             const inaccessible = {
               ...fixture,
               context: {
