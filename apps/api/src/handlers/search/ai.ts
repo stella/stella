@@ -18,6 +18,7 @@ import {
   searchDocuments,
   workspaceSearchDocuments,
 } from "@/api/db/schema";
+import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { status } from "@/api/http/status";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -896,8 +897,12 @@ const loadSummaryContexts = async ({
     { scopedDb },
   );
 
+  if (searchResult.isErr()) {
+    const error = searchProvenanceError(searchResult.error);
+    return status(error.status, { message: error.message });
+  }
   return await buildSearchResultContexts({
-    hits: searchResult.hits,
+    hits: searchResult.value.hits,
     organizationId,
     accessibleWorkspaceIds,
     scopedDb,

@@ -7,6 +7,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
 import type { DocumentProcessingStatus } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
+import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -185,7 +186,7 @@ export const searchHandler = async ({
 
   const types = body.types.length > 0 ? body.types : body.kinds;
 
-  const result = await search(
+  const searched = await search(
     {
       query: body.query,
       organizationId,
@@ -203,6 +204,11 @@ export const searchHandler = async ({
     { scopedDb },
   );
 
+  if (searched.isErr()) {
+    const error = searchProvenanceError(searched.error);
+    return status(error.status, { message: error.message });
+  }
+  const result = searched.value;
   const entityHits = result.hits.filter(isEntitySearchHit);
   const processingStatuses =
     entityHits.length === 0

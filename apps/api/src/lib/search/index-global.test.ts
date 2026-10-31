@@ -4,6 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { RESOURCE_TYPE, resourceRef, toResourceName } from "@stll/api-contract";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { chatThreadScopeSql } from "@/api/lib/search/chat-thread-scope-sql";
@@ -25,7 +26,7 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 const { scopedDb } = createScopedDbMock(rootDbTestDouble);
 const searchGlobal = async (
   query: Parameters<typeof searchGlobalWithDatabase>[0],
-) => await searchGlobalWithDatabase(query, { scopedDb });
+) => (await searchGlobalWithDatabase(query, { scopedDb })).unwrap();
 
 // The final SQL LIMIT bounds the source page; chat has earlier candidate limits.
 const sourcePageLimit = (compiled: ReturnType<PgDialect["sqlToQuery"]>) => {
@@ -52,6 +53,65 @@ describe("global search SQL scope", () => {
   beforeEach(() => {
     clearRootDbMocks();
   });
+
+  test.each([undefined, {}, { version: 2, slots: {} }])(
+    "propagates invalid chat provenance %j before ranking or language enrichment",
+    async (metadata) => {
+      const dialect = new PgDialect();
+      rootDbExecuteMock.mockImplementation(async (query) => {
+        const text = dialect.sqlToQuery(query).sql;
+        return text.includes("t.generation_provenance")
+          ? [
+              {
+                id: "00000000-0000-4000-8000-000000000003",
+                title: "Generated title",
+                title_source: "ai",
+                generation_provenance: metadata,
+                source_messages: [],
+                updated_at: new Date("2026-07-29T08:00:00.000Z"),
+                tier: 0,
+                score: 0,
+              },
+            ]
+          : [];
+      });
+      let languageReads = 0;
+      const result = await searchGlobalWithDatabase(
+        {
+          query: "",
+          organizationId: toSafeId<"organization">("org_1"),
+          userId: toSafeId<"user">("user_1"),
+          accessibleWorkspaceIds: [],
+          selectedWorkspaceIds: [],
+          types: ["chat"],
+          editedByUserIds: [],
+          mimeTypes: [],
+          limit: 10,
+        },
+        {
+          scopedDb,
+          readLanguageAlternates: async () => {
+            languageReads++;
+            return { alternatesFor: () => [] };
+          },
+        },
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(ArtefactProvenanceDecodeError);
+      }
+      expect(languageReads).toBe(0);
+      const reads = rootDbExecuteMock.mock.calls.map(
+        ([query]) => dialect.sqlToQuery(query).sql,
+      );
+      expect(
+        reads.some((text) => text.includes("t.generation_provenance")),
+      ).toBe(true);
+      expect(
+        reads.some((text) => text.includes("FROM jsonb_to_recordset")),
+      ).toBe(false);
+    },
+  );
 
   test("always constrains contact search to accessible workspaces", async () => {
     const dialect = new PgDialect();

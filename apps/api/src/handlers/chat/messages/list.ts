@@ -32,6 +32,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -329,6 +330,7 @@ const getMessages = createSafeRootHandler(
                 id: true,
                 title: true,
                 titleSource: true,
+                ...THREAD_ARTEFACT_PROVENANCE_COLUMNS,
                 subjectDecisionId: true,
                 workspaceId: true,
               },
@@ -362,7 +364,11 @@ const getMessages = createSafeRootHandler(
         const maskedParent =
           parent === undefined
             ? undefined
-            : { ...parent, title: parentWithdrawal.thread(parent).title };
+            : {
+                id: parent.id,
+                title: parentWithdrawal.thread(parent).title,
+                workspaceId: parent.workspaceId,
+              };
         return {
           kind: "ok" as const,
           attachedFiles,

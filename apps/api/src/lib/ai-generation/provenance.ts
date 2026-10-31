@@ -6,43 +6,26 @@ import type { Transaction } from "@/api/db/root";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
 import type { ModelOperationId } from "@/api/lib/ai-generation/model-operation-registry";
+import { aiTitlingMayReplace } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
+import {
+  ARTEFACT_SOURCE_DECISION_LIMIT,
+  generatedOrigin,
+} from "@/api/lib/chat/artefact-provenance";
+import type {
+  ArtefactOrigin,
+  GeneratedOrigin,
+} from "@/api/lib/chat/artefact-provenance";
 
-/** One slot fits a bounded source lookup; larger input sets must be split. */
-export const ARTEFACT_SOURCE_DECISION_LIMIT = 1024;
 export class ArtefactSourceLimitError extends TaggedError(
   "ArtefactSourceLimitError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
-const generatedOrigin = v.strictObject({
-  type: v.literal("generated"),
-  generator: v.pipe(v.string(), v.minLength(1)),
-  decisionIds: v.pipe(
-    v.array(v.pipe(v.string(), v.uuid())),
-    v.maxLength(ARTEFACT_SOURCE_DECISION_LIMIT),
-  ),
-  coverage: v.picklist(["complete", "legacy-input"]),
-});
-const authoredOrigin = v.strictObject({ type: v.literal("authored") });
-const storedOrigin = v.variant("type", [generatedOrigin, authoredOrigin]);
-const storedProvenance = v.strictObject({
-  version: v.literal(1),
-  slots: v.pipe(
-    v.unknown(),
-    v.check(
-      (slots) => !Array.isArray(slots),
-      "Provenance slots must be an object",
-    ),
-    v.record(v.pipe(v.string(), v.minLength(1)), storedOrigin),
-  ),
-});
-export type StoredArtefactProvenance = v.InferOutput<typeof storedProvenance>;
-export type ArtefactOrigin =
-  v.InferOutput<typeof storedOrigin> | { type: "legacy" };
-type GeneratedOrigin = v.InferOutput<typeof generatedOrigin>;
 type ArtefactSources = {
   decisionIds: readonly SafeId<"caseLawDecision">[];
   inputs: readonly ArtefactOrigin[];
@@ -167,22 +150,6 @@ export const generateArtefact = async <T>({
 export const authorArtefact = <T>(value: T): ArtefactValue<T> =>
   new Artefact(value, { type: "authored" });
 
-export const readArtefactOrigin = (
-  provenance: unknown,
-  slot: string,
-): ArtefactOrigin => {
-  if (provenance === null || provenance === undefined) {
-    return { type: "legacy" };
-  }
-  const parsed = v.safeParse(storedProvenance, provenance);
-  if (!parsed.success) {
-    return panic("Invalid stored artefact provenance");
-  }
-  return (
-    new Map(Object.entries(parsed.output.slots)).get(slot) ?? { type: "legacy" }
-  );
-};
-
 type ReadArtefactTextOptions = {
   value: string;
   origin: ArtefactOrigin;
@@ -233,6 +200,9 @@ export const writeThreadArtefactTitle = async ({
 }: WriteThreadArtefactTitleOptions): Promise<boolean> => {
   const { value, origin } = artefact[readValue]();
   const generated = origin.type === "generated";
+  if (generated && !aiTitlingMayReplace(expected.source)) {
+    return false;
+  }
   const updated = await tx
     .update(chatThreads)
     .set({
@@ -270,8 +240,3 @@ export const writeThreadArtefactTitle = async ({
   });
   return true;
 };
-
-/** Preserve the provenance column when a reader rebuilds a complete thread row. */
-export const projectThreadArtefactProvenance = (
-  row: Pick<typeof chatThreads.$inferSelect, "generationProvenance">,
-) => ({ generationProvenance: row.generationProvenance });

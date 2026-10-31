@@ -1,5 +1,6 @@
 import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
+import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 
 import { readChatCopyProjection } from "./withdrawn-copies";
 
@@ -23,6 +24,7 @@ export const readChatExportSource = async ({
       columns: {
         title: true,
         titleSource: true,
+        ...THREAD_ARTEFACT_PROVENANCE_COLUMNS,
         subjectDecisionId: true,
         workspaceId: true,
       },
@@ -42,7 +44,9 @@ export const readChatExportSource = async ({
       values: thread,
     });
     return {
-      ...thread,
+      titleSource: thread.titleSource,
+      subjectDecisionId: thread.subjectDecisionId,
+      workspaceId: thread.workspaceId,
       title: projection.thread(thread).title,
       messages: thread.messages.map((row) =>
         projection.chat(row, thread.subjectDecisionId),

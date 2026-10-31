@@ -37,7 +37,13 @@ export const PROVENANCE_PROPERTY_OWNERS = [
     type: "module",
     file: `${PROVENANCE_MODULE}.ts`,
     reason:
-      "The provenance owner constructs persisted values and their read projections.",
+      "The generation owner atomically writes generated values and provenance.",
+  },
+  {
+    type: "module",
+    file: "apps/api/src/lib/chat/artefact-provenance.ts",
+    reason:
+      "The persisted provenance owner validates read projections and copies recorded origins.",
   },
   {
     type: "table-definition",
@@ -520,6 +526,7 @@ export const inspectArtefactGenerators = ({ file, source }: ScanOptions) => {
         modelImport = true;
       }
       if (provenance) {
+        modelImport = true;
         wrapperNamespaces.add(imported.name.text);
       }
       return;

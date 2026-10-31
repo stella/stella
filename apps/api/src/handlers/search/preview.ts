@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { ScopedDb } from "@/api/db/safe-db";
+import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,17 +25,40 @@ const config = {
   body: searchPreviewBodySchema,
 } satisfies HandlerConfig;
 
+type SearchPreviewHandlerOptions = {
+  query: Parameters<typeof readSearchPreview>[0];
+  scopedDb: ScopedDb;
+  readPreview?: typeof readSearchPreview;
+};
+
+export const searchPreviewHandler = async ({
+  query,
+  scopedDb,
+  readPreview = readSearchPreview,
+}: SearchPreviewHandlerOptions) => {
+  const preview = await readPreview(query, scopedDb);
+  if (preview.isErr()) {
+    return Result.err(searchProvenanceError(preview.error));
+  }
+  if (preview.value === null) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Search result not found" }),
+    );
+  }
+  return Result.ok(preview.value);
+};
+
 const searchPreviewEndpoint = createSafeRootHandler(
   config,
   async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
     const activeWorkspaceIds = yield* Result.await(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
-    const preview = yield* Result.await(
+    return yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readSearchPreview(
-            {
+          await searchPreviewHandler({
+            query: {
               query: body.query,
               resultId: body.resultId,
               type: body.type,
@@ -42,20 +67,9 @@ const searchPreviewEndpoint = createSafeRootHandler(
               accessibleWorkspaceIds: activeWorkspaceIds,
             },
             scopedDb,
-          ),
+          }),
       ),
     );
-
-    if (!preview) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: "Search result not found",
-        }),
-      );
-    }
-
-    return Result.ok(preview);
   },
 );
 

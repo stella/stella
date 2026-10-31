@@ -9,28 +9,49 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions, caseLawSources, chatThreads } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  caseLawSources,
+  chatMessages,
+  chatThreads,
+} from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
+import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import { generateAdmittedThreadTitle } from "@/api/handlers/chat/generate-thread-title";
+import type { ChatMessage } from "@/api/handlers/chat/types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { WithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-projection";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import {
+  ARTEFACT_SOURCE_DECISION_LIMIT,
+  type ArtefactOrigin,
+  readArtefactOrigin,
+} from "@/api/lib/chat/artefact-provenance";
+import { readChatExportSource } from "@/api/lib/chat/export-source";
+import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { deleteCorpusDocument } from "@/api/lib/legal-search/corpus-storage";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import { searchGlobal } from "@/api/lib/search/index-global";
+import { readSearchPreview } from "@/api/lib/search/preview";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import {
+  testModelAdmission,
+  testOrganizationStateDb,
+} from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
-  ARTEFACT_SOURCE_DECISION_LIMIT,
-  type ArtefactOrigin,
   authorArtefact,
   generateArtefact,
-  readArtefactOrigin,
   readArtefactText,
   writeThreadArtefactTitle,
 } from "./provenance";
@@ -64,6 +85,32 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
   const recordAuditEvent = async () => {
     audits++;
   };
+  const seedPilotDecision = async (id: SafeId<"caseLawDecision">) =>
+    await db.insert(caseLawDecisions).values({
+      id,
+      sourceId: sourceRegistryId,
+      sourceDocumentId: id,
+      caseNumber: "Title source",
+      country: "GBR",
+      court: "Fixture",
+      language: "en",
+      fulltext: "Title source text",
+      contentHash: id,
+    });
+  const withdrawDecision = async (decisionId: SafeId<"caseLawDecision">) =>
+    await redactCaseLawDecision({
+      decisionId,
+      scopedDb: asTestRaw<ScopedDb>(
+        async <T>(read: (tx: Transaction) => Promise<T>) =>
+          await db.transaction(async (tx) => await read(asTestRaw(tx))),
+      ),
+      sweepRaw: async () => ({ type: "swept", legacy: "none" }),
+      deleteCorpus: async (keys, deletionOptions) =>
+        await deleteCorpusDocument(keys, {
+          ...deletionOptions,
+          deleteObject: async () => undefined,
+        }),
+    });
   beforeAll(async () => {
     await db.insert(user).values({
       id: userId,
@@ -154,7 +201,9 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
     await db
       .delete(organization)
       .where(eq(organization.id, foreignOrganizationId));
-    await db.delete(caseLawDecisions).where(eq(caseLawDecisions.id, sourceId));
+    await db
+      .delete(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceRegistryId));
     await db
       .delete(caseLawSources)
       .where(eq(caseLawSources.id, sourceRegistryId));
@@ -200,19 +249,7 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       decisionIds: [sourceId],
       coverage: "complete",
     });
-    const withdrawn = await redactCaseLawDecision({
-      decisionId: sourceId,
-      scopedDb: asTestRaw<ScopedDb>(
-        async <T>(read: (tx: Transaction) => Promise<T>) =>
-          await db.transaction(async (tx) => await read(asTestRaw(tx))),
-      ),
-      sweepRaw: async () => ({ type: "swept", legacy: "none" }),
-      deleteCorpus: async (keys, deletionOptions) =>
-        await deleteCorpusDocument(keys, {
-          ...deletionOptions,
-          deleteObject: async () => undefined,
-        }),
-    });
+    const withdrawn = await withdrawDecision(sourceId);
     expect(withdrawn.isOk()).toBe(true);
     const current = await readWithdrawnCopyProjection({
       values: row.generationProvenance,
@@ -419,6 +456,268 @@ describe.skipIf(!enabled)("generated artefact storage (postgres)", () => {
       );
     }
   });
+  test.each(["generated", "renamed", "withdrawn-before-dispatch"])(
+    "title pilot captures ingress sources and keeps race guards: %s",
+    async (mode) => {
+      const threadId = createSafeId<"chatThread">();
+      const decisionId = createSafeId<"caseLawDecision">();
+      const userMessageId = createSafeId<"chatMessage">();
+      const assistantMessageId = createSafeId<"chatMessage">();
+      await seedPilotDecision(decisionId);
+      await db
+        .insert(chatThreads)
+        .values({ id: threadId, organizationId, userId, title: "Placeholder" });
+      const messages = [
+        {
+          id: userMessageId,
+          role: "user",
+          parts: [
+            {
+              type: "text",
+              content: `Authored bronze question [decision](#stella-decision=${decisionId})`,
+            },
+          ],
+        },
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          parts: [{ type: "text", content: "An independent explanation" }],
+        },
+      ] satisfies [ChatMessage, ChatMessage];
+      await db.insert(chatMessages).values(
+        messages.map((message) => ({
+          id: message.id,
+          threadId,
+          userId,
+          role: message.role,
+          content: toPersistedChatMessageContentV3({
+            data: message.parts,
+          }),
+        })),
+      );
+      const withdraw = async () => {
+        expect((await withdrawDecision(decisionId)).isOk()).toBe(true);
+      };
+      if (mode === "withdrawn-before-dispatch") {
+        await withdraw();
+      }
+      let dispatched = 0;
+      let indexed = 0;
+      let recorded = 0;
+      await generateAdmittedThreadTitle({
+        initialTitle: "Placeholder",
+        messages,
+        organizationId,
+        userId,
+        orgAIConfig: null,
+        managedAIResidency: "eu",
+        promptCachingEnabled: false,
+        organizationStateDb: testOrganizationStateDb,
+        safeDb: safeDbFromScoped(scopedDb),
+        threadId,
+        threadWorkspaceId: null,
+        admissionSignal: new AbortController().signal,
+        modelAdmission: testModelAdmission(organizationId),
+        recordAuditEvent: async () => {
+          recorded++;
+        },
+        indexThread: async () => {
+          indexed++;
+        },
+        generateTextForTask: async ({ prompt }) => {
+          dispatched++;
+          expect(prompt).toContain(decisionId);
+          if (mode === "renamed") {
+            await db
+              .update(chatThreads)
+              .set({ title: "Authored replacement", titleSource: "user" })
+              .where(eq(chatThreads.id, threadId));
+          }
+          return '"pilotquartz judgement"';
+        },
+      });
+      const row =
+        (
+          await db
+            .select()
+            .from(chatThreads)
+            .where(eq(chatThreads.id, threadId))
+            .limit(1)
+        ).at(0) ?? panic("Missing title pilot fixture");
+      if (mode !== "generated") {
+        expect(dispatched).toBe(mode === "renamed" ? 1 : 0);
+        expect(indexed).toBe(0);
+        expect(recorded).toBe(0);
+        expect(row.title).toBe(
+          mode === "renamed" ? "Authored replacement" : "Placeholder",
+        );
+        expect(row.generationProvenance).toBeNull();
+        return;
+      }
+      expect([dispatched, indexed, recorded]).toEqual([1, 1, 1]);
+      expect(row.title).toBe("pilotquartz judgement");
+      expect(
+        readArtefactOrigin(row.generationProvenance, "title"),
+      ).toMatchObject({
+        type: "generated",
+        decisionIds: [decisionId],
+        generator,
+      });
+      // Editing a source message must not erase the title's captured association.
+      const retainedUserContent = toPersistedChatMessageContentV3({
+        data: [{ type: "text", content: "Authored bronze question" }],
+      });
+      expect(JSON.stringify(messages)).toContain(decisionId);
+      expect(JSON.stringify(retainedUserContent)).not.toContain(decisionId);
+      await db
+        .update(chatMessages)
+        .set({ content: retainedUserContent })
+        .where(eq(chatMessages.id, userMessageId));
+      await upsertChatThreadSearchDocument(threadId, db);
+      const query = {
+        organizationId,
+        userId,
+        accessibleWorkspaceIds: [],
+        selectedWorkspaceIds: [],
+        types: ["chat"] as const,
+        editedByUserIds: [],
+        mimeTypes: [],
+        limit: 10,
+      };
+      const search = async (queryText: string) =>
+        (
+          await searchGlobal(
+            { ...query, types: [...query.types], query: queryText },
+            { scopedDb },
+          )
+        ).unwrap();
+      expect(
+        (await search("pilotquartz")).hits.some(
+          (hit) => hit.id === `chat:${threadId}`,
+        ),
+      ).toBe(true);
+      await withdraw();
+      const exportSource = (
+        await readChatExportSource({
+          safeDb: safeDbFromScoped(scopedDb),
+          threadId,
+          messageId: userMessageId,
+          userId,
+        })
+      ).unwrap();
+      expect(exportSource?.title).not.toBe(row.title);
+      expect(exportSource?.messages.at(0)?.content).toEqual(
+        retainedUserContent,
+      );
+      expect((await search("pilotquartz")).hits).toEqual([]);
+      const retained = await search("bronze -pilotquartz");
+      const retainedHit = retained.hits.find(
+        (hit) => hit.id === `chat:${threadId}`,
+      );
+      expect(retainedHit).toBeDefined();
+      expect(retainedHit?.title).toBe(exportSource?.title);
+      expect(JSON.stringify(retained)).not.toContain(row.title);
+      const preview = (
+        await readSearchPreview(
+          {
+            organizationId,
+            userId,
+            accessibleWorkspaceIds: [],
+            resultId: threadId,
+            type: "chat",
+            query: "pilotquartz",
+          },
+          scopedDb,
+        )
+      ).unwrap();
+      expect(preview.type).toBe("plain-text");
+      if (preview.type !== "plain-text") {
+        return;
+      }
+      expect(preview.content).toBe(exportSource?.title);
+    },
+  );
+
+  test("title reads keep query and response budgets with unrelated thread growth", async () => {
+    const threadId = createSafeId<"chatThread">();
+    const budgetDecisionId = createSafeId<"caseLawDecision">();
+    await seedPilotDecision(budgetDecisionId);
+    expect((await withdrawDecision(budgetDecisionId)).isOk()).toBe(true);
+    await db.insert(chatThreads).values({
+      id: threadId,
+      organizationId,
+      userId,
+      title: "Measured title",
+    });
+    const artefact = (
+      await generateArtefact({
+        generator,
+        sources: { decisionIds: [budgetDecisionId], inputs: [] },
+        generate: () => "Derived measured title",
+      })
+    ).unwrap();
+    await scopedDb(
+      async (tx) =>
+        await writeThreadArtefactTitle({
+          tx,
+          threadId,
+          artefact,
+          expected: { title: "Measured title", source: "default" },
+          recordAuditEvent,
+        }),
+    );
+    const measure = async () =>
+      await runWithQueryCounter(async (counter) => {
+        const title = await scopedDb(async (tx) => {
+          const row =
+            (
+              await tx
+                .select()
+                .from(chatThreads)
+                .where(eq(chatThreads.id, threadId))
+                .limit(1)
+            ).at(0) ?? panic("Missing title budget fixture");
+          const { projection: titleProjection } = await readChatCopyProjection({
+            tx,
+            threadIds: [threadId],
+            values: row,
+          });
+          return titleProjection.thread(row).title;
+        });
+        expect(title).not.toBe("Derived measured title");
+        return {
+          statements: counter.count,
+          transactions: counter.transactions,
+          bytes: Buffer.byteLength(JSON.stringify({ title })),
+        };
+      });
+    const insertUnrelated = async (count: number) =>
+      await db.insert(chatThreads).values(
+        Array.from({ length: count }, () => ({
+          id: createSafeId<"chatThread">(),
+          organizationId,
+          userId,
+          title: "Unrelated authored title",
+          titleSource: "user" as const,
+        })),
+      );
+    const existing = Number(
+      (
+        await db
+          .select({ count: sql`count(*)` })
+          .from(chatThreads)
+          .where(eq(chatThreads.organizationId, organizationId))
+      ).at(0)?.count,
+    );
+    expect(existing).toBeLessThan(20);
+    await insertUnrelated(20 - existing);
+    const small = await measure();
+    await insertUnrelated(180);
+    const large = await measure();
+    expect(small.statements).toBeGreaterThan(0);
+    expect(large).toEqual(small);
+  });
+
   test("generated-artefact.storage-validation", async () => {
     const origin = fc.oneof(
       fc.record({ type: fc.constant("authored") }),

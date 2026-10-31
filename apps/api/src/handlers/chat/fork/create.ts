@@ -37,6 +37,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import {
+  copyThreadArtefactTitle,
+  THREAD_ARTEFACT_PROVENANCE_SELECTION,
+} from "@/api/lib/chat/artefact-provenance";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { consumeInBatches } from "@/api/lib/destructive-effect-chunks";
@@ -104,6 +108,7 @@ const FORKED_THREAD_COLUMNS = {
   dataWorkspaceIds: chatThreads.dataWorkspaceIds,
   title: chatThreads.title,
   titleSource: chatThreads.titleSource,
+  ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
   subjectDecisionId: chatThreads.subjectDecisionId,
   usedAnonymization: chatThreads.usedAnonymization,
   webSearchEnabled: chatThreads.webSearchEnabled,
@@ -536,7 +541,9 @@ const copyUserFiles = async ({
  */
 class ChatForkAttachmentRowMissingError extends TaggedError(
   "ChatForkAttachmentRowMissingError",
-)<{ message: string }> {}
+)<{
+  message: string;
+}> {}
 
 /**
  * A `user_files` row of the copied prefix points at a storage object (or a
@@ -639,6 +646,7 @@ export const createForkThread = ({
             parentThreadId: chatThreads.parentThreadId,
             title: chatThreads.title,
             titleSource: chatThreads.titleSource,
+            ...THREAD_ARTEFACT_PROVENANCE_SELECTION,
             subjectDecisionId: chatThreads.subjectDecisionId,
           })
           .from(chatThreads)
@@ -893,8 +901,7 @@ export const createForkThread = ({
           id: newThreadId,
           organizationId: session.activeOrganizationId,
           parentThreadId: params.threadId,
-          title: source.title,
-          titleSource: source.titleSource,
+          ...copyThreadArtefactTitle(source),
           subjectDecisionId: source.subjectDecisionId,
           usedAnonymization: source.usedAnonymization,
           userId: user.id,

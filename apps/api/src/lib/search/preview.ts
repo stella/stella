@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
@@ -8,6 +8,8 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
+import type { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 import { CHAT_SEARCH_DISPLAY_METADATA_GENERATION } from "@/api/lib/search/chat-search-generation";
 import { normalizeSearchableChatMessageContent } from "@/api/lib/search/chat-search-text";
@@ -72,6 +74,7 @@ type SearchPreviewChatMessageRow = {
 };
 
 type SearchPreviewChatRow = {
+  generation_provenance: unknown;
   subjectDecisionId?: unknown;
   titleSource?: unknown;
   isTitleOnlyMatch: unknown;
@@ -458,6 +461,7 @@ export const buildSearchPreviewQuery = ({
           cst.title,
           t.subject_decision_id AS "subjectDecisionId",
           t.title_source AS "titleSource",
+          t.generation_provenance,
           ${chatPreviewTitleOnlyMatch(tsQuery)},
           ${chatPreviewMessages(locatorTsQuery)}
         FROM chat_thread_search_documents cst
@@ -546,32 +550,42 @@ const isSearchPreviewRow = (value: unknown): value is SearchPreviewRow =>
 export const readSearchPreview = async (
   input: SearchPreviewQuery,
   scopedDb: ScopedDb,
-): Promise<SearchPreview | null> => {
+): Promise<Result<SearchPreview | null, ArtefactProvenanceDecodeError>> => {
   if (input.type === "chat") {
     const rows = await scopedDb(
       async (tx) =>
         await tx.execute<SearchPreviewChatRow>(buildSearchPreviewQuery(input)),
     );
     const row = rows.at(0);
-    if (!row || !Array.isArray(row.messages)) {
-      return null;
+    if (!row) {
+      return Result.ok(null);
     }
 
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      return Result.err(provenance.error);
+    }
+    if (!Array.isArray(row.messages)) {
+      return Result.ok(null);
+    }
     const withdrawal = await readWithdrawnCopyProjection({ values: row });
     const subject =
       typeof row.subjectDecisionId === "string" ? row.subjectDecisionId : null;
-    const titleMarker =
-      row.titleSource === "user"
-        ? null
-        : withdrawal.marker([row.title, row.messages], subject);
+    const titleMarker = withdrawal.threadTitleMarker({
+      title: row.title,
+      titleSource: row.titleSource,
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      ...provenance.value,
+      messages: row.messages,
+    });
     if (titleMarker !== null) {
-      return { type: "plain-text", content: titleMarker };
+      return Result.ok({ type: "plain-text", content: titleMarker });
     }
 
     if (row.isTitleOnlyMatch === true && typeof row.title === "string") {
       const title = row.title.trim();
       if (title) {
-        return { type: "plain-text", content: title };
+        return Result.ok({ type: "plain-text", content: title });
       }
     }
 
@@ -650,12 +664,12 @@ export const readSearchPreview = async (
       remainingCharacters -= content.length;
     }
 
-    return {
+    return Result.ok({
       type: "chat-messages",
       messages: messages
         .toSorted((first, second) => first.position - second.position)
         .map((entry) => entry.message),
-    };
+    });
   }
 
   const rows = await scopedDb(
@@ -663,11 +677,11 @@ export const readSearchPreview = async (
   );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {
-    return null;
+    return Result.ok(null);
   }
 
   if (preview.sourceContent === null) {
-    return { type: "plain-text", content: preview.content };
+    return Result.ok({ type: "plain-text", content: preview.content });
   }
   const content = restoreOriginalSearchPreview({
     headline: preview.content,
@@ -676,5 +690,8 @@ export const readSearchPreview = async (
     source: preview.sourceContent,
     useUnaccent: preview.useUnaccent,
   });
-  return { type: "highlighted-html", content: escapeAndHighlight(content) };
+  return Result.ok({
+    type: "highlighted-html",
+    content: escapeAndHighlight(content),
+  });
 };

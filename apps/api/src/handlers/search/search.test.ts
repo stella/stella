@@ -1,9 +1,11 @@
+import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { searchHandler } from "@/api/handlers/search/search";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ArtefactProvenanceDecodeError } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";
 
 const searchMock = mock();
@@ -74,12 +76,14 @@ const createWorkspaceLookupScopedDb =
 describe("search handler workspace scoping", () => {
   beforeEach(() => {
     searchMock.mockReset();
-    searchMock.mockResolvedValue({
-      facets: { editor: [], mimeType: [], type: [], workspace: [] },
-      hits: [],
-      nextCursor: null,
-      totalCount: 0,
-    });
+    searchMock.mockResolvedValue(
+      Result.ok({
+        facets: { editor: [], mimeType: [], type: [], workspace: [] },
+        hits: [],
+        nextCursor: null,
+        totalCount: 0,
+      }),
+    );
   });
 
   test("passes the caller's accessible workspace allowlist for global searches", async () => {
@@ -217,7 +221,9 @@ describe("search handler workspace scoping", () => {
 
       expect(searchMock).toHaveBeenCalledWith(
         expect.objectContaining({ query, ...values }),
-        { scopedDb: expect.any(Function) },
+        {
+          scopedDb: expect.any(Function),
+        },
       );
     },
   );
@@ -340,5 +346,25 @@ describe("search handler workspace scoping", () => {
       }),
       { scopedDb: expect.any(Function) },
     );
+  });
+
+  test("search returns a server failure for unreadable provenance before processing hits", async () => {
+    const result = await searchHandler({
+      accessibleWorkspaceIds,
+      body: { ...emptySearchFilters(), query: "closing memo" },
+      organizationId,
+      userId,
+      search: async () =>
+        Result.err(
+          new ArtefactProvenanceDecodeError({
+            message: "Invalid stored artefact provenance",
+          }),
+        ),
+      scopedDb: unusedScopedDb,
+    });
+    expect(result).toMatchObject({
+      code: 500,
+      response: { message: "Search results could not be read" },
+    });
   });
 });

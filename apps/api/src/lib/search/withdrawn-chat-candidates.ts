@@ -5,6 +5,7 @@ import { GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE } from "@stll/api-contract/search";
 
 import type { Transaction } from "@/api/db/root";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
+import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -21,6 +22,7 @@ import { searchTitleTierSql } from "./search-ranking";
 
 export type ChatSearchCandidateRow = Record<string, unknown> & {
   id: string;
+  generation_provenance: unknown;
   score: number;
   tier: SearchRankingTier;
 };
@@ -87,28 +89,36 @@ type ProjectChatCandidatesOptions = {
 /** Ranks and previews only admitted source text from a bounded candidate window. */
 export const projectChatSearchCandidates = async ({
   database,
-  rows,
+  rows: candidates,
   query,
   cursor,
   limit,
 }: ProjectChatCandidatesOptions) => {
-  if (rows.length === 0) {
-    return [];
+  if (candidates.length === 0) {
+    return Result.ok([]);
   }
-  const projection = await readWithdrawnCopyProjection({ values: rows });
-  const admitted = rows.map((row) => {
+  const rows = [];
+  for (const row of candidates) {
+    const provenance = decodeRawThreadArtefactProvenance(row);
+    if (provenance.isErr()) {
+      return Result.err(provenance.error);
+    }
+    rows.push({ row, provenance: provenance.value });
+  }
+  const projection = await readWithdrawnCopyProjection({ values: candidates });
+  const admitted = rows.map(({ row, provenance }) => {
     const subject =
       typeof row["subject_decision_id"] === "string"
         ? row["subject_decision_id"]
         : null;
-    const marker = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
-    const title =
-      marker === null || row["title_source"] === "user"
-        ? String(row["title"])
-        : "";
+    const titleMarker = projection.threadTitleMarker({
+      title: row["title"],
+      titleSource: row["title_source"],
+      subjectDecisionId: subject?.toLowerCase() ?? null,
+      ...provenance,
+      source_messages: row["source_messages"],
+    });
+    const title = titleMarker === null ? String(row["title"]) : "";
     const messages = isUnknownArray(row["source_messages"])
       ? row["source_messages"]
       : [];
@@ -163,30 +173,32 @@ export const projectChatSearchCandidates = async ({
     LIMIT ${limit}
   `);
   const byId = new Map(ranked.map((row) => [row.id, row]));
-  return rows.flatMap((row) => {
-    const safe = byId.get(row.id);
-    if (safe === undefined) {
-      return [];
-    }
-    const subject =
-      typeof row["subject_decision_id"] === "string"
-        ? row["subject_decision_id"]
-        : null;
-    const label = projection.marker(
-      [row["title"], row["source_messages"]],
-      subject,
-    );
-    return [
-      {
-        ...row,
-        title:
-          row["title_source"] === "user"
-            ? row["title"]
-            : (label ?? row["title"]),
-        score: safe.score,
-        tier: safe.tier,
-        headline: safe.headline,
-      },
-    ];
-  });
+  return Result.ok(
+    rows.flatMap(({ row, provenance }) => {
+      const safe = byId.get(row.id);
+      if (safe === undefined) {
+        return [];
+      }
+      const subject =
+        typeof row["subject_decision_id"] === "string"
+          ? row["subject_decision_id"]
+          : null;
+      const titleMarker = projection.threadTitleMarker({
+        title: row["title"],
+        titleSource: row["title_source"],
+        subjectDecisionId: subject?.toLowerCase() ?? null,
+        ...provenance,
+        source_messages: row["source_messages"],
+      });
+      return [
+        {
+          ...row,
+          title: titleMarker ?? row["title"],
+          score: safe.score,
+          tier: safe.tier,
+          headline: safe.headline,
+        },
+      ];
+    }),
+  );
 };
