@@ -98,7 +98,9 @@ export const seedOutboundActionScaling = async (
   const configuredConfirm = createConfirmOutboundActionHandler({
     "email.send": async () => {
       executions += 1;
-      return Result.ok({ providerMessageId: "message-1" });
+      return await Promise.resolve(
+        Result.ok({ providerMessageId: "message-1" }),
+      );
     },
   });
   if (configuredConfirm.config !== confirmOutboundAction.config) {
