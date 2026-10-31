@@ -160,25 +160,29 @@ const documentBytes = async (
 
 const seedDocuments = async ({
   actor,
+  matterState,
   workspaceId,
   matter,
   dependencies,
   counts,
 }: MatterStep): Promise<Result<void, ReviewSeedError>> => {
   const fileNames = matter.documents.map(({ fileName }) => fileName);
-  const existing = await actor.safeDb((tx) =>
-    tx
-      .select({ name: entities.name })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.kind, "document"),
-          inArray(entities.name, fileNames),
-        ),
-      )
-      .limit(fileNames.length),
-  );
+  const existing =
+    matterState === "created"
+      ? Result.ok([])
+      : await actor.safeDb((tx) =>
+          tx
+            .select({ name: entities.name })
+            .from(entities)
+            .where(
+              and(
+                eq(entities.workspaceId, workspaceId),
+                eq(entities.kind, "document"),
+                inArray(entities.name, fileNames),
+              ),
+            )
+            .limit(fileNames.length),
+        );
   if (Result.isError(existing)) {
     return Result.err(seedError("documents", existing.error));
   }
@@ -222,6 +226,7 @@ const seedDocuments = async ({
 
 const seedTasks = async ({
   actor,
+  matterState,
   workspaceId,
   matter,
   counts,
@@ -232,18 +237,21 @@ const seedTasks = async ({
       `task:${matter.key}:${task.key}`,
     ),
   );
-  const existing = await actor.safeDb((tx) =>
-    tx
-      .select({ id: entities.id })
-      .from(entities)
-      .where(
-        and(
-          eq(entities.workspaceId, workspaceId),
-          inArray(entities.id, taskIds),
-        ),
-      )
-      .limit(taskIds.length),
-  );
+  const existing =
+    matterState === "created"
+      ? Result.ok([])
+      : await actor.safeDb((tx) =>
+          tx
+            .select({ id: entities.id })
+            .from(entities)
+            .where(
+              and(
+                eq(entities.workspaceId, workspaceId),
+                inArray(entities.id, taskIds),
+              ),
+            )
+            .limit(taskIds.length),
+        );
   if (Result.isError(existing)) {
     return Result.err(seedError("tasks", existing.error));
   }
@@ -335,7 +343,14 @@ const seedMatters = async (
         }
         counts.matters.created += 1;
       }
-      const matterStep = { actor, workspaceId, matter, dependencies, counts };
+      const matterStep = {
+        actor,
+        workspaceId,
+        matter,
+        dependencies,
+        counts,
+        matterState: existingIds.has(workspaceId) ? "existing" : "created",
+      } satisfies MatterStep;
       // The rate table comes before the time entries it prices.
       return await inOrder(
         [seedDocuments, seedTasks, seedMatterTimeBilling],

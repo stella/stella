@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript6";
 
 import { collectIdempotentCreateRoutes } from "@stll/scripts/src/idempotent-create-routes";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { apiRoutes } from "@/api/api-routes";
 import { hasRootReplayAuthorization } from "@/api/lib/api-handlers";
@@ -78,6 +79,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "DELETE /v1/mcp/connectors/:slug": {
     type: "non-replay",
     reason: "credential",
+  },
+  "DELETE /v1/me/push-devices/:token": {
+    type: "non-replay",
+    reason: "current-state",
   },
   "DELETE /v1/memories/:memoryId": {
     type: "non-replay",
@@ -532,6 +537,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/transcribe": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
   "POST /v1/feedback": {
     type: "non-replay",
     reason: "external-effect",
@@ -634,6 +643,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/organization-settings/web-search-key": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organizations/slug": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -995,6 +1008,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "PUT /v1/me/push-devices": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/organization-settings/anonymization-blacklist": {
     type: "non-replay",
     reason: "current-state",
@@ -1318,7 +1335,9 @@ test("every create route and capability declares JSON request replay or a reason
   const creates = new Set(mounted.map(({ file }) => file));
   for (const file of new Bun.Glob(
     "src/mcp/generated/capability-dispatch/*.ts",
-  ).scanSync({ cwd: apiRoot })) {
+  ).scanSync({
+    cwd: apiRoot,
+  })) {
     for (const handler of collectCreateCapabilities(
       readFileSync(path.join(apiRoot, file), "utf-8"),
     )) {
@@ -1506,9 +1525,7 @@ test("the create replay exception inventory only shrinks", () => {
       stdout: "pipe",
       stderr: "pipe",
     });
-  const base = git(["merge-base", "origin/main", "HEAD"]);
-  expect(base.exitCode).toBe(0);
-  const sha = base.stdout.toString().trim();
+  const sha = treeBaseRevision({ repoRoot: path.resolve(apiRoot, "../..") });
   const file = "apps/api/src/handlers/idempotency-census.test.ts";
   const exists = git(["ls-tree", "--name-only", sha, "--", file]);
   expect(exists.exitCode).toBe(0);

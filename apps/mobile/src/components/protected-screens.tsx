@@ -197,7 +197,15 @@ const Screens = () => {
               }}
             />
             <Stack.Screen
-              name="scan"
+              name="scan/index"
+              options={{
+                ...pushedScreen,
+                // Full screen, so a stray swipe cannot drop pages not yet saved.
+                presentation: "fullScreenModal",
+              }}
+            />
+            <Stack.Screen
+              name="scan/save"
               options={{
                 ...pushedScreen,
                 presentation: "formSheet",

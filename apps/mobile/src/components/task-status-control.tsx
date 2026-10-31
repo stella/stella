@@ -13,6 +13,7 @@ import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
+import { TaskAssignees } from "@/components/task-assignees";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
@@ -145,6 +146,12 @@ const LoadedTaskStatus = ({
         {done ? t("reopen") : t("markDone")}
       </Button>
       <WriteFailureNotice failure={failure} message={t("statusFailed")} />
+      <TaskAssignees
+        initial={loaded.value.assignees}
+        matterId={matterId}
+        source={source}
+        taskId={taskId}
+      />
     </View>
   );
 };

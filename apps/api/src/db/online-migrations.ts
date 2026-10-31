@@ -46,6 +46,8 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -79,9 +81,14 @@ import {
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
+import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "./legal-list-source-decision-backfill";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -92,6 +99,10 @@ import {
 } from "./matter-time-expense-retention-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
+import {
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
+} from "./notification-task-assigned-constraint-validation";
 import {
   createIndexConcurrently,
   createOnlineTableGate,
@@ -118,6 +129,7 @@ import type {
 import {
   CLIENT_INVOICE_UNIQUE_INDEXES,
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  IMPORT_PROVENANCE_UNIQUE_INDEXES,
   LEGISLATION_UNIQUE_INDEXES,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -141,6 +153,10 @@ import {
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINTS,
 } from "./time-entry-submitted-constraint-validation";
+import {
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINTS,
+} from "./usage-action-type-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -764,6 +780,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:
@@ -959,13 +976,24 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  // Not behind one migration: the OAuth resource set is derived from the MCP
+  // audiences in application code, so it is the code that moves and the rows
+  // that follow. Its completion is the startup census, so the deploy that
+  // widens the audience set is the one that reconciles them, without an
+  // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
+  LEGAL_LIST_SOURCE_DECISION_BACKFILL,
+  CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
 ];
 
 /**
@@ -993,7 +1021,10 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+    ...USAGE_ACTION_TYPE_CONSTRAINTS,
+    ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {
@@ -1018,7 +1049,7 @@ type OnlineMigrationMode =
   | { operation: "validate"; report: OnlineMigrationStartupReport };
 
 type OnlineMigrationOptions = {
-  repairs?: readonly OnlineRepair[];
+  repairs: readonly OnlineRepair[];
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -1071,7 +1102,7 @@ export type OnlineMigrationStartupReport = {
  */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  options: OnlineMigrationOptions,
 ): Promise<
   | { type: "validated"; report: OnlineMigrationStartupReport }
   | { type: "migrator_active" }
@@ -1212,7 +1243,7 @@ const walkOnlineMigrations = async ({
   return await processOnlineRepairAt({
     connection,
     mode,
-    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    repairs: options.repairs,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
