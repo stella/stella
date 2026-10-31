@@ -4,18 +4,18 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## legal_holds · `legalHolds` · legal-holds.ts:18 · rls
+## legal_holds · `legalHolds` · legal-holds.ts:20 · rls
 
 ```text
-legal_holds.id               pUuid               pk,not null       legal-holds.ts:21
-legal_holds.organization_id  safeOrganizationId  fk,not null       legal-holds.ts:22
-legal_holds.scope_type       text                not null          legal-holds.ts:25
-legal_holds.workspace_id     safeWorkspaceId     fk,null           legal-holds.ts:26
-legal_holds.entity_id        safeUuid            fk,null           legal-holds.ts:32
-legal_holds.reason           text                not null          legal-holds.ts:35
-legal_holds.placed_by        text                not null          legal-holds.ts:37  Actor identities are durable audit evidence; account erasure must not cascade them.
-legal_holds.placed_at        timestamptz         default,not null  legal-holds.ts:38
-legal_holds.released_by      text                null              legal-holds.ts:39
-legal_holds.released_at      timestamptz         null              legal-holds.ts:40
-legal_holds.release_reason   text                null              legal-holds.ts:41
+legal_holds.id               pUuid               pk,not null       legal-holds.ts:23
+legal_holds.organization_id  safeOrganizationId  fk,not null       legal-holds.ts:24
+legal_holds.scope_type       text                not null          legal-holds.ts:27
+legal_holds.workspace_id     safeWorkspaceId     fk,null           legal-holds.ts:28
+legal_holds.entity_id        safeUuid            fk,null           legal-holds.ts:29
+legal_holds.reason           text                not null          legal-holds.ts:32
+legal_holds.placed_by        text                not null          legal-holds.ts:34  Actor identities are durable audit evidence; account erasure must not cascade them.
+legal_holds.placed_at        timestamptz         default,not null  legal-holds.ts:35
+legal_holds.released_by      text                null              legal-holds.ts:36
+legal_holds.released_at      timestamptz         null              legal-holds.ts:37
+legal_holds.release_reason   text                null              legal-holds.ts:38
 ```
