@@ -27,6 +27,7 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type {
   GatedTestClientScope,
@@ -385,13 +386,11 @@ const measureBackfillJobRun = async ({
               observeStatus: noopTask,
               sleep: async () => await Promise.resolve(),
             })
-          : (createSchedulerTaskRegistry(
-              noopTask,
-              createCaseLawCoverageRefreshTask({
-                compute: computeCaseLawCoverageAnswer,
-              }),
-            ).get(job.task) ??
-            panic(`No registered task ${job.task} for ${jobId}`));
+          : createLegislationExpressionIdBackfill({
+              readVerdict: async () =>
+                await Promise.resolve(QUERY_PERF_ADMISSION),
+              observeStatus: noopTask,
+            });
       const outcome = await task(
         asTestRaw<SchedulerTaskContext>({
           db,
