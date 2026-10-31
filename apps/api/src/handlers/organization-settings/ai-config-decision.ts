@@ -54,7 +54,9 @@ export const resolveDecisionConfig = ({
   const storedKey =
     existing?.provider === selection.provider ? existing.apiKey : undefined;
   const apiKey =
-    input?.apiKey === null ? undefined : selection.apiKey?.trim() || storedKey;
+    input !== undefined && input.apiKey === null
+      ? undefined
+      : selection.apiKey?.trim() || storedKey;
   let decision: OrgDecisionModelConfig;
   switch (selection.provider) {
     case "typesafe":

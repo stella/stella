@@ -875,7 +875,7 @@ const readRtfInto = (
   const enterDestination = (destination: Destination): void => {
     flushRun();
     const frame = stack.at(-1);
-    if (frame?.heldParagraph === null) {
+    if (frame !== undefined && frame.heldParagraph === null) {
       frame.heldParagraph = paragraph;
       paragraph = { content: [], alignment: undefined, following: [] };
       hasPendingRun = false;

@@ -2538,8 +2538,8 @@ export const createSendMessage = (
           ? undefined
           : {
               ...body.activeFile,
-              ...(activeFileEntity?.currentVersionId === null ||
-              activeFileEntity?.currentVersionId === undefined
+              ...(activeFileEntity === undefined ||
+              activeFileEntity.currentVersionId === null
                 ? {}
                 : { currentVersionId: activeFileEntity.currentVersionId }),
             };

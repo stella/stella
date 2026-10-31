@@ -324,7 +324,7 @@ export const AnonymizationFacet = ({
     const isInsidePreview = (node: Node | null): boolean => {
       const element =
         node instanceof Element ? node : (node?.parentElement ?? null);
-      return element?.closest(PREVIEW_SURFACES) !== null && element !== null;
+      return element !== null && element.closest(PREVIEW_SURFACES) !== null;
     };
     const handler = () => {
       const selection = window.getSelection();

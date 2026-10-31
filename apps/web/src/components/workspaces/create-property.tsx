@@ -443,8 +443,7 @@ const PropertyComposerBody = ({
   const fileProperties = properties.filter((p) => p.content.type === "file");
   const fileProperty = fileProperties.at(0);
   const extractionFileProperty =
-    extractionContext?.filePropertyId === null ||
-    extractionContext?.filePropertyId === undefined
+    extractionContext === undefined || extractionContext.filePropertyId === null
       ? null
       : (fileProperties.find(
           (property) => property.id === extractionContext.filePropertyId,

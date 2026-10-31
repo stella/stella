@@ -94,10 +94,7 @@ export default createSafeRootHandler(
             ),
           )
           .limit(1);
-        if (
-          deletionBoundary?.token === null ||
-          deletionBoundary === undefined
-        ) {
+        if (deletionBoundary === undefined || deletionBoundary.token === null) {
           // The soft delete and its audit row are already written here, so
           // returning would commit a recorded deletion the handler then
           // reports as a missing style set.

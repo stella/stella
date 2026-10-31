@@ -422,7 +422,7 @@ export const VersionsSidebar = ({
                   idx > 0 &&
                   version.label !== orderedVersions[idx - 1]?.label &&
                   (version.label !== null ||
-                    orderedVersions[idx - 1]?.label !== null)
+                    (orderedVersions[idx - 1]?.label ?? null) !== null)
                 }
                 summarize={isDocx ? buildSummarize(version.id) : null}
                 version={version}

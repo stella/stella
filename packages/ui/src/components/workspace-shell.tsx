@@ -93,7 +93,7 @@ export const WorkspaceShell = ({
   }, [compactNavigationOpen, isCompact, onCompactNavigationOpenChange]);
 
   const compactNavigationTrigger =
-    compactNavigation?.trigger === null || compactNavigation === null ? null : (
+    compactNavigation === null || compactNavigation.trigger === null ? null : (
       <span className="contents md:hidden">
         <SheetTrigger
           aria-label={compactNavigation.label}
