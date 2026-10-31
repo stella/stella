@@ -212,23 +212,62 @@ export const findMigrateStepsWithoutMode = (
 
 const SCRIPT_MODE_ASSIGNMENT =
   /\bSTELLA_MIGRATE_ONLINE_WORK=["']?(?:verify_finalized|build_finalized|build_all)\b/u;
+const SCRIPT_MODE_EXPORT =
+  /^export\s+STELLA_MIGRATE_ONLINE_WORK=["']?(?:verify_finalized|build_finalized|build_all)\b/u;
+
+/** A script's commands, continuation lines joined, comments dropped. */
+const shellCommands = (source: string) => {
+  const commands: { line: number; text: string }[] = [];
+  let pending: { line: number; text: string } | undefined;
+  for (const [index, raw] of source.split("\n").entries()) {
+    const line = raw.trim();
+    if (pending === undefined && (line === "" || line.startsWith("#"))) {
+      continue;
+    }
+    const continued = line.endsWith("\\");
+    const text = continued ? line.slice(0, -1) : line;
+    pending =
+      pending === undefined
+        ? { line: index + 1, text }
+        : { line: pending.line, text: `${pending.text} ${text}` };
+    if (!continued) {
+      commands.push(pending);
+      pending = undefined;
+    }
+  }
+  if (pending !== undefined) {
+    commands.push(pending);
+  }
+  return commands;
+};
 
 /**
- * A shell script that runs the migrate entrypoint names its mode itself: the
- * workflow step that calls the script shows no migrate command to check.
+ * Every migrate call in a shell script names its mode: on the same command,
+ * or through an earlier `export`. The workflow step that calls the script
+ * shows no migrate command to check.
  */
 export const findMigrateScriptsWithoutMode = (
   scripts: readonly { file: string; source: string }[],
 ): string[] =>
-  scripts
-    .filter(
-      ({ source }) =>
-        MIGRATE_COMMAND.test(source) && !SCRIPT_MODE_ASSIGNMENT.test(source),
-    )
-    .map(
-      ({ file }) =>
-        `${file}: runs migrate without ${MIGRATE_MODE_VARIABLE}; set build_finalized or build_all (verify_finalized for a release database)`,
-    );
+  scripts.flatMap(({ file, source }) => {
+    let exported = false;
+    const problems: string[] = [];
+    for (const { line, text } of shellCommands(source)) {
+      if (SCRIPT_MODE_EXPORT.test(text)) {
+        exported = true;
+      }
+      if (
+        MIGRATE_COMMAND.test(text) &&
+        !exported &&
+        !SCRIPT_MODE_ASSIGNMENT.test(text)
+      ) {
+        problems.push(
+          `${file}:${line}: runs migrate without ${MIGRATE_MODE_VARIABLE}; set build_finalized or build_all (verify_finalized for a release database) on the command or in an earlier export`,
+        );
+      }
+    }
+    return problems;
+  });
 
 const git: OnlineWorkLifecycleGit = (args) => {
   const result = Bun.spawnSync(["git", ...args]);

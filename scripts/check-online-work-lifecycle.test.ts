@@ -300,6 +300,8 @@ describe("CI migrate steps name their online work mode", () => {
   test("a shell script that migrates names its own mode", () => {
     const migrate =
       "(cd apps/api && DB_LOAD_GATE_EBS_SIGNAL=disabled bun --no-env-file src/db/migrate.ts)";
+    const missing = (file: string, line: number) =>
+      `${file}:${line}: runs migrate without STELLA_MIGRATE_ONLINE_WORK; set build_finalized or build_all (verify_finalized for a release database) on the command or in an earlier export`;
     expect(
       findMigrateScriptsWithoutMode([
         {
@@ -311,6 +313,10 @@ describe("CI migrate steps name their online work mode", () => {
           source: `STELLA_MIGRATE_ONLINE_WORK=build_finalized ${migrate}\n`,
         },
         {
+          file: "scripts/continued.sh",
+          source: `DB_LOAD_GATE_EBS_SIGNAL=disabled \\\n  STELLA_MIGRATE_ONLINE_WORK=build_all \\\n  bun --no-env-file src/db/migrate.ts\n`,
+        },
+        {
           file: "scripts/exported.sh",
           source: `export STELLA_MIGRATE_ONLINE_WORK=build_all\n${migrate}\n`,
         },
@@ -320,8 +326,37 @@ describe("CI migrate steps name their online work mode", () => {
         },
         { file: "scripts/unrelated.sh", source: "bun run build\n" },
       ]),
+    ).toEqual([missing("scripts/unnamed.sh", 2)]);
+  });
+
+  test("a mode named only in a comment, after the call, or on another call does not count", () => {
+    const migrate = "bun --no-env-file src/db/migrate.ts";
+    const missing = (file: string, line: number) =>
+      `${file}:${line}: runs migrate without STELLA_MIGRATE_ONLINE_WORK; set build_finalized or build_all (verify_finalized for a release database) on the command or in an earlier export`;
+    expect(
+      findMigrateScriptsWithoutMode([
+        {
+          file: "scripts/commented.sh",
+          source: `# STELLA_MIGRATE_ONLINE_WORK=build_finalized\n${migrate}\n`,
+        },
+        {
+          file: "scripts/late-export.sh",
+          source: `${migrate}\nexport STELLA_MIGRATE_ONLINE_WORK=build_all\n`,
+        },
+        {
+          file: "scripts/two-calls.sh",
+          source: `STELLA_MIGRATE_ONLINE_WORK=build_all ${migrate}\n${migrate}\n`,
+        },
+        {
+          file: "scripts/unexported.sh",
+          source: `STELLA_MIGRATE_ONLINE_WORK=build_all\n${migrate}\n`,
+        },
+      ]),
     ).toEqual([
-      "scripts/unnamed.sh: runs migrate without STELLA_MIGRATE_ONLINE_WORK; set build_finalized or build_all (verify_finalized for a release database)",
+      missing("scripts/commented.sh", 2),
+      missing("scripts/late-export.sh", 1),
+      missing("scripts/two-calls.sh", 2),
+      missing("scripts/unexported.sh", 2),
     ]);
   });
 
