@@ -144,7 +144,56 @@ describe("remediation selects one complete package fix", () => {
         quarantinedVersions,
       },
     });
+  const accepted = (
+    id: string,
+    vulnerableVersions: string,
+  ): AdvisoryAssessment => {
+    const acceptance = {
+      id,
+      severity: currentAdvisory.severity,
+      package: currentAdvisory.package,
+      title: currentAdvisory.title,
+      owner: "supply-chain",
+      reason: "test acceptance",
+      expiresOn: "2026-11-14",
+      affectedPaths: ["pkg"],
+    };
+    return {
+      ...assessment({
+        id,
+        vulnerableVersions,
+        disposition: { status: "accepted", acceptance },
+      }),
+      acceptance,
+    };
+  };
   const now = new Date("2026-10-31T12:00:00.000Z");
+
+  test("an accepted advisory does not block a release that fixes it and a new advisory", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        accepted("GHSA-1111-1111-1111", "<1.5.1"),
+        available("GHSA-2222-2222-2222", "<1.5.0", ["1.5.0", "1.5.1"]),
+      ],
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.5.1"]]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
+
+  test("an accepted advisory may remain when the selected release fixes only the new advisory", () => {
+    const plan = planDependencyAuditRemediation({
+      now,
+      assessments: [
+        accepted("GHSA-1111-1111-1111", ">=1.5.0"),
+        available("GHSA-2222-2222-2222", "<1.5.0", ["1.5.0"]),
+      ],
+    });
+
+    expect([...plan.pins]).toEqual([["pkg", "1.5.0"]]);
+    expect(plan.acceptanceDrafts).toEqual([]);
+  });
 
   test("two advisories select the lowest common fix in either input order", () => {
     const assessments = [

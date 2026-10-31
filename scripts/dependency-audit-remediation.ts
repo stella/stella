@@ -155,12 +155,15 @@ export const planDependencyAuditRemediation = ({
         disposition.status === "fix_in_quarantine",
     );
     const blocked = group.some(
-      ({ disposition }) => disposition.status === "upstream_blocked",
+      ({ disposition }) =>
+        disposition.status !== "fix_available" &&
+        disposition.status !== "fix_in_quarantine" &&
+        disposition.status !== "accepted",
     );
     const candidates = new Set(actionable.flatMap(candidateVersions));
     const common = [...candidates]
       .filter((version) =>
-        group.every(
+        actionable.every(
           ({ advisory }) =>
             !Bun.semver.satisfies(version, advisory.vulnerableVersions),
         ),
@@ -170,18 +173,33 @@ export const planDependencyAuditRemediation = ({
           candidateVersions(assessment).includes(version),
         ),
       )
-      .toSorted(Bun.semver.order);
+      .toSorted((left, right) => {
+        const acceptedFixedByLeft = group.filter(
+          ({ advisory, disposition }) =>
+            disposition.status === "accepted" &&
+            !Bun.semver.satisfies(left, advisory.vulnerableVersions),
+        ).length;
+        const acceptedFixedByRight = group.filter(
+          ({ advisory, disposition }) =>
+            disposition.status === "accepted" &&
+            !Bun.semver.satisfies(right, advisory.vulnerableVersions),
+        ).length;
+        return (
+          acceptedFixedByRight - acceptedFixedByLeft ||
+          Bun.semver.order(left, right)
+        );
+      });
     const quarantined = quarantinedCandidates(actionable);
     const installable = common.find((version) => !quarantined.has(version));
     const selected = installable ?? common.at(0);
 
-    if (
-      !blocked &&
-      actionable.length === group.length &&
-      selected !== undefined
-    ) {
+    if (!blocked && actionable.length > 0 && selected !== undefined) {
+      const remediated = group.filter(
+        ({ advisory }) =>
+          !Bun.semver.satisfies(selected, advisory.vulnerableVersions),
+      );
       const affectedCopies = new Set(
-        actionable.flatMap(({ affectedPaths }) => affectedPaths),
+        remediated.flatMap(({ affectedPaths }) => affectedPaths),
       );
       const copies = new Map(
         group.flatMap(({ copies: assessmentCopies }) =>
@@ -416,7 +434,15 @@ export const verifyDependencyAuditRemediation = async ({
 
     const resolved = await resolve(proposal);
     const remaining = new Set(resolved.assessments.map(advisoryKey));
-    const targets = new Set(group.map(advisoryKey));
+    const targets = new Set(
+      group
+        .filter(
+          ({ disposition }) =>
+            disposition.status === "fix_available" ||
+            disposition.status === "fix_in_quarantine",
+        )
+        .map(advisoryKey),
+    );
     const targetRemains = [...targets].some((key) => remaining.has(key));
     const introducedAdvisory = [...remaining].some((key) => !initial.has(key));
     const lockfileChangesAreSafe = changedCopiesAreSafe({
