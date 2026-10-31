@@ -104,38 +104,53 @@ test.each([
 
 const unavailableImage =
   "This job failed because of a scheduled macOS 14 runner image brownout.";
+type ClassificationJob = Parameters<
+  typeof classifyMainHeavyFailures
+>[0]["jobs"][number];
+const desktopRustJobName = "suites / Desktop Rust Tests (macos)";
 
 test.each([
   {
     title: "a runner-less cancel is infrastructure",
-    job: { conclusion: "cancelled", runner_name: "", steps: [] },
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      runner_name: "",
+      steps: [],
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "a cancelled job with no runner field is infrastructure",
-    job: { conclusion: "cancelled" },
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "a runner-less cancel with queued steps is infrastructure",
     job: {
+      name: desktopRustJobName,
       conclusion: "cancelled",
       steps: [{ name: "Test", conclusion: null, status: "queued" }],
-    },
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "a runner image brownout annotation is infrastructure",
     job: {
+      name: desktopRustJobName,
       conclusion: "failure",
       runner_name: "GitHub Actions 1",
       annotations: [{ message: unavailableImage }],
-    },
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "a runner image deprecation annotation is infrastructure",
     job: {
+      name: desktopRustJobName,
       conclusion: "failure",
       annotations: [
         {
@@ -143,12 +158,13 @@ test.each([
             "The macOS-13 environment is now deprecated and will be removed starting December 4th, 2025. For more details, see https://github.com/actions/runner-images/issues/13046",
         },
       ],
-    },
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "a hyphenated runner-image brownout annotation is infrastructure",
     job: {
+      name: desktopRustJobName,
       conclusion: "cancelled",
       runner_name: "GitHub Actions 1",
       annotations: [
@@ -157,30 +173,33 @@ test.each([
             "This job failed because of a scheduled macOS 14 runner-image brownout.",
         },
       ],
-    },
+    } satisfies ClassificationJob,
     expected: "INFRA",
   },
   {
     title: "an unrelated brownout annotation stays code",
     job: {
+      name: desktopRustJobName,
       conclusion: "failure",
       annotations: [{ message: "Test service brownout" }],
-    },
+    } satisfies ClassificationJob,
     expected: "CODE",
   },
   {
     title:
       "a cancel after a failed step stays code despite brownout annotations",
     job: {
+      name: desktopRustJobName,
       conclusion: "cancelled",
       annotations: [{ message: unavailableImage }],
       steps: [{ name: "Test", conclusion: "failure" }],
-    },
+    } satisfies ClassificationJob,
     expected: "CODE",
   },
   {
     title: "a cancel after a step started stays code",
     job: {
+      name: desktopRustJobName,
       conclusion: "cancelled",
       steps: [
         {
@@ -189,22 +208,23 @@ test.each([
           started_at: "2026-10-30T00:00:00Z",
         },
       ],
-    },
+    } satisfies ClassificationJob,
     expected: "CODE",
   },
   {
     title: "a job that ran and failed stays code",
     job: {
+      name: desktopRustJobName,
       conclusion: "failure",
       runner_name: "GitHub Actions 1",
       steps: [{ name: "Test", conclusion: "failure" }],
-    },
+    } satisfies ClassificationJob,
     expected: "CODE",
   },
 ])("$title", ({ job, expected }) => {
   expect(
     classifyMainHeavyFailures({
-      jobs: [{ name: "suites / Desktop Rust Tests (macos)", ...job }],
+      jobs: [job],
       queueJobs: [],
     }).map(({ type }) => type),
   ).toEqual([expected]);
