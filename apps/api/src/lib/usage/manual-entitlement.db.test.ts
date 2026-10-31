@@ -30,6 +30,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -108,7 +109,7 @@ const grant = async (
   usagePolicyId: SafeId<"usagePolicy">,
   seats = 3,
 ) =>
-  await grantManualEntitlement(tx, {
+  await grantManualEntitlement(asOwnerTransaction(tx), {
     organizationId,
     usagePolicyId,
     seats,
@@ -140,7 +141,7 @@ describe("manual entitlements", () => {
       });
 
       const endsAt = new Date("2031-01-01T00:00:00.000Z");
-      const ended = await endManualEntitlement(tx, {
+      const ended = await endManualEntitlement(asOwnerTransaction(tx), {
         organizationId,
         endsAt,
         actor: "operator:test",
@@ -191,7 +192,7 @@ describe("manual entitlements", () => {
       expect(Result.isError(refused) && refused.error).toBeInstanceOf(
         ManualEntitlementRefusedError,
       );
-      const ended = await endManualEntitlement(tx, {
+      const ended = await endManualEntitlement(asOwnerTransaction(tx), {
         organizationId,
         endsAt: new Date("2030-01-01T00:00:00.000Z"),
         actor: "operator:test",
@@ -267,7 +268,7 @@ describe("manual entitlements", () => {
         const result = await grant(tx, organizationId, policyId);
         expect(Result.isError(result)).toBe(true);
       }
-      const past = await grantManualEntitlement(tx, {
+      const past = await grantManualEntitlement(asOwnerTransaction(tx), {
         organizationId,
         usagePolicyId,
         seats: 3,
@@ -293,7 +294,7 @@ describe("manual entitlements", () => {
         .update(usageEntitlements)
         .set({ currentPeriodStart: new Date(before - 120_000) })
         .where(eq(usageEntitlements.organizationId, organizationId));
-      const ended = await endManualEntitlement(tx, {
+      const ended = await endManualEntitlement(asOwnerTransaction(tx), {
         organizationId,
         endsAt: new Date(before - 60_000),
         actor: "operator:test",
@@ -316,7 +317,7 @@ describe("manual entitlements", () => {
       expect(Result.isOk(await grant(tx, organizationId, usagePolicyId))).toBe(
         true,
       );
-      const extended = await endManualEntitlement(tx, {
+      const extended = await endManualEntitlement(asOwnerTransaction(tx), {
         organizationId,
         endsAt: new Date("2100-01-01T00:00:00.000Z"),
         actor: "operator:test",
@@ -338,12 +339,15 @@ describe("manual entitlements", () => {
     });
     const revived = await db.transaction(
       async (testTx) =>
-        await endManualEntitlement(asTestRaw<Transaction>(testTx), {
-          organizationId: lapsedOrganizationId,
-          endsAt: new Date("2030-01-01T00:00:00.000Z"),
-          actor: "operator:test",
-          reason: "Must refuse a revival",
-        }),
+        await endManualEntitlement(
+          asOwnerTransaction(asTestRaw<Transaction>(testTx)),
+          {
+            organizationId: lapsedOrganizationId,
+            endsAt: new Date("2030-01-01T00:00:00.000Z"),
+            actor: "operator:test",
+            reason: "Must refuse a revival",
+          },
+        ),
     );
     expect(Result.isError(revived)).toBe(true);
     // A lapsed manual entitlement binds no limits any more.

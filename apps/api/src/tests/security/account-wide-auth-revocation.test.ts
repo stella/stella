@@ -27,6 +27,7 @@ import {
   revokeAllUserSessions,
 } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -278,7 +279,7 @@ describe("account-wide auth revocation", () => {
     await testDb.transaction(
       async (tx) =>
         await revokeAllUserDurableCredentials(
-          asTestRaw<Transaction>(tx),
+          asOwnerTransaction(asTestRaw<Transaction>(tx)),
           toSafeId<"user">(LEAVER),
         ),
     );

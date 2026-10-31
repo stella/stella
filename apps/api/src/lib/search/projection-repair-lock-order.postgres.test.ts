@@ -20,7 +20,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import {
   upsertContactSearchDocument,
@@ -31,6 +30,7 @@ import { persistNativeExtractionProjection } from "@/api/lib/search/process-extr
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -153,7 +153,7 @@ if (!databaseUrl || !runPostgresTests) {
             connection: Pick<GatedTestDb, "query" | "select" | "transaction">,
           ) => {
             // Projections lock organization parents on the owner connection.
-            const database = markOwnerDatabase(connection);
+            const database = ownerDatabaseDouble(connection);
             switch (kind) {
               case "native": {
                 const outcome = await persistNativeExtractionProjection(
@@ -419,7 +419,7 @@ if (!databaseUrl || !runPostgresTests) {
       let arrivals = 0;
       const pending: Promise<void>[] = [];
       const gated = (database: GatedTestDb) =>
-        markOwnerDatabase({
+        ownerDatabaseDouble({
           query: database.query,
           select: database.select.bind(database),
           transaction: async <T>(run: (tx: Transaction) => Promise<T>) =>
@@ -452,7 +452,7 @@ if (!databaseUrl || !runPostgresTests) {
         );
         await upsertWorkspaceSearchDocuments(
           workspaceIds,
-          markOwnerDatabase(setup.db),
+          ownerDatabaseDouble(setup.db),
         );
         await setup.db
           .update(workspaces)

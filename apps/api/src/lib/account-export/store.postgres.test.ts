@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/account-export/store";
 import { toSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -30,7 +31,8 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
       panic("DATABASE_URL required");
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-      const { sql: client, db } = openClient();
+      const { sql: client, db: clientDb } = openClient();
+      const db = ownerDatabaseDouble(clientDb);
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const schema = `export_${suffix}`;
       const ownerRole = `export_owner_${suffix}`;
@@ -100,7 +102,9 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
                 `SET search_path TO ${schema}, public; SET ROLE ${ownerRole}`,
               );
               return (
-                await requestAccountExport(userId, { db: retryDb })
+                await requestAccountExport(userId, {
+                  db: ownerDatabaseDouble(retryDb),
+                })
               ).unwrap().id;
             },
           ),
@@ -335,7 +339,9 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
               .update(accountExports)
               .set({ status: "failed" })
               .where(eq(accountExports.id, lastSlot.id));
-            const pending = requestAccountExport(userId, { db: racingDb });
+            const pending = requestAccountExport(userId, {
+              db: ownerDatabaseDouble(racingDb),
+            });
             await locking.promise;
             return { pending };
           },

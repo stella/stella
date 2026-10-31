@@ -22,7 +22,7 @@ import {
 } from "@/api/lib/db/timestamp-cas";
 import { getPgErrorCode } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 const db = await getTestDb();
@@ -97,7 +97,7 @@ describe("aggregate queries preserve their decisive read", () => {
           .returning({ token: timestampCasToken(workspaces.lastActivityAt) })
       ).at(0) ?? panic("Missing workspace fixture");
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const query = () =>
         tx
           .select({
@@ -146,7 +146,7 @@ describe("aggregate queries preserve their decisive read", () => {
     "a missing %s query reserves ordering without confirming a held mode",
     async (wait) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const result = await withAggregateRowQuery({
           ...workspaceIdentity,
           tx,
@@ -168,7 +168,7 @@ describe("aggregate queries preserve their decisive read", () => {
               aggregate: "organization",
               id: organizationId,
               mode: "update",
-              tx,
+              tx: asOwnerTransaction(tx),
             }),
           ),
         ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -196,7 +196,7 @@ describe("aggregate queries preserve their decisive read", () => {
     "a missing %s query cannot cover a same-key request below the high-water",
     async (wait) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const select = (queryTx: Transaction) =>
           queryTx
             .select({
@@ -258,7 +258,7 @@ describe("aggregate queries preserve their decisive read", () => {
 
   test("additional predicates cannot select another physical identity", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       expect(
         await withAggregateRowQuery({
           ...workspaceIdentity,
@@ -279,7 +279,7 @@ describe("aggregate queries preserve their decisive read", () => {
           withAggregateLock({
             aggregate: "organization",
             id: organizationId,
-            tx,
+            tx: asOwnerTransaction(tx),
             mode: "update",
           }),
         ),
@@ -290,7 +290,7 @@ describe("aggregate queries preserve their decisive read", () => {
   test("rejects a non-registered target table", async () => {
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         return await withAggregateRowQuery({
           ...workspaceIdentity,
           tx,
@@ -310,7 +310,7 @@ describe("outer aggregate query target validation", () => {
   test("rejects a non-registered outer target with a nested projection", async () => {
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         return await withAggregateRowQuery({
           ...workspaceIdentity,
           tx,
@@ -333,7 +333,7 @@ describe("outer aggregate query target validation", () => {
 
   test("scalar subquery FROM and JOIN clauses do not change the outer locked resource", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       // Names preserve nested qualifiers that single-table projection rendering removes from PgColumn chunks.
       const firmId = sql`${sql.identifier("public")}.${sql.identifier(getTableName(organization))}.${sql.identifier(organization.id.name)}`;
       const matterFirm = sql`${sql.identifier("public")}.${sql.identifier(getTableName(workspaces))}.${sql.identifier(workspaces.organizationId.name)}`;
@@ -362,7 +362,7 @@ describe("outer aggregate query target validation", () => {
 
   test("quoted strings, dollar quotes, comments and quoted projection identifiers do not declare targets", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const result = await withAggregateRowQuery({
         ...workspaceIdentity,
         tx,
@@ -403,7 +403,7 @@ describe("outer aggregate query target validation", () => {
 describe("aggregate query projection ownership", () => {
   test("renamed nested genuine columns preserve projection while proving identity and tenant scope", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const result = await withAggregateRowQuery({
         ...workspaceIdentity,
         tx,
@@ -432,7 +432,7 @@ describe("aggregate query projection ownership", () => {
     "rejects a %s literal in place of a registered column and leaves history idle",
     async (field) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const id =
           field === "id" ? sql`${workspaceId}`.mapWith(String) : workspaces.id;
         const tenant =
@@ -458,7 +458,7 @@ describe("aggregate query projection ownership", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx,
+            tx: asOwnerTransaction(tx),
           }),
         ).toEqual({ status: "locked" });
       });
@@ -467,7 +467,7 @@ describe("aggregate query projection ownership", () => {
 
   test("rejects a key column from a different joined table", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       expect(
         await rejectionOf(
           withAggregateRowQuery({
@@ -497,7 +497,7 @@ describe("aggregate query projection ownership", () => {
           aggregate: "organization",
           id: organizationId,
           mode: "update",
-          tx,
+          tx: asOwnerTransaction(tx),
         }),
       ).toEqual({ status: "locked" });
     });
@@ -507,7 +507,7 @@ describe("aggregate query projection ownership", () => {
 describe("owner-scoped query predicates", () => {
   test("broad predicates return only the declared row; a different tenant returns none", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const select = (queryTx: Transaction) =>
         queryTx
           .select({
@@ -546,7 +546,7 @@ describe("owner-scoped query predicates", () => {
     "%s caller builders fail before scoping or execution and leave history idle",
     async (shape) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         let scoped = false;
         expect(
           await rejectionOf(
@@ -609,7 +609,7 @@ describe("owner-scoped query predicates", () => {
           await withAggregateLock({
             aggregate: "organization",
             id: organizationId,
-            tx,
+            tx: asOwnerTransaction(tx),
             mode: "update",
           }),
         ).toEqual({ status: "locked" });
@@ -623,7 +623,7 @@ describe("returned aggregate identity validation", () => {
     "a blocking malformed %s response records returned identities and leaves history idle",
     async (mismatch) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const returnedIds =
           mismatch === "cardinality"
             ? [workspaceId, otherWorkspaceId]
@@ -684,7 +684,7 @@ describe("returned aggregate identity validation", () => {
             withAggregateLock({
               aggregate: "organization",
               id: organizationId,
-              tx,
+              tx: asOwnerTransaction(tx),
               mode: "key share",
             }),
           ),
@@ -695,7 +695,7 @@ describe("returned aggregate identity validation", () => {
 
   test("a returned tenant mismatch rejects the read and retains no parent lock", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const incorrectOrganizationId = mintAuthProviderId<"organization">();
       expect(
         await rejectionOf(
@@ -720,7 +720,7 @@ describe("returned aggregate identity validation", () => {
           aggregate: "organization",
           id: organizationId,
           mode: "update",
-          tx,
+          tx: asOwnerTransaction(tx),
         }),
       ).toEqual({ status: "locked" });
     });
@@ -728,7 +728,7 @@ describe("returned aggregate identity validation", () => {
 
   test("extra rows are rejected before any matched row's fence reaches the parent", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       expect(
         await rejectionOf(
           withAggregateRowQuery({
@@ -754,7 +754,7 @@ describe("returned aggregate identity validation", () => {
           aggregate: "organization",
           id: organizationId,
           mode: "update",
-          tx,
+          tx: asOwnerTransaction(tx),
         }),
       ).toEqual({ status: "locked" });
     });
@@ -766,7 +766,7 @@ describe("nested query lock rejection", () => {
     "nested FOR %s in an additional predicate is refused before acquisition",
     async (mode) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         expect(
           await rejectionOf(
             withAggregateRowQuery({
@@ -791,7 +791,7 @@ describe("nested query lock rejection", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx,
+            tx: asOwnerTransaction(tx),
           }),
         ).toEqual({ status: "locked" });
       });
@@ -802,7 +802,7 @@ describe("nested query lock rejection", () => {
     "nested FOR %s is refused before acquisition",
     async (mode) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         expect(
           await rejectionOf(
             withAggregateRowQuery({
@@ -827,7 +827,7 @@ describe("nested query lock rejection", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx,
+            tx: asOwnerTransaction(tx),
           }),
         ).toEqual({ status: "locked" });
       });
@@ -838,7 +838,7 @@ describe("nested query lock rejection", () => {
     "invalid %s validation leaves history idle",
     async (invalid) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const identity =
           invalid === "target"
             ? ({ aggregate: "organization", id: organizationId } as const)
@@ -870,7 +870,7 @@ describe("nested query lock rejection", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx,
+            tx: asOwnerTransaction(tx),
           }),
         ).toEqual({ status: "locked" });
       });
@@ -881,7 +881,7 @@ describe("nested query lock rejection", () => {
 describe("aggregate query targets and lock modes", () => {
   test("a same-row blocking query upgrade is rejected; NOWAIT upgrade remains available", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const select = (queryTx: Transaction) =>
         queryTx
           .select({
@@ -923,7 +923,7 @@ describe("aggregate query targets and lock modes", () => {
   });
   test("joined projections lock only their explicit registered OF target", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const result = await withAggregateRowQuery({
         ...workspaceIdentity,
         tx,
@@ -951,7 +951,7 @@ describe("aggregate query targets and lock modes", () => {
     });
     const error = await rejectionOf(
       withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         return await withAggregateRowQuery({
           ...workspaceIdentity,
           tx,
@@ -979,7 +979,7 @@ describe("aggregate query targets and lock modes", () => {
 
   test("NOWAIT query failures propagate unchanged and leave the parent transaction usable", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const failure = new TransactionRollbackError();
       expect(
         await rejectionOf(
@@ -999,7 +999,7 @@ describe("aggregate query targets and lock modes", () => {
           aggregate: "organization",
           id: organizationId,
           mode: "update",
-          tx,
+          tx: asOwnerTransaction(tx),
         }),
       ).toEqual({ status: "locked" });
     });
@@ -1007,12 +1007,12 @@ describe("aggregate query targets and lock modes", () => {
 
   test("rejects a blocking mode upgrade after a higher-ranked acquisition", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       await withAggregateLock({
         aggregate: "organization",
         id: organizationId,
         mode: "key share",
-        tx,
+        tx: asOwnerTransaction(tx),
       });
       await withAggregateRowQuery({
         ...workspaceIdentity,
@@ -1032,7 +1032,7 @@ describe("aggregate query targets and lock modes", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx,
+            tx: asOwnerTransaction(tx),
           }),
         ),
       ).toMatchObject({
@@ -1044,7 +1044,7 @@ describe("aggregate query targets and lock modes", () => {
           aggregate: "organization",
           id: organizationId,
           mode: "key share",
-          tx,
+          tx: asOwnerTransaction(tx),
         }),
       ).toEqual({ status: "locked" });
     });
@@ -1054,7 +1054,7 @@ describe("aggregate query targets and lock modes", () => {
 describe("NOWAIT acquisition fencing", () => {
   test("an exposed child transaction cannot acquire another fence while its exact query is unresolved", async () => {
     await withAggregateTransaction(db, async (rawTx) => {
-      const tx = asTestRaw<Transaction>(rawTx);
+      const tx = asOwnerTransaction(rawTx);
       const ready = Promise.withResolvers<undefined>();
       const release = Promise.withResolvers<undefined>();
       let exposedChild: Transaction | undefined;
@@ -1100,7 +1100,7 @@ describe("NOWAIT acquisition fencing", () => {
               aggregate: "organization",
               id: organizationId,
               mode: "update",
-              tx: child,
+              tx: asOwnerTransaction(child),
             }),
           ),
         ).toMatchObject({
@@ -1164,7 +1164,7 @@ describe("top-level aggregate transaction entry", () => {
             aggregate: "organization",
             id: organizationId,
             mode: "update",
-            tx: publicHandle,
+            tx: asOwnerTransaction(publicHandle),
           }),
         ).toEqual({ status: "locked" });
         expect(queries).toBe(1);
@@ -1210,7 +1210,7 @@ describe("aggregate transaction lifetime", () => {
     "%s: empty-query reservations follow savepoint lifetime",
     async (disposition) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const child = withAggregateSavepoint(tx, async (savepoint) => {
           expect(
             await withAggregateRowQuery({
@@ -1256,7 +1256,7 @@ describe("aggregate transaction lifetime", () => {
     "%s: child locks are retained only after savepoint commit",
     async (disposition) => {
       await withAggregateTransaction(db, async (rawTx) => {
-        const tx = asTestRaw<Transaction>(rawTx);
+        const tx = asOwnerTransaction(rawTx);
         const child = withAggregateSavepoint(tx, async (savepoint) => {
           await withAggregateRowQuery({
             ...workspaceIdentity,
@@ -1283,7 +1283,7 @@ describe("aggregate transaction lifetime", () => {
               aggregate: "organization",
               id: organizationId,
               mode: "update",
-              tx,
+              tx: asOwnerTransaction(tx),
             }),
           ).toEqual({ status: "locked" });
           return;
@@ -1295,7 +1295,7 @@ describe("aggregate transaction lifetime", () => {
               aggregate: "organization",
               id: organizationId,
               mode: "update",
-              tx,
+              tx: asOwnerTransaction(tx),
             }),
           ),
         ).toMatchObject({ message: "Aggregate lock rank inversion" });
@@ -1308,7 +1308,7 @@ describe("aggregate transaction lifetime", () => {
     expect(
       await rejectionOf(
         withAggregateTransaction(db, async (rawTx) => {
-          escaped = asTestRaw<Transaction>(rawTx);
+          escaped = asOwnerTransaction(rawTx);
           escaped.rollback();
         }),
       ),
@@ -1325,7 +1325,7 @@ describe("aggregate transaction lifetime", () => {
     let parent: Transaction | undefined;
     let child: Transaction | undefined;
     await withAggregateTransaction(db, async (rawTx) => {
-      parent = asTestRaw<Transaction>(rawTx);
+      parent = asOwnerTransaction(rawTx);
       await withAggregateSavepoint(parent, async (savepoint) => {
         child = savepoint;
       });

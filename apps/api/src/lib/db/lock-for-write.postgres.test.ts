@@ -62,7 +62,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await rejectionOf(
               withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id: toSafeId<"organization">(`Z_${suffix}`),
                 mode: "key share",
@@ -74,7 +74,7 @@ if (!databaseUrl || !enabled) {
           for (const id of sorted) {
             expect(
               await withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id,
                 mode: "key share",
@@ -143,7 +143,7 @@ if (!databaseUrl || !enabled) {
           expect(
             await rejectionOf(
               withAggregateLock({
-                tx,
+                tx: asOwnerTransaction(tx),
                 aggregate: "organization",
                 id: missingOrganizationId,
                 mode: "key share",

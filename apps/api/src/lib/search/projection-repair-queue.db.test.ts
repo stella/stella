@@ -27,6 +27,7 @@ import {
   SEARCH_PROJECTION_REPAIR_BATCH_SIZE,
 } from "@/api/lib/search/projection-repair-queue";
 import type { SearchProjectionRepairDeps } from "@/api/lib/search/projection-repair-queue";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -456,21 +457,21 @@ test("a drain rebuilds every projection kind on the connection it is handed", as
   // object on PGlite and a row array on the production driver; that is the
   // one difference the transaction shim adapts.
   const relational = drizzle({ client, relations: databaseRelations });
-  const handed = asTestRaw<
-    Parameters<typeof createSearchProjectionRepairDeps>[0]
-  >({
-    delete: relational.delete.bind(relational),
-    query: relational.query,
-    select: relational.select.bind(relational),
-    update: relational.update.bind(relational),
-    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-      await relational.transaction(
-        async (tx) =>
-          await run({
-            execute: async (query: SQL) => (await tx.execute(query)).rows,
-          }),
-      ),
-  });
+  const handed = ownerDatabaseDouble(
+    asTestRaw<Parameters<typeof createSearchProjectionRepairDeps>[0]>({
+      delete: relational.delete.bind(relational),
+      query: relational.query,
+      select: relational.select.bind(relational),
+      update: relational.update.bind(relational),
+      transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+        await relational.transaction(
+          async (tx) =>
+            await run({
+              execute: async (query: SQL) => (await tx.execute(query)).rows,
+            }),
+        ),
+    }),
+  );
   expect(
     await drainSearchProjectionRepairQueue({
       deps: createSearchProjectionRepairDeps(handed),

@@ -62,6 +62,7 @@ import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isTransientPgConnectionError } from "@/api/lib/pg-error";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -1482,12 +1483,14 @@ describe("repair sweep rest", () => {
     );
     const dependencies = {
       broadcastWorkspaceResourceUpdated: () => undefined,
-      database: asTestRaw<typeof rootDb>({
-        select: () => {
-          touches.selects += 1;
-          return query;
-        },
-      }),
+      database: ownerDatabaseDouble(
+        asTestRaw<typeof rootDb>({
+          select: () => {
+            touches.selects += 1;
+            return query;
+          },
+        }),
+      ),
       enqueueDocumentDeadlineScout: async () => undefined,
       enqueueDocumentProcessingRun: async () => undefined,
       indexEntity: async () => undefined,

@@ -63,9 +63,18 @@ const rowLockedTables = (statements: readonly { sql: string }[]) =>
 
 const lockedTables = async (fence: ReturnType<typeof fences>[number]) => {
   const { tx, statements } = aggregateRecorder();
-  await withAggregateLock({ ...fence, tx });
+  await withAggregateLock({ ...fence, tx: asOwnerTransaction(tx) });
   return rowLockedTables(statements);
 };
+
+/** The tables each registered row aggregate locks, from its real statements. */
+const registeredAcquisitions = async () =>
+  await Promise.all(
+    fences().map(async (fence) => ({
+      aggregate: fence.aggregate,
+      tables: await lockedTables(fence),
+    })),
+  );
 
 /** A transaction double whose parents have all disappeared. */
 const parentRecorder = () => {
@@ -80,40 +89,17 @@ const parentRecorder = () => {
   return { tx, statements };
 };
 
-/**
- * Lock paths that row-lock outside `withAggregateLock`, each under the
- * registered aggregate whose holder its transaction type takes.
- */
-const parentBatchPaths = (): {
-  aggregate: AggregateName;
-  acquire: () => Promise<string[]>;
-}[] => [
-  {
-    aggregate: "organization",
-    acquire: async () => {
-      const { tx, statements } = parentRecorder();
-      await withAggregateParentBatch({
-        tx: asOwnerTransaction(tx),
-        organizationIds: [mintAuthProviderId<"organization">()],
-        mode: "key share",
-      });
-      return rowLockedTables(statements);
-    },
-  },
-  {
-    aggregate: "workspace",
-    acquire: async () => {
-      const { tx, statements } = parentRecorder();
-      await withAggregateParentBatch({
-        tx,
-        organizationIds: [],
-        workspaceIds: [createSafeId<"workspace">()],
-        mode: "key share",
-      });
-      return rowLockedTables(statements);
-    },
-  },
-];
+/** Every table one full parent batch row-locks, from its real statements. */
+const parentBatchTables = async () => {
+  const { tx, statements } = parentRecorder();
+  await withAggregateParentBatch({
+    tx: asOwnerTransaction(tx),
+    organizationIds: [mintAuthProviderId<"organization">()],
+    workspaceIds: [createSafeId<"workspace">()],
+    mode: "key share",
+  });
+  return rowLockedTables(statements);
+};
 
 /** Disagreements between a lock path's declared holder and the grants. */
 const holderProblems = (
@@ -152,12 +138,7 @@ describe("aggregate row locks and the application role's grants", () => {
   });
 
   test("every row aggregate locks a table its declared holder can lock", async () => {
-    const acquisitions = await Promise.all(
-      fences().map(async (fence) => ({
-        aggregate: fence.aggregate,
-        tables: await lockedTables(fence),
-      })),
-    );
+    const acquisitions = await registeredAcquisitions();
     expect(
       acquisitions.flatMap(({ aggregate, tables }) =>
         holderProblems(aggregate, aggregate, tables),
@@ -165,21 +146,28 @@ describe("aggregate row locks and the application role's grants", () => {
     ).toEqual([]);
   });
 
-  test("every parent batch path locks a table its aggregate's holder can lock", async () => {
-    const acquisitions = await Promise.all(
-      parentBatchPaths().map(async ({ aggregate, acquire }) => ({
-        aggregate,
-        tables: await acquire(),
-      })),
-    );
-    expect(acquisitions.map(({ aggregate }) => aggregate)).toEqual([
-      "organization",
-      "workspace",
-    ]);
+  test("every table a parent batch locks belongs to a registered aggregate its holder can lock", async () => {
+    const owners = new Map<string, AggregateName[]>();
+    for (const { aggregate, tables } of await registeredAcquisitions()) {
+      for (const table of tables) {
+        owners.set(table, [...(owners.get(table) ?? []), aggregate]);
+      }
+    }
+    const tables = await parentBatchTables();
+    expect(tables.length).toBeGreaterThan(0);
     expect(
-      acquisitions.flatMap(({ aggregate, tables }) =>
-        holderProblems(`parent batch of ${aggregate}`, aggregate, tables),
-      ),
+      tables.flatMap((table) => {
+        const aggregates = owners.get(table) ?? [];
+        return aggregates.length === 0
+          ? [
+              `a parent batch locks public.${table}, which no registered aggregate locks`,
+            ]
+          : aggregates.flatMap((aggregate) =>
+              holderProblems(`parent batch of ${aggregate}`, aggregate, [
+                table,
+              ]),
+            );
+      }),
     ).toEqual([]);
   });
 
@@ -203,6 +191,27 @@ describe("aggregate row locks and the application role's grants", () => {
     expect(AGGREGATE_LOCKS.organization.holder).toBe("owner");
     // @ts-expect-error organization rows are owner-held; an application transaction is refused
     const refused = async () => await withAggregateParentBatch(batch);
+    expect(refused).toBeInstanceOf(Function);
+  });
+
+  test("an application transaction cannot take an owner-held aggregate row lock", async () => {
+    const { tx, statements } = parentRecorder();
+    const lock: {
+      aggregate: "organization";
+      id: SafeId<"organization">;
+      mode: "update";
+      tx: typeof tx;
+    } = {
+      aggregate: "organization",
+      id: mintAuthProviderId<"organization">(),
+      mode: "update",
+      tx,
+    };
+    // The same lock typechecks once its transaction is the owner's.
+    await withAggregateLock({ ...lock, tx: asOwnerTransaction(tx) });
+    expect(rowLockedTables(statements)).toEqual(["organization"]);
+    // @ts-expect-error organization rows are owner-held; an application transaction is refused
+    const refused = async () => await withAggregateLock(lock);
     expect(refused).toBeInstanceOf(Function);
   });
 });

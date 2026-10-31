@@ -18,7 +18,6 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
@@ -41,6 +40,7 @@ import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
@@ -242,7 +242,7 @@ const searchReplayPhase = (
   >[0]["indexEntity"],
 ) =>
   createDocumentProcessingReconciliationPhases({
-    database: asTestRaw<typeof rootDb>(db),
+    database: ownerDatabaseDouble(asTestRaw<typeof rootDb>(db)),
     broadcastWorkspaceResourceUpdated: () => undefined,
     enqueueDocumentDeadlineScout: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
@@ -488,7 +488,7 @@ if (!databaseUrl || !runPostgresTests) {
           };
           await (path === "request"
             ? persistManualOcrRun({
-                db: markOwnerDatabase(db),
+                db: ownerDatabaseDouble(db),
                 organizationId,
                 workspaceId,
                 userId,
@@ -496,7 +496,7 @@ if (!databaseUrl || !runPostgresTests) {
                 recordAuditEvent: async () => undefined,
               })
             : restoreManualOcrRunAfterProjectionLoss({
-                db: markOwnerDatabase(db),
+                db: ownerDatabaseDouble(db),
                 organizationId,
                 workspaceId,
                 ...source,
@@ -610,16 +610,18 @@ if (!databaseUrl || !runPostgresTests) {
             label: "Cap workspace barrier",
             timeoutMs: 3000,
           });
-          const database = asTestRaw<typeof rootDb>({
-            transaction: async <T>(
-              operation: (tx: Transaction) => Promise<T>,
-            ) =>
-              await writer.db.transaction(async (tx) => {
-                const result = await operation(tx);
-                // Dispatch claim writes are the tested transaction; stop before I/O.
-                return path === "dispatch" ? null : result;
-              }),
-          });
+          const database = ownerDatabaseDouble(
+            asTestRaw<typeof rootDb>({
+              transaction: async <T>(
+                operation: (tx: Transaction) => Promise<T>,
+              ) =>
+                await writer.db.transaction(async (tx) => {
+                  const result = await operation(tx);
+                  // Dispatch claim writes are the tested transaction; stop before I/O.
+                  return path === "dispatch" ? null : result;
+                }),
+            }),
+          );
           const runWriter = async () => {
             switch (path) {
               case "request":
@@ -783,7 +785,9 @@ if (!databaseUrl || !runPostgresTests) {
           });
           pending.push(
             markRunFailed({
-              database: asTestRaw<typeof rootDb>(settler.db),
+              database: ownerDatabaseDouble(
+                asTestRaw<typeof rootDb>(settler.db),
+              ),
               run,
               claimToken,
               error: new DocumentProcessingJobError({
@@ -895,7 +899,7 @@ if (!databaseUrl || !runPostgresTests) {
             switch (path) {
               case "request": {
                 const result = await persistManualOcrRun({
-                  db: markOwnerDatabase(ocrDatabase),
+                  db: ownerDatabaseDouble(ocrDatabase),
                   organizationId,
                   workspaceId,
                   userId,
@@ -907,7 +911,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
               case "restore":
                 await restoreManualOcrRunAfterProjectionLoss({
-                  db: markOwnerDatabase(ocrDatabase),
+                  db: ownerDatabaseDouble(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,
@@ -919,7 +923,7 @@ if (!databaseUrl || !runPostgresTests) {
           };
           const runRepair = async () =>
             await upsertSearchDocument(source.entityId, {
-              database: markOwnerDatabase(repairDatabase),
+              database: ownerDatabaseDouble(repairDatabase),
             });
           pending.push(first === "ocr" ? runOcr() : runRepair());
           await withTimeout(async () => await firstReady.promise, {
@@ -989,7 +993,7 @@ if (!databaseUrl || !runPostgresTests) {
         const { organizationId, userId, workspaceId, source } = fixture;
         pending.push(
           persistManualOcrRun({
-            db: markOwnerDatabase(ocr.db),
+            db: ownerDatabaseDouble(ocr.db),
             organizationId,
             userId,
             workspaceId,
@@ -1123,7 +1127,7 @@ if (!databaseUrl || !runPostgresTests) {
             switch (path) {
               case "request": {
                 const result = await persistManualOcrRun({
-                  db: markOwnerDatabase(ocrDatabase),
+                  db: ownerDatabaseDouble(ocrDatabase),
                   organizationId,
                   workspaceId,
                   userId,
@@ -1139,7 +1143,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
               case "restore":
                 await restoreManualOcrRunAfterProjectionLoss({
-                  db: markOwnerDatabase(ocrDatabase),
+                  db: ownerDatabaseDouble(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,
@@ -1147,7 +1151,7 @@ if (!databaseUrl || !runPostgresTests) {
                 return;
               case "automatic":
                 await requestAutomaticDocumentOcr({
-                  db: markOwnerDatabase(ocrDatabase),
+                  db: ownerDatabaseDouble(ocrDatabase),
                   organizationId,
                   workspaceId,
                   ...source,
@@ -1283,96 +1287,104 @@ if (!databaseUrl || !runPostgresTests) {
                 { pid: number }[]
               >`SELECT pg_backend_pid() AS pid`
             ).at(0)?.pid ?? panic("Deletion session missing");
-          const database = asTestRaw<typeof rootDb>({
-            transaction: async <T>(
-              operation: (tx: Transaction) => Promise<T>,
-            ) =>
-              await ocr.db.transaction(async (tx) => {
-                const result = await operation(
-                  first === "ocr"
-                    ? withSourceBarrier(tx, {
-                        ready: () => {
-                          ready.resolve(undefined);
-                          return;
-                        },
-                        release: release.promise,
-                      })
-                    : tx,
-                );
-                if (first === "ocr") {
-                  const rows = await tx
-                    .select({
-                      id: documentProcessingRuns.id,
-                      status: documentProcessingRuns.status,
-                      kind: documentProcessingRuns.kind,
-                      requestSource: documentProcessingRuns.requestSource,
-                      claimedBy: documentProcessingRuns.claimedBy,
-                      attemptCount: documentProcessingRuns.attemptCount,
-                    })
-                    .from(documentProcessingRuns)
-                    .where(
-                      eq(documentProcessingRuns.entityId, source.entityId),
-                    );
-                  expect(rows).toEqual([
-                    {
-                      // The native repair mints its run id; the others reuse run.id.
-                      id:
-                        path === "native-repair" ? expect.any(String) : run.id,
-                      status: path === "native-repair" ? "queued" : "running",
-                      kind:
-                        path === "native-repair" ? "native-extraction" : "ocr",
-                      requestSource:
-                        path === "native-repair" ? "repair" : "manual",
-                      claimedBy: {
-                        projection: claimToken,
-                        dispatch: expect.any(String),
-                        "native-repair": null,
-                      }[path],
-                      attemptCount: path === "dispatch" ? 1 : 0,
-                    },
-                  ]);
-                  if (path === "native-repair") {
-                    // `result` is the wrapper's open generic; compare it as data.
-                    const repairedIds: unknown = result;
-                    expect(repairedIds).toEqual(rows.map(({ id }) => id));
-                  }
-                  if (path === "dispatch") {
-                    expect(result).toEqual(
-                      expect.objectContaining(
-                        rows.at(0) ?? panic("Dispatched run missing"),
-                      ),
-                    );
-                  }
-                  if (path === "projection") {
-                    expect(
-                      await tx
-                        .select({
-                          ocrRunId: extractedContent.ocrRunId,
-                          sourceFieldId: extractedContent.sourceFieldId,
-                          charCount: extractedContent.charCount,
+          const database = ownerDatabaseDouble(
+            asTestRaw<typeof rootDb>({
+              transaction: async <T>(
+                operation: (tx: Transaction) => Promise<T>,
+              ) =>
+                await ocr.db.transaction(async (tx) => {
+                  const result = await operation(
+                    first === "ocr"
+                      ? withSourceBarrier(tx, {
+                          ready: () => {
+                            ready.resolve(undefined);
+                            return;
+                          },
+                          release: release.promise,
                         })
-                        .from(extractedContent)
-                        .where(eq(extractedContent.entityId, source.entityId)),
-                    ).toEqual([
+                      : tx,
+                  );
+                  if (first === "ocr") {
+                    const rows = await tx
+                      .select({
+                        id: documentProcessingRuns.id,
+                        status: documentProcessingRuns.status,
+                        kind: documentProcessingRuns.kind,
+                        requestSource: documentProcessingRuns.requestSource,
+                        claimedBy: documentProcessingRuns.claimedBy,
+                        attemptCount: documentProcessingRuns.attemptCount,
+                      })
+                      .from(documentProcessingRuns)
+                      .where(
+                        eq(documentProcessingRuns.entityId, source.entityId),
+                      );
+                    expect(rows).toEqual([
                       {
-                        ocrRunId: run.id,
-                        sourceFieldId: source.fieldId,
-                        charCount: 4,
+                        // The native repair mints its run id; the others reuse run.id.
+                        id:
+                          path === "native-repair"
+                            ? expect.any(String)
+                            : run.id,
+                        status: path === "native-repair" ? "queued" : "running",
+                        kind:
+                          path === "native-repair"
+                            ? "native-extraction"
+                            : "ocr",
+                        requestSource:
+                          path === "native-repair" ? "repair" : "manual",
+                        claimedBy: {
+                          projection: claimToken,
+                          dispatch: expect.any(String),
+                          "native-repair": null,
+                        }[path],
+                        attemptCount: path === "dispatch" ? 1 : 0,
                       },
                     ]);
+                    if (path === "native-repair") {
+                      // `result` is the wrapper's open generic; compare it as data.
+                      const repairedIds: unknown = result;
+                      expect(repairedIds).toEqual(rows.map(({ id }) => id));
+                    }
+                    if (path === "dispatch") {
+                      expect(result).toEqual(
+                        expect.objectContaining(
+                          rows.at(0) ?? panic("Dispatched run missing"),
+                        ),
+                      );
+                    }
+                    if (path === "projection") {
+                      expect(
+                        await tx
+                          .select({
+                            ocrRunId: extractedContent.ocrRunId,
+                            sourceFieldId: extractedContent.sourceFieldId,
+                            charCount: extractedContent.charCount,
+                          })
+                          .from(extractedContent)
+                          .where(
+                            eq(extractedContent.entityId, source.entityId),
+                          ),
+                      ).toEqual([
+                        {
+                          ocrRunId: run.id,
+                          sourceFieldId: source.fieldId,
+                          charCount: 4,
+                        },
+                      ]);
+                    }
                   }
-                }
-                if (path === "dispatch") {
-                  if (first === "deletion") {
-                    expect(result).toBeNull();
+                  if (path === "dispatch") {
+                    if (first === "deletion") {
+                      expect(result).toBeNull();
+                    }
+                    // The real claim has completed its writes; stop before the
+                    // processing stage starts heartbeats or reads source bytes.
+                    return null;
                   }
-                  // The real claim has completed its writes; stop before the
-                  // processing stage starts heartbeats or reads source bytes.
-                  return null;
-                }
-                return result;
-              }),
-          });
+                  return result;
+                }),
+            }),
+          );
           const runWriter = async () => {
             await runQueueWriter({
               path,

@@ -44,7 +44,7 @@ test("mixed-case parent IDs use the same byte order in SQL and history", async (
   const historyTx = { execute: async () => [{ id: "unused" }] };
   for (const id of sorted) {
     await withAggregateLock({
-      tx: historyTx,
+      tx: asOwnerTransaction(historyTx),
       aggregate: "organization",
       id,
       mode: "key share",
@@ -53,7 +53,7 @@ test("mixed-case parent IDs use the same byte order in SQL and history", async (
   expect(
     await rejectionOf(
       withAggregateLock({
-        tx: historyTx,
+        tx: asOwnerTransaction(historyTx),
         aggregate: "organization",
         id: toSafeId<"organization">("Z"),
         mode: "key share",
@@ -121,7 +121,7 @@ test.each(ROW_LOCK_MODES)(
     expect(
       await rejectionOf(
         withAggregateLock({
-          tx,
+          tx: asOwnerTransaction(tx),
           aggregate: "organization",
           id: otherOrganizationId,
           mode,
@@ -162,7 +162,7 @@ test("batch identities allow covered reacquisition but reject a blocking upgrade
   });
   expect(
     await withAggregateLock({
-      tx,
+      tx: asOwnerTransaction(tx),
       aggregate: "organization",
       id: organizationId,
       mode: "key share",
@@ -194,7 +194,7 @@ test("batch identities allow covered reacquisition but reject a blocking upgrade
 test("stronger single locks cover weaker batches without lowering held modes", async () => {
   const { tx, queries } = recorder();
   await withAggregateLock({
-    tx,
+    tx: asOwnerTransaction(tx),
     aggregate: "organization",
     id: organizationId,
     mode: "update",
@@ -207,7 +207,7 @@ test("stronger single locks cover weaker batches without lowering held modes", a
   });
   expect(
     await withAggregateLock({
-      tx,
+      tx: asOwnerTransaction(tx),
       aggregate: "organization",
       id: organizationId,
       mode: "update",
@@ -233,7 +233,7 @@ test("overlapping parent acquisitions fail before a second query executes", asyn
   expect(
     await rejectionOf(
       withAggregateLock({
-        tx,
+        tx: asOwnerTransaction(tx),
         aggregate: "organization",
         id: organizationId,
         mode: "key share",
@@ -257,7 +257,7 @@ test("missing batch rows consume no rank or mode coverage", async () => {
   });
   expect(
     await withAggregateLock({
-      tx,
+      tx: asOwnerTransaction(tx),
       aggregate: "organization",
       id: organizationId,
       mode: "update",
@@ -282,7 +282,7 @@ test("batch high water includes the last sorted identity", async () => {
   expect(
     await rejectionOf(
       withAggregateLock({
-        tx,
+        tx: asOwnerTransaction(tx),
         aggregate: "organization",
         id: organizationId,
         mode: "key share",

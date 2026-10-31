@@ -40,6 +40,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 import {
@@ -286,7 +287,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       for (const elapsedDays of [0, 10, 29]) {
         const observed = requireSuccess(
           await probeDesktopCredential({
-            db: ownerDb(db),
+            db: ownerDatabaseDouble(ownerDb(db)),
             keyId: fixture.keyId,
             userId: fixture.userId,
             organizationId: fixture.organizationId,
@@ -302,7 +303,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       }
       await expectUnauthorized(
         probeDesktopCredential({
-          db: ownerDb(db),
+          db: ownerDatabaseDouble(ownerDb(db)),
           keyId: fixture.keyId,
           userId: fixture.userId,
           organizationId: fixture.organizationId,
@@ -472,7 +473,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       );
       await expectUnauthorized(
         probeDesktopCredential({
-          db: ownerDb(db),
+          db: ownerDatabaseDouble(ownerDb(db)),
           keyId: fixture.keyId,
           userId: fixture.userId,
           organizationId: fixture.organizationId,
@@ -493,7 +494,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
       expect(
         requireSuccess(
           await probeDesktopCredential({
-            db: ownerDb(db),
+            db: ownerDatabaseDouble(ownerDb(db)),
             keyId: fixture.keyId,
             userId: fixture.userId,
             organizationId: fixture.organizationId,
@@ -590,7 +591,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
           await expectUnauthorized(
             probeDesktopCredential({
               ...fixture,
-              db,
+              db: ownerDatabaseDouble(db),
               currentKey,
               now: new Date(NOW.getTime() + DAY_MS),
             }),
@@ -622,7 +623,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
               requireSuccess(
                 await probeDesktopCredential({
                   ...fixture,
-                  db,
+                  db: ownerDatabaseDouble(db),
                   currentKey: SUCCESSOR_KEY,
                   now: new Date(NOW.getTime() + DAY_MS),
                 }),
@@ -773,7 +774,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
               requireSuccess(
                 await probeDesktopCredential({
                   ...fixture,
-                  db,
+                  db: ownerDatabaseDouble(db),
                   currentKey: winningKey,
                   now: new Date(NOW.getTime() + DAY_MS),
                 }),
@@ -782,7 +783,7 @@ describe.skipIf(!enabled)("desktop credential renewal (postgres)", () => {
             await expectUnauthorized(
               probeDesktopCredential({
                 ...fixture,
-                db,
+                db: ownerDatabaseDouble(db),
                 currentKey: losingKey,
                 now: new Date(NOW.getTime() + DAY_MS),
               }),

@@ -26,6 +26,7 @@ import {
   upsertWorkspaceSearchDocuments,
 } from "@/api/lib/search/index-global";
 import { buildSearchPreviewPassages } from "@/api/lib/search/preview-passages";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -85,51 +86,55 @@ const countingDatabase = ({
       counts.reads += 1;
       return run(...args);
     };
-  const database = asTestRaw<ProjectionDatabase>({
-    query: {
-      contacts: {
-        findFirst: counted(db.query.contacts.findFirst.bind(db.query.contacts)),
-        findMany: counted(db.query.contacts.findMany.bind(db.query.contacts)),
+  const database = ownerDatabaseDouble(
+    asTestRaw<ProjectionDatabase>({
+      query: {
+        contacts: {
+          findFirst: counted(
+            db.query.contacts.findFirst.bind(db.query.contacts),
+          ),
+          findMany: counted(db.query.contacts.findMany.bind(db.query.contacts)),
+        },
+        workspaces: {
+          findMany: counted(
+            db.query.workspaces.findMany.bind(db.query.workspaces),
+          ),
+        },
       },
-      workspaces: {
-        findMany: counted(
-          db.query.workspaces.findMany.bind(db.query.workspaces),
-        ),
+      select: counted(db.select.bind(db)),
+      transaction: async (run: (tx: unknown) => Promise<unknown>) => {
+        counts.transactions += 1;
+        const transaction = counts.transactions;
+        const statements: SQL[] = [];
+        written.push(statements);
+        return await db.transaction(
+          async (tx) =>
+            await run({
+              execute: async (query: SQL) => {
+                if (
+                  failAt?.transaction === transaction &&
+                  failAt.statement === statements.length + 1
+                ) {
+                  throw new Error("injected projection write failure");
+                }
+                if (
+                  new PgDialect()
+                    .sqlToQuery(query)
+                    .sql.trim()
+                    .startsWith("SELECT")
+                ) {
+                  parentLocks.push(query);
+                } else {
+                  counts.statements += 1;
+                }
+                statements.push(query);
+                return (await tx.execute(query)).rows;
+              },
+            }),
+        );
       },
-    },
-    select: counted(db.select.bind(db)),
-    transaction: async (run: (tx: unknown) => Promise<unknown>) => {
-      counts.transactions += 1;
-      const transaction = counts.transactions;
-      const statements: SQL[] = [];
-      written.push(statements);
-      return await db.transaction(
-        async (tx) =>
-          await run({
-            execute: async (query: SQL) => {
-              if (
-                failAt?.transaction === transaction &&
-                failAt.statement === statements.length + 1
-              ) {
-                throw new Error("injected projection write failure");
-              }
-              if (
-                new PgDialect()
-                  .sqlToQuery(query)
-                  .sql.trim()
-                  .startsWith("SELECT")
-              ) {
-                parentLocks.push(query);
-              } else {
-                counts.statements += 1;
-              }
-              statements.push(query);
-              return (await tx.execute(query)).rows;
-            },
-          }),
-      );
-    },
-  });
+    }),
+  );
   return { counts, database, written, parentLocks };
 };
 

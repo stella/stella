@@ -37,6 +37,7 @@ import {
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
 import { createDesktopDeviceSigner } from "@/api/tests/helpers/desktop-device-proof";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 
 // Every authorization operation and credential write here uses the production
@@ -131,7 +132,11 @@ describe.skipIf(
             expect(issued.isOk()).toBe(true);
             if (link === "reset-before-redeem") {
               await db.transaction(
-                async (tx) => await revokeAllUserDurableCredentials(tx, userId),
+                async (tx) =>
+                  await revokeAllUserDurableCredentials(
+                    asOwnerTransaction(tx),
+                    userId,
+                  ),
               );
             }
             const body = {

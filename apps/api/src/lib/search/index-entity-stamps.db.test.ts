@@ -22,6 +22,7 @@ import {
   buildPlainSearchTsQuery,
   buildSearchTsQuery,
 } from "@/api/lib/search/query";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -113,17 +114,19 @@ type ProjectionDatabase = NonNullable<IndexEntityDependencies["database"]>;
  * projection calls.
  */
 const projectionDatabase = (): ProjectionDatabase =>
-  asTestRaw<ProjectionDatabase>({
-    query: db.query,
-    select: db.select.bind(db),
-    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
-      await db.transaction(
-        async (tx) =>
-          await run({
-            execute: async (query: SQL) => (await tx.execute(query)).rows,
-          }),
-      ),
-  });
+  ownerDatabaseDouble(
+    asTestRaw<ProjectionDatabase>({
+      query: db.query,
+      select: db.select.bind(db),
+      transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+        await db.transaction(
+          async (tx) =>
+            await run({
+              execute: async (query: SQL) => (await tx.execute(query)).rows,
+            }),
+        ),
+    }),
+  );
 
 const indexEntity = async (): Promise<void> => {
   await upsertSearchDocument(entityId, {
@@ -261,7 +264,7 @@ test("a delayed projection cannot restore a tombstoned historical reference", as
   const database = projectionDatabase();
   try {
     await upsertSearchDocument(entityId, {
-      database: {
+      database: ownerDatabaseDouble<ProjectionDatabase>({
         ...database,
         transaction: async (run) => {
           // The old projection has already read every stamp. A deletion and its
@@ -274,7 +277,7 @@ test("a delayed projection cannot restore a tombstoned historical reference", as
           expect(await matchesReferenceExactly(firstReference)).toBe(false);
           return await database.transaction(run);
         },
-      },
+      }),
       syncActivity: async () => undefined,
     });
 

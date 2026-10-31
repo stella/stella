@@ -15,6 +15,7 @@ import {
   aggregateFences as fences,
 } from "@/api/tests/fixtures/aggregate-lock-order";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { asOwnerTransaction } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
@@ -67,7 +68,7 @@ test.each(["present", "missing"] as const)(
     await withInvoiceMatterLocks(tx, [first, second]);
     const count = statements.length;
     const earlierParent = withAggregateLock({
-      tx,
+      tx: asOwnerTransaction(tx),
       aggregate: "organization",
       id: organizationId,
       mode: "update",

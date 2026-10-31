@@ -9,6 +9,7 @@ import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { toDocumentReference } from "@/api/lib/document-reference";
 import { upsertSearchDocument as upsertSearchDocumentWithDependencies } from "@/api/lib/search/index-entity";
 import type { IndexEntityDependencies } from "@/api/lib/search/index-entity";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -179,7 +180,7 @@ const database = asTestRaw<NonNullable<IndexEntityDependencies["database"]>>({
 
 const upsertSearchDocument = async (entityId: SafeId<"entity">) =>
   await upsertSearchDocumentWithDependencies(entityId, {
-    database,
+    database: ownerDatabaseDouble(database),
     syncActivity: syncWorkspaceSearchActivityMock,
   });
 

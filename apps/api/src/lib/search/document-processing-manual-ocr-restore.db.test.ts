@@ -17,7 +17,6 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
@@ -27,6 +26,7 @@ import { persistManualOcrRun } from "@/api/lib/document-processing-request";
 import { claimDocumentProcessingAttempt } from "@/api/lib/document-processing-retry";
 import type { restoreManualOcrRunAfterProjectionLoss as RestoreManualOcrRunAfterProjectionLoss } from "@/api/lib/search/document-processing-manual-ocr-restore";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { ownerDatabaseDouble } from "@/api/tests/helpers/owner-transaction";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -145,11 +145,13 @@ const restore = async ({
   sourceSha256Hex = SOURCE_SHA256_HEX,
 } = {}) =>
   await restoreManualOcrRunAfterProjectionLoss({
-    db: asTestRaw<
-      NonNullable<
-        Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0]["db"]
-      >
-    >(testDb),
+    db: ownerDatabaseDouble(
+      asTestRaw<
+        NonNullable<
+          Parameters<typeof restoreManualOcrRunAfterProjectionLoss>[0]["db"]
+        >
+      >(testDb),
+    ),
     entityId: ids.entityA1,
     entityVersionId: ids.entityVersionA1,
     fieldId: ids.fieldA1,
@@ -352,7 +354,7 @@ test.each(
     });
     const request = async () =>
       await persistManualOcrRun({
-        db: markOwnerDatabase(
+        db: ownerDatabaseDouble(
           asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
         ),
         organizationId: ids.orgA,
@@ -420,7 +422,7 @@ test.each(
       status,
     });
     await requestAutomaticDocumentOcr({
-      db: markOwnerDatabase(
+      db: ownerDatabaseDouble(
         asTestRaw<Pick<typeof rootDb, "transaction">>(testDb),
       ),
       organizationId: ids.orgA,
