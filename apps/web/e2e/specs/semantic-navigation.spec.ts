@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import { apiDelete, apiPut } from "../helpers/api";
@@ -73,6 +73,88 @@ const assertVisibleTabTargets = async (page: Page) => {
       .toEqual([]);
   }
 };
+
+const blankCellPoint = async (cell: Locator) =>
+  await cell.evaluate(async (element) => {
+    const margin = 8;
+    const rectValues = (rect: DOMRect) => [
+      rect.left,
+      rect.top,
+      rect.right,
+      rect.bottom,
+    ];
+    const nextFrameRect = async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+      return element.getBoundingClientRect();
+    };
+
+    let cellRect = await nextFrameRect();
+    // real-time: layout stability can only be observed across rendered frames.
+    while (true) {
+      const nextRect = await nextFrameRect();
+      if (
+        rectValues(cellRect).every(
+          (value, index) => value === rectValues(nextRect)[index],
+        )
+      ) {
+        cellRect = nextRect;
+        break;
+      }
+      cellRect = nextRect;
+    }
+
+    const y = cellRect.top + cellRect.height / 2;
+    const linkRects = [...element.querySelectorAll("a")].flatMap((link) =>
+      [...link.getClientRects()].map((rect) => ({
+        left: rect.left,
+        top: rect.top,
+        right: rect.right,
+        bottom: rect.bottom,
+      })),
+    );
+    const blocked = linkRects
+      .filter((rect) => y >= rect.top - margin && y <= rect.bottom + margin)
+      .map((rect) => ({
+        left: Math.max(cellRect.left + margin, rect.left - margin),
+        right: Math.min(cellRect.right - margin, rect.right + margin),
+      }))
+      .filter((interval) => interval.left < interval.right)
+      .toSorted((first, second) => first.left - second.left);
+    const available: { left: number; right: number }[] = [];
+    let start = cellRect.left + margin;
+    for (const interval of blocked) {
+      if (interval.left > start) {
+        available.push({ left: start, right: interval.left });
+      }
+      start = Math.max(start, interval.right);
+    }
+    if (start < cellRect.right - margin) {
+      available.push({ left: start, right: cellRect.right - margin });
+    }
+    const widest = available
+      .filter((interval) => interval.right - interval.left >= margin)
+      .toSorted(
+        (first, second) =>
+          second.right - second.left - (first.right - first.left),
+      )
+      .at(0);
+    if (widest === undefined) {
+      throw new Error(
+        `No 8px blank interval in email cell ${JSON.stringify(rectValues(cellRect))}; link rects: ${JSON.stringify(linkRects)}`,
+      );
+    }
+    const x = (widest.left + widest.right) / 2;
+    const target = document.elementFromPoint(x, y);
+    return {
+      x: x - cellRect.left,
+      y: y - cellRect.top,
+      hitsLink: target?.closest("a") !== null,
+    };
+  });
 
 test.describe("focus target detector", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -216,16 +298,7 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
-      const space = await cell.evaluate((element) => {
-        const bounds = element.getBoundingClientRect();
-        const x = bounds.width - 4;
-        const y = bounds.height / 2;
-        const target = document.elementFromPoint(
-          bounds.left + x,
-          bounds.top + y,
-        );
-        return { x, y, hitsLink: target?.closest("a") !== null };
-      });
+      const space = await blankCellPoint(cell);
       expect(space.hitsLink).toBe(false);
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
