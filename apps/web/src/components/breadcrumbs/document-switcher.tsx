@@ -1,7 +1,8 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -14,6 +15,7 @@ import {
 } from "@stll/ui/command";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { CheckIcon, ChevronDownIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   Tooltip as TooltipRoot,
@@ -21,15 +23,14 @@ import {
   TooltipTrigger,
 } from "@stll/ui/tooltip";
 
-import {
-  filterDocumentsByQuery,
-  isCurrentDocument,
-} from "@/components/breadcrumbs/document-switcher.logic";
+import { isCurrentDocument } from "@/components/breadcrumbs/document-switcher.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { detached } from "@/lib/detached";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
-import { workspaceFilesOptions } from "@/lib/workspaces/queries/entities";
+import { workspaceFileSearchOptions } from "@/lib/workspaces/queries/entities";
+
+const DOCUMENT_SEARCH_DEBOUNCE_MS = 200;
 
 type DocumentSwitcherProps = {
   /** The document the main view shows, checked in the list. */
@@ -42,7 +43,8 @@ type DocumentSwitcherProps = {
 /**
  * The breadcrumb's caret beside the document name: a searchable list of the
  * matter's files, current one checked, that opens the chosen file in the main
- * view in place of this one. The list loads only once the popover opens.
+ * view in place of this one. The list loads only once the popover opens, one
+ * server-filtered page at a time.
  */
 export const DocumentSwitcher = ({
   entityId,
@@ -54,17 +56,18 @@ export const DocumentSwitcher = ({
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const filesQuery = useQuery({
-    ...workspaceFilesOptions(workspaceId),
+  const [search] = useDebounce(query, DOCUMENT_SEARCH_DEBOUNCE_MS);
+  const filesQuery = useInfiniteQuery({
+    ...workspaceFileSearchOptions({ workspaceId, search }),
     enabled: open,
+    // Keeps the last matches on screen while the next term loads.
+    placeholderData: keepPreviousData,
+    select: (data) => data.pages.flatMap((page) => page.items),
   });
   const filesView = queryView(filesQuery);
   useQueryViewError(filesView, "DocumentSwitcher:query");
 
-  const visible =
-    filesView.type === "items"
-      ? filterDocumentsByQuery(filesView.items, query)
-      : [];
+  const visible = filesView.type === "items" ? filesView.items : [];
   const label = t("workspaces.documentSwitcher.trigger");
 
   const changeOpen = (next: boolean) => {
@@ -123,7 +126,7 @@ export const DocumentSwitcher = ({
                   <QueryViewFeedback view={filesView} />
                 </div>
               ) : null}
-              {filesView.type === "items" && visible.length === 0 ? (
+              {filesView.type === "empty" ? (
                 <p className="text-muted-foreground px-2 py-1.5 text-sm">
                   {t("common.noResults")}
                 </p>
@@ -148,6 +151,27 @@ export const DocumentSwitcher = ({
                   </CommandItem>
                 );
               })}
+              {filesView.type === "items" && filesQuery.hasNextPage ? (
+                <Button
+                  className="w-full"
+                  disabled={filesQuery.isFetchingNextPage}
+                  onClick={() =>
+                    detached(
+                      filesQuery.fetchNextPage(),
+                      "document-switcher.fetch-next-page",
+                    )
+                  }
+                  size="sm"
+                  variant="ghost"
+                >
+                  {filesQuery.isFetchingNextPage ? (
+                    <Loader size="sm" variant="decorative" />
+                  ) : null}
+                  {filesQuery.isFetchingNextPage
+                    ? t("common.loading")
+                    : t("common.loadMore")}
+                </Button>
+              ) : null}
             </div>
           </CommandList>
         </Command>
