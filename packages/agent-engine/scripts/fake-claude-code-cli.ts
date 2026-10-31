@@ -1,7 +1,11 @@
 import { appendFileSync } from "node:fs";
 import * as v from "valibot";
 
-import type { StellaMcpToolName } from "@stll/api-contract/mcp-tool-names";
+import {
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_SERVER,
+  FAKE_STELLA_STEPS,
+} from "./fake-stella-turn";
 
 /**
  * A stand-in for the Claude Code CLI in stream-json mode that replays a
@@ -35,8 +39,6 @@ type FakeScenario =
 
 export const FAKE_CLAUDE_VERSION = "2.1.309";
 export const FAKE_RESUMED_SESSION_ID = "4f1d2c3b-5a6e-4b7c-8d9e-0f1a2b3c4d5e";
-/** The server name tests register the stella MCP binding under. */
-export const FAKE_STELLA_SERVER = "stella";
 
 const SUBSCRIPTION = {
   email: "user@example.test",
@@ -184,49 +186,6 @@ export const FAKE_MCP_CALL = {
   input: { query: "lease" },
 };
 
-/**
- * Stella tool calls and the output the stella MCP server returns for each:
- * the tool's validated output as JSON in one text block.
- */
-const FAKE_STELLA_CALLS = [
-  {
-    id: "call-case-law",
-    tool: "search_case_law",
-    arguments: { query: "lease termination", jurisdiction: "CZ" },
-    output: {
-      results: [
-        {
-          title: "Lease termination for unpaid rent",
-          url: "https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024",
-          caseLaw: { decisionId: "dec-1", decisionDate: "2024-03-01" },
-        },
-      ],
-      nextCursor: null,
-    },
-  },
-  {
-    id: "call-save-matter",
-    tool: "save_matter",
-    arguments: { name: "Lease dispute" },
-    output: {
-      applied: true,
-      matter: { ref: "matter-1", name: "Lease dispute" },
-    },
-  },
-] as const satisfies readonly {
-  id: string;
-  tool: StellaMcpToolName;
-  arguments: object;
-  output: object;
-}[];
-
-/** Markdown with a link, as the agent writes its answer. */
-export const FAKE_STELLA_ANSWER = [
-  "One decision matches: [26 Cdo 1/2024](https://stll.app/case-law/cz/nejvyssi-soud/26-cdo-1-2024).",
-  "",
-  "- Matter **Lease dispute** saved.",
-].join("\n");
-
 /** The reason the CLI wrote for its terminal, with color escapes. */
 export const FAKE_APPROVAL_REASON = "\u001B[33mDeletes a file\u001B[0m";
 
@@ -238,20 +197,28 @@ export const FAKE_PERMISSION_SUGGESTION = {
 };
 
 const FAKE_SCENARIOS = {
-  /** Stella tool calls through the stella MCP binding, then an answer. */
+  /**
+   * The shared stella tool calls through the stella MCP binding, step by
+   * step: one assistant message per call of a step (the CLI writes one per
+   * completed block), then their results. Then an answer.
+   */
   stella_tools: [
     ...freshTurn(),
-    ...FAKE_STELLA_CALLS.flatMap((call) => [
-      assistant(`msg-${call.id}`, [
-        toolUse(
-          call.id,
-          `mcp__${FAKE_STELLA_SERVER}__${call.tool}`,
-          call.arguments,
-        ),
-      ]),
-      toolResult(call.id, [
-        { type: "text", text: JSON.stringify(call.output) },
-      ]),
+    ...FAKE_STELLA_STEPS.flatMap((step, index) => [
+      ...step.map((call) =>
+        assistant(`msg-step-${String(index)}`, [
+          toolUse(
+            call.id,
+            `mcp__${FAKE_STELLA_SERVER}__${call.tool}`,
+            call.arguments,
+          ),
+        ]),
+      ),
+      ...step.map((call) =>
+        toolResult(call.id, [
+          { type: "text", text: JSON.stringify(call.output) },
+        ]),
+      ),
     ]),
     assistant("msg-answer", [{ type: "text", text: FAKE_STELLA_ANSWER }]),
     result(),

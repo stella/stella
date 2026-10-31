@@ -22,11 +22,13 @@ import {
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
   FAKE_RESUMED_SESSION_ID,
-  FAKE_STELLA_ANSWER,
-  FAKE_STELLA_SERVER,
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
 import type { FakeScenario as FakeCodexScenario } from "../../../scripts/fake-codex-app-server";
+import {
+  FAKE_STELLA_ANSWER,
+  FAKE_STELLA_SERVER,
+} from "../../../scripts/fake-stella-turn";
 import type { HarnessTurn, HarnessTurnInput } from "../adapter";
 import { createCodexHarnessAdapter } from "../codex/adapter";
 import {
