@@ -1,9 +1,10 @@
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DOCUMENT_UPLOAD_PUT_TIMEOUT_MS } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
+import { readBodyTextWithIdleDeadline } from "@stll/fetch/body-reader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
@@ -280,7 +281,7 @@ const putFileEntity = async ({
       headers,
       body: file,
       signal,
-      timeout: { type: "idle", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
+      timeout: { type: "headers", ms: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS },
     });
   } catch (error) {
     // Best-effort cleanup: abortUpload swallows its own errors and its
@@ -300,9 +301,15 @@ const putFileEntity = async ({
     });
   }
   if (!putResponse.ok) {
+    const errorBody = await Result.tryPromise(async () =>
+      readBodyTextWithIdleDeadline(putResponse, {
+        idleMs: DOCUMENT_UPLOAD_PUT_TIMEOUT_MS,
+        signal,
+      }),
+    );
     const error = toAPIError({
       status: putResponse.status,
-      value: await putResponse.text().catch(() => undefined),
+      value: errorBody.isErr() ? undefined : errorBody.value,
     });
     attachResponseForRetry(error, putResponse);
     await abortUpload(workspaceId, uploadId);

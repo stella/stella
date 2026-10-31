@@ -4,7 +4,7 @@ import {
   isLegacyRequest,
   McpServer,
 } from "@modelcontextprotocol/server";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, jest, test } from "bun:test";
 import * as v from "valibot";
 
 import {
@@ -59,6 +59,16 @@ const REVIEW_REQUIRED_TOOLS = [
   "save_task",
   "delete_task",
 ] as const;
+
+afterEach(() => {
+  jest.useRealTimers();
+});
+
+const flushMicrotasks = async () => {
+  for (let index = 0; index < 32; index += 1) {
+    await Promise.resolve();
+  }
+};
 
 type ReviewFailure = {
   step: string;
@@ -1703,6 +1713,49 @@ describe("OAuth client journeys", () => {
     ).toHaveLength(0);
   });
 
+  test("bounds a stalled client metadata body by the probe timeout", async () => {
+    jest.useFakeTimers();
+    const { fetcher: baseFetcher } = fakeOAuth();
+    const stalledClient = CANARY_CLIENT_IDS[0];
+    const fetcher: CanaryFetcher = async (input, init) => {
+      const url = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      if (url.href === stalledClient) {
+        return new Response(new ReadableStream<Uint8Array>());
+      }
+      return await baseFetcher(input, init);
+    };
+
+    const result = runOAuthJourneys(
+      {
+        baseUrl: "https://api.example",
+        frontendUrl: "https://app.example",
+        mode: "frequent",
+      },
+      fetcher,
+    );
+    await flushMicrotasks();
+    jest.advanceTimersByTime(19_999);
+    await flushMicrotasks();
+    let settled = false;
+    void result.then(() => {
+      settled = true;
+      return undefined;
+    });
+    await flushMicrotasks();
+    expect(settled).toBe(false);
+    jest.advanceTimersByTime(1);
+    await flushMicrotasks();
+    expect(settled).toBe(true);
+
+    expect(await result).toContainEqual({
+      name: `client metadata ${stalledClient}`,
+      status: "upstream",
+      detail: "client metadata unavailable upstream (unreachable)",
+    });
+  });
+
   test("stops a client's authorize variants after its first failure", async () => {
     const { fetcher: baseFetcher, requests } = fakeOAuth();
     const failingClient = CANARY_CLIENT_IDS[0];
@@ -2457,7 +2510,7 @@ describe("deployment fetch boundary", () => {
     const response = await deploymentFetch("https://api.example/path", {
       headers: { authorization: "Bearer canary" },
       redirect: "follow",
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(response.status).toBe(302);
     expect(captured?.redirect).toBe("manual");
@@ -2479,15 +2532,15 @@ describe("deployment fetch boundary", () => {
       fetcher,
     );
     await deploymentFetch("https://app.example/oauth/authorize", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     await deploymentFetch("https://api.example/mcp", {
-      timeout: { type: "idle", ms: 1000 },
+      timeout: { type: "headers", ms: 1000 },
     });
     expect(origins).toEqual(["https://app.example", "https://api.example"]);
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
@@ -2505,7 +2558,7 @@ describe("deployment fetch boundary", () => {
     );
     const rejection = await rejectionOf(
       deploymentFetch("https://foreign.example/path", {
-        timeout: { type: "idle", ms: 1000 },
+        timeout: { type: "headers", ms: 1000 },
       }),
     );
     expect(rejection).toMatchObject({ _tag: "CanaryTargetError" });
