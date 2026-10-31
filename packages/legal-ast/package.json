@@ -166,6 +166,10 @@
     "./text-spans": {
       "types": "./src/text-spans.ts",
       "import": "./src/text-spans.ts"
+    },
+    "./separate-opinion-heading": {
+      "types": "./src/separate-opinion-heading.ts",
+      "import": "./src/separate-opinion-heading.ts"
     }
   },
   "scripts": {

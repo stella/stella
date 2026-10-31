@@ -21,6 +21,7 @@ import {
 } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 
@@ -171,17 +172,20 @@ test("membership probes retain indexed plans without type indexes at N and 10N",
           country: "CZE",
           ...probe,
         });
-        const scans = scanOccurrences(
-          explainRoot(
-            await roleTx.execute(sql`EXPLAIN (FORMAT JSON) ${query}`),
-          ),
+        const root = explainRoot(
+          await roleTx.execute(sql`EXPLAIN (FORMAT JSON) ${query}`),
         );
-        const decisions = scans.filter(
+        const decisions = scanOccurrences(root).filter(
           ({ relation }) => relation === "case_law_decisions",
         );
         expect(decisions).toHaveLength(1);
         const decisionScan = decisions.at(0);
-        expect(decisionScan?.nodeType).toBe("Index Scan");
+        // The one scan of the table is a plain index scan.
+        expect(
+          indexedAccessPaths(root, "case_law_decisions", {
+            accessKind: "index",
+          }),
+        ).toHaveLength(1);
         expect(
           decisionScan?.indexCond
             ?.replaceAll(/[()]/gu, "")
