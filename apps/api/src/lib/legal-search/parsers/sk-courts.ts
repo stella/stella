@@ -462,11 +462,13 @@ const continuesPastStart = (
 type ParagraphGapOptions = {
   previous: PdfLine | undefined;
   current: PdfLine;
+  lineSpacingRatio: number;
 };
 
 const hasParagraphGap = ({
   previous,
   current,
+  lineSpacingRatio,
 }: ParagraphGapOptions): boolean => {
   if (
     previous?.pageIndex !== current.pageIndex ||
@@ -479,12 +481,39 @@ const hasParagraphGap = ({
   // page; a page turn alone says nothing about a paragraph boundary.
   return (
     previous.position.y - current.position.y >
-    Math.max(previous.position.height, current.position.height) *
+    Math.max(
+      previous.position.height,
+      current.position.height,
+      lineSpacingRatio * Math.max(previous.fontSize, current.fontSize),
+    ) *
       PARAGRAPH_GAP_LINE_HEIGHTS
   );
 };
 
+const measuredLineSpacing = (lines: readonly PdfLine[]): number => {
+  // Glyph bounds need not fill a typeset line. Measure ordinary leading
+  // independently, excluding page turns; the lower median resists blank lines.
+  const spacings = lines
+    .flatMap((line, index) => {
+      const previous = lines.at(index - 1);
+      if (
+        previous?.pageIndex !== line.pageIndex ||
+        previous.position === undefined ||
+        line.position === undefined ||
+        previous.fontSize !== line.fontSize ||
+        line.fontSize <= 0
+      ) {
+        return [];
+      }
+      const distance = previous.position.y - line.position.y;
+      return distance > 0 ? [distance / line.fontSize] : [];
+    })
+    .toSorted((left, right) => left - right);
+  return spacings.at(Math.floor((spacings.length - 1) / 2)) ?? 0;
+};
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
+  const lineSpacingRatio = measuredLineSpacing(lines);
   const merged: PdfLine[] = [];
   const continuations = sentenceContinuations(lines);
   let section: Section = "preamble";
@@ -507,7 +536,11 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
     const prev = merged.at(-1);
     const paragraphGap =
       index > 0 &&
-      hasParagraphGap({ previous: lines.at(index - 1), current: line });
+      hasParagraphGap({
+        previous: lines.at(index - 1),
+        current: line,
+        lineSpacingRatio,
+      });
 
     // Start a new paragraph if:
     // - first line

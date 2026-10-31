@@ -209,7 +209,7 @@ describe("publisher paragraph layout", () => {
     expect(blocks.at(4)?.plainText).toBe(
       "Odvolanie možno odôvodniť len tým, že",
     );
-    for (const [index, letter] of [..."abcdefgh"].entries()) {
+    for (const [index, letter] of Array.from("abcdefgh").entries()) {
       expect(blocks.at(index + 5)?.plainText).toStartWith(`${letter}) `);
     }
     expect(blocks.at(6)?.plainText).toEndWith("práva na spravodlivý proces,");
@@ -221,29 +221,38 @@ describe("publisher paragraph layout", () => {
     );
   });
 
-  test("blank-line detection scales with the source font and ignores page turns", () => {
-    for (const scale of [0.5, 0.75, 1]) {
-      const lines = [
-        { text: "Prvý odsek", y: 700, pageIndex: 0 },
-        { text: "pokračuje.", y: 688, pageIndex: 0 },
-        { text: "Druhý odsek", y: 664, pageIndex: 0 },
-        { text: "pokračuje cez stranu.", y: 760, pageIndex: 1 },
-      ].map(({ text, y, pageIndex }) => ({
-        text,
-        segments: [{ text }],
-        bold: false,
-        fontSize: 10 * scale,
-        pageIndex,
-        position: { y: y * scale, height: 13.63 * scale },
-      }));
-      expect(
-        buildSkDecisionPdfBlocks({
-          lines,
-          metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
-        }).map((block) => block.plainText),
-      ).toEqual(["Prvý odsek pokračuje.", "Druhý odsek pokračuje cez stranu."]);
-    }
-  });
+  test.each([
+    { height: 13.63, leading: 12 },
+    { height: 7.18, leading: 18 },
+  ])(
+    "blank-line detection scales with font metrics %j and ignores page turns",
+    ({ height, leading }) => {
+      for (const scale of [0.5, 0.75, 1]) {
+        const lines = [
+          { text: "Prvý odsek", y: 700, pageIndex: 0 },
+          { text: "pokračuje.", y: 700 - leading, pageIndex: 0 },
+          { text: "Druhý odsek", y: 700 - 3 * leading, pageIndex: 0 },
+          { text: "pokračuje cez stranu.", y: 760, pageIndex: 1 },
+        ].map(({ text, y, pageIndex }) => ({
+          text,
+          segments: [{ text }],
+          bold: false,
+          fontSize: 10 * scale,
+          pageIndex,
+          position: { y: y * scale, height: height * scale },
+        }));
+        expect(
+          buildSkDecisionPdfBlocks({
+            lines,
+            metadata: { court: "Court", caseNumber: "1/2026", ecli: undefined },
+          }).map((block) => block.plainText),
+        ).toEqual([
+          "Prvý odsek pokračuje.",
+          "Druhý odsek pokračuje cez stranu.",
+        ]);
+      }
+    },
+  );
 
   test("removes the bounded metadata table but retains its labels in body text", () => {
     const texts = [
