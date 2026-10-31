@@ -9,6 +9,7 @@ export const QUERY_PERF_OWNER_DEADLINES = {
     CASE_LAW_COVERAGE_REFRESH_STATEMENT_TIMEOUT_MS,
   "statement.caseLaw.globalSearchHits": undefined,
   "scheduled.caseLaw.reportFreshness": undefined,
+  "scheduled.dataExports.maintain": undefined,
   "scheduled.requests.sweepReceipts":
     REQUEST_RECEIPT_RETENTION_STATEMENT_BUDGET_MS,
   "scheduled.caseLaw.refreshSitemapShards":

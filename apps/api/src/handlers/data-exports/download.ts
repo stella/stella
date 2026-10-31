@@ -2,13 +2,13 @@ import { panic, Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { ownerSyntheticSessionAuthorityReader } from "@/api/db/root";
 import { organizationDataExports } from "@/api/db/schema";
 import type { DataExportStatus } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import {
   DATA_EXPORT_DOWNLOAD_URL_TTL_SECONDS,

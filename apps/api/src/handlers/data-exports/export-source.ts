@@ -91,6 +91,7 @@ import {
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { createFileKey } from "@/api/lib/files/utils";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -495,36 +496,44 @@ const readMatterRecords = async (
   const readTimeEntryRowsPage = async (cursor: string | null) =>
     await db(
       async (tx) =>
-        await tx
-          .select()
-          .from(timeEntries)
-          .where(
-            and(
-              eq(timeEntries.organizationId, organizationId),
-              dataExportRecordScope(timeEntries, workspaceId),
-              after(timeEntries.id, cursor),
-            ),
+        (
+          await readCursorPage(
+            tx
+              .select()
+              .from(timeEntries)
+              .where(
+                and(
+                  eq(timeEntries.organizationId, organizationId),
+                  dataExportRecordScope(timeEntries, workspaceId),
+                  after(timeEntries.id, cursor),
+                ),
+              )
+              .orderBy(asc(timeEntries.id)),
+            { limit: DATA_EXPORT_PAGE_SIZE, cursorForItem: (row) => row.id },
           )
-          .orderBy(asc(timeEntries.id))
-          .limit(DATA_EXPORT_PAGE_SIZE),
+        ).items,
     );
   const timeEntryRows = await readAll(readTimeEntryRowsPage);
   const expenseRows = await readAll(
     async (cursor) =>
       await db(
         async (tx) =>
-          await tx
-            .select()
-            .from(expenses)
-            .where(
-              and(
-                eq(expenses.organizationId, organizationId),
-                dataExportRecordScope(expenses, workspaceId),
-                after(expenses.id, cursor),
-              ),
+          (
+            await readCursorPage(
+              tx
+                .select()
+                .from(expenses)
+                .where(
+                  and(
+                    eq(expenses.organizationId, organizationId),
+                    dataExportRecordScope(expenses, workspaceId),
+                    after(expenses.id, cursor),
+                  ),
+                )
+                .orderBy(asc(expenses.id)),
+              { limit: DATA_EXPORT_PAGE_SIZE, cursorForItem: (row) => row.id },
             )
-            .orderBy(asc(expenses.id))
-            .limit(DATA_EXPORT_PAGE_SIZE),
+          ).items,
       ),
   );
   return { contactLinks, assignees, timeEntryRows, expenseRows };
@@ -772,47 +781,59 @@ const readOrganizationReferenceRows = async (reader: PagedReader) => {
   const sellerProfilesRows = await readOrganizationTable(
     reader,
     async (tx, cursor) =>
-      await tx
-        .select()
-        .from(sellerProfiles)
-        .where(
-          and(
-            eq(sellerProfiles.organizationId, organizationId),
-            after(sellerProfiles.id, cursor),
-          ),
+      (
+        await readCursorPage(
+          tx
+            .select()
+            .from(sellerProfiles)
+            .where(
+              and(
+                eq(sellerProfiles.organizationId, organizationId),
+                after(sellerProfiles.id, cursor),
+              ),
+            )
+            .orderBy(asc(sellerProfiles.id)),
+          { limit: DATA_EXPORT_PAGE_SIZE, cursorForItem: (row) => row.id },
         )
-        .orderBy(asc(sellerProfiles.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+      ).items,
   );
   const clauseCategoriesRows = await readOrganizationTable(
     reader,
     async (tx, cursor) =>
-      await tx
-        .select()
-        .from(clauseCategories)
-        .where(
-          and(
-            eq(clauseCategories.organizationId, organizationId),
-            after(clauseCategories.id, cursor),
-          ),
+      (
+        await readCursorPage(
+          tx
+            .select()
+            .from(clauseCategories)
+            .where(
+              and(
+                eq(clauseCategories.organizationId, organizationId),
+                after(clauseCategories.id, cursor),
+              ),
+            )
+            .orderBy(asc(clauseCategories.id)),
+          { limit: DATA_EXPORT_PAGE_SIZE, cursorForItem: (row) => row.id },
         )
-        .orderBy(asc(clauseCategories.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+      ).items,
   );
   const templateCategoriesRows = await readOrganizationTable(
     reader,
     async (tx, cursor) =>
-      await tx
-        .select()
-        .from(templateCategories)
-        .where(
-          and(
-            eq(templateCategories.organizationId, organizationId),
-            after(templateCategories.id, cursor),
-          ),
+      (
+        await readCursorPage(
+          tx
+            .select()
+            .from(templateCategories)
+            .where(
+              and(
+                eq(templateCategories.organizationId, organizationId),
+                after(templateCategories.id, cursor),
+              ),
+            )
+            .orderBy(asc(templateCategories.id)),
+          { limit: DATA_EXPORT_PAGE_SIZE, cursorForItem: (row) => row.id },
         )
-        .orderBy(asc(templateCategories.id))
-        .limit(DATA_EXPORT_PAGE_SIZE),
+      ).items,
   );
   return { sellerProfilesRows, clauseCategoriesRows, templateCategoriesRows };
 };
