@@ -467,7 +467,6 @@ const uniqueModuleConstant = (name: string, context: SourceContext) => {
       case "TSTypeParameterDeclaration":
       case "TSTypeAliasDeclaration":
       case "TSInterfaceDeclaration":
-      case "TSGlobalDeclaration":
       case "TSNamespaceExportDeclaration":
         return false;
       default:
