@@ -89,6 +89,7 @@ export const actionDrawsServiceBudget = ({
  * pooled free budget (background kinds through their counted parent).
  */
 export const FREE_WITHOUT_OWN_KEY = {
+  "dictation.transcribe": "counts",
   "chat.send": "counts",
   "chat.span-edit": "counts",
   // The automatic title of a counted chat send rides on that send.
