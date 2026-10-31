@@ -1,4 +1,5 @@
 // parser-output-unchanged: [cz-us] CZ-US uses default options; its recorded document and adapter outputs remain byte-identical.
+// parser-output-unchanged: [sk-us] adds `withAttestedLetterSpacing`, which only the Czech parsers call; `collapseLetterSpacing` is unchanged.
 /**
  * Letter-spaced emphasis read back as the words it spells.
  *
@@ -21,6 +22,9 @@
  * one run of single letters a sentence does write is a row of those words.
  */
 
+import type { Block } from "@stll/legal-ast/document-ast";
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import { mapInlineText } from "@stll/legal-ast/inline-line";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 type Token = {
@@ -374,4 +378,40 @@ export const collapseLetterSpacing = (
     index = run.end;
   }
   return `${result}${tail}`;
+};
+
+/** Words a text prints intact, lowercased: the witnesses for uneven chunks. */
+const wordsOf = (texts: Iterable<string>): Set<string> => {
+  const words = new Set<string>();
+  for (const text of texts) {
+    for (const [word] of text.matchAll(/\p{L}[\p{L}\p{M}]*/gu)) {
+      words.add(normalizeUnicode(word, "NFC").toLowerCase());
+    }
+  }
+  return words;
+};
+
+/**
+ * A decision's blocks with every word the court spaced unevenly (`m ů že`)
+ * read as the word it spells, when the decision prints that word intact
+ * elsewhere. The entry point for parsers that build blocks rather than lines.
+ */
+export const withAttestedLetterSpacing = (
+  blocks: readonly Block[],
+): Block[] => {
+  const attestedWords = wordsOf(blocks.map(({ plainText }) => plainText));
+  return blocks.map((block): Block => {
+    if (block.type !== "paragraph" && block.type !== "heading") {
+      return block;
+    }
+    const inlines = mapInlineText(block.inlines, (text) =>
+      collapseLetterSpacing(text, { attestedWords }),
+    );
+    // The block's text is derived from its repaired inlines, never repaired
+    // apart from them: a word split across formatting nodes stays as printed
+    // in both. Only a changed reading replaces either.
+    return plainTextOf(inlines) === plainTextOf(block.inlines)
+      ? block
+      : { ...block, inlines, plainText: plainTextOf(inlines).trim() };
+  });
 };
