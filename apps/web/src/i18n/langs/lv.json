@@ -814,8 +814,10 @@
       "deleteRateTable": "Dzēst likmju tabulu",
       "editRateTable": "Rediģēt likmju tabulu",
       "effectiveFrom": "Spēkā no",
+      "effectiveRateRequired": "Šai lietai, personai un datumam nav noteikta spēkā esoša likme. Pievienojiet likmi vai reģistrējiet laiku kā neapmaksājamu.",
       "effectiveTo": "Spēkā līdz",
       "hourlyRate": "Stundas likme",
+      "logNonBillable": "Reģistrēt kā neapmaksājamu",
       "noRateEntries": "Likmju ierakstu vēl nav",
       "noRateFound": "Likme nav konfigurēta",
       "noRateTables": "Likmju tabulu vēl nav",
@@ -1090,7 +1092,9 @@
     },
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
-      "remove": "Noņemt filtru {filter}"
+      "countryMismatch": "Noņemti filtri, kas neattiecas uz izvēlēto valsti ({country}): {filters}.",
+      "remove": "Noņemt filtru {filter}",
+      "showInCountry": "Rādīt {filter} valstī {country}"
     },
     "languages": {
       "count": "{count, plural, zero {# valodu} one {# valoda} other {# valodas}}",
@@ -1346,6 +1350,7 @@
       "toastTitle": "Pilnais skats vēl nav pieejams"
     },
     "activity": {
+      "newerVersion": "Šis saturs tiek rādīts jaunākā versijā.",
       "review": "Pārskatīšanas atjauninājums"
     },
     "aiPrompt": "AI ziņojuma lauks",
@@ -2084,8 +2089,6 @@
     "clearFilters": "Notīrīt filtrus",
     "clearSearch": "Notīrīt meklēšanu",
     "close": "Aizvērt",
-    "closeAll": "Aizvērt visu",
-    "closeOthers": "Aizvērt citus",
     "columns": "Kolonnas",
     "comfortable": "Ērts",
     "comingSoon": "Drīzumā",
@@ -2359,6 +2362,7 @@
     "unknownUser": "Nezināms lietotājs",
     "unpin": "Atspraust",
     "unsavedChanges": "Nesaglabātas izmaiņas",
+    "unsavedChangesClose": "Nesaglabātas izmaiņas. Vēlreiz aizveriet, lai tās atmestu",
     "unsavedChangesEscape": "Nesaglabātas izmaiņas. Vēlreiz nospiediet Esc, lai tās atmestu",
     "unsavedLeaveConfirm": "Jums ir nesaglabātas izmaiņas. Vai iziet bez saglabāšanas?",
     "unverified": "Nav pārbaudīts",
@@ -2400,6 +2404,8 @@
     "returnToAgent": "Lai turpinātu, atgriezieties pie sava aģenta.",
     "returnsLocally": "Šajā datorā jūs atgriezīsities lietotnē {clientName}",
     "returnsTo": "Jūs atgriezīsities lietotnē {clientName}",
+    "scopeAccountExportRead": "Lasīt savu personas datu eksportus",
+    "scopeAccountExportWrite": "Pieprasīt savu personas datu eksportus",
     "scopeAdminRead": "Lasīt jūsu organizācijas audita žurnālu",
     "scopeAdminWrite": "Pārvaldīt organizācijas dalībniekus un iestatījumus",
     "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
@@ -2870,6 +2876,8 @@
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "hostedCheckoutOpen": "Šai organizācijai jau ir atvērta apmaksa. Pabeidziet to vai sāciet jaunu pēc tās derīguma beigām.",
       "hostedSubscriptionLive": "Šai organizācijai jau ir abonements. Mainiet to sadaļā “Pārvaldīt mitināto lietojumu”.",
+      "idempotencyInProgress": "Šis pieprasījums vēl tiek apstrādāts. Nedaudz uzgaidiet un mēģiniet vēlreiz.",
+      "idempotencyKeyReused": "Dati kopš iepriekšējā mēģinājuma ir mainījušies. Atiestatiet veidlapu un mēģiniet vēlreiz.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts vienumu ierobežojums, tāpēc dokumentu nevarēja izveidot.",
       "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
@@ -3672,6 +3680,9 @@
       "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
+    "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
+    "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
+    "closeTab": "Aizvērt <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
       "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
@@ -5010,7 +5021,6 @@
       "beta": "Beta funkcijas",
       "betaAvt": "AVT dokumentu pārbaude",
       "betaAvtDescription": "Pārbaudīt lietas dokumentus apgalvojumu pa apgalvojumam pret saraksta faktiem",
-      "betaCaseLawDescription": "Rādīt publisko tiesu prakses meklēšanu un lasītāju sānjoslā",
       "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "betaInbox": "Iesūtne un paziņojumi",
       "betaInboxDescription": "Rādīt iesūtni un paziņojumu zvaniņu",
@@ -5046,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop ir sasaistīts",
       "desktopCardMissingDetail": "Instalējiet to vai savienojiet, ja tas jau ir instalēts šajā datorā.",
       "desktopCardMissingTitle": "stella desktop vēl nav sasaistīts",
+      "desktopCardOpeningDetail": "Šis dators tiek saistīts ar <bdi>{identity}</bdi> serverī {host}. Ja pārlūks jautā, atļaujiet tam atvērt stella desktop.",
+      "desktopCardOpeningTitle": "Notiek stella desktop atvēršana...",
       "desktopCardOutdatedDetail": "Versija {version} ir saistīta ar <bdi>{identity}</bdi>. Instalējiet jaunāko versiju, lai dokumenti un aktivitāte turpinātu darboties.",
       "desktopCardOutdatedTitle": "stella desktop jāatjaunina",
       "desktopClipboardDescription": "Atveriet, meklējiet, kārtojiet un atkārtoti izmantojiet tekstu, kas kopēts no jebkuras lietotnes.",
@@ -5065,6 +5077,7 @@
       "desktopInstallOpenStep": "Vienreiz atveriet stella desktop. Starpliktuve parādīsies uzreiz un turpmāk būs pieejama macOS izvēļņu joslā vai Windows sistēmas teknē.",
       "desktopInstallTitle": "Instalēšana un atvēršana",
       "desktopInstallWindowsStep": "Palaidiet instalētāju un izpildiet norādījumus.",
+      "desktopOpenApp": "Atvērt stella desktop",
       "desktopPrivacyDescription": "Starpliktuves vēsture tiek šifrēta un glabāta šajā ierīcē.",
       "desktopPrivacyTitle": "Privāts pēc noklusējuma",
       "desktopSelfHostDescription": "Uzticieties šim stella URL parakstītajā desktop lietotnē, lai šīs instalācijas dokumentus varētu atvērt lokāli.",
@@ -5074,6 +5087,15 @@
       "displayNameSaved": "Attēlojamais vārds atjaunināts",
       "enterOtp": "Apstiprinājuma kods",
       "otpSentSuccess": "Apstiprinājuma kods ir nosūtīts uz jūsu e-pastu.",
+      "personalDataExportDescription": "Pieprasiet lejupielādējamu jūsu kontā glabāto personas datu kopiju. Lejupielāde būs pieejama vienu stundu.",
+      "personalDataExportExpired": "Šī eksporta derīguma termiņš ir beidzies.",
+      "personalDataExportExpiresAt": "Pieejams līdz {expiresAt}.",
+      "personalDataExportFailed": "Neizdevās sagatavot eksportu.",
+      "personalDataExportReady": "Eksports ir gatavs.",
+      "personalDataExportRequest": "Pieprasīt eksportu",
+      "personalDataExportRequestNew": "Pieprasīt jaunu eksportu",
+      "personalDataExportTitle": "Eksportēt manus datus",
+      "personalDataExportWorking": "Notiek eksporta sagatavošana…",
       "preferredName": "Vēlamais vārds",
       "preferredNameDescription": "Tiek izmantots kā autors DOCX izsekotajām izmaiņām un komentāriem.",
       "preferredNamePlaceholder": "Jūsu vārds",
@@ -5411,6 +5433,7 @@
     "showCitedPartOnly": "Rādīt tikai citēto daļu",
     "showFullProvision": "Rādīt visu normu",
     "showInText": "Rādīt tekstā",
+    "sortNeedsYear": "Lai kārtotu pēc šīs kolonnas, filtros izvēlieties gadu.",
     "statedWindow": "Izdevēja norādītie datumi: {range}",
     "status": {
       "current": "Spēkā",
@@ -6508,6 +6531,14 @@
           "started": "Sāka dokumenta pārbaudi:"
         },
         "empty": "Šajā lietā vēl nav darbību.",
+        "fields": {
+          "dueDate": "termiņš",
+          "parentFolder": "vecākmape",
+          "priority": "prioritāte",
+          "property": "rekvizīts",
+          "schedule": "grafiks",
+          "sortOrder": "secība"
+        },
         "filterLabel": "Filtrēt darbības",
         "filters": {
           "all": "Visas darbības",
@@ -6557,6 +6588,7 @@
           "translation": "tulkojums"
         },
         "title": "Darbības",
+        "updatedFields": "Atjaunināts: {fields}",
         "views": {
           "list": "Saraksta skats",
           "timeline": "Laika skalas skats"

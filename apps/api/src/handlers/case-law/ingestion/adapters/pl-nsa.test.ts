@@ -24,8 +24,6 @@ import nodePath from "node:path";
 
 import { createSha256 } from "@stll/sha256/node";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlNsaDecision,
   composePlNsaFullText,
@@ -64,7 +62,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";

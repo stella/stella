@@ -1,5 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
 import { createAuth } from "@/api/lib/auth";
@@ -11,7 +13,6 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

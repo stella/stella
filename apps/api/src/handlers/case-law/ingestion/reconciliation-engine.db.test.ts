@@ -1646,7 +1646,7 @@ const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
       rawHash: "0".repeat(64),
       documentAst: EMPTY_AST,
     }) satisfies IngestionResult,
-  ).metadata;
+  ).unwrap().metadata;
 
 type SeedDecisionInput = {
   sourceId: SafeId<"caseLawSource">;
