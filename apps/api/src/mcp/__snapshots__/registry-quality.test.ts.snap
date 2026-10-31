@@ -6742,8 +6742,8 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "slug": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 100,
-          "pattern": "^[a-z0-9-]+$",
+          "maxLength": 128,
+          "pattern": "^[a-z0-9\\\\x2d]+$",
           "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
           "x-stella-agent-input": {
             "kind": "slug"

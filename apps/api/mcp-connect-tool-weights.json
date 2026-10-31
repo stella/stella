@@ -49,9 +49,9 @@
       "name": "create_organization",
       "nameChars": 19,
       "descriptionChars": 275,
-      "inputSchemaChars": 509,
-      "totalChars": 803,
-      "estimatedTokens": 311
+      "inputSchemaChars": 513,
+      "totalChars": 807,
+      "estimatedTokens": 312
     },
     {
       "name": "create_reader_annotation",
@@ -631,7 +631,7 @@
     }
   ],
   "totals": {
-    "characters": 132965,
-    "estimatedTokens": 52841
+    "characters": 132969,
+    "estimatedTokens": 52842
   }
 }
