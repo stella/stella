@@ -674,11 +674,6 @@
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/web/src/features/case-law/components/case-viewer/analysis/decision-inspector-outline.dom.test.tsx": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/src/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis.dom.test.tsx": {
     "count": 1,
     "owner": "web",
@@ -720,7 +715,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/features/chat/chat-runtime-stop.test.ts": {
-    "count": 2,
+    "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -790,11 +785,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/web/src/lib/errors/user-toast.test.ts": {
-    "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/src/lib/files/attached-template-upload.test.ts": {
     "count": 1,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
