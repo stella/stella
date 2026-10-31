@@ -396,11 +396,12 @@ describe("an accepted edit", () => {
 });
 
 describe("queued prompts while an edit is open", () => {
-  const queuedPrompt = (page: Page) =>
-    page.session().sendMessage({
+  const queuedPrompt = async (page: Page) => {
+    await page.session().sendMessage({
       content: "A queued question",
       id: toSafeId<"chatMessage">(QUEUED),
     });
+  };
 
   test("wait while the form is open and are sent once it closes", async () => {
     const server = createServer({ answer: { type: "accepted" } });
@@ -444,15 +445,17 @@ describe("queued prompts while an edit is open", () => {
       expect(server.posted).toHaveLength(2);
     });
     expect(
-      server.posted.map((body) => {
+      server.posted.map((body): unknown => {
         const forwarded: unknown = body["forwardedProps"];
         const message: unknown =
           typeof forwarded === "object" && forwarded !== null
             ? Reflect.get(forwarded, "message")
             : undefined;
-        return typeof message === "object" && message !== null
-          ? Reflect.get(message, "id")
-          : undefined;
+        const id: unknown =
+          typeof message === "object" && message !== null
+            ? Reflect.get(message, "id")
+            : undefined;
+        return id;
       }),
     ).toEqual([SECOND, QUEUED]);
   });
