@@ -32,7 +32,7 @@ describe("splitForMiddleTruncate", () => {
       fc.property(name, (value) => {
         const split = splitForMiddleTruncate(value);
         if (split === null) {
-          return graphemesOf(value).length < 14;
+          return graphemesOf(value).length < 14 || value.includes("ي");
         }
         const tail = graphemesOf(split.tail).length;
         return (
@@ -57,6 +57,28 @@ describe("splitForMiddleTruncate", () => {
       head: "t3/clone-repo-on-remote-",
       tail: "machine",
     });
+  });
+
+  test("keeps a run in the other direction in one piece", () => {
+    expect(
+      splitForMiddleTruncate("عقد Master Services Agreement.docx"),
+    ).toBeNull();
+    expect(
+      splitForMiddleTruncate("Smlouva o dílo عقد الخدمات القانونية.docx"),
+    ).toBeNull();
+  });
+
+  test("splits a right-to-left name with a Latin extension", () => {
+    expect(splitForMiddleTruncate("عقد الخدمات القانونية طويل.docx")).toEqual({
+      head: "عقد الخدمات القانونية ",
+      tail: "طويل.docx",
+    });
+  });
+
+  test("splits between runs when the cut falls on their border", () => {
+    expect(
+      splitForMiddleTruncate("Smlouva عقد الخدمات Agreement.docx"),
+    ).toEqual({ head: "Smlouva عقد الخدمات ", tail: "Agreement.docx" });
   });
 
   test("leaves short values whole", () => {

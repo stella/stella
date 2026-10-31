@@ -23,9 +23,29 @@ export const graphemesOf = (value: string): string[] => {
   return Array.from(segmenter.segment(value), ({ segment }) => segment);
 };
 
+const RTL_LETTER =
+  /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Adlam}]/u;
+
+const strongDirections = (text: string): ("ltr" | "rtl")[] =>
+  Array.from(text.matchAll(/\p{L}/gu), (letter) =>
+    RTL_LETTER.test(letter[0]) ? "rtl" : "ltr",
+  );
+
+/**
+ * The head and tail render as two boxes, each ordered on its own. A run in the
+ * other direction than the name's stays readable only while one box holds it:
+ * cut through it and its words swap sides even when nothing is truncated.
+ */
+const cutsThroughForeignRun = (head: string, tail: string): boolean => {
+  const before = strongDirections(head);
+  const base = before.at(0);
+  const last = before.at(-1);
+  return last !== base && strongDirections(tail).at(0) === last;
+};
+
 type MiddleTruncateSplit = { head: string; tail: string };
 
-/** The head and tail of `value`, or null when it is too short to split. */
+/** The head and tail of `value`, or null when it should stay in one piece. */
 export const splitForMiddleTruncate = (
   value: string,
 ): MiddleTruncateSplit | null => {
@@ -34,10 +54,9 @@ export const splitForMiddleTruncate = (
     return null;
   }
   const cut = tailStart(characters);
-  return {
-    head: characters.slice(0, cut).join(""),
-    tail: characters.slice(cut).join(""),
-  };
+  const head = characters.slice(0, cut).join("");
+  const tail = characters.slice(cut).join("");
+  return cutsThroughForeignRun(head, tail) ? null : { head, tail };
 };
 
 /**
