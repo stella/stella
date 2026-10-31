@@ -210,11 +210,26 @@ export const KANBAN_BOARD_COLLISION_DETECTION: CollisionDetection = (args) => {
   const intersectingIds = new Set(
     intersections.map((intersection) => intersection.id),
   );
+  const cellIds = new Set(
+    boardContainers
+      .filter(({ data }) => isKanbanCellDropData(data.current))
+      .map(({ id }) => id),
+  );
   return closestCorners({
     ...args,
-    droppableContainers: boardContainers.filter(({ id }) =>
-      intersectingIds.has(id),
-    ),
+    droppableContainers: boardContainers.filter(({ id, data }) => {
+      if (!intersectingIds.has(id)) {
+        return false;
+      }
+      // Overscanned rows keep measured rectangles outside their cell's clip.
+      // They are pointer targets only while the pointer is inside that cell.
+      const cellId = getSortableData(data.current)?.containerId;
+      return (
+        cellId === undefined ||
+        !cellIds.has(cellId) ||
+        intersectingIds.has(cellId)
+      );
+    }),
   });
 };
 

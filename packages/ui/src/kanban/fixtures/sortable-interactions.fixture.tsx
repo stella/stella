@@ -1,5 +1,7 @@
 import { createRoot } from "react-dom/client";
 
+import "./sortable-interactions.fixture.css";
+
 import { panic } from "better-result";
 import { ScrollArea } from "../../components/scroll-area";
 
@@ -12,9 +14,6 @@ import {
 } from "../index";
 
 const fixtureStyles = `
-  .touch-auto { touch-action: auto; }
-  .touch-none { touch-action: none; }
-  .size-11 { block-size: 44px; inline-size: 44px; }
   [data-board] { block-size: 300px; inline-size: 320px; position: relative; }
   [data-column] { flex: 0 0 200px; }
   [data-kanban-cell] { block-size: 120px; max-block-size: 120px; }
