@@ -240,12 +240,14 @@ const rolePrivilegeCensusQuery = `
       FROM set_reachable_acl acl
       JOIN application_roles role ON role.oid = acl.role_oid
       UNION ALL
-      SELECT grantee.rolname, 'privilege', acl.kind || ':' || acl.object_name || ':' ||
+      SELECT CASE WHEN acl.grantee = 0 THEN 'PUBLIC' ELSE grantee.rolname END,
+             'privilege', acl.kind || ':' || acl.object_name || ':' ||
              acl.privilege_type || ':GRANTOR:' || grantor.rolname ||
              ':GRANTABLE:' || acl.is_grantable
       FROM expanded_acl acl
-      JOIN application_roles grantee ON grantee.oid = acl.grantee
+      LEFT JOIN application_roles grantee ON grantee.oid = acl.grantee
       JOIN pg_catalog.pg_roles grantor ON grantor.oid = acl.grantor
+      WHERE acl.grantee = 0 OR grantee.oid IS NOT NULL
       UNION ALL
       SELECT role.rolname, 'privilege',
              'table:' || relation.nspname || '.' || relation.relname ||

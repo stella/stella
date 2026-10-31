@@ -1,5 +1,6 @@
-import type { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { panic } from "better-result";
+import type { SQL, TransactionSQL } from "bun";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -20,10 +21,20 @@ const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const describePostgres = describe.skipIf(!runPostgresTests);
 const migrationsFolder = path.resolve(import.meta.dir, "../../../drizzle");
 
-const withMigratedDatabase = async (
-  run: (database: SQL, census: Census) => Promise<void>,
-) => {
-  await withIsolatedPostgresCluster(
+let censusDatabase: SQL | undefined;
+let fixture: Promise<unknown> | undefined;
+const fixtureReady = Promise.withResolvers<undefined>();
+const releaseFixture = Promise.withResolvers<undefined>();
+class CensusRollbackError extends Error {
+  override name = "CensusRollbackError";
+}
+
+// timeout: applying the complete migration chain provisions the shared census fixture.
+beforeAll(async () => {
+  if (!runPostgresTests) {
+    return;
+  }
+  fixture = withIsolatedPostgresCluster(
     {
       prefix: "role-census",
       database: "stella",
@@ -32,8 +43,8 @@ const withMigratedDatabase = async (
     },
     async (scratchUrl) => {
       await withGatedTestClients(scratchUrl, async ({ openClient }) => {
-        const database = openClient().sql;
-        const connection = await database.reserve();
+        const migratedDatabase = openClient().sql;
+        const connection = await migratedDatabase.reserve();
         try {
           await runMigrations({
             connection,
@@ -44,17 +55,47 @@ const withMigratedDatabase = async (
         } finally {
           await connection.release();
         }
-        await run(database, await readRolePrivilegeCensus(database));
+        censusDatabase = migratedDatabase;
+        fixtureReady.resolve();
+        await releaseFixture.promise;
       });
     },
   );
+  void fixture.catch(fixtureReady.reject);
+  await fixtureReady.promise;
+}, 120_000);
+
+afterAll(async () => {
+  if (!runPostgresTests) {
+    return;
+  }
+  releaseFixture.resolve(undefined);
+  await fixture;
+});
+
+const withMigratedDatabase = async (
+  run: (transaction: TransactionSQL, census: Census) => Promise<void>,
+) => {
+  const migratedDatabase =
+    censusDatabase ?? panic("Census database is not ready");
+  await migratedDatabase
+    .begin(async (transaction) => {
+      await run(transaction, await readRolePrivilegeCensus(transaction));
+      throw new CensusRollbackError();
+    })
+    .catch((error: unknown) => {
+      if (!(error instanceof CensusRollbackError)) {
+        throw error;
+      }
+    });
 };
 
 describePostgres("database role privilege census", () => {
   const privilegesFor = (census: Census, role: string) =>
-    census.roles.find((entry) => entry.role === role)?.privileges ?? [];
+    census.roles.find((entry) => entry.role === role)?.privileges ??
+    panic(`Role ${role} is missing from the privilege census`);
 
-  // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("matches every migrated role and effective privilege", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, actual) => {
@@ -72,7 +113,7 @@ describePostgres("database role privilege census", () => {
         has_function_privilege('stella_public_law_reader', 'public.stella_chat_run_text_boundaries()', 'EXECUTE') AS reader`),
       ).toEqual([{ runtime: true, reader: false }]);
       const denied = await rejectionOf(
-        database.begin(async (tx) => {
+        database.savepoint(async (tx) => {
           await tx.unsafe("SET LOCAL ROLE stella_public_law_reader");
           await tx.unsafe("SELECT public.stella_chat_run_text_boundaries()");
         }),
@@ -81,7 +122,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports disabled row-level security", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -102,7 +143,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a sequence UPDATE grant", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -124,7 +165,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a database CREATE grant to an existing restricted role", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -145,7 +186,47 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
+  test("reports a changed grantor for a PUBLIC grant", async () => {
+    await withMigratedDatabase(async (database) => {
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const firstGrantor = `stella_census_grantor_a_${suffix}`;
+      const secondGrantor = `stella_census_grantor_b_${suffix}`;
+      const table = `stella_census_fixture_${suffix}`;
+      await database.unsafe(`
+        CREATE ROLE "${firstGrantor}" NOLOGIN;
+        CREATE ROLE "${secondGrantor}" NOLOGIN;
+        CREATE TABLE public."${table}" (id integer);
+        REVOKE ALL ON TABLE public."${table}" FROM PUBLIC;
+        GRANT SELECT ON TABLE public."${table}" TO "${firstGrantor}", "${secondGrantor}" WITH GRANT OPTION;
+        SET LOCAL SESSION AUTHORIZATION "${firstGrantor}";
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+        RESET SESSION AUTHORIZATION;
+      `);
+      const firstCensus = await readRolePrivilegeCensus(database);
+      expect(privilegesFor(firstCensus, "PUBLIC")).toContain(
+        `table:public.${table}:SELECT:GRANTOR:${firstGrantor}:GRANTABLE:false`,
+      );
+
+      await database.unsafe(`
+        SET LOCAL SESSION AUTHORIZATION "${firstGrantor}";
+        REVOKE SELECT ON TABLE public."${table}" FROM PUBLIC;
+        RESET SESSION AUTHORIZATION;
+        SET LOCAL SESSION AUTHORIZATION "${secondGrantor}";
+        GRANT SELECT ON TABLE public."${table}" TO PUBLIC;
+        RESET SESSION AUTHORIZATION;
+      `);
+      const secondCensus = await readRolePrivilegeCensus(database);
+      expect(privilegesFor(secondCensus, "PUBLIC")).toContain(
+        `table:public.${table}:SELECT:GRANTOR:${secondGrantor}:GRANTABLE:false`,
+      );
+      expect(() => assertCompleteCensus(firstCensus, secondCensus)).toThrow(
+        `PUBLIC table:public.${table}:SELECT:GRANTOR:${secondGrantor}:GRANTABLE:false`,
+      );
+    });
+  }, 120_000);
+
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("does not inherit privileges through a membership that disables INHERIT and SET", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -182,7 +263,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("inherits privileges through a membership that enables INHERIT", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -213,7 +294,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports predefined-role privileges without an object ACL", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -256,7 +337,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports inherited grant options from roles outside the audited set", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -264,11 +345,13 @@ describePostgres("database role privilege census", () => {
       const member = `stella_census_member_${suffix}`;
       const grantable = "table:public.account:SELECT:EFFECTIVE_GRANTABLE";
       const censusAsParent = async () =>
-        database.begin(async (transaction) => {
+        database.savepoint(async (transaction) => {
           await transaction.unsafe(
             `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
           );
-          return readRolePrivilegeCensus(transaction);
+          const census = await readRolePrivilegeCensus(transaction);
+          await transaction.unsafe("RESET SESSION AUTHORIZATION");
+          return census;
         });
       try {
         await database.unsafe(`
@@ -302,7 +385,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("records SET-only privileges separately from effective privileges", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -334,7 +417,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("records SET-only privileges through roles outside the audited set", async () => {
     await withMigratedDatabase(async (database) => {
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
@@ -342,11 +425,13 @@ describePostgres("database role privilege census", () => {
       const member = `stella_census_member_${suffix}`;
       const setReachable = "table:public.account:SELECT:SET_REACHABLE";
       const censusAsParent = async () =>
-        database.begin(async (transaction) => {
+        database.savepoint(async (transaction) => {
           await transaction.unsafe(
             `SET LOCAL SESSION AUTHORIZATION "${parent}"`,
           );
-          return readRolePrivilegeCensus(transaction);
+          const census = await readRolePrivilegeCensus(transaction);
+          await transaction.unsafe("RESET SESSION AUTHORIZATION");
+          return census;
         });
       try {
         await database.unsafe(`
@@ -378,7 +463,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a role granted CREATEDB", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -396,7 +481,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a role granted REPLICATION", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -414,7 +499,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a membership changed to WITH ADMIN OPTION", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -448,7 +533,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a column-level grant", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -470,7 +555,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports an aggregate EXECUTE grant", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -503,7 +588,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports policies for a column-only grantee", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -534,7 +619,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a new row-level security policy", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -556,7 +641,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a changed row-level security USING predicate", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
@@ -577,7 +662,7 @@ describePostgres("database role privilege census", () => {
     });
   }, 120_000);
 
-  // timeout: the self-test applies the complete migration chain before mutating its census fixture.
+  // timeout: exhaustive privilege census queries can exceed the default test budget.
   test("reports a changed row-level security WITH CHECK predicate", async () => {
     const expected = readExpectedCensus();
     await withMigratedDatabase(async (database, baseline) => {
