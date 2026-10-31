@@ -5253,7 +5253,7 @@
       "auditLogsUserId": "User ID",
       "auditLogsUserIdPlaceholder": "Filter by user ID",
       "billingDrafts": {
-        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Attach firm guidelines before enabling drafts.",
+        "description": "Draft billing narratives from selected activity and firm or client knowledge files. Each user also gives consent. Drafts are checked against the guidelines once firm guidelines are attached.",
         "firm": "Firm guidelines",
         "ledes": "Electronic billing (LEDES)",
         "title": "AI billing drafts"

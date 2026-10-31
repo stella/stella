@@ -9,6 +9,7 @@ import {
   test,
 } from "bun:test";
 import { and, eq, isNull } from "drizzle-orm";
+import assert from "node:assert/strict";
 import * as v from "valibot";
 
 import { desktopBillingDraftRequestSchema } from "@stll/api-contract/desktop-billing-drafts";
@@ -346,24 +347,16 @@ test("mixed-case duplicate matter UUIDs normalize before the scoped context quer
   ).toHaveLength(1);
 });
 
-test("organization disablement prevents any AI continuation", async () => {
+test("organization disablement leaves a consenting user plain descriptions without guideline context", async () => {
   await db
     .update(organizationSettings)
     .set({ aiBillingDraftsMode: "disabled" })
     .where(eq(organizationSettings.organizationId, ids.orgA));
-  const result = await load();
-  let modelCalled = false;
-  result.map(() => {
-    modelCalled = true;
-    return true;
-  });
-  expect(modelCalled).toBe(false);
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain(
-      "organization enablement and personal consent",
-    );
-  }
+  const context = (await load()).unwrap();
+  expect(context.mode).toBe("plain");
+  expect(context).not.toHaveProperty("guidelines");
+  expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
+  expect(context.preference).toBe("Use concise Czech narratives");
 });
 
 test("revoked personal consent prevents any AI continuation", async () => {
@@ -386,7 +379,7 @@ test("revoked personal consent prevents any AI continuation", async () => {
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
     expect(result.error.message).toContain(
-      "organization enablement and personal consent",
+      "AI billing drafts require personal consent",
     );
   }
 });
@@ -409,6 +402,7 @@ test("an inaccessible selected matter is refused by scoped queries before any AI
 
 test("guideline context joins only firm and selected client files with rule sections and live billing metadata", async () => {
   const context = (await load()).unwrap();
+  assert.ok(context.mode === "guided");
   expect(context.guidelines.map(({ fileId }) => fileId).toSorted()).toEqual(
     [guidelineIds.firm, guidelineIds.client].toSorted(),
   );
@@ -550,7 +544,7 @@ test("billing guideline knowledge text remains editable only by firm managers", 
   expect(updated).toEqual([{ id: guidelineIds.firm }]);
 });
 
-test("missing firm guidance refuses drafting even when selected client guidance is attached", async () => {
+test("without a firm guideline file a consenting user gets plain descriptions, also with client guidance attached", async () => {
   await db
     .delete(billingGuidelineFiles)
     .where(
@@ -567,11 +561,8 @@ test("missing firm guidance refuses drafting even when selected client guidance 
   expect(clientFiles.map(({ resourceId }) => resourceId)).toEqual([
     guidelineIds.client,
   ]);
-  const result = await load();
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toBe(
-      "A firm billing guideline file is required",
-    );
-  }
+  const context = (await load()).unwrap();
+  expect(context.mode).toBe("plain");
+  expect(context).not.toHaveProperty("guidelines");
+  expect(context.matters.map(({ matterId }) => matterId)).toEqual([ids.wsA1]);
 });

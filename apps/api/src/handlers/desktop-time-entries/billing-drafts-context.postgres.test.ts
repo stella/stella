@@ -251,7 +251,7 @@ if (!databaseUrl || !runPostgres) {
     });
   });
 
-  test("organization disablement and revoked consent refuse context", async () => {
+  test("revoked consent refuses context and organization disablement does not", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db: rawDb } = openClient();
       const db = markRlsDatabase(rawDb);
@@ -308,11 +308,12 @@ if (!databaseUrl || !runPostgres) {
             ],
           },
         });
+        // Organization disablement turns guideline checks off, not drafting:
+        // the consenting caller passes the consent gate and stops only at
+        // the matter scope.
         expect(disabled.isErr()).toBe(true);
         if (disabled.isErr()) {
-          expect(disabled.error.message).toContain(
-            "organization enablement and personal consent",
-          );
+          expect(disabled.error.message).toBe("Selected matter is unavailable");
         }
 
         await db
@@ -352,7 +353,7 @@ if (!databaseUrl || !runPostgres) {
         expect(revoked.isErr()).toBe(true);
         if (revoked.isErr()) {
           expect(revoked.error.message).toContain(
-            "organization enablement and personal consent",
+            "AI billing drafts require personal consent",
           );
         }
       } finally {
@@ -462,7 +463,7 @@ if (!databaseUrl || !runPostgres) {
         expect(result.isErr()).toBe(true);
         if (result.isErr()) {
           expect(result.error.message).toContain(
-            "organization enablement and personal consent",
+            "AI billing drafts require personal consent",
           );
         }
         const initialB = (

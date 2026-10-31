@@ -194,7 +194,7 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
     }),
   });
 
-  const desktopBillingDraftResponseSchema = v.strictObject({
+  const guidedResponseEntries = {
     drafts: array(desktopBillingDraftSchema, {
       min: 1,
       max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
@@ -203,7 +203,23 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
       v.strictObject({ fileId: identifier, fileName: name }),
       { max: DESKTOP_BILLING_DRAFT_LIMITS.guidelines },
     ),
+  };
+
+  // A description only: no classification, guideline flags or operations.
+  const desktopBillingPlainDraftSchema = v.strictObject({
+    entryId: identifier,
+    narrative,
+    matchedEarlierEntryIds: array(identifier, {
+      max: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
+    }),
   });
+
+  const plainResponseEntries = {
+    drafts: array(desktopBillingPlainDraftSchema, {
+      min: 1,
+      max: DESKTOP_BILLING_DRAFT_LIMITS.entries,
+    }),
+  };
 
   return {
     desktopBillingDraftClassificationSchema,
@@ -211,9 +227,14 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
     desktopBillingDraftFlagSchema,
     desktopBillingDraftOperationSchema,
     desktopBillingDraftSchema,
-    desktopBillingDraftResponseSchema,
+    guidedResponseEntries,
+    plainResponseEntries,
   };
 };
+
+const canonicalBillingDraftSchemas =
+  createBillingDraftResponseSchemas("canonical");
+const modelBillingDraftSchemas = createBillingDraftResponseSchemas("model");
 
 export const {
   desktopBillingDraftClassificationSchema,
@@ -221,12 +242,39 @@ export const {
   desktopBillingDraftFlagSchema,
   desktopBillingDraftOperationSchema,
   desktopBillingDraftSchema,
-  desktopBillingDraftResponseSchema,
-} = createBillingDraftResponseSchemas("canonical");
+} = canonicalBillingDraftSchemas;
 
-/** Compact model grammar; every generated result must pass the canonical schema. */
-export const desktopBillingDraftModelResponseSchema =
-  createBillingDraftResponseSchemas("model").desktopBillingDraftResponseSchema;
+/** Drafts checked against the organization's bound billing guideline files,
+ * with billing classifications, guideline flags and reviewable operations. */
+export const desktopBillingGuidedDraftResponseSchema = v.strictObject({
+  mode: v.literal("guided"),
+  ...canonicalBillingDraftSchemas.guidedResponseEntries,
+});
+
+/** Descriptions drafted without guideline files: no classification, flags,
+ * operations or checked guidelines exist in this shape. */
+export const desktopBillingPlainDraftResponseSchema = v.strictObject({
+  mode: v.literal("plain"),
+  ...canonicalBillingDraftSchemas.plainResponseEntries,
+});
+
+// A union, not a variant: native response validation reads `anyOf` and
+// refuses `oneOf`. The `mode` literal still discriminates both branches.
+export const desktopBillingDraftResponseSchema = v.union([
+  desktopBillingGuidedDraftResponseSchema,
+  desktopBillingPlainDraftResponseSchema,
+]);
+
+/** Compact model grammar; every generated result must pass the canonical
+ * schema once the server names its mode. */
+export const desktopBillingDraftModelResponseSchema = v.strictObject(
+  modelBillingDraftSchemas.guidedResponseEntries,
+);
+
+/** Compact model grammar for plain descriptions. */
+export const desktopBillingPlainDraftModelResponseSchema = v.strictObject(
+  modelBillingDraftSchemas.plainResponseEntries,
+);
 
 /** The caller's own earlier entries a draft cites, so the review can show
  * what "consistent with" refers to without a second request. */
@@ -325,6 +373,12 @@ export type DesktopBillingDraftRequest = v.InferOutput<
 >;
 export type DesktopBillingDraftResponse = v.InferOutput<
   typeof desktopBillingDraftResponseSchema
+>;
+export type DesktopBillingGuidedDraftResponse = v.InferOutput<
+  typeof desktopBillingGuidedDraftResponseSchema
+>;
+export type DesktopBillingPlainDraftResponse = v.InferOutput<
+  typeof desktopBillingPlainDraftResponseSchema
 >;
 export type DesktopBillingDraftReview = v.InferOutput<
   typeof desktopBillingDraftReviewSchema

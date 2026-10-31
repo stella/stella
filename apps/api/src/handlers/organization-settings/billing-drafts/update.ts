@@ -40,11 +40,6 @@ const permissions = {
   organizationSettings: ["update"],
 } satisfies HandlerConfig["permissions"];
 const CONFIGURATION_FAILURES = {
-  firm_guideline_required: {
-    status: 400,
-    message:
-      "Attach a firm billing guideline file before enabling AI billing drafts",
-  },
   invalid_client: { status: 404, message: "Client not found" },
   invalid_files: {
     status: 400,
@@ -119,26 +114,12 @@ const loadBillingFileBindings = async ({
       ),
     BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
   );
-  const oldFiles =
-    bindings.type === "complete"
-      ? bindings.rows
-      : panic("Billing guideline bindings exceed their configured cap", {
-          organizationId,
-          clientId,
-        });
-  const firmFiles = clientId
-    ? await tx
-        .select({ resourceId: billingGuidelineFiles.resourceId })
-        .from(billingGuidelineFiles)
-        .where(
-          and(
-            eq(billingGuidelineFiles.organizationId, organizationId),
-            isNull(billingGuidelineFiles.clientId),
-          ),
-        )
-        .limit(1)
-    : oldFiles;
-  return { oldFiles, firmFiles };
+  return bindings.type === "complete"
+    ? bindings.rows
+    : panic("Billing guideline bindings exceed their configured cap", {
+        organizationId,
+        clientId,
+      });
 };
 
 const billingDraftConfigurationBodySchema = v.strictObject({
@@ -301,20 +282,13 @@ const updateBillingDraftConfiguration = createSafeRootHandler(
           }
           previousClientFormat = client.format;
         }
-        const { oldFiles, firmFiles } = await loadBillingFileBindings({
+        // Enabling needs no guideline file: until a firm file is bound,
+        // consenting members draft plain descriptions.
+        const oldFiles = await loadBillingFileBindings({
           tx,
           organizationId,
           ...(body.clientId === undefined ? {} : { clientId: body.clientId }),
         });
-        const nextFirmFiles = body.clientId
-          ? firmFiles
-          : (body.resourceIds ?? firmFiles);
-        if (
-          (body.mode ?? settingsRow?.mode ?? "disabled") === "enabled" &&
-          nextFirmFiles.length === 0
-        ) {
-          return { type: "firm_guideline_required" } as const;
-        }
         if (
           enforceWritePrecondition({
             type: "updatedAt",

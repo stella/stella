@@ -5253,7 +5253,7 @@
       "auditLogsUserId": "ID do usuário",
       "auditLogsUserIdPlaceholder": "Filtrar por ID do usuário",
       "billingDrafts": {
-        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Anexe as diretrizes do escritório antes de ativar os rascunhos.",
+        "description": "Redija descrições com base nas atividades selecionadas e nos arquivos de conhecimento do escritório ou do cliente. Cada usuário também dá seu consentimento. Depois que as diretrizes do escritório forem anexadas, os rascunhos são verificados com base nelas.",
         "firm": "Diretrizes do escritório",
         "ledes": "Faturamento eletrônico (LEDES)",
         "title": "Rascunhos de faturamento com IA"

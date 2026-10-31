@@ -77,7 +77,7 @@ export default {
       {
         path: "apps/api/src/handlers/desktop-time-entries/billing-drafts.ts",
         reason:
-          "Sends selected activity evidence, own bounded time history and authorized guideline files; carries no chat transcript. Both consent gates are checked live.",
+          "Sends selected activity evidence, own bounded time history and, once the organization enables them, authorized guideline files; carries no chat transcript. Personal consent is checked live.",
       },
       {
         path: "apps/api/src/handlers/chat/messages/revisions/span-edit.ts",
