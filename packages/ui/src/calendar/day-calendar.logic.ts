@@ -253,7 +253,7 @@ export type DayCalendarLanePlacement = {
 export const layoutOverlaps = (
   ranges: readonly (DayCalendarRange & { id: string })[],
 ): Map<string, DayCalendarLanePlacement> => {
-  const sorted = ranges.toSorted(
+  const sorted = [...ranges].sort(
     (left, right) =>
       left.startMs - right.startMs ||
       right.endMs - left.endMs ||
@@ -316,7 +316,7 @@ export const mergeShortSegments = <
   segments: readonly Segment[],
   { thresholdMs }: { thresholdMs: number },
 ): MergedSegment<Segment>[] => {
-  const sorted = segments.toSorted(
+  const sorted = [...segments].sort(
     (left, right) =>
       left.startMs - right.startMs ||
       left.endMs - right.endMs ||
