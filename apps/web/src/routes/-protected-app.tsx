@@ -598,8 +598,11 @@ function WorkspaceInspectorSidePanel({
   // Desktop keeps a rail-mounted inspector shell; mobile uses a
   // sheet and relies on the topbar restore button after Back.
   // Pane content is shown only when a tab exists and the inspector
-  // is not minimized.
-  const showPaneContent = reservePane || (tabs.length > 0 && !minimized);
+  // is not minimized. The desktop dock also reserves its saved width
+  // while tabs restore; the mobile sheet overlays the page, so it
+  // waits for a real tab instead of opening empty.
+  const hasOpenTab = tabs.length > 0 && !minimized;
+  const showPaneContent = reservePane || hasOpenTab;
   const activeWorkspaceId = resolveInspectorWorkspaceId({
     activeId,
     routeWorkspaceId,
@@ -676,7 +679,7 @@ function WorkspaceInspectorSidePanel({
         onOpenChange={(open) => {
           setMinimized(!open);
         }}
-        open={showPaneContent}
+        open={hasOpenTab}
       >
         {/* The sheet's default edge width leaves the page peeking past the
             backdrop, as the sidebar sheet does, so a tap outside dismisses
