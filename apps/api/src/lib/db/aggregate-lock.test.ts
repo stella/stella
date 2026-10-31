@@ -24,7 +24,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
-import { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder.ts";
+import { DEFAULT_LOCK_RETRY_CONFIG } from "../../db/lock-retry-ladder";
 import {
   AGGREGATE_CHAINS,
   AGGREGATE_LOCKS,

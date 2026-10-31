@@ -8,7 +8,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import {
   AGGREGATE_TRANSACTION_BUDGETS,
   tighterTransactionBudget,
-} from "./aggregate-transaction-budget.ts";
+} from "./aggregate-transaction-budget";
 import {
   getPendingTransactionBudget,
   getTransactionBudget,
@@ -16,7 +16,7 @@ import {
   initializeTransactionBudget,
   prepareTransactionBudgetSetting,
   withTransactionBudgetContext,
-} from "./transaction-budget-owner.ts";
+} from "./transaction-budget-owner";
 
 class TransactionOwnerFixtureError extends TaggedError(
   "TransactionOwnerFixtureError",
