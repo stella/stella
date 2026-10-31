@@ -10,6 +10,11 @@ import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
 
 type Utf8ByteBounds = { maxBytes: number; maxSegmentBytes?: number };
 
+export type Utf8ByteBoundsKeywords = {
+  "x-maxUtf8Bytes"?: Utf8ByteBounds["maxBytes"];
+  "x-maxSegmentUtf8Bytes"?: Utf8ByteBounds["maxSegmentBytes"];
+};
+
 const UTF8_BYTE_BOUNDS = new WeakMap<object, Utf8ByteBounds>();
 
 export const readUtf8ByteBounds = (action: object) =>

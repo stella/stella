@@ -1,6 +1,6 @@
 import {
   type ConversionConfig,
-  type JsonSchema,
+  type JsonSchema as ValibotJsonSchema,
   toJsonSchema as convertToJsonSchema,
 } from "@valibot/to-json-schema";
 import { type GenericSchema, safeParse } from "valibot";
@@ -16,6 +16,7 @@ import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast"
 import {
   isUniqueItemsCheck,
   readUtf8ByteBounds,
+  type Utf8ByteBoundsKeywords,
 } from "@/api/lib/custom-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 
@@ -132,7 +133,7 @@ const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
 
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
-export type { JsonSchema };
+export type JsonSchema = ValibotJsonSchema & Utf8ByteBoundsKeywords;
 
 /** A valibot schema: route and tool schemas reach shared code as `unknown`. */
 export const isValibotSchema = (value: unknown): value is GenericSchema =>
