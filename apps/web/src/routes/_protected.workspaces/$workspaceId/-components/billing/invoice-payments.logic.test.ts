@@ -41,7 +41,7 @@ describe("checkPaymentAmount", () => {
         locale: "sk-SK",
         outstandingAmount: 200_000,
       }),
-    ).toEqual({ type: "not_positive" });
+    ).toEqual({ type: "invalid_format" });
   });
   test("accepts up to the outstanding amount, in the invoice's minor units", () => {
     expect(
@@ -90,8 +90,8 @@ describe("checkPaymentAmount", () => {
     ).toEqual({ type: "more_than_outstanding" });
   });
 
-  test("refuses nothing, zero and text that is not an amount", () => {
-    for (const input of ["", "0", "0.00", "-5", "abc"]) {
+  test("refuses nothing, zero and a negative amount as not positive", () => {
+    for (const input of ["", "0", "0.00", "-5"]) {
       expect(
         checkPaymentAmount({
           input,
@@ -100,6 +100,19 @@ describe("checkPaymentAmount", () => {
           outstandingAmount: 6000,
         }),
       ).toEqual({ type: "not_positive" });
+    }
+  });
+
+  test("refuses text that is not an amount as a format problem", () => {
+    for (const input of ["abc", "1.2.3", "12.345"]) {
+      expect(
+        checkPaymentAmount({
+          input,
+          currency: "USD",
+          locale: "en-US",
+          outstandingAmount: 6000,
+        }),
+      ).toEqual({ type: "invalid_format" });
     }
   });
 });

@@ -285,12 +285,16 @@ const RecordPaymentForm = ({
       });
       if (check.type !== "ok") {
         addIssue({
-          message:
-            check.type === "more_than_outstanding"
-              ? t("billing.invoices.payments.amountTooHigh", {
-                  amount: formatCurrencyAmount(outstandingAmount, currency),
-                })
-              : t("billing.amountMustBePositive"),
+          message: {
+            invalid_format: t("billing.invalidNumberFormat"),
+            more_than_outstanding: t(
+              "billing.invoices.payments.amountTooHigh",
+              {
+                amount: formatCurrencyAmount(outstandingAmount, currency),
+              },
+            ),
+            not_positive: t("billing.amountMustBePositive"),
+          }[check.type],
           path: [
             {
               type: "object",

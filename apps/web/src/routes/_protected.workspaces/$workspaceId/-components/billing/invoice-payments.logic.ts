@@ -16,6 +16,7 @@ export const isPartiallyPaid = (invoice: {
 
 type PaymentAmountCheck =
   | { type: "ok"; amount: number }
+  | { type: "invalid_format" }
   | { type: "not_positive" }
   | { type: "more_than_outstanding" };
 
@@ -37,7 +38,12 @@ export const checkPaymentAmount = ({
   locale: string;
 }): PaymentAmountCheck => {
   const parsed = parseLocaleMinorUnits({ amount: input, currency, locale });
-  if (parsed.isErr() || parsed.value <= 0) {
+  if (parsed.isErr()) {
+    return parsed.error.reason === "empty"
+      ? { type: "not_positive" }
+      : { type: "invalid_format" };
+  }
+  if (parsed.value <= 0) {
     return { type: "not_positive" };
   }
   const amount = parsed.value;
