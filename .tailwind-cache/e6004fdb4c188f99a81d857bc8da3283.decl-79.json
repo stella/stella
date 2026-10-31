@@ -1,1 +1,0 @@
-{"dark:[:hover,[data-pressed]]:flex":{"valid":true,"declarations":[["","display","flex"]],"values":{"flex":{"p":[],"f":[],"u":false}}},"data-[position*=top]:after:flex":{"valid":true,"declarations":[["","content","var(--tw-content)"],["","display","flex"]],"values":{"var(--tw-content)":{"p":["--tw-content"],"f":[],"u":true},"flex":{"p":[],"f":[],"u":false}}}}

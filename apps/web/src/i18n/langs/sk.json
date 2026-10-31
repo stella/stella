@@ -814,8 +814,10 @@
       "deleteRateTable": "Odstrániť tabuľku sadzieb",
       "editRateTable": "Upraviť tabuľku sadzieb",
       "effectiveFrom": "Platná od",
+      "effectiveRateRequired": "Pre tento spis, osobu a dátum nie je nastavená platná sadzba. Pridajte sadzbu alebo zaznamenajte čas ako nefakturovateľný.",
       "effectiveTo": "Platná do",
       "hourlyRate": "Hodinová sadzba",
+      "logNonBillable": "Zaznamenať ako nefakturovateľný",
       "noRateEntries": "Zatiaľ žiadne sadzby",
       "noRateFound": "Sadzba nie je nakonfigurovaná",
       "noRateTables": "Zatiaľ žiadne tabuľky sadzieb",
@@ -945,7 +947,8 @@
         "answerIncomplete": "{source, select, organization {Kľúč vašej organizácie pre {provider} vrátil neúplnú odpoveď.} other {AI model vrátil neúplnú odpoveď.}}",
         "decisionNotFound": "Rozhodnutie sa nenašlo. Otvorte ho znova z vyhľadávania.",
         "documentUnparseable": "Text rozhodnutia nie je pripravený na analýzu. Prečítajte si pôvodný zdroj.",
-        "languageUnsupported": "AI analýza zatiaľ nepodporuje jazyk tohto rozhodnutia. Prečítajte si text rozhodnutia alebo pôvodný zdroj.",
+        "languageUnsupported": "AI analýza je dostupná len pre rozhodnutia v týchto jazykoch: {languages}.",
+        "openLanguageVersion": "Otvoriť jazykovú verziu: {language}",
         "providerRefused": "{source, select, organization {{provider} odmietol požiadavku s kľúčom vašej organizácie. Skontrolujte kľúč, jeho kvótu a fakturáciu v nastaveniach organizácie.} other {Poskytovateľ AI požiadavku odmietol.}}",
         "providerUnavailable": "{source, select, organization {{provider} je pre kľúč vašej organizácie momentálne nedostupný.} other {Poskytovateľ AI je momentálne nedostupný.}}",
         "retryAfter": "Znova to môžete skúsiť po {time}.",
@@ -1035,7 +1038,7 @@
     "coverage": {
       "allCurrent": "Všetky zdroje sú aktuálne",
       "completeness": "Úplnosť",
-      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju.",
+      "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju. Rozhodnutia zo zoznamu vydavateľa, ktorých chýbanie zistilo porovnanie, sa nezapočítavajú.",
       "countryNavigation": "Prejsť na krajinu",
       "courtsHeading": "Podľa súdu",
       "decisionYears": "Roky rozhodnutí",
@@ -1090,7 +1093,9 @@
     },
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
-      "remove": "Odstrániť filter {filter}"
+      "countryMismatch": "Filtre boli odstránené, pretože nepatria do krajiny {country}: {filters}.",
+      "remove": "Odstrániť filter {filter}",
+      "showInCountry": "Zobraziť {filter} pre krajinu {country}"
     },
     "languages": {
       "count": "{count, plural, one {# jazyk} few {# jazyky} other {# jazykov}}",
@@ -1346,6 +1351,7 @@
       "toastTitle": "Plné zobrazenie zatiaľ nie je dostupné"
     },
     "activity": {
+      "newerVersion": "Tento obsah sa zobrazí v novšej verzii.",
       "review": "Informácie o revízii"
     },
     "aiPrompt": "Pole správy pre AI",
@@ -1442,6 +1448,14 @@
     "attachedImage": "Priložený obrázok",
     "attachment": "Príloha",
     "audioContent": "Vygenerovaný zvuk",
+    "browserExtension": {
+      "connect": "Pripojiť rozšírenie",
+      "connectDescription": "Na tejto karte kliknite na ikonu rozšírenia stella na paneli prehliadača. Ak sa zobrazí žiadosť o prístup k webom, povoľte ho a pripojte túto kartu.",
+      "connected": "Rozšírenie pripojené",
+      "description": "stella vám na požiadanie otvorí a prečíta webové stránky v samostatnej karte.",
+      "install": "Nainštalovať rozšírenie",
+      "installDescription": "S rozšírením stella vám môže stella na požiadanie otvárať a čítať weby v samostatnej karte. Nainštalujete ho z Internetového obchodu Chrome."
+    },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
@@ -2576,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# vytvorený} few {# vytvorené} other {# vytvorených}}, {skipped, plural, one {# preskočený} few {# preskočené} other {# preskočených}}",
       "rowLabel": "Klient {index}",
       "skippedDuplicateContactId": "Preskočené: duplicitné ID kontaktu",
+      "skippedDuplicateExternalRef": "Preskočené: rovnaký zdroj a externé ID sa vyskytujú dvakrát",
       "skippedDuplicateTaxId": "Preskočené: duplicitné daňové identifikačné číslo",
       "skippedInFileDuplicate": "Preskočené: opakuje skorší riadok súboru",
       "skippedInvalidRow": "Preskočené: riadok nespĺňa pravidlá importu",
@@ -4537,6 +4552,7 @@
     "aiTitle": "Pripojte svojho poskytovateľa AI",
     "appsSubtitle": "stella funguje aj mimo prehliadača: v aplikácii pre počítač a vo vašom AI asistentovi. K tomuto nastaveniu sa môžete kedykoľvek neskôr vrátiť.",
     "appsTitle": "Získajte stellu všade",
+    "browserExtensionCardDescription": "Chat môže pracovať s webmi, ktoré už používate, na karte Chromu, ktorú zvolíte.",
     "catalogueAlwaysOn": "Vždy zapnuté",
     "catalogueCommunityHeading": "Ostatné",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi}}",
@@ -5016,7 +5032,6 @@
       "beta": "Beta funkcie",
       "betaAvt": "Overovanie dokumentov AVT",
       "betaAvtDescription": "Kontrolujte dokumenty spisu tvrdenie po tvrdení voči faktom zo zoznamu",
-      "betaCaseLawDescription": "Zobraziť verejné vyhľadávanie a čítačku judikatúry v bočnom paneli",
       "betaDescription": "Vyskúšajte funkcie, ktoré sú stále vo vývoji",
       "betaInbox": "Doručené a oznámenia",
       "betaInboxDescription": "Zobraziť Doručené a zvonček oznámení",
@@ -5052,6 +5067,8 @@
       "desktopCardConnectedTitle": "stella desktop je prepojený",
       "desktopCardMissingDetail": "Nainštalujte ho, alebo ho pripojte, ak už na tomto počítači nainštalovaný je.",
       "desktopCardMissingTitle": "stella desktop zatiaľ nie je prepojený",
+      "desktopCardOpeningDetail": "Prepájame tento počítač s účtom <bdi>{identity}</bdi> na {host}. Ak sa prehliadač opýta, povoľte otvorenie stella desktop.",
+      "desktopCardOpeningTitle": "Otvára sa stella desktop...",
       "desktopCardOutdatedDetail": "Verzia {version} je prepojená s účtom <bdi>{identity}</bdi>. Nainštalujte najnovšiu verziu, aby dokumenty a aktivita ďalej fungovali.",
       "desktopCardOutdatedTitle": "stella desktop potrebuje aktualizáciu",
       "desktopClipboardDescription": "Otvárajte, prehľadávajte, usporadúvajte a znova používajte text skopírovaný z ľubovoľnej aplikácie.",
@@ -5071,6 +5088,7 @@
       "desktopInstallOpenStep": "Raz otvorte stella desktop. Schránka sa zobrazí okamžite a zostane dostupná z panela ponúk systému macOS alebo z oblasti oznámení systému Windows.",
       "desktopInstallTitle": "Inštalácia a otvorenie",
       "desktopInstallWindowsStep": "Spustite inštalátor a postupujte podľa pokynov.",
+      "desktopOpenApp": "Otvoriť stella desktop",
       "desktopPrivacyDescription": "História schránky je šifrovaná a uložená v tomto zariadení.",
       "desktopPrivacyTitle": "Predvolene súkromné",
       "desktopSelfHostDescription": "Dôverujte tejto URL stella v podpísanej desktopovej aplikácii, aby sa dokumenty z tejto inštalácie mohli otvárať lokálne.",
@@ -5144,6 +5162,10 @@
     "connections": {
       "accessTitle": "{clientName} môže",
       "browseIntegrations": "Pridať službu",
+      "browserExtensionConnectHint": "Po inštalácii otvorte rozšírenie na tejto karte stelly, povoľte prístup k webom a kartu pripojte.",
+      "browserExtensionDescription": "Chat v stelle môže čítať weby a pracovať s nimi na karte Chromu, ktorú zvolíte. Každá akcia čaká na vaše schválenie.",
+      "browserExtensionInstall": "Pridať do Chromu",
+      "browserExtensionTitle": "Rozšírenie prehliadača",
       "cliDescription": "Nainštalujte si príkazový riadok stella a prihláste sa, aby ste mohli z terminálu skriptovať spisy, dokumenty a vzory.",
       "cliInstallLabel": "Inštalácia",
       "cliLoginLabel": "Prihlásenie",
@@ -5394,7 +5416,7 @@
     },
     "inForceSince": "Účinné od {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "Kľúčové rozhodnutia",
+    "leadingDecision": "Kľúčové rozhodnutie",
     "leadingDecisionsExplanation": "Prvá zmienka v každom rozhodnutí, zoradená podľa citačnej autority: vážené prichádzajúce citácie so zohľadnením úrovne súdu, polarity citácie a jej veku.",
     "noVersionInForce": "K vybranému dňu nebolo účinné žiadne znenie tohto predpisu.",
     "openEnded": "súčasnosť",
@@ -5405,15 +5427,11 @@
     "pendingChanges": "Nadchádzajúce novely",
     "pendingChangesIncomplete": "Údaje vydavateľa nemusia zahŕňať všetky nadchádzajúce novely.",
     "provisionAskContextPrompt": "\n\nPasáže, ktoré toto ustanovenie aplikujú v najvplyvnejších rozhodnutiach:\n{passages}\n\nPomocou nástrojov pre judikatúru si môžeš prečítať ktorékoľvek z týchto rozhodnutí celé alebo vyhľadať ďalšie rozhodnutia, ktoré ustanovenie citujú.",
-    "provisionAskPlaceholder": "Opýtajte sa na toto ustanovenie",
-    "provisionAskQuestionPrompt": "K {subject}: {question}",
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
     "provisionEffectiveFrom": "účinné od {date}",
-    "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
-    "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
     "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
@@ -5426,6 +5444,7 @@
     "showCitedPartOnly": "Zobraziť len citovanú časť",
     "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
+    "sortNeedsYear": "Na zoradenie podľa tohto stĺpca vyberte vo filtroch rok.",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
       "current": "Účinné",
@@ -6233,8 +6252,10 @@
       "downloadAsZip": "Stiahnuť .zip súbor",
       "downloadExtractedText": "Extrahovaný text (.txt)",
       "downloadFailed": "Sťahovanie zlyhalo",
+      "downloadOriginal": "Pôvodný súbor",
       "downloadPdf": "Stiahnuť ako PDF",
       "downloadSearchablePdf": "Prehľadávateľné PDF",
+      "downloadWithComments": "Stiahnuť s komentármi",
       "emptyFile": "Súbor je prázdny.",
       "includeReferenceNumber": "Pridať referenčné číslo",
       "itemLimitReached": "Tento spis dosiahol limit položiek.",
@@ -6523,6 +6544,14 @@
           "started": "Spustil(a) kontrolu dokumentu"
         },
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
+        "fields": {
+          "dueDate": "termín",
+          "parentFolder": "nadradený priečinok",
+          "priority": "priorita",
+          "property": "vlastnosť",
+          "schedule": "plán",
+          "sortOrder": "poradie"
+        },
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
           "all": "Všetka aktivita",
@@ -6572,6 +6601,7 @@
           "translation": "preklad"
         },
         "title": "Aktivita",
+        "updatedFields": "Aktualizované: {fields}",
         "views": {
           "list": "Zoznam",
           "timeline": "Časová os"

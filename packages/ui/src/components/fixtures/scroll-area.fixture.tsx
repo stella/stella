@@ -14,7 +14,9 @@ import { ScrollArea } from "../scroll-area";
 // - the same column with short content, which stays as short as its content;
 // - a root bounded by its own max-height, in a parent of auto height;
 // - a root of definite height, in a parent of auto height;
-// - a root with no bound at all, which is as tall as its content.
+// - a root with no bound at all, which is as tall as its content;
+// - a root inside a positioned frame that scrolls, whose rows carry
+//   visually hidden labels the frame must never scroll to.
 const FRAME_CLASS = {
   // A frame of definite height that the card's max-height resolves against.
   // `items-start` keeps the card from stretching to the frame, which would
@@ -25,10 +27,17 @@ const FRAME_CLASS = {
 } as const;
 const CARD_CLASS = "bg-background flex max-h-full w-full flex-col border";
 
-const Lines = ({ count }: { count: number }) => (
+const Lines = ({
+  count,
+  hiddenLabels = false,
+}: {
+  count: number;
+  hiddenLabels?: boolean;
+}) => (
   <ul className="flex flex-col gap-2 p-3 text-sm">
     {Array.from({ length: count }, (_, index) => (
       <li data-line={index + 1} key={index}>
+        {hiddenLabels && <span className="sr-only">Changed: </span>}
         Line {index + 1}
       </li>
     ))}
@@ -107,6 +116,18 @@ const ScrollAreaFixture = () => {
       <Case frame="open" name="unbounded">
         <ScrollArea axis="vertical">
           <Lines count={3} />
+        </ScrollArea>
+      </Case>
+      {/* An app shell's scrolling content area, holding a positioned pane
+          that a scroll area fills: anything positioned against the pane that
+          lies past its bottom would scroll the shell. */}
+      <Case frame="open" name="positioned-frame">
+        <ScrollArea axis="vertical" className="h-40">
+          <div className="relative flex h-40 flex-col">
+            <ScrollArea axis="vertical" className="min-h-0 flex-1">
+              <Lines count={40} hiddenLabels />
+            </ScrollArea>
+          </div>
         </ScrollArea>
       </Case>
     </main>

@@ -814,8 +814,10 @@
       "deleteRateTable": "Tariftabelle löschen",
       "editRateTable": "Tariftabelle bearbeiten",
       "effectiveFrom": "Gültig ab",
+      "effectiveRateRequired": "Für diese Akte, diese Person und dieses Datum ist kein gültiger Stundensatz hinterlegt. Fügen Sie einen Stundensatz hinzu oder erfassen Sie die Zeit als nicht abrechenbar.",
       "effectiveTo": "Gültig bis",
       "hourlyRate": "Stundensatz",
+      "logNonBillable": "Als nicht abrechenbar erfassen",
       "noRateEntries": "Noch keine Tarifeinträge",
       "noRateFound": "Kein Tarif konfiguriert",
       "noRateTables": "Noch keine Tariftabellen",
@@ -945,7 +947,8 @@
         "answerIncomplete": "{source, select, organization {Der {provider}-Schlüssel Ihrer Organisation hat eine unvollständige Antwort geliefert.} other {Das KI-Modell hat eine unvollständige Antwort geliefert.}}",
         "decisionNotFound": "Diese Entscheidung wurde nicht gefunden. Öffnen Sie sie erneut über die Suche.",
         "documentUnparseable": "Der Entscheidungstext ist noch nicht für die Analyse bereit. Lesen Sie die Originalquelle.",
-        "languageUnsupported": "Die KI-Analyse unterstützt die Sprache dieser Entscheidung noch nicht. Lesen Sie den Entscheidungstext oder die Originalquelle.",
+        "languageUnsupported": "Die KI-Analyse ist nur für Entscheidungen in diesen Sprachen verfügbar: {languages}.",
+        "openLanguageVersion": "Sprachfassung öffnen: {language}",
         "providerRefused": "{source, select, organization {{provider} hat die Anfrage mit dem Schlüssel Ihrer Organisation abgelehnt. Prüfen Sie den Schlüssel, sein Kontingent und die Abrechnung in den Organisationseinstellungen.} other {Der KI-Anbieter hat die Anfrage abgelehnt.}}",
         "providerUnavailable": "{source, select, organization {{provider} ist für den Schlüssel Ihrer Organisation gerade nicht verfügbar.} other {Der KI-Anbieter ist gerade nicht verfügbar.}}",
         "retryAfter": "Sie können es ab {time} erneut versuchen.",
@@ -1035,7 +1038,7 @@
     "coverage": {
       "allCurrent": "Alle Quellen sind aktuell",
       "completeness": "Vollständigkeit",
-      "completenessHelp": "Gespeicherte Entscheidungen im Verhältnis zur Gesamtzahl des Herausgebers, dessen Verzeichnis oder einer erfassten Gesamtzahl.",
+      "completenessHelp": "Gespeicherte Entscheidungen im Verhältnis zur Gesamtzahl des Herausgebers, dessen Verzeichnis oder einer erfassten Gesamtzahl. Vom Herausgeber gelistete Entscheidungen, die beim Abgleich als fehlend festgestellt wurden, werden nicht mitgezählt.",
       "countryNavigation": "Land auswählen",
       "courtsHeading": "Nach Gericht",
       "decisionYears": "Entscheidungsjahre",
@@ -1090,7 +1093,9 @@
     },
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
-      "remove": "Filter {filter} entfernen"
+      "countryMismatch": "Filter entfernt, da sie nicht zu {country} gehören: {filters}.",
+      "remove": "Filter {filter} entfernen",
+      "showInCountry": "{filter} in {country} anzeigen"
     },
     "languages": {
       "count": "{count, plural, one {# Sprache} other {# Sprachen}}",
@@ -1346,6 +1351,7 @@
       "toastTitle": "Vollansicht noch nicht verfügbar"
     },
     "activity": {
+      "newerVersion": "Dieser Inhalt wird in einer neueren Version angezeigt.",
       "review": "Aktualisierung zur Prüfung"
     },
     "aiPrompt": "KI-Nachrichtenfeld",
@@ -1442,6 +1448,14 @@
     "attachedImage": "Angehängtes Bild",
     "attachment": "Anhang",
     "audioContent": "Generiertes Audio",
+    "browserExtension": {
+      "connect": "Erweiterung verbinden",
+      "connectDescription": "Klicken Sie in diesem Tab auf das stella-Symbol in der Browserleiste. Erlauben Sie bei Nachfrage den Zugriff auf Websites und verbinden Sie diesen Tab.",
+      "connected": "Erweiterung verbunden",
+      "description": "stella kann auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen.",
+      "install": "Erweiterung installieren",
+      "installDescription": "Mit der stella-Erweiterung kann stella auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen. Sie erhalten die Erweiterung im Chrome Web Store."
+    },
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stellen Sie Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In KI-Chat einfügen",
@@ -2576,6 +2590,7 @@
       "resultsSummary": "{created, plural, one {# erstellt} other {# erstellt}}, {skipped, plural, one {# übersprungen} other {# übersprungen}}",
       "rowLabel": "Mandant {index}",
       "skippedDuplicateContactId": "Übersprungen: doppelte Kontakt-ID",
+      "skippedDuplicateExternalRef": "Übersprungen: dieselbe Quelle und externe ID kommen doppelt vor",
       "skippedDuplicateTaxId": "Übersprungen: doppelte Steuernummer",
       "skippedInFileDuplicate": "Übersprungen: wiederholt eine frühere Zeile der Datei",
       "skippedInvalidRow": "Übersprungen: Die Zeile verletzt die Importregeln",
@@ -4537,6 +4552,7 @@
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
+    "browserExtensionCardDescription": "Der Chat arbeitet mit Websites, die Sie bereits nutzen, in einem Chrome-Tab Ihrer Wahl.",
     "catalogueAlwaysOn": "Immer aktiv",
     "catalogueCommunityHeading": "Weitere",
     "catalogueContinueWithCount": "{count, plural, one {Mit # Tool fortfahren} other {Mit # Tools fortfahren}}",
@@ -5016,7 +5032,6 @@
       "beta": "Beta-Funktionen",
       "betaAvt": "AVT-Dokumentprüfung",
       "betaAvtDescription": "Die Dokumente einer Akte Aussage für Aussage mit den Fakten einer Liste abgleichen",
-      "betaCaseLawDescription": "Öffentliche Rechtsprechungssuche und -ansicht in der Seitenleiste anzeigen",
       "betaDescription": "Funktionen ausprobieren, die sich noch in der Entwicklung befinden",
       "betaInbox": "Posteingang und Benachrichtigungen",
       "betaInboxDescription": "Posteingang und Benachrichtigungsglocke anzeigen",
@@ -5052,6 +5067,8 @@
       "desktopCardConnectedTitle": "stella desktop ist verknüpft",
       "desktopCardMissingDetail": "Installieren Sie es oder verbinden Sie es, falls es auf diesem Computer schon installiert ist.",
       "desktopCardMissingTitle": "stella desktop ist noch nicht verknüpft",
+      "desktopCardOpeningDetail": "Dieser Computer wird mit <bdi>{identity}</bdi> auf {host} verknüpft. Wenn Ihr Browser nachfragt, erlauben Sie das Öffnen von stella desktop.",
+      "desktopCardOpeningTitle": "stella desktop wird geöffnet...",
       "desktopCardOutdatedDetail": "Version {version} ist mit <bdi>{identity}</bdi> verknüpft. Installieren Sie die neueste Version, damit Dokumente und Aktivität weiter funktionieren.",
       "desktopCardOutdatedTitle": "stella desktop braucht ein Update",
       "desktopClipboardDescription": "Öffnen, durchsuchen, organisieren und verwenden Sie kopierten Text aus jeder App erneut.",
@@ -5071,6 +5088,7 @@
       "desktopInstallOpenStep": "Öffnen Sie stella desktop einmal. Die Zwischenablage erscheint sofort und bleibt über die macOS-Menüleiste oder den Windows-Infobereich verfügbar.",
       "desktopInstallTitle": "Installieren und öffnen",
       "desktopInstallWindowsStep": "Starten Sie das Installationsprogramm und folgen Sie den Anweisungen.",
+      "desktopOpenApp": "stella desktop öffnen",
       "desktopPrivacyDescription": "Der Zwischenablageverlauf wird verschlüsselt auf diesem Gerät gespeichert.",
       "desktopPrivacyTitle": "Standardmäßig privat",
       "desktopSelfHostDescription": "Vertrauen Sie dieser stella-URL in der signierten Desktop-App, damit Dokumente aus dieser Installation lokal geöffnet werden können.",
@@ -5144,6 +5162,10 @@
     "connections": {
       "accessTitle": "{clientName} darf",
       "browseIntegrations": "Dienst hinzufügen",
+      "browserExtensionConnectHint": "Öffnen Sie die Erweiterung nach der Installation in diesem stella-Tab, erlauben Sie den Zugriff auf Websites und verbinden Sie den Tab.",
+      "browserExtensionDescription": "Der stella-Chat kann Websites in einem Chrome-Tab Ihrer Wahl lesen und bedienen. Jede Aktion wartet auf Ihre Freigabe.",
+      "browserExtensionInstall": "Zu Chrome hinzufügen",
+      "browserExtensionTitle": "Browsererweiterung",
       "cliDescription": "Installieren Sie den stella-Kommandozeilen-Client und melden Sie sich an, um Akten, Dokumente und Vorlagen per Terminal zu automatisieren.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",
@@ -5394,7 +5416,7 @@
     },
     "inForceSince": "In Kraft seit {date}",
     "ineligibleVersion": "{range} ({label})",
-    "leadingDecisions": "Leitentscheidungen",
+    "leadingDecision": "Leitentscheidung",
     "leadingDecisionsExplanation": "Die erste Erwähnung in jeder Entscheidung, geordnet nach Zitiergewicht: gewichtete eingehende Zitate, angepasst an Gerichtsrang, Zitierpolarität und Alter.",
     "noVersionInForce": "Am gewählten Tag galt keine Fassung dieses Gesetzes.",
     "openEnded": "heute",
@@ -5405,15 +5427,11 @@
     "pendingChanges": "Bevorstehende Änderungen",
     "pendingChangesIncomplete": "Die Daten des Herausgebers enthalten möglicherweise nicht alle bevorstehenden Änderungen.",
     "provisionAskContextPrompt": "\n\nPassagen, die die Vorschrift in den maßgeblichsten Entscheidungen anwenden:\n{passages}\n\nNutze die Rechtsprechungswerkzeuge, um eine dieser Entscheidungen vollständig zu lesen oder weitere Entscheidungen zu finden, die die Vorschrift zitieren.",
-    "provisionAskPlaceholder": "Zu dieser Vorschrift fragen",
-    "provisionAskQuestionPrompt": "Zu {subject}: {question}",
     "provisionAskSummarize": "Zusammenfassen, wie Gerichte diese Vorschrift anwenden",
     "provisionAskSummarizePrompt": "Fasse zusammen, wie Gerichte {subject} anwenden, und zitiere die herangezogenen Entscheidungen.",
     "provisionDetailsFor": "Einzelheiten zu {provision}",
     "provisionEffectiveFrom": "in Kraft seit {date}",
-    "provisionHistoryEarliest": "Älteste überlieferte Fassung.",
     "provisionHistoryEmpty": "Zu dieser Vorschrift liegt keine Fassung vor.",
-    "provisionHistoryLoadOlder": "Ältere Fassungen laden und vergleichen.",
     "provisionHistoryUnavailable": "Der Verlauf dieser Vorschrift konnte nicht geladen werden.",
     "provisionPartTextUnavailable": "Der Wortlaut von {provisionLabel} ist nicht verfügbar",
     "provisionPromptSubject": "{provision} von {statute} ({eli}) in der seit {date} geltenden Fassung",
@@ -5426,6 +5444,7 @@
     "showCitedPartOnly": "Nur zitierten Teil anzeigen",
     "showFullProvision": "Ganze Vorschrift anzeigen",
     "showInText": "Im Text anzeigen",
+    "sortNeedsYear": "Wählen Sie in den Filtern ein Jahr, um nach dieser Spalte zu sortieren.",
     "statedWindow": "Vom Herausgeber angegebene Daten: {range}",
     "status": {
       "current": "In Kraft",
@@ -6233,8 +6252,10 @@
       "downloadAsZip": "Als .zip herunterladen",
       "downloadExtractedText": "Extrahierter Text (.txt)",
       "downloadFailed": "Download fehlgeschlagen",
+      "downloadOriginal": "Originaldatei",
       "downloadPdf": "Als PDF herunterladen",
       "downloadSearchablePdf": "Durchsuchbare PDF",
+      "downloadWithComments": "Mit Kommentaren herunterladen",
       "emptyFile": "Die Datei ist leer.",
       "includeReferenceNumber": "Aktenzeichen einfügen",
       "itemLimitReached": "Diese Akte hat das Limit für Einträge erreicht.",
@@ -6523,6 +6544,14 @@
           "started": "Dokumentenprüfung gestartet für"
         },
         "empty": "Noch keine Aktivität in dieser Akte.",
+        "fields": {
+          "dueDate": "Fälligkeitsdatum",
+          "parentFolder": "übergeordneter Ordner",
+          "priority": "Priorität",
+          "property": "Eigenschaft",
+          "schedule": "Zeitplan",
+          "sortOrder": "Reihenfolge"
+        },
         "filterLabel": "Aktivität filtern",
         "filters": {
           "all": "Alle Aktivitäten",
@@ -6572,6 +6601,7 @@
           "translation": "Übersetzung"
         },
         "title": "Aktivität",
+        "updatedFields": "{fields} aktualisiert",
         "views": {
           "list": "Listenansicht",
           "timeline": "Zeitleistenansicht"

@@ -1,0 +1,1 @@
+{"[--sidebar-inline-size:calc(var(--sidebar-width-icon)+var(--sidebar-safe-area-inline))]":{"valid":true,"declarations":[["","--sidebar-inline-size","calc(var(--sidebar-width-icon) + var(--sidebar-safe-area-inline))"]],"values":{"calc(var(--sidebar-width-icon) + var(--sidebar-safe-area-inline))":{"p":["--sidebar-width-icon","--sidebar-safe-area-inline"],"f":[],"u":false}}}}

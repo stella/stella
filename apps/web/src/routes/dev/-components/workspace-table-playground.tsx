@@ -93,6 +93,7 @@ const benchDecisions = (): Decision[] =>
       slug: null,
       decisionDate: benchDate(index),
       decisionType: BENCH_TYPES[index % BENCH_TYPES.length] ?? "judgment",
+      decisionTypeKind: null,
       headline: BENCH_HEADNOTES[index % BENCH_HEADNOTES.length] ?? null,
       headnote: {
         type: TEXT_FIELD_TYPE.PRESENT,

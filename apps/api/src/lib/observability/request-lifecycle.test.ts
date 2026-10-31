@@ -851,7 +851,7 @@ describe("the request lifecycle", () => {
         "_aws" in record,
       ]),
     ).toEqual([
-      ["/v1/case/decisions/:decisionId/citations/summary", "search", true],
+      ["/v1/case/decisions/:decisionId/citations/summary", "search", false],
       ["/v1/case/sitemap/shards", "batch", false],
     ]);
   });
