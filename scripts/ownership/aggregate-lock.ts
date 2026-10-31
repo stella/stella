@@ -5,6 +5,8 @@ export default {
   capability: "Acquiring transaction aggregate locks",
   owner: [
     "apps/api/src/lib/db/aggregate-lock.ts",
+    "apps/api/src/lib/db/aggregate-lock-entries/",
+    "apps/api/src/lib/db/aggregate-chain-entries/",
     "apps/api/src/lib/db/transaction-abort.ts",
   ],
   summary:

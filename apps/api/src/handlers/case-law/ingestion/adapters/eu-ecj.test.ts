@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildListingQuery,
   celexToCaseNumber,
@@ -21,6 +20,7 @@ import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliatio
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
   listingIdentityKey,
   parseListingIdentityKey,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
