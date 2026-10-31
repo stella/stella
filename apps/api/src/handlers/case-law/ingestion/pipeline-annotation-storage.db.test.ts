@@ -39,6 +39,7 @@ import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
+import { isRecord } from "@/api/lib/type-guards";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -939,6 +940,81 @@ test.each([inlineCorpus, packedCorpus])(
       }
     } finally {
       report.mockRestore();
+    }
+  },
+);
+
+test.each([inlineCorpus, packedCorpus])(
+  "opinion scopes over late head matter are stored against the stored blocks ($mode)",
+  async (corpus) => {
+    const documentId = createSafeId<"caseLawDecision">();
+    const ast = sourceAst(documentId, "Decision text.");
+    const body = ast.blocks.at(0);
+    if (body?.type !== "paragraph") {
+      expect.unreachable("Fixture contains a paragraph");
+    }
+    ast.blocks.push({
+      ...body,
+      id: "p2",
+      anchorId: "p2",
+      inlines: [{ type: "text", text: "Counsel of record." }],
+      plainText: "Counsel of record.",
+      role: "apparatus",
+    });
+    expect(isDocumentAst(ast)).toBe(false);
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const outcome = (
+        await processDecision({
+          input: plainTextIngestionResult({
+            ...input(documentId, "Decision text."),
+            documentAst: ast,
+            citationScopes: opinion,
+          }),
+          sourceId,
+          scopedDb,
+          observedAt: new Date("2026-10-26T10:00:00Z"),
+          observationOrder: 1n,
+          corpus,
+        })
+      ).unwrap();
+      expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
+      expect(warn).toHaveBeenCalledWith(
+        "case_law.ingestion.ast_head_matter_order",
+        expect.objectContaining({ lateBlockCount: 1 }),
+      );
+      const row = (
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceDocumentId, documentId))
+      ).at(0);
+      if (row === undefined) {
+        expect.unreachable("The decision is stored");
+      }
+      const stored: unknown =
+        corpus.mode === "off"
+          ? row.documentAst
+          : await storedAst(
+              packs.at(-1) ??
+                expect.unreachable("Canonical mode stores a pack"),
+              row.id,
+            );
+      expect(stored).toEqual(ast);
+      if (!isRecord(stored)) {
+        expect.unreachable("The stored AST is an object");
+      }
+      const metadata = row.metadata ?? expect.unreachable("Metadata stored");
+      expect(metadata[CITATION_SCOPE_METADATA_KEY]).toEqual(
+        expect.objectContaining({ astHash: citationScopeAstHash(stored) }),
+      );
+      const verified = validatedCitationScopes(metadata, stored);
+      if (Result.isError(verified)) {
+        expect.unreachable(`Stored scopes validate: ${verified.error.defect}`);
+      }
+      expect(verified.value).toEqual(opinion);
+    } finally {
+      warn.mockRestore();
     }
   },
 );
