@@ -205,7 +205,7 @@ const readCustomPropertyReference = async (
   zip: ZipArchive,
 ): Promise<CarriedReference | null> => {
   const entry = zip.entry(CUSTOM_PROPERTIES_PATH);
-  if (entry === null) {
+  if (entry === undefined) {
     return null;
   }
 
