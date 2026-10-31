@@ -105,7 +105,9 @@ DECLARE
   fresh_candidates text[];
   locked_candidates text[];
   held jsonb;
+  requested_wait text := CASE WHEN p_mode = 'update_nowait' THEN 'nowait' ELSE 'block' END;
 BEGIN
+  IF p_mode = 'update_nowait' THEN p_mode := 'update'; END IF;
   IF p_mode NOT IN ('share', 'update') OR jsonb_typeof(p_requests) <> 'array' THEN
     RAISE EXCEPTION 'invalid stewardship lock request' USING ERRCODE = 'invalid_parameter_value';
   END IF;
@@ -231,9 +233,15 @@ BEGIN
     RAISE EXCEPTION 'stewardship relationships changed; retry the transaction' USING ERRCODE = 'lock_not_available';
   END IF;
   IF p_mode = 'update' THEN
+    IF requested_wait = 'nowait' THEN
+      PERFORM w.id FROM public.workspaces w
+        JOIN jsonb_to_recordset(p_requests) AS r(organization_id text) ON r.organization_id = w.organization_id
+        WHERE w.id = ANY(targets) ORDER BY w.id FOR UPDATE OF w NOWAIT;
+    ELSE
     PERFORM w.id FROM public.workspaces w
       JOIN jsonb_to_recordset(p_requests) AS r(organization_id text) ON r.organization_id = w.organization_id
       WHERE w.id = ANY(targets) ORDER BY w.id FOR UPDATE OF w;
+    END IF;
   ELSE
     PERFORM w.id FROM public.workspaces w
       JOIN jsonb_to_recordset(p_requests) AS r(organization_id text) ON r.organization_id = w.organization_id

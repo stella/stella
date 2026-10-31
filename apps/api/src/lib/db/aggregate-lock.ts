@@ -2855,8 +2855,10 @@ type MatterStewardshipLockRequest = {
 type MatterStewardshipLockOptions = {
   tx: ExecuteTransaction;
   requests: readonly MatterStewardshipLockRequest[];
-  mode: "share" | "update";
-};
+} & (
+  | { mode: "share"; wait?: never }
+  | { mode: "update"; wait?: "block" | "nowait" }
+);
 
 /**
  * The single stewardship prefix: lifecycle IDs, candidate member IDs, matter
@@ -2867,7 +2869,9 @@ export const lockMatterStewardship = async ({
   tx,
   requests,
   mode,
+  wait,
 }: MatterStewardshipLockOptions) => {
+  const sqlMode = wait === "nowait" ? "update_nowait" : mode;
   const request = JSON.stringify(
     requests.map((scope) => ({
       organization_id: scope.organizationId,
@@ -2879,7 +2883,7 @@ export const lockMatterStewardship = async ({
   const result = await Result.tryPromise(
     async () =>
       await tx.execute(sql`
-    SELECT workspace_id AS id FROM public.stella_lock_matter_stewardship(${request}::text::jsonb, ${mode})
+    SELECT workspace_id AS id FROM public.stella_lock_matter_stewardship(${request}::text::jsonb, ${sqlMode})
   `),
   );
   if (result.isErr()) {

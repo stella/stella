@@ -1134,6 +1134,7 @@ export const tryLockAccountMemberCleanup = async (
       membershipUserIds: [userId],
     })),
     mode: "update",
+    wait: "nowait",
   });
   const lockedIds = new Set(workspaceIds);
   const current = await selectMemberCleanupWorkspaceIds({ tx, userId });

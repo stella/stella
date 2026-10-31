@@ -21,6 +21,7 @@ import { ACCOUNT_DELETION_ERROR_CODE } from "@/api/lib/account-deletion-steps";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
+import { shareAccountRow } from "@/api/lib/db/account-row";
 import { verifyAndDeleteUser } from "@/api/lib/delete-account";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import { isPgConstraintError, isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -232,12 +233,17 @@ const fixture = async (db: GatedTestDb) => {
 type Fixture = Awaited<ReturnType<typeof fixture>>;
 
 /** Organization removal of the leaver that holds its transaction open. */
-const heldRemoval = (db: GatedTestDb, data: Fixture) => {
+const heldRemoval = (
+  db: GatedTestDb,
+  data: Fixture,
+  beforeRemoval?: (tx: Transaction) => Promise<void>,
+) => {
   const pid = Promise.withResolvers<number>();
   const removed = Promise.withResolvers<undefined>();
   const release = Promise.withResolvers<undefined>();
   const done = db.transaction(async (tx) => {
     pid.resolve(await backendPid(tx));
+    await beforeRemoval?.(asTestRaw<Transaction>(tx));
     await removeOrganizationMemberInTransaction(asTestRaw<Transaction>(tx), {
       organizationId: data.organizationId,
       memberId: data.leaverMemberId,
@@ -263,7 +269,11 @@ if (!databaseUrl || !runPostgresTests) {
         const { db } = openClient();
         const { db: removalDb } = openClient();
         const data = await fixture(db);
-        const removal = heldRemoval(removalDb, data);
+        const removal = heldRemoval(
+          removalDb,
+          data,
+          async (tx) => await shareAccountRow(tx, data.leaverId),
+        );
         try {
           await removal.removed;
           const removalPid = await removal.pid;
@@ -300,6 +310,7 @@ if (!databaseUrl || !runPostgresTests) {
         const { db } = openClient();
         const { db: blockerDb } = openClient();
         const { db: removalDb } = openClient();
+        const { db: matterBlockerDb } = openClient();
         const data = await fixture(db);
         // A co-owner row share-lock pauses erasure after it holds the
         // leaver's own membership rows and before it reaches any matter.
@@ -315,6 +326,9 @@ if (!databaseUrl || !runPostgresTests) {
           await releaseBlocker.promise;
         });
         let removal: ReturnType<typeof heldRemoval> | undefined;
+        const matterHeld = Promise.withResolvers<undefined>();
+        const releaseMatter = Promise.withResolvers<undefined>();
+        let matterBlocker: Promise<void> | undefined;
         try {
           const heldBy = await blockerPid.promise;
           const erasure = verifyAndDeleteUser(
@@ -323,8 +337,18 @@ if (!databaseUrl || !runPostgresTests) {
             data.code,
           );
           await waitUntilHolding(db, heldBy);
-          // Organization removal takes the matter, then waits on the
-          // membership the erasure already holds.
+          // An independent matter writer holds the later-ranked row while
+          // removal waits for erasure's canonical stewardship prefix.
+          matterBlocker = matterBlockerDb.transaction(async (tx) => {
+            await tx
+              .select({ id: workspaces.id })
+              .from(workspaces)
+              .where(eq(workspaces.id, data.workspaceId))
+              .for("update");
+            matterHeld.resolve(undefined);
+            await releaseMatter.promise;
+          });
+          await matterHeld.promise;
           removal = heldRemoval(removalDb, data);
           await waitUntilBlocked(db, await removal.pid);
           releaseBlocker.resolve(undefined);
@@ -338,6 +362,20 @@ if (!databaseUrl || !runPostgresTests) {
               retryable: true,
             });
           }
+          expect(await data.otpRows()).toBe(1);
+          const [unchangedUser] = await db
+            .select({ deletedAt: user.deletedAt })
+            .from(user)
+            .where(eq(user.id, data.leaverId));
+          expect(unchangedUser?.deletedAt).toBeNull();
+          expect(
+            await db.$count(
+              accountDeletionRequests,
+              eq(accountDeletionRequests.userId, data.leaverId),
+            ),
+          ).toBe(0);
+          releaseMatter.resolve(undefined);
+          await matterBlocker;
           // The refusal released the membership; removal finishes.
           await removal.removed;
           removal.release.resolve(undefined);
@@ -362,9 +400,10 @@ if (!databaseUrl || !runPostgresTests) {
           ).toBe(0);
         } finally {
           releaseBlocker.resolve(undefined);
+          releaseMatter.resolve(undefined);
           removal?.release.resolve(undefined);
           // The happy path already awaited both; this only drains a failed run.
-          await Promise.allSettled([blocker, removal?.done]);
+          await Promise.allSettled([blocker, matterBlocker, removal?.done]);
           await data.cleanUp();
         }
       });
