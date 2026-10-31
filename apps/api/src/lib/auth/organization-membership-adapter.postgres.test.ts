@@ -1,3 +1,4 @@
+import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization as organizationPlugin } from "better-auth/plugins";
 import type { OrganizationOptions } from "better-auth/plugins";
@@ -22,6 +23,12 @@ const CREATED_AT = new Date("2026-01-02T03:04:05.000Z");
 
 const adapterOptions = {
   plugins: [organizationPlugin(BETTER_AUTH_ORGANIZATION_OPTIONS)],
+};
+
+type MembershipProjectionCase = {
+  name: string;
+  options: BetterAuthOptions;
+  expectedMetadata: unknown;
 };
 
 const projectionSchema = v.array(
@@ -49,7 +56,7 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("organization membership adapter (postgres)", () => {
-    test.each([
+    test.each<MembershipProjectionCase>([
       {
         name: "default metadata",
         options: adapterOptions,
