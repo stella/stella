@@ -34,9 +34,13 @@ import {
 } from "./seed-slovak-firm.data";
 
 let rlsFixture: Awaited<ReturnType<typeof getRlsFixture>>;
-beforeAll(async () => {
-  rlsFixture = await getRlsFixture();
-});
+// timeout: initializes the shared database schema and its RLS fixture.
+beforeAll(
+  async () => {
+    rlsFixture = await getRlsFixture();
+  },
+  { timeout: 30_000 },
+);
 afterAll(releaseRlsFixture);
 
 type TransitionContext = Parameters<typeof transitionInvoice.handler>[0];
