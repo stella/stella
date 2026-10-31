@@ -78,6 +78,7 @@ import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
+import { chatDraftHasModelContent } from "@/features/chat/lib/chat-message-model-content";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -1579,7 +1580,9 @@ export const useChatEditor = ({
       }
       confirmedCredentialSendRef.current = false;
 
-      if (!html && files.length === 0) {
+      // Nothing a model reads (spaces, a lone line break): the draft stays
+      // in the composer and nothing is sent.
+      if (!chatDraftHasModelContent({ files, html })) {
         return;
       }
 

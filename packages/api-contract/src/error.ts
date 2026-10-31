@@ -70,6 +70,9 @@ export const MEMBER_REMOVAL_BUSY_CODE = "member_removal_busy" as const;
 export const CHAT_CONTINUATION_REJECTED_ERROR_CODE =
   "chat_continuation_rejected" as const;
 
+/** A chat user message with nothing a model can read: no text and no attachment. */
+export const CHAT_MESSAGE_EMPTY_ERROR_CODE = "chat_message_empty" as const;
+
 /** A chat request whose turn has no execution it may continue: the turn was
  *  stopped, superseded or already settled. */
 export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;

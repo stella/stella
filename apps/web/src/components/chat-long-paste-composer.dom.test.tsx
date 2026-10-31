@@ -204,7 +204,7 @@ for (const editAfterExpand of [false, true]) {
     }
     expect(draft.html).toBe("");
     expect(draft.files).toEqual(originalAttachments);
-    expect((await buildChatRequestMessage(draft)).content).toEqual([
+    expect((await buildChatRequestMessage(draft)).unwrap().content).toEqual([
       { type: "text", content: text, metadata: { type: "pasted_text" } },
     ]);
     client.clear();
@@ -321,7 +321,7 @@ test("sending keeps typed content and exact pasted attachment text in the reques
   if (draft === undefined) {
     throw new Error("Expected the composer to submit its draft");
   }
-  expect(await buildChatRequestMessage(draft)).toMatchObject({
+  expect((await buildChatRequestMessage(draft)).unwrap()).toMatchObject({
     content: [
       { type: "text", content: "<p>Review this passage</p>" },
       { type: "text", content: text, metadata: { type: "pasted_text" } },
@@ -349,7 +349,7 @@ test("a pasted chip alone submits without an empty prompt part", async () => {
     throw new Error("Expected an attachment-only draft to submit");
   }
   expect(draft.html).toBe("");
-  expect(await buildChatRequestMessage(draft)).toMatchObject({
+  expect((await buildChatRequestMessage(draft)).unwrap()).toMatchObject({
     content: [
       { type: "text", content: text, metadata: { type: "pasted_text" } },
     ],

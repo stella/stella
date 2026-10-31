@@ -168,6 +168,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { FILE_OPEN_TARGET, resolveFileOpenTarget } from "@/lib/file-open.logic";
 import {
@@ -1129,19 +1130,21 @@ export const SearchDialog = ({
         scope: "global",
         threadId: createChatThreadId(),
       };
-      await startNewThreadCommandHandoff({
-        activeOrganizationId: searchRecentsScope.organizationId,
-        context: {
-          allowMissingThread: true,
-          getUserContext,
-          getContextMatterIds: () => [],
-          getSendMode: () => getChatSendMode(threadRef),
-        },
-        files: [],
-        html: toAskAIMessageHtml(queryText),
-        queryClient,
-        threadRef,
-      });
+      readQueryResult(
+        await startNewThreadCommandHandoff({
+          activeOrganizationId: searchRecentsScope.organizationId,
+          context: {
+            allowMissingThread: true,
+            getUserContext,
+            getContextMatterIds: () => [],
+            getSendMode: () => getChatSendMode(threadRef),
+          },
+          files: [],
+          html: toAskAIMessageHtml(queryText),
+          queryClient,
+          threadRef,
+        }),
+      );
       return threadRef.threadId;
     },
     onError: (error) => {
