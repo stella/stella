@@ -456,6 +456,12 @@ describe("DayCalendar", () => {
     expect(
       container.querySelector('[data-slot="day-calendar-selection"]'),
     ).toBeNull();
+
+    // A keyboard range drafted in the column stays a draft when Enter is
+    // pressed on the suggestion.
+    await key(surfaceOf(container, "entries"), "ArrowDown");
+    await key(suggestion, "Enter");
+    expect(selected).toEqual([]);
     await cleanup();
   });
 

@@ -642,7 +642,9 @@ const DayCalendarBlockView = ({
         data-state={block.state}
         onClick={block.onActivate}
         // A suggestion is acted on, not dragged across: the column's range
-        // selection must not start under it.
+        // selection must not start under it, and its keys must not reach the
+        // column's range slider (Enter would commit a keyboard range).
+        onKeyDown={(event) => event.stopPropagation()}
         onPointerDown={(event) => event.stopPropagation()}
         type="button"
       >
