@@ -176,6 +176,13 @@ export const scheduledJobBudgetProblems = (
 ) => {
   const budget = READ_BUDGETS[id];
   const problems: string[] = [];
+  const hang = budgetViolations(
+    sumMetrics([measured.readMetrics, measured.writeMetrics]),
+    readBudgetPages(id),
+  ).find((violation) => violation.kind === "execution-time-hang-guard");
+  if (hang !== undefined) {
+    problems.push(`${id}: ${hang.message}`);
+  }
   const readProblem = pageBudgetProblem(id, measured.readMetrics.sharedBlocks);
   if (readProblem !== undefined) {
     problems.push(readProblem);

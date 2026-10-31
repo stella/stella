@@ -479,6 +479,13 @@ test("scheduled runs retain execution time and reject a slow statement within th
     expect(budgetProblem(id, metrics)).toContain(
       "execution time hang guard exceeded",
     );
+    expect(
+      scheduledJobBudgetProblems(id, {
+        readMetrics: { sharedBlocks: 1, executionTimeMs: 5000 },
+        writeMetrics: { sharedBlocks: 1, executionTimeMs: 5001 },
+        writtenRows: 1,
+      }).join("\n"),
+    ).toContain("execution time hang guard exceeded");
   }
   expect(
     budgetProblem(
