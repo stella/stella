@@ -4,8 +4,8 @@
 // only once something builds it: every migrate run builds deploy-blocking and
 // finalized work, while pending work waits for the post-deploy runner. A
 // conflict target that resolves to pending work fails its writes until then,
-// so this guard resolves every target in apps/api/src to its unique index and
-// refuses pending ones, and any target it cannot resolve.
+// so this guard resolves every target in apps/api/src and apps/api/scripts to
+// its unique index and refuses pending ones, and any target it cannot resolve.
 //
 // Usage: bun scripts/check-conflict-target-lifecycle.ts
 
@@ -32,7 +32,19 @@ import {
 import * as schema from "../apps/api/src/db/schema";
 
 const ROOT = path.resolve(import.meta.dir, "..");
-const SOURCE_ROOT = "apps/api/src";
+const SOURCE_ROOTS = ["apps/api/src", "apps/api/scripts"] as const;
+
+/**
+ * The one symbol through which a conflict target built at runtime resolves:
+ * the scoped upsert's identity, whose arbiter `defineScopedTransitions` types
+ * as an online index every migrate run builds or a schema-declared key. Any
+ * other target the guard cannot read is unresolved.
+ */
+export const CONFLICT_TARGET_OWNER = {
+  file: "apps/api/src/lib/db/transitions.ts",
+  specifier: /(?:^|\/)lib\/db\/transitions$/u,
+  symbol: "scopedTransitionConflictTarget",
+} as const;
 
 /** An online unique index: what a conflict target may resolve to. */
 type OnlineUniqueIndex = {
@@ -70,53 +82,50 @@ const sameColumns = (left: readonly string[], right: readonly string[]) =>
 
 const unquote = (column: string) => column.trim().replaceAll('"', "");
 
-/** The unique keys a Drizzle table declares, as SQL column lists. */
-const declaredUniqueKeys = (table: PgTable): string[][] => {
+type DeclaredUniqueKey = { name: string; columns: readonly string[] };
+
+/** The unique keys a Drizzle table declares, named as PostgreSQL names them. */
+const declaredUniqueKeys = (table: PgTable): DeclaredUniqueKey[] => {
   const config = getTableConfig(table);
-  const keys: string[][] = [];
+  const keys: DeclaredUniqueKey[] = [];
   for (const column of config.columns) {
-    if (column.primary || column.isUnique) {
-      keys.push([column.name]);
+    if (column.primary) {
+      keys.push({ name: `${config.name}_pkey`, columns: [column.name] });
+    }
+    if (column.isUnique) {
+      keys.push({
+        name: column.uniqueName ?? `${config.name}_${column.name}_key`,
+        columns: [column.name],
+      });
     }
   }
-  for (const primaryKey of config.primaryKeys) {
-    keys.push(primaryKey.columns.map(({ name }) => name));
-  }
-  for (const unique of config.uniqueConstraints) {
-    keys.push(unique.columns.map(({ name }) => name));
+  for (const key of [...config.primaryKeys, ...config.uniqueConstraints]) {
+    keys.push({
+      name: key.getName(),
+      columns: key.columns.map(({ name }) => name),
+    });
   }
   for (const index of config.indexes) {
-    if (!index.config.unique) {
+    if (!index.config.unique || index.config.name === undefined) {
       continue;
     }
     const columns = index.config.columns.flatMap((column) =>
       "name" in column && typeof column.name === "string" ? [column.name] : [],
     );
     if (columns.length === index.config.columns.length) {
-      keys.push(columns);
+      keys.push({ name: index.config.name, columns });
     }
   }
   return keys;
 };
 
-/** The unique constraint and index names a Drizzle table declares. */
-const declaredUniqueNames = (table: PgTable): string[] => {
-  const config = getTableConfig(table);
-  return [
-    ...(config.columns.some(({ primary }) => primary)
-      ? [`${config.name}_pkey`]
-      : []),
-    ...config.primaryKeys.map((primaryKey) => primaryKey.getName()),
-    ...config.uniqueConstraints.flatMap(({ name }) =>
-      name === undefined ? [] : [name],
-    ),
-    ...config.indexes.flatMap((index) =>
-      index.config.unique && index.config.name !== undefined
-        ? [index.config.name]
-        : [],
-    ),
-  ];
-};
+/** Every unique index name a Drizzle table declares, expression ones too. */
+const declaredUniqueIndexNames = (table: PgTable): string[] =>
+  getTableConfig(table).indexes.flatMap((index) =>
+    index.config.unique && index.config.name !== undefined
+      ? [index.config.name]
+      : [],
+  );
 
 const tablesBySqlName = (tables: ReadonlyMap<string, PgTable>) =>
   new Map([...tables.values()].map((table) => [getTableName(table), table]));
@@ -135,19 +144,29 @@ const judge = (
       ? null
       : `conflict target ${name} is pending online work, which no migrate run builds; register it DEPLOY_BLOCKING or target an index the migrate step builds`;
   };
+  // Any matched name with a lifecycle entry is online work, whatever shape
+  // its registry or schema declaration takes.
+  const verdict = (name: string) =>
+    Object.hasOwn(context.lifecycle, name) ||
+    context.onlineIndexes.some((index) => index.name === name)
+      ? lifecycleProblem(name)
+      : null;
   switch (arbiter.type) {
     case "unresolved":
       return `conflict target cannot be resolved to a unique index (${arbiter.reason}); name it inline or through onlineUniqueIndexTarget`;
     case "index": {
-      if (context.onlineIndexes.some(({ name }) => name === arbiter.name)) {
-        return lifecycleProblem(arbiter.name);
-      }
-      const declared = [...context.tables.values()].some((table) =>
-        declaredUniqueNames(table).includes(arbiter.name),
+      const declared = [...context.tables.values()].some(
+        (table) =>
+          declaredUniqueKeys(table).some(({ name }) => name === arbiter.name) ||
+          declaredUniqueIndexNames(table).includes(arbiter.name),
       );
-      return declared
-        ? null
-        : `conflict target ${arbiter.name} is no declared unique constraint or index`;
+      if (
+        !declared &&
+        !context.onlineIndexes.some(({ name }) => name === arbiter.name)
+      ) {
+        return `conflict target ${arbiter.name} is no declared unique constraint or index`;
+      }
+      return verdict(arbiter.name);
     }
     case "columns": {
       const online = context.onlineIndexes.find(
@@ -156,18 +175,18 @@ const judge = (
           sameColumns(index.columns, arbiter.columns),
       );
       if (online !== undefined) {
-        return lifecycleProblem(online.name);
+        return verdict(online.name);
       }
       const table = tablesBySqlName(context.tables).get(arbiter.tableName);
       if (table === undefined) {
-        // A table the SQL migrations alone own carries no online work.
-        return null;
+        return `conflict target cannot be resolved to a unique index (${arbiter.tableName} is no schema table); name it inline or through onlineUniqueIndexTarget`;
       }
-      return declaredUniqueKeys(table).some((key) =>
-        sameColumns(key, arbiter.columns),
-      )
-        ? null
-        : `conflict target ${arbiter.tableName}(${arbiter.columns.join(", ")}) matches no unique key the schema declares`;
+      const key = declaredUniqueKeys(table).find(({ columns }) =>
+        sameColumns(columns, arbiter.columns),
+      );
+      return key === undefined
+        ? `conflict target ${arbiter.tableName}(${arbiter.columns.join(", ")}) matches no unique key the schema declares`
+        : verdict(key.name);
     }
     default:
       arbiter satisfies never;
@@ -186,6 +205,14 @@ type FileScope = {
   namedImports: ReadonlyMap<string, string>;
   /** Const initializers by binding name; a repeated name is ambiguous. */
   constants: ReadonlyMap<string, ts.Expression | null>;
+  /**
+   * Names some other binding also declares (a parameter, a `let`, a
+   * destructured name): which one a use means depends on scope, so none
+   * resolves.
+   */
+  shadowed: ReadonlySet<string>;
+  /** Local bindings of `CONFLICT_TARGET_OWNER.symbol`. */
+  owners: ReadonlySet<string>;
   context: ConflictTargetContext;
 };
 
@@ -197,6 +224,7 @@ const readScope = (
   const schemaImports = new Map<string, string>();
   const schemaNamespaces = new Set<string>();
   const namedImports = new Map<string, string>();
+  const owners = new Set<string>();
   for (const statement of ast.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
@@ -209,6 +237,9 @@ const readScope = (
       continue;
     }
     const fromSchema = SCHEMA_SPECIFIER.test(statement.moduleSpecifier.text);
+    const fromOwner = CONFLICT_TARGET_OWNER.specifier.test(
+      statement.moduleSpecifier.text.replace(/\.ts$/u, ""),
+    );
     if (ts.isNamespaceImport(bindings)) {
       if (fromSchema) {
         schemaNamespaces.add(bindings.name.text);
@@ -221,9 +252,24 @@ const readScope = (
       if (fromSchema) {
         schemaImports.set(element.name.text, imported);
       }
+      if (fromOwner && imported === CONFLICT_TARGET_OWNER.symbol) {
+        owners.add(element.name.text);
+      }
     }
   }
   const constants = new Map<string, ts.Expression | null>();
+  const shadowed = new Set<string>();
+  const bindNames = (name: ts.BindingName): void => {
+    if (ts.isIdentifier(name)) {
+      shadowed.add(name.text);
+      return;
+    }
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) {
+        bindNames(element.name);
+      }
+    }
+  };
   const collect = (node: ts.Node): void => {
     if (
       ts.isVariableDeclaration(node) &&
@@ -236,10 +282,27 @@ const readScope = (
         name,
         constants.has(name) ? null : (node.initializer ?? null),
       );
+    } else if (ts.isVariableDeclaration(node)) {
+      bindNames(node.name);
+    } else if (ts.isParameter(node) || ts.isBindingElement(node)) {
+      bindNames(node.name);
+    } else if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isFunctionExpression(node) ||
+        ts.isClassDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      shadowed.add(node.name.text);
     }
     ts.forEachChild(node, collect);
   };
   collect(ast);
+  if (
+    file === CONFLICT_TARGET_OWNER.file &&
+    constants.get(CONFLICT_TARGET_OWNER.symbol)
+  ) {
+    owners.add(CONFLICT_TARGET_OWNER.symbol);
+  }
   return {
     file,
     ast,
@@ -247,6 +310,8 @@ const readScope = (
     schemaNamespaces,
     namedImports,
     constants,
+    shadowed,
+    owners,
     context,
   };
 };
@@ -276,6 +341,9 @@ const resolveTable = (
     return undefined;
   }
   if (ts.isIdentifier(node)) {
+    if (scope.shadowed.has(node.text)) {
+      return undefined;
+    }
     const imported = scope.schemaImports.get(node.text);
     if (imported !== undefined) {
       return scope.context.tables.get(imported);
@@ -293,6 +361,7 @@ const resolveTable = (
   if (
     ts.isPropertyAccessExpression(node) &&
     ts.isIdentifier(node.expression) &&
+    !scope.shadowed.has(node.expression.text) &&
     scope.schemaNamespaces.has(node.expression.text)
   ) {
     return scope.context.tables.get(node.name.text);
@@ -315,12 +384,16 @@ const resolveIndexName = (
   if (
     ts.isPropertyAccessExpression(node) &&
     ts.isIdentifier(node.expression) &&
+    !scope.shadowed.has(node.expression.text) &&
     (scope.namedImports.get(node.expression.text) ?? node.expression.text) ===
       "ONLINE_UNIQUE_INDEX_NAMES"
   ) {
     return scope.context.indexNameConstants[node.name.text];
   }
   if (ts.isIdentifier(node)) {
+    if (scope.shadowed.has(node.text)) {
+      return undefined;
+    }
     const exported =
       scope.context.indexNameConstants[
         scope.namedImports.get(node.text) ?? node.text
@@ -346,7 +419,9 @@ const resolveTarget = (
     return { type: "unresolved", reason: "too many indirections" };
   }
   if (ts.isIdentifier(node)) {
-    const initializer = scope.constants.get(node.text);
+    const initializer = scope.shadowed.has(node.text)
+      ? undefined
+      : scope.constants.get(node.text);
     return initializer === undefined || initializer === null
       ? { type: "unresolved", reason: `${node.text} is no local constant` }
       : resolveTarget(scope, initializer, depth + 1);
@@ -354,6 +429,7 @@ const resolveTarget = (
   if (
     ts.isCallExpression(node) &&
     ts.isIdentifier(node.expression) &&
+    !scope.shadowed.has(node.expression.text) &&
     (scope.namedImports.get(node.expression.text) ?? node.expression.text) ===
       "onlineUniqueIndexTarget"
   ) {
@@ -416,7 +492,9 @@ const targetOf = (
 ): ConflictOptionsTarget => {
   const node = unwrap(options);
   if (ts.isIdentifier(node) && depth <= MAX_DEPTH) {
-    const initializer = scope.constants.get(node.text);
+    const initializer = scope.shadowed.has(node.text)
+      ? undefined
+      : scope.constants.get(node.text);
     return initializer === undefined || initializer === null
       ? { type: "unresolved", reason: `${node.text} is no local constant` }
       : targetOf(scope, initializer, depth + 1);
@@ -471,30 +549,13 @@ const sqlText = (
   return undefined;
 };
 
-/**
- * Conflict targets assembled from a declaration rather than written out, each
- * resolved where it is declared. The scoped upsert names the identity of its
- * transition spec, and `defineScopedTransitions` refuses an identity that
- * rests only on pending online work when the spec module loads.
- */
-export const DECLARED_CONFLICT_TARGETS = [
-  {
-    file: "apps/api/src/lib/db/transitions.ts",
-    columns: "identityColumns",
-    owner: "defineScopedTransitions",
-  },
-] as const;
-
-const declaredTarget = (file: string, hole: ts.Expression | undefined) =>
+/** Whether a `${...}` hole is a call of the conflict target owner. */
+const isOwnerTarget = (scope: FileScope, hole: ts.Expression | undefined) =>
   hole !== undefined &&
-  DECLARED_CONFLICT_TARGETS.some(
-    (declared) =>
-      declared.file === file &&
-      ts.isCallExpression(hole) &&
-      hole.arguments.some((argument) =>
-        argument.getText().startsWith(`${declared.columns}.`),
-      ),
-  );
+  ts.isCallExpression(hole) &&
+  ts.isIdentifier(hole.expression) &&
+  !scope.shadowed.has(hole.expression.text) &&
+  scope.owners.has(hole.expression.text);
 
 /** The SQL table names a raw `INSERT INTO` reference may write. */
 const resolveTableNames = (
@@ -524,7 +585,11 @@ const resolveTableNames = (
       ? undefined
       : [...whenTrue, ...whenFalse];
   }
-  if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+  if (
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    !scope.shadowed.has(node.expression.text)
+  ) {
     const callee = scope.constants.get(node.expression.text);
     const body =
       callee !== undefined &&
@@ -568,7 +633,7 @@ const rawArbiters = (
     if (
       columnHole !== null &&
       columnList.trim() === columnHole[0] &&
-      declaredTarget(scope.file, holes[Number(columnHole[1])])
+      isOwnerTarget(scope, holes[Number(columnHole[1])])
     ) {
       continue;
     }
@@ -587,7 +652,11 @@ const rawArbiters = (
     if (
       tableNames === undefined ||
       tableNames.some((name) => name === "") ||
-      columns.some((column) => !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(column))
+      columns.some(
+        (column) =>
+          TEMPLATE_HOLE.test(column) ||
+          !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(column),
+      )
     ) {
       arbiters.push({
         type: "unresolved",
@@ -715,10 +784,14 @@ export const repositoryConflictTargetContext = (): ConflictTargetContext => {
   };
 };
 
+/** Every API source the guard reads, scripts included. */
+export const conflictTargetSourceFiles = (): string[] =>
+  SOURCE_ROOTS.flatMap(sourceFiles);
+
 export const checkRepositoryConflictTargets = (
   context: ConflictTargetContext = repositoryConflictTargetContext(),
 ): ConflictTargetFinding[] =>
-  sourceFiles(SOURCE_ROOT).flatMap((file) =>
+  conflictTargetSourceFiles().flatMap((file) =>
     checkConflictTargetSource({
       file,
       source: readFileSync(path.resolve(ROOT, file), "utf-8"),
