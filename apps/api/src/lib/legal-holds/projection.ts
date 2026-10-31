@@ -29,10 +29,11 @@ export const legalHoldViewerFromContext = (ctx: object): LegalHoldViewer => {
   const user: unknown = Object.hasOwn(ctx, "user")
     ? Reflect.get(ctx, "user")
     : undefined;
-  if (memberRole === null || !isRecord(user) || typeof user.id !== "string") {
+  const userId: unknown = isRecord(user) ? user["id"] : undefined;
+  if (memberRole === null || typeof userId !== "string") {
     return UNIDENTIFIED_LEGAL_HOLD_VIEWER;
   }
-  return { type: "member", userId: user.id, memberRole };
+  return { type: "member", userId, memberRole };
 };
 
 type LegalHoldRecordFields = {
