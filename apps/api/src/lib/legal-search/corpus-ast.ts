@@ -5,6 +5,7 @@ import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   isDocumentAst,
   persistedDocumentAstSchema,
+  persistedDocumentAstWriteSchema,
 } from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -20,9 +21,14 @@ import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
-/** The wire contract shared by corpus readers and every payload writer. */
+/** The wire contract corpus readers accept from any stored row. */
 export const persistedCorpusAstSchema = v.nullable(
   v.union([persistedDocumentAstSchema, emptyAstSchema]),
+);
+
+/** What a payload writer may store: the reader contract plus block order. */
+const writtenCorpusAstSchema = v.nullable(
+  v.union([persistedDocumentAstWriteSchema, emptyAstSchema]),
 );
 
 class IngestedAstRejectedError extends TaggedError("IngestedAstRejectedError")<{
@@ -46,7 +52,7 @@ export const prepareCorpusAst = ({
   source,
   parserVersion,
 }: PrepareCorpusAstOptions) => {
-  const parsed = v.safeParse(persistedCorpusAstSchema, ast);
+  const parsed = v.safeParse(writtenCorpusAstSchema, ast);
   if (parsed.success) {
     // Keep a canonical AST as the parser produced it: the parsed output is a
     // rebuilt object (schema key order, undeclared fields dropped), and the
