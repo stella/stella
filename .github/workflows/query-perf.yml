@@ -37,7 +37,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f
+        image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
         env:
           POSTGRES_USER: stella_owner
           POSTGRES_PASSWORD: stella
@@ -58,7 +58,7 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 

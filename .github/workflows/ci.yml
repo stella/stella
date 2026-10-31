@@ -900,7 +900,6 @@ jobs:
         # are enough to list changed paths, and git fetches any other blob a
         # step reads (a `git show <base>:<file>`, say) on first access. Jobs
         # that never look past HEAD keep the default shallow checkout.
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -924,7 +923,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         timeout-minutes: 2
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -1049,7 +1048,6 @@ jobs:
           steps.check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch'
           )
-        id: consumer-setup-bun-for-dependency-scope
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
@@ -1851,7 +1849,6 @@ jobs:
     steps:
       - &checkout_input_sha
         name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -1898,7 +1895,7 @@ jobs:
         name: Log in to the CI image mirror
         continue-on-error: true
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -2120,7 +2117,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -2448,7 +2446,8 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -2697,7 +2696,7 @@ jobs:
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/.github/actions/changeset-policy@a6a6cd30646c18321ef71e344bf0af6b8d3634b8 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2793,7 +2792,8 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -2819,7 +2819,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Prepares and validates baseline using target revision and external recording context."
         id: network_manifest_prepare
-        if: ${{ steps.checkout.outcome == 'success' && (!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true')) }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -2985,7 +2985,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -3342,7 +3343,6 @@ jobs:
     steps:
       - &full_checkout_input_sha
         name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -3384,6 +3384,7 @@ jobs:
             scripts/retry.sh \
             scripts/generated-files.ts \
             bunfig.toml \
+            .npmrc \
             VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
@@ -3475,7 +3476,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -3491,7 +3493,6 @@ jobs:
       - name: Install UI browser test runtime
         timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        id: consumer-install-ui-browser-test-runtime
         uses: ./.github/actions/setup-playwright
         with:
           # The pinned image includes both desktop engines and screenshot fonts.
@@ -3609,7 +3610,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -3770,7 +3772,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Download generated sources
@@ -3963,7 +3966,7 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: package.json
           # Run 38089283216: filtered API/CLI installs took 8–13 seconds,
@@ -4167,7 +4170,7 @@ jobs:
 
       - name: Login to GHCR for corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4266,7 +4269,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4274,7 +4277,8 @@ jobs:
         timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Test migration safety rules and historical findings
@@ -4314,7 +4318,7 @@ jobs:
 
     services:
       postgres:
-        image: ${{ needs.ci-plan.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f' }}
+        image: ${{ needs.ci-plan.outputs.postgres || 'docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336' }}
         credentials: ${{ startsWith(needs.ci-plan.outputs.postgres, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         env:
           POSTGRES_USER: stella_owner
@@ -4328,7 +4332,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: ${{ needs.ci-plan.outputs.redis || 'docker.io/library/redis:8.10.3@sha256:3466b24cc1232a254fc4753963cbe93392a30b3d24c2cad445fbc72c80b654a0' }}
+        image: ${{ needs.ci-plan.outputs.redis || 'docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5' }}
         credentials: ${{ startsWith(needs.ci-plan.outputs.redis, 'ghcr.io/') && fromJSON(format('{{"username":"{0}","password":"{1}"}}', github.actor, secrets.GITHUB_TOKEN)) || fromJSON('{}') }}
         ports:
           - 6379:6379
@@ -4345,7 +4349,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4353,7 +4357,8 @@ jobs:
         timeout-minutes: 2
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Test Postgres owner replacement and helper replay
@@ -4578,7 +4583,8 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Configure test Postgres parity
@@ -4605,7 +4611,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4786,7 +4792,6 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
@@ -4802,7 +4807,10 @@ jobs:
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the secret to install-time lifecycle scripts. The token is
+          # only required when publishing — never to read from the public
+          # npm registry. Match the ci-checks / landing-build pattern.
           NPM_TOKEN: ""
 
       - name: Prepare environment
@@ -4811,7 +4819,6 @@ jobs:
           cp .env.example .env
 
       - name: Build web
-        id: consumer-build-web
         uses: ./.github/actions/build-e2e-web
 
       - name: Upload production E2E web build
@@ -4919,7 +4926,7 @@ jobs:
       - *ci_image_mirror_login
       - &setup_bun_cached
         name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -5066,7 +5073,8 @@ jobs:
           cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
-          # PR installs must not expose registry credentials to lifecycle scripts.
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
       - name: Build landing
@@ -5114,7 +5122,6 @@ jobs:
       - name: Prepare environment
         run: cp apps/web/.env.example apps/web/.env
       - name: Build web
-        id: consumer-build-web
         uses: ./.github/actions/build-e2e-web
       - name: Upload production E2E web build
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -5150,7 +5157,6 @@ jobs:
       CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
     steps:
       - name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5181,7 +5187,6 @@ jobs:
 
       - name: Prepare merge-base network budget
         timeout-minutes: 5
-        id: consumer-prepare-merge-base-network-budget
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -5192,7 +5197,7 @@ jobs:
         timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -5283,7 +5288,6 @@ jobs:
     steps:
       - name: Checkout
         timeout-minutes: 7
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -5338,7 +5342,6 @@ jobs:
       - name: Prepare merge-base network budget
         timeout-minutes: 2
         if: matrix.shard == 'network-baseline'
-        id: consumer-prepare-merge-base-network-budget
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ needs.ci-plan.outputs.target_base_sha || github.sha }}
@@ -5546,7 +5549,6 @@ jobs:
 
       - name: Verify Firefox and WebKit in the pinned image
         timeout-minutes: 4
-        id: consumer-verify-firefox-and-webkit-in-the-pinned-image
         uses: ./.github/actions/setup-playwright
         with:
           browsers: firefox webkit
@@ -5681,7 +5683,6 @@ jobs:
       - name: Install Playwright browsers
         timeout-minutes: 3
         if: steps.e2e-stack.outcome == 'success'
-        id: consumer-install-playwright-browsers
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
@@ -5852,7 +5853,6 @@ jobs:
 
       - name: Install Playwright browsers
         timeout-minutes: 4
-        id: consumer-install-playwright-browsers
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
@@ -6307,7 +6307,6 @@ jobs:
       actions: write
     steps:
       - name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -6338,9 +6337,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.99.0
           targets: x86_64-pc-windows-msvc
 
       - name: Resolve Windows build toolchain
@@ -6397,7 +6396,6 @@ jobs:
 
       - name: Exercise Windows desktop release build
         if: github.event_name == 'merge_group' || github.event_name == 'pull_request' || steps.receipt.outputs.reused != 'true'
-        id: consumer-exercise-windows-desktop-release-build
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "true"
@@ -6513,9 +6511,9 @@ jobs:
           if-no-files-found: ignore
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.99.0
           targets: wasm32-unknown-unknown
 
       - name: Restore Rust build cache
@@ -6618,7 +6616,6 @@ jobs:
     steps:
       - &desktop_rust_checkout
         name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -6626,9 +6623,9 @@ jobs:
 
       - &desktop_rust_toolchain
         name: Setup Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.99.0
           targets: ${{ matrix.target }}
           components: clippy
 
@@ -6740,7 +6737,6 @@ jobs:
       - name: Install cargo-deny
         timeout-minutes: 10
         if: matrix.os == 'macos'
-        id: consumer-install-cargo-deny
         uses: ./.github/actions/cargo-deny
 
       # Licenses, bans and sources read only the resolved dependency graph.
@@ -6826,7 +6822,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -6934,9 +6930,8 @@ jobs:
             core.setOutput("manifest", manifestPath);
 
       - name: Setup workflow YAML parser
-        id: workflow-yaml-parser
         if: steps.changes.outputs.workflows == 'true'
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: ${{ steps.changes.outputs.manifest }}
           # Parses YAML only; nothing is installed, so nothing is cached.
@@ -7114,17 +7109,15 @@ jobs:
       - *checkout_input_sha
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
       - name: Install Safe Chain
         timeout-minutes: 2
-        id: consumer-install-safe-chain
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
         timeout-minutes: 2
-        if: ${{ steps.source-checkout.outcome == 'success' && (!cancelled()) }}
-        id: consumer-install-osv-scanner
+        if: ${{ !cancelled() }}
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures
         timeout-minutes: 2
@@ -8133,7 +8126,7 @@ jobs:
       # Reporting only: the verdict above is unchanged.
       - name: Setup Bun for the failure digest
         if: failure() && steps.outcome.outcome == 'failure'
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .workflow-tooling/package.json

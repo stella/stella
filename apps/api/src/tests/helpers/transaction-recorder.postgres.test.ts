@@ -179,10 +179,7 @@ if (!databaseUrl || !runPostgresTests) {
         const holder = openClient();
         const contender = openClient();
         const pid = (
-          await holder.db.execute(
-            sql`SELECT pg_backend_pid() AS pid`,
-            "objects",
-          )
+          await holder.db.execute(sql`SELECT pg_backend_pid() AS pid`)
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
           panic("Missing fixture backend pid");

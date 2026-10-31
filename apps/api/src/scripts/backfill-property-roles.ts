@@ -48,8 +48,7 @@ const backfillBatch = async ({
 
   await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
 
-  const rows = await tx.execute(
-    sql`
+  const rows = await tx.execute(sql`
       WITH workspace_batch AS (
         SELECT workspace_id
         FROM (
@@ -103,9 +102,7 @@ const backfillBatch = async ({
         ) AS next_cursor,
         (SELECT count(*)::int FROM workspace_batch) AS scanned_workspaces,
         (SELECT count(*)::int FROM updated) AS updated
-    `,
-    "objects",
-  );
+    `);
 
   const row = rows.at(0);
   if (!row) {

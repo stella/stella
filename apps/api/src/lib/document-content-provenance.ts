@@ -1,5 +1,4 @@
 import { and, eq, isNull } from "drizzle-orm";
-import { EmptyFilter } from "drizzle-orm/relations";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { documentProcessingRuns } from "@/api/db/schema";
@@ -221,8 +220,7 @@ const resolveCurrentExtractedRowsFromDatabase = async (
     where: {
       entityId: { in: entityIds },
       organizationId: { eq: organizationId },
-      workspaceId:
-        workspaceIds === null ? EmptyFilter : { in: [...workspaceIds] },
+      workspaceId: workspaceIds ? { in: [...workspaceIds] } : undefined,
     },
     columns: {
       entityId: true,

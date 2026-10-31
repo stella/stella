@@ -34,20 +34,9 @@ let db: ReturnType<typeof drizzle>;
 type PGliteTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // The production Bun driver returns rows directly; PGlite wraps them in `rows`.
 const withBunRows = (tx: PGliteTransaction) => ({
-  execute: createTestRawExecute(async (query, mode) => {
-    switch (mode) {
-      case "arrays":
-        return await tx.execute(query, "arrays");
-      case "objects":
-        return await tx.execute(query, "objects");
-      case "raw":
-        return (await tx.execute(query)).rows;
-      default: {
-        const unreachable: never = mode;
-        return unreachable;
-      }
-    }
-  }),
+  execute: createTestRawExecute(
+    async (query) => (await tx.execute(query)).rows,
+  ),
   rollback: () => tx.rollback(),
   insert: tx.insert.bind(tx),
   select: tx.select.bind(tx),

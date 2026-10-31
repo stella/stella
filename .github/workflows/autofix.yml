@@ -62,7 +62,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Setup regeneration tooling
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: .regeneration-controls/package.json
@@ -192,7 +192,7 @@ jobs:
       # autofix-ci/action v1.3.4 declares Node 24 support, but its action
       # metadata still names node20 for compatibility with older runners.
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.1
+      RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
       - name: Checkout Dependabot head
@@ -203,7 +203,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -389,7 +389,7 @@ jobs:
 
       # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
           no-cache: true
@@ -462,7 +462,7 @@ jobs:
     timeout-minutes: 20
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      RUSTUP_TOOLCHAIN: 1.99.1
+      RUSTUP_TOOLCHAIN: 1.99.0
 
     steps:
       - name: Checkout lockfile tooling
@@ -519,7 +519,7 @@ jobs:
           git diff --name-only -z --no-renames --diff-filter=A "$BASE_SHA"..."$HEAD_SHA" -- apps/api/ > "$RUNNER_TEMP/autofix-added-paths"
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@ba5f7da76aededf6f22814de93c72a49843fcc8e
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"

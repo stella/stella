@@ -110,7 +110,7 @@ const sketchChunk = (chunk: SQLChunk): string => {
     return "";
   }
   if (is(chunk, StringChunk)) {
-    return chunk.value;
+    return chunk.value.join("");
   }
   if (is(chunk, SQL)) {
     return sketchChunks(chunk.queryChunks);

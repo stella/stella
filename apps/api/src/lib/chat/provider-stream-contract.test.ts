@@ -70,7 +70,6 @@ const adapterOf = (
 const run = async (adapter: AnyTextAdapter, signal?: AbortSignal) => {
   const chunks: StreamChunk[] = [];
   for await (const chunk of withProviderStreamContract(adapter).chatStream({
-    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",
@@ -137,7 +136,6 @@ describe("the provider stream contract", () => {
       },
     ] satisfies ModelMessage[];
     const request = {
-      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages,
       model: "gpt-6-sol",
@@ -216,7 +214,6 @@ describe("the provider stream contract", () => {
       },
     });
     for await (const chunk of withProviderStreamContract(adapter).chatStream({
-      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -249,7 +246,6 @@ describe("the provider stream contract", () => {
       },
     });
     const request = {
-      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [],
       model: "model",
@@ -455,7 +451,6 @@ const reasoningSignedBy = async (provider: ReasoningProvider) => {
   const adapter = reasoningAdapter(provider, fetch);
   const signatures: string[] = [];
   for await (const chunk of adapter.chatStream({
-    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [{ role: "user", content: "Delete the draft." }],
     model: adapter.model,
@@ -489,7 +484,6 @@ const requestWithReasoning = async (
   const { bodies, fetch } = recordingFetch(refused);
   const adapter = reasoningAdapter(provider, fetch);
   for await (const _chunk of adapter.chatStream({
-    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [
       { role: "user", content: "Delete the draft." },
@@ -542,9 +536,9 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
         };
         if (sink.length === 1) {
           yield {
-            type: EventType.REASONING_MESSAGE_START,
-            messageId: "thinking-1",
-            role: "reasoning",
+            type: EventType.STEP_STARTED,
+            stepName: "thinking",
+            stepId: "step-1",
             model,
             timestamp: 1,
           };
@@ -556,10 +550,10 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
             timestamp: 1,
           };
           yield {
-            type: EventType.REASONING_ENCRYPTED_VALUE,
-            subtype: "message",
-            entityId: "thinking-1",
-            encryptedValue: signature,
+            type: EventType.STEP_FINISHED,
+            stepName: "thinking",
+            stepId: "step-1",
+            signature,
             model,
             timestamp: 1,
           };
@@ -602,7 +596,6 @@ for (const boundary of ["base contract", "run tool-call ledger"] as const) {
       inputSchema: toTanStackToolSchema(v.object({})),
     }).server(async () => ({ found: true }));
     for await (const _chunk of chat({
-      threadId: Bun.randomUUIDv7(),
       adapter,
       messages: [{ role: "user", content: "Search" }],
       tools: [search],
@@ -679,7 +672,6 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     const { bodies, fetch } = recordingFetch(refused);
     const adapter = reasoningAdapter(provider, fetch);
     for await (const _chunk of adapter.chatStream({
-      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: openTurn(thinking),
       model: adapter.model,
@@ -751,7 +743,6 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
     const refusal: unknown = await adapter
       .structuredOutput({
         chatOptions: {
-          threadId: Bun.randomUUIDv7(),
           logger: resolveDebugOption(false),
           messages: openTurn(legacyReasoning),
           model: adapter.model,
@@ -788,7 +779,6 @@ describe("a resumed tool-use turn whose reasoning cannot be replayed", () => {
       panic("The contract hides the structured output stream");
     for await (const _chunk of stream({
       chatOptions: {
-        threadId: Bun.randomUUIDv7(),
         logger: resolveDebugOption(false),
         messages: openTurn(legacyReasoning),
         model: adapter.model,

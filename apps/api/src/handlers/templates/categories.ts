@@ -154,12 +154,11 @@ export const createTemplateCategoryHandler = async ({
   body,
   recordAuditEvent,
 }: CreateProps) => {
-  const parentId = body.parentId;
-  if (parentId) {
+  if (body.parentId) {
     const parent = await scopedDb((tx) =>
       tx.query.templateCategories.findFirst({
         where: {
-          id: { eq: parentId },
+          id: { eq: body.parentId },
           organizationId: { eq: organizationId },
         },
         columns: { id: true },

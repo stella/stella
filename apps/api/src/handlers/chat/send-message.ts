@@ -2317,6 +2317,7 @@ export const createSendMessage = (
         transportBody.runId !== body.runId ||
         transportParentRunId !== parentRunId ||
         !deepEquals(transportResume, resume) ||
+        !deepEquals(transportBody.data, body) ||
         !transportBody.messages.some(
           (message) =>
             message.id === body.message.id &&
@@ -2474,14 +2475,13 @@ export const createSendMessage = (
         : (body.editApplyMode ?? DEFAULT_CHAT_EDIT_APPLY_MODE);
       const docxEditRepresentation =
         body.docxEditRepresentation ?? DEFAULT_DOCX_EDIT_REPRESENTATION;
-      const activeFile = body.activeFile;
       const activeFileEntity =
-        activeFile?.supportsDocxEdits === true && workspaceId !== null
+        body.activeFile?.supportsDocxEdits === true && workspaceId !== null
           ? yield* Result.await(
               safeDb((tx) =>
                 tx.query.entities.findFirst({
                   where: {
-                    id: { eq: activeFile.entityId },
+                    id: { eq: body.activeFile?.entityId },
                     workspaceId: { eq: workspaceId },
                   },
                   columns: { currentVersionId: true },

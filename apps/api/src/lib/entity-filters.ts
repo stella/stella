@@ -721,10 +721,7 @@ const conditionFoldHandlers: FoldHandlers<SQL> = {
     if (!combined) {
       return null;
     }
-    return node.negated
-      ? (not(combined) ??
-          panic("A nonempty filter cannot have an empty negation"))
-      : combined;
+    return node.negated ? not(combined) : combined;
   },
 };
 

@@ -76,6 +76,8 @@ const SAFE_USAGE_SCALAR_KEYS = {
   promptTokens: true,
   completionTokens: true,
   totalTokens: true,
+  durationSeconds: true,
+  unitsBilled: true,
   cost: true,
 } as const satisfies Record<
   Exclude<
@@ -150,7 +152,6 @@ const PROMPT_TOKENS_DETAIL_KEYS = {
   audioTokens: true,
   cachedTokens: true,
   cacheWriteTokens: true,
-  cacheWrite1hTokens: true,
   documentTokens: true,
   imageTokens: true,
   textTokens: true,
@@ -214,6 +215,15 @@ const addBilled = (
 };
 
 /**
+ * The SDK's deprecated `durationSeconds` and `unitsBilled` restate `billed`
+ * without its unit; a summed run carries `billed` alone.
+ */
+type SummedTokenUsageField = Exclude<
+  keyof TokenUsage,
+  "durationSeconds" | "unitsBilled"
+>;
+
+/**
  * How each `TokenUsage` field combines across the steps of one run. Total over
  * the SDK type, so a field an SDK release adds fails typecheck here until its
  * combination is chosen, instead of dropping out of a multi-step total.
@@ -243,7 +253,7 @@ const TOKEN_USAGE_ADDERS = {
   costDetails: (total, step) =>
     addCounts(COST_DETAIL_KEYS, total.costDetails, step.costDetails),
 } as const satisfies {
-  [TField in keyof TokenUsage]-?: (
+  [TField in SummedTokenUsageField]-?: (
     total: TokenUsage,
     step: TokenUsage,
   ) => TokenUsage[TField];

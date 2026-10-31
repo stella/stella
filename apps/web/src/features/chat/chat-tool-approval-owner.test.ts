@@ -2,10 +2,7 @@ import { EventType, StreamProcessor } from "@tanstack/ai/client";
 import type { UIMessage } from "@tanstack/ai/client";
 import { expect, test } from "bun:test";
 
-import {
-  buildToolApprovalInterrupt,
-  buildWireSnapshot,
-} from "@/features/chat/chat-test-fixtures";
+import { buildWireSnapshot } from "@/features/chat/chat-test-fixtures";
 
 const TOOL_CALL_ID = "pending-call";
 const APPROVAL_ID = "pending-approval";
@@ -106,13 +103,12 @@ test("approval updates the tool owner after a snapshot and later assistant activ
         outcome: {
           type: "interrupt",
           interrupts: [
-            buildToolApprovalInterrupt({
+            {
               id: APPROVAL_ID,
-              runId: "approval-run",
+              reason: "approval_required",
               toolCallId: TOOL_CALL_ID,
-              toolName: TOOL_NAME,
-              input: { title: "Record" },
-            }),
+              metadata: { kind: "approval", toolName: TOOL_NAME },
+            },
           ],
         },
       });
@@ -169,13 +165,12 @@ test("an approval for an absent tool leaves every message unchanged", () => {
     outcome: {
       type: "interrupt",
       interrupts: [
-        buildToolApprovalInterrupt({
+        {
           id: APPROVAL_ID,
-          runId: "missing-tool-run",
+          reason: "approval_required",
           toolCallId: TOOL_CALL_ID,
-          toolName: TOOL_NAME,
-          input: { title: "Record" },
-        }),
+          metadata: { kind: "approval", toolName: TOOL_NAME },
+        },
       ],
     },
   });

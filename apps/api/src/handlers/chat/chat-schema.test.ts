@@ -490,6 +490,7 @@ describe("native AG-UI request envelope", () => {
     tools: [],
     context: [],
     forwardedProps,
+    data: forwardedProps,
   };
 
   test("accepts the canonical envelope with a complete native resume batch", () => {
@@ -512,14 +513,12 @@ describe("native AG-UI request envelope", () => {
         parentRunId: "run-parent",
         resume,
         forwardedProps: continuationForwardedProps,
+        data: continuationForwardedProps,
       }),
     ).toBe(true);
   });
 
   test("rejects untyped fields, incomplete resume items, and user-message resumes", () => {
-    expect(
-      v.is(agUiSendMessageBodySchema, { ...request, data: forwardedProps }),
-    ).toBe(false);
     expect(
       v.is(agUiSendMessageBodySchema, {
         ...request,

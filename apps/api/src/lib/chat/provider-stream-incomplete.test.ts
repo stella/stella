@@ -32,7 +32,6 @@ const cutOffRunError = async (): Promise<
     },
   });
   for await (const chunk of withProviderStreamContract(adapter).chatStream({
-    threadId: Bun.randomUUIDv7(),
     logger: resolveDebugOption(false),
     messages: [],
     model: "model",

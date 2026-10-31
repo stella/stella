@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
-import { EmptyFilter } from "drizzle-orm/relations";
 import * as v from "valibot";
 
 import { TIME_ENTRY_STATUSES } from "@stll/api-contract";
@@ -488,7 +487,7 @@ const resolveInvoiceWorkspace = async ({
           limit: 1,
           where:
             requestedMatterId === undefined
-              ? EmptyFilter
+              ? undefined
               : { workspaceId: { eq: requestedMatterId } },
         },
       },

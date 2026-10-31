@@ -279,7 +279,6 @@ jobs:
           echo "RELEASE_TOOLING=$RUNNER_TEMP/release-tooling" >> "$GITHUB_ENV"
 
       - name: Checkout
-        id: source-checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Pinned to the SHA resolved by the resolve job; never to
@@ -294,7 +293,7 @@ jobs:
           cp -R "$RELEASE_TOOLING/actions/desktop-windows-build" .github/actions/desktop-windows-build
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
           no-cache: true
@@ -318,9 +317,9 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
         with:
-          toolchain: 1.99.1
+          toolchain: 1.99.0
           targets: ${{ matrix.rust_targets }}
 
       # The locked crates for every target download once, retried as a unit;
@@ -358,7 +357,6 @@ jobs:
       # short-circuit the ~5 min source compile.
       - name: Build and sign Windows artifacts
         if: matrix.os == 'windows'
-        id: consumer-build-and-sign-windows-artifacts
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "false"
@@ -536,7 +534,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
           no-cache: true
@@ -754,7 +752,7 @@ jobs:
           bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" assets/* --clobber
 
       - name: Setup Bun
-        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: "package.json"
           no-cache: true

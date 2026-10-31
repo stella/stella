@@ -122,9 +122,9 @@ const BABEL_TOOLCHAINS = [
 // `typescript6` alias, and Astro's checker, which supports only TypeScript 5
 // and 6, gets its own pinned copy.
 const TYPESCRIPT_TOOLCHAIN = {
-  oxlint: "1.87.0",
+  oxlint: "1.89.0",
   oxlintConfig: "1.7.0",
-  tsgolint: "7.0.2003",
+  tsgolint: "7.0.2005",
   tsrs: "0.18.0-ts7.1.0-dev.20260929",
   typescript6Api: "npm:typescript@6.0.3",
   typescript6Astro: "6.0.3",
@@ -145,7 +145,7 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astroCheck: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    specifier: "^0.9.11",
+    specifier: "^0.9.12",
   },
   compilerApi: {
     dependency: "typescript6",

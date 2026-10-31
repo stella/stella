@@ -1,0 +1,521 @@
+client.tools(defs, { callToolTimeoutMs }) forwards request timeouts for
+legacy and modern calls, input resumes, task polling, results and cancellation.
+Regression: apps/api/src/lib/mcp-upstream/tanstack-ai-mcp-timeout.test.ts.
+
+diff --git a/dist/esm/client.js b/dist/esm/client.js
+index d86f73ff75043587880a13b436e7051e6c346c17..a42893e13bddf4959b0ddcf5f43b7cc34cc9763d 100644
+--- a/dist/esm/client.js
++++ b/dist/esm/client.js
+@@ -97,7 +97,7 @@ var MCPClientImpl = class {
+ 				const serverTool = available.get(def.name);
+ 				if (!serverTool) throw new MCPToolNotFoundError(def.name);
+ 				if (requiresTaskExecution(serverTool) && !serverSupportsTaskCalls(this.#client)) throw new MCPTaskRequiredToolError(def.name);
+-				const bound = def.server(makeMcpExecute(this.#client, def.name, Boolean(def.outputSchema), requiresTaskExecution(serverTool)));
++				const bound = def.server(makeMcpExecute(this.#client, def.name, Boolean(def.outputSchema), requiresTaskExecution(serverTool), options.callToolTimeoutMs));
+ 				const existingMcp = bound.metadata?.mcp;
+ 				const mcpBase = existingMcp !== null && typeof existingMcp === "object" ? existingMcp : {};
+ 				return {
+@@ -116,7 +116,8 @@ var MCPClientImpl = class {
+ 		} else tools = toServerTools(this.#client, defs, {
+ 			prefix: this.prefix,
+ 			lazy: options.lazy,
+-			needsApproval
++			needsApproval,
++			callToolTimeoutMs: options.callToolTimeoutMs
+ 		});
+ 		const seen = /* @__PURE__ */ new Set();
+ 		for (const t of tools) {
+diff --git a/dist/esm/tools.d.ts b/dist/esm/tools.d.ts
+index 25933d69795e238a22e48229fdbecd2193e62a2b..15ee4be752211ff9e042efba8784a0c887d45709 100644
+--- a/dist/esm/tools.d.ts
++++ b/dist/esm/tools.d.ts
+@@ -2,6 +2,7 @@ import { Client, Tool as McpToolDef } from '@modelcontextprotocol/client';
+ import { ContentPart, ToolInputResponse } from '@tanstack/ai';
+ import { McpServerTool, McpToolMetadata } from './types.js';
+ interface ConvertOptions {
++    callToolTimeoutMs?: number;
+     prefix?: string;
+     lazy?: boolean;
+     needsApproval?: (tool: McpToolDef) => boolean;
+@@ -50,8 +51,9 @@ export declare function mcpContentToTanstack(content: unknown): string | Array<C
+  * @param taskRequired - True when the tool requires a spec 2025 task
+  * @param signal - Stops the wait when the caller aborts
+  * @param inputResponse - The user's answer from an `mcp_input` interrupt
++ * @param timeout - Request timeout for every tool, input retry and task operation
+  */
+-export declare function callMcpTool(client: Client, mcpName: string, args: Record<string, unknown>, taskRequired: boolean, signal?: AbortSignal, inputResponse?: ToolInputResponse): Promise<{
++export declare function callMcpTool(client: Client, mcpName: string, args: Record<string, unknown>, taskRequired: boolean, signal?: AbortSignal, inputResponse?: ToolInputResponse, timeout?: number): Promise<{
+     [x: string]: unknown;
+     content: ({
+         type: "text";
+@@ -164,7 +166,7 @@ export declare function callMcpTool(client: Client, mcpName: string, args: Recor
+  *   validation in `executeServerTool` validates MCP's typed payload rather than
+  *   a JSON-in-text blob. Otherwise normalize `content[]` → string | ContentPart[].
+  */
+-export declare function makeMcpExecute(client: Client, mcpName: string, preferStructured: boolean, taskRequired?: boolean): (args: unknown, ctx?: {
++export declare function makeMcpExecute(client: Client, mcpName: string, preferStructured: boolean, taskRequired?: boolean, callToolTimeoutMs?: number): (args: unknown, ctx?: {
+     abortSignal?: AbortSignal;
+     inputResponse?: ToolInputResponse;
+ }) => Promise<{} | null>;
+diff --git a/dist/esm/tools.js b/dist/esm/tools.js
+index d3403622cc55214555ab72dd22714331e639056b..41bffc3a6e13be3b3c46cc2927913eba2d2769f8 100644
+--- a/dist/esm/tools.js
++++ b/dist/esm/tools.js
+@@ -104,8 +104,9 @@ function mcpContentToTanstack(content) {
+ * @param taskRequired - True when the tool requires a spec 2025 task
+ * @param signal - Stops the wait when the caller aborts
+ * @param inputResponse - The user's answer from an `mcp_input` interrupt
++* @param timeout - Request timeout for every tool, input retry and task operation
+ */
+-async function callMcpTool(client, mcpName, args, taskRequired, signal, inputResponse) {
++async function callMcpTool(client, mcpName, args, taskRequired, signal, inputResponse, timeout) {
+ 	signal?.throwIfAborted();
+ 	const isModern = client.getProtocolEra() === "modern";
+ 	if (!taskRequired && !isModern) {
+@@ -114,7 +115,8 @@ async function callMcpTool(client, mcpName, args, taskRequired, signal, inputRes
+ 			arguments: args
+ 		}, {
+ 			signal,
+-			allowInputRequired: true
++			allowInputRequired: true,
++			...timeout === void 0 ? {} : { timeout }
+ 		});
+ 		throwIfInputRequired(result);
+ 		return result;
+@@ -123,19 +125,19 @@ async function callMcpTool(client, mcpName, args, taskRequired, signal, inputRes
+ 		name: mcpName,
+ 		arguments: args
+ 	};
+-	let raw = isModern ? await rawRequest(client, "tools/call", params, signal) : await sdkRequest(client, "tools/call", {
++	let raw = isModern ? await rawRequest(client, "tools/call", params, signal, timeout) : await sdkRequest(client, "tools/call", {
+ 		name: mcpName,
+ 		arguments: args,
+ 		task: {}
+-	}, signal);
++	}, signal, timeout);
+ 	if (isModern && inputResponse !== void 0 && isInputRequiredResult(raw)) {
+ 		raw = await rawRequest(client, "tools/call", {
+ 			...params,
+ 			...retryParams(raw, inputResponse)
+-		}, signal);
++		}, signal, timeout);
+ 		if (isInputRequiredResult(raw)) throw new Error(`The MCP tool "${mcpName}" asked for input a second time. This client answers one input request per tool call.`);
+ 	}
+-	return finishToolCall(client, mcpName, raw, signal);
++	return finishToolCall(client, mcpName, raw, signal, timeout);
+ }
+ function retryParams(result, response) {
+ 	const requests = isRecord(result.inputRequests) ? result.inputRequests : {};
+@@ -186,34 +188,34 @@ var passThroughResult = { "~standard": {
+ var defaultPollMs = 1e3;
+ var rawRequestId = 0;
+ var transportTaps = /* @__PURE__ */ new WeakMap();
+-async function finishToolCall(client, mcpName, raw, signal) {
++async function finishToolCall(client, mcpName, raw, signal, timeout) {
+ 	throwIfInputRequired(raw);
+ 	const task = readNestedTask(raw);
+-	if (task !== void 0) return pollTask(client, mcpName, task, signal);
++	if (task !== void 0) return pollTask(client, mcpName, task, signal, timeout);
+ 	if (isCallToolResult(raw)) return raw;
+ 	throw missingTaskResult(mcpName);
+ }
+-async function pollTask(client, mcpName, task, signal) {
++async function pollTask(client, mcpName, task, signal, timeout) {
+ 	let current = task;
+ 	try {
+ 		while (current.status === "working" || current.status === "input_required") {
+ 			if (current.status === "input_required") {
+-				cancelTask(client, current.taskId);
++				cancelTask(client, current.taskId, timeout);
+ 				throw new Error(`MCP task "${current.taskId}" needs input. This client cannot answer a spec 2025 task input request.`);
+ 			}
+ 			await waitForPoll(current.pollInterval ?? defaultPollMs, signal);
+-			current = await readPolledTask(client, current.taskId, mcpName, signal);
++			current = await readPolledTask(client, current.taskId, mcpName, signal, timeout);
+ 		}
+ 	} catch (error) {
+ 		if (isMCPInputRequiredError(error)) throw error;
+ 		if (signal?.aborted) {
+-			cancelTask(client, task.taskId);
++			cancelTask(client, task.taskId, timeout);
+ 			throw abortReason(signal);
+ 		}
+ 		throw error;
+ 	}
+ 	switch (current.status) {
+-		case "completed": return taskResult(client, mcpName, current.taskId, signal);
++		case "completed": return taskResult(client, mcpName, current.taskId, signal, timeout);
+ 		case "failed":
+ 		case "cancelled": throw terminalTaskError(current);
+ 		default: {
+@@ -222,36 +224,36 @@ async function pollTask(client, mcpName, task, signal) {
+ 		}
+ 	}
+ }
+-async function taskResult(client, mcpName, taskId, signal) {
+-	const result = await taskRequest(client, "tasks/result", { taskId }, signal);
++async function taskResult(client, mcpName, taskId, signal, timeout) {
++	const result = await taskRequest(client, "tasks/result", { taskId }, signal, timeout);
+ 	throwIfInputRequired(result);
+ 	if (!isCallToolResult(result)) throw missingTaskResult(mcpName);
+ 	return result;
+ }
+-async function readPolledTask(client, taskId, mcpName, signal) {
+-	const body = await taskRequest(client, "tasks/get", { taskId }, signal);
++async function readPolledTask(client, taskId, mcpName, signal, timeout) {
++	const body = await taskRequest(client, "tasks/get", { taskId }, signal, timeout);
+ 	throwIfInputRequired(body);
+ 	const task = readTaskState(body);
+ 	if (task === void 0) throw missingTaskResult(mcpName);
+ 	return task;
+ }
+-function taskRequest(client, method, params, signal) {
+-	return sdkRequest(client, method, params, signal);
++function taskRequest(client, method, params, signal, timeout) {
++	return sdkRequest(client, method, params, signal, timeout);
+ }
+-async function sdkRequest(client, method, params, signal) {
++async function sdkRequest(client, method, params, signal, timeout) {
+ 	signal?.throwIfAborted();
+ 	const rpc = {
+ 		method,
+ 		params
+ 	};
+ 	try {
+-		return await client.request(rpc, passThroughResult, signal === void 0 ? void 0 : { signal });
++		return await client.request(rpc, passThroughResult, { signal, ...timeout === void 0 ? {} : { timeout } });
+ 	} catch (error) {
+ 		if (signal?.aborted) throw abortReason(signal);
+ 		throw error;
+ 	}
+ }
+-function rawRequest(client, method, params, signal) {
++function rawRequest(client, method, params, signal, timeout) {
+ 	signal?.throwIfAborted();
+ 	const transport = client.transport;
+ 	if (transport === void 0) throw new Error("The MCP client is not connected.");
+@@ -261,9 +263,10 @@ function rawRequest(client, method, params, signal) {
+ 	const body = withEnvelope(params, readEnvelope(client));
+ 	return new Promise((resolve, reject) => {
+ 		let settled = false;
++		const requestTimeoutMs = timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+ 		const timer = setTimeout(() => {
+-			finish(new SdkError(SdkErrorCode.RequestTimeout, `The MCP request ${method} timed out after ${DEFAULT_REQUEST_TIMEOUT_MSEC} ms.`));
+-		}, DEFAULT_REQUEST_TIMEOUT_MSEC);
++			finish(new SdkError(SdkErrorCode.RequestTimeout, `The MCP request ${method} timed out after ${requestTimeoutMs} ms.`));
++		}, requestTimeoutMs);
+ 		const finish = (error, result) => {
+ 			if (settled) return;
+ 			settled = true;
+@@ -336,8 +339,8 @@ function withEnvelope(params, envelope) {
+ 		}
+ 	};
+ }
+-function cancelTask(client, taskId) {
+-	return taskRequest(client, "tasks/cancel", { taskId }).catch(() => void 0);
++function cancelTask(client, taskId, timeout) {
++	return taskRequest(client, "tasks/cancel", { taskId }, void 0, timeout).catch(() => void 0);
+ }
+ function throwIfInputRequired(value) {
+ 	if (!isRecord(value)) return;
+@@ -432,9 +435,9 @@ function isRecord(value) {
+ *   validation in `executeServerTool` validates MCP's typed payload rather than
+ *   a JSON-in-text blob. Otherwise normalize `content[]` → string | ContentPart[].
+ */
+-function makeMcpExecute(client, mcpName, preferStructured, taskRequired = false) {
++function makeMcpExecute(client, mcpName, preferStructured, taskRequired = false, callToolTimeoutMs) {
+ 	return async (args, ctx) => {
+-		const result = await callMcpTool(client, mcpName, isRecord(args) ? args : {}, taskRequired, ctx?.abortSignal, ctx?.inputResponse);
++		const result = await callMcpTool(client, mcpName, isRecord(args) ? args : {}, taskRequired, ctx?.abortSignal, ctx?.inputResponse, callToolTimeoutMs);
+ 		if (result.isError) {
+ 			const text = Array.isArray(result.content) ? mcpContentToTanstack(result.content) : void 0;
+ 			const detail = typeof text === "string" ? text : text === void 0 ? void 0 : JSON.stringify(text);
+@@ -472,7 +475,7 @@ function toServerTools(client, defs, options) {
+ 			...def.outputSchema ? { outputSchema: def.outputSchema } : {},
+ 			...options.lazy ? { lazy: true } : {},
+ 			metadata: { mcp: toolMcpMetadata(def, options.prefix) },
+-			execute: makeMcpExecute(client, def.name, Boolean(def.outputSchema), requiresTaskExecution(def))
++			execute: makeMcpExecute(client, def.name, Boolean(def.outputSchema), requiresTaskExecution(def), options.callToolTimeoutMs)
+ 		};
+ 		if (options.needsApproval?.(def)) {
+ 			const approvable = tool;
+diff --git a/dist/esm/types.d.ts b/dist/esm/types.d.ts
+index 552f86b8f98e23013db0b5461ee1a9ec9ae80ece..d65e126cd1fdc39f97c6e72a19137ba89aaa0e4e 100644
+--- a/dist/esm/types.d.ts
++++ b/dist/esm/types.d.ts
+@@ -146,6 +146,8 @@ export interface MCPClientOptions {
+     needsApproval?: (tool: McpToolDef) => boolean;
+ }
+ export interface ToolsOptions {
++    /** Override the MCP request timeout for calls bound by tools(). */
++    callToolTimeoutMs?: number;
+     /** Mark tools `lazy: true` to defer schema-sending via LazyToolManager. */
+     lazy?: boolean;
+ }
+diff --git a/src/client.ts b/src/client.ts
+index af5a6f97fd54599dcc5a1a893aace7a194337002..0cafb84cf09b8afd72f685dbeb64497618e39e9f 100644
+--- a/src/client.ts
++++ b/src/client.ts
+@@ -326,6 +326,7 @@ class MCPClientImpl<
+             def.name,
+             Boolean(def.outputSchema),
+             requiresTaskExecution(serverTool),
++            options.callToolTimeoutMs,
+           ),
+         ) as ServerTool
+         // A caller-supplied definition may already carry its own `mcp` block,
+@@ -362,6 +363,7 @@ class MCPClientImpl<
+         prefix: this.prefix,
+         lazy: options.lazy,
+         needsApproval,
++        callToolTimeoutMs: options.callToolTimeoutMs,
+       })
+     }
+ 
+diff --git a/src/tools.ts b/src/tools.ts
+index a1cd7f1757f2c70c542e28eef9949f5e1a660b81..d6279e86235800706e2d53591fe3a139a5cc18b4 100644
+--- a/src/tools.ts
++++ b/src/tools.ts
+@@ -27,6 +27,7 @@ import {
+ import type { McpServerTool, McpToolMetadata } from './types'
+ 
+ interface ConvertOptions {
++  callToolTimeoutMs?: number
+   prefix?: string
+   lazy?: boolean
+   needsApproval?: (tool: McpToolDef) => boolean
+@@ -140,6 +141,7 @@ export function mcpContentToTanstack(
+  * @param taskRequired - True when the tool requires a spec 2025 task
+  * @param signal - Stops the wait when the caller aborts
+  * @param inputResponse - The user's answer from an `mcp_input` interrupt
++ * @param timeout - Request timeout for every tool, input retry and task operation
+  */
+ export async function callMcpTool(
+   client: Client,
+@@ -148,13 +150,14 @@ export async function callMcpTool(
+   taskRequired: boolean,
+   signal?: AbortSignal,
+   inputResponse?: ToolInputResponse,
++  timeout?: number,
+ ) {
+   signal?.throwIfAborted()
+   const isModern = client.getProtocolEra() === 'modern'
+   if (!taskRequired && !isModern) {
+     const result = await client.callTool(
+       { name: mcpName, arguments: args },
+-      { signal, allowInputRequired: true },
++      { signal, allowInputRequired: true, ...(timeout === undefined ? {} : { timeout }) },
+     )
+     throwIfInputRequired(result)
+     return result
+@@ -162,12 +165,13 @@ export async function callMcpTool(
+ 
+   const params = { name: mcpName, arguments: args }
+   let raw = isModern
+-    ? await rawRequest(client, 'tools/call', params, signal)
++    ? await rawRequest(client, 'tools/call', params, signal, timeout)
+     : await sdkRequest(
+         client,
+         'tools/call',
+         { name: mcpName, arguments: args, task: {} },
+         signal,
++        timeout,
+       )
+   // ponytail: the answer is sent on the second call, so the server state never
+   // travels through the browser. The cost is one extra tools/call.
+@@ -177,6 +181,7 @@ export async function callMcpTool(
+       'tools/call',
+       { ...params, ...retryParams(raw, inputResponse) },
+       signal,
++      timeout,
+     )
+     // ponytail: one input round per call. The next resume starts with no
+     // requestState, so a second pause would ask round 1 again forever.
+@@ -188,7 +193,7 @@ export async function callMcpTool(
+       )
+     }
+   }
+-  return finishToolCall(client, mcpName, raw, signal)
++  return finishToolCall(client, mcpName, raw, signal, timeout)
+ }
+ 
+ // Answers only the first input request. That is the one the interrupt shows.
+@@ -269,12 +274,13 @@ async function finishToolCall(
+   mcpName: string,
+   raw: unknown,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+   throwIfInputRequired(raw)
+   // A spec 2025 task body also carries `content`. Read the task first.
+   const task = readNestedTask(raw)
+   if (task !== undefined) {
+-    return pollTask(client, mcpName, task, signal)
++    return pollTask(client, mcpName, task, signal, timeout)
+   }
+   if (isCallToolResult(raw)) return raw
+   throw missingTaskResult(mcpName)
+@@ -285,6 +291,7 @@ async function pollTask(
+   mcpName: string,
+   task: TaskState,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+   let current = task
+   try {
+@@ -296,19 +303,19 @@ async function pollTask(
+         // A spec 2025 task sends its input request on tasks/result, as a
+         // request to the client. This client does not answer those requests,
+         // so stop here. Polling again would never end.
+-        void cancelTask(client, current.taskId)
++        void cancelTask(client, current.taskId, timeout)
+         throw new Error(
+           `MCP task "${current.taskId}" needs input. This client cannot answer a spec 2025 task input request.`,
+         )
+       }
+       const delay = current.pollInterval ?? defaultPollMs
+       await waitForPoll(delay, signal)
+-      current = await readPolledTask(client, current.taskId, mcpName, signal)
++      current = await readPolledTask(client, current.taskId, mcpName, signal, timeout)
+     }
+   } catch (error) {
+     if (isMCPInputRequiredError(error)) throw error
+     if (signal?.aborted) {
+-      void cancelTask(client, task.taskId)
++      void cancelTask(client, task.taskId, timeout)
+       throw abortReason(signal)
+     }
+     throw error
+@@ -316,7 +323,7 @@ async function pollTask(
+ 
+   switch (current.status) {
+     case 'completed':
+-      return taskResult(client, mcpName, current.taskId, signal)
++      return taskResult(client, mcpName, current.taskId, signal, timeout)
+     case 'failed':
+     case 'cancelled':
+       throw terminalTaskError(current)
+@@ -332,8 +339,9 @@ async function taskResult(
+   mcpName: string,
+   taskId: string,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+-  const result = await taskRequest(client, 'tasks/result', { taskId }, signal)
++  const result = await taskRequest(client, 'tasks/result', { taskId }, signal, timeout)
+   throwIfInputRequired(result)
+   if (!isCallToolResult(result)) throw missingTaskResult(mcpName)
+   return result
+@@ -344,8 +352,9 @@ async function readPolledTask(
+   taskId: string,
+   mcpName: string,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+-  const body = await taskRequest(client, 'tasks/get', { taskId }, signal)
++  const body = await taskRequest(client, 'tasks/get', { taskId }, signal, timeout)
+   throwIfInputRequired(body)
+   const task = readTaskState(body)
+   if (task === undefined) throw missingTaskResult(mcpName)
+@@ -357,8 +366,9 @@ function taskRequest(
+   method: string,
+   params: Record<string, unknown>,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+-  return sdkRequest(client, method, params, signal)
++  return sdkRequest(client, method, params, signal, timeout)
+ }
+ 
+ async function sdkRequest(
+@@ -366,6 +376,7 @@ async function sdkRequest(
+   method: string,
+   params: Record<string, unknown>,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+   signal?.throwIfAborted()
+   const rpc: Request = { method, params }
+@@ -373,7 +384,7 @@ async function sdkRequest(
+     return await client.request(
+       rpc,
+       passThroughResult,
+-      signal === undefined ? undefined : { signal },
++      { signal, ...(timeout === undefined ? {} : { timeout }) },
+     )
+   } catch (error) {
+     if (signal?.aborted) throw abortReason(signal)
+@@ -386,6 +397,7 @@ function rawRequest(
+   method: string,
+   params: Record<string, unknown>,
+   signal?: AbortSignal,
++  timeout?: number,
+ ) {
+   signal?.throwIfAborted()
+   const transport = client.transport
+@@ -399,14 +411,15 @@ function rawRequest(
+   return new Promise<unknown>((resolve, reject) => {
+     let settled = false
+     // Same limit as an SDK request, so a lost response cannot hang the call.
++    const requestTimeoutMs = timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC
+     const timer = setTimeout(() => {
+       finish(
+         new SdkError(
+           SdkErrorCode.RequestTimeout,
+-          `The MCP request ${method} timed out after ${DEFAULT_REQUEST_TIMEOUT_MSEC} ms.`,
++          `The MCP request ${method} timed out after ${requestTimeoutMs} ms.`,
+         ),
+       )
+-    }, DEFAULT_REQUEST_TIMEOUT_MSEC)
++    }, requestTimeoutMs)
+     const finish = (error: unknown, result?: unknown) => {
+       if (settled) return
+       settled = true
+@@ -497,8 +510,8 @@ function withEnvelope(
+   }
+ }
+ 
+-function cancelTask(client: Client, taskId: string) {
+-  return taskRequest(client, 'tasks/cancel', { taskId }).catch(() => undefined)
++function cancelTask(client: Client, taskId: string, timeout?: number) {
++  return taskRequest(client, 'tasks/cancel', { taskId }, undefined, timeout).catch(() => undefined)
+ }
+ 
+ function throwIfInputRequired(value: unknown) {
+@@ -635,6 +648,7 @@ export function makeMcpExecute(
+   mcpName: string,
+   preferStructured: boolean,
+   taskRequired = false,
++  callToolTimeoutMs?: number,
+ ) {
+   return async (
+     args: unknown,
+@@ -647,6 +661,7 @@ export function makeMcpExecute(
+       taskRequired,
+       ctx?.abortSignal,
+       ctx?.inputResponse,
++      callToolTimeoutMs,
+     )
+     if (result.isError) {
+       const text = Array.isArray(result.content)
+@@ -717,6 +732,7 @@ export function toServerTools(
+           def.name,
+           Boolean(def.outputSchema),
+           requiresTaskExecution(def),
++          options.callToolTimeoutMs,
+         ),
+       }
+       if (options.needsApproval?.(def)) {
+diff --git a/src/types.ts b/src/types.ts
+index 447260d0d41e54a99bca22061dece90d7f92340c..958de9b0242801ae1fd7b71387df4b0a4323d8f5 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -148,6 +148,8 @@ export interface MCPClientOptions {
+ }
+ 
+ export interface ToolsOptions {
++  /** Override the MCP request timeout for calls bound by tools(). */
++  callToolTimeoutMs?: number
+   /** Mark tools `lazy: true` to defer schema-sending via LazyToolManager. */
+   lazy?: boolean
+ }

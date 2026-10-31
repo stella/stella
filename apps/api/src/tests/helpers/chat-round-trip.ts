@@ -175,6 +175,14 @@ async function* scriptedStepChunks({
       timestamp,
     };
     yield {
+      type: EventType.STEP_STARTED,
+      stepName: stepId,
+      stepId,
+      model,
+      timestamp,
+      stepType: "thinking",
+    };
+    yield {
       type: EventType.REASONING_MESSAGE_CONTENT,
       messageId: reasoningId,
       delta: step.reasoning,
@@ -182,14 +190,25 @@ async function* scriptedStepChunks({
       timestamp,
     };
     yield {
-      type: EventType.REASONING_ENCRYPTED_VALUE,
-      subtype: "message",
-      entityId: reasoningId,
+      type: EventType.STEP_FINISHED,
+      stepName: stepId,
+      stepId,
       model,
       timestamp,
+      delta: step.reasoning,
+      content: step.reasoning,
+    };
+    yield {
+      type: EventType.STEP_FINISHED,
+      stepName: stepId,
+      stepId,
+      model,
+      timestamp,
+      delta: "",
+      content: step.reasoning,
       // The harness resolves OpenAI models: replay requires encrypted content,
       // rather than an opaque signature or an id whose stored copy may be gone.
-      encryptedValue: JSON.stringify({
+      signature: JSON.stringify({
         id: `rs_${blockId}`,
         encrypted_content: `encrypted-${stepId}`,
       }),

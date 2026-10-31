@@ -116,8 +116,6 @@ const blocksOf = (
  * and differ between a message built live and the same one hydrated.
  */
 const MESSAGE_FIELD_REACHES_PROVIDER = {
-  blockOrder: true,
-  midConversationChange: false,
   content: true,
   createdAt: false,
   error: true,

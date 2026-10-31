@@ -15,8 +15,7 @@
 //   (a) an inline arrow/function expression — return value is used as-is;
 //   (b) a string literal or no-substitution template literal — `$`
 //       sequences are then author-visible in the source and presumed
-//       intentional; literal string arrays follow the same rule for APIs
-//       such as RegexSet.replaceAll that accept per-pattern replacements;
+//       intentional;
 //   (c) an identifier that resolves, through the scope API, to a function
 //       declaration or a `const`/`let` arrow/function-expression
 //       assignment. Any other resolution (parameter, import, class name,
@@ -175,17 +174,6 @@ export default eslintCompatPlugin({
           }
           if (isNoSubstitutionTemplateLiteral(argument)) {
             return true;
-          }
-          if (
-            isAstNode(argument) &&
-            argument.type === "ArrayExpression" &&
-            Array.isArray(argument.elements)
-          ) {
-            return argument.elements.every(
-              (element) =>
-                isStringLiteral(element) ||
-                isNoSubstitutionTemplateLiteral(element),
-            );
           }
           if (isIdentifier(argument)) {
             return isFunctionBinding(argument);

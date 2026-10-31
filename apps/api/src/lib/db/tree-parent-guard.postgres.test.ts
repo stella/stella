@@ -307,8 +307,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         for (const guard of Object.values(TREE_PARENT_GUARDS)) {
-          const rows = await db.execute(
-            sql`
+          const rows = await db.execute(sql`
             SELECT t.tgenabled::text AS enabled,
                    t.tgnargs AS nargs,
                    encode(t.tgargs, 'escape') AS args,
@@ -318,9 +317,7 @@ if (!databaseUrl || !runPostgresTests) {
               JOIN pg_class c ON c.oid = t.tgrelid
               JOIN pg_proc p ON p.oid = t.tgfoid
              WHERE c.relname = ${guard.table}
-               AND t.tgname = ${guard.constraint}`,
-            "objects",
-          );
+               AND t.tgname = ${guard.constraint}`);
           const row = rows.at(0);
           expect({ table: guard.table, found: row !== undefined }).toEqual({
             table: guard.table,

@@ -190,7 +190,6 @@ describe("instance provider redirect policy", () => {
                 panic("Unknown request scope");
             }
             const chatOptions = {
-              threadId: Bun.randomUUIDv7(),
               model,
               messages: [{ role: "user" as const, content: "fixture request" }],
               logger: resolveDebugOption(false),
@@ -340,7 +339,6 @@ describe("OpenRouter document transport", () => {
         "google/gemini-2.5-flash",
       );
       for await (const _chunk of chat({
-        threadId: Bun.randomUUIDv7(),
         adapter: wireAdapter,
         messages: [
           {
@@ -390,7 +388,6 @@ describe("OpenRouter document transport", () => {
 describe("OpenRouter tool schemas", () => {
   test("an optional field also admits null on the wire; a required one does not", () => {
     const request = adapter.requestFor({
-      threadId: Bun.randomUUIDv7(),
       logger: resolveDebugOption(false),
       messages: [{ role: "user", content: "Delete the draft." }],
       model: "google/gemini-2.5-flash",

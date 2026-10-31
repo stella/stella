@@ -294,7 +294,7 @@ describe("buildDeclineBody", () => {
       ],
       runId: "run-2",
     });
-    expect(body).not.toHaveProperty("data");
+    expect(body.data).toEqual(body.forwardedProps);
   });
 });
 

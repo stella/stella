@@ -80,13 +80,12 @@ export const createClauseHandler = async function* ({
     );
   }
 
-  const categoryId = body.categoryId;
-  if (categoryId) {
+  if (body.categoryId) {
     const category = yield* Result.await(
       safeDb((tx) =>
         tx.query.clauseCategories.findFirst({
           where: {
-            id: { eq: categoryId },
+            id: { eq: body.categoryId },
             organizationId: { eq: organizationId },
           },
           columns: { id: true },

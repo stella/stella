@@ -102,7 +102,6 @@ if (!databaseUrl || !runPostgresTests) {
             $probe$`);
               const rows = await tx.execute(
                 sql`SELECT current_setting('stella_test.blocked') = 'true' AS blocked`,
-                "objects",
               );
               probed.resolve(rows.at(0)?.["blocked"] === true);
             };

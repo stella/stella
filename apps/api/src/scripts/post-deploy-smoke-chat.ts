@@ -334,6 +334,7 @@ export const buildUserTurnBody = ({
     tools: [],
     context: [],
     forwardedProps,
+    data: forwardedProps,
   } satisfies ChatSmokeBody;
 };
 
@@ -401,7 +402,7 @@ export const buildDeclineBody = ({
     tools: [],
     context: [],
     forwardedProps,
-
+    data: forwardedProps,
     parentRunId: interruptedRunId,
     resume,
   } satisfies ChatSmokeBody;

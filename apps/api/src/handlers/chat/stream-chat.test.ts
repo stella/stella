@@ -1549,7 +1549,7 @@ describe("transient visual preview fault persistence", () => {
             yield* normalizeStreamChunk({
               type: EventType.TOOL_CALL_END,
               toolCallId: "preview-call",
-              metadata: { tanstack: { toolName: VISUAL_PREVIEW_TOOL_NAME } },
+              toolName: VISUAL_PREVIEW_TOOL_NAME,
               output: partial,
               input: {},
             });
@@ -4444,7 +4444,6 @@ describe("outgoing chat stream message ids", () => {
       },
       processor: new StreamProcessor(),
       source: chat({
-        threadId: Bun.randomUUIDv7(),
         adapter,
         messages: [{ content: "Hello", role: "user" }],
       }),
@@ -5808,15 +5807,15 @@ describe("chat stream refs", () => {
           toolCallId: "tool-1",
         },
         // Shaped by the SDK's own normalizer, as `chat()` emits it: `input`
-        // is not a spec key on TOOL_CALL_END, so the engine moves it
-        // into `metadata.tanstack` before the chunk reaches this
+        // and `toolName` are not spec keys on TOOL_CALL_END, so the engine
+        // moves them into `metadata.tanstack` before the chunk reaches this
         // pipeline. An adapter that parses the whole input on END (Anthropic)
         // delivers the canonical arguments there.
         ...normalizeStreamChunk({
           type: EventType.TOOL_CALL_END,
           input: { matter_id: matterRef },
           toolCallId: "tool-1",
-          metadata: { tanstack: { toolName: "list_matters" } },
+          toolName: "list_matters",
         }),
         ...normalizeStreamChunk({
           type: EventType.RUN_FINISHED,

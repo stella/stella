@@ -659,7 +659,7 @@ export const readSearchPreview = async (
   }
 
   const rows = await scopedDb(
-    async (tx) => await tx.execute(buildSearchPreviewQuery(input), "objects"),
+    async (tx) => await tx.execute(buildSearchPreviewQuery(input)),
   );
   const preview = rows.at(0)?.["preview"];
   if (!isSearchPreviewRow(preview)) {

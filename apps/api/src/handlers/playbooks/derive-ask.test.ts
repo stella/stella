@@ -119,7 +119,6 @@ describe("deriveAutoAsks — save resilience", () => {
     } satisfies DeriveAskResult;
     const providerResponse = {
       id: "derive-ask-response",
-      access_programs: null,
       created_at: 0,
       output_text: JSON.stringify(generatedAsk),
       error: null,

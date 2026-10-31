@@ -1651,8 +1651,7 @@ const readGlobalFacet = async (
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await database.execute(
-      sql`
+    const rows = await database.execute(sql`
       SELECT editor.id AS value, editor.name AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1670,9 +1669,7 @@ const readGlobalFacet = async (
       GROUP BY editor.id, editor.name
       ORDER BY count DESC, editor.name ASC
       LIMIT ${limit}
-    `,
-      "objects",
-    );
+    `);
     return { buckets: facetBuckets(toStringFacetMap(rows)) };
   }
 
@@ -1680,8 +1677,7 @@ const readGlobalFacet = async (
     if (!hasSelectedEntityType(selected)) {
       return { buckets: [] };
     }
-    const rows = await database.execute(
-      sql`
+    const rows = await database.execute(sql`
       SELECT mime_type.value AS value, mime_type.value AS label, count(*)::int AS count
       FROM search_documents sd
       LEFT JOIN entities e
@@ -1701,9 +1697,7 @@ const readGlobalFacet = async (
       GROUP BY mime_type.value
       ORDER BY count DESC, mime_type.value ASC
       LIMIT ${limit}
-    `,
-      "objects",
-    );
+    `);
     return { buckets: facetBuckets(toMimeTypeFacetMap(rows)) };
   }
 
@@ -1745,8 +1739,7 @@ const readGlobalFacet = async (
     `
     : emptyWorkspaceFacetQuery;
 
-  const rows = await database.execute(
-    sql`
+  const rows = await database.execute(sql`
     SELECT value, label, count(*)::int AS count
     FROM (
       ${entityWorkspaceFacetQuery}
@@ -1758,9 +1751,7 @@ const readGlobalFacet = async (
     GROUP BY value, label
     ORDER BY count DESC, value ASC
     LIMIT ${limit}
-  `,
-    "objects",
-  );
+  `);
   return { buckets: facetBuckets(toStringFacetMap(rows)) };
 };
 

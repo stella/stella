@@ -2657,7 +2657,7 @@ type ProcessSnapshotChunkOptions = SnapshotProcessorOptions & {
 };
 
 /**
- * TanStack AI answers an approved call it has not executed yet with
+ * TanStack AI (0.65.1) answers an approved call it has not executed yet with
  * a placeholder tool row (`uiMessagesToWire` / `uiMessageToModelMessages` in
  * `@tanstack/ai`), and the interrupt MESSAGES_SNAPSHOT that hands an
  * approved client tool to the browser carries it. Folded into UI parts, the

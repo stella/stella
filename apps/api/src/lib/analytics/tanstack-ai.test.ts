@@ -117,8 +117,6 @@ const createMiddlewareContext = ({
   modelOptions,
   messageCount: 1,
   hasTools: true,
-  callMetadata: {},
-  retry: () => undefined,
   currentMessageId: null,
   accumulatedContent: "",
   messages: [],
@@ -1133,7 +1131,6 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(
         await rejectionOf(
           generateChatObject({
-            threadId: Bun.randomUUIDv7(),
             adapter,
             messages: [{ role: "user", content: "Return JSON" }],
             outputSchema: {
@@ -1286,7 +1283,6 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       for await (const _ of streamChatChunks({
-        threadId: Bun.randomUUIDv7(),
         adapter,
         messages: [{ role: "user", content: "Reply." }],
         middleware: [callbacks.middleware],
@@ -1398,7 +1394,6 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     const chunks: StreamChunk[] = [];
     for await (const chunk of streamChatChunks({
-      threadId: Bun.randomUUIDv7(),
       adapter,
       messages: [{ role: "user", content: "Reply." }],
       middleware: [callbacks.middleware],
