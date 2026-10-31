@@ -40,7 +40,7 @@ const createOrganization = createSafeSessionHandler(
           ...(slug === undefined ? {} : { slug }),
           idempotencyKey: request.headers.get("Idempotency-Key"),
         },
-        getAuth().api.createOrganization,
+        { createOrganization: getAuth().api.createOrganization },
       ),
     );
     return Result.ok({
