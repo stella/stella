@@ -161,7 +161,7 @@ const NATIVE_TIME_BILLING_ROUTES = [
     method: "PUT",
     path: "/v1/desktop/billing-drafts/settings",
     definition: updateBillingDraftSettings,
-    body: { consent: "granted" },
+    body: { type: "withdraw_consent" },
   },
   {
     method: "POST",

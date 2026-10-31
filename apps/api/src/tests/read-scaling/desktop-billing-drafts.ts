@@ -174,6 +174,7 @@ export const measureDesktopBillingDraftSettings = async (
         return panic("Desktop settings scaling requires a successful response");
       }
       expect(response).toEqual({
+        revision: expect.any(String),
         organizationMode: "enabled",
         consent: "granted",
         preference: "Keep the target narrative concise",

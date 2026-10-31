@@ -276,19 +276,32 @@ export const desktopBillingDraftRequestSchema = v.pipe(
   ),
 );
 
-export const desktopBillingDraftSettingsRequestSchema = v.pipe(
-  v.strictObject({
-    consent: v.optional(v.picklist(["granted", "revoked"])),
-    preference: v.optional(v.nullable(steeringTextSchema)),
-  }),
-  v.check(
-    (request) =>
-      request.consent !== undefined || request.preference !== undefined,
-    "A consent or preference update is required",
-  ),
+/** Opaque server revision of the caller's own settings; `null` before the
+ * first write. */
+const billingDraftSettingsRevisionSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(64),
 );
 
+/** A withdrawal carries no revision, so it applies whatever the caller last
+ * read. A grant or a preference change applies only to the revision it was
+ * made on. */
+export const desktopBillingDraftSettingsRequestSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("withdraw_consent") }),
+  v.strictObject({
+    type: v.literal("grant_consent"),
+    revision: v.nullable(billingDraftSettingsRevisionSchema),
+  }),
+  v.strictObject({
+    type: v.literal("set_preference"),
+    revision: v.nullable(billingDraftSettingsRevisionSchema),
+    preference: v.nullable(steeringTextSchema),
+  }),
+]);
+
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
+  revision: v.nullable(billingDraftSettingsRevisionSchema),
   organizationMode: v.picklist(["enabled", "disabled"]),
   consent: v.picklist(["granted", "revoked"]),
   preference: v.nullable(
@@ -298,6 +311,13 @@ export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
       v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.steerLength),
     ),
   ),
+});
+
+/** Every write leaves the caller's row in place, so its answer always names
+ * a revision. */
+export const desktopBillingDraftSettingsUpdateResponseSchema = v.strictObject({
+  ...desktopBillingDraftSettingsResponseSchema.entries,
+  revision: billingDraftSettingsRevisionSchema,
 });
 
 export type DesktopBillingDraftRequest = v.InferOutput<

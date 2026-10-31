@@ -9,9 +9,11 @@ import {
   test,
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopBillingDraftSettingsResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -776,23 +778,36 @@ const expectDesktopEntryOwnedByB = async (entryId: string) => {
 
 const DESKTOP_DRAFT_PREFERENCE_B = "Organization B drafting preference";
 
+// Grants and preference changes apply to the revision the caller last read.
 const putDraftSettings = async (
   caller: (request: Request) => Promise<Response>,
-  body: { consent: "granted" } | { preference: string },
+  change:
+    { type: "grant_consent" } | { type: "set_preference"; preference: string },
 ) => {
-  const response = await caller(desktopRequest("/draft-settings", body));
+  const current = await caller(desktopRequest("/draft-settings"));
+  expect(current.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsResponseSchema,
+    await current.json(),
+  );
+  const response = await caller(
+    desktopRequest("/draft-settings", { ...change, revision }),
+  );
   expect(response.status).toBe(200);
 };
 
 const grantDraftConsent = async (
   caller: (request: Request) => Promise<Response>,
-) => await putDraftSettings(caller, { consent: "granted" });
+) => await putDraftSettings(caller, { type: "grant_consent" });
 
 const saveOrganizationBDraftSettings = async (
   desktopB: (request: Request) => Promise<Response>,
 ) => {
   await grantDraftConsent(desktopB);
-  await putDraftSettings(desktopB, { preference: DESKTOP_DRAFT_PREFERENCE_B });
+  await putDraftSettings(desktopB, {
+    type: "set_preference",
+    preference: DESKTOP_DRAFT_PREFERENCE_B,
+  });
 };
 
 const desktopCredentialIsolationCases = (): IsolationCase[] => [
@@ -947,12 +962,14 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
     },
     expectDenied: (result) =>
       expect(result).toEqual({
+        revision: null,
         organizationMode: "enabled",
         consent: "revoked",
         preference: null,
       }),
     expectPositive: (result) =>
       expect(result).toEqual({
+        revision: expect.any(String),
         organizationMode: "enabled",
         consent: "granted",
         preference: DESKTOP_DRAFT_PREFERENCE_B,

@@ -25,6 +25,20 @@ type ColumnCasToken<TColumn extends Column> =
     ? TimestampCasToken
     : TimestampCasToken | null;
 
+// `timestamptz::text` under the default ISO DateStyle, offset included, so a
+// token read in one session TimeZone still names the same instant in another.
+const TIMESTAMP_CAS_TOKEN_PATTERN =
+  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?[+-]\d{2}(?::\d{2}){0,2}$/u;
+
+/**
+ * Recognises a token a client sent back. A value that fails is not a
+ * revision this column ever produced, so it can never match; checking it
+ * here keeps a malformed value out of the `::timestamptz` cast.
+ */
+export const isTimestampCasToken = (
+  value: string,
+): value is TimestampCasToken => TIMESTAMP_CAS_TOKEN_PATTERN.test(value);
+
 /** Select expression producing the column's exact-precision CAS token. */
 export const timestampCasToken = <TColumn extends Column>(
   column: TColumn,

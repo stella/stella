@@ -145,12 +145,17 @@ test("billing draft responses emit finite direct JSON schemas for native respons
 });
 
 test("billing drafting settings accept only personal consent and bounded preferences", () => {
+  const revision = "2026-10-30 13:03:04.123456+01";
   for (const patch of [
-    { consent: "granted" },
-    { consent: "revoked" },
-    { preference: "Use concise Czech narratives" },
-    { preference: null },
-    { consent: "granted", preference: "Client-friendly wording" },
+    { type: "withdraw_consent" },
+    { type: "grant_consent", revision: null },
+    { type: "grant_consent", revision },
+    {
+      type: "set_preference",
+      revision,
+      preference: "Use concise Czech narratives",
+    },
+    { type: "set_preference", revision: null, preference: null },
   ] satisfies DesktopBillingDraftSettingsRequest[]) {
     expect(v.parse(desktopBillingDraftSettingsRequestSchema, patch)).toEqual(
       patch,
@@ -158,12 +163,22 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const patch of [
     {},
-    { consent: "pending" },
-    { organizationMode: "enabled" },
-    { consent: "granted", userId: "another-user" },
-    { preference: "" },
-    { preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1) },
-    { preference: "text\u0000text" },
+    { consent: "granted" },
+    { consent: "revoked" },
+    { type: "pending" },
+    { type: "grant_consent" },
+    { type: "grant_consent", revision: "" },
+    { type: "grant_consent", revision, organizationMode: "enabled" },
+    { type: "grant_consent", revision, userId: "another-user" },
+    { type: "grant_consent", revision, preference: "Combined" },
+    { type: "set_preference", revision, preference: "" },
+    { type: "set_preference", preference: "Missing revision" },
+    {
+      type: "set_preference",
+      revision,
+      preference: "x".repeat(DESKTOP_BILLING_DRAFT_LIMITS.steerLength + 1),
+    },
+    { type: "set_preference", revision, preference: "text\u0000text" },
   ]) {
     expect(
       v.safeParse(desktopBillingDraftSettingsRequestSchema, patch).success,
@@ -171,12 +186,35 @@ test("billing drafting settings accept only personal consent and bounded prefere
   }
   for (const organizationMode of ["enabled", "disabled"] as const) {
     for (const consent of ["granted", "revoked"] as const) {
-      const settings = { organizationMode, consent, preference: null };
-      expect(
-        v.parse(desktopBillingDraftSettingsResponseSchema, settings),
-      ).toEqual(settings);
+      for (const stored of [null, revision]) {
+        const settings = {
+          revision: stored,
+          organizationMode,
+          consent,
+          preference: null,
+        };
+        expect(
+          v.parse(desktopBillingDraftSettingsResponseSchema, settings),
+        ).toEqual(settings);
+      }
     }
   }
+});
+
+test("a consent withdrawal cannot be made conditional on a revision", () => {
+  for (const revision of [null, "2026-10-30 13:03:04.123456+01"]) {
+    expect(
+      v.safeParse(desktopBillingDraftSettingsRequestSchema, {
+        type: "withdraw_consent",
+        revision,
+      }).success,
+    ).toBe(false);
+  }
+  expect(
+    v.safeParse(desktopBillingDraftSettingsRequestSchema, {
+      type: "withdraw_consent",
+    }).success,
+  ).toBe(true);
 });
 
 test("steering round trips the bounded structured result without server session state", () => {
