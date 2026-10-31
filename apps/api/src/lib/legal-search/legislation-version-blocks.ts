@@ -259,7 +259,7 @@ export const readVersionAst = async (options: ReadVersionAstOptions) =>
       await readStoredVersionAst({
         legislationDb: options.legislationDb,
         id: options.row.id,
-        purpose: options.purpose,
+        ...(options.purpose === undefined ? {} : { purpose: options.purpose }),
         surface: options.surface,
       }),
   });
