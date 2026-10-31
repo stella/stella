@@ -10,11 +10,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { sha256Hex as hashContent } from "@stll/sha256/node";
 
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import {
   assemblePlKioDecision as uncheckedAssemblePlKioDecision,
@@ -35,6 +30,11 @@ import {
   fitsDecisionSearchCandidateRow,
   sanitizeResult,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -481,7 +481,7 @@ describe("building a ruling from its three pages", () => {
             decision.metadata["courtAsStated"] ===
               (refused ? court : undefined),
           ).toBe(true);
-          expect(sanitizeResult(decision).court).toBe(decision.court);
+          expect(sanitizeResult(decision).unwrap().court).toBe(decision.court);
         }
       }
     }
@@ -504,7 +504,7 @@ describe("building a ruling from its three pages", () => {
       true,
     );
     expect(decision.isListingOnly).toBe(true);
-    expect(sanitizeResult(decision).court === "").toBe(true);
+    expect(sanitizeResult(decision).unwrap().court === "").toBe(true);
   });
 
   test("an oversized docket does not quarantine the stated court", () => {
@@ -520,7 +520,7 @@ describe("building a ruling from its three pages", () => {
     expect(decision.metadata["quarantineReason"]).toBeUndefined();
     expect(decision.metadata["courtAsStated"]).toBeUndefined();
     const refused = Result.try({
-      try: () => sanitizeResult(decision),
+      try: () => sanitizeResult(decision).unwrap(),
       catch: (error: unknown) => error,
     });
     expect(refused.isErr()).toBe(true);

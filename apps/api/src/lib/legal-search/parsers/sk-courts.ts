@@ -99,6 +99,8 @@ type PdfLine = Omit<PdfPrintedLine, "kind"> & {
   fontSize: number;
   /** 0-based page index from PDF extraction. */
   pageIndex: number;
+  /** PDF coordinates, used to retain the publisher's blank paragraph lines. */
+  position?: { y: number; height: number };
 };
 
 /**
@@ -131,11 +133,11 @@ export const parseSkDecisionPdf = async (
   const lines = await extractLines(input.pdfBytes);
   const blocks = buildSkDecisionPdfBlocks({ lines, metadata: input });
 
-  // Synthesize decision title if none detected
+  // Metadata may title extracted content, but cannot manufacture a document.
   const hasTitle = blocks.some(
     (b) => b.type === "heading" && b.role === "decision-title",
   );
-  if (!hasTitle && input.decisionType) {
+  if (blocks.length > 0 && !hasTitle && input.decisionType) {
     const title =
       input.decisionType.charAt(0).toUpperCase() + input.decisionType.slice(1);
     blocks.unshift({
@@ -226,6 +228,7 @@ const extractLines = async (pdfBytes: Uint8Array): Promise<PdfLine[]> => {
         fontSize,
         pageIndex: pageIdx,
         layout: { ...line.bbox, pageIndex: pageIdx },
+        position: { y: line.bbox.y, height: line.bbox.height },
       });
     }
   }
@@ -383,10 +386,12 @@ const buildSpanSegments = (
 // Roman numeral pattern excludes case citations like
 // "II. ÚS 177/04" via negative lookahead for "ÚS".
 const STARTS_NEW_PARAGRAPH_RE =
-  /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\([a-z]\)\s)/u;
+  /^(?:\d{1,3}\.\s|(?:I{1,3}|IV|VI{0,3}|IX|X)\.(?:\s(?!ÚS\b)|$)|\(?[a-z]\)\s)/u;
 
 /** A line set larger than this is the decision title. */
 const TITLE_FONT_SIZE = 14;
+const PARAGRAPH_GAP_LINE_HEIGHTS = 1.5;
+const FONT_LINE_HEIGHT_RATIO = 1.25;
 
 function isStructuralStart(line: PdfLine, section: Section): boolean {
   if (line.fontSize > TITLE_FONT_SIZE) {
@@ -467,6 +472,37 @@ const continuesPastStart = (
   splitsDate(previous, line.text) ||
   (!afterSignatures && SK_JUDGE_TITLE_RE.test(line.text));
 
+type ParagraphGapOptions = {
+  previous: PdfLine | undefined;
+  current: PdfLine;
+};
+
+const hasParagraphGap = ({
+  previous,
+  current,
+}: ParagraphGapOptions): boolean => {
+  if (
+    previous?.pageIndex !== current.pageIndex ||
+    previous.position === undefined ||
+    current.position === undefined
+  ) {
+    return false;
+  }
+  // PDF y runs upwards. A blank line separates paragraphs on the same
+  // page; a page turn alone says nothing about a paragraph boundary.
+  // Font metrics bound ordinary leading: paragraph gaps must not enlarge
+  // their own threshold when short paragraphs dominate the document.
+  return (
+    previous.position.y - current.position.y >
+    Math.max(
+      previous.position.height,
+      current.position.height,
+      FONT_LINE_HEIGHT_RATIO * Math.max(previous.fontSize, current.fontSize),
+    ) *
+      PARAGRAPH_GAP_LINE_HEIGHTS
+  );
+};
+
 const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
   const merged: PdfLine[] = [];
   const continuations = sentenceContinuations(lines);
@@ -488,6 +524,11 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       section = "closing";
     }
     const prev = merged.at(-1);
+    // `lines[-1]` is undefined, so the first line never opens on a gap.
+    const paragraphGap = hasParagraphGap({
+      previous: lines[index - 1],
+      current: line,
+    });
 
     // Start a new paragraph if:
     // - first line
@@ -521,6 +562,7 @@ const mergeWrappedLines = (lines: readonly PdfLine[]): PdfLine[] => {
       !prev ||
       (line.bold !== prev.bold && !boldContinuation) ||
       fontSizeChanged ||
+      paragraphGap ||
       structuralStart ||
       prev.bold ||
       continuations[index] === LINE_JOIN.BREAK;
@@ -561,10 +603,34 @@ export const buildSkDecisionPdfBlocks = ({
     `Súd: ${metadata.court}`,
     `Spisová značka: ${metadata.caseNumber}`,
   ]);
-  if (metadata.ecli) {
-    repeatedHeaders.add(`ECLI: ${metadata.ecli}`);
+  const ecliHeader = metadata.ecli ? `ECLI: ${metadata.ecli}` : undefined;
+  if (ecliHeader !== undefined) {
+    repeatedHeaders.add(ecliHeader);
   }
+  // The publisher's first-page metadata table is bounded by court/docket
+  // and ECLI. Strip the intervening labelled rows only inside that table,
+  // never a matching phrase in the decision body or an unknown header row.
+  // Without an ECLI the table has no known end, so nothing is stripped.
+  const tableEnd =
+    ecliHeader === undefined
+      ? -1
+      : lines.findIndex((line) => line.text.trim() === ecliHeader);
+  const table = lines.slice(0, tableEnd + 1);
+  const metadataRow =
+    /^(?:Identifikačné číslo súdneho spisu: \d+|Dátum vydania rozhodnutia: \d{1,2}\.\s*\d{1,2}\.\s*\d{4}|Meno a priezvisko sudcu, VSÚ: .+)$/u;
   let firstBodyLine = 0;
+  if (
+    table.at(0)?.text.trim() === `Súd: ${metadata.court}` &&
+    table.at(1)?.text.trim() === `Spisová značka: ${metadata.caseNumber}` &&
+    table.every(
+      (line) =>
+        line.pageIndex === 0 &&
+        (repeatedHeaders.has(line.text.trim()) ||
+          metadataRow.test(line.text.trim())),
+    )
+  ) {
+    firstBodyLine = table.length;
+  }
   while (
     firstBodyLine < lines.length &&
     repeatedHeaders.has(lines.at(firstBodyLine)?.text.trim() ?? "")

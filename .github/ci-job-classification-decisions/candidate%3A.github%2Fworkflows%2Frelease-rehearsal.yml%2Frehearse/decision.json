@@ -1,0 +1,4 @@
+{
+  "kind": "support",
+  "qualifier": "Runs the read-only release gates on trusted main code before release day."
+}

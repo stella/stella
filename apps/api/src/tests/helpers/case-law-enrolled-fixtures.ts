@@ -23,12 +23,6 @@ import * as cheerio from "cheerio";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
@@ -138,7 +132,13 @@ import type { ParserParityIdentity } from "@/api/handlers/case-law/ingestion/par
 import { planUnreadItems } from "@/api/handlers/case-law/ingestion/pipeline/unread-items";
 import { UNAVAILABLE_CYCLES_BEFORE_MARKING } from "@/api/lib/errors/read-outcome";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import { withSourceRawObjects } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  withSourceRawObjects,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   RAW_SOURCE_FAMILY,
   sourceBinaryRef,
@@ -1323,6 +1323,7 @@ const EU_ECJ_BINDING = {
     type: "uri",
     value: `${CELLAR_RESOURCE}${EU_ECJ_EXPRESSION}.05`,
   },
+  manifestationType: { type: "literal", value: "xhtml" },
 } as const satisfies EcjSparqlBinding;
 
 const EU_ECJ_ADAPTER_FIXTURES = new URL(

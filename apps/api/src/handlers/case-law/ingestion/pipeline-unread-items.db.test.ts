@@ -14,11 +14,6 @@ import { authRelationsPart } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources, relations } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import type {
-  IngestionResult,
-  SyncPage,
-  UnreadListedItem,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
@@ -36,6 +31,12 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SyncPage,
+  UnreadListedItem,
+} from "@/api/lib/legal-search/ingestion-types";
 import { OBSERVATION_DETAIL } from "@/api/lib/legal-search/partial-observation-sql";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { type FakeS3, startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -152,13 +153,19 @@ const forbidden = (id: string): UnreadListedItem => ({
 /** One crawl cycle over one page; returns where the cursor stands after it. */
 const cycle = async (
   sourceId: SafeId<"caseLawSource">,
-  page: Omit<SyncPage, "nextCursor">,
+  page: Omit<SyncPage, "nextCursor" | "publisherRequest">,
 ) => {
   const sourceLease =
     (await acquireCaseLawSourceIngestionLease({ scopedDb, sourceId })) ??
     panic("expected the source lease to be free");
   czNsAdapter.fetchPage = async () =>
-    await Promise.resolve(Result.ok({ ...page, nextCursor: "page-2" }));
+    await Promise.resolve(
+      Result.ok({
+        ...page,
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: "page-2",
+      }),
+    );
   const run = await runIngestionPipeline({
     acquireStoredTotalAdmission: async () => "held",
     source: sourceLease.source,
@@ -362,6 +369,7 @@ describe("a listed item whose read stays unavailable", () => {
         Result.ok({
           decisions: [],
           unreadItems: [forbidden("slotted")],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor: "page-2",
         }),
       );

@@ -28,6 +28,8 @@ const entityRowSchema = v.object({
   updatedAt: v.nullish(v.string()),
   status: v.nullish(v.string()),
   createdBy: v.nullish(v.string()),
+  /** The folder it sits in, or none at the matter's top level. */
+  parentId: v.nullish(v.string()),
 });
 
 const entityPageSchema = v.object({
@@ -123,9 +125,26 @@ export const applyEntityPage = (
 
 type EntitySectionKey = "documents" | "tasks";
 
+/**
+ * One row of a section. A document or folder sits `depth` folders below the
+ * matter's top level; a folder says whether it is open.
+ */
+type EntityTreeRow =
+  | {
+      readonly type: "folder";
+      readonly entity: MatterEntity;
+      readonly depth: number;
+      readonly open: boolean;
+    }
+  | {
+      readonly type: "item";
+      readonly entity: MatterEntity;
+      readonly depth: number;
+    };
+
 export type EntitySection = {
   readonly key: EntitySectionKey;
-  readonly data: MatterEntity[];
+  readonly data: EntityTreeRow[];
 };
 
 const SECTION_OF_KIND: Readonly<Record<string, EntitySectionKey>> = {
@@ -135,25 +154,93 @@ const SECTION_OF_KIND: Readonly<Record<string, EntitySectionKey>> = {
 };
 
 /**
- * Documents (folders first) then tasks, each in the order the server listed
- * them. Empty sections are left out; kinds this build does not know are too.
+ * Documents as the web's tree: at each level folders first, then documents,
+ * each in the order the server listed them, and an open folder's contents
+ * under it. A row whose folder is not loaded (yet) sits at the top level, so
+ * paging never hides a document. Tasks follow, flat. Empty sections are left
+ * out; kinds this build does not know are too.
  */
 export const entitySections = (
   entities: readonly MatterEntity[],
+  openFolders: ReadonlySet<string>,
 ): EntitySection[] => {
-  const folders: MatterEntity[] = [];
+  const tasks: EntityTreeRow[] = [];
   const documents: MatterEntity[] = [];
-  const tasks: MatterEntity[] = [];
   for (const entity of entities) {
     const section = SECTION_OF_KIND[entity.kind];
     if (section === "tasks") {
-      tasks.push(entity);
+      tasks.push({ type: "item", entity, depth: 0 });
     } else if (section === "documents") {
-      (entity.kind === "folder" ? folders : documents).push(entity);
+      documents.push(entity);
     }
   }
+  const folderIds = new Set(
+    documents
+      .filter((entity) => entity.kind === "folder")
+      .map((entity) => entity.entityId),
+  );
+  const childrenOf = new Map<string | null, MatterEntity[]>();
+  for (const entity of documents) {
+    const parent =
+      entity.parentId !== null &&
+      entity.parentId !== undefined &&
+      entity.parentId !== entity.entityId &&
+      folderIds.has(entity.parentId)
+        ? entity.parentId
+        : null;
+    const siblings = childrenOf.get(parent) ?? [];
+    siblings.push(entity);
+    childrenOf.set(parent, siblings);
+  }
+  // Folders that name each other as parents are reached from nowhere; they
+  // move to the top level so no row is ever hidden.
+  const reachable = new Set<string>();
+  const reach = (parent: string | null) => {
+    for (const entity of childrenOf.get(parent) ?? []) {
+      if (!reachable.has(entity.entityId)) {
+        reachable.add(entity.entityId);
+        reach(entity.entityId);
+      }
+    }
+  };
+  reach(null);
+  for (const entity of documents) {
+    if (!reachable.has(entity.entityId)) {
+      const roots = childrenOf.get(null) ?? [];
+      roots.push(entity);
+      childrenOf.set(null, roots);
+      reachable.add(entity.entityId);
+      reach(entity.entityId);
+    }
+  }
+  const tree: EntityTreeRow[] = [];
+  // A folder is listed once even if the data names a cycle of parents.
+  const listed = new Set<string>();
+  const addLevel = (parent: string | null, depth: number) => {
+    const siblings = childrenOf.get(parent) ?? [];
+    const ordered = [
+      ...siblings.filter((entity) => entity.kind === "folder"),
+      ...siblings.filter((entity) => entity.kind !== "folder"),
+    ];
+    for (const entity of ordered) {
+      if (listed.has(entity.entityId)) {
+        continue;
+      }
+      listed.add(entity.entityId);
+      if (entity.kind !== "folder") {
+        tree.push({ type: "item", entity, depth });
+        continue;
+      }
+      const open = openFolders.has(entity.entityId);
+      tree.push({ type: "folder", entity, depth, open });
+      if (open) {
+        addLevel(entity.entityId, depth + 1);
+      }
+    }
+  };
+  addLevel(null, 0);
   return [
-    { key: "documents" as const, data: [...folders, ...documents] },
+    { key: "documents" as const, data: tree },
     { key: "tasks" as const, data: tasks },
   ].filter((section) => section.data.length > 0);
 };

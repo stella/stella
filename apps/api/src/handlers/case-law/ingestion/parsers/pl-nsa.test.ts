@@ -1,6 +1,14 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import {
+  parsePlNsaDecision as uncheckedParsePlNsaDecision,
+  plNsaParagraphs,
+  plNsaStatedSuperscripts,
+} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 /**
  * The pl-nsa reader against whole rows of the dataset.
  *
@@ -10,15 +18,7 @@ import { describe, expect, test } from "bun:test";
  * whose page numbers follow its closing rule, one whose page footer sits
  * inside a sentence, and two citing article numbers with superscripts.
  */
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { assemblePlNsaDecision } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
-import { PL_NSA_SNAPSHOT } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import type { PlNsaDatasetRow } from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
-import {
-  parsePlNsaDecision as uncheckedParsePlNsaDecision,
-  plNsaParagraphs,
-  plNsaStatedSuperscripts,
-} from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 

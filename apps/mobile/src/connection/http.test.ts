@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, jest, test } from "bun:test";
+import * as ReactNativeFetch from "whatwg-fetch";
 
 import { fetchWithTimeout } from "./http";
 
@@ -146,32 +147,37 @@ describe("HTTP request deadline", () => {
     expect(jest.getTimerCount()).toBe(0);
   });
 
-  test("reads a streamed body where the global Response cannot take a stream", async () => {
-    const PlatformResponse = Response;
-    // React Native's global `Response` is a polyfill that stores any body it
-    // does not know, a stream included, as the text "[object ReadableStream]".
-    class PolyfillResponse extends PlatformResponse {
-      constructor(body?: BodyInit | null, init?: ResponseInit) {
-        super(
-          body instanceof ReadableStream
-            ? Object.prototype.toString.call(body)
-            : body,
-          init,
-        );
-      }
-    }
-    const encoded = new TextEncoder().encode(JSON.stringify({ ready: true }));
+  test("reads a streamed body under React Native's fetch classes", async () => {
+    const platform = {
+      Headers: globalThis.Headers,
+      Request: globalThis.Request,
+      Response: globalThis.Response,
+    };
+    const streamed = () =>
+      new ReadableStream<Uint8Array>({
+        start(stream) {
+          stream.enqueue(
+            new TextEncoder().encode(JSON.stringify({ ready: true })),
+          );
+          stream.close();
+        },
+      });
+    // The phone's `Response` cannot take a stream: it keeps it as text.
+    expect(await new ReactNativeFetch.Response(streamed()).text()).toBe(
+      "[object ReadableStream]",
+    );
+    // Expo's fetch answers with its own streaming response, as the platform
+    // one does here; the globals are the ones React Native installs.
     const fetch = async (): Promise<Response> =>
-      new PlatformResponse(
-        new ReadableStream<Uint8Array>({
-          start(stream) {
-            stream.enqueue(encoded);
-            stream.close();
-          },
-        }),
-        { headers: { "content-type": "application/json" }, status: 201 },
-      );
-    globalThis.Response = PolyfillResponse;
+      new platform.Response(streamed(), {
+        headers: { "content-type": "application/json" },
+        status: 201,
+      });
+    Object.assign(globalThis, {
+      Headers: ReactNativeFetch.Headers,
+      Request: ReactNativeFetch.Request,
+      Response: ReactNativeFetch.Response,
+    });
     try {
       const response = await fetchWithTimeout(fetch, "https://example.com");
 
@@ -180,7 +186,7 @@ describe("HTTP request deadline", () => {
       expect(response.headers.get("content-type")).toBe("application/json");
       expect(await response.json()).toEqual({ ready: true });
     } finally {
-      globalThis.Response = PlatformResponse;
+      Object.assign(globalThis, platform);
     }
   });
 });

@@ -30,16 +30,6 @@ import { headMatterPrecedesBody } from "@stll/legal-ast/document-ast";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
-  decodeSourceRawEnvelope,
-  EMPTY_AST,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceFieldDisposition,
-  SourceFieldTarget,
-  SourceRawParts,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   getSourceRegistration,
   listSourceRegistrations,
   type SourceRegistrationKey,
@@ -52,8 +42,16 @@ import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestio
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceFieldDisposition,
+  SourceFieldTarget,
+  SourceRawParts,
 } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,

@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript6";
 
 import { collectIdempotentCreateRoutes } from "@stll/scripts/src/idempotent-create-routes";
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
 
 import { apiRoutes } from "@/api/api-routes";
 import { hasRootReplayAuthorization } from "@/api/lib/api-handlers";
@@ -531,6 +532,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/entity-views/reorder": {
     type: "non-replay",
     reason: "current-state",
+  },
+  "POST /v1/dictation/transcribe": {
+    type: "non-replay",
+    reason: "external-effect",
   },
   "POST /v1/feedback": {
     type: "non-replay",
@@ -1509,9 +1514,7 @@ test("the create replay exception inventory only shrinks", () => {
       stdout: "pipe",
       stderr: "pipe",
     });
-  const base = git(["merge-base", "origin/main", "HEAD"]);
-  expect(base.exitCode).toBe(0);
-  const sha = base.stdout.toString().trim();
+  const sha = treeBaseRevision({ repoRoot: path.resolve(apiRoot, "../..") });
   const file = "apps/api/src/handlers/idempotency-census.test.ts";
   const exists = git(["ls-tree", "--name-only", sha, "--", file]);
   expect(exists.exitCode).toBe(0);

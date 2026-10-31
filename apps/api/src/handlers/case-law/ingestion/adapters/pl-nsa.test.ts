@@ -24,8 +24,6 @@ import nodePath from "node:path";
 
 import { createSha256 } from "@stll/sha256/node";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlNsaDecision,
   composePlNsaFullText,
@@ -64,7 +62,12 @@ import {
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parsePlNsaDecision as uncheckedParsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
 import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
-import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import {
+  decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+  toPlainTextIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
@@ -650,8 +653,32 @@ describe("the cursor", () => {
     const crawler = createPlNsaCrawler({ snapshot, source: counted });
     const parked = `${snapshot.revision}:2:0`;
     const page = (await crawler.fetchPage(parked)).unwrap();
-    expect(page).toEqual({ decisions: [], nextCursor: parked });
+    // Nothing was asked, so the page says so and the run is no sync.
+    expect(page).toEqual({
+      decisions: [],
+      nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
+    });
     expect(local).not.toHaveBeenCalled();
+  });
+
+  test("local shard and cached window pages report no publisher answer", async () => {
+    const counted = { ...source };
+    const local = spyOn(counted, "local");
+    const crawler = createPlNsaCrawler({
+      snapshot,
+      source: counted,
+      pageRows: 1,
+      windowRows: 2,
+    });
+    const first = (await crawler.fetchPage(null)).unwrap();
+    expect(first.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    const second = (await crawler.fetchPage(first.nextCursor)).unwrap();
+    expect(second.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(1);
+    const third = (await crawler.fetchPage(second.nextCursor)).unwrap();
+    expect(third.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
+    expect(local).toHaveBeenCalledTimes(2);
   });
 
   test("resumes mid-shard where it stopped, across the shard boundary", async () => {
@@ -1274,8 +1301,10 @@ describe("shard download failures", () => {
     const crawler = createPlNsaCrawler({ snapshot, source });
     const page = (await crawler.fetchPage(null)).unwrap();
     expect(page.decisions).toHaveLength(28);
+    expect(page.publisherRequest).toBe(PUBLISHER_REQUEST.ANSWERED);
     const before = requests.length;
-    (await source.local(shardOf(sha256()))).unwrap();
+    const cached = (await source.local(shardOf(sha256()))).unwrap();
+    expect(cached.publisherRequest).toBe(PUBLISHER_REQUEST.NONE);
     expect(requests.length).toBe(before);
   });
 

@@ -5,17 +5,6 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 
 import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-  StoredRawReadError,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  StoredRawReparseInput,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   CZ_UOHS_SYNTHETIC_LISTING,
   czUohsSyntheticPdf,
 } from "@/api/handlers/case-law/ingestion/adapters/__fixtures__/cz-uohs.synthetic";
@@ -24,6 +13,17 @@ import {
   czUohsAdapter,
   parseCzUohsListing,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-uohs";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  StoredRawReadError,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  StoredRawReparseInput,
+} from "@/api/lib/legal-search/ingestion-types";
 import { guardParser } from "@/api/tests/helpers/parser-reader-guard";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 

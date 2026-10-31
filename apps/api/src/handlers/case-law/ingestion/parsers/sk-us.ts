@@ -31,7 +31,10 @@ import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  hasInlineChildren,
+  withUniqueBlockIdentities,
+} from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -1316,11 +1319,13 @@ export const parseSkUsDocumentXhtml = ({
   for (const line of lines) {
     setInlines(line, readTypography(line.inlines, words));
   }
-  const blocks = courtParagraphNumbers(classifyLines(lines), {
-    parser: "sk-us",
-    caseNumber,
-    url: documentUrl,
-  });
+  const blocks = withUniqueBlockIdentities(
+    courtParagraphNumbers(classifyLines(lines), {
+      parser: "sk-us",
+      caseNumber,
+      url: documentUrl,
+    }),
+  );
 
   const fulltext = blocks
     .map(({ plainText }) => plainText)
