@@ -17,10 +17,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { StellaWordmarkLatin } from "@stll/ui/stella-wordmark";
 import { cn } from "@stll/ui/utils";
 
-import {
-  inspectorRestorePendingEntry,
-  readPersistedInspectorPaneRequested,
-} from "@/components/inspector/inspector-storage-keys";
+import { readPersistedInspectorPaneOpen } from "@/components/inspector/inspector-broadcast";
 import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
 import { PendingInspectorScopeContext } from "@/components/inspector/pending-inspector-scope";
 import {
@@ -34,7 +31,6 @@ import {
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { readPersistedState } from "@/lib/persisted-state/registry";
 
 // The primary entries every signed-in person sees, from the same list the
 // real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join
@@ -66,8 +62,7 @@ export function ProtectedPendingSkeleton({
   const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
   const paneRequested =
     inspectorScope !== undefined &&
-    readPersistedInspectorPaneRequested(inspectorScope) &&
-    readPersistedState(inspectorRestorePendingEntry, inspectorScope) === "";
+    readPersistedInspectorPaneOpen(inspectorScope);
   const sidebarOpen =
     (readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) &&
     !shouldForceSidebarCollapsed({

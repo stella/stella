@@ -22,6 +22,7 @@ import type {
   TemplateDensity,
   TemplateTagFilter,
 } from "@/features/knowledge/views/templates/templates-seam";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { deviceStorage } from "@/lib/account/browser-storage";
@@ -273,8 +274,11 @@ const TEMPLATE_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];
 // Mirrors the TemplateListView layout (w-48 category sidebar + bordered list
 // pane with count/new-template toolbar and divided rows) so the page keeps its
 // shape while templates load; only the values fade in.
-export const TemplateListSkeleton = () => {
-  const density = readTemplateDensity();
+export const TemplateListSkeleton = ({
+  mobileFilters,
+}: Pick<TemplateListViewProps, "mobileFilters">) => {
+  const hydrated = useHydrated();
+  const density = hydrated ? readTemplateDensity() : "compact";
   const t = useTranslations();
   return (
     <div
@@ -305,11 +309,13 @@ export const TemplateListSkeleton = () => {
           </div>
         </div>
 
-        <div className="border-b px-3 py-2 md:hidden">
-          <div className="flex gap-1 pb-0.5">
-            <Skeleton className="h-8 w-32" />
+        {mobileFilters !== undefined && (
+          <div className="border-b px-3 py-2 md:hidden">
+            <div className="flex gap-1 pb-0.5">
+              <Skeleton className="h-8 w-32" />
+            </div>
           </div>
-        </div>
+        )}
         <ul className="flex-1 divide-y overflow-y-auto">
           {TEMPLATE_ROW_KEYS.map((key) => (
             <li
@@ -350,7 +356,7 @@ export const TemplateLibraryView = (props: TemplateListViewProps) => {
   const t = useTranslations();
 
   if (props.source.status === "loading") {
-    return <TemplateListSkeleton />;
+    return <TemplateListSkeleton mobileFilters={props.mobileFilters} />;
   }
   if (props.source.status === "error") {
     return (

@@ -252,3 +252,35 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
   );
   expect(dockWidth()).toBeNull();
 });
+
+test.each([
+  { tabs: [{ type: "retired-tab" }] },
+  { tabs: [{ type: "chat", id: "missing-required-fields" }] },
+  {
+    tabs: [
+      { type: "retired-tab" },
+      { type: "chat", id: "missing-required-fields" },
+    ],
+  },
+])(
+  "discarded persisted tabs reserve no member loading pane: %j",
+  ({ tabs }) => {
+    writePersistedState(inspectorStateEntry, pendingScope, {
+      tabs,
+      groups: [],
+      groupAssignments: {},
+      activeId: null,
+      collapsedGroupIds: [],
+    }).unwrap();
+    const { container } = render(
+      <PendingInspectorScopeContext value={pendingScope}>
+        <ProtectedPendingSkeleton />
+      </PendingInspectorScopeContext>,
+    );
+    expect(
+      container
+        .querySelector('[data-slot="inspector-pending-dock"]')
+        ?.getAttribute("style"),
+    ).toBeNull();
+  },
+);

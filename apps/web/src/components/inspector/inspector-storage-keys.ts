@@ -9,7 +9,6 @@ import { userStorageKey } from "@/lib/account/user-scoped-storage";
 import {
   definePersistedState,
   keepInAnyScope,
-  readPersistedState,
 } from "@/lib/persisted-state/registry";
 
 /** Whose inspector this is: one user inside one organization. */
@@ -81,10 +80,3 @@ export const inspectorRestorePendingEntry = definePersistedState({
   scopeCheck: keepInAnyScope,
   restoredUi: true,
 });
-
-/** Layout metadata only: the member's tab payloads stay in the lazy frame. */
-export const readPersistedInspectorPaneRequested = (
-  scope: InspectorStorageScope,
-) =>
-  (readPersistedState(inspectorStateEntry, scope)?.tabs.length ?? 0) > 0 &&
-  !readPersistedState(inspectorMinimizedEntry, scope);

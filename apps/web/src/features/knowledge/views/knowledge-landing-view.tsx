@@ -90,26 +90,39 @@ export const KnowledgeLandingView = ({
 );
 
 /** The section copy is already known; reserve its wrapping and card geometry. */
-export const KnowledgeLandingSkeleton = () => {
+export const KnowledgeLandingSkeleton = ({
+  audience,
+}: {
+  audience: "public" | "member";
+}) => {
   const t = useTranslations();
   return (
     <div aria-hidden="true" className={LANDING_CLASS}>
       <div className={GRID_CLASS}>
-        {knowledgeSections.map((section) => (
-          <div className={CARD_CLASS} key={section.key}>
-            <CardBody
-              card={{
-                key: section.key,
-                icon: section.icon,
-                title: t(section.titleKey),
-                description:
-                  section.key === "styles"
-                    ? t("styleSets.description")
-                    : t(`knowledge.sections.${section.key}.description`),
-              }}
-            />
-          </div>
-        ))}
+        {knowledgeSections
+          .filter(
+            (section) =>
+              audience === "member" || section.publicAccess !== "unavailable",
+          )
+          .map((section) => (
+            <div className={CARD_CLASS} key={section.key}>
+              <CardBody
+                card={{
+                  key: section.key,
+                  icon: section.icon,
+                  title: t(section.titleKey),
+                  note:
+                    audience === "public" && section.publicAccess === "account"
+                      ? t("knowledge.landing.withAccount")
+                      : undefined,
+                  description:
+                    section.key === "styles"
+                      ? t("styleSets.description")
+                      : t(`knowledge.sections.${section.key}.description`),
+                }}
+              />
+            </div>
+          ))}
       </div>
     </div>
   );

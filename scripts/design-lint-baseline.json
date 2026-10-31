@@ -363,7 +363,7 @@
     "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx": 2,
     "apps/web/src/routes/onboarding/-components/steps/download-step.tsx": 1,
     "apps/web/src/routes/tools/$slug.tsx": 1,
-    "apps/web/src/routes/tools/-components/public-tools-index.tsx": 2,
+    "apps/web/src/routes/tools/-components/public-tools-index.tsx": 1,
     "packages/ui/src/calendar/resource-calendar.tsx": 1,
     "packages/ui/src/components/application-rail.tsx": 1,
     "packages/ui/src/components/command.tsx": 1,
