@@ -48,6 +48,7 @@ import {
   readBillingDraftGate,
   readEffectiveDraftMode,
 } from "./billing-draft-mode";
+import type { readSettingsView } from "./billing-draft-settings";
 import {
   createDesktopBillingDraftSettingsReadEndpoint,
   createDesktopBillingDraftSettingsUpdateEndpoint,
@@ -330,12 +331,14 @@ type Caller = {
   userId: SafeId<"user">;
   /** Whether the caller holds the time-billing enrolment. */
   enrolled?: boolean;
+  /** Replaces the update's second read, the settings view. */
+  readView?: typeof readSettingsView;
 };
 
 /** One linked desktop calling the settings endpoints on the real HTTP core,
  * through its own membership-scoped database. */
 const callSettings = async (
-  { organizationId, userId, enrolled = true }: Caller,
+  { organizationId, userId, enrolled = true, readView }: Caller,
   change?: DesktopBillingDraftSettingsRequest,
 ) => {
   const authorizeAccount = async (request: Request) => {
@@ -379,6 +382,7 @@ const callSettings = async (
           GET: createDesktopBillingDraftSettingsReadEndpoint(authorizeAccount),
           PUT: createDesktopBillingDraftSettingsUpdateEndpoint(
             authorizeAccount,
+            readView === undefined ? {} : { readView },
           ),
         },
       }),
@@ -503,6 +507,40 @@ test("a member without the feature can still withdraw consent, and change nothin
     preference: null,
   });
   expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeNull();
+});
+
+test("a withdrawal stays committed and answers revoked when reading the settings view fails", async () => {
+  expect(
+    (await callSettings(A1_IN_A, { type: "grant_consent", revision: null }))
+      .status,
+  ).toBe(200);
+  const failingView = async () =>
+    await Promise.reject(new Error("Settings view unavailable"));
+
+  const withdrawn = await callSettings(
+    { ...A1_IN_A, readView: failingView },
+    { type: "withdraw_consent" },
+  );
+
+  expect(withdrawn.status).toBe(200);
+  const answer = v.parse(
+    desktopBillingDraftSettingsUpdateResponseSchema,
+    withdrawn.body,
+  );
+  expect(answer).toMatchObject({ consent: "revoked", effectiveMode: "off" });
+  const committed = await rowOf(ids.orgA, ids.userA1);
+  expect(committed?.consentAt).toBeNull();
+  // The answer names the committed row's revision.
+  expect(settingsOf((await callSettings(A1_IN_A)).body).revision).toBe(
+    answer.revision,
+  );
+  // Any other change answers the read's failure; its write is committed.
+  const regranted = await callSettings(
+    { ...A1_IN_A, readView: failingView },
+    { type: "grant_consent", revision: answer.revision },
+  );
+  expect(regranted.status).toBe(500);
+  expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeInstanceOf(Date);
 });
 
 test("the effective mode follows the organization's switch and its firm guideline file", async () => {

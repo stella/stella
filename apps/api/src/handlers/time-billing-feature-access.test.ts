@@ -47,7 +47,10 @@ import {
   featureAccessGateFeature,
 } from "@/api/lib/auth/feature-access/route";
 import { toSafeId } from "@/api/lib/branded-types";
-import { deploymentFeatureGateFlag } from "@/api/lib/deployment-feature-route";
+import {
+  deploymentFeatureGateExceptionFlag,
+  deploymentFeatureGateFlag,
+} from "@/api/lib/deployment-feature-route";
 import { defineEndpoint } from "@/api/lib/endpoints";
 import {
   createFeatureAccessSnapshot,
@@ -315,6 +318,13 @@ describe("time billing admission census", () => {
         middleware.flatMap((stage) => deploymentFeatureGateFlag(stage) ?? []),
       ),
     ).toEqual([]);
+    expect(
+      consentRoutes.flatMap(({ middleware }) =>
+        middleware.flatMap(
+          (stage) => deploymentFeatureGateExceptionFlag(stage) ?? [],
+        ),
+      ),
+    ).toEqual([FLAG]);
     for (const entry of organizationSettingsRoute.filter(({ path }) =>
       path.startsWith("/organization-settings/billing-drafts"),
     )) {
@@ -518,18 +528,54 @@ describe("native time billing admission", () => {
             status: enabled ? 401 : 404,
           });
         }
-        // A withdrawal asks for the linked credential whatever the flag says.
-        const withdrawal = await server.fetch(
-          new Request(`http://localhost${CONSENT_SETTINGS_ROUTE.path}`, {
-            method: CONSENT_SETTINGS_ROUTE.method,
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ type: "withdraw_consent" }),
-          }),
-        );
-        expect({ enabled, status: withdrawal.status }).toEqual({
-          enabled,
-          status: 401,
-        });
+        // A withdrawal asks for the linked credential whatever the flag says;
+        // with the flag off anything else, malformed or not, is absent.
+        // With the flag on the route answers as it always does; only its
+        // absence is asserted there for a body it cannot read.
+        for (const [body, readable, disabledStatus] of [
+          [JSON.stringify({ type: "withdraw_consent" }), true, 401],
+          [
+            JSON.stringify({ type: "grant_consent", revision: null }),
+            true,
+            404,
+          ],
+          [
+            JSON.stringify({
+              type: "set_preference",
+              revision: null,
+              preference: "Shorter",
+            }),
+            true,
+            404,
+          ],
+          [
+            JSON.stringify({ type: "withdraw_consent", extra: true }),
+            false,
+            404,
+          ],
+          ["{not json", false, 404],
+          ["", false, 404],
+        ] as const) {
+          const response = await server.fetch(
+            new Request(`http://localhost${CONSENT_SETTINGS_ROUTE.path}`, {
+              method: CONSENT_SETTINGS_ROUTE.method,
+              headers: { "content-type": "application/json" },
+              body,
+            }),
+          );
+          if (enabled && !readable) {
+            expect({ body, status: response.status }).not.toEqual({
+              body,
+              status: 404,
+            });
+            continue;
+          }
+          expect({ enabled, body, status: response.status }).toEqual({
+            enabled,
+            body,
+            status: enabled ? 401 : disabledStatus,
+          });
+        }
       });
     }
   });

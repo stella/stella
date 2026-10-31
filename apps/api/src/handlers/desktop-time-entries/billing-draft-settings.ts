@@ -1,11 +1,13 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import type { DesktopBillingDraftSettingsRequest } from "@stll/api-contract/desktop-billing-drafts";
 import {
   desktopBillingDraftSettingsRequestSchema,
   desktopBillingDraftSettingsResponseSchema,
   desktopBillingDraftSettingsUpdateResponseSchema,
+  desktopBillingDraftWithdrawalSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 
 import type { Transaction } from "@/api/db/root";
@@ -178,7 +180,7 @@ type SettingsViewOptions = {
 
 /** The caller's settings as the desktop shows them, with the drafting the
  * caller gets: `off` while the organization or the feature is off. */
-const readSettingsView = async ({
+export const readSettingsView = async ({
   tx,
   organizationId,
   timeEntriesAvailable,
@@ -250,8 +252,14 @@ export const createDesktopBillingDraftSettingsReadEndpoint = (
     },
   );
 
+type SettingsUpdateDependencies = {
+  /** Test seam for the answer's second read. */
+  readView?: typeof readSettingsView;
+};
+
 export const createDesktopBillingDraftSettingsUpdateEndpoint = (
   authorizeAccount: typeof authorizeDesktopAccount = authorizeDesktopAccount,
+  { readView = readSettingsView }: SettingsUpdateDependencies = {},
 ) =>
   declareAggregateMutation(
     createSafeBoundedPublicHandler(
@@ -287,30 +295,21 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
           request,
           server: null,
         });
-        const settings = yield* Result.await(
-          account.safeDb(async (tx) => {
-            const own = await writeOwnBillingDraftSettings({
-              tx,
-              organizationId: account.organizationId,
-              userId: account.userId,
-              change: body,
-              recordAuditEvent,
-            });
-            if (own === undefined) {
-              return undefined;
-            }
-            return {
-              revision: timestampCasTokenText(own.revision),
-              ...(await readSettingsView({
+        // The write commits on its own: nothing read afterwards can undo a
+        // withdrawal.
+        const own = yield* Result.await(
+          account.safeDb(
+            async (tx) =>
+              await writeOwnBillingDraftSettings({
                 tx,
                 organizationId: account.organizationId,
-                timeEntriesAvailable: account.timeEntriesAvailable,
-                own,
-              })),
-            };
-          }),
+                userId: account.userId,
+                change: body,
+                recordAuditEvent,
+              }),
+          ),
         );
-        if (settings === undefined) {
+        if (own === undefined) {
           return Result.err(
             new HandlerError({
               status: 409,
@@ -318,11 +317,32 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
             }),
           );
         }
+        const view = await account.safeDb(
+          async (tx) =>
+            await readView({
+              tx,
+              organizationId: account.organizationId,
+              timeEntriesAvailable: account.timeEntriesAvailable,
+              own,
+            }),
+        );
+        if (view.isErr() && body.type !== "withdraw_consent") {
+          return Result.err(view.error);
+        }
+        // A committed withdrawal still answers as one: nothing is drafted for
+        // a member without consent, whatever the organization allows.
+        const settings = view.isOk()
+          ? view.value
+          : {
+              effectiveMode: "off" as const,
+              consent: "revoked" as const,
+              preference: own.preference,
+            };
         return Result.ok(
-          projectionPayload(
-            desktopBillingDraftSettingsUpdateResponseSchema,
-            settings,
-          ),
+          projectionPayload(desktopBillingDraftSettingsUpdateResponseSchema, {
+            revision: timestampCasTokenText(own.revision),
+            ...settings,
+          }),
         );
       },
     ),
@@ -332,6 +352,22 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
         "Updates only the authenticated person's consent and preference through the organization/user primary-key upsert; no shared aggregate state is mutated.",
     },
   );
+
+// A withdrawal is `{"type":"withdraw_consent"}`; a body much longer than
+// that is something else and is not parsed.
+const WITHDRAWAL_BODY_MAX_LENGTH = 64;
+
+/** Whether a request body is exactly a consent withdrawal. */
+export const isConsentWithdrawalRequest = async (request: Request) => {
+  const text = await request.text();
+  if (text.length > WITHDRAWAL_BODY_MAX_LENGTH) {
+    return false;
+  }
+  const parsed = Result.try((): unknown => JSON.parse(text));
+  return (
+    parsed.isOk() && v.is(desktopBillingDraftWithdrawalSchema, parsed.value)
+  );
+};
 
 export const readBillingDraftSettings =
   createDesktopBillingDraftSettingsReadEndpoint();
