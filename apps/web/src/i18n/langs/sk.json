@@ -4025,6 +4025,7 @@
     "title": "Inšpektor"
   },
   "invoiceLink": {
+    "credited": "Táto faktúra je v plnej výške dobropisovaná; nič nie je na úhradu.",
     "downloadEInvoice": {
       "isdoc": "Stiahnuť ISDOC",
       "peppol_sk": "Stiahnuť e-faktúru (Peppol)",

@@ -4025,6 +4025,7 @@
     "title": "Panel de inspección"
   },
   "invoiceLink": {
+    "credited": "Esta factura se ha abonado en su totalidad; no hay importe pendiente.",
     "downloadEInvoice": {
       "isdoc": "Descargar ISDOC",
       "peppol_sk": "Descargar factura electrónica (Peppol)",

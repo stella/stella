@@ -4025,6 +4025,7 @@
     "title": "Inspektorius"
   },
   "invoiceLink": {
+    "credited": "Ši sąskaita visiškai kredituota; mokėti nieko nereikia.",
     "downloadEInvoice": {
       "isdoc": "Atsisiųsti ISDOC",
       "peppol_sk": "Atsisiųsti e. sąskaitą (Peppol)",

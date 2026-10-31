@@ -4025,6 +4025,7 @@
     "title": "Inspektors"
   },
   "invoiceLink": {
+    "credited": "Šis rēķins ir pilnībā kreditēts; nekas nav jāmaksā.",
     "downloadEInvoice": {
       "isdoc": "Lejupielādēt ISDOC",
       "peppol_sk": "Lejupielādēt e-rēķinu (Peppol)",

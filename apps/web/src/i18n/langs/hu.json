@@ -4025,6 +4025,7 @@
     "title": "Ellenőrző panel"
   },
   "invoiceLink": {
+    "credited": "Ezt a számlát teljes egészében jóváírták; nincs fizetendő összeg.",
     "downloadEInvoice": {
       "isdoc": "ISDOC letöltése",
       "peppol_sk": "E-számla letöltése (Peppol)",

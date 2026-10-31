@@ -4025,6 +4025,7 @@
     "title": "Inspector"
   },
   "invoiceLink": {
+    "credited": "This invoice has been credited in full; nothing is due.",
     "downloadEInvoice": {
       "isdoc": "Download ISDOC",
       "peppol_sk": "Download e-invoice (Peppol)",

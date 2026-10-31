@@ -4025,6 +4025,7 @@
     "title": "Inspektor"
   },
   "invoiceLink": {
+    "credited": "Diese Rechnung wurde vollständig gutgeschrieben; es ist nichts zu zahlen.",
     "downloadEInvoice": {
       "isdoc": "ISDOC herunterladen",
       "peppol_sk": "E-Rechnung herunterladen (Peppol)",
