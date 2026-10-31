@@ -64,7 +64,7 @@ const anyOrderDocument = fc
 // their text on read.
 test("block order never refuses a stored row; writers still enforce it", () => {
   assertProperty(
-    "corpus-ast-block-order-reader-tolerance",
+    "block order never refuses a stored row; writers still enforce it",
     fc.property(anyOrderDocument, (ast) => {
       const read = parsePersistedCorpusAst(ast);
       if (read === null || !("blocks" in read)) {
