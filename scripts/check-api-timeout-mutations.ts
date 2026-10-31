@@ -18,6 +18,8 @@ const REPO_ROOT = path.resolve(import.meta.dir, "..");
 const API_SOURCE = "apps/api/src/";
 const SHARED_OWNER = `${API_SOURCE}db/shared-pool-timeouts.ts`;
 const DEDICATED_OWNER = `${API_SOURCE}db/long-running-connection.ts`;
+const DEDICATED_BUDGET_OWNER = `${API_SOURCE}db/dedicated-connection-timeouts.ts`;
+const DEDICATED_OWNERS = new Set([DEDICATED_OWNER, DEDICATED_BUDGET_OWNER]);
 
 // These modules run under the migrator's independently reserved connection.
 const MIGRATION_OWNERS = new Set([
@@ -30,6 +32,7 @@ const MIGRATION_OWNERS = new Set([
   `${API_SOURCE}db/better-auth-oauth-resource-repair.ts`,
   `${API_SOURCE}db/decision-date-ceiling-repair.ts`,
   `${API_SOURCE}db/chat-content-v3-backfill.ts`,
+  `${API_SOURCE}db/client-invoice-backfill.ts`,
 ]);
 
 // These operator commands construct their own SQL client, apart from rootDb.
@@ -72,7 +75,7 @@ export const isTimeoutMutationSource = (file: string): boolean =>
   !/\.(?:test|spec|d)\.ts$/u.test(file) &&
   !STANDALONE_CONNECTION_OWNERS.has(file) &&
   file !== SHARED_OWNER &&
-  file !== DEDICATED_OWNER &&
+  !DEDICATED_OWNERS.has(file) &&
   !MIGRATION_OWNERS.has(file);
 
 type SourceLoader = (file: string) => string | undefined;
@@ -417,13 +420,14 @@ const inspectSql = (sql: string): string[] => {
 /** The dedicated timeout owner may only configure its own reserved client. */
 export const findDedicatedOwnerViolations = (
   source: string,
+  { file = DEDICATED_OWNER }: { file?: string } = {},
 ): TimeoutMutation[] => {
-  const parsed = sourceFile(DEDICATED_OWNER, source);
+  const parsed = sourceFile(file, source);
   const findings: TimeoutMutation[] = [];
   const setterAliases = new Set(SHARED_HANDLE_EXPORTS);
   const record = (node: Node, setting: string): void => {
     findings.push({
-      file: DEDICATED_OWNER,
+      file,
       line: parsed.locate(node.start).line,
       setting,
     });
@@ -434,14 +438,14 @@ export const findDedicatedOwnerViolations = (
       record(node, "dynamic import");
       return;
     }
-    const target = modulePath(DEDICATED_OWNER, text);
+    const target = modulePath(file, text);
     if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
       record(node, `shared-pool import ${text}`);
     }
   };
   walk(parsed.program, (node) => {
     if (node.type === "ImportDeclaration") {
-      const target = modulePath(DEDICATED_OWNER, node.source.value);
+      const target = modulePath(file, node.source.value);
       if (target !== undefined && SHARED_HANDLE_MODULES.has(target)) {
         record(node, `shared-pool import ${node.source.value}`);
       }
@@ -491,8 +495,8 @@ export const findApiTimeoutMutations = (
   source: string,
   load: SourceLoader = defaultSourceLoader,
 ): TimeoutMutation[] => {
-  if (file === DEDICATED_OWNER) {
-    return findDedicatedOwnerViolations(source);
+  if (DEDICATED_OWNERS.has(file)) {
+    return findDedicatedOwnerViolations(source, { file });
   }
   if (!isTimeoutMutationSource(file) || !MAY_MUTATE_TIMEOUT.test(source)) {
     return [];
@@ -572,7 +576,7 @@ export const checkApiTimeoutMutations = ({
 }: ScanOptions = {}): TimeoutMutation[] => {
   const findings: TimeoutMutation[] = [];
   for (const file of files) {
-    if (file !== DEDICATED_OWNER && !isTimeoutMutationSource(file)) {
+    if (!DEDICATED_OWNERS.has(file) && !isTimeoutMutationSource(file)) {
       continue;
     }
     findings.push(...findApiTimeoutMutations(file, read(file)));
@@ -587,9 +591,9 @@ if (import.meta.main) {
   const findings = checkApiTimeoutMutations();
   for (const { file, line, setting } of findings) {
     console.error(
-      file === DEDICATED_OWNER
+      DEDICATED_OWNERS.has(file)
         ? `${file}:${line}: dedicated timeout owner must use its reserved connection; forbidden ${setting}`
-        : `${file}:${line}: ${setting} mutation must use ${SHARED_OWNER} (or ${DEDICATED_OWNER} on a dedicated connection)`,
+        : `${file}:${line}: ${setting} mutation must use ${SHARED_OWNER} (or ${DEDICATED_BUDGET_OWNER} on a dedicated connection)`,
     );
   }
   if (findings.length > 0) {

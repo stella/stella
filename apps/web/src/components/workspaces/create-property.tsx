@@ -65,13 +65,14 @@ import {
   CapabilityAction,
   useActionCapabilities,
 } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
   SelectPropertyOption,
   WorkspaceProperty,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import {
   useCreateProperty,
   useSuggestPrompt,
@@ -161,7 +162,7 @@ export const CreateProperty = ({
     select: (properties) =>
       properties.find((property) => property.id === propertyId),
   });
-  const editingProperty = useQueryView(editingPropertyQuery);
+  const editingProperty = queryView(editingPropertyQuery);
   useQueryViewError(editingProperty, "CreateProperty:query");
   const action = propertyToolAction(
     editingProperty.type === "items" &&

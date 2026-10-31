@@ -37,16 +37,12 @@ import {
   relations,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
-import {
-  EMPTY_AST,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
+import {
+  assemblePlKioDecision,
+  plKioAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
+import { PL_KIO_DOCUMENT_REJECTION } from "@/api/handlers/case-law/ingestion/adapters/pl-kio-response-budget";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -83,6 +79,17 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  STORED_RAW_REPARSE_REJECTION,
+  STORED_RAW_REPLAY_STATUS,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
 import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
@@ -567,6 +574,15 @@ const noDocumentAdapter = stubAdapter(() => ({
   detail: "no fulltext parsed from the stored payload",
 }));
 
+// What an adapter answers when the envelope names a document object that
+// object storage does not hold.
+const metadataOnlyAdapter = stubAdapter(() => ({
+  type: "rejected",
+  rejection: STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA,
+  status: STORED_RAW_REPLAY_STATUS.METADATA_ONLY,
+  detail: "the stored record has no document object for document",
+}));
+
 const STORED_PAGE_TEXT = "Site navigation, contact options and a footer.";
 
 type WithdrawFixture = {
@@ -654,6 +670,61 @@ const storedDocumentOf = async (id: SafeId<"caseLawDecision">) => {
   return row;
 };
 
+test("missing stored document capture keeps existing text even when rejected-document withdrawal is enabled", async () => {
+  const { id, sourceId } = await insertRowHoldingAPage({
+    label: "metadata-only",
+  });
+  await db
+    .update(caseLawDecisions)
+    .set({
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    })
+    .where(eq(caseLawDecisions.id, id));
+  const before = await storedDocumentOf(id);
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    panic("Expected a source ingestion lease for metadata-only replay");
+  }
+  try {
+    const run = await replayCaseLawSource({
+      adapter: metadataOnlyAdapter,
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () =>
+        new TextEncoder().encode(
+          encodeSourceRawEnvelope({
+            listing: JSON.stringify({
+              documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
+              mkRSAPNumberOfFile: "PL. ÚS 4/2020",
+              mkDateOfDecision: "03/12/2020 00:00:00",
+              mkFormOfDecision: "Nález",
+            }),
+          }),
+        ),
+      sourceLease,
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+      rejectionPolicy: REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT,
+    });
+    if (run.type !== "ran") {
+      panic("Expected metadata-only replay to run");
+    }
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
+    expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WOULD_WITHDRAW]).toBe(0);
+    expect(
+      run.report.rejections[STORED_RAW_REPARSE_REJECTION.INCOMPLETE_METADATA],
+    ).toBe(1);
+    expect(await storedDocumentOf(id)).toEqual(before);
+  } finally {
+    await sourceLease.release();
+  }
+});
+
 test("a row that re-parses to no document keeps its text unless asked", async () => {
   const { id, sourceId } = await insertRowHoldingAPage({ label: "rejected" });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
@@ -679,6 +750,97 @@ test("a row that re-parses to no document keeps its text unless asked", async ()
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
   expect(run.report.outcomes[REPLAY_ROW_OUTCOME.WITHDRAWN]).toBe(0);
   expect((await storedDocumentOf(id))?.fulltext).toBe(STORED_PAGE_TEXT);
+
+  await sourceLease.release();
+});
+
+test("a re-parse its parsing budget refuses keeps the stored text and records the refusal", async () => {
+  // A real procurement ruling whose markup the adapter's DOM allocation
+  // budget refuses. A row stored with text before the budget existed
+  // re-parses to a ruling with no document; the pipeline keeps the stored
+  // one (`preserveStoredDocument` in pipeline/decision-plan.ts) and the
+  // refusal is recorded on the row as the document status.
+  const fixture = (name: string) =>
+    Bun.file(new URL(`adapters/__fixtures__/${name}`, import.meta.url));
+  const html = new TextDecoder().decode(
+    Bun.gunzipSync(
+      new Uint8Array(
+        await fixture("pl-kio-content-10000.html.gz").arrayBuffer(),
+      ),
+    ),
+  );
+  const refused = assemblePlKioDecision({
+    item: {
+      id: "10000",
+      signature: "KIO 2155/17",
+      issueDate: "02-11-2017",
+      documentType: "wyrok",
+    },
+    detailHtml: await fixture("pl-kio-detail-10000.html").text(),
+    document: { type: "read", html },
+  }).decision;
+  expect(refused.fulltext ?? "").toBe("");
+  expect(
+    refused.metadata["documentStatus"] ===
+      PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  ).toBe(true);
+  const envelope = refused.sourceRaw;
+  if (envelope === undefined) {
+    panic("Expected the procurement ruling to carry its envelope");
+  }
+
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `replay-budget-${sourceId}`,
+    name: "replay budget fixture",
+  });
+  const id = createSafeId<"caseLawDecision">();
+  const storedText = "WYROK, as the ruling was first stored.";
+  await db.insert(caseLawDecisions).values({
+    id,
+    sourceId,
+    caseNumber: refused.caseNumber,
+    sourceDocumentId: refused.sourceDocumentId,
+    court: refused.court,
+    country: refused.country,
+    language: refused.language,
+    fulltext: storedText,
+    sections: [{ index: 0, type: "unknown", title: null, text: storedText }],
+    sourceRawS3Key: STORED_KEY_PLACEHOLDER,
+    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    sourceHash: "hash-of-the-envelope-as-first-stored",
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIO] - 1,
+    metadata: {},
+  });
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+
+  const run = await replayCaseLawSource({
+    adapter: plKioAdapter,
+    scopedDb,
+    sourceId,
+    scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+    readStoredRaw: async () =>
+      await Promise.resolve(new TextEncoder().encode(envelope)),
+    sourceLease,
+    bound: { type: "at-most", limit: 10 },
+    pageSize: 10,
+  });
+  if (run.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+
+  const row = await storedDocumentOf(id);
+  expect(row?.fulltext).toBe(storedText);
+  expect(row?.metadata?.["documentStatus"]).toBe(
+    PL_KIO_DOCUMENT_REJECTION.MARKUP_BUDGET_EXCEEDED,
+  );
 
   await sourceLease.release();
 });
@@ -859,8 +1021,8 @@ const replayConvergenceFixture = async (text: string) => {
     documentAst: astWithBlocks([paragraph("b1", text)]),
     parserVersion: 4,
   });
-  const sanitized = sanitizeResult(result);
-  const payload = caseLawCanonicalPayload(sanitized);
+  const sanitized = sanitizeResult(result).unwrap();
+  const payload = caseLawCanonicalPayload(sanitized).unwrap();
   await db.insert(caseLawDecisions).values({
     id,
     sourceId,

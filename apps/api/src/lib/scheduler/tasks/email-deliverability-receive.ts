@@ -3,7 +3,7 @@ import { panic, Result } from "better-result";
 import { env } from "@/api/env";
 import { drainDeliverabilityEvents } from "@/api/lib/email/deliverability";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
-import { recordRecipientRefusal } from "@/api/lib/email/recipient-deliverability";
+import { recordRecipientRefusals } from "@/api/lib/email/recipient-deliverability";
 import {
   readApproximateQueueDepth,
   sqsClientFor,
@@ -44,7 +44,7 @@ export const receiveEmailDeliverability: SchedulerTask = async ({
     client,
     queueUrl: config.queue.url,
     topicArn: config.topicArn,
-    markUndeliverable: recordRecipientRefusal,
+    markUndeliverable: recordRecipientRefusals,
     signal,
     logger,
   });

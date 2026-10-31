@@ -9,6 +9,7 @@ GlobalRegistrator.register({ url: "https://app.example.test" });
 const {
   SELECTION_TOOLBAR_EDGE_MARGIN_PX,
   SELECTION_TOOLBAR_OFFSET_PX,
+  scrollMovesSelection,
   selectionToolbarBounds,
   selectionToolbarPosition,
 } = await import("@/components/selection-toolbar.logic");
@@ -71,6 +72,29 @@ test("a reader without docked chrome keeps its whole scroll area", () => {
   try {
     expect(selectionToolbarBounds(root)?.bottom).toBe(700);
   } finally {
+    host.remove();
+  }
+});
+
+test("only a scroll outside the bar's own surfaces moves the selection", () => {
+  const { host, root } = mountReader(null);
+  const menu = document.createElement("div");
+  const preview = document.createElement("div");
+  menu.append(preview);
+  document.body.append(menu);
+  const scrollOf = (target: EventTarget): Event => {
+    const event = new Event("scroll");
+    target.dispatchEvent(event);
+    return event;
+  };
+  try {
+    expect(scrollMovesSelection(scrollOf(preview), [null, menu])).toBe(false);
+    expect(scrollMovesSelection(scrollOf(menu), [null, menu])).toBe(false);
+    expect(scrollMovesSelection(scrollOf(root), [null, menu])).toBe(true);
+    expect(scrollMovesSelection(scrollOf(document), [null, menu])).toBe(true);
+    expect(scrollMovesSelection(scrollOf(preview), [null, null])).toBe(true);
+  } finally {
+    menu.remove();
     host.remove();
   }
 });

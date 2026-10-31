@@ -5,6 +5,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  mock,
   spyOn,
   test,
 } from "bun:test";
@@ -75,6 +76,11 @@ import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+// Spies created in a test stay attached if it fails before restoring them.
+afterEach(() => {
+  mock.restore();
+});
 
 // A settled short slice is short forever — that is what settled means — so it
 // is never re-walked and its `checkedAt` never moves on its own. The candidate
@@ -1640,7 +1646,7 @@ const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
       rawHash: "0".repeat(64),
       documentAst: EMPTY_AST,
     }) satisfies IngestionResult,
-  ).metadata;
+  ).unwrap().metadata;
 
 type SeedDecisionInput = {
   sourceId: SafeId<"caseLawSource">;

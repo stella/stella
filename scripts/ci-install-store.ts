@@ -4,6 +4,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -13,6 +14,9 @@ import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
 const STORE_CACHE_VERSION = "v4";
+
+const repoRelativePath = (from: string, to: string) =>
+  path.posix.relative(from.replaceAll("\\", "/"), to.replaceAll("\\", "/"));
 
 export type GlobalStoreMode = "enabled" | "disabled";
 
@@ -133,6 +137,152 @@ export const completeInstallStoreKey = ({
   return `bun-complete-store-${STORE_CACHE_VERSION}-${platform}-${arch}-${revision}-${globalStoreMode}-${digest}`;
 };
 
+export const installStoreRestorePrefix = (key: string) => {
+  const separator = key.lastIndexOf("-");
+  if (separator === -1) {
+    throw new InstallStoreInvariantError("Invalid install-store key");
+  }
+  return key.slice(0, separator + 1);
+};
+
+type LockStoreEntries = {
+  identities: Set<string>;
+  unmappablePackageNames: Set<string>;
+};
+
+const lockStoreEntries = (root: string): LockStoreEntries => {
+  const lock: unknown = Bun.JSONC.parse(
+    readFileSync(path.join(root, "bun.lock"), "utf-8"),
+  );
+  if (!isRecord(lock) || !isRecord(lock["packages"])) {
+    throw new InstallStoreInvariantError("Invalid bun.lock packages");
+  }
+  const identities = new Set<string>();
+  const unmappablePackageNames = new Set<string>();
+  for (const value of Object.values(lock["packages"])) {
+    if (!Array.isArray(value) || typeof value[0] !== "string") {
+      continue;
+    }
+    const resolution = value[0];
+    const source =
+      /@(?<kind>github:|git\+|https?:\/\/|file:|link:|workspace:|root:|\.{0,2}\/)/u.exec(
+        resolution,
+      );
+    if (source?.groups?.["kind"] === undefined) {
+      identities.add(resolution);
+      continue;
+    }
+    const packageName = resolution.slice(0, source.index);
+    const kind = source.groups["kind"];
+    const tag = value.at(2);
+    if (kind === "github:" && typeof tag === "string") {
+      identities.add(`@GH@${tag}`);
+    } else if (kind === "git+" && typeof tag === "string") {
+      identities.add(`@G@${tag}`);
+    } else if (
+      (kind === "http://" ||
+        kind === "https://" ||
+        kind === "./" ||
+        kind === "../" ||
+        kind === "/") &&
+      typeof tag === "string" &&
+      tag.startsWith("sha512-")
+    ) {
+      const hash = Buffer.from(tag.slice("sha512-".length), "base64")
+        .toString("hex")
+        .slice(0, 32);
+      identities.add(`@T@sha512-${hash}`);
+    } else {
+      unmappablePackageNames.add(packageName);
+    }
+  }
+  return { identities, unmappablePackageNames };
+};
+
+const lockNeedsStoreEntry = (
+  entries: LockStoreEntries,
+  identity: string,
+  packageName: string,
+) =>
+  entries.identities.has(identity.replace(/@@@\d+$/u, "")) ||
+  entries.unmappablePackageNames.has(packageName);
+
+// A prefix restore may contain packages from the previous lock. Remove every
+// identifiable package absent from the current lock before sealing the new key.
+export const pruneInstallStore = (store: string, root: string) => {
+  const needed = lockStoreEntries(root);
+  const pending = [store];
+  for (const directory of pending) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (!entry.isDirectory() || entry.name === "links") {
+        continue;
+      }
+      const manifest = path.join(filename, "package.json");
+      if (!existsSync(manifest)) {
+        pending.push(filename);
+        continue;
+      }
+      const metadata: unknown = Bun.JSONC.parse(
+        readFileSync(manifest, "utf-8"),
+      );
+      if (
+        isRecord(metadata) &&
+        typeof metadata["name"] === "string" &&
+        typeof metadata["version"] === "string" &&
+        !lockNeedsStoreEntry(
+          needed,
+          repoRelativePath(store, filename),
+          metadata["name"],
+        )
+      ) {
+        rmSync(filename, { recursive: true, force: true });
+      }
+    }
+  }
+};
+
+const assertInstallStoreExact = (store: string, root: string) => {
+  const extraCandidates: { identity: string; packageName: string }[] = [];
+  const visit = (directory: string) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const filename = path.join(directory, entry.name);
+      if (!entry.isDirectory() || entry.name === "links") {
+        continue;
+      }
+      const manifest = path.join(filename, "package.json");
+      if (!existsSync(manifest)) {
+        visit(filename);
+        continue;
+      }
+      const metadata: unknown = Bun.JSONC.parse(
+        readFileSync(manifest, "utf-8"),
+      );
+      if (
+        isRecord(metadata) &&
+        typeof metadata["name"] === "string" &&
+        typeof metadata["version"] === "string"
+      ) {
+        extraCandidates.push({
+          identity: repoRelativePath(store, filename),
+          packageName: metadata["name"],
+        });
+      }
+    }
+  };
+  visit(store);
+  const needed = lockStoreEntries(root);
+  const extra = extraCandidates.find(
+    ({ identity, packageName }) =>
+      !lockNeedsStoreEntry(needed, identity, packageName),
+  );
+  if (extra !== undefined) {
+    throw new InstallStoreInvariantError(
+      `Install store contains package outside current lock: ${extra.identity}`,
+    );
+  }
+};
+
 type ExtractionScratchOptions = {
   directory: string;
   entry: string;
@@ -244,6 +394,7 @@ type InstallStoreOptions = {
   store: string;
   key: string;
   globalStoreMode: GlobalStoreMode;
+  root?: string;
 };
 
 const markerContents = ({
@@ -266,6 +417,7 @@ export const sealInstallStore = (options: InstallStoreOptions) => {
 };
 
 export const verifyInstallStore = (options: InstallStoreOptions) => {
+  assertInstallStoreExact(options.store, options.root ?? process.cwd());
   const marker = path.join(options.store, MARKER);
   if (
     !existsSync(marker) ||
@@ -370,6 +522,7 @@ if (import.meta.main) {
       globalStoreMode,
     });
     console.log(`key=${key}`);
+    console.log(`restore-prefix=${installStoreRestorePrefix(key)}`);
     const temporary = process.env["RUNNER_TEMP"];
     if (temporary !== undefined) {
       const { store: storePath, alias } = installStorePath({
@@ -385,19 +538,21 @@ if (import.meta.main) {
       }
     }
   } else if (
-    (operation === "seal" || operation === "verify") &&
+    (operation === "seal" || operation === "verify" || operation === "prune") &&
     args.length === 1 &&
     args[0]
   ) {
     const options = { store, key: args[0], globalStoreMode };
-    if (operation === "seal") {
+    if (operation === "prune") {
+      pruneInstallStore(store, process.cwd());
+    } else if (operation === "seal") {
       sealInstallStore(options);
     } else {
       verifyInstallStore(options);
     }
   } else {
     throw new InstallStoreInvariantError(
-      "Usage: ci-install-store.ts key | seal <key> | verify <key>",
+      "Usage: ci-install-store.ts key | prune <key> | seal <key> | verify <key>",
     );
   }
 }

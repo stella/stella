@@ -443,6 +443,7 @@ describe("active decision section", () => {
         asTestRaw<CaseLawPublicReadTransaction>({
           select: () => ({
             from: () => ({
+              where: () => ({ limit: async () => [] }),
               innerJoin: () => ({
                 where: () => ({
                   limit: async () => [

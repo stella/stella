@@ -24,14 +24,10 @@ const protectedFixture = (child: string) =>
 /** `<Tag>…</Tag>`; oxc also wraps a self-closing `<Tag />` in a JSXElement. */
 const isPairedElement = (node: Node): node is JSXElement =>
   node.type === "JSXElement" && node.closingElement !== null;
-/** The parameter's own name, through a default value or a rest marker. */
+/** An identifier parameter, optionally with a default value. */
 const parameterName = (parameter: ParamPattern | undefined) => {
-  let binding: Node | undefined = parameter;
-  if (parameter?.type === "AssignmentPattern") {
-    binding = parameter.left;
-  } else if (parameter?.type === "RestElement") {
-    binding = parameter.argument;
-  }
+  const binding =
+    parameter?.type === "AssignmentPattern" ? parameter.left : parameter;
   return binding?.type === "Identifier" ? binding.name : undefined;
 };
 const isNullLiteral = (node: Node) =>
@@ -288,6 +284,7 @@ describe("capability flow action declarations", () => {
         " {...capabilityProps} onClick={unrecognizedFlow}",
       ),
       good.replace(" {...capabilityProps}", " {...otherProps}"),
+      good.replace("(capabilityProps)", "(...capabilityProps)"),
     ]) {
       expect(inspect(bad, "fixture.tsx")).toEqual(["fixture.tsx:1"]);
     }

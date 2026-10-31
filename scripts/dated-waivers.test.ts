@@ -259,7 +259,10 @@ test("an elapsed test quarantine and other elapsed waivers still fail the check"
     new Date("2026-10-07T00:00:00.000Z"),
   );
   expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
+    entries.filter(
+      ({ kind }) =>
+        kind !== "release-age-exclusion" && kind !== "dependency-audit",
+    ).length,
   );
   expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
     false,
@@ -468,7 +471,11 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
     '// test-quarantine-expires: 2026-10-05\ntest.skip("case", () => {});';
   const entriesAt = (prefix: string) =>
     collectWaivers({
-      read: (file) => prefix + read(file),
+      read: (file) =>
+        prefix +
+        (file === "scripts/guard-rollouts/fixture-guard.ts"
+          ? 'export default { id: "fixture-guard" };'
+          : read(file)),
       docs: [doc],
       audit: [{ id: "GHSA-test", package: "pkg", expiresOn: "2026-10-03" }],
       bunfigs: ["bunfig.toml"],
@@ -478,6 +485,14 @@ test("all waiver kinds retain their keys when unrelated lines shift their locato
       quarantineSources: {
         "a.test.ts": `${prefix}${quarantined}`,
       },
+      guardRollouts: [
+        {
+          id: "fixture-guard",
+          type: "changed-lines",
+          expiresAt: "2026-10-20T00:00:00.000Z",
+          check: ["bun", "scripts/check-fixture.ts"],
+        },
+      ],
       flakyTestQuarantines: [flaky],
       pendingContractMigrations: [
         { name: "pending-contract", expiresAt: "2026-10-01" },
@@ -600,4 +615,71 @@ test("tracked-files input rejects absolute and parent paths", () => {
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("changed-lines guard rollouts enter the dated inventory with a full-scope probe", () => {
+  const entries = collectWaivers({
+    read: (file) =>
+      file === "scripts/guard-rollouts/fixture-guard.ts"
+        ? 'export default { id: "fixture-guard" };'
+        : read(file),
+    docs: [],
+    audit: [],
+    bunfigs: [],
+    releaseAgeSources: {},
+    guardRollouts: [
+      {
+        id: "fixture-guard",
+        type: "changed-lines",
+        expiresAt: "2026-10-20T00:00:00.000Z",
+        check: ["bun", "scripts/check-fixture.ts"],
+      },
+      {
+        id: "full-guard",
+        type: "full",
+        check: ["bun", "scripts/check-full.ts"],
+      },
+      {
+        id: "autofix-guard",
+        type: "autofix",
+        generator: "fixture-fix",
+        check: ["bun", "scripts/check-autofix.ts"],
+      },
+    ],
+  }).filter(({ kind }) => kind === "guard-rollout");
+  expect(entries).toHaveLength(1);
+  expect(entries.at(0)?.probe).toEqual({
+    command: [
+      "env",
+      "STELLA_GUARD_SCOPE=all",
+      "bun",
+      "scripts/check-fixture.ts",
+    ],
+    attempts: 20,
+  });
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-19T23:59:59.999Z")),
+  ).toEqual([]);
+  expect(
+    expiredWaiverFailures(entries, new Date("2026-10-20T00:00:00.000Z")),
+  ).toEqual([
+    "scripts/guard-rollouts/fixture-guard.ts:1 dated waiver expired: fixture-guard",
+  ]);
+});
+
+test("dependency acceptance expiry warns on main and refuses only its owning file", () => {
+  const entries = inventory().filter(({ kind }) => kind === "dependency-audit");
+  const now = new Date("2026-10-07T00:00:00Z");
+  const source = "scripts/dependency-audit-baseline.json";
+  expect(entries.length).toBeGreaterThan(0);
+  for (const changes of [undefined, new Set<string>(), new Set(["bun.lock"])]) {
+    expect(expiredWaiverFailures(entries, now, changes)).toEqual([]);
+    expect(dueWaiverWarnings(entries, now, changes)).toHaveLength(
+      entries.length,
+    );
+  }
+  expect(expiredWaiverFailures(entries, now, new Set([source]))).toHaveLength(
+    entries.length,
+  );
+  expect(dueWaiverWarnings(entries, now, new Set([source]))).toEqual([]);
 });

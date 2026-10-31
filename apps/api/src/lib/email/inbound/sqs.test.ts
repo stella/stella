@@ -6,6 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { generateInboundAddressToken } from "@/api/lib/email/inbound/address";
 import type { InboundDeliveryStore } from "@/api/lib/email/inbound/ingest";
+import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
 import {
   receiveSesInboundMail,
   SesInboundError,
@@ -13,8 +14,12 @@ import {
 import {
   drainInboundMailQueue,
   parseInboundQueueMessage,
+  RECIPIENT_FILINGS_PER_RUN,
 } from "@/api/lib/email/inbound/sqs";
-import { MAX_QUEUE_MESSAGE_CHARS } from "@/api/lib/email/sns-queue-drain";
+import {
+  MAX_MESSAGES_PER_BATCH,
+  MAX_QUEUE_MESSAGE_CHARS,
+} from "@/api/lib/email/sns-queue-drain";
 import {
   logger,
   type LogRecord,
@@ -31,7 +36,10 @@ const raw = new TextEncoder().encode(
   `From: Member <member@example.test>\r\nTo: Counsel <counsel@outside.test>\r\nSubject: ${subject}\r\nDate: Sat, 26 Sep 2026 12:00:00 +0000\r\nMessage-ID: <queue@example.test>\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\nPrivileged body text.\r\n`,
 );
 
-const sesEvent = (messageId: string) => ({
+const sesEvent = (
+  messageId: string,
+  recipients = [`${token}@inbound.example.test`],
+) => ({
   notificationType: "Received",
   mail: {
     messageId,
@@ -40,7 +48,7 @@ const sesEvent = (messageId: string) => ({
     commonHeaders: { from: ["Member <member@example.test>"] },
   },
   receipt: {
-    recipients: [`${token}@inbound.example.test`],
+    recipients,
     action: {
       type: "S3",
       bucketName: "inbound-bucket",
@@ -411,5 +419,61 @@ describe("queue drain", () => {
       deleteFailed: 0,
     });
     expect(queue.remaining()).toHaveLength(0);
+  });
+
+  test("stops leasing once a run's recipient filings are spent", async () => {
+    const perMessage = RECIPIENT_FILINGS_PER_RUN / (2 * MAX_MESSAGES_PER_BATCH);
+    const recipients = Array.from(
+      { length: perMessage },
+      () =>
+        `${generateInboundAddressToken({ userId: null })}@inbound.example.test`,
+    );
+    const { queue, drain } = drainHarness();
+    for (let index = 0; index < 25; index += 1) {
+      queue.enqueue(
+        snsBody({ message: sesEvent(`fanout-${index}`, recipients) }),
+      );
+    }
+    const first = await drain();
+    expect(first.isOk() && first.value).toMatchObject({
+      batches: 2,
+      filed: RECIPIENT_FILINGS_PER_RUN,
+      stoppedBecause: "limitReached",
+    });
+    // Nothing leased was handed back, so no delivery spent a receive.
+    expect(queue.releasedMessageIds).toEqual([]);
+    expect(queue.remaining()).toHaveLength(5);
+    expect(
+      queue.remaining().every(({ receiveCount }) => receiveCount === 0),
+    ).toBe(true);
+    const second = await drain();
+    expect(second.isOk() && second.value).toMatchObject({
+      filed: 5 * perMessage,
+      stoppedBecause: "drained",
+    });
+  });
+
+  test("a failed receive spends a message's recipient cap", async () => {
+    const { queue, drain } = drainHarness({
+      readObject: async () =>
+        Result.err(
+          new SesInboundError({
+            message: "Inbound object could not be read",
+            reason: "object-unavailable",
+          }),
+        ),
+    });
+    const failures = Math.ceil(
+      RECIPIENT_FILINGS_PER_RUN / INBOUND_MAIL_LIMITS.recipients,
+    );
+    for (let index = 0; index < failures + 2; index += 1) {
+      queue.enqueue(snsBody({ message: sesEvent(`unreadable-${index}`) }));
+    }
+    const drained = await drain();
+    expect(drained.isOk() && drained.value).toMatchObject({
+      batches: 1,
+      retry: Math.min(failures + 2, MAX_MESSAGES_PER_BATCH),
+      stoppedBecause: "limitReached",
+    });
   });
 });

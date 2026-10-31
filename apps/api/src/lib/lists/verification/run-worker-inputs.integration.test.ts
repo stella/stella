@@ -12,6 +12,8 @@ import {
   beforeEach,
   describe,
   expect,
+  type Mock,
+  mock,
   setDefaultTimeout,
   spyOn,
   test,
@@ -73,7 +75,7 @@ const actor = createRootRunActor(
   database,
 );
 
-const readSpy = spyOn(documentText, "readVerificationDocument");
+let readSpy: Mock<typeof documentText.readVerificationDocument>;
 
 const readRun = async () =>
   (
@@ -85,6 +87,7 @@ const readRun = async () =>
   ).at(0);
 
 beforeEach(async () => {
+  readSpy = spyOn(documentText, "readVerificationDocument");
   env.FEATURE_LEGAL_LISTS = true;
   env.API_FEATURE_ACCESS_GRANTS = {
     "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
@@ -116,6 +119,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  mock.restore();
   await testDb
     .delete(legalListVerificationRuns)
     .where(eq(legalListVerificationRuns.id, runId));

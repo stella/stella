@@ -1,6 +1,9 @@
+import { panic } from "better-result";
 import type { BunRequest } from "bun";
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { QueryPromise } from "drizzle-orm/query-promise";
 import { setInterval } from "node:timers/promises";
+import { Script } from "node:vm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { deferred } from "@stll/test-kit";
@@ -15,6 +18,7 @@ import {
   currentTransactionCount,
   DB_QUERY_COUNT_HEADER,
   DB_TRANSACTION_COUNT_HEADER,
+  instrumentQueryOrigins,
   queryCountLogger,
   RepeatedQueryFingerprintError,
   runCountedTransaction,
@@ -36,6 +40,31 @@ const logQueriesInterleaved = async (queries: number): Promise<void> => {
     queryCountLogger.logQuery("SELECT 1", []);
   }
 };
+
+const dependencyQueries = async (body: string) => {
+  const invoke: unknown = new Script(
+    `(record) => new Promise((resolve) => queueMicrotask(() => {
+      const deep = (remaining) => remaining === 0
+        ? record("SELECT id FROM session WHERE token = $1", [])
+        : deep(remaining - 1);
+      ${body}
+      resolve();
+    }))`,
+    {
+      filename: `${process.cwd()}/node_modules/query-counter-driver/adapter.js`,
+    },
+  ).runInThisContext();
+  if (typeof invoke !== "function") {
+    panic("SQL dependency fixture must be callable");
+  }
+  await Reflect.apply(invoke, undefined, [queryCountLogger.logQuery]);
+};
+
+class LoggedQuery extends QueryPromise<void> {
+  execute = async (): Promise<void> => {
+    queryCountLogger.logQuery("SELECT id FROM session WHERE token = $1", []);
+  };
+}
 
 describe("db query counter logger", () => {
   test("distinct callsites may issue the same SQL without a repeated fingerprint", async () => {
@@ -108,6 +137,129 @@ describe("db query counter logger", () => {
     expect(result.transactions).toBe(2);
     expect(result.repeats).toHaveLength(1);
     expect(result.repeats[0]).toContain("select * from matters where id = ?");
+  });
+
+  test("pooled savepoint controls contribute neither statements nor transaction round trips", async () => {
+    await runWithQueryCounter(async (counter) => {
+      await runCountedTransaction(async () => {
+        for (const statement of [
+          'SAVEPOINT "nested"',
+          'ROLLBACK TO SAVEPOINT "nested"',
+          'ROLLBACK WORK TO "nested"',
+          'RELEASE SAVEPOINT "nested"',
+          'RELEASE "nested"',
+        ]) {
+          queryCountLogger.logQuery(statement, []);
+        }
+        queryCountLogger.logQuery("SELECT 1", []);
+      });
+      expect(counter.count).toBe(1);
+      expect(counter.transactions).toBe(2);
+    });
+  });
+
+  test("origin instrumentation preserves provider metadata, clients and method replacement", async () => {
+    const options = { metadata: { SERVER_ONLY: true } };
+    const endpoint = Object.assign(async (request: Request) => request.method, {
+      path: "/sign-in/email",
+      options,
+    });
+    const client = Object.assign(() => "native transport", {
+      close: async () => undefined,
+    });
+    const session = { findMany: async () => ["original"] };
+    const owner = { api: { endpoint }, query: { session }, $client: client };
+    const instrumented = instrumentQueryOrigins(owner);
+    expect(instrumented).toBe(owner);
+    expect(instrumented.api.endpoint.path).toBe(endpoint.path);
+    expect(instrumented.api.endpoint.options).toBe(options);
+    expect(instrumented.api.endpoint.length).toBe(endpoint.length);
+    expect(instrumented.$client).toBe(client);
+    expect(instrumented.$client.close).toBe(client.close);
+    expect(instrumented.query.session).toBe(session);
+    const replacement = spyOn(
+      instrumented.query.session,
+      "findMany",
+    ).mockResolvedValue(["replacement"]);
+    try {
+      expect(await instrumented.query.session.findMany()).toEqual([
+        "replacement",
+      ]);
+      expect(replacement).toHaveBeenCalledTimes(1);
+    } finally {
+      replacement.mockRestore();
+    }
+  });
+
+  test("pooled lazy queries retain their constructors across sequential awaits", async () => {
+    const database = instrumentQueryOrigins({
+      select: () => new LoggedQuery(),
+    });
+    await runWithMeasuredQueryCounter(async (counter) => {
+      await database.select();
+      await database.select();
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(2);
+    });
+    expect(
+      await rejectionOf(
+        runWithMeasuredQueryCounter(async () => {
+          for (let index = 0; index < 2; index += 1) {
+            await database.select();
+          }
+        }),
+      ),
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
+  });
+
+  test("dependency-only stacks keep distinct deep call chains separate", async () => {
+    await runWithMeasuredQueryCounter(async (counter) => {
+      await dependencyQueries("deep(20);\n deep(20);");
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(2);
+      expect(
+        [...counter.fingerprints.keys()].some((key) => key.includes("unknown")),
+      ).toBe(false);
+    });
+  });
+
+  test("a repeated dependency-only call chain still fails its SQL budget", async () => {
+    expect(
+      await rejectionOf(
+        runWithMeasuredQueryCounter(async () => {
+          await dependencyQueries("for (const item of [1, 2]) { deep(20); }");
+        }),
+      ),
+    ).toMatchObject({ cause: expect.any(RepeatedQueryFingerprintError) });
+  });
+
+  test("unmeasured counters retain no diagnostic fingerprints", () => {
+    runWithQueryCounter((counter) => {
+      for (const id of [1, 2]) {
+        queryCountLogger.logQuery("SELECT id FROM matters WHERE id = $1", [id]);
+      }
+      expect(counter.count).toBe(2);
+      expect(counter.fingerprints.size).toBe(0);
+      expect(counter.diagnostics).toBe(false);
+      expect(currentRepeatedQueryFingerprints()).toEqual([]);
+    });
+  });
+
+  test("transaction-disabled children still count each round trip for their parent", async () => {
+    await runWithQueryCounter(async (parent) => {
+      await runWithQueryCounter(
+        async (child) => {
+          await runCountedTransaction(async () => {
+            queryCountLogger.logQuery("SELECT 1", []);
+          });
+          expect(child.count).toBe(1);
+          expect(child.transactions).toBe(0);
+        },
+        { countTransactions: false },
+      );
+      expect(parent.count).toBe(1);
+      expect(parent.transactions).toBe(2);
+    });
   });
 
   test("interleaved async contexts count independently", async () => {

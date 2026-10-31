@@ -6,6 +6,7 @@ import {
   type Expression,
   type IdentifierName,
   type ImportDeclaration,
+  isSideEffectImport,
   type MemberExpression,
   type ModuleExportName,
   type Node,
@@ -660,14 +661,11 @@ const isInsideType = (scopes: BindingScopes, node: Node): boolean => {
 // Null for a side-effect, default or namespace import.
 const moduleNamesFromImport = (
   node: ImportDeclaration,
-  sourceText: string,
+  source: ParsedSource,
 ): readonly string[] | null => {
   // `import "x"` has no clause, where `import {} from "x"` names nothing.
-  const clauseless =
-    node.specifiers.length === 0 &&
-    sourceText.slice(node.start, node.source.start).trim() === "import";
   if (
-    clauseless ||
+    isSideEffectImport(node, source) ||
     node.specifiers.some((specifier) => specifier.type !== "ImportSpecifier")
   ) {
     return null;
@@ -684,7 +682,7 @@ type VisitModuleLoadOptions = {
   scopes: BindingScopes;
   register: ModuleRegistration;
   file: string;
-  sourceText: string;
+  source: ParsedSource;
   capabilities: Set<string>;
 };
 
@@ -693,14 +691,14 @@ const visitModuleLoad = ({
   scopes,
   register,
   file,
-  sourceText,
+  source,
   capabilities,
 }: VisitModuleLoadOptions): void => {
   if (node.type === "ImportDeclaration") {
     if (node.importKind === "type") {
       return;
     }
-    const names = moduleNamesFromImport(node, sourceText);
+    const names = moduleNamesFromImport(node, source);
     if (names === null || names.length > 0) {
       register(node.source.value, names);
     }
@@ -976,7 +974,7 @@ const visitSource = (source: ParsedSource, context: VisitContext): void => {
       scopes: context.scopes,
       register,
       file: context.file,
-      sourceText: source.sourceText,
+      source,
       capabilities: context.capabilities,
     });
     visitGlobalReference({

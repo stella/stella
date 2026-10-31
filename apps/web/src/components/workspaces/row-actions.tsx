@@ -2,21 +2,12 @@ import { useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMatch, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isDocumentTranslationSourceEligible } from "@stll/api-contract/document-translation";
 import { fetchWithTimeout } from "@stll/fetch";
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
@@ -70,8 +61,8 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { openInspectorSelection } from "@/components/inspector/inspector-actions";
 import {
-  PdfSignDialogs,
-  usePdfSignFlow,
+  PdfSignRequiredDialog,
+  usePdfSignFromList,
 } from "@/components/inspector/pdf-sign-action";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import Tooltip from "@/components/tooltip";
@@ -115,6 +106,7 @@ import {
   type RowMenuSection,
   type RowMenuSubject,
 } from "@/components/workspaces/row-actions.logic";
+import { RowDeleteDialog } from "@/components/workspaces/row-delete-dialog";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { PDF_MIME_TYPE } from "@/consts";
@@ -154,6 +146,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { getExtension } from "@/lib/files/file-extension";
 import type { Capability } from "@/lib/organization/feature-access/action-capabilities.logic";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
+import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   OcrExportStatus,
@@ -161,7 +154,7 @@ import type {
   WorkspaceCellMetadata,
   WorkspaceEntity,
 } from "@/lib/types";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { downloadFile } from "@/lib/utils";
 import { createUuid } from "@/lib/uuid";
 import {
@@ -175,6 +168,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
 import { workflowActionsDisabled } from "@/lib/workspaces/queries/workspace.logic";
 import { useWorkspaceStore } from "@/lib/workspaces/store";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 export type VirtualAnchor = {
   getBoundingClientRect: () => DOMRect;
@@ -286,6 +280,7 @@ const useOpenPDFPageEditor = ({
   workspaceId,
 }: UseOpenPDFPageEditorOptions): (() => void) | undefined => {
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return undefined;
   }
@@ -293,7 +288,7 @@ const useOpenPDFPageEditor = ({
     detached(
       navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: viewParams,
         search: {
           entity: entityId,
           field: target.fieldId,
@@ -396,6 +391,7 @@ export const RowActions = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
@@ -415,7 +411,7 @@ export const RowActions = ({
   const [translationDialogState, setTranslationDialogState] =
     useState<TranslationDialogState>({ type: "closed" });
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
-  const propertiesView = useQueryView(propertiesQuery);
+  const propertiesView = queryView(propertiesQuery);
   useQueryViewError(propertiesView, "RowActions:query");
   const properties =
     propertiesView.type === "items" ? propertiesView.items : undefined;
@@ -496,13 +492,17 @@ export const RowActions = ({
     readOnly: entity.readOnly,
   });
   const desktopEditGate = useDesktopActionGate("edit-file");
-  const pdfSignFlow = usePdfSignFlow();
   // A folder has no file; a row always shows the current version.
   const pdfSignTarget = resolvePdfSignTarget({
     canUpdateEntity: !entity.readOnly,
     entityId: entity.entityId,
     file: isBulk ? null : file,
     isCurrentVersion: true,
+    workspaceId,
+  });
+  const { flow: pdfSignFlow, sign: signPdf } = usePdfSignFromList({
+    entity,
+    target: pdfSignTarget,
     workspaceId,
   });
   const openCopyToMatterDialog = () => {
@@ -526,7 +526,7 @@ export const RowActions = ({
         detached(
           navigate({
             to: "/workspaces/$workspaceId/$viewId/document",
-            params: { workspaceId, viewId: "all" },
+            params: viewParams,
             search: {
               entity: entity.entityId,
               field: file.fieldId,
@@ -921,7 +921,6 @@ export const RowActions = ({
     const toastId = stellaToast.add({
       title: t("common.duplicating"),
       type: "loading",
-      timeout: Number.POSITIVE_INFINITY,
     });
     let failedCount = 0;
     let firstFailure: unknown;
@@ -985,7 +984,7 @@ export const RowActions = ({
       if (openedDuplicate) {
         await navigate({
           to: "/workspaces/$workspaceId/$viewId/document",
-          params: { workspaceId, viewId: "all" },
+          params: viewParams,
           search: {
             entity: openedDuplicate.entityId,
             field: openedDuplicate.fieldId,
@@ -1130,7 +1129,7 @@ export const RowActions = ({
             aria-label={t("common.actions")}
             className={cn(
               triggerClassName ??
-                "opacity-0! transition-opacity group-hover/row:opacity-100!",
+                "opacity-0! transition-opacity group-hover/row:opacity-100! pointer-coarse:opacity-100!",
             )}
             onClick={(event) => event.stopPropagation()}
             onPointerDown={(event) => event.stopPropagation()}
@@ -1243,7 +1242,7 @@ export const RowActions = ({
               ? {
                   capability: "desktop",
                   label: pdfSignFlow.actionLabel,
-                  onSelect: pdfSignFlow.start,
+                  onSelect: signPdf,
                   onSetUp: pdfSignFlow.setUp,
                   status: pdfSignFlow.status,
                 }
@@ -1324,9 +1323,7 @@ export const RowActions = ({
         }
         workspaceId={workspaceId}
       />
-      {pdfSignTarget !== null && (
-        <PdfSignDialogs flow={pdfSignFlow} target={pdfSignTarget} />
-      )}
+      {pdfSignTarget !== null && <PdfSignRequiredDialog flow={pdfSignFlow} />}
       <DesktopRequiredDialog {...desktopEditGate.requiredDialog} />
     </Menu>
   );
@@ -1351,7 +1348,7 @@ const RowDuplicatePrimaryAction = ({
 
   return (
     <Button
-      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100"
+      className="opacity-0 transition-opacity group-hover/row:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
       disabled={pending}
       onClick={(event) => {
         event.stopPropagation();
@@ -1721,10 +1718,7 @@ const RowTranslationDialog = ({
   target: TranslationTarget | null;
   workspaceId: string;
 }) => {
-  const viewMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/$viewId",
-    shouldThrow: false,
-  });
+  const { viewId } = useWorkspaceViewParams(workspaceId);
   if (target === null) {
     return null;
   }
@@ -1738,7 +1732,7 @@ const RowTranslationDialog = ({
       mode="controlled"
       onOpenChange={onOpenChange}
       open={open}
-      viewId={viewMatch?.params.viewId ?? "all"}
+      viewId={viewId}
       workspaceId={workspaceId}
     />
   );
@@ -1898,56 +1892,6 @@ const RowFileOperationsMenu = ({
         {t("common.delete")}
       </MenuItem>
     </>
-  );
-};
-
-type RowDeleteDialogProps = {
-  isBulk: boolean;
-  name: string;
-  onConfirm: () => void;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  selectedCount: number;
-};
-
-const RowDeleteDialog = ({
-  isBulk,
-  name,
-  onConfirm,
-  onOpenChange,
-  open,
-  selectedCount,
-}: RowDeleteDialogProps) => {
-  const t = useTranslations();
-  return (
-    <AlertDialog onOpenChange={onOpenChange} open={open}>
-      <AlertDialogPopup>
-        <AlertDialogHeader>
-          <AlertDialogTitle>
-            {isBulk
-              ? t("workspaces.deleteItems", { count: selectedCount })
-              : t("workspaces.deleteItem")}
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            {isBulk
-              ? t("workspaces.deleteItemsDescription", {
-                  count: selectedCount,
-                })
-              : t("common.deleteConfirmDescription", { name })}
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </AlertDialogClose>
-          <AlertDialogClose
-            render={<Button onClick={onConfirm} variant="destructive" />}
-          >
-            {t("common.delete")}
-          </AlertDialogClose>
-        </AlertDialogFooter>
-      </AlertDialogPopup>
-    </AlertDialog>
   );
 };
 

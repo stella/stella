@@ -149,6 +149,7 @@ const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
  * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
+  "account-exports": "stella:account_export_write",
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)
@@ -186,6 +187,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Now carries invoice create/delete/transition capabilities, not just the
   // read tool, so it reuses the billing write bucket.
   invoices: "stella:billing_write",
+  "client-invoices": "stella:billing_write",
   // A reader's highlights and comments: personal knowledge, like clauses.
   "legal-reader": "stella:knowledge_write",
   legislation: "stella:read",
@@ -259,6 +261,8 @@ const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
  * different scope fails the export until pinned in ENTRY_SCOPE_OVERRIDES.
  */
 const SCOPE_STRICTNESS: Record<string, number> = {
+  "stella:account_export_read": 2,
+  "stella:account_export_write": 3,
   "stella:search": 0,
   "stella:read": 1,
   "stella:onboarding": 2,
@@ -443,6 +447,7 @@ const DOMAIN_FEATURE: Record<string, string> = {
   "case-law": "FEATURE_PUBLIC_LAW",
   expenses: "FEATURE_TIME_BILLING",
   invoices: "FEATURE_TIME_BILLING",
+  "client-invoices": "FEATURE_TIME_BILLING",
   legislation: "FEATURE_PUBLIC_LAW",
   lists: "FEATURE_LEGAL_LISTS",
   memories: "FEATURE_AI_MEMORY",
@@ -888,7 +893,7 @@ const compactInputSchemaGuarded = ({
   const bytes = inputSchemaByteSize(compacted);
   if (bytes > MAX_CAPABILITY_SCHEMA_BYTES) {
     errors.push(
-      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable TypeBox type) or improve compaction; the cap is not the thing to raise`,
+      `capability "${id}": input schema is ${bytes} bytes after $defs compaction, over the ${MAX_CAPABILITY_SCHEMA_BYTES}-byte cap. Shrink the handler's schema (factor the repeated shape into one reusable valibot schema) or improve compaction; the cap is not the thing to raise`,
     );
     return compacted;
   }

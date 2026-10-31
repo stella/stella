@@ -15,15 +15,15 @@
 import { sha256Hex } from "@stll/sha256/node";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   atFindokFixture,
   atRisFixture,
@@ -48,6 +48,7 @@ import {
   plUokikRulingFixture,
   skCourtsFixture,
   skUsFixture,
+  ukFclFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 /** One way of building a decision of a source, named for the baseline key. */
@@ -98,6 +99,7 @@ export const SOURCE_FINGERPRINT_DRIVERS = {
   [ADAPTER_KEYS.AT_FINDOK]: one(atFindokFixture),
   [ADAPTER_KEYS.EU_ECJ]: one(euEcjFixture),
   [ADAPTER_KEYS.HU_BHGY]: one(huBhgyFixture),
+  [ADAPTER_KEYS.UK_FCL]: one(ukFclFixture),
   [ADAPTER_KEYS.PL_KIS]: one(plKisFixture),
   [ADAPTER_KEYS.PL_UODO]: one(plUodoFixture),
   [ADAPTER_KEYS.PL_UOKIK]: [

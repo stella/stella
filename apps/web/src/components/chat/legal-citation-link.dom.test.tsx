@@ -155,6 +155,7 @@ const decisionPath = createCaseLawDecisionPath(
 );
 const absentText = { type: "absent", reason: "not_published" } as const;
 const fullDecision = {
+  extractionWarnings: [],
   citationCount: 0,
   id: toSafeId<"caseLawDecision">(documentId),
   caseNumber: "26 Cdo 4249/2016",
@@ -168,6 +169,7 @@ const fullDecision = {
   decisionType: null,
   ecli: null,
   language: "cs",
+  caseFile: { items: [], nextCursor: null, limit: 50 },
   languageAlternates: [],
   languageGroupKey: null,
   slug: null,
@@ -198,6 +200,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {
     abstract: absentText,
@@ -217,6 +220,7 @@ const canonicalDecision = {
 const canonicalSearchHit = {
   ...canonicalDecision,
   decisionId: documentId,
+  decisionTypeKind: null,
   identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
   textWithheldReason: null,
   keywords: null,
@@ -224,6 +228,7 @@ const canonicalSearchHit = {
   headline: null,
   citationAuthority: 0,
   citationCount: 0,
+  textAvailability: "available",
   matchingPassages: 1,
   match: "all_terms",
 } satisfies PublicLawData<

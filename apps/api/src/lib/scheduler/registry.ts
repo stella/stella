@@ -1,3 +1,4 @@
+import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
   SWEEP_ACTION_COSTS_TASK,
@@ -27,6 +28,11 @@ import {
   RECONCILE_CASE_LAW_CORPUS_UPLOAD_INTENTS_TASK,
   reconcileCaseLawCorpusUploadIntentsTask,
 } from "@/api/lib/scheduler/tasks/case-law-corpus-upload-cleanup";
+import { REFRESH_CASE_LAW_COVERAGE_TASK } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import {
+  RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK,
+  reconcileCaseLawDecisionIdentifiersTask,
+} from "@/api/lib/scheduler/tasks/case-law-decision-identifier-reconciliation";
 import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
@@ -35,6 +41,10 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import {
+  RECONCILE_PUBLISHER_REMOVALS_TASK,
+  reconcilePublisherRemovalsTask,
+} from "@/api/lib/scheduler/tasks/case-law-publisher-removals";
 import {
   CENSUS_CASE_LAW_RAW_OBJECTS_TASK,
   censusCaseLawRawObjectsTask,
@@ -165,6 +175,10 @@ import {
   reconcileReportExports,
 } from "@/api/lib/scheduler/tasks/report-export-reconcile";
 import {
+  SWEEP_REQUEST_RECEIPTS_TASK,
+  sweepRequestReceipts,
+} from "@/api/lib/scheduler/tasks/request-receipt-retention";
+import {
   RESET_REVIEW_ORGANIZATION_TASK,
   resetReviewOrganizationTask,
 } from "@/api/lib/scheduler/tasks/review-organization-reset";
@@ -222,6 +236,7 @@ import {
 } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 import type {
   SchedulerTask,
+  SchedulerTaskContext,
   SchedulerTaskRegistry,
 } from "@/api/lib/scheduler/types";
 
@@ -230,6 +245,8 @@ const noopTask: SchedulerTask = ({ logger }) => {
 };
 
 const SCHEDULER_TASKS = {
+  [SWEEP_REQUEST_RECEIPTS_TASK]: sweepRequestReceipts,
+  [RECONCILE_PUBLISHER_REMOVALS_TASK]: reconcilePublisherRemovalsTask,
   [AUDIT_SCHEDULER_PAUSES_TASK]: auditSchedulerPauses,
   [REDACT_HOSTED_USAGE_WEBHOOK_EVENTS_TASK]: redactHostedUsageWebhookEvents,
   [BACKFILL_AGENT_CLIENT_STORAGE_TASK]: backfillAgentClientStorage,
@@ -259,6 +276,8 @@ const SCHEDULER_TASKS = {
   [REFRESH_CASE_LAW_SITEMAP_SHARDS_TASK]: refreshCaseLawSitemapShardsTask,
   [REFRESH_CASE_LAW_BROWSE_FACETS_TASK]: refreshCaseLawBrowseFacetsTask,
   [REPORT_CASE_LAW_FRESHNESS_TASK]: reportCaseLawFreshnessTask,
+  [RECONCILE_CASE_LAW_DECISION_IDENTIFIERS_TASK]:
+    reconcileCaseLawDecisionIdentifiersTask,
   [REFRESH_CASE_LAW_SOURCE_ARRIVALS_TASK]: refreshCaseLawSourceArrivalsTask,
   [REFRESH_LEGISLATION_FACETS_TASK]: refreshLegislationFacetsTask,
   [REFRESH_STATUTE_SITEMAP_SHARDS_TASK]: refreshStatuteSitemapShardsTask,
@@ -301,9 +320,17 @@ const SCHEDULER_TASKS = {
   SchedulerTask | { featureId: string; task: SchedulerTask }
 >;
 
-const schedulerTasks = (reapOwnerlessChatTurns: SchedulerTask) => ({
+type SchedulerTaskRegistryOptions = {
+  resetReviewOrganization?: SchedulerTask;
+};
+
+const schedulerTasks = (
+  reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+) => ({
   ...SCHEDULER_TASKS,
   [REAP_OWNERLESS_CHAT_TURNS_TASK]: reapOwnerlessChatTurns,
+  [REFRESH_CASE_LAW_COVERAGE_TASK]: refreshCaseLawCoverage,
 });
 
 export type RegisteredSchedulerTaskName = keyof ReturnType<
@@ -315,17 +342,37 @@ export type RegisteredSchedulerTaskName = keyof ReturnType<
  * persisted rows whose task no build code answers for anymore.
  */
 export const REGISTERED_SCHEDULER_TASK_NAMES: ReadonlySet<string> = new Set(
-  Object.keys(schedulerTasks(noopTask)),
+  Object.keys(schedulerTasks(noopTask, noopTask)),
 );
 
 export const createSchedulerTaskRegistry = (
   reapOwnerlessChatTurns: SchedulerTask,
+  refreshCaseLawCoverage: SchedulerTask,
+  options: SchedulerTaskRegistryOptions = {},
 ): SchedulerTaskRegistry =>
   new Map(
-    Object.entries(schedulerTasks(reapOwnerlessChatTurns)).map(
-      ([name, entry]) => [
+    Object.entries(
+      schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
+    ).map(([name, registered]) => {
+      const entry =
+        name === RESET_REVIEW_ORGANIZATION_TASK
+          ? (options.resetReviewOrganization ?? registered)
+          : registered;
+      return [
         name,
-        typeof entry === "function" ? entry : entry.task,
-      ],
-    ),
+        async (context: SchedulerTaskContext) =>
+          runWithStatementCeiling({
+            kind: "scheduler",
+            key: name,
+            run: async () => {
+              const task = typeof entry === "function" ? entry : entry.task;
+              const outcome = await task(context);
+              if (outcome === undefined) {
+                return undefined;
+              }
+              return outcome;
+            },
+          }),
+      ];
+    }),
   );
