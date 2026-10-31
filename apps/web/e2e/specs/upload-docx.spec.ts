@@ -1,7 +1,8 @@
 import type { APIRequestContext } from "@playwright/test";
-import JSZip from "jszip";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   apiDownloadFileField,
@@ -49,8 +50,8 @@ const findFileFieldForProperty = (
   );
 
 const readDocumentXml = async (docxBuffer: Buffer) => {
-  const zip = await JSZip.loadAsync(docxBuffer);
-  const documentXml = await zip.file("word/document.xml")?.async("text");
+  const zip = await ZipArchive.read(docxBuffer);
+  const documentXml = await zip.entry("word/document.xml")?.text();
   if (documentXml === undefined) {
     throw new Error("Saved DOCX is missing word/document.xml");
   }

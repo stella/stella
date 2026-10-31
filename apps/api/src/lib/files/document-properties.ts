@@ -25,7 +25,6 @@ import type {
   DocumentPropertyKey,
   DocumentPropertyValue,
 } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
 import {
   isOfficeCollaborationPart,
   officeIdentityAttributePolicy,
@@ -96,41 +95,29 @@ const readPropertyEntry = async (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
   path: string,
 ): Promise<string | null> => {
-  const entry = archive.zip.file(path);
-  if (entry === null) {
+  const entry = archive.zip.entry(path);
+  if (entry === undefined) {
     return null;
   }
-  const bytes = await new Promise<Buffer>((resolve, reject) => {
-    const stream = entry.nodeStream("nodebuffer");
-    const chunks: Buffer[] = [];
-    let size = 0;
-    stream.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
-        const destroy: unknown = Reflect.get(stream, "destroy");
-        if (typeof destroy === "function") {
-          Reflect.apply(destroy, stream, []);
-        }
-        reject(
-          new DocumentPropertiesParseError({
-            message: `Property entry ${path} is too large`,
-          }),
-        );
-        return;
-      }
-      chunks.push(chunk);
+  // Inflation stops at the declared size, so refusing that size bounds the
+  // read.
+  if (entry.size > DOCUMENT_METADATA_ENTRY_MAX_BYTES) {
+    throw new DocumentPropertiesParseError({
+      message: `Property entry ${path} is too large`,
     });
-    stream.on("end", () => resolve(Buffer.concat(chunks)));
-    stream.on("error", (cause) => {
-      reject(
-        new DocumentPropertiesParseError({
-          message: `Property entry ${path} could not be decompressed`,
-          cause,
-        }),
-      );
-    });
+  }
+  const read = await Result.tryPromise({
+    try: async () => await entry.text(),
+    catch: (cause) =>
+      new DocumentPropertiesParseError({
+        message: `Property entry ${path} could not be decompressed`,
+        cause,
+      }),
   });
-  return bytes.toString("utf-8");
+  if (Result.isError(read)) {
+    throw read.error;
+  }
+  return read.value;
 };
 
 // ── Value builders ──────────────────────────────────────
@@ -598,7 +585,7 @@ const zeroNamespacedElement = (
 const isSignedZipArchive = (
   archive: Awaited<ReturnType<typeof loadDocxArchive>>,
 ): boolean =>
-  Object.keys(archive.zip.files).some((path) => {
+  archive.zip.paths().some((path) => {
     const normalized = path.toLowerCase();
     return (
       normalized.startsWith("_xmlsignatures/") ||
@@ -647,21 +634,18 @@ const scrubZipArchive = async (
     }
     const cleared = part.clear(xml);
     if (typeof cleared === "string") {
-      writeZipEntry(archive.zip, part.path, cleared);
+      archive.zip.set(part.path, cleared);
       continue;
     }
     if (cleared.isErr()) {
       return { status: "unreadable" };
     }
-    writeZipEntry(archive.zip, part.path, cleared.value);
+    archive.zip.set(part.path, cleared.value);
   }
   await prepare?.(archive);
   return {
     status: "scrubbed",
-    bytes: await archive.zip.generateAsync({
-      type: "uint8array",
-      compression: "DEFLATE",
-    }),
+    bytes: await archive.zip.generate(),
   };
 };
 
@@ -744,7 +728,8 @@ const scrubOoxml = async (
   bytes: ArrayBuffer,
 ): Promise<ScrubDocumentPropertiesResult> => {
   const archive = await loadDocxArchive(bytes);
-  const collaborationParts = Object.keys(archive.zip.files)
+  const collaborationParts = archive.zip
+    .paths()
     .filter(isOfficeCollaborationPart)
     .map((path) => ({
       path,
@@ -833,7 +818,8 @@ const scrubOdf = async (
   bytes: ArrayBuffer,
 ): Promise<ScrubDocumentPropertiesResult> => {
   const sourceArchive = await loadDocxArchive(bytes);
-  const collaborationParts = Object.keys(sourceArchive.zip.files)
+  const collaborationParts = sourceArchive.zip
+    .paths()
     .filter(isOfficeCollaborationPart)
     .map((path) => ({
       path,
@@ -854,16 +840,14 @@ const scrubOdf = async (
       ...collaborationParts,
     ],
     async (archive) => {
-      const firstPath = Object.keys(archive.zip.files).at(0);
+      const firstPath = archive.zip.paths().at(0);
       const mimetype = await readPropertyEntry(archive, "mimetype");
       if (firstPath !== "mimetype" || mimetype === null) {
         throw new DocumentPropertiesParseError({
           message: "ODF mimetype must be the first ZIP entry",
         });
       }
-      writeZipEntry(archive.zip, "mimetype", mimetype, {
-        compression: "STORE",
-      });
+      archive.zip.set("mimetype", mimetype, { compression: "store" });
     },
   );
 };
@@ -1061,13 +1045,11 @@ const declareOoxmlParts = async (
     })
     .join("");
 
-  writeZipEntry(
-    archive.zip,
+  archive.zip.set(
     CONTENT_TYPES_PATH,
     contentTypes.replace(/<\/Types>/u, () => `${overrides}</Types>`),
   );
-  writeZipEntry(
-    archive.zip,
+  archive.zip.set(
     PACKAGE_RELS_PATH,
     rels.replace(
       /<\/Relationships>/u,
@@ -1211,11 +1193,11 @@ export const writeDocumentProperties = async ({
           updated = set.value;
         }
       }
-      writeZipEntry(archive.zip, OOXML_PART_PATH[part], updated);
+      archive.zip.set(OOXML_PART_PATH[part], updated);
     }
     return {
       status: "written",
-      bytes: await archive.zip.generateAsync({ type: "uint8array" }),
+      bytes: await archive.zip.generate({ compression: "store" }),
     };
   } catch (error) {
     return unreadableDocument(error, "write");

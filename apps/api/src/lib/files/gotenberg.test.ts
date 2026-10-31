@@ -1,8 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import {
   DERIVATIVE_REFUSAL,
@@ -182,15 +181,14 @@ describe("PDF conversion routes", () => {
   });
 
   test("names an unsupported document field", async () => {
-    const archive = new JSZip();
-    writeZipEntry(
-      archive,
+    const archive = new ZipArchive();
+    archive.set(
       "word/document.xml",
       new TextEncoder().encode(
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:fldSimple w:instr="INCLUDEPICTURE https://example.test/a.png"/></w:document>',
       ),
     );
-    const bytes = await archive.generateAsync({ type: "uint8array" });
+    const bytes = await archive.generate({ compression: "store" });
     const { result, urls } = await withConverterFetch(
       () => new Response("unexpected", { status: 500 }),
       async () => await convertToPdf(fileOf(bytes, DOCX_MIME_TYPE)),

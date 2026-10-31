@@ -1,9 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 import { SaxesParser } from "saxes";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
@@ -46,10 +45,9 @@ const makeDocx = async (opts?: {
   contentTypes?: string;
   docRels?: string;
 }): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     opts?.documentXml ??
       [
@@ -63,47 +61,45 @@ const makeDocx = async (opts?: {
       ].join("\n"),
   );
 
-  writeZipEntry(
-    zip,
-    "[Content_Types].xml",
-    opts?.contentTypes ?? CONTENT_TYPES_XML,
-  );
+  zip.set("[Content_Types].xml", opts?.contentTypes ?? CONTENT_TYPES_XML);
 
   if (opts?.docRels) {
-    writeZipEntry(zip, "word/_rels/document.xml.rels", opts.docRels);
+    zip.set("word/_rels/document.xml.rels", opts.docRels);
   }
   if (opts?.footerXml) {
-    writeZipEntry(zip, "word/footer1.xml", opts.footerXml);
+    zip.set("word/footer1.xml", opts.footerXml);
   }
   if (opts?.footerRels) {
-    writeZipEntry(zip, "word/_rels/footer1.xml.rels", opts.footerRels);
+    zip.set("word/_rels/footer1.xml.rels", opts.footerRels);
   }
   if (opts?.customXml) {
-    writeZipEntry(zip, "docProps/custom.xml", opts.customXml);
+    zip.set("docProps/custom.xml", opts.customXml);
   }
   if (opts?.coreXml) {
-    writeZipEntry(zip, "docProps/core.xml", opts.coreXml);
+    zip.set("docProps/core.xml", opts.coreXml);
   }
   if (opts?.appXml) {
-    writeZipEntry(zip, "docProps/app.xml", opts.appXml);
+    zip.set("docProps/app.xml", opts.appXml);
   }
   for (const [path, contents] of Object.entries(opts?.additionalFiles ?? {})) {
-    writeZipEntry(zip, path, contents);
+    zip.set(path, contents);
   }
 
-  return zip.generateAsync({ type: "arraybuffer" });
+  return zip
+    .generate({ compression: "store" })
+    .then((archive) => archive.buffer);
 };
 
 const readZipFile = async (
   buffer: ArrayBuffer | Uint8Array,
   path: string,
 ): Promise<string | null> => {
-  const zip = await JSZip.loadAsync(buffer);
-  const file = zip.file(path);
+  const zip = await ZipArchive.read(buffer);
+  const file = zip.entry(path);
   if (!file) {
     return null;
   }
-  return file.async("string");
+  return file.text();
 };
 
 const isWellFormedXml = (xml: string): boolean =>
@@ -855,9 +851,8 @@ describe("stripStamp", () => {
   test("does not rewrite a non-DOCX OOXML archive", async () => {
     const { mainPartContentType, mainPartPath } =
       DESKTOP_EDIT_FILE_TYPE_CONFIG.xlsx;
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "[Content_Types].xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -866,9 +861,8 @@ describe("stripStamp", () => {
         "</Types>",
       ].join("\n"),
     );
-    writeZipEntry(zip, mainPartPath, "<workbook/>");
-    writeZipEntry(
-      zip,
+    zip.set(mainPartPath, "<workbook/>");
+    zip.set(
       "docProps/custom.xml",
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -881,7 +875,7 @@ describe("stripStamp", () => {
     );
 
     expect(
-      await stripStamp(await zip.generateAsync({ type: "arraybuffer" })),
+      await stripStamp((await zip.generate({ compression: "store" })).buffer),
     ).toBeNull();
   });
 

@@ -8,9 +8,8 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -25,9 +24,8 @@ const WRAP = (body: string) =>
 
 /** Build a minimal DOCX file from document body XML. */
 const buildDocx = async (bodyXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -36,22 +34,20 @@ const buildDocx = async (bodyXml: string): Promise<ScannedFile> => {
       `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
       "</Types>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
       "</Relationships>",
   );
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`,
   );
-  writeZipEntry(zip, "word/document.xml", WRAP(bodyXml));
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  zip.set("word/document.xml", WRAP(bodyXml));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 // ─────────────────────────────────────────────────────────

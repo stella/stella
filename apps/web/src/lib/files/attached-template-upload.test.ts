@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { DOCX_MIME } from "@/lib/consts";
 
@@ -33,13 +32,13 @@ const makeDocxFile = async ({
   relationships: string;
   settings: string;
 }): Promise<File> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", "<Types/>");
-  writeZipEntry(zip, "word/document.xml", "<w:document/>");
-  writeZipEntry(zip, "word/settings.xml", settings);
-  writeZipEntry(zip, "word/_rels/settings.xml.rels", relationships);
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", "<Types/>");
+  zip.set("word/document.xml", "<w:document/>");
+  zip.set("word/settings.xml", settings);
+  zip.set("word/_rels/settings.xml.rels", relationships);
   return new File(
-    [await zip.generateAsync({ type: "arraybuffer" })],
+    [(await zip.generate({ compression: "store" })).buffer],
     "case.docx",
     {
       type: DOCX_MIME,
@@ -99,15 +98,13 @@ describe("attached-template upload preparation", () => {
     expect(prepared.file.type).toBe(original.type);
     expect(prepared.file.lastModified).toBe(original.lastModified);
 
-    const sanitizedZip = await JSZip.loadAsync(
+    const sanitizedZip = await ZipArchive.read(
       await prepared.file.arrayBuffer(),
     );
     const relationships = await sanitizedZip
-      .file("word/_rels/settings.xml.rels")
-      ?.async("string");
-    const settings = await sanitizedZip
-      .file("word/settings.xml")
-      ?.async("string");
+      .entry("word/_rels/settings.xml.rels")
+      ?.text();
+    const settings = await sanitizedZip.entry("word/settings.xml")?.text();
     expect(relationships).not.toContain("attachedTemplate");
     expect(relationships).toContain(HYPERLINK_TYPE);
     expect(settings).not.toContain("attachedTemplate");

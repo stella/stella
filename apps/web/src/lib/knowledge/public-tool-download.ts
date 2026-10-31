@@ -1,8 +1,6 @@
-import JSZip from "jszip";
-
 import { loadCatalogue } from "@stll/catalogue";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ssrCacheClassHeaders } from "@/route-response-policy";
 
@@ -26,12 +24,12 @@ export const publicToolDownloadResponse = async (
     return notFound();
   }
 
-  const zip = new JSZip();
-  writeZipEntry(zip, "SKILL.md", payload.body);
+  const zip = new ZipArchive();
+  zip.set("SKILL.md", payload.body);
   for (const resource of payload.resourceFiles) {
-    writeZipEntry(zip, resource.path, resource.content);
+    zip.set(resource.path, resource.content);
   }
-  const bytes = await zip.generateAsync({ type: "arraybuffer" });
+  const bytes = (await zip.generate({ compression: "store" })).buffer;
 
   return new Response(bytes, {
     headers: {

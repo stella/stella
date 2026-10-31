@@ -1,16 +1,11 @@
-import { expect, spyOn, test } from "bun:test";
+import { expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
-import {
-  propertyConfig,
-  propertySeed,
-  propertyTestTimeout,
-} from "@stll/property-testing";
+import { ZipArchive } from "@stll/docx-core/zip";
+import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { DocxArchiveError, loadDocxArchive } from "./archive";
-import { extractBinary, extractText, loadDocx, repackZip } from "./zip";
-import { writeZipEntry } from "./zip-entry";
+import { DocxArchiveError, loadDocx, loadDocxArchive } from "./archive";
 
 const part = fc.record({
   path: fc
@@ -25,11 +20,11 @@ const parts = fc.uniqueArray(part, {
 const buildZip = async (
   entries: { path: string; bytes: Uint8Array }[],
 ): Promise<ArrayBuffer> => {
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   for (const { path, bytes } of entries) {
-    writeZipEntry(zip, path, bytes, { createFolders: false });
+    zip.set(path, bytes);
   }
-  return await zip.generateAsync({ type: "arraybuffer", compression: "STORE" });
+  return (await zip.generate({ compression: "store" })).buffer;
 };
 
 const expectArchiveError = async (promise: Promise<unknown>): Promise<void> => {
@@ -45,28 +40,27 @@ const expectArchiveError = async (promise: Promise<unknown>): Promise<void> => {
 test(
   "archive repacking preserves every part",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "archive repacking preserves every part",
       fc.asyncProperty(
         parts,
         fc.string({ maxLength: 256 }),
         async (entries, text) => {
           const zip = await loadDocx(await buildZip(entries));
-          writeZipEntry(zip, "word/document.xml", text);
-          const first = await loadDocx(await repackZip(zip));
-          const second = await loadDocx(await repackZip(first));
-          expect(Object.keys(second.files).toSorted()).toEqual(
-            Object.keys(first.files).toSorted(),
-          );
+          zip.set("word/document.xml", text);
+          const first = await loadDocx(await zip.generate());
+          const second = await loadDocx(await first.generate());
+          expect(second.paths().toSorted()).toEqual(first.paths().toSorted());
           for (const { path, bytes } of entries) {
-            const binary = await extractBinary(second, path);
+            const binary = await second.entry(path)?.arrayBuffer();
             expect(binary).not.toBeNull();
             expect(new Uint8Array(binary ?? new ArrayBuffer(0))).toEqual(bytes);
           }
-          expect(await extractText(second, "word/document.xml")).toBe(text);
-          expect(await extractText(second, "word/missing.xml")).toBeNull();
+          expect(await second.entry("word/document.xml")?.text()).toBe(text);
+          expect(second.entry("word/missing.xml") ?? null).toBeNull();
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 30 }),
+      { numRuns: 30 },
     );
   },
   propertyTestTimeout(10_000),
@@ -75,7 +69,8 @@ test(
 test(
   "archive loading applies configured budgets",
   async () => {
-    await fc.assert(
+    await assertProperty(
+      "archive loading applies configured budgets",
       fc.asyncProperty(
         fc.integer({ min: 1, max: 24 }),
         fc.integer({ min: 1, max: 128 }),
@@ -114,7 +109,7 @@ test(
           }
         },
       ),
-      propertyConfig({ seed: propertySeed(), numRuns: 20 }),
+      { numRuns: 20 },
     );
   },
   propertyTestTimeout(10_000),
@@ -130,10 +125,11 @@ test(
       })),
     );
     const zip = await loadDocx(buffer);
-    expect(Object.keys(zip.files)).toHaveLength(4000);
+    expect(zip.paths()).toHaveLength(4000);
     expect(
       new Uint8Array(
-        (await extractBinary(zip, "word/part-3999.bin")) ?? new ArrayBuffer(0),
+        (await zip.entry("word/part-3999.bin")?.arrayBuffer()) ??
+          new ArrayBuffer(0),
       ),
     ).toEqual(new Uint8Array([3999 % 256]));
   },
@@ -155,7 +151,9 @@ test(
       maxTotalBytes: 25 * 1024 * 1024,
     });
     for (let id = 0; id < 3; id++) {
-      const content = await extractBinary(zip, `word/media/image-${id}.bin`);
+      const content = await zip
+        .entry(`word/media/image-${id}.bin`)
+        ?.arrayBuffer();
       expect(content?.byteLength).toBe(image.length);
       const bytes = new Uint8Array(content ?? new ArrayBuffer(0));
       expect(bytes.at(0)).toBe(73);
@@ -166,17 +164,48 @@ test(
 );
 
 test("rejects archives whose end records are ambiguous", async () => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "part.txt", "text", { createFolders: false });
-  const bytes = await zip.generateAsync({
-    type: "uint8array",
-    comment: String.fromCodePoint(80, 75, 5, 6),
+  const zip = new ZipArchive();
+  zip.set("part.txt", "text");
+  const generated = await zip.generate({ compression: "store" });
+  const bytes = new Uint8Array(generated.length + 4);
+  bytes.set(generated);
+  new DataView(bytes.buffer).setUint16(generated.length - 2, 4, true);
+  bytes.set([80, 75, 5, 6], generated.length);
+  await expectArchiveError(loadDocx(bytes));
+});
+
+test("bounded reads apply entry limits to replacements", async () => {
+  const archive = await loadDocxArchive(await buildZip([]), {
+    maxEntryBytes: 4,
+    maxTotalBytes: 16,
   });
-  const loader = spyOn(JSZip, "loadAsync");
-  try {
-    await expectArchiveError(loadDocx(bytes));
-    expect(loader).not.toHaveBeenCalled();
-  } finally {
-    loader.mockRestore();
+  archive.zip.set("part.txt", "replacement");
+  expect(await rejectionOf(archive.readEntryString("part.txt"))).toMatchObject({
+    _tag: "DocxArchiveError",
+    reason: "entry-too-large",
+  });
+});
+
+test("archive budgets require nonnegative safe integers", async () => {
+  const buffer = await buildZip([]);
+  for (const limit of [
+    -1,
+    0.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    for (const key of [
+      "maxEntries",
+      "maxEntryBytes",
+      "maxTotalBytes",
+    ] as const) {
+      expect(
+        await rejectionOf(loadDocx(buffer, { [key]: limit })),
+      ).toMatchObject({
+        _tag: "DocxArchiveError",
+        reason: "load-failed",
+      });
+    }
   }
 });

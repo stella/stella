@@ -17,9 +17,8 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
@@ -255,19 +254,17 @@ describe("report export run", () => {
     const body = paragraphs
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    writeZipEntry(
-      zip,
+    zip.set(
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
     const { file } = await writeFieldFilters(
-      testDocxFile(await zip.generateAsync({ type: "uint8array" })),
+      testDocxFile(await zip.generate({ compression: "store" })),
       [],
       conditions.map((condition) => ({
         path: condition.path,

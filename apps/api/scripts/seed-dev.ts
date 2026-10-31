@@ -34,7 +34,7 @@ import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
@@ -231,11 +231,9 @@ export const createMockDocx = async (
   title: string,
   bodyText?: string,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -246,8 +244,7 @@ export const createMockDocx = async (
       }</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -266,8 +263,7 @@ export const createMockDocx = async (
       `${xmlEscape(line)}</w:t></w:r></w:p>`;
   }
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -275,17 +271,16 @@ export const createMockDocx = async (
       "</w:document>",
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 
@@ -641,12 +636,10 @@ const supplierAgreementBaseVersionId = (
 const createSupplierAgreementDocx = async (
   disposition: SeedTrackedChangeDisposition,
 ): Promise<Buffer> => {
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
+  const zip = new ZipArchive();
   const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -658,8 +651,7 @@ const createSupplierAgreementDocx = async (
       `</Types>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
@@ -733,8 +725,7 @@ const createSupplierAgreementDocx = async (
 
   const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
@@ -749,16 +740,14 @@ const createSupplierAgreementDocx = async (
       `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
       "</w:comment>",
   ).join("");
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/comments.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `${commentsXml}</w:comments>`,
   );
 
-  writeZipEntry(
-    zip,
+  zip.set(
     "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
@@ -766,9 +755,9 @@ const createSupplierAgreementDocx = async (
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
+  zip.set("word/styles.xml", SEED_STYLES_XML);
 
-  const buf = await zip.generateAsync({ type: "nodebuffer" });
+  const buf = Buffer.from(await zip.generate({ compression: "store" }));
   return buf;
 };
 

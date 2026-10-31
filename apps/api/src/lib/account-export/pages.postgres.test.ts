@@ -1,9 +1,9 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -649,12 +649,12 @@ describe.skipIf(!enabled)("account export personal data", () => {
           if (bytes === undefined) {
             panic("Archive publication required");
           }
-          return await JSZip.loadAsync(bytes);
+          return await ZipArchive.read(bytes);
         };
         const archive = await archiveFor(userId);
         const historyText = await archive
-          .file("search_history_entries.json")
-          ?.async("string");
+          .entry("search_history_entries.json")
+          ?.text();
         if (historyText === undefined) {
           panic("History archive entry required");
         }
@@ -678,10 +678,8 @@ describe.skipIf(!enabled)("account export personal data", () => {
             },
           ]),
         );
-        expect(await archive.file("ai_memories.json")?.async("string")).toBe(
-          "[]",
-        );
-        expect(Object.keys(archive.files).toSorted()).toEqual(
+        expect(await archive.entry("ai_memories.json")?.text()).toBe("[]");
+        expect(archive.paths().toSorted()).toEqual(
           [
             ...EXPORTED_ACCOUNT_TABLE_NAMES.map((table) => `${table}.json`),
             "manifest.json",
@@ -691,7 +689,7 @@ describe.skipIf(!enabled)("account export personal data", () => {
           ACCOUNT_EXPORT_REGISTRY,
         )) {
           if (disposition.type === "exempt") {
-            expect(archive.file(`${table}.json`)).toBeNull();
+            expect(archive.entry(`${table}.json`)).toBeUndefined();
           }
         }
       } finally {

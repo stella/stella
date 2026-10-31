@@ -12,9 +12,8 @@
 
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { propertyConfig } from "@stll/property-testing";
 import {
   arrayFiltersFromFieldConfig,
@@ -38,9 +37,9 @@ const P = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
 const makeDocx = async (
   paragraphs: readonly string[],
 ): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", WRAP(paragraphs.map(P).join("")));
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", WRAP(paragraphs.map(P).join("")));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 /** The document every generated configuration is written into: two plain value

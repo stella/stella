@@ -9,10 +9,9 @@
 
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
-import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { CONDITION_RESERVED_WORDS } from "@stll/template-conditions";
 
@@ -51,10 +50,9 @@ const parseBody = (xml: string): slimdom.Element => {
 };
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
-  const zip = new JSZip();
-  writeZipEntry(zip, "word/document.xml", documentXml);
-  writeZipEntry(
-    zip,
+  const zip = new ZipArchive();
+  zip.set("word/document.xml", documentXml);
+  zip.set(
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -62,12 +60,12 @@ const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
 </Types>`,
   );
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 const extractTexts = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   const texts: string[] = [];
   for (const match of xml.matchAll(/<w:t[^>]*>(?<text>.*?)<\/w:t>/gu)) {
     if (match.groups?.["text"] !== undefined) {
@@ -750,8 +748,8 @@ describe("property: loop-expanded num() markers number sequentially", () => {
 
 /** The whole paragraph's text, in document order, with runs joined. */
 const paragraphTextsOf = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   return [...parseBody(xml).getElementsByTagNameNS(W_NS, "p")].map((p) =>
     paragraphText(p),
   );

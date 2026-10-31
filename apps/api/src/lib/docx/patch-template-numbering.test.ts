@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import JSZip from "jszip";
 
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
@@ -28,21 +27,21 @@ const buildDocx = async (
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphs.map(para).join("")}<w:sectPr/></w:body></w:document>`;
   const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`;
   const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
-  const zip = new JSZip();
-  writeZipEntry(zip, "[Content_Types].xml", contentTypes);
-  writeZipEntry(zip, "_rels/.rels", rels);
-  writeZipEntry(zip, "word/document.xml", documentXml);
+  const zip = new ZipArchive();
+  zip.set("[Content_Types].xml", contentTypes);
+  zip.set("_rels/.rels", rels);
+  zip.set("word/document.xml", documentXml);
   if (options?.numberingXml !== undefined) {
-    writeZipEntry(zip, "word/numbering.xml", options.numberingXml);
+    zip.set("word/numbering.xml", options.numberingXml);
   }
-  return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+  return testDocxFile(await zip.generate({ compression: "store" }));
 };
 
 // Concatenated visible text: value substitution splits a paragraph into
 // multiple <w:t> runs, so assert on the stripped text, not the raw XML.
 const docTextOf = async (file: ScannedFile): Promise<string> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  let text = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  let text = (await zip.entry("word/document.xml")?.text()) ?? "";
   // Strip tags until stable so a tag span revealed by an earlier removal can't
   // survive — the single-pass form trips CodeQL's incomplete-sanitization check.
   let previous = "";
@@ -228,8 +227,8 @@ const NUMBERING_XML =
   `</w:numbering>`;
 
 const numIdsOf = async (file: ScannedFile): Promise<string[]> => {
-  const zip = await JSZip.loadAsync(file.bytes);
-  const xml = (await zip.file("word/document.xml")?.async("string")) ?? "";
+  const zip = await ZipArchive.read(file.bytes);
+  const xml = (await zip.entry("word/document.xml")?.text()) ?? "";
   return [...xml.matchAll(/<w:numId w:val="(?<numId>\d+)"\s*\/?>/gu)].flatMap(
     (m) => (m[1] ? [m[1]] : []),
   );
@@ -254,10 +253,8 @@ describe("fillTemplate — w:numPr through {% for %} expansion", () => {
     // continues 1..3 instead of restarting per iteration.
     expect(await numIdsOf(file)).toEqual(["1", "1", "1"]);
 
-    const zip = await JSZip.loadAsync(file.bytes);
-    expect(await zip.file("word/numbering.xml")?.async("string")).toBe(
-      NUMBERING_XML,
-    );
+    const zip = await ZipArchive.read(file.bytes);
+    expect(await zip.entry("word/numbering.xml")?.text()).toBe(NUMBERING_XML);
   });
 
   test("a cloned numPr whose numId does not resolve is pruned", async () => {

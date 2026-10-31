@@ -2,10 +2,9 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
-import JSZip from "jszip";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
-import { writeZipEntry } from "@stll/docx-utils";
+import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -840,13 +839,12 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       clauseVersionId: versionId,
       slotName: "Terms",
     });
-    const zip = new JSZip();
-    writeZipEntry(
-      zip,
+    const zip = new ZipArchive();
+    zip.set(
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{ clause("Terms") }}</w:t></w:r></w:p></w:body></w:document>',
     );
-    const file = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
+    const file = testDocxFile(await zip.generate({ compression: "store" }));
     const scopedDb = asTestRaw<ScopedDb>(
       createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     );
@@ -876,8 +874,8 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
         clauseId,
       },
     ]);
-    const output = await JSZip.loadAsync(result.file.bytes);
-    const xml = await output.file("word/document.xml")?.async("string");
+    const output = await ZipArchive.read(result.file.bytes);
+    const xml = await output.entry("word/document.xml")?.text();
     for (const paragraph of body) {
       expect(xml).toContain(paragraph.text);
     }

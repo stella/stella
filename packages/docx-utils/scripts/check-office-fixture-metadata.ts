@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 
 import { Result, TaggedError } from "better-result";
-import JSZip from "jszip";
 import path from "node:path";
 import { parseXmlDocument } from "slimdom";
+
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { OFFICE_ARCHIVE_FORMATS } from "../src/office-formats";
 import {
@@ -54,24 +55,28 @@ export const inspectOfficeFixture = async ({
   Result<OfficeFixtureMetadataError[], OfficeFixtureMetadataError>
 > => {
   const loaded = await Result.tryPromise({
-    try: async () => await JSZip.loadAsync(bytes, { checkCRC32: true }),
+    try: async () => await ZipArchive.read(bytes),
     catch: () => failure({ filePath, field: "archive", reason: "unreadable" }),
   });
   if (Result.isError(loaded)) {
     return loaded;
   }
   const findings = new Map<string, OfficeFixtureMetadataError>();
-  for (const part of Object.keys(loaded.value.files).filter(
-    (candidate) =>
-      isOfficeIdentityPart(candidate) || candidate === "META-INF/manifest.xml",
-  )) {
-    const entry = loaded.value.file(part);
-    if (entry === null) {
+  for (const part of loaded.value
+    .paths()
+    .filter(
+      (candidate) =>
+        isOfficeIdentityPart(candidate) ||
+        candidate === "META-INF/manifest.xml",
+    )) {
+    const entry = loaded.value.entry(part);
+    if (entry === undefined) {
       continue;
     }
     const parsed = await Result.tryPromise({
       try: async () => {
-        const xml = await entry.async("string");
+        // Every entry is checked against its CRC-32 as it is read.
+        const xml = await entry.text();
         if (/<!DOCTYPE/iu.test(xml)) {
           throw failure({ filePath, field: part, reason: "invalid-xml" });
         }

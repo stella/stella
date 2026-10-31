@@ -3,9 +3,9 @@ import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import JSZip from "jszip";
 
 import { compareCodeUnit } from "@stll/collation";
+import { ZipArchive } from "@stll/docx-core/zip";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -613,12 +613,10 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
           normalizePersistedChatMessageContent(message.content).parts,
         );
         expect(markdown).toBe(marker);
-        const docx = await JSZip.loadAsync(
+        const docx = await ZipArchive.read(
           await createChatExportDocx(markdownToStellaDocument(markdown)),
         );
-        const documentXml = await docx
-          .file("word/document.xml")
-          ?.async("string");
+        const documentXml = await docx.entry("word/document.xml")?.text();
         expect(documentXml).toContain(marker);
         expect(documentXml).not.toContain(secret);
         expect(source?.title).toBe(marker);

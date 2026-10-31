@@ -16,7 +16,6 @@
 
 import * as slimdom from "slimdom";
 
-import { writeZipEntry } from "@stll/docx-utils";
 import {
   type FilterCall,
   isFieldPath,
@@ -226,19 +225,19 @@ export const writeFieldFilters = async (
   let changed = false;
   // Headers and footers hold markers of their own, and a loop never spans two
   // parts, so each part walks with a stack of its own.
-  for (const path of templateContentPartPaths(Object.keys(zip.files))) {
-    const entry = zip.file(path);
+  for (const path of templateContentPartPaths(zip.paths())) {
+    const entry = zip.entry(path);
     if (!entry) {
       continue;
     }
-    const rewritten = rewritePart(await entry.async("string"), {
+    const rewritten = rewritePart(await entry.text(), {
       conditions,
       rewrites: byPath,
       scopes: [],
       written,
     });
     if (rewritten.changed) {
-      writeZipEntry(zip, path, rewritten.xml);
+      zip.set(path, rewritten.xml);
       changed = true;
     }
   }
@@ -247,9 +246,6 @@ export const writeFieldFilters = async (
   if (!changed) {
     return { file, written };
   }
-  const output = await zip.generateAsync({
-    compression: "DEFLATE",
-    type: "uint8array",
-  });
+  const output = await zip.generate();
   return { file: derivedScannedFile(file, output), written };
 };
