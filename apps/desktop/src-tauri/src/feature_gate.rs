@@ -10,19 +10,16 @@ use std::{collections::HashSet, num::NonZeroUsize, sync::RwLock};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DesktopFeature {
   ActivityTimeline,
-  TimeBilling,
   LocalAgents,
 }
 
 impl DesktopFeature {
-  pub const ALL: &'static [Self] =
-    &[Self::ActivityTimeline, Self::TimeBilling, Self::LocalAgents];
+  pub const ALL: &'static [Self] = &[Self::ActivityTimeline, Self::LocalAgents];
 
   /// The identifier the feature-access contract uses.
   pub const fn id(self) -> &'static str {
     match self {
       Self::ActivityTimeline => "activity-timeline",
-      Self::TimeBilling => "time-billing",
       Self::LocalAgents => "local-agents",
     }
   }
@@ -249,16 +246,16 @@ mod tests {
       FeatureGates::blocking(HashSet::from([DesktopFeature::ActivityTimeline]));
     let changed = gates.replace(HashSet::from([
       DesktopFeature::ActivityTimeline,
-      DesktopFeature::TimeBilling,
+      DesktopFeature::LocalAgents,
     ]));
-    assert_eq!(changed, [DesktopFeature::TimeBilling]);
+    assert_eq!(changed, [DesktopFeature::LocalAgents]);
     assert!(!gates.is_enabled(DesktopFeature::ActivityTimeline));
     assert!(
       gates
         .account_binding(DesktopFeature::ActivityTimeline)
         .is_none()
     );
-    assert!(gates.is_enabled(DesktopFeature::TimeBilling));
+    assert!(gates.is_enabled(DesktopFeature::LocalAgents));
   }
 
   #[tokio::test]

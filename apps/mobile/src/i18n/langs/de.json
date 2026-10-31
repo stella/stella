@@ -22,7 +22,8 @@
     "toolUsed": "Verwendet: {tool}",
     "threadTitle": "Unterhaltung",
     "threadLoadFailed": "Diese Unterhaltung konnte nicht geladen werden.",
-    "threadEmptyDescription": "Diese Unterhaltung enthält noch keine Nachrichten.",
+    "greeting": "Woran möchten Sie arbeiten?",
+    "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "sections": {
       "today": "Heute",
       "yesterday": "Gestern",
@@ -127,6 +128,22 @@
     "currentVersion": "Aktuelle Version",
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden."
   },
+  "document": {
+    "title": "Dokument",
+    "failedTitle": "Dieses Dokument konnte nicht geöffnet werden",
+    "failure": {
+      "offline": "Sie sind offline. Stellen Sie eine Internetverbindung her und versuchen Sie es erneut.",
+      "noFile": "Dieses Dokument hat noch keine Datei.",
+      "failed": "Beim Öffnen ist ein Fehler aufgetreten. Versuchen Sie es gleich noch einmal.",
+      "unsupported": "Aktualisieren Sie die App, um Dokumente zu öffnen.",
+      "android": "In der Android-App lassen sich Dokumente noch nicht öffnen."
+    },
+    "retry": "Erneut versuchen",
+    "preview": "Vorschau öffnen",
+    "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
+    "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
+    "details": "Details"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Klarheit für jeden Fall.",
@@ -163,7 +180,6 @@
     "newest": "Neueste Entscheidungen",
     "noResults": "Nichts entspricht den Wörtern, die diese Suche verlangt hat.",
     "noResultsHint": "Versuchen Sie weniger oder andere Wörter: die Begriffe, die eine Entscheidung verwenden würde, nicht den Satz, in dem eine Frage gestellt wird.",
-    "unavailable": "Die Suche ist vorübergehend nicht verfügbar",
     "retry": "Erneut versuchen",
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
@@ -179,6 +195,14 @@
   "writes": {
     "consentNeeded": "Damit die App Änderungen vornehmen kann, braucht stella Ihre Erlaubnis. Melden Sie sich erneut an, um sie zu erteilen.",
     "signInAgain": "Erneut anmelden"
+  },
+  "loads": {
+    "offline": "stella konnte Ihren Server nicht erreichen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "outdated": "Ihr Server hat in einem Format geantwortet, das diese App-Version nicht versteht. Aktualisieren Sie die App oder, falls Sie ihn betreiben, den Server.",
+    "consent": "Diese Anmeldung erlaubt der App nicht, dies zu lesen. Melden Sie sich erneut an, um den Zugriff zu erteilen.",
+    "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an.",
+    "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
+    "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status})."
   },
   "timers": {
     "title": "Timer",
@@ -213,7 +237,27 @@
     "matterTitle": "Akte",
     "uploadFailed": "Der Scan konnte nicht hochgeladen werden. Versuchen Sie es erneut.",
     "failedTitle": "Scan fehlgeschlagen",
-    "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut."
+    "failed": "Die Kamera konnte den Scan nicht speichern. Versuchen Sie es erneut.",
+    "save": "Speichern",
+    "saveTitle": "In einer Akte speichern",
+    "share": "Teilen",
+    "addPages": "Seiten hinzufügen",
+    "page": "Seite {number}",
+    "rotatePage": "Seite {number} drehen",
+    "removePage": "Seite {number} entfernen",
+    "deletePage": "Löschen",
+    "movePage": "Seite {number} verschieben",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "noPages": "Keine Seiten mehr. Mit „Seiten hinzufügen“ scannen Sie weitere.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Das PDF konnte nicht erstellt werden. Versuchen Sie es erneut.",
+    "shareFailed": "Das PDF konnte nicht geteilt werden. Versuchen Sie es erneut.",
+    "discardTitle": "Diesen Scan verwerfen?",
+    "discardMessage": "Seine Seiten sind in keiner Akte gespeichert und werden von diesem Gerät gelöscht.",
+    "discard": "Verwerfen",
+    "keepEditing": "Weiter bearbeiten"
   },
   "shortcuts": {
     "search": "Suchen",

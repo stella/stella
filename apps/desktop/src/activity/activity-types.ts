@@ -74,7 +74,6 @@ export type ActivityDaySnapshot = {
   } | null;
   manualAssignments: ActivityManualAssignment[];
   draftedEntries: { start: string; end: string; entryId: string }[];
-  timeBillingEnabled: boolean;
   earliestDate: string;
   latestDate: string;
   excludedApps: ActivityAppExclusion[];
@@ -284,7 +283,6 @@ export const isActivityDaySnapshot = (
     earliestDate,
     latestDate,
     unreadable,
-    timeBillingEnabled,
     deletionStatus,
     sourceAppVisuals,
     otherAccountHistoryDays,
@@ -300,7 +298,6 @@ export const isActivityDaySnapshot = (
     typeof earliestDate === "string" &&
     typeof latestDate === "string" &&
     typeof unreadable === "boolean" &&
-    typeof timeBillingEnabled === "boolean" &&
     typeof deletionStatus === "string" &&
     Object.hasOwn(activityContract.deletionStatuses, deletionStatus) &&
     isReviewState(value) &&
