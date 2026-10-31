@@ -12,11 +12,11 @@
     "name": "valkey"
   },
   {
-    "source": "docker.io/quickwit/quickwit:0.9.2@sha256:1c249c579063830be4666523c4d95289683f98c5a584de8e67a8be3361fe1f72",
+    "source": "docker.io/quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd",
     "name": "quickwit"
   },
   {
-    "source": "docker.io/rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b",
+    "source": "docker.io/rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2",
     "name": "rustfs"
   },
   {
