@@ -554,6 +554,7 @@ const ClipboardCardName = ({
       className="min-w-0 flex-1"
       onClick={onEdit}
       onFocus={onFocus}
+      title={t("editItem")}
       tooltip={t("editItem")}
       variant="plain"
     >
