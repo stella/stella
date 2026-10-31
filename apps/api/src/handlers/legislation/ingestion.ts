@@ -353,19 +353,21 @@ const refreshVersionChanges = async ({
   documentId,
   scopedDb,
 }: RefreshVersionChangesOptions): Promise<void> => {
-  const refreshed = await Result.tryPromise({
-    try: async () =>
-      await refreshWorkVersionChanges({
-        db: scopedDb,
-        work: {
-          sourceId: input.sourceId,
-          eli: input.eli,
-          language: input.language,
-        },
-        around: documentId,
-      }),
-    catch: (cause) => cause,
-  });
+  const refreshed = (
+    await Result.tryPromise({
+      try: async () =>
+        await refreshWorkVersionChanges({
+          db: scopedDb,
+          work: {
+            sourceId: input.sourceId,
+            eli: input.eli,
+            language: input.language,
+          },
+          around: documentId,
+        }),
+      catch: (cause) => cause,
+    })
+  ).andThen((outcome) => outcome);
   if (Result.isError(refreshed)) {
     captureError(
       refreshed.error,

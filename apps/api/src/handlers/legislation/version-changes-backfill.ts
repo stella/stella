@@ -1,4 +1,5 @@
-import { panic, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import type { InferOk } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -126,7 +127,7 @@ export const planVersionChangesPage = async ({
   );
   const last = works.at(-1);
   if (last === undefined) {
-    return { after, cursor: null, works: 0, tasks: [] };
+    return Result.ok({ after, cursor: null, works: 0, tasks: [] });
   }
   const languageResult = await db(
     async (tx) =>
@@ -145,9 +146,11 @@ export const planVersionChangesPage = async ({
       ),
   );
   if (languageResult.type === "overflow") {
-    throw new VersionChangeLanguageLimitError({
-      message: "A work exceeds the language-variant batch bound",
-    });
+    return Result.err(
+      new VersionChangeLanguageLimitError({
+        message: "A work exceeds the language-variant batch bound",
+      }),
+    );
   }
   const lastLanguages = languageResult.rows;
   const versionWorks = new Map<string, LegislationVersionWork>();
@@ -162,35 +165,51 @@ export const planVersionChangesPage = async ({
     });
   }
 
-  const tasks = await planVersionChangeTasks({
+  const taskPlan = await planVersionChangeTasks({
     db,
     works: [...versionWorks.values()],
   });
-  return {
+  if (taskPlan.isErr()) {
+    return Result.err(taskPlan.error);
+  }
+  const tasks = taskPlan.value;
+  return Result.ok({
     after,
     cursor: { sourceId: last.sourceId, eli: last.eli },
     works: new Set(works.map((work) => `${work.sourceId}\u0000${work.eli}`))
       .size,
     tasks,
-  };
+  });
 };
 
 /** All object I/O finishes before entering the checkpoint transaction. */
 export const prepareVersionChangesPage = async (
   options: VersionChangesPageOptions,
 ) => {
-  const page = await planVersionChangesPage(options);
-  const writes = await prepareVersionChanges({
+  const planned = await planVersionChangesPage(options);
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+  const page = planned.value;
+  const preparation = await prepareVersionChanges({
     db: options.db,
     tasks: page.tasks,
   });
-  return { page, writes };
+  if (preparation.isErr()) {
+    return Result.err(preparation.error);
+  }
+  const writes = preparation.value;
+  return Result.ok({ page, writes });
 };
+
+type PreparedVersionChangesPage = InferOk<
+  Awaited<ReturnType<typeof prepareVersionChangesPage>>
+>;
 
 /** The caller checks the prepared cursor against its locked durable checkpoint. */
 export const applyVersionChangesPageTx = async (
   tx: Transaction,
-  { page, writes }: Awaited<ReturnType<typeof prepareVersionChangesPage>>,
+  { page, writes }: PreparedVersionChangesPage,
 ): Promise<VersionChangesBackfillPage> => {
   const written = await writePreparedVersionChangesTx(tx, writes);
   return {
@@ -208,19 +227,29 @@ export const backfillVersionChangesPage = async ({
   ...options
 }: VersionChangesPageOptions & {
   apply: boolean;
-}): Promise<VersionChangesBackfillPage> => {
+}) => {
   if (apply) {
-    const prepared = await prepareVersionChangesPage(options);
-    return await options.db(
-      async (tx) => await applyVersionChangesPageTx(tx, prepared),
+    const preparation = await prepareVersionChangesPage(options);
+    if (preparation.isErr()) {
+      return Result.err(preparation.error);
+    }
+    const prepared = preparation.value;
+    return Result.ok(
+      await options.db(
+        async (tx) => await applyVersionChangesPageTx(tx, prepared),
+      ),
     );
   }
-  const page = await planVersionChangesPage(options);
-  return {
+  const planned = await planVersionChangesPage(options);
+  if (planned.isErr()) {
+    return Result.err(planned.error);
+  }
+  const page = planned.value;
+  return Result.ok({
     cursor: page.cursor,
     works: page.works,
     planned: page.tasks.length,
     written: 0,
     superseded: 0,
-  };
+  });
 };

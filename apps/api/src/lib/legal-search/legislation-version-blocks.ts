@@ -288,6 +288,11 @@ type ReadVersionChangePayloadsOptions = {
   readObjectAst?: typeof versionAstCache.read;
 };
 
+type VersionChangePayloadRead = Result<
+  readonly [SafeId<"legislationDocument">, VersionChangePayload],
+  VersionChangePayloadTooLargeError
+>;
+
 /**
  * A bounded comparison batch reads each canonical payload once. Object reads
  * run after the SQL transaction closes. An unavailable object rejects the batch,
@@ -308,7 +313,9 @@ export const readVersionChangePayloads = async ({
     return panic("Version comparison payload batch exceeds its bound");
   }
   if (ids.length === 0) {
-    return new Map<SafeId<"legislationDocument">, VersionChangePayload>();
+    return Result.ok(
+      new Map<SafeId<"legislationDocument">, VersionChangePayload>(),
+    );
   }
   const projection = versionAstColumnsFor(mode);
   const payloadBytes = sql`COALESCE(octet_length(${projection.documentAst}::text), 0)`;
@@ -328,16 +335,14 @@ export const readVersionChangePayloads = async ({
   const payloads = await mapWithConcurrency({
     items: rows,
     limit: VERSION_CHANGE_OBJECT_CONCURRENCY,
-    operation: async (
-      row,
-    ): Promise<
-      readonly [SafeId<"legislationDocument">, VersionChangePayload]
-    > => {
+    operation: async (row): Promise<VersionChangePayloadRead> => {
       if (row.oversized) {
-        throw new VersionChangePayloadTooLargeError({
-          message: "Version AST exceeds the corpus payload byte bound",
-          documentId: row.id,
-        });
+        return Result.err(
+          new VersionChangePayloadTooLargeError({
+            message: "Version AST exceeds the corpus payload byte bound",
+            documentId: row.id,
+          }),
+        );
       }
       const { payloadRevision } = row;
       const source = canonicalLegislationAstSource(row, mode);
@@ -353,17 +358,17 @@ export const readVersionChangePayloads = async ({
         }
       })();
       if (ast.isErr()) {
-        return [row.id, { type: "unreadable", payloadRevision }];
+        return Result.ok([row.id, { type: "unreadable", payloadRevision }]);
       }
       const blocks =
         ast.value !== null && "blocks" in ast.value ? ast.value.blocks : [];
-      return [
+      return Result.ok([
         row.id,
         blocks.length === 0
           ? { type: "no-blocks", payloadRevision }
           : { type: "blocks", blocks, payloadRevision },
-      ];
+      ]);
     },
   });
-  return new Map(payloads);
+  return Result.all(payloads).map((entries) => new Map(entries));
 };

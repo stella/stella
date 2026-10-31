@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -24,7 +24,10 @@ import {
 } from "@/api/lib/legal-search/corpus-storage";
 import type { LegislationDocumentInput } from "@/api/lib/legal-search/legislation-ingestion-types";
 import { readVersionChangePayloads } from "@/api/lib/legal-search/legislation-version-blocks";
-import { refreshWorkVersionChanges } from "@/api/lib/legal-search/legislation-version-changes";
+import {
+  planVersionChangeTasks,
+  refreshWorkVersionChanges,
+} from "@/api/lib/legal-search/legislation-version-changes";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -54,13 +57,15 @@ const corpus = {
     const plan = planCorpusDocumentWrite(input);
     switch (plan.type) {
       case "put":
-        return await Promise.resolve({
-          type: "written",
-          written: plan.written,
-        });
+        return await Promise.resolve(
+          Result.ok({
+            type: "written",
+            written: plan.written,
+          }),
+        );
       case "skipped-empty":
       case "skipped-unchanged":
-        return await Promise.resolve(plan);
+        return await Promise.resolve(Result.ok(plan));
       default:
         return plan satisfies never;
     }
@@ -225,12 +230,14 @@ const BACKFILLED = ["/eli/cz/sb/2019/3", "/eli/cz/sb/2019/4"];
 const walk = async (apply: boolean, pageSize: number) => {
   const pages = [];
   const read = async (after: VersionChangesCursor | null) =>
-    await backfillVersionChangesPage({
-      db: scopedDb,
-      after,
-      pageSize,
-      apply,
-    });
+    (
+      await backfillVersionChangesPage({
+        db: scopedDb,
+        after,
+        pageSize,
+        apply,
+      })
+    ).unwrap();
   let page = await read(null);
   while (page.cursor !== null) {
     pages.push(page);
@@ -446,17 +453,21 @@ test("query count grows by comparison batches rather than by work or version", a
       after: { sourceId: benchmarkSource, eli: "" },
       pageSize: count,
     };
-    const report = await backfillVersionChangesPage({
-      ...options,
-      apply: false,
-    });
+    const report = (
+      await backfillVersionChangesPage({
+        ...options,
+        apply: false,
+      })
+    ).unwrap();
     expect(report.planned).toBe(3 * count);
     reportCounts.push(statements);
     statements = 0;
-    const applied = await backfillVersionChangesPage({
-      ...options,
-      apply: true,
-    });
+    const applied = (
+      await backfillVersionChangesPage({
+        ...options,
+        apply: true,
+      })
+    ).unwrap();
     expect(applied.written).toBe(3 * count);
     applyCounts.push(statements);
   }
@@ -503,23 +514,25 @@ test("canonical object ASTs are compared outside SQL transactions", async () => 
         insideTransaction = false;
       }
     });
-  const refreshed = await refreshWorkVersionChanges({
-    db: trackedDb,
-    work: { sourceId, eli, language: "cs" },
-    readPayloads: async (options) =>
-      await readVersionChangePayloads({
-        ...options,
-        mode: "canonical",
-        readObjectAst: async (key) => {
-          objectReads.add(key);
-          expect(insideTransaction).toBe(false);
-          const object = objects.get(key);
-          return object === undefined
-            ? panic("Canonical fixture object is missing")
-            : object;
-        },
-      }),
-  });
+  const refreshed = (
+    await refreshWorkVersionChanges({
+      db: trackedDb,
+      work: { sourceId, eli, language: "cs" },
+      readPayloads: async (options) =>
+        await readVersionChangePayloads({
+          ...options,
+          mode: "canonical",
+          readObjectAst: async (key) => {
+            objectReads.add(key);
+            expect(insideTransaction).toBe(false);
+            const object = objects.get(key);
+            return object === undefined
+              ? panic("Canonical fixture object is missing")
+              : object;
+          },
+        }),
+    })
+  ).unwrap();
   expect(refreshed.written).toBe(3);
   expect([...objectReads].toSorted()).toEqual([...objects.keys()].toSorted());
   expect(await countsOf(eli)).toEqual(["first", ONE_WORD, ONE_PROVISION_ADDED]);
@@ -537,29 +550,59 @@ test("batch summaries refuse target and base revisions replaced after their read
     .set({ changeSummary: null })
     .where(eq(legislationDocuments.eli, eli));
   let replaced = false;
-  const result = await refreshWorkVersionChanges({
-    db: scopedDb,
-    work: { sourceId, eli, language: "cs" },
-    readPayloads: async (options) => {
-      const payloads = await readVersionChangePayloads(options);
-      if (!replaced && payloads.has(first)) {
-        replaced = true;
-        await db
-          .update(legislationDocuments)
-          .set({
-            documentAst: ast([
-              heading("§ 1"),
-              paragraph("p1", "Změněné znění."),
-            ]),
-          })
-          .where(eq(legislationDocuments.id, first));
-      }
-      return payloads;
-    },
-  });
+  const result = (
+    await refreshWorkVersionChanges({
+      db: scopedDb,
+      work: { sourceId, eli, language: "cs" },
+      readPayloads: async (options) => {
+        const payloads = (await readVersionChangePayloads(options)).unwrap();
+        if (!replaced && payloads.has(first)) {
+          replaced = true;
+          await db
+            .update(legislationDocuments)
+            .set({
+              documentAst: ast([
+                heading("§ 1"),
+                paragraph("p1", "Změněné znění."),
+              ]),
+            })
+            .where(eq(legislationDocuments.id, first));
+        }
+        return Result.ok(payloads);
+      },
+    })
+  ).unwrap();
   expect(replaced).toBe(true);
   expect(result).toEqual({ planned: 3, written: 1, superseded: 2 });
   expect(
     (await summaries(eli)).map(({ summary }) => summary?.type ?? null),
   ).toEqual([null, null, "compared"]);
+});
+
+test("history overflow returns a typed error without a partial comparison plan", async () => {
+  const eli = "eli/cz/version-history-bound";
+  await db.execute(sql`
+    INSERT INTO legislation_documents
+      (id, source_id, eli, title, country, language, version_valid_from)
+    SELECT gen_random_uuid(), ${sourceId}, ${eli}, 'Zákon o nájmu', 'CZE', 'cs',
+      DATE '1900-01-01' + n
+    FROM generate_series(1, 10001) AS series(n)
+  `);
+  try {
+    const result = await planVersionChangeTasks({
+      db: scopedDb,
+      works: [{ sourceId, eli, language: "cs" }],
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        _tag: "VersionChangeReadLimitError",
+        cap: 10_000,
+      });
+    }
+  } finally {
+    await db
+      .delete(legislationDocuments)
+      .where(eq(legislationDocuments.eli, eli));
+  }
 });

@@ -121,12 +121,16 @@ const runVersionChangesPass = async (
       step: async () => {
         const remaining = limit - works;
         if (runtime === null) {
-          const page = await backfillVersionChangesPage({
+          const pagePlan = await backfillVersionChangesPage({
             db,
             after: cursor,
             pageSize: Math.min(plan.initialSize, remaining),
             apply: false,
           });
+          if (pagePlan.isErr()) {
+            throw pagePlan.error;
+          }
+          const page = pagePlan.value;
           return {
             done: page.cursor === null || works + page.works >= limit,
             sleepMs: 0,
@@ -165,11 +169,15 @@ const runVersionChangesPass = async (
         }
         try {
           const preparedSize = Math.min(nextPageSize, remaining);
-          const prepared = await prepareVersionChangesPage({
+          const preparation = await prepareVersionChangesPage({
             db,
             after: cursor,
             pageSize: preparedSize,
           });
+          if (preparation.isErr()) {
+            throw preparation.error;
+          }
+          const prepared = preparation.value;
           const result = await runtime.step(
             async ({ tx, size, cursor: persistedCursor }) => {
               const actualAfter =

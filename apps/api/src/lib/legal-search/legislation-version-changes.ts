@@ -302,14 +302,19 @@ export type WorkVersionChangeTask = VersionChangeTask & {
   work: LegislationVersionWork;
 };
 
+type PlanVersionChangeTasksResult = Result<
+  WorkVersionChangeTask[],
+  VersionChangeReadLimitError
+>;
+
 /** Read one bounded history batch, refusing a truncated predecessor sequence. */
 export const planVersionChangeTasks = async ({
   db,
   works,
   around,
-}: PlanVersionChangeTasksOptions): Promise<WorkVersionChangeTask[]> => {
+}: PlanVersionChangeTasksOptions): Promise<PlanVersionChangeTasksResult> => {
   if (works.length === 0) {
-    return [];
+    return Result.ok([]);
   }
   const result = await db(
     async (tx) =>
@@ -352,11 +357,13 @@ export const planVersionChangeTasks = async ({
       ),
   );
   if (result.type === "overflow") {
-    throw new VersionChangeReadLimitError({
-      message:
-        "Version histories exceed the comparison batch bound; use a smaller work page",
-      cap: result.cap,
-    });
+    return Result.err(
+      new VersionChangeReadLimitError({
+        message:
+          "Version histories exceed the comparison batch bound; use a smaller work page",
+        cap: result.cap,
+      }),
+    );
   }
   const grouped = new Map<string, VersionChangeCandidate[]>();
   for (const work of works) {
@@ -377,16 +384,18 @@ export const planVersionChangeTasks = async ({
       changeSummary: row.changeSummary,
     });
   }
-  return works.flatMap((work) => {
-    const versions = grouped.get(versionChangeWorkKey(work));
-    if (versions === undefined) {
-      return panic("Version history batch omitted a requested work");
-    }
-    return planVersionChanges({ versions, around }).map((task) => ({
-      ...task,
-      work,
-    }));
-  });
+  return Result.ok(
+    works.flatMap((work) => {
+      const versions = grouped.get(versionChangeWorkKey(work));
+      if (versions === undefined) {
+        return panic("Version history batch omitted a requested work");
+      }
+      return planVersionChanges({ versions, around }).map((task) => ({
+        ...task,
+        work,
+      }));
+    }),
+  );
 };
 
 export type PreparedVersionChange = ComputedSummary & {
@@ -405,7 +414,7 @@ export const prepareVersionChanges = async ({
   db,
   tasks,
   readPayloads = readVersionChangePayloads,
-}: PrepareVersionChangesOptions): Promise<PreparedVersionChange[]> => {
+}: PrepareVersionChangesOptions) => {
   const writes: PreparedVersionChange[] = [];
   for (const batch of chunk(tasks, VERSION_CHANGE_COMPARISON_BATCH_MAX)) {
     const ids = [
@@ -415,15 +424,23 @@ export const prepareVersionChanges = async ({
         ),
       ),
     ];
-    const payloads = await readPayloads({ db, ids });
+    const payloadRead = await readPayloads({ db, ids });
+    if (payloadRead.isErr()) {
+      return Result.err(payloadRead.error);
+    }
+    const payloads = payloadRead.value;
     for (const task of batch) {
       const computed = computeSummary(payloads, task);
       if (computed !== null) {
-        writes.push({ ...computed, targetId: task.target.id, work: task.work });
+        writes.push({
+          ...computed,
+          targetId: task.target.id,
+          work: task.work,
+        });
       }
     }
   }
-  return writes;
+  return Result.ok(writes);
 };
 
 /** Each row checks both payload revisions and its current predecessor in the same batched statement. */
@@ -483,10 +500,30 @@ export const refreshWorkVersionChanges = async ({
   around,
   readPayloads,
 }: RefreshWorkVersionChangesOptions) => {
-  const tasks = await planVersionChangeTasks({ db, works: [work], around });
-  const writes = await prepareVersionChanges({ db, tasks, readPayloads });
+  const taskPlan = await planVersionChangeTasks({
+    db,
+    works: [work],
+    around,
+  });
+  if (taskPlan.isErr()) {
+    return Result.err(taskPlan.error);
+  }
+  const tasks = taskPlan.value;
+  const preparation = await prepareVersionChanges({
+    db,
+    tasks,
+    readPayloads,
+  });
+  if (preparation.isErr()) {
+    return Result.err(preparation.error);
+  }
+  const writes = preparation.value;
   const written = await db(
     async (tx) => await writePreparedVersionChangesTx(tx, writes),
   );
-  return { planned: tasks.length, written, superseded: tasks.length - written };
+  return Result.ok({
+    planned: tasks.length,
+    written,
+    superseded: tasks.length - written,
+  });
 };
