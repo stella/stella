@@ -107,6 +107,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             orgAIConfig,
             managedAIResidency,
@@ -149,6 +150,7 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
           await createSearchSummaryChatThread({
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             featureAccessSnapshot,
             safeDb,

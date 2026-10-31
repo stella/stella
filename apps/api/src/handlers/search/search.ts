@@ -137,6 +137,8 @@ type SearchHandlerProps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   body: SearchBodySchema;
   search?: typeof searchGlobal;
 };
@@ -146,6 +148,7 @@ export const searchHandler = async ({
   organizationId,
   userId,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
   search = searchGlobal,
 }: SearchHandlerProps) => {
@@ -179,6 +182,7 @@ export const searchHandler = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,
+      grantedScopes,
       editedByUserIds: body.editedByUserIds,
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,

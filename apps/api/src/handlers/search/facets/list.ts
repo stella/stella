@@ -27,6 +27,7 @@ const searchFacets = createSafeRootHandler(
           await searchFacetsHandler({
             organizationId: session.activeOrganizationId,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             scopedDb,
           }),

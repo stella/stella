@@ -30,6 +30,7 @@ const searchResults = createSafeRootHandler(
             organizationId: session.activeOrganizationId,
             userId: user.id,
             accessibleWorkspaceIds: activeWorkspaceIds,
+            grantedScopes: session.grantedScopes,
             body,
             scopedDb,
           }),

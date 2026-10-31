@@ -113,6 +113,7 @@ describe("search summary chat", () => {
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -195,6 +196,7 @@ describe("search summary chat", () => {
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -256,6 +258,7 @@ describe("search summary chat", () => {
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -343,6 +346,7 @@ describe("search summary chat", () => {
 
     const result = await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [firstWorkspaceId, secondWorkspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],
@@ -422,6 +426,7 @@ describe("search summary chat", () => {
 
     await createSearchSummaryChatThread({
       accessibleWorkspaceIds: [workspaceId],
+      grantedScopes: undefined,
       body: {
         ...emptySearchSummaryFilters(),
         citations: [{ number: 1 }],

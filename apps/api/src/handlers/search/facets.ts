@@ -46,6 +46,8 @@ type SearchFacetsHandlerProps = {
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   accessibleWorkspaceIds: SafeId<"workspace">[];
+  /** The caller's access-token scopes; `undefined` for a browser session. */
+  grantedScopes: readonly string[] | undefined;
   body: SearchFacetsBody;
 };
 
@@ -53,6 +55,7 @@ export const searchFacetsHandler = async ({
   scopedDb,
   organizationId,
   accessibleWorkspaceIds,
+  grantedScopes,
   body,
 }: SearchFacetsHandlerProps) => {
   if (!hasSearchQueryOrSelectiveFilter(body)) {
@@ -83,6 +86,7 @@ export const searchFacetsHandler = async ({
       accessibleWorkspaceIds,
       selectedWorkspaceIds: resolved.ids,
       types,
+      grantedScopes,
       editedByUserIds: body.editedByUserIds,
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,
