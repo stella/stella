@@ -199,7 +199,7 @@
     "ci.yml/legal-atlas-image": "armed",
     "ci.yml/windows-scripts": "armed",
     "ci.yml/desktop-windows-dry-run": "armed",
-    "ci.yml/desktop-rust-tests": "armed",
+    "ci.yml/desktop-rust-tests": "pr-fast",
     "ci.yml/scan-engine-wasm-drift": "pr-fast",
     "ci.yml/desktop-rust-lint": "pr-fast",
     "ci.yml/dependency-malware": "pr-fast",
