@@ -971,6 +971,12 @@
     "Test depth repository scripts": {
       "minutes": 30,
       "samples": 0
+    },
+    "Action commit pins": {
+      "minutes": 5,
+      "samples": 0,
+      "p95Seconds": 0,
+      "p99Seconds": 0
     }
   },
   "code-quality-web-rest": {

@@ -113,7 +113,7 @@ test("doctor finds a recorded custom native installation through a PATH alias af
     const npmTarget = path.join(dir, "node_modules", "@stll", "cli", "cli.js");
     await Promise.all(
       [configDir, customBin, aliasBin, npmBin, path.dirname(npmTarget)].map(
-        (directory) => mkdir(directory, { recursive: true }),
+        async (directory) => mkdir(directory, { recursive: true }),
       ),
     );
     const installedPath = path.join(customBin, "stella");
@@ -224,8 +224,8 @@ test("doctor fix preserves existing backup links and remains reversible on succe
     const nativeBin = path.join(root, "native-bin");
     const npmTarget = path.join(root, "node_modules", "@stll", "cli", "cli.js");
     await Promise.all(
-      [configDir, npmBin, nativeBin, path.dirname(npmTarget)].map((directory) =>
-        mkdir(directory, { recursive: true }),
+      [configDir, npmBin, nativeBin, path.dirname(npmTarget)].map(
+        async (directory) => mkdir(directory, { recursive: true }),
       ),
     );
     const nativePath = path.join(nativeBin, "stella");

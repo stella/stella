@@ -32,7 +32,9 @@ const fakeRelease =
     requests: string[] = [],
   ): UpdateFetch =>
   async (input) => {
-    const url = new URL(String(input));
+    const url = new URL(
+      input instanceof Request ? input.url : input.toString(),
+    );
     requests.push(url.href);
     if (url.pathname.includes("/latest/download/")) {
       return new Response(null, {
@@ -102,7 +104,7 @@ describe("native self update", () => {
       platform: "linux",
       arch: "x64",
       fetcher: async (input) => {
-        requests.push(String(input));
+        requests.push(input instanceof Request ? input.url : input.toString());
         return new Response(null, {
           status: 302,
           headers: { location: "http://example.test/stella" },
@@ -345,7 +347,7 @@ describe("native self update", () => {
           `process.execPath = ${JSON.stringify(executablePath)};
 process.argv = [process.execPath, ${JSON.stringify(path.join(import.meta.dirname, "../cli.ts"))}, "update", ...${JSON.stringify(allowDowngrade ? ["--allow-downgrade"] : [])}];
 globalThis.fetch = async (input) => {
-  const url = new URL(String(input));
+  const url = new URL(input instanceof Request ? input.url : input.toString());
   if (url.pathname.includes("/latest/download/")) return new Response(null, { status: 302, headers: { location: ${JSON.stringify(`https://github.com/stella/stella/releases/download/v${targetVersion}/stella-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}`)} } });
   return new Response(url.pathname.endsWith("checksums.txt") ? ${JSON.stringify(`${sha256Hex(replacement)}  stella-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}${process.platform === "win32" ? ".exe" : ""}\n`)} : new TextEncoder().encode("new executable"));
 };

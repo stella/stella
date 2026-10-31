@@ -61,7 +61,7 @@ export const resolveDoctorNativePath = async ({
   activeNativePath,
 }: ResolveDoctorNativePathOptions): Promise<Result<string, DoctorError>> => {
   const stored = await Result.tryPromise({
-    try: () => readFile(path.join(configDir, "install-path"), "utf-8"),
+    try: async () => readFile(path.join(configDir, "install-path"), "utf-8"),
     catch: (cause) => cause,
   });
   if (Result.isError(stored)) {
@@ -92,7 +92,7 @@ export const inspectPathInstallations = async ({
   platform = process.platform,
 }: InspectPathOptions): Promise<Result<PathInstallation[], DoctorError>> => {
   const native = await Result.tryPromise({
-    try: () => realpath(nativePath),
+    try: async () => realpath(nativePath),
     catch: (cause) => cause,
   });
   if (Result.isError(native) && !hasFsErrorCode(native.error, ["ENOENT"])) {
@@ -247,7 +247,7 @@ export const doctorCommand: Command<Context> = buildCommand<
         if (nativeIndex > 0 && first?.channel === "npm") {
           const info = yield* Result.await(
             Result.tryPromise({
-              try: () => lstat(first.path),
+              try: async () => lstat(first.path),
               catch: (cause) =>
                 new DoctorError({
                   message: "Could not inspect the shadowing executable.",
@@ -258,7 +258,7 @@ export const doctorCommand: Command<Context> = buildCommand<
           if (info.isSymbolicLink()) {
             const backup = `${first.path}.stella-disabled`;
             const exists = await Result.tryPromise({
-              try: () => lstat(backup),
+              try: async () => lstat(backup),
               catch: (cause) => cause,
             });
             if (Result.isOk(exists)) {
@@ -278,7 +278,7 @@ export const doctorCommand: Command<Context> = buildCommand<
             }
             yield* Result.await(
               Result.tryPromise({
-                try: () => rename(first.path, backup),
+                try: async () => rename(first.path, backup),
                 catch: (cause) =>
                   new DoctorError({
                     message: "Could not disable the shadowing executable.",

@@ -1,4 +1,9 @@
-import { Result, TaggedError, type TaggedErrorClass } from "better-result";
+import {
+  panic,
+  Result,
+  TaggedError,
+  type TaggedErrorClass,
+} from "better-result";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -19,6 +24,10 @@ export const upgradeCommandFor = (channel: InstallChannel): string => {
       return "npm i -g @stll/cli@latest";
     case "homebrew":
       return "brew upgrade stella";
+    default: {
+      channel satisfies never;
+      return panic("Unknown installation channel");
+    }
   }
 };
 
@@ -53,7 +62,7 @@ export const detectInstallChannel = async ({
     return Result.ok(inferred);
   }
   const marker = await Result.tryPromise({
-    try: () => readFile(path.join(configDir, "install-channel"), "utf-8"),
+    try: async () => readFile(path.join(configDir, "install-channel"), "utf-8"),
     catch: (cause) => cause,
   });
   if (Result.isError(marker)) {

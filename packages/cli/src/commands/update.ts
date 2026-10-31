@@ -4,6 +4,8 @@ import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import { chmod, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import { CliCommandError } from "../cli-exit-code.js";
 import type { Context } from "../context.js";
 import { CLI_VERSION } from "../generated/cli-version.js";
@@ -37,12 +39,13 @@ const parseStableVersion = (version: string): StableVersion | undefined => {
   if (match === null) {
     return undefined;
   }
-  const parsed = {
-    major: Number(match.at(1)),
-    minor: Number(match.at(2)),
-    patch: Number(match.at(3)),
-  };
-  return Object.values(parsed).every(Number.isSafeInteger) ? parsed : undefined;
+  const major = parseIntegerToken(match.at(1), { sign: "unsigned" });
+  const minor = parseIntegerToken(match.at(2), { sign: "unsigned" });
+  const patch = parseIntegerToken(match.at(3), { sign: "unsigned" });
+  if (Result.isError(major) || Result.isError(minor) || Result.isError(patch)) {
+    return undefined;
+  }
+  return { major: major.value, minor: minor.value, patch: patch.value };
 };
 
 type DownloadAssetOptions = {
@@ -264,7 +267,7 @@ export const updateNative = async ({
           // Windows permits renaming a running executable, but not overwriting it.
           const previous = path.join(staging, "previous.exe");
           await rename(executablePath, previous);
-          const moved = await Result.tryPromise(() =>
+          const moved = await Result.tryPromise(async () =>
             rename(replacement, executablePath),
           );
           if (Result.isError(moved)) {
@@ -290,7 +293,7 @@ export const updateNative = async ({
           }),
         );
       }
-      const cleanup = await Result.tryPromise(() =>
+      const cleanup = await Result.tryPromise(async () =>
         rm(staging, { recursive: true, force: true }),
       );
       if (Result.isError(cleanup) && platform !== "win32") {

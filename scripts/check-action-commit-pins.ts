@@ -87,8 +87,8 @@ export const changedActionPins = (changes: readonly ActionPinChange[]) => {
           }),
         );
       }
-      const repository = match?.at(1)?.toLowerCase();
-      const sha = match?.at(2)?.toLowerCase();
+      const repository = match.at(1)?.toLowerCase();
+      const sha = match.at(2)?.toLowerCase();
       if (repository && sha) {
         pins.set(`${repository}@${sha}`, { repository, sha });
       }
@@ -100,7 +100,7 @@ export const changedActionPins = (changes: readonly ActionPinChange[]) => {
 type VerifyActionPinsOptions = {
   changes: readonly ActionPinChange[];
   token: string | undefined;
-  request?: typeof fetch;
+  request?: (url: string, options: RequestInit) => Promise<Response>;
 };
 
 export const verifyActionPins = async ({
@@ -222,7 +222,7 @@ if (import.meta.main) {
     });
   const result = await verifyActionPins({
     changes,
-    token: process.env.GITHUB_TOKEN,
+    token: process.env["GITHUB_TOKEN"],
   });
   if (result.isErr()) {
     process.stderr.write(`${result.error.message}\n`);

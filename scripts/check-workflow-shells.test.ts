@@ -189,7 +189,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const includesWindowsRunner = (value: unknown): boolean => {
   if (typeof value === "string") {
-    return /^windows-/u.test(value);
+    return value.startsWith("windows-");
   }
   if (Array.isArray(value)) {
     return value.some(includesWindowsRunner);

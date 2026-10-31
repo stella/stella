@@ -37,6 +37,8 @@
     "scripts/changeset-guard.test.ts",
     "scripts/changeset-guard.ts",
     "scripts/chat-fixture-guard.ts",
+    "scripts/check-action-commit-pins.test.ts",
+    "scripts/check-action-commit-pins.ts",
     "scripts/check-actionlint-baseline.ts",
     "scripts/check-aggregate-locks.test.ts",
     "scripts/check-aggregate-locks.ts",

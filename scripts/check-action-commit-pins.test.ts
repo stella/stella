@@ -45,12 +45,12 @@ test("changed action pins accept commit objects using one authenticated bounded 
     changes,
     token: "fixture-token",
     request: async (url, options) => {
-      calls.push(String(url));
-      expect(options?.headers).toMatchObject({
+      calls.push(url);
+      expect(options.headers).toMatchObject({
         Authorization: "Bearer fixture-token",
       });
-      expect(options?.signal).toBeInstanceOf(AbortSignal);
-      expect(options?.redirect).toBe("error");
+      expect(options.signal).toBeInstanceOf(AbortSignal);
+      expect(options.redirect).toBe("error");
       return Response.json(commit);
     },
   });
@@ -71,7 +71,7 @@ test("an annotated tag SHA is refused without peeling it to a commit", async () 
     ],
     token: "fixture-token",
     request: async (url) => {
-      calls.push(String(url));
+      calls.push(url);
       return Response.json({ message: "Not Found" }, { status: 404 });
     },
   });
@@ -99,7 +99,8 @@ for (const [name, response] of [
     const result = await verifyActionPins({
       changes,
       token: "fixture-token",
-      request: async () => response.clone(),
+      request: async () =>
+        new Response(await response.text(), { status: response.status }),
     });
     expect(result.isErr()).toBe(true);
   });
