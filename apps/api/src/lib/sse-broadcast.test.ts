@@ -165,7 +165,7 @@ test("an MCP tool projection change round-trips for an organisation or one membe
   const publisher = createSseBroadcastPublisher({
     createClient: () => ({
       publish: async (_channel, message) => {
-        published.push(String(message));
+        published.push(message);
         return 0;
       },
     }),
