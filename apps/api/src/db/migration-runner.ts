@@ -843,13 +843,13 @@ const openSchemaTableLeases = async ({
 
 const takeCorpusSchemaLane = async (
   connection: ReservedSQL,
-  acquired: () => void,
+  { onLaneAcquired }: { onLaneAcquired: () => void },
 ) => {
   const [liftTimeout, takeLane, restoreTimeout] =
     CORPUS_SCHEMA_LANE_LOCK_STATEMENTS;
   await connection.unsafe(liftTimeout);
   await connection.unsafe(takeLane);
-  acquired();
+  onLaneAcquired();
   await connection.unsafe(restoreTimeout);
 };
 
@@ -898,39 +898,31 @@ const applyOnlinePhase = async ({
     },
   );
 
-type ReleaseSchemaResourcesOptions = {
+type ReleaseSchemaCoordinationOptions = {
   connection: ReservedSQL;
   session: { state: "open" | "terminated" };
-  laneHeld: boolean;
   schemaRunHeld: boolean;
   tableLeases: Awaited<ReturnType<typeof openSchemaTableLeases>>;
   schemaObserver: OnlineMigrationConnection | undefined;
 };
 
-/** Release each acquired resource even when another cleanup operation rejects. */
-const releaseSchemaResources = async ({
+/** Cleanup continues even when a lease release or advisory unlock rejects. */
+const releaseSchemaCoordination = async ({
   connection,
   session,
-  laneHeld,
   schemaRunHeld,
   tableLeases,
   schemaObserver,
-}: ReleaseSchemaResourcesOptions) => {
+}: ReleaseSchemaCoordinationOptions) => {
   try {
-    if (migrationSessionCanUnlock(laneHeld, session.state)) {
-      await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-    }
+    await tableLeases?.release();
   } finally {
     try {
-      await tableLeases?.release();
-    } finally {
-      try {
-        if (schemaRunHeld && session.state === "open") {
-          await connection.unsafe(MIGRATION_SCHEMA_RUN_UNLOCK_QUERY);
-        }
-      } finally {
-        await schemaObserver?.release();
+      if (schemaRunHeld && session.state === "open") {
+        await connection.unsafe(MIGRATION_SCHEMA_RUN_UNLOCK_QUERY);
       }
+    } finally {
+      await schemaObserver?.release();
     }
   }
 };
@@ -1136,23 +1128,20 @@ export const runMigrations = async ({
     }
 
     const predicted = predictPendingMigrations(migrations, preflight.rows);
-    reportWildcardMigrationLocks(
-      manifest,
-      predicted.map(({ name }) => name),
-    );
+    const pendingNames = predicted.map(({ name }) => name);
+    reportWildcardMigrationLocks(manifest, pendingNames);
     tableLeases = await openSchemaTableLeases({
-      tables: pendingMigrationLockTables(
-        manifest,
-        predicted.map(({ name }) => name),
-      ),
+      tables: pendingMigrationLockTables(manifest, pendingNames),
       databaseUrl,
       connection,
       session,
       options: tableLeaseOptions,
     });
-    await takeCorpusSchemaLane(connection, () => {
-      laneHeld = true;
-      clock.laneWaitMs = elapsedMs();
+    await takeCorpusSchemaLane(connection, {
+      onLaneAcquired: () => {
+        laneHeld = true;
+        clock.laneWaitMs = elapsedMs();
+      },
     });
     await tableLeases?.assertHeld();
     const readLedger = async () =>
@@ -1243,14 +1232,19 @@ export const runMigrations = async ({
     emitFailedPhase(timing, clock, elapsedMs());
     throw error;
   } finally {
-    await releaseSchemaResources({
-      connection,
-      session,
-      laneHeld,
-      schemaRunHeld,
-      tableLeases,
-      schemaObserver,
-    });
+    try {
+      if (migrationSessionCanUnlock(laneHeld, session.state)) {
+        await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+      }
+    } finally {
+      await releaseSchemaCoordination({
+        connection,
+        session,
+        schemaRunHeld,
+        tableLeases,
+        schemaObserver,
+      });
+    }
   }
 };
 
