@@ -47,7 +47,7 @@ test.skipIf(!enabled)(
         );
         const migration = await Bun.file(
           new URL(
-            "../../../drizzle/20261029142200_case_law_fallback_identity/migration.sql",
+            "../../../drizzle/20261031041257_case_law_fallback_identity/migration.sql",
             import.meta.url,
           ),
         ).text();
