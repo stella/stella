@@ -28,7 +28,10 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { cn } from "@stll/ui/utils";
 
 import { ACTIVITY_CHANGED_EVENT } from "../activity/activity-types";
-import { ActivitySettingsPane } from "../activity/ActivitySettings";
+import {
+  ActivitySettingsPane,
+  ActivitySettingsSkeleton,
+} from "../activity/ActivitySettings";
 import {
   isSupportedLanguage,
   setPreferredLanguage,
@@ -1053,7 +1056,9 @@ const App = () => {
                     {/* Activity reads nothing until its access is confirmed. */}
                     {activityAvailability === "enabled" ? (
                       <ActivitySettingsPane />
-                    ) : null}
+                    ) : (
+                      <ActivitySettingsSkeleton />
+                    )}
                   </div>
                 </ScrollArea>
               </TabsPanel>
