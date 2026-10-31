@@ -12,6 +12,10 @@ import {
   type MigrateOnlineWorkMode,
 } from "./migrate-online-work-mode";
 import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
+import {
+  ONLINE_MIGRATION_REPAIRS,
+  reportOnlineMigrations,
+} from "./online-migrations";
 import { ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -48,6 +52,45 @@ const indexValidity = async (admin: SQL, names: readonly string[]) => {
 
 // CI owns this isolated PostgreSQL database and applies the committed bundle.
 describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
+  // The suites' database starts empty and is migrated with build_finalized,
+  // so pending work and the work that waits on it are absent here.
+  // timeout: a migrate run over the committed bundle builds online indexes
+  test("startup validates a database build_finalized migrated, leaving pending work pending", async () => {
+    const url = databaseUrl ?? panic("DATABASE_URL is required");
+    await withGatedTestClients(url, async ({ openClient }) => {
+      const { sql: admin } = openClient({ max: 1 });
+      const connection = await admin.reserve();
+      try {
+        expect(
+          await runMigrationsUntilSettled({
+            onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
+            connection,
+            migrationsFolder,
+            databaseUrl: url,
+            ebs: { type: "disabled" },
+          }),
+        ).toMatchObject({ status: "applied" });
+        expect(
+          await reportOnlineMigrations(
+            {
+              reserve: async () => ({
+                execute: async (query, params = []) => {
+                  await connection.unsafe(query, [...params]);
+                },
+                query: async (query, params = []) =>
+                  await connection.unsafe(query, [...params]),
+                release: () => undefined,
+              }),
+            },
+            { repairs: ONLINE_MIGRATION_REPAIRS },
+          ),
+        ).toMatchObject({ type: "validated" });
+      } finally {
+        await connection.release();
+      }
+    });
+  }, 180_000);
+
   // timeout: four migrate runs over the committed bundle build online indexes
   test("every migrate run leaves deploy-blocking indexes valid, and a release's run fails when one cannot be built", async () => {
     expect(deployBlocking).toEqual(expect.arrayContaining(IMPORT_ARBITERS));
