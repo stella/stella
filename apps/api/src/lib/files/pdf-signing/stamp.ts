@@ -30,6 +30,7 @@ import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
 import type { PdfSigningStamp, PdfSigningStampRotation } from "@/api/db/schema";
+import { pdfStrokeColor } from "@/api/lib/files/pdf-color";
 import { STAMP_BRAND_BLUE } from "@/api/lib/files/pdf-signing/stamp-colors";
 import {
   boldStampFonts,
@@ -413,7 +414,7 @@ const drawStampRule = ({
   const lower = Math.min(middle, bottom + width / 2);
   return [
     "q",
-    `${STAMP_BRAND_BLUE} RG`,
+    pdfStrokeColor(STAMP_BRAND_BLUE),
     `${pdfNumber(width)} w`,
     "1 J",
     `${pdfNumber(x)} ${pdfNumber(upper)} m`,

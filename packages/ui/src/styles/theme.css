@@ -1393,3 +1393,29 @@
     display: none;
   }
 }
+
+/* ---- Screen and elevation accents, the same in every palette ----
+ * The tint the sign-in and error screens fade into, and a cool near-black for
+ * the shadows of cards floating over light surfaces. */
+:root {
+  --auth-gradient-end: #cbe1fc;
+  --error-gradient-end: #fbe9e4;
+  --shadow-tint: rgb(23 28 38);
+}
+
+.dark {
+  --auth-gradient-end: #1a3a5c;
+  --error-gradient-end: #261815;
+}
+
+/* A category's tile takes its hue from the category (`--cat-hue`, set inline);
+ * the lightness and chroma are fixed per colour scheme. */
+@utility category-tile {
+  background-color: oklch(0.94 0.045 var(--cat-hue));
+  color: oklch(0.45 0.13 var(--cat-hue));
+
+  @variant dark {
+    background-color: oklch(0.32 0.05 var(--cat-hue));
+    color: oklch(0.85 0.11 var(--cat-hue));
+  }
+}

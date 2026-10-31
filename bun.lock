@@ -83,6 +83,7 @@
         "@stll/api-contract": "workspace:*",
         "@stll/auth-model": "workspace:*",
         "@stll/boe": "workspace:*",
+        "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
         "@stll/catalogue": "workspace:*",
@@ -312,6 +313,7 @@
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
         "@stll/anonymize-wasm": "catalog:",
+        "@stll/brand": "workspace:*",
         "@stll/clipboard": "workspace:*",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
@@ -529,6 +531,7 @@
         "@stll/api-client": "workspace:*",
         "@stll/api-contract": "workspace:*",
         "@stll/auth-model": "workspace:*",
+        "@stll/brand": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/calculations": "workspace:*",
         "@stll/catalogue": "workspace:*",
@@ -815,6 +818,17 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "fast-check": "catalog:",
+      },
+    },
+    "packages/brand": {
+      "name": "@stll/brand",
+      "version": "0.0.0",
+      "dependencies": {
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/business-registries": {
@@ -3270,6 +3284,8 @@
     "@stll/auth-model": ["@stll/auth-model@workspace:packages/auth-model"],
 
     "@stll/boe": ["@stll/boe@workspace:packages/boe"],
+
+    "@stll/brand": ["@stll/brand@workspace:packages/brand"],
 
     "@stll/business-registries": ["@stll/business-registries@workspace:packages/business-registries"],
 

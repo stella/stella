@@ -10,6 +10,7 @@ import { Section } from "../components/section";
 import { Text } from "../components/text";
 import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
+import { brand } from "./_shared";
 
 type Props = {
   device: string;
@@ -65,22 +66,21 @@ export const Email = ({
 const styles = {
   body: {
     margin: "0",
-    backgroundColor: "#f6f9fc",
+    backgroundColor: brand.backgroundPage,
     padding: "24px 0",
-    fontFamily:
-      '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    fontFamily: brand.fontFamily,
   },
   container: {
     margin: "0 auto",
     maxWidth: "520px",
     borderRadius: "12px",
-    backgroundColor: "#ffffff",
+    backgroundColor: brand.backgroundCard,
     padding: "24px",
-    border: "1px solid #e5e7eb",
+    border: `1px solid ${brand.border}`,
   },
   heading: {
     margin: "0 0 12px",
-    color: "#111827",
+    color: brand.foreground,
     fontSize: "24px",
     lineHeight: "32px",
     fontWeight: "700",
@@ -88,7 +88,7 @@ const styles = {
   },
   text: {
     margin: "0 0 16px",
-    color: "#374151",
+    color: brand.textPrimary,
     fontSize: "16px",
     lineHeight: "24px",
     textAlign: "center",
@@ -96,12 +96,12 @@ const styles = {
   detailsSection: {
     marginBottom: "16px",
     borderRadius: "10px",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: brand.backgroundCodeBlock,
     padding: "16px",
   },
   detailRow: {
     margin: "0 0 4px",
-    color: "#374151",
+    color: brand.textPrimary,
     fontSize: "14px",
     lineHeight: "22px",
   },
@@ -110,9 +110,9 @@ const styles = {
     textAlign: "center" as const,
   },
   button: {
-    backgroundColor: "#111827",
+    backgroundColor: brand.foreground,
     borderRadius: "8px",
-    color: "#ffffff",
+    color: brand.foregroundOnAccent,
     fontSize: "16px",
     fontWeight: "600",
     padding: "12px 24px",
@@ -120,11 +120,11 @@ const styles = {
   },
   hr: {
     margin: "0 0 16px",
-    borderColor: "#e5e7eb",
+    borderColor: brand.border,
   },
   footer: {
     margin: "0",
-    color: "#6b7280",
+    color: brand.textMuted,
     fontSize: "13px",
     lineHeight: "20px",
     textAlign: "center",

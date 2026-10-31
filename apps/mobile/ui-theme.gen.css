@@ -12,6 +12,7 @@
     @variant light {
       --color-accent: #0000000a;
       --color-accent-foreground: #262626;
+      --color-auth-gradient-end: #cbe1fc;
       --color-background: #fff;
       --color-border: #0000001a;
       --color-card: #fff;
@@ -107,6 +108,7 @@
     @variant dark {
       --color-accent: #ffffff0a;
       --color-accent-foreground: #f5f5f5;
+      --color-auth-gradient-end: #1a3a5c;
       --color-background: #161616;
       --color-border: #ffffff14;
       --color-card: #1b1b1b;

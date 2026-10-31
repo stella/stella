@@ -109,13 +109,13 @@ const TemplateMonogram = ({
     );
   }
   // CSSProperties has no index signature for CSS custom properties, so widen
-  // the binding rather than cast; --cat-hue feeds the oklch() classes.
+  // the binding rather than cast; --cat-hue feeds the `category-tile` utility.
   const style: CSSProperties & { "--cat-hue": string } = {
     "--cat-hue": String(categoryHue(categoryId)),
   };
   return (
     <div
-      className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-[oklch(0.94_0.045_var(--cat-hue))] text-sm font-semibold text-[oklch(0.45_0.13_var(--cat-hue))] dark:bg-[oklch(0.32_0.05_var(--cat-hue))] dark:text-[oklch(0.85_0.11_var(--cat-hue))]"
+      className="category-tile flex size-9 shrink-0 items-center justify-center rounded-lg text-sm font-semibold"
       style={style}
     >
       {initial}

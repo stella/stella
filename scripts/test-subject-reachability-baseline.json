@@ -81,6 +81,5 @@
   ],
   "scripts/check-cli-contract-changeset.test.ts": [
     "local-export-collision:runCliContractGuard"
-  ],
-  "scripts/stylelint.test.ts": ["no-classified-reachability"]
+  ]
 }

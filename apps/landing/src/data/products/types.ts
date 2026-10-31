@@ -81,10 +81,10 @@ export type FrameVariant = "wash" | "bloom" | "ripple";
 // Accent hues reused from scenes and tokens that already exist in the landing;
 // no invented colors. Keyed by pillar mood, applied per product.
 export const frameAccents = {
-  // Agent scene chip color (AGENT_ACCENT in CliMcpPreview).
-  ember: "#d97757",
-  // Teams companion window accent (--teams-accent in CliMcpPreview).
-  iris: "#6264a7",
+  // Agent scene chip color (AGENT_ACCENT in CliMcpPreview; global.css).
+  ember: "var(--accent-ember)",
+  // Teams companion window accent (--teams-accent in CliMcpPreview; global.css).
+  iris: "var(--accent-iris)",
   // Terminal accent token (global.css).
   sky: "var(--terminal-accent)",
   // Theme-switched hero/auth gradient endpoint token (global.css).
