@@ -1,21 +1,29 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { Database, SQLiteError } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 const LOCK_POLL_MS = 100;
 
-type GenerationLockOptions = {
+class GenerationLockTimeoutError extends TaggedError(
+  "GenerationLockTimeoutError",
+)<{
+  message: string;
+}> {}
+
+type GenerationLockOptions<T> = {
   lockPath: string;
-  run: () => void | Promise<void>;
+  run: () => T | Promise<T>;
+  waitTimeoutMs?: number;
 };
 
 // SQLite's process-owned write lock releases even on SIGKILL. Keep the file:
 // unlinking it would let another caller lock a different inode at the same path.
-export const withGenerationLock = async ({
+export const withGenerationLock = async <T>({
   lockPath,
   run,
-}: GenerationLockOptions) => {
+  waitTimeoutMs = Number.POSITIVE_INFINITY,
+}: GenerationLockOptions<T>) => {
   const opened = Result.try(() => {
     mkdirSync(path.dirname(lockPath), { recursive: true });
     return new Database(lockPath, { create: true });
@@ -24,6 +32,7 @@ export const withGenerationLock = async ({
     return opened;
   }
   const database = opened.value;
+  const deadline = performance.now() + waitTimeoutMs;
   try {
     while (true) {
       const acquired = Result.try(() => database.run("BEGIN IMMEDIATE"));
@@ -34,11 +43,16 @@ export const withGenerationLock = async ({
       if (!(cause instanceof SQLiteError) || cause.code !== "SQLITE_BUSY") {
         return acquired;
       }
+      if (performance.now() >= deadline) {
+        return Result.err(
+          new GenerationLockTimeoutError({
+            message: "Timed out waiting for the generation lock.",
+          }),
+        );
+      }
       await Bun.sleep(LOCK_POLL_MS);
     }
-    return await Result.tryPromise(async () => {
-      await run();
-    });
+    return await Result.tryPromise(async () => await run());
   } finally {
     database.close(true);
   }
