@@ -17,6 +17,7 @@ import {
   usesDefaultCacheScope,
   workflowCacheProblems,
 } from "./workflow-cache-policy.ts";
+import { workflowOutageSends } from "./workflow-outage";
 
 // A workflow_run workflow runs in the default branch's context, with its
 // secrets and cache scope, for any completed run of a workflow with the
@@ -498,100 +499,155 @@ describe("workflow_run trust", () => {
   });
 
   test("release cancellations preserve outage suppression until recovery", () => {
-    const workflow = allWorkflows().find(
-      ({ file }) => file === "scheduled-run-alerts.yml",
-    )?.workflow;
-    if (
-      !isRecord(workflow) ||
-      !isRecord(workflow["jobs"]) ||
-      !isRecord(workflow["jobs"]["notify"])
-    ) {
-      expect.unreachable("alerts require notify");
+    for (const releaseChain of [true, false]) {
+      const source = `${releaseChain ? RELEASE_CHAIN_MARKER : ""}\nname: Example\njobs: {}`;
+      for (const { conclusions, releaseSend, nightlySend } of [
+        { conclusions: ["success"], releaseSend: true, nightlySend: true },
+        { conclusions: ["failure"], releaseSend: false, nightlySend: false },
+        {
+          conclusions: ["success", "cancelled"],
+          releaseSend: false,
+          nightlySend: true,
+        },
+        {
+          conclusions: ["failure", "cancelled"],
+          releaseSend: false,
+          nightlySend: false,
+        },
+        {
+          conclusions: ["failure", "success"],
+          releaseSend: true,
+          nightlySend: true,
+        },
+        {
+          conclusions: ["failure", "skipped"],
+          releaseSend: false,
+          nightlySend: false,
+        },
+      ]) {
+        const current = {
+          run_number: 10,
+          event: "push",
+          head_branch: "main",
+          display_title: "Example",
+          conclusion: "failure",
+        };
+        const history = conclusions.map((conclusion, index) => ({
+          ...current,
+          run_number: index + 1,
+          conclusion,
+        }));
+        expect(
+          workflowOutageSends({ source, current, history }),
+          conclusions.join(", "),
+        ).toBe(releaseChain ? releaseSend : nightlySend);
+      }
     }
-    const steps = workflow["jobs"]["notify"]["steps"];
-    if (!Array.isArray(steps)) {
-      expect.unreachable("alerts require steps");
-    }
-    const outage = steps.find(
-      (step: unknown) => isRecord(step) && step["id"] === "outage",
-    );
-    if (!isRecord(outage) || typeof outage["run"] !== "string") {
-      expect.unreachable("alerts require outage script");
-    }
-    const root = mkdtempSync(path.join(tmpdir(), "release-outage-"));
-    try {
-      mkdirSync(path.join(root, ".gh-retry/.github/workflows"), {
-        recursive: true,
-      });
-      writeFileSync(
-        path.join(root, ".gh-retry/.github/workflows/release.yml"),
-        RELEASE_CHAIN_MARKER,
-      );
-      writeFileSync(
-        path.join(root, ".gh-retry/.github/workflows/nightly-test.yml"),
-        "name: Nightly Full Test",
-      );
-      writeFileSync(path.join(root, "gh-retry.sh"), 'cat "$HISTORY"\n');
-      for (const file of ["release.yml", "nightly-test.yml"]) {
-        for (const { conclusions, releaseSend, nightlySend } of [
-          { conclusions: ["success"], releaseSend: true, nightlySend: true },
-          { conclusions: ["failure"], releaseSend: false, nightlySend: false },
-          {
-            conclusions: ["success", "cancelled"],
-            releaseSend: false,
-            nightlySend: true,
-          },
-          {
-            conclusions: ["failure", "cancelled"],
-            releaseSend: false,
-            nightlySend: false,
-          },
-          {
-            conclusions: ["failure", "success"],
-            releaseSend: true,
-            nightlySend: true,
-          },
-          {
-            conclusions: ["failure", "skipped"],
-            releaseSend: false,
-            nightlySend: false,
-          },
-        ]) {
-          writeFileSync(
-            path.join(root, "history.json"),
-            JSON.stringify({
-              workflow_runs: conclusions.map((conclusion, index) => ({
-                run_number: index + 1,
-                conclusion,
-              })),
-            }),
-          );
-          const output = path.join(root, "output");
-          writeFileSync(output, "");
-          const result = Bun.spawnSync(["bash", "-c", outage["run"]], {
-            cwd: root,
-            env: {
-              ...process.env,
-              GH_RETRY_SCRIPT: path.join(root, "gh-retry.sh"),
-              HISTORY: path.join(root, "history.json"),
-              GITHUB_OUTPUT: output,
-              GITHUB_REPOSITORY: "owner/repo",
-              RUN_NUMBER: "10",
-              RUN_BRANCH: "main",
-              RUN_EVENT: "push",
-              RUN_PATH: `.github/workflows/${file}`,
-              WORKFLOW_ID: "1",
-            },
-          });
-          expect(result.exitCode, result.stderr.toString()).toBe(0);
+  });
+
+  test("superseded release cancellations neither alert nor change the outage", () => {
+    for (const { file, source, workflow } of allWorkflows().filter(
+      ({ source: workflowSource }) =>
+        workflowSource.includes(RELEASE_CHAIN_MARKER),
+    )) {
+      if (!isRecord(workflow)) {
+        expect.unreachable("release workflows require an object");
+      }
+      const jobs = workflow["jobs"];
+      if (!isRecord(jobs)) {
+        expect.unreachable("release workflows require jobs");
+      }
+      const hasConcurrency =
+        workflow["concurrency"] !== undefined ||
+        Object.values(jobs).some(
+          (job) => isRecord(job) && job["concurrency"] !== undefined,
+        );
+      if (!hasConcurrency) {
+        continue;
+      }
+      for (const event of triggers(workflowOn(file, workflow))) {
+        const runName = workflow["run-name"];
+        const title =
+          typeof runName === "string"
+            ? runName.replace(/\$\{\{[\s\S]*?\}\}/gu, "v1.2.3")
+            : "Release";
+        const cancelled = {
+          run_number: 2,
+          event,
+          head_branch: "main",
+          display_title: title,
+          conclusion: "cancelled",
+        };
+        const newer = { ...cancelled, run_number: 3, conclusion: null };
+        expect(
+          workflowOutageSends({ source, current: cancelled, history: [] }),
+          `${file}/${event}: unsuperseded`,
+        ).toBe(true);
+        expect(
+          workflowOutageSends({ source, current: cancelled, history: [newer] }),
+          `${file}/${event}: superseded`,
+        ).toBe(false);
+        for (const conclusion of ["success", "failure"]) {
+          const previous = { ...cancelled, run_number: 1, conclusion };
+          const current = { ...newer, run_number: 4, conclusion: "failure" };
           expect(
-            readFileSync(output, "utf-8").trim(),
-            `${file}: ${conclusions.join(", ")}`,
-          ).toBe(`send=${file === "release.yml" ? releaseSend : nightlySend}`);
+            workflowOutageSends({
+              source,
+              current,
+              history: [previous, cancelled, newer],
+            }),
+            `${file}/${event}/${conclusion}`,
+          ).toBe(conclusion === "success");
         }
       }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("release concurrency separates tag modes, branches and release titles", () => {
+    for (const { file, source } of allWorkflows().filter(
+      ({ source: workflowSource }) =>
+        workflowSource.includes(RELEASE_CHAIN_MARKER),
+    )) {
+      const current = {
+        run_number: 2,
+        event: "workflow_dispatch",
+        head_branch: "main",
+        display_title: "Release",
+        conclusion: "cancelled",
+      };
+      if (file === "release-tag.yml") {
+        expect(
+          workflowOutageSends({
+            source,
+            current,
+            history: [{ ...current, run_number: 3, event: "workflow_run" }],
+          }),
+        ).toBe(true);
+      }
+      if (file === "publish-npm.yml") {
+        expect(
+          workflowOutageSends({
+            source,
+            current,
+            history: [{ ...current, run_number: 3, head_branch: "other" }],
+          }),
+        ).toBe(true);
+      }
+      if (file === "release-desktop.yml" || file === "release-health.yml") {
+        const prefix =
+          file === "release-desktop.yml"
+            ? "Desktop Release Artifacts "
+            : "Release health ";
+        expect(
+          workflowOutageSends({
+            source,
+            current: { ...current, display_title: `${prefix}v1.2.3` },
+            history: [
+              { ...current, run_number: 3, display_title: `${prefix}v1.2.4` },
+            ],
+          }),
+        ).toBe(true);
+      }
     }
   });
 

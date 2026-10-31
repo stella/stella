@@ -98,8 +98,11 @@ jobs:
           path: .gh-retry
           persist-credentials: false
           sparse-checkout: |
+            package.json
             scripts/gh-retry.sh
             scripts/main-heavy-alert-kind.mjs
+            scripts/workflow-outage.ts
+            scripts/github-expression.ts
             .github/workflows
           sparse-checkout-cone-mode: false
 
@@ -108,39 +111,26 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
-      # A recovery resets the outage. Release cancellations count as failures;
-      # other cancellations, skipped runs and unfinished newer runs do not reset it.
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .gh-retry/package.json
+          no-cache: true
+
+      # Superseded cancellations neither start nor recover an outage.
       - name: Detect a continuing outage
         id: outage
+        timeout-minutes: 2
         if: github.event_name == 'workflow_run'
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
-          RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
-          RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
-          RUN_EVENT: ${{ github.event.workflow_run.event }}
-          RUN_PATH: ${{ github.event.workflow_run.path }}
         run: |
           set -euo pipefail
-          test -f ".gh-retry/$RUN_PATH"
-          release_chain=false
-          if grep -q '^[#] release-chain-alert$' ".gh-retry/$RUN_PATH"; then
-            release_chain=true
-          fi
-          previous=$(bash "$GH_RETRY_SCRIPT" api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
-            -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
-            jq -r --argjson number "$RUN_NUMBER" --argjson release_chain "$release_chain" '
-              [.workflow_runs[]
-                | select(.run_number < $number)
-                | select((.conclusion != "cancelled" or $release_chain) and .conclusion != "skipped")]
-              | sort_by(.run_number) | last | .conclusion // "none"')
-          case "$previous" in
-            failure|startup_failure|timed_out|cancelled)
-              echo "send=false" >> "$GITHUB_OUTPUT"
-              echo "::notice::Suppressing repeated workflow failure during a continuing outage."
-              ;;
-            *) echo "send=true" >> "$GITHUB_OUTPUT" ;;
-          esac
+          history=$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp --method GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" -f per_page=100)
+          bun .gh-retry/scripts/workflow-outage.ts "$GITHUB_EVENT_PATH" .gh-retry \
+            <<< "$history" >> "$GITHUB_OUTPUT"
 
       - name: Classify main-heavy infrastructure failures
         id: classification

@@ -83,9 +83,18 @@ describe("API deployment health receipt", () => {
       const workflowRuns = history.map((conclusion, index) => ({
         run_number: index + 1,
         conclusion,
+        event: "schedule",
+        head_branch: "main",
+        display_title: "Nightly Full Test",
       }));
       // A later recovery cannot reset the outage for an older run's alert.
-      workflowRuns.push({ run_number: 999, conclusion: "success" });
+      workflowRuns.push({
+        run_number: 999,
+        conclusion: "success",
+        event: "schedule",
+        head_branch: "main",
+        display_title: "Nightly Full Test",
+      });
       const outputDir = mkdtempSync(
         path.join(tmpdir(), "scheduled-alert-test-"),
       );
@@ -119,6 +128,7 @@ describe("API deployment health receipt", () => {
               path: ".github/workflows/nightly-test.yml",
               event: "schedule",
               head_branch: "main",
+              display_title: "Nightly Full Test",
               conclusion: "failure",
             },
           }),
@@ -141,9 +151,11 @@ describe("API deployment health receipt", () => {
               RUN_BRANCH: "main",
               RUN_EVENT: "schedule",
               WORKFLOW_ID: "1",
-              TEST_HISTORY: JSON.stringify({
-                workflow_runs: workflowRuns.toReversed(),
-              }),
+              TEST_HISTORY: JSON.stringify([
+                {
+                  workflow_runs: workflowRuns.toReversed(),
+                },
+              ]),
             },
           },
         );
