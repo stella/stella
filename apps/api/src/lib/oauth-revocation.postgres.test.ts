@@ -1,5 +1,12 @@
 import { panic } from "better-result";
-import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterAll,
+  beforeAll,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -26,6 +33,8 @@ import {
 } from "@/api/tests/helpers/oauth-grant";
 import { serveRoutesForTest } from "@/api/tests/helpers/serve-routes";
 
+import rootManifest from "../../../../package.json" with { type: "json" };
+
 const routeServer = serveRoutesForTest(meRoute);
 afterAll(async () => {
   await routeServer.stop();
@@ -44,12 +53,20 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
   });
 } else {
   const auth = getAuth();
+  const context = await auth.$context;
+  const provider =
+    context.getPlugin("oauth-provider") ?? panic("OAuth provider required");
 
   const cleanup: (() => Promise<unknown>)[] = [];
   afterAll(async () => {
     for (const remove of cleanup.toReversed()) {
       await remove();
     }
+  });
+  beforeAll(() => {
+    expect(provider.version).toBe(
+      rootManifest.catalog["@better-auth/oauth-provider"],
+    );
   });
   const fixture = async () => {
     const browser = await signInHuman(

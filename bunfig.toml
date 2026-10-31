@@ -52,6 +52,7 @@ minimumReleaseAgeExcludes = [
   "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/mcp-kit", # quarantine-excluded-since: 2026-09-30T00:00:00.000Z
   "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/folio-fonts", # quarantine-excluded-since: 2026-10-30T04:55:17.971Z
   "@stll/folio-react", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/fuzzy-search", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z
   "@stll/fuzzy-search-darwin-arm64", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z

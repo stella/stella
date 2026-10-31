@@ -15,15 +15,15 @@
   },
   "dependencies": {
     "@hocuspocus/extension-redis": "4.7.1",
-    "@hocuspocus/server": "^4.6.0",
+    "@hocuspocus/server": "^4.7.1",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
-    "@stll/time": "0.4.2",
+    "@stll/time": "0.4.1",
     "@t3-oss/env-core": "catalog:",
     "better-result": "catalog:",
-    "crossws": "^0.4.16",
+    "crossws": "^0.4.15",
     "ioredis": "~6.0.0",
     "valibot": "catalog:",
     "yjs": "^13.6.33"

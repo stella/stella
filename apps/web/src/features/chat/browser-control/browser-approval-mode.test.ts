@@ -1,7 +1,10 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
-import type { BrowserControlCommand } from "@stll/api-contract/browser-control";
+import {
+  BROWSER_CONTROL_TARGET_METADATA,
+  type BrowserControlCommand,
+} from "@stll/api-contract/browser-control";
 
 import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
 import {
@@ -23,7 +26,13 @@ const read = { action: "snapshot" } satisfies BrowserControlCommand;
 const act = {
   action: "click",
   page: { revision: "revision-1", url: "https://example.com/" },
-  target: { name: "Submit", ref: "e:0:0.1", role: "button" },
+  target: {
+    context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+    name: "Submit",
+    ref: "e:0:0.1",
+    role: "button",
+  },
 } satisfies BrowserControlCommand;
 
 const STORAGE_KEY = userStorageKey("stella.chat.browserApprovalMode");

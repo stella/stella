@@ -98,6 +98,14 @@
     "./us-code-citations": {
       "types": "./src/us-code-citations.ts",
       "import": "./src/us-code-citations.ts"
+    },
+    "./link-recall-reference": {
+      "types": "./src/link-recall-reference.ts",
+      "import": "./src/link-recall-reference.ts"
+    },
+    "./link-recall": {
+      "types": "./src/link-recall.ts",
+      "import": "./src/link-recall.ts"
     }
   },
   "scripts": {

@@ -1,4 +1,5 @@
 name: Release health
+run-name: Release health ${{ inputs.release_ref }}
 
 # Dispatched by release.yml once production serves a stable release: wait out
 # the post-release window, compare the release's failure fingerprints with the
@@ -28,8 +29,10 @@ concurrency:
 jobs:
   window:
     name: Post-release window
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    environment: release-app
     permissions:
       contents: write # record the verdict on the release
     env:
@@ -89,6 +92,7 @@ jobs:
           {
             echo "window_end=$(bun scripts/release-health.ts window-end --published-at "$published_at")"
             echo "previous=$(jq -r '.tag // empty' <<<"$previous")"
+            echo "previous_published_at=$(jq -r '.publishedAt // empty' <<<"$previous")"
           } >> "$GITHUB_OUTPUT"
 
       - name: Wait out the post-release window
@@ -114,6 +118,7 @@ jobs:
           POSTHOG_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
           POSTHOG_API_HOST: https://eu.posthog.com
           PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
           WINDOW_END: ${{ steps.release.outputs.window_end }}
         run: |
           set -euo pipefail
@@ -124,6 +129,7 @@ jobs:
           bun scripts/release-health.ts query \
             --release "$RELEASE_REF" \
             --previous "$PREVIOUS_REF" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
             --until "$WINDOW_END" > "$RUNNER_TEMP/query.json"
           bash scripts/retry.sh curl --fail -sS --max-time 60 \
             -X POST \
@@ -137,7 +143,9 @@ jobs:
         id: evaluate
         env:
           PREVIOUS_REF: ${{ steps.release.outputs.previous }}
+          PREVIOUS_PUBLISHED_AT: ${{ steps.release.outputs.previous_published_at }}
           QUERY_OUTCOME: ${{ steps.query.outcome }}
+          WINDOW_END: ${{ steps.release.outputs.window_end }}
         run: |
           set -euo pipefail
           result_args=()
@@ -147,6 +155,9 @@ jobs:
           bun scripts/release-health.ts evaluate \
             --release "$RELEASE_REF" \
             --previous "$PREVIOUS_REF" \
+            --until "$WINDOW_END" \
+            --previous-published-at "$PREVIOUS_PUBLISHED_AT" \
+            --record "$RUNNER_TEMP/private-release-health.json" \
             "${result_args[@]}" \
             --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --verdict "$RUNNER_TEMP/release-health.json" \
@@ -158,6 +169,27 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash "$GH_RETRY_SCRIPT" release upload "$RELEASE_REF" "$RUNNER_TEMP/release-health.json" --clobber
+
+      - name: Mint private record token
+        id: record-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ vars.STAGING_DEPLOY_REPOSITORY }}
+          permission-contents: write
+
+      - name: Persist private release record
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ steps.record-token.outputs.token }}
+          RECORD_STORE: ${{ github.repository_owner }}/${{ vars.STAGING_DEPLOY_REPOSITORY }}
+        run: |
+          bun scripts/release-health.ts record \
+            --release "$RELEASE_REF" \
+            --store "$RECORD_STORE" \
+            --record "$RUNNER_TEMP/private-release-health.json"
 
       - name: Fail a release that is not healthy
         if: steps.evaluate.outputs.verdict != 'healthy'

@@ -157,80 +157,6 @@ jobs:
             fi
           fi
 
-      # The tag takes a merge-group receipt in place of main/heavy and
-      # main/pr-depth only when the receipt covers the release history. This
-      # push already runs heavy; pr-depth is dispatched below when it does not.
-      - name: Check the version commit's merge-group receipt
-        timeout-minutes: 5
-        id: receipt
-        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
-        working-directory: .release-proof
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          if bash scripts/check-release-receipt-coverage.sh "$GITHUB_REPOSITORY" "$GITHUB_SHA"; then
-            echo "covered=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "covered=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Dispatch release PR-depth checks
-        if: ${{ (github.event_name == 'workflow_dispatch' && inputs.sha != '' && inputs.release_candidate == true && steps.reuse.outputs.run != 'false') || steps.receipt.outputs.covered == 'false' }}
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          SHA: ${{ inputs.sha || github.sha }}
-        with:
-          retries: 2
-          script: |
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: "main-pr-depth.yml",
-              ref: "main",
-              inputs: { sha: process.env.SHA },
-            });
-
-      - name: Dispatch version commit staging
-        if: "${{ github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: release v') }}"
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 2
-          script: |
-            const { data: pulls } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-              ...context.repo,
-              commit_sha: context.sha,
-              per_page: 100,
-            });
-            const releasePull = pulls.find(pull => pull.merged_at
-              && pull.merge_commit_sha === context.sha
-              && pull.title.startsWith("chore: release v")
-              && pull.head.repo?.full_name === `${context.repo.owner}/${context.repo.repo}`);
-            const headSha = releasePull?.head.sha;
-            let reuse = false;
-            if (headSha) {
-              const [{ data: head }, { data: version }, { data: statuses }] = await Promise.all([
-                github.rest.git.getCommit({ ...context.repo, commit_sha: headSha }),
-                github.rest.git.getCommit({ ...context.repo, commit_sha: context.sha }),
-                github.rest.repos.listCommitStatusesForRef({
-                  ...context.repo,
-                  ref: headSha,
-                  per_page: 100,
-                }),
-              ]);
-              const staging = statuses.find(status => status.context === "staging/verified");
-              reuse = head.tree.sha === version.tree.sha
-                && staging?.creator?.login === "github-actions[bot]"
-                && staging.state === "success";
-            }
-            await github.rest.actions.createWorkflowDispatch({
-              ...context.repo,
-              workflow_id: "deploy-staging.yml",
-              ref: "main",
-              inputs: reuse
-                ? { proof_sha: headSha, sha: context.sha }
-                : { release_candidate: "true", sha: context.sha },
-            });
-
       - name: Select untested heavy SHA
         if: steps.reuse.outputs.run != 'false'
         id: selection
@@ -304,8 +230,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
+          proof_args=()
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            proof_args+=(--allow-pr-head)
+          fi
           {
-            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
+            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" "${proof_args[@]}" "$GITHUB_REPOSITORY" "$SHA" "$SHA"
             echo "sha=$SHA"
             echo "task_cache_producer=validated-main"
           } >> "$GITHUB_OUTPUT"
@@ -352,6 +282,7 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/main-heavy-classification.mjs
+            scripts/main-heavy-infrastructure-steps.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -379,7 +310,8 @@ jobs:
             let failures;
             try {
               failures = await collectMainHeavyFailures({ github, context,
-                sha: process.env.SHA, results, warn: message => core.warning(message) });
+                sha: process.env.SHA,
+                results, warn: message => core.warning(message) });
             } catch {
               core.warning('Job evidence is unavailable; failures remain CODE.');
               failures = Object.entries(results).filter(([, { result }]) => result !== 'success')
@@ -387,6 +319,7 @@ jobs:
             }
             const code = failures.filter(({ type }) => type === 'CODE').length;
             const infra = failures.filter(({ type }) => type === 'INFRA').length;
+            core.setOutput('code', code);
             core.setOutput('description', `Main heavy suites: failure (CODE ${code}, INFRA ${infra})`);
             await core.summary.addHeading('Main heavy failures').addTable([
               [{ data: 'Job', header: true }, { data: 'Classification', header: true },
@@ -402,11 +335,15 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           DESCRIPTION: ${{ steps.classification.outputs.description }}
+          CODE_FAILURES: ${{ steps.classification.outputs.code }}
           PROOF_MAIN_BASE: ${{ needs.validate.outputs.main-base }}
         run: |
           state=failure
           if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
             state=success
+          fi
+          if [[ "${CODE_FAILURES:-1}" == 0 ]]; then
+            state=error
           fi
           if [[ -n "$PROOF_MAIN_BASE" ]]; then
             DESCRIPTION="${DESCRIPTION:-Main heavy suites: $state}; main=$PROOF_MAIN_BASE"
@@ -416,4 +353,4 @@ jobs:
               -f context=main/heavy -f state="$state" \
               -f description="${DESCRIPTION:-Main heavy suites: $state}" -f target_url="$RUN_URL"
           fi
-          [[ "$state" == success ]]
+          [[ "$state" == success || "$state" == error ]]

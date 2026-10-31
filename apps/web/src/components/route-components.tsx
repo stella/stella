@@ -36,7 +36,6 @@ import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-co
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
-import { recoverFromStaleDeploymentLoad } from "@/lib/preload-error-recovery";
 
 // Lazy so the form stack is fetched only when someone reports the error.
 const FeedbackDialog = lazy(async () => {
@@ -300,7 +299,6 @@ const UnexpectedRouteError = ({
       recovery: recovery.type,
       reference,
     });
-    recoverFromStaleDeploymentLoad(routeError);
   });
 
   const handleRecovery = () => {

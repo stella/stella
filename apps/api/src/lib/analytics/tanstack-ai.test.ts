@@ -8,6 +8,7 @@ import { EventType } from "@tanstack/ai";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { createTestState } from "@stll/test-state";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -17,7 +18,6 @@ import {
 } from "@/api/lib/chat/tanstack-chat-runtime";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { SERVER_ANALYTICS_EVENTS } from "./server-analytics";

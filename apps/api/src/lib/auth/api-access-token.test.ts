@@ -169,6 +169,41 @@ describe("which routes an API access token opens", () => {
     ).toEqual({ admitted: true });
   });
 
+  test("an upload opens at its domain scope, its folder steps never", () => {
+    for (const route of [
+      "/v1/uploads/:workspaceId/presign",
+      "/v1/uploads/:workspaceId/:uploadId/finalize",
+      "/v1/uploads/:workspaceId/:uploadId/abort",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:read", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write"],
+        }),
+      ).toEqual({ admitted: true });
+    }
+    for (const route of [
+      "/v1/uploads/:workspaceId/entity-create/preflight",
+      "/v1/uploads/:workspaceId/entity-create/tree",
+    ]) {
+      expect(
+        admitApiAccessTokenRoute({
+          method: "POST",
+          route,
+          scopes: ["stella:matters_write", "stella:documents_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "route" });
+    }
+  });
+
   test("a request no route matched is refused", () => {
     expect(
       admitApiAccessTokenRoute({
@@ -198,6 +233,9 @@ describe("which routes an API access token opens", () => {
             "/v1/entities/:workspaceId/upload",
             "/v1/entities/:workspaceId/folio-collab-rooms/publish-version",
             "/v1/files/:workspaceId/stamped/:fieldId",
+            "/v1/uploads/:workspaceId/entity-create/preflight",
+            "/v1/uploads/:workspaceId/entity-create/tree",
+            "/v1/properties/:workspaceId/property/:propertyId",
             "/v1/me/oauth-connections/:consentId",
             "/v1/contacts",
           ),

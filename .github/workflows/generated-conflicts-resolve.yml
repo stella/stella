@@ -134,4 +134,5 @@ jobs:
           name: generated-conflicts
           path: ${{ runner.temp }}/resolution
           if-no-files-found: error
+          include-hidden-files: true
           retention-days: 1

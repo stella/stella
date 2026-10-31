@@ -26,11 +26,11 @@ import {
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import type { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { installSkill } from "@/api/lib/skills/install";
 import {
   createSkillPackageFetchContext,

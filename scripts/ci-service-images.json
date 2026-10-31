@@ -1,30 +1,30 @@
 [
   {
-    "source": "docker.io/library/postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f",
+    "source": "docker.io/library/postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336",
     "name": "postgres"
   },
   {
-    "source": "docker.io/library/redis:8.10.3@sha256:3466b24cc1232a254fc4753963cbe93392a30b3d24c2cad445fbc72c80b654a0",
+    "source": "docker.io/library/redis:8@sha256:298e5b3bc566bade82f46ad5511777a4a07a294097ce16ada2f6a42be5239df5",
     "name": "redis"
   },
   {
-    "source": "docker.io/valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b",
+    "source": "docker.io/valkey/valkey:9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11",
     "name": "valkey"
   },
   {
-    "source": "docker.io/quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd",
+    "source": "docker.io/quickwit/quickwit:0.9.2@sha256:1c249c579063830be4666523c4d95289683f98c5a584de8e67a8be3361fe1f72",
     "name": "quickwit"
   },
   {
-    "source": "docker.io/rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2",
+    "source": "docker.io/rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b",
     "name": "rustfs"
   },
   {
-    "source": "docker.io/amazon/aws-cli:2.39.0@sha256:6014c77975a4ae237395924cc821333f20bf87c91964a45dd4ed5f3b13b424f5",
+    "source": "docker.io/amazon/aws-cli:2.38.2@sha256:5d39fd52f236ed01c5c25fba66c9aebcfc6cbb88e7bb1b727c5fe1f150540597",
     "name": "aws-cli"
   },
   {
-    "source": "docker.io/gotenberg/gotenberg:8.39.0@sha256:13672f317b443c793e972b1bd2155ec62a3e7b6891b411e8196442cc053ee5f5",
+    "source": "docker.io/gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b",
     "name": "gotenberg"
   },
   {
@@ -32,19 +32,19 @@
     "name": "bun"
   },
   {
-    "source": "docker.io/library/node:26.12.1-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0",
+    "source": "docker.io/library/node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1",
     "name": "node"
   },
   {
-    "source": "mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea",
+    "source": "mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
     "name": "playwright"
   },
   {
-    "source": "docker.io/library/node:26.12.1-bookworm-slim@sha256:88e480776c6149ff1d098cd304f44bf18057fb5d284a3329b78162d29821e28c",
-    "name": "node-26-bookworm"
+    "source": "docker.io/library/node:24-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20",
+    "name": "node-24-bookworm"
   },
   {
-    "source": "docker.io/library/rust:1.99.1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8",
+    "source": "docker.io/library/rust:1.99.0-bookworm@sha256:114c7a4425406451c2866b6aafe69fe29b1b298832db1277d411ac73c82d04d6",
     "name": "rust"
   }
 ]

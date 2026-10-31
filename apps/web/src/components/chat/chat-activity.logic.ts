@@ -1,3 +1,5 @@
+import { isOwnKey } from "@stll/api-contract/own-key";
+
 import type {
   ChatMessage,
   ChatUIPart,
@@ -18,6 +20,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   boe_search_legislation: "research",
   borme_get_summary: "research",
   business_registry_lookup: "research",
+  connect_connector: "user-input",
   counterparty_check: "research",
   request_secret: "user-input",
   review_folder_consistency: "research",
@@ -41,6 +44,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   get_document_outline: "research",
   infosoud_lookup_case: "research",
   link_matter_contact: "mutation",
+  list_connectable_connectors: "research",
   list_stories: "research",
   list_templates: "research",
   "load-skill": "research",
@@ -111,7 +115,7 @@ const CHAT_TOOL_ACTIVITY_CATEGORIES = {
 const isCategorizedBuiltInChatToolName = (
   toolName: string,
 ): toolName is keyof typeof CHAT_TOOL_ACTIVITY_CATEGORIES =>
-  toolName in CHAT_TOOL_ACTIVITY_CATEGORIES;
+  isOwnKey(CHAT_TOOL_ACTIVITY_CATEGORIES, toolName);
 
 const EXTERNAL_ARTIFACT_OPERATION_PATTERN =
   /(?:^|[_-])(?:compose|draft|fill|render|shape|transform)(?:$|[_-])/u;

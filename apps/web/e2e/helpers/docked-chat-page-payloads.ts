@@ -1,6 +1,11 @@
 import { toSafeId } from "@stll/api-contract/safe-id";
 import { cents } from "@stll/money";
 
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
+
+type InvoiceDetailResponse =
+  WebRoutes["v1"]["invoices"][":workspaceId"][":invoiceId"]["get"]["response"][200];
+
 type DockedChatPageFixtureOptions = {
   workspaceId: string;
   /** The world fixture's uploaded document id; also names these HTTP-only records. */
@@ -57,11 +62,15 @@ export const dockedChatPagePayloads = ({
     lines: [],
     timeEntries: [],
     expenses: [],
+    payments: [],
+    paidAmount: 0,
+    outstandingAmount: 0,
+    sentAt: null,
     paidAt: null,
     finalizedAt: null,
     createdAt: timestamp,
     updatedAt: timestamp,
-  };
+  } satisfies InvoiceDetailResponse;
   const report = {
     status: "completed" as const,
     error: null,

@@ -16,7 +16,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
@@ -68,7 +68,7 @@ function ReportExportRecoveryPage() {
 
     const downloadUrl = result.value.data?.downloadUrl;
     if (!downloadUrl) {
-      notifyUserError(undefined, t("common.unexpectedError"));
+      notifyUserProblem(t("common.unexpectedError"));
       return;
     }
 

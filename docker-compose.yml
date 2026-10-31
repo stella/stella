@@ -29,7 +29,7 @@ services:
 
   rustfs:
     profiles: [dev]
-    image: rustfs/rustfs:1.0.4@sha256:ed9210d6411d77ffceb70d94b964a3cb7d225983368bc25bebe01e995293dcc2
+    image: rustfs/rustfs:1.0.3@sha256:9ca9559533b537d10482fe923288b676ad08f92a7069d9a17327fbae3cab688b
     command: /data
     environment:
       RUSTFS_ACCESS_KEY: stella-rustfs-dev
@@ -58,7 +58,7 @@ services:
     # One-shot bucket bootstrap over RustFS's S3 API. The AWS CLI is the
     # maintained generic client; the MinIO client it replaces is no longer
     # published.
-    image: amazon/aws-cli:2.39.0@sha256:6014c77975a4ae237395924cc821333f20bf87c91964a45dd4ed5f3b13b424f5
+    image: amazon/aws-cli:2.38.2@sha256:5d39fd52f236ed01c5c25fba66c9aebcfc6cbb88e7bb1b727c5fe1f150540597
     depends_on:
       rustfs:
         condition: service_healthy
@@ -80,7 +80,7 @@ services:
 
   valkey:
     profiles: [dev]
-    image: valkey/valkey:9.1.3-alpine@sha256:bf09d58e96d6b4524a15396b65b242bbe18beebbcc15a04d8ee75ddac62fae0b
+    image: valkey/valkey:9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11
     ports:
       - "127.0.0.1:${STELLA_VALKEY_HOST_PORT:-6379}:6379"
     healthcheck:
@@ -91,7 +91,7 @@ services:
 
   gotenberg:
     profiles: [dev]
-    image: gotenberg/gotenberg:8.39.0@sha256:13672f317b443c793e972b1bd2155ec62a3e7b6891b411e8196442cc053ee5f5
+    image: gotenberg/gotenberg:8.38.1@sha256:aa552cc115db488e0f0bcb07446aac13071ad51505b642c84bb894500907b42b
     # If you see "context deadline exceeded" or multi-threading errors, add
     # command: ["gotenberg", "--libreoffice-restart-after=1"]. See
     # https://github.com/gotenberg/gotenberg/issues/1452.
@@ -113,7 +113,7 @@ services:
   # minor releases.
   quickwit09-postgres-setup:
     profiles: [quickwit09]
-    image: postgres:18.6@sha256:bc8d7bdd54dc38115ef954fef07f30a96bb2b5b080effa692e0093f03eabac8f
+    image: postgres:18.6@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     environment:
       PGPASSWORD: postgres
     depends_on:
@@ -130,7 +130,7 @@ services:
 
   quickwit09:
     profiles: [quickwit09]
-    image: quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd
+    image: quickwit/quickwit:0.9.2@sha256:1c249c579063830be4666523c4d95289683f98c5a584de8e67a8be3361fe1f72
     command: run
     environment:
       QW_CLUSTER_ID: stella-local-q09
