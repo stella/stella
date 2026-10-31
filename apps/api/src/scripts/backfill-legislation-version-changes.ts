@@ -86,6 +86,20 @@ let written = 0;
 let superseded = 0;
 let nextPageSize = Math.min(plan.initialSize, VERSION_CHANGE_WORK_PAGE_MAX);
 const progress = { reachedEnd: false };
+type VersionChangesBatchValue =
+  | { type: "retry"; cursor: VersionChangesCursor | null; pageSize: number }
+  | {
+      type: "page";
+      page: Awaited<ReturnType<typeof applyVersionChangesPageTx>>;
+      pageSize: number;
+    };
+
+type VersionChangesCheckpointBatch = {
+  cursor: string | null;
+  done: boolean;
+  value: VersionChangesBatchValue;
+};
+
 const runVersionChangesPass = async (
   slot: ReturnType<typeof createHeavyWorkSlot> | null,
 ) => {
@@ -179,7 +193,11 @@ const runVersionChangesPass = async (
           }
           const prepared = preparation.value;
           const result = await runtime.step(
-            async ({ tx, size, cursor: persistedCursor }) => {
+            async ({
+              tx,
+              size,
+              cursor: persistedCursor,
+            }): Promise<VersionChangesCheckpointBatch> => {
               const actualAfter =
                 persistedCursor === null
                   ? cursor

@@ -1324,42 +1324,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::<module>::maxLength:12::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::max:999::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::maxLength:3::2",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blockArbitrary::minLength:1::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::blocksArbitrary::max:4::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::inlineArbitrary::maxLength:5::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::segmentText::maxLength:8::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/features/statutes/statute-diff-marks.test.ts::sideDiff::maxLength:6::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/style-sets/style-set-editor-controls.tsx::FontField::maxLength:128::1",
     "reason": "Existing FontField UI validation or presentation bound; contract migration pending."
   },

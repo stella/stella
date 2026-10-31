@@ -92,7 +92,7 @@ class VersionChangeLanguageLimitError extends TaggedError(
   "VersionChangeLanguageLimitError",
 )<{ message: string }> {}
 
-export const planVersionChangesPage = async ({
+const planVersionChangesPage = async ({
   after,
   db,
   pageSize,

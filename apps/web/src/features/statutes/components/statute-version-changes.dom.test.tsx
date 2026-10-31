@@ -23,7 +23,7 @@ const renderRow = (changes: StatuteChangeCounts) =>
 
 const cells = (container: HTMLElement) =>
   [...container.querySelectorAll<HTMLElement>("[data-cell]")].map(
-    (cell) => cell.dataset.cell,
+    (cell) => cell.dataset["cell"],
   );
 
 test("names only the kinds of change that happened, with a size bar of the words", () => {
@@ -38,9 +38,7 @@ test("names only the kinds of change that happened, with a size bar of the words
   const bar = screen.getByRole("img", {
     name: "120 words inserted, 30 words deleted",
   });
-  expect(bar.getAttribute("title")).toBe(
-    "120 words inserted, 30 words deleted",
-  );
+  expect(bar.getAttribute("title")).toBeNull();
   expect(cells(screen.container)).toEqual([
     "inserted",
     "inserted",

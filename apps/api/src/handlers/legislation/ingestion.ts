@@ -72,7 +72,9 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 export { legislationSourceHash } from "@/api/handlers/legislation/revision";
 export type { LegislationCorpusDependencies } from "@/api/handlers/legislation/revision";
@@ -335,6 +337,11 @@ const reportWindowJunctions = async ({
   }
 };
 
+const VERSION_CHANGES_REFRESH_FAILURE = failureSink({
+  event: "legislation.version_changes.refresh_failed",
+  expected: [],
+});
+
 type RefreshVersionChangesOptions = {
   input: Pick<LegislationDocumentInput, "sourceId" | "eli" | "language">;
   documentId: SafeId<"legislationDocument">;
@@ -369,14 +376,14 @@ const refreshVersionChanges = async ({
     })
   ).andThen((outcome) => outcome);
   if (Result.isError(refreshed)) {
-    captureError(
-      refreshed.error,
-      handlerErrorContext("legislation.refreshVersionChanges", {
+    observeFailure(refreshed.error, {
+      sink: VERSION_CHANGES_REFRESH_FAILURE,
+      ctx: {
         documentId,
-        sourceId: input.sourceId,
+        source: input.sourceId,
         step: "processLegislationDocument.versionChanges",
-      }),
-    );
+      },
+    });
   }
 };
 

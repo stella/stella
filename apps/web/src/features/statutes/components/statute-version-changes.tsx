@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import type { StatuteChangeCounts } from "@stll/legal-ast/statute-compare";
 import { cn } from "@stll/ui/utils";
 
+import Tooltip from "@/components/tooltip";
 import {
   versionChangeBar,
   versionChangeParts,
@@ -66,21 +67,26 @@ export const StatuteVersionChanges = ({
           : parts.map(partLabel).join(" · ")}
       </span>
       {inserted + deleted === 0 ? null : (
-        <span
-          aria-label={wordsLabel}
-          className="flex shrink-0 gap-px"
-          role="img"
-          title={wordsLabel}
-        >
-          {versionChangeBar(changes.words).map((cell, index) => (
+        <Tooltip
+          content={wordsLabel}
+          render={
             <span
-              className={cn("size-1.5 rounded-xs", BAR_CELL_CLASS[cell])}
-              data-cell={cell}
-              // oxlint-disable-next-line react/no-array-index-key -- a fixed five-cell bar; cells never reorder.
-              key={index}
+              aria-label={wordsLabel}
+              className="flex shrink-0 gap-px"
+              role="img"
             />
-          ))}
-        </span>
+          }
+        >
+          {Object.entries(versionChangeBar(changes.words)).map(
+            ([position, cell]) => (
+              <span
+                className={cn("size-1.5 rounded-xs", BAR_CELL_CLASS[cell])}
+                data-cell={cell}
+                key={position}
+              />
+            ),
+          )}
+        </Tooltip>
       )}
     </span>
   );
