@@ -48,6 +48,7 @@ import {
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
+import { ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS } from "./organization-ai-instructions-constraint-validation";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -711,7 +712,10 @@ describe("online migrations", () => {
     expect(harness.released()).toBe(true);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
+  ])(
     "validates monitoring constraint $name once and rejects incomplete startup",
     async (validation) => {
       const { name } = validation;
@@ -1480,7 +1484,10 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, DROP_INDEX_FRAGMENT)).toBe(-1);
   });
 
-  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+  test.each([
+    ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,
+    ...ORGANIZATION_AI_INSTRUCTIONS_CONSTRAINT_VALIDATIONS,
+  ])(
     "defers at validation $name while the gate holds it, then validates it on a healthy run",
     async (validation) => {
       const { name } = validation;
