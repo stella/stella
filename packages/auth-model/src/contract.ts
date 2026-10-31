@@ -84,6 +84,12 @@ export const BETTER_AUTH_ORGANIZATION_ROLE_GRANTS = {
  * Values that change Better Auth's organization authorization semantics.
  * Hooks, adapters, email delivery, and product-specific options stay local.
  */
+export const ORGANIZATION_SLUG_RULES = {
+  minLength: 1,
+  maxLength: 128,
+  pattern: /^[a-z0-9\x2d]+$/u,
+} as const;
+
 export const BETTER_AUTH_ORGANIZATION_OPTIONS = {
   allowUserToCreateOrganization: true,
   cancelPendingInvitationsOnReInvite: false,

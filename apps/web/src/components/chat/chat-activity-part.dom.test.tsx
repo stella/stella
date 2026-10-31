@@ -3,6 +3,8 @@ import { StrictMode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE } from "@stll/api-contract/chat";
+
 import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
@@ -206,5 +208,37 @@ test("review activities use the dedicated translated chat label without telemetr
   );
   expect(view.getByText(messages.chat.activity.review)).toBeDefined();
   expect(view.container.textContent).not.toContain("private-payload");
+  expect(errors).toEqual([]);
+});
+
+test("a part only a newer release can read shows a neutral row in its place, never its content", () => {
+  const errors: unknown[] = [];
+  const analytics = {
+    ...noopAnalytics,
+    captureError: (error: unknown) => errors.push(error),
+  };
+  const message = {
+    id: "answer-from-newer-release",
+    role: "assistant",
+    parts: [
+      { type: "text", content: "The NDA is mutual." },
+      {
+        type: "activity",
+        activityType: UNSUPPORTED_CHAT_PART_ACTIVITY_TYPE,
+        content: { part: { type: "citation", quote: "private-payload" } },
+      },
+    ],
+  } satisfies ChatUIMessage;
+  const view = render(
+    activityView({
+      message,
+      analytics,
+      activitySession: { reportedUnknownActivityTypes: new Set<string>() },
+    }),
+  );
+  expect(view.getByText(messages.chat.activity.newerVersion)).toBeDefined();
+  expect(view.container.textContent).toContain("The NDA is mutual.");
+  expect(view.container.textContent).not.toContain("private-payload");
+  expect(view.container.textContent).not.toContain("citation");
   expect(errors).toEqual([]);
 });

@@ -25,6 +25,7 @@ import {
 // committed source: no network, secrets, clock, randomness, or untracked
 // machine state. Each entry names what was checked.
 const PURE_AUTOFIX = {
+  "db-registry-entries": "scripts/db-registry-entries.ts",
   // Reads canonical source-entry JSON; Git staging never changes the literal maps.
   "parser-registry": "scripts/generate-parser-registry.ts",
   "withdrawn-decision-labels":
@@ -71,7 +72,7 @@ const PURE_AUTOFIX = {
   // and copies lucide-static's outlines, pinned by the lockfile, into the
   // app's asset catalog folder; reads only committed and installed files.
   "mobile-icons": "scripts/generate-mobile-icons.ts",
-  // Reads folio's installed fontsource stylesheets, pinned by the lockfile.
+  // Reads the installed @stll/folio-fonts catalogue, pinned by the lockfile.
   "mobile-folio-fonts": "scripts/generate-mobile-folio-fonts.ts",
   // The committed release policy renders package names inside fixed markers.
   "published-package-list": "scripts/check-published-package-lists.ts",

@@ -12,7 +12,10 @@ import * as v from "valibot";
 
 import { generateMainHeavyInfrastructureSteps } from "./generate-main-heavy-infrastructure-steps";
 import { mainHeavyAlertKind } from "./main-heavy-alert-kind.mjs";
-import { classifyMainHeavyFailures } from "./main-heavy-classification.mjs";
+import {
+  classifyMainHeavyFailures,
+  collectMainHeavyFailures,
+} from "./main-heavy-classification.mjs";
 import { scopeFilters } from "./test-scope";
 import { shardFilters } from "./test-shards";
 
@@ -97,6 +100,248 @@ test.each([
     definitions: classificationDefinitions,
   });
   expect(failures.map(({ type }) => type)).toEqual([expected]);
+});
+
+const unavailableImage =
+  "This job failed because of a scheduled macOS 14 runner image brownout.";
+const deprecatedImage =
+  "The macOS-13 environment is now deprecated and will be removed starting December 4th, 2025.";
+type ClassificationJob = Parameters<
+  typeof classifyMainHeavyFailures
+>[0]["jobs"][number];
+const desktopRustJobName = "suites / Desktop Rust Tests (macos)";
+
+test.each([
+  {
+    title: "a runner-less cancel is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      runner_name: "",
+      steps: [],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a cancelled job with no runner field is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a runner-less cancel with queued steps is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      steps: [{ name: "Test", conclusion: null, status: "queued" }],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a runner image brownout annotation is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "failure",
+      runner_name: "GitHub Actions 1",
+      annotations: [{ message: unavailableImage }],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a runner image deprecation annotation is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "failure",
+      annotations: [{ message: deprecatedImage }],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a hyphenated runner-image brownout annotation is infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      runner_name: "GitHub Actions 1",
+      annotations: [
+        {
+          message:
+            "This job failed because of a scheduled macOS 14 runner-image brownout.",
+        },
+      ],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "a timed-out test stays code despite deprecation annotations",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      annotations: [{ message: deprecatedImage }],
+      steps: [{ name: "Test", conclusion: "timed_out" }],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "a mid-run cancellation stays code despite deprecation annotations",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      annotations: [{ message: deprecatedImage }],
+      steps: [
+        {
+          name: "Test",
+          conclusion: "cancelled",
+          started_at: "2026-10-30T00:00:00Z",
+        },
+      ],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "successful steps before a runner loss remain infrastructure",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      runner_name: "GitHub Actions 1",
+      annotations: [{ message: deprecatedImage }],
+      steps: [
+        { name: "Checkout", conclusion: "success" },
+        { name: "Test", conclusion: null, status: "queued" },
+      ],
+    } satisfies ClassificationJob,
+    expected: "INFRA",
+  },
+  {
+    title: "an unrelated brownout annotation stays code",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "failure",
+      annotations: [{ message: "Test service brownout" }],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title:
+      "a cancel after a failed step stays code despite brownout annotations",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      annotations: [{ message: unavailableImage }],
+      steps: [{ name: "Test", conclusion: "failure" }],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "a cancel after a step started stays code",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "cancelled",
+      steps: [
+        {
+          name: "Test",
+          conclusion: "cancelled",
+          started_at: "2026-10-30T00:00:00Z",
+        },
+      ],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+  {
+    title: "a job that ran and failed stays code",
+    job: {
+      name: desktopRustJobName,
+      conclusion: "failure",
+      runner_name: "GitHub Actions 1",
+      steps: [{ name: "Test", conclusion: "failure" }],
+    } satisfies ClassificationJob,
+    expected: "CODE",
+  },
+])("$title", ({ job, expected }) => {
+  expect(
+    classifyMainHeavyFailures({
+      jobs: [job],
+      queueJobs: [],
+    }).map(({ type }) => type),
+  ).toEqual([expected]);
+});
+
+test.each([
+  {
+    title: "heavy classification reads paginated runner-image annotations",
+    unavailable: false,
+  },
+  {
+    title:
+      "heavy classification retains runner-less proof when annotation lookup fails",
+    unavailable: true,
+  },
+])("$title", async ({ unavailable }) => {
+  const calls: number[] = [];
+  const warnings: string[] = [];
+  const github = {
+    paginate: async () => [
+      {
+        name: "suites / Desktop Rust Tests (macos)",
+        conclusion: unavailable ? "cancelled" : "failure",
+        runner_name: unavailable ? "" : "GitHub Actions 1",
+        check_run_url:
+          "https://api.github.com/repos/stella/stella/check-runs/7",
+        steps: [],
+      },
+    ],
+    rest: {
+      checks: {
+        listAnnotations: async ({
+          check_run_id,
+          page,
+          request,
+        }: {
+          check_run_id: number;
+          page: number;
+          request: { timeout: number };
+        }) => {
+          expect(check_run_id).toBe(7);
+          expect(request.timeout).toBe(30_000);
+          calls.push(page);
+          if (unavailable) {
+            throw new TypeError("Annotations unavailable");
+          }
+          return {
+            data:
+              page === 1
+                ? Array.from({ length: 100 }, () => ({
+                    message: "Other annotation",
+                  }))
+                : [{ message: unavailableImage }],
+          };
+        },
+      },
+      actions: {
+        listJobsForWorkflowRun: "current-jobs",
+        listJobsForWorkflowRunAttempt: "queue-jobs",
+        listWorkflowRuns: async () => ({ data: { workflow_runs: [] } }),
+      },
+      repos: {
+        getCommit: async () => ({
+          data: { commit: { tree: { sha: "tree" } } },
+        }),
+      },
+    },
+  };
+  const failures = await collectMainHeavyFailures({
+    github,
+    context: { repo: { owner: "stella", repo: "stella" }, runId: 100 },
+    sha: "",
+    results: { suites: { result: "failure" } },
+    warn: (message) => {
+      warnings.push(message);
+    },
+  });
+  expect(failures.map(({ type }) => type)).toEqual(["INFRA"]);
+  expect(calls).toEqual(unavailable ? [1] : [1, 2]);
+  expect(warnings.length).toBe(unavailable ? 1 : 0);
 });
 
 const root = path.resolve(import.meta.dirname, "..");

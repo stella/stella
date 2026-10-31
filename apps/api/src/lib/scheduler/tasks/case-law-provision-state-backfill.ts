@@ -44,6 +44,16 @@ type ReservedConnection = {
   close: () => Promise<void>;
 };
 
+type ProvisionTaskConnection = Pick<ReservedConnection, "unsafe">;
+type ProvisionTaskConnectionHandle = {
+  connection: ProvisionTaskConnection;
+  setTransactionBudget: ProvisionBackfillSession["setTransactionBudget"];
+};
+type ProvisionTaskWithConnection = <T>(
+  options: Parameters<typeof withLongRunningConnection>[0],
+  work: (handle: ProvisionTaskConnectionHandle) => Promise<T>,
+) => Promise<T>;
+
 type ReservedSessionOptions<T> = {
   reserve: () => Promise<ReservedConnection>;
   /** Cancels whatever the given backend is running, from another connection. */
@@ -106,7 +116,7 @@ export const createCaseLawProvisionStateBackfillTask =
       await sleepWithSignal(milliseconds, undefined, { signal });
     },
   }: {
-    withConnection?: typeof withLongRunningConnection;
+    withConnection?: ProvisionTaskWithConnection;
     readVerdict?: () => Promise<Verdict>;
     clock?: () => number;
     observeStatus?: typeof logSchedulerBackfillStatus;
