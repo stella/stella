@@ -32,6 +32,7 @@ import {
 
 import { LegalHoldActiveError } from "./errors";
 import type { HoldSummary } from "./errors";
+import { LegalHoldRecord } from "./projection";
 
 export type HoldTarget =
   | { type: "matter"; workspaceId: SafeId<"workspace"> }
@@ -206,12 +207,15 @@ export const holdsBlocking = async ({
     if (!workspaceId) {
       return panic("Legal hold target has no matter");
     }
-    return {
+    return new LegalHoldRecord({
       id: row.id,
       scope: row.scopeType,
       workspaceId,
+      entityId: row.entityId,
       placedAt: row.placedAt,
-    };
+      placedBy: row.placedBy,
+      reason: row.reason,
+    });
   });
   return { type: "held", holds };
 };

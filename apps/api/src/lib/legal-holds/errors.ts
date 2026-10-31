@@ -2,14 +2,10 @@ import { TaggedError } from "better-result";
 
 import type { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
 
-import type { SafeId } from "@/api/lib/branded-types";
+import type { LegalHoldRecord } from "./projection";
 
-export type HoldSummary = {
-  id: SafeId<"legalHold">;
-  scope: "matter" | "entity";
-  workspaceId: SafeId<"workspace">;
-  placedAt: Date;
-};
+/** An active hold a refusal names; clients see it only through its `view`. */
+export type HoldSummary = LegalHoldRecord;
 
 export class LegalHoldActiveError extends TaggedError("LegalHoldActiveError")<{
   message: string;

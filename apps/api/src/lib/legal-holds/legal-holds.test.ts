@@ -12,6 +12,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { LegalHoldActiveError } from "./errors";
 import { holdTargetPredicate } from "./holds";
 import type { HoldTarget } from "./holds";
+import { LegalHoldRecord } from "./projection";
 import { legalHoldRefusal } from "./refusal";
 
 const targets = () =>
@@ -61,12 +62,15 @@ test("hold refusals retain the shared HTTP MCP and CLI conflict code", () => {
     message: "An active legal hold prevents deletion.",
     code: LEGAL_HOLD_ACTIVE,
     holds: [
-      {
+      new LegalHoldRecord({
         id: holdId,
         scope: "matter",
         workspaceId: createSafeId<"workspace">(),
+        entityId: null,
         placedAt: new Date("2026-01-01T00:00:00Z"),
-      },
+        placedBy: "placing-member",
+        reason: "Preserve the supplier dispute record",
+      }),
     ],
   });
   for (const wrapped of [

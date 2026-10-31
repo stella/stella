@@ -32,11 +32,12 @@ export default createSafeHandler(
     workspaceId,
     session,
     user,
+    memberRole,
     params,
     body,
     recordAuditEvent,
   }) {
-    const outcome = yield* Result.await(
+    const placed = yield* Result.await(
       safeDb(
         async (tx) =>
           await placeLegalHold({
@@ -49,6 +50,10 @@ export default createSafeHandler(
           }),
       ),
     );
-    return outcome;
+    const hold = yield* placed;
+    // The placer always reads the reason they gave.
+    return Result.ok(
+      hold.view({ type: "member", userId: user.id, memberRole }),
+    );
   },
 );

@@ -5,7 +5,10 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_INTENT } from "@stll/api-contract";
-import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
+import {
+  LEGAL_HOLD_ACTIVE,
+  LEGAL_HOLD_REASON_ISSUE_CODE,
+} from "@stll/api-contract/legal-holds";
 import { roles } from "@stll/permissions";
 import { createTestState } from "@stll/test-state";
 
@@ -43,6 +46,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
+import { LegalHoldRecord } from "@/api/lib/legal-holds/projection";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,
@@ -1711,12 +1715,15 @@ describe("send message turn persistence", () => {
           code: LEGAL_HOLD_ACTIVE,
           message: "An active legal hold prevents attachment rollback.",
           holds: [
-            {
+            new LegalHoldRecord({
               id: holdId,
               placedAt: new Date("2026-01-01T00:00:00Z"),
+              placedBy: "another-member",
+              reason: "Preserve the supplier dispute record",
               scope: "matter",
               workspaceId: activeWorkspaceId,
-            },
+              entityId: null,
+            }),
           ],
         }),
       ),
@@ -1753,7 +1760,16 @@ describe("send message turn persistence", () => {
       code: 409,
       response: {
         code: LEGAL_HOLD_ACTIVE,
-        issues: [{ path: holdId }],
+        // The requesting owner reads the reason; see projection.test.ts for
+        // the members who do not.
+        issues: [
+          { path: holdId, code: "matter" },
+          {
+            path: `${holdId}.reason`,
+            code: LEGAL_HOLD_REASON_ISSUE_CODE,
+            message: "Preserve the supplier dispute record",
+          },
+        ],
       },
     });
   });

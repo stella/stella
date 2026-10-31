@@ -11,6 +11,7 @@ import { readLockedLegalHolds } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { lockLegalHoldOrganization } from "./holds";
+import { LegalHoldRecord } from "./projection";
 
 type LegalHoldScope =
   | { type: "matter"; workspaceId: SafeId<"workspace"> }
@@ -105,8 +106,17 @@ export const placeLegalHold = async (options: HoldMutationOptions) => {
       scope: { old: null, new: scope.type },
     },
   });
+  const hold = inserted.at(0) ?? panic("Legal hold insert returned no row");
   return Result.ok(
-    inserted.at(0) ?? panic("Legal hold insert returned no row"),
+    new LegalHoldRecord({
+      id: hold.id,
+      scope: hold.scopeType,
+      workspaceId: scope.workspaceId,
+      entityId: hold.entityId,
+      placedAt: hold.placedAt,
+      placedBy: hold.placedBy,
+      reason: hold.reason,
+    }),
   );
 };
 
