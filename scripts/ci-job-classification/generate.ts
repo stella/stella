@@ -6,7 +6,13 @@ import * as v from "valibot";
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
-import { decisionPathForKey } from "./inputs";
+import { approvalPathForKey, decisionPathForKey } from "./inputs";
+import {
+  deriveJobPrivileges,
+  expectedJobDigest,
+  jobDependencyDigests,
+  reachableJobDocuments,
+} from "./job-digests";
 import { verifyPublicMetadata } from "./public-metadata";
 import type { MetadataReader, PublicMetadata } from "./public-metadata";
 import {
@@ -17,11 +23,7 @@ import {
   sameMetadataOrigin,
 } from "./references";
 import type { MetadataOrigin, MetadataReferenceKind } from "./references";
-import {
-  isPrivilegedJobClosure,
-  isRepositoryWritingJob,
-  ReviewRequiredError,
-} from "./review";
+import { isRepositoryWritingJob, ReviewRequiredError } from "./review";
 import { AdmissionError, parseDocument } from "./yaml";
 import type { ParsedDocument } from "./yaml";
 
@@ -30,15 +32,19 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
+// The decision shape the generator accepts, as readDecisions produces it.
+export type ClassificationDecisionsInput = v.InferInput<typeof DECISIONS>;
 const REVISION_DECISIONS = v.record(
   v.string(),
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    reviewedDigest: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    approvedDigests: v.optional(
+      v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
+    ),
   }),
 );
 const SNAPSHOTS = v.record(
@@ -173,7 +179,7 @@ export const readClassificationInputsAtRevision = (
           key,
           {
             ...decision,
-            reviewedDigest: decision.reviewedDigest ?? "0".repeat(64),
+            approvedDigests: decision.approvedDigests ?? [],
           },
         ]),
       ),
@@ -257,7 +263,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-const createDocumentDigest = ({
+export const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {
@@ -303,36 +309,7 @@ type ReviewJobsOptions = DocumentDigestOptions & {
   documentDigest: (id: string) => string;
   observeJobs?: (jobs: ReadonlyMap<string, DerivedJob>) => void;
 };
-type ReachableDocumentsOptions = DocumentDigestOptions & {
-  initialTargets: string[];
-};
-const reachableDocuments = ({
-  initialTargets,
-  nodes,
-  parsedDocuments,
-}: ReachableDocumentsOptions) => {
-  const documents: ParsedDocument[] = [];
-  const visited = new Set<string>();
-  const visit = (id: string) => {
-    if (visited.has(id)) {
-      return;
-    }
-    visited.add(id);
-    const node = nodes.get(id);
-    const parsed = parsedDocuments.get(id);
-    if (!node || node.type !== "metadata" || !parsed) {
-      return;
-    }
-    documents.push(parsed);
-    for (const target of Object.values(node.edges)) {
-      visit(target);
-    }
-  };
-  for (const target of initialTargets) {
-    visit(target);
-  }
-  return documents;
-};
+
 const reviewJobs = ({
   nodes,
   parsedDocuments,
@@ -340,10 +317,20 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<string, unknown> = {};
+  const entries: Record<
+    string,
+    { kind: string; qualifier: string; reviewedDigest: string }
+  > = {};
   const privilegedJobs: string[] = [];
   const observedJobs = new Set<string>();
   const derivedJobs = new Map<string, DerivedJob>();
+
+  const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
+    nodes,
+    parsedDocuments,
+    decisions,
+  });
+
   for (const node of nodes.values()) {
     if (node.type !== "metadata") {
       continue;
@@ -355,38 +342,28 @@ const reviewJobs = ({
     node.jobs = Object.entries(parsed.jobs).flatMap(([jobId, job]) => {
       const key = `${node.repository}:${node.path}/${jobId}`;
       observedJobs.add(key);
-      const dependencyDigests = Object.fromEntries(
-        Object.keys(job.dependencies)
-          .toSorted(compareCodeUnit)
-          .flatMap((reference) => {
-            const target = node.edges[reference];
-            return target && nodes.get(target)?.type === "metadata"
-              ? [[reference, documentDigest(target)]]
-              : [];
-          }),
-      );
-      const digest = Object.keys(dependencyDigests).length
-        ? sha256(
-            JSON.stringify({
-              digest: job.digest,
-              dependencies: dependencyDigests,
-            }),
-          )
-        : job.digest;
+      const dependencyDigests = jobDependencyDigests({
+        definition: job,
+        edges: node.edges,
+        isMetadata: (target) => nodes.get(target)?.type === "metadata",
+        documentDigest,
+      });
       const decision = decisions[key];
       const targets = Object.keys(job.dependencies).flatMap((reference) => {
         const target = node.edges[reference];
         return target ? [target] : [];
       });
-      const reachable = reachableDocuments({
+      const reachable = reachableJobDocuments({
         initialTargets: targets,
         nodes,
         parsedDocuments,
       });
-      const privileged = isPrivilegedJobClosure({
-        kind: decision?.kind,
-        shape: job.shape,
-        reachableDocuments: reachable,
+      const privileged = jobPrivileges.get(key) ?? false;
+      const digest = expectedJobDigest({
+        definition: job,
+        privileged,
+        inheritedGrants: inheritedGrants.get(key),
+        dependencyDigests,
       });
       derivedJobs.set(key, {
         digest,
@@ -396,11 +373,12 @@ const reviewJobs = ({
           reachableDocuments: reachable,
         }),
       });
-      if (!decision || decision.reviewedDigest !== digest) {
+      if (!decision || !decision.approvedDigests.includes(digest)) {
         entries[key] = {
           kind: decision?.kind ?? "<choose ordinary, support, or priority>",
           qualifier:
             decision?.qualifier ?? "<describe the reviewed classification>",
+          // The approval file format the decision reader validates.
           reviewedDigest: digest,
         };
         if (privileged) {
@@ -435,7 +413,7 @@ const reviewJobs = ({
       )
         .map(
           ([key, value]) =>
-            `${decisionPathForKey(key)}\n${JSON.stringify(value, null, 2)}`,
+            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
         )
         .join("\n")}`,
       privilegedJobs,

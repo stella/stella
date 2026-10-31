@@ -1,22 +1,37 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { asc, sql } from "drizzle-orm";
+import { asc, getTableName, is, sql } from "drizzle-orm";
+import { PgTable } from "drizzle-orm/pg-core";
 
-import { organizationDataExports } from "@/api/db/schema";
+import type { Verdict } from "@stll/db-load-gate/health";
+
+import * as schema from "@/api/db/schema";
 import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
   corpusProjectionUnpublishedIntentProbe,
 } from "@/api/lib/legal-search/corpus-index-projection-convergence";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { DATA_EXPORT_HANDOFF_PAGE_SIZE } from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import { scanOccurrences } from "@/api/tests/query-plans/plan-walker";
 
+import {
+  CASE_LAW_SEARCH_FETCH_LIMIT,
+  CASE_LAW_SEARCH_SIZES,
+  caseLawSearchStatement,
+  seedCaseLawSearch,
+  unboundedCaseLawSearchStatement,
+} from "./case-law-search-fixture";
 import {
   CASE_LAW_SCENARIOS,
   type CaseLawScenarioGeneration,
+  coverageRefreshWroteSummary,
   describeServed,
+  readCoverageRefreshState,
   seedCorpusReadBudgets,
   serveCaseLaw,
 } from "./corpus-seed";
@@ -27,9 +42,12 @@ import {
   budgetViolations,
   measureOwnerStatement,
   measureQueryPerf,
+  OVER_BUDGET_REMOVAL_BAND,
   scaleViolations,
   shapeViolations,
+  sharedBlockSampleProblem,
 } from "./measurement";
+import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { QUERY_PERF_PROFILES } from "./profiles";
 import {
   corpusStatementRegistry,
@@ -38,8 +56,10 @@ import {
   SCHEDULED_JOB_MEASUREMENTS,
   type ScheduledJobScenario,
 } from "./registry";
-import { measureScheduledJobRun } from "./scheduled-run";
+import { seedRequestReceiptScenario } from "./request-receipt-seed";
+import { measureScheduledJobRun, QUERY_PERF_ADMISSION } from "./scheduled-run";
 import { seedQueryPerf } from "./seed";
+import { QUERY_PERF_TABLE_SIZES } from "./table-sizes";
 import { UNBOUNDED_FRESHNESS_STATEMENTS } from "./unbounded-freshness-fixture";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
@@ -47,17 +67,32 @@ const CORPUS_PROFILE_TIMEOUT_MS = 300_000;
 const describeScheduledScenario = (scenario: ScheduledJobScenario) =>
   scenario.type === "case-law"
     ? describeServed(scenario.served)
-    : `exports:${scenario.cohort}:${scenario.rows}`;
+    : `${scenario.type}:${scenario.cohort}:${scenario.rows}`;
 
 const log = (record: Record<string, unknown>) => {
   console.info(JSON.stringify(record));
 };
 
-const profileBudgets = (profile: "corpus" | "tenant") =>
+const profileBudgets = (
+  profile: (typeof READ_BUDGET_PROFILES)[keyof typeof READ_BUDGET_PROFILES],
+) =>
   Object.entries(READ_BUDGET_PROFILES)
     .filter(([, owner]) => owner === profile)
     .map(([id]) => id)
     .toSorted();
+
+test("query-perf table size declarations name real schema tables", () => {
+  const schemaTables: ReadonlySet<string> = new Set(
+    Object.values(schema)
+      .filter((value) => is(value, PgTable))
+      .map(getTableName),
+  );
+  expect(
+    Object.keys(QUERY_PERF_TABLE_SIZES).filter(
+      (name) => !schemaTables.has(name),
+    ),
+  ).toEqual([]);
+});
 
 test("every measurement execution guard applies even when pages fit or carry an over-budget marker", () => {
   for (const id of [
@@ -76,19 +111,28 @@ test("every measurement execution guard applies even when pages fit or carry an 
   }
 });
 
-test("corpus page markers still reflect pages within the execution guard", () => {
+test("over-budget markers use hysteresis while unmarked budgets retain their edge", () => {
   const id = "statement.legislation.candidateRows";
+  const budget = READ_BUDGETS[id].pages;
+  expect(OVER_BUDGET_REMOVAL_BAND).toBe(0.15);
+  const removalLine = budget * 0.85;
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages,
+      sharedBlocks: removalLine,
       executionTimeMs: 10_000,
     }),
   ).toContain("remove its overBudget marker");
   expect(
     budgetProblem(id, {
-      sharedBlocks: READ_BUDGETS[id].pages + 1,
+      sharedBlocks: removalLine + 1,
       executionTimeMs: 10_000,
     }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget, executionTimeMs: 10_000 }),
+  ).toBeUndefined();
+  expect(
+    budgetProblem(id, { sharedBlocks: budget + 1, executionTimeMs: 10_000 }),
   ).toBeUndefined();
   expect(
     budgetProblem("statement.documents.searchHits", {
@@ -99,6 +143,114 @@ test("corpus page markers still reflect pages within the execution guard", () =>
 });
 
 describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
+  test("global Case Law search enriches only its page at both corpus sizes", async () => {
+    const budgetId = "statement.caseLaw.globalSearchHits";
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("DATABASE_URL required for query perf");
+    const measurements: number[] = [];
+    await withQueryPerfFixture({
+      databaseUrl,
+      profileId: "corpus",
+      timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
+      run: async (db, deadline) => {
+        for (const rows of CASE_LAW_SEARCH_SIZES) {
+          // db-await-in-loop: grow and measure each isolated corpus sequentially.
+          await deadline.run(`case-law search corpus ${rows}`, async () => {
+            await seedCaseLawSearch(db, rows);
+            const good = await measureOwnerStatement({
+              database: db,
+              build: caseLawSearchStatement,
+              owner: budgetId,
+              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
+              profileId: "corpus",
+            });
+            const bad = await measureOwnerStatement({
+              database: db,
+              build: unboundedCaseLawSearchStatement,
+              owner: budgetId,
+              ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[budgetId],
+              profileId: "corpus",
+            });
+            log({
+              event: "read_budget_measurement",
+              budgetId,
+              rows,
+              budgetPages: READ_BUDGETS[budgetId].pages,
+              after: good.metrics,
+              before: bad.metrics,
+            });
+            log({
+              event: "read_budget_plan",
+              budgetId,
+              rows,
+              plan: good.plan.Plan,
+              formerPlan: bad.plan.Plan,
+            });
+            expect(good.plan.Plan["Actual Rows"]).toBe(
+              CASE_LAW_SEARCH_FETCH_LIMIT,
+            );
+            expect(bad.plan.Plan["Actual Rows"]).toBe(
+              CASE_LAW_SEARCH_FETCH_LIMIT,
+            );
+            expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
+            // Fixed text hits must not walk unrelated decisions before LIMIT.
+            expect(
+              good.planViolations.filter(
+                ({ kind, node }) =>
+                  kind === "large-scan" &&
+                  node["Relation Name"] ===
+                    getTableName(schema.caseLawDecisions),
+              ),
+            ).toEqual([]);
+            expect(
+              budgetViolations(bad.metrics, READ_BUDGETS[budgetId].pages).map(
+                ({ kind }) => kind,
+              ),
+            ).toContain("shared-buffer-budget");
+            // Same values and order, including snippets, identifiers and ranking.
+            const before = executedRows(
+              await db.execute(unboundedCaseLawSearchStatement()),
+            );
+            const after = executedRows(
+              await db.execute(caseLawSearchStatement()),
+            );
+            expect(after).toEqual(before);
+            expect(after).toHaveLength(CASE_LAW_SEARCH_FETCH_LIMIT);
+            expect(Object.keys(after.at(0) ?? {}).toSorted()).toEqual(
+              [
+                "id",
+                "case_number",
+                "ecli",
+                "case_number_type",
+                "court",
+                "country",
+                "decision_date",
+                "slug",
+                "language",
+                "language_group_key",
+                "identifiers",
+                "headline",
+                "tier",
+                "score",
+                "updated_at",
+              ].toSorted(),
+            );
+            measurements.push(good.metrics.sharedBlocks);
+          });
+        }
+      },
+    });
+    expect(measurements).toHaveLength(CASE_LAW_SEARCH_SIZES.length);
+    expect(
+      scaleViolations({
+        size: measurements.at(0) ?? panic("Missing small measurement"),
+        double: measurements.at(1) ?? panic("Missing growth measurement"),
+      }),
+    ).toEqual([]);
+    expect(profileBudgets("case-law")).toEqual([budgetId]);
+  }, 420_000); // timeout: two corpus sizes, warm-cache measurements and mutation checks on an isolated database.
+
   test("document search stays within its budget at both sizes and a correlated policy exceeds it", async () => {
     const databaseUrl =
       process.env["DATABASE_URL"] ??
@@ -128,6 +280,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   database: db,
                   seed,
                   query: entry.query,
+                  owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -149,6 +304,12 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               plan: good.plan.Plan,
             });
             expect(shapeViolations(good.plan, profileId)).toEqual([]);
+            expect(
+              sharedBlockSampleProblem(budgetId, good.samples),
+            ).toBeUndefined();
+            expect(good.planViolations.map(({ message }) => message)).toEqual(
+              [],
+            );
             expect(budgetProblem(budgetId, good.metrics)).toBeUndefined();
             await deadline.run(
               `CREATE POLICY ${id}`,
@@ -164,6 +325,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
                   database: db,
                   seed,
                   query: entry.query,
+                  owner: budgetId,
+                  ownerDeadlineMs: entry.ownerDeadlineMs,
+                  profileId,
                 }),
             );
             log({
@@ -232,7 +396,13 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           const result = await deadline.run(
             `measure ${id}`,
             async () =>
-              await measureOwnerStatement({ database: db, build: entry.build }),
+              await measureOwnerStatement({
+                database: db,
+                build: entry.build,
+                owner: budgetId,
+                ownerDeadlineMs: entry.ownerDeadlineMs,
+                profileId: "corpus",
+              }),
           );
           log({
             event: "read_budget_measurement",
@@ -248,12 +418,49 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             budgetId,
             plan: result.plan.Plan,
           });
+          note(sharedBlockSampleProblem(budgetId, result.samples));
           note(
             result.plan.Plan["Actual Rows"] === entry.expectedRows
               ? undefined
               : `${id}: ${String(result.plan.Plan["Actual Rows"])} rows, expected ${String(entry.expectedRows)}`,
           );
           note(budgetProblem(budgetId, result.metrics));
+          for (const violation of result.planViolations) {
+            note(violation.message);
+          }
+          if (budgetId === "statement.caseLaw.euCompletionPage") {
+            const scans = scanOccurrences(result.plan.Plan).filter(
+              ({ relation }) =>
+                relation === "case_law_decisions" ||
+                relation === "eu_completion_receipts" ||
+                relation === "case_law_index_jobs",
+            );
+            note(
+              scans.length > 0 &&
+                scans.every(({ nodeType }) => nodeType.includes("Index"))
+                ? undefined
+                : `${budgetId}: completion relations must use index scans`,
+            );
+            for (const index of [
+              "case_law_decisions_source_id_page_idx",
+              "case_law_index_jobs_decision_idx",
+            ]) {
+              note(
+                scans.some((scan) => scan.index === index)
+                  ? undefined
+                  : `${budgetId}: missing ${index}`,
+              );
+            }
+            const rows = await db.transaction(
+              async (tx) => await entry.read(tx),
+            );
+            note(
+              rows.length === entry.expectedRows &&
+                rows.every((row) => !row.eligible)
+                ? undefined
+                : `${budgetId}: expected 100 ineligible rows`,
+            );
+          }
         }
 
         const runMetrics = async (
@@ -263,68 +470,121 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         ) => {
           if (scenario.type === "case-law") {
             await serveCaseLaw(db, scenario.served);
-          } else {
+          } else if (scenario.type === "data-exports") {
             await seedDataExportScenario(db, scenario);
+          } else {
+            await seedRequestReceiptScenario(db, scenario);
           }
-          const generation = describeScheduledScenario(scenario);
-          let enqueued = 0;
-          const exportLifecycle = async () =>
-            await db
-              .select({
-                id: organizationDataExports.id,
-                status: organizationDataExports.status,
-              })
-              .from(organizationDataExports)
-              .orderBy(asc(organizationDataExports.id));
-          const originalExportLifecycle =
-            scenario.type === "data-exports" ? await exportLifecycle() : null;
-          let lifecycleChanged = false;
-          const run = await measureScheduledJobRun({
-            database: db,
-            openClient,
-            jobId,
-            task,
-            ...(scenario.type === "data-exports"
-              ? {
-                  resetAfterCapture: async () => {
-                    lifecycleChanged =
-                      JSON.stringify(await exportLifecycle()) !==
-                      JSON.stringify(originalExportLifecycle);
-                    await seedDataExportScenario(db, scenario);
-                  },
-                  dataExportMaintenance: {
-                    handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
-                    enqueue: async () => {
-                      enqueued += 1;
-                      return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+          const measurement =
+            SCHEDULED_JOB_MEASUREMENTS[jobId] ??
+            panic(`No measurement for ${jobId}`);
+          const release =
+            scenario.type === "case-law"
+              ? await measurement.prepare?.({
+                  database: db,
+                  served: scenario.served,
+                  openClient,
+                })
+              : undefined;
+          try {
+            const generation = describeScheduledScenario(scenario);
+            let enqueued = 0;
+            const exportLifecycle = async () =>
+              await db
+                .select({
+                  id: schema.organizationDataExports.id,
+                  status: schema.organizationDataExports.status,
+                })
+                .from(schema.organizationDataExports)
+                .orderBy(asc(schema.organizationDataExports.id));
+            const originalExportLifecycle =
+              scenario.type === "data-exports" ? await exportLifecycle() : null;
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId,
+              task,
+              ...(scenario.type === "data-exports"
+                ? {
+                    dataExportMaintenance: {
+                      handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+                      enqueue: async () => {
+                        enqueued += 1;
+                        return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+                      },
                     },
+                  }
+                : {}),
+            });
+            if (scenario.type === "data-exports") {
+              const retained = await db.$count(schema.organizationDataExports);
+              if (retained !== scenario.rows) {
+                panic("Scheduled measurement consumed its export fixture", {
+                  retained,
+                  expected: scenario.rows,
+                });
+              }
+              const lifecycleChanged =
+                JSON.stringify(await exportLifecycle()) !==
+                JSON.stringify(originalExportLifecycle);
+              if (lifecycleChanged !== (scenario.cohort === "transitions")) {
+                panic(
+                  "Export measurement missed its transition path",
+                  scenario,
+                );
+              }
+              if (enqueued > 0 !== (scenario.cohort !== "quiet")) {
+                panic("Export measurement missed its handoff path", scenario);
+              }
+            }
+            if (scenario.type === "request-receipts") {
+              const retained = await db.$count(
+                schema.requestIdempotencyReceipts,
+              );
+              if (
+                scenario.cohort === "quiet"
+                  ? retained !== scenario.rows
+                  : retained >= scenario.rows
+              ) {
+                panic(
+                  "Scheduled measurement did not apply its receipt retention scenario",
+                  {
+                    retained,
+                    expected: scenario.rows,
                   },
-                }
-              : {}),
-          });
-          if (scenario.type === "data-exports") {
-            const retained = await db.$count(organizationDataExports);
-            if (retained !== scenario.rows) {
-              panic("Scheduled measurement consumed its export fixture", {
-                retained,
-                expected: scenario.rows,
-              });
+                );
+              }
+              const deleted = run.statements.some(({ statement }) =>
+                /^delete\s/iu.test(statement),
+              );
+              if (deleted !== (scenario.cohort !== "quiet")) {
+                panic(
+                  "Receipt task did not exercise the expected retention path",
+                  scenario,
+                );
+              }
             }
-            if (lifecycleChanged !== (scenario.cohort === "transitions")) {
-              panic("Export measurement missed its transition path", scenario);
+            log({
+              event: "read_budget_job_run",
+              jobId,
+              generation,
+              ...run.metrics,
+              statements: run.statements,
+            });
+            for (const violation of run.planViolations) {
+              note(violation.message);
             }
-            if (enqueued > 0 !== (scenario.cohort !== "quiet")) {
-              panic("Export measurement missed its handoff path", scenario);
+            if (
+              measurement.executed !== undefined &&
+              !(await measurement.executed(db))
+            ) {
+              note(
+                `${jobId} on ${generation} left no proof of its work; the budget measured only its bookkeeping`,
+              );
             }
+            return run.metrics;
+          } finally {
+            await release?.();
           }
-          log({
-            event: "read_budget_job_run",
-            jobId,
-            generation,
-            ...run.metrics,
-            statements: run.statements,
-          });
-          return run.metrics;
         };
         // Every job that declares a budget, judged against the budget its own
         // registration names; the census makes each one have a measurement.
@@ -368,6 +628,66 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
           }
         }
 
+        // The coverage refresh writes. Measured twice in place, it must leave
+        // the fixture exactly as found and take the same path both times.
+        const coverageJob =
+          DECLARED_SCHEDULER_JOBS.find(
+            ({ id }) => id === SCHEDULER_BACKFILL_IDS.coverage,
+          ) ?? panic("The coverage refresh is not declared");
+        const coverageMeasurement =
+          SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
+          panic("The coverage refresh has no measurement");
+        const measureCoverageInPlace = async (
+          admission: Verdict = QUERY_PERF_ADMISSION,
+        ) => {
+          const served = CASE_LAW_SCENARIOS.quiet.size;
+          await serveCaseLaw(db, served);
+          const release = await coverageMeasurement.prepare?.({
+            database: db,
+            served,
+            openClient,
+          });
+          try {
+            const run = await measureScheduledJobRun({
+              database: db,
+              jobId: coverageJob.id,
+              task: coverageMeasurement.task,
+              admission,
+            });
+            return {
+              ...run,
+              computed: await coverageRefreshWroteSummary(db),
+            };
+          } finally {
+            await release?.();
+          }
+        };
+        const coverageShape = (
+          run: Awaited<ReturnType<typeof measureCoverageInPlace>>,
+        ) =>
+          run.statements.map(({ statement, planViolations }) => ({
+            statement,
+            violations: planViolations.map(({ kind }) => kind),
+          }));
+        await deadline.run("measure the coverage refresh twice", async () => {
+          const found = await readCoverageRefreshState(db);
+          const first = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          const second = await measureCoverageInPlace();
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+          expect(first.computed).toBe(true);
+          expect(second.computed).toBe(true);
+          expect(coverageShape(first).length).toBeGreaterThan(0);
+          expect(coverageShape(second)).toEqual(coverageShape(first));
+          // The check above is what a busy-window hold would fail.
+          const held = await measureCoverageInPlace({
+            kind: "stop",
+            signals: [],
+          });
+          expect(held.computed).toBe(false);
+          expect(await readCoverageRefreshState(db)).toEqual(found);
+        });
+
         // The gate must refuse what it exists to refuse. The freshness
         // report's former reads go over its budget on this fixture, and the
         // census-readiness revision checks, which it no longer runs, grow
@@ -381,6 +701,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
               const result = await measureOwnerStatement({
                 database: db,
                 build: () => query,
+                owner: "fixture.unboundedFreshness",
+                ownerDeadlineMs: undefined,
+                profileId: "corpus",
               });
               pages += result.metrics.sharedBlocks;
             }
@@ -414,6 +737,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
             const result = await measureOwnerStatement({
               database: db,
               build: () => query,
+              owner: "fixture.convergenceRevisionChecks",
+              ownerDeadlineMs: undefined,
+              profileId: "corpus",
             });
             pages += result.metrics.sharedBlocks;
           }

@@ -1,14 +1,26 @@
 import { useState } from "react";
 
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { useAppColors } from "@/theme";
+import {
+  COMPOSER_BOX_CLASS,
+  COMPOSER_LARGE_EDITOR_CLASS,
+} from "@stll/ui/composer-tokens";
+import { Textarea } from "@stll/ui/textarea";
+
+import { ArrowUpIcon, PlusIcon, SquareIcon } from "@/icons.gen";
+import { useUiColors } from "@/theme";
 
 /**
- * The message box under a thread. It grows with what is typed up to a few
- * lines, then scrolls. While an answer is arriving its button stops the
- * answer instead of sending; it can stop once the server has named the turn.
+ * The message box: the web's large composer, its box from the same tokens
+ * (`@stll/ui/composer-tokens`). The text sits on top, three lines tall
+ * before it grows, then a row with the (+) control and the round send
+ * button. Sized for a thumb: body text and 36pt controls. It grows with what
+ * is typed up to a few lines, then scrolls. While an answer is arriving its
+ * button stops the answer instead of sending; it can stop once the server
+ * has named the turn. With nothing to send, the button is drawn muted rather
+ * than dimmed, so it never reads as ready.
  */
 export const ChatComposer = ({
   busy,
@@ -22,7 +34,7 @@ export const ChatComposer = ({
   onSend: (text: string, onRefused: () => void) => boolean;
   onStop: () => void;
 }) => {
-  const colors = useAppColors();
+  const ui = useUiColors();
   const t = useTranslations("chat");
   const [draft, setDraft] = useState("");
   const message = draft.trim();
@@ -40,100 +52,64 @@ export const ChatComposer = ({
     }
   };
 
+  const canSend = message !== "";
+  const round = "size-9 shrink-0 items-center justify-center rounded-full";
+  const ready = `${round} bg-foreground`;
+  const muted = `${round} bg-secondary`;
+
   return (
-    <View
-      style={[
-        styles.bar,
-        { backgroundColor: colors.card, borderTopColor: colors.border },
-      ]}
-    >
-      <TextInput
-        accessibilityLabel={t("composerPlaceholder")}
-        multiline
-        onChangeText={setDraft}
-        placeholder={t("composerPlaceholder")}
-        placeholderTextColor={colors.muted}
-        style={[
-          styles.input,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-            color: colors.text,
-          },
-        ]}
-        value={draft}
-      />
-      {busy ? (
-        <Pressable
-          accessibilityLabel={t("stop")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: !canStop }}
-          disabled={!canStop}
-          onPress={onStop}
-          style={[
-            styles.button,
-            { backgroundColor: canStop ? colors.text : colors.border },
-          ]}
-        >
-          <View style={[styles.stopMark, { backgroundColor: colors.card }]} />
-        </Pressable>
-      ) : (
-        <Pressable
-          accessibilityLabel={t("send")}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: message === "" }}
-          disabled={message === ""}
-          onPress={send}
-          style={[
-            styles.button,
-            {
-              backgroundColor: message === "" ? colors.border : colors.accent,
-            },
-          ]}
-        >
-          <Text style={[styles.sendMark, { color: colors.onAccent }]}>↑</Text>
-        </Pressable>
-      )}
+    <View className="bg-background px-3 pt-1 pb-2">
+      <View className={`${COMPOSER_BOX_CLASS} border-border`}>
+        <View className="px-3.5 pt-3 pb-1">
+          <Textarea
+            accessibilityLabel={t("composerPlaceholder")}
+            // Three lines tall, all of it a place to tap and type.
+            className={`${COMPOSER_LARGE_EDITOR_CLASS} max-h-40`}
+            onChangeText={setDraft}
+            placeholder={t("composerPlaceholder")}
+            unstyled
+            value={draft}
+          />
+        </View>
+        <View className="flex-row items-center justify-between px-2 pb-2">
+          <Pressable
+            accessibilityLabel={t("composerMenu")}
+            accessibilityRole="button"
+            className={`border-border bg-secondary border ${round}`}
+          >
+            <PlusIcon color={ui.secondaryForeground} size={18} />
+          </Pressable>
+          {busy ? (
+            <Pressable
+              accessibilityLabel={t("stop")}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canStop }}
+              className={canStop ? ready : muted}
+              disabled={!canStop}
+              onPress={onStop}
+            >
+              <SquareIcon
+                color={canStop ? ui.background : ui.mutedForeground}
+                size={16}
+              />
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityLabel={t("send")}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !canSend }}
+              className={canSend ? ready : muted}
+              disabled={!canSend}
+              onPress={send}
+            >
+              <ArrowUpIcon
+                color={canSend ? ui.background : ui.mutedForeground}
+                size={18}
+              />
+            </Pressable>
+          )}
+        </View>
+      </View>
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  bar: {
-    alignItems: "flex-end",
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  button: {
-    alignItems: "center",
-    borderRadius: 18,
-    height: 36,
-    justifyContent: "center",
-    width: 36,
-  },
-  input: {
-    borderRadius: 18,
-    borderWidth: StyleSheet.hairlineWidth,
-    flex: 1,
-    fontSize: 16,
-    lineHeight: 21,
-    maxHeight: 132,
-    minHeight: 36,
-    paddingBottom: 8,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-  },
-  sendMark: {
-    fontSize: 20,
-    fontWeight: "700",
-    lineHeight: 22,
-  },
-  stopMark: {
-    borderRadius: 2,
-    height: 12,
-    width: 12,
-  },
-});

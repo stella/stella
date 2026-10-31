@@ -68,6 +68,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "modelId",
   "operation",
   "organizationId",
+  "parameterStoreReason",
   "phase",
   "queue",
   "requestId",

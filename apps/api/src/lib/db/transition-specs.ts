@@ -4,6 +4,7 @@ import {
   accountExports,
   caseLawDecisionCitationStatsState,
   caseLawReplayBatches,
+  caseLawSitemapDrainProgress,
   desktopEditSessions,
   desktopTimeEntryBatches,
   EU_COMPLETION_STATUSES,
@@ -46,6 +47,7 @@ import type {
   ScopedTransitionDeclaration,
   TransitionSpec,
 } from "@/api/lib/db/transitions";
+import { REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS } from "@/api/lib/idempotency/request-receipt-transition-spec";
 import {
   CONTACT_MONITORING_TRANSITIONS,
   FIRM_MONITORING_TRANSITIONS,
@@ -151,6 +153,25 @@ const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
   key: "decisionId",
   edges: { pending: ["exact"], exact: [] },
   options: { terminal: ["exact"] },
+});
+
+export const SITEMAP_DRAIN_TRANSITION_IDENTITY = {
+  tableName: "caseLawSitemapDrainProgress",
+  key: "country",
+  scope: ["year", "month"],
+  stateColumn: "phase",
+} as const;
+
+const SITEMAP_DRAIN_TRANSITIONS = defineScopedTransitions({
+  table: caseLawSitemapDrainProgress,
+  key: SITEMAP_DRAIN_TRANSITION_IDENTITY.key,
+  scope: SITEMAP_DRAIN_TRANSITION_IDENTITY.scope,
+  stateColumn: SITEMAP_DRAIN_TRANSITION_IDENTITY.stateColumn,
+  edges: {
+    draining: ["awaiting_visibility"],
+    awaiting_visibility: ["draining"],
+  },
+  initial: ["draining"],
 });
 
 // Readmission and recovery move the attempt and receipt status atomically.
@@ -417,6 +438,7 @@ export const TRANSITIONS = {
   caseLawReplayBatches: CASE_LAW_REPLAY_BATCH_TRANSITIONS,
   caseLawResearchAnswers: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawSearchBackfillFailures: { unmanaged: UNMANAGED_REASONS.workerRun },
+  caseLawSitemapDrainProgress: SITEMAP_DRAIN_TRANSITIONS,
   caseLawStatuteCitationCountState: { unmanaged: UNMANAGED_REASONS.projection },
   chatThreadCompactions: { unmanaged: UNMANAGED_REASONS.workerRun },
   chatTurns: { unmanaged: UNMANAGED_REASONS.workerRun },
@@ -475,6 +497,7 @@ export const TRANSITIONS = {
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },
   properties: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   reportExports: { unmanaged: UNMANAGED_REASONS.workerRun },
+  requestIdempotencyReceipts: REQUEST_IDEMPOTENCY_RECEIPT_TRANSITIONS,
   sanctionsContactMatches: {
     scoped: {
       state: MATCH_MEMBERSHIP_TRANSITIONS,

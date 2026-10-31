@@ -38,6 +38,11 @@ import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 export const QUERY_PLAN_ROW_COUNT = 3000;
+/**
+ * Link rows under the sample provision, out of the seed's
+ * `QUERY_PLAN_ROW_COUNT`: two mentions from each of 1,000 Czech decisions.
+ */
+export const QUERY_PLAN_PROVISION_SUBTREE_ROWS = 2000;
 const DECISION_ID_PREFIX = "00000000-0000-7000-8000-";
 const LEGISLATION_DOCUMENT_ID_PREFIX = "00000000-0000-7000-9000-";
 const SAMPLE_DECISION_NUMBER = 12;
@@ -57,6 +62,9 @@ export const QUERY_PLAN_SAMPLE = {
       makeUuid(DECISION_ID_PREFIX, SAMPLE_DECISION_NUMBER),
     ),
     sharedEcli: "ECLI:EU:C:2024:12",
+    /** The work and provision the seed's link rows concentrate on. */
+    provisionWork: "/eli/cz/sb/2024/1",
+    provisionAnchor: "section-1",
     generation: CASE_LAW_GENERATION,
     candidateIds: Array.from({ length: 10 }, (_, index) =>
       toSafeId<"caseLawDecision">(
@@ -304,6 +312,37 @@ export const seedQueryPlanData = async (
     FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
   `);
 
+  // One heavily cited provision: two mentions, the section and one of its
+  // subsections, from each Czech decision (3, 6, 9, ...; every third decision
+  // is Czech). The remaining rows spread over the other works as before.
+  const subtreeDecisions = QUERY_PLAN_PROVISION_SUBTREE_ROWS / 2;
+  await db.execute(sql`
+    INSERT INTO ${caseLawProvisionCitations}
+      (id, decision_id, jurisdiction, work_identifier, work_number,
+       work_year, work_collection, unit, section, anchor, decision_date,
+       sentence_text, span_start, span_end, confidence)
+    SELECT
+      md5('qpg-provision-' || n::text)::uuid,
+      (${sql.raw(`'${DECISION_ID_PREFIX}'`)} || lpad(subtree.decision::text, 12, '0'))::uuid,
+      ${QUERY_PLAN_SAMPLE.caseLaw.country}::text,
+      ${QUERY_PLAN_SAMPLE.caseLaw.provisionWork}::text,
+      1, 2024, 'sb', 'section', 1,
+      CASE WHEN subtree.mention = 1
+        THEN ${QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor}::text
+        ELSE ${QUERY_PLAN_SAMPLE.caseLaw.provisionAnchor}::text || '-odst_' || (n % 5 + 1)::text
+      END,
+      DATE '2024-01-01' + (subtree.decision % 365),
+      'Query plan provision citation',
+      subtree.mention * 20 - 20,
+      subtree.mention * 20 - 10,
+      0.9
+    FROM generate_series(1, ${QUERY_PLAN_PROVISION_SUBTREE_ROWS}::integer) AS generated(n)
+    CROSS JOIN LATERAL (
+      SELECT
+        3 * ((n - 1) % ${subtreeDecisions}::integer + 1) AS decision,
+        (n - 1) / ${subtreeDecisions}::integer + 1 AS mention
+    ) subtree
+  `);
   await db.execute(sql`
     INSERT INTO ${caseLawProvisionCitations}
       (id, decision_id, jurisdiction, work_identifier, work_number,
@@ -316,9 +355,15 @@ export const seedQueryPlanData = async (
       n % 100 + 1, 2024, 'sb', 'section', n % 20 + 1,
       'section-' || (n % 20 + 1)::text,
       DATE '2024-01-01' + (n % 365),
-      'Query plan provision citation', 0, 10, 0.9
-    FROM generate_series(1, ${QUERY_PLAN_ROW_COUNT}) AS generated(n)
+      'Query plan provision citation', 40, 50, 0.9
+    FROM generate_series(
+      ${QUERY_PLAN_PROVISION_SUBTREE_ROWS + 1}::integer,
+      ${QUERY_PLAN_ROW_COUNT}::integer
+    ) AS generated(n)
   `);
+  // Vacuumed like the corpus table it stands for, so the subtree range can
+  // be read from the index alone.
+  await db.execute(sql`VACUUM (ANALYZE) ${caseLawProvisionCitations}`);
 
   await db.execute(sql`
     INSERT INTO ${caseLawProvisionExtractions}

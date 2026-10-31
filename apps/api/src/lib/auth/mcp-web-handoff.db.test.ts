@@ -346,7 +346,6 @@ describe("MCP web handoff lifecycle", () => {
       token,
       now: before,
       expiresAt: new Date(deadline.getTime() + 7 * 24 * 60 * 60 * 1000),
-      credentialMode: "cookie",
     });
     expect(refreshed?.expiresAt).toEqual(deadline);
     expect(
@@ -354,9 +353,7 @@ describe("MCP web handoff lifecycle", () => {
         await db.select().from(session).where(eq(session.id, "handoff-session"))
       ).at(0)?.expiresAt,
     ).toEqual(deadline);
-    expect(
-      await store.observe({ token, now: deadline, boundary: "activity" }),
-    ).toBeNull();
+    expect(await store.observe({ token, now: deadline })).toBeNull();
   });
   test("handoff sessions enforce their idle limit independently of rollout policies", async () => {
     const idleAt = new Date(instant.getTime() - 60 * 60 * 1000);
@@ -377,7 +374,6 @@ describe("MCP web handoff lifecycle", () => {
       await store.observe({
         token: "idle-handoff-token",
         now: instant,
-        boundary: "activity",
       }),
     ).toBeNull();
   });

@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import {
-  copyFileSync,
+  cpSync,
   existsSync,
   readFileSync,
   rmSync,
@@ -134,14 +134,16 @@ const reconcileDecisions = ({
     }
     if (existsSync(newFile)) {
       if (decisionKind(newFile) !== decisionKind(path.resolve(root, oldFile))) {
-        rmSync(newFile);
+        rmSync(path.dirname(newFile), { recursive: true });
         conflicted.add(renamedKey);
       }
       return;
     }
-    copyFileSync(path.resolve(root, oldFile), newFile);
+    cpSync(path.dirname(path.resolve(root, oldFile)), path.dirname(newFile), {
+      recursive: true,
+    });
   };
-  for (const name of new Bun.Glob("*.json").scanSync({
+  for (const name of new Bun.Glob("*/decision.json").scanSync({
     cwd: decisionDirectory,
   })) {
     const oldFile = `.github/ci-job-classification-decisions/${name}`;
@@ -155,9 +157,9 @@ const reconcileDecisions = ({
     const remainder = key.slice(key.indexOf(":") + 1);
     if (replacement) {
       place(key, oldFile, replacement);
-      rmSync(path.resolve(root, oldFile));
+      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
     } else if (previous[oldSupplier] !== undefined && kept === undefined) {
-      rmSync(path.resolve(root, oldFile));
+      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
     } else if (
       kept !== undefined &&
       !Object.keys(kept.documents).some((file) =>
@@ -166,7 +168,7 @@ const reconcileDecisions = ({
     ) {
       // A supplier still in use no longer carries this job's document: its
       // callers moved to another revision (copied above) or dropped it.
-      rmSync(path.resolve(root, oldFile));
+      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
     }
   }
 };
