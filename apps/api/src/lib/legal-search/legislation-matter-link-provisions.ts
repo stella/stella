@@ -1,14 +1,14 @@
 import { panic } from "better-result";
-import { and, eq, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lte, or, sql } from "drizzle-orm";
 
+import { normalizeCountry } from "@stll/agent-input";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
-import { chunk } from "@stll/concurrency/chunk";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {
-  publishedLegislationDocumentIn,
+  publishedLegislationDocumentFor,
   redistributableLegislationVersionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -16,7 +16,7 @@ import {
   opensOn,
 } from "@/api/lib/legal-search/legislation-validity-window";
 import {
-  readVersionBlocks,
+  readVersionBlocksBatch,
   versionAstColumns,
 } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -59,9 +59,15 @@ export const resolveMatterLinkProvisions = async ({
 }: ResolveMatterLinkProvisionsOptions): Promise<
   MatterLinkProvisionResolution[]
 > => {
+  const normalizedItems = items.map((item) => {
+    const country = normalizeCountry(item.jurisdiction, {
+      spelling: "alpha-3",
+    });
+    return country.ok ? { ...item, jurisdiction: country.value.alpha3 } : item;
+  });
   const requests = [
     ...new Map(
-      items.map((item) => [
+      normalizedItems.map((item) => [
         JSON.stringify([
           item.statuteId,
           item.provisionId,
@@ -110,7 +116,7 @@ export const resolveMatterLinkProvisions = async ({
       )
       .where(
         and(
-          publishedLegislationDocumentIn(PUBLIC_LEGISLATION_COUNTRIES),
+          publishedLegislationDocumentFor("search"),
           or(
             ...versions.map((item) =>
               and(
@@ -160,55 +166,58 @@ export const resolveMatterLinkProvisions = async ({
     documents.map((row) => [row.id, new Set<string>()]),
   );
   const requestedAnchorSet = new Set(requestedAnchors);
-  // Legacy ASTs normalize duplicate anchors in the canonical reader. Reading
-  // raw JSON in SQL would disagree with the anchors a prior reader returned.
-  // Whole payloads cannot be range-read, so fetch each version separately,
-  // keep at most two ASTs in flight, and retain only the requested anchors.
-  for (const batch of chunk(uniqueDocuments, 2)) {
-    await Promise.all(
-      batch.map(async (row) => {
-        const read = await legislationDb(
-          async (tx) =>
-            await readBounded(
-              tx
-                .select(versionAstColumns)
-                .from(legislationDocuments)
-                .where(
-                  and(
-                    eq(legislationDocuments.id, row.id),
-                    redistributableLegislationVersionFor("search"),
-                    opensOn(
-                      legislationVersionRef(legislationDocuments),
-                      sql`${row.version}::date`,
+  if (uniqueDocuments.length > 0) {
+    const read = await legislationDb(
+      async (tx) =>
+        await readBounded(
+          tx
+            .select(versionAstColumns)
+            .from(legislationDocuments)
+            .where(
+              and(
+                inArray(
+                  legislationDocuments.id,
+                  uniqueDocuments.map(({ id }) => id),
+                ),
+                redistributableLegislationVersionFor("search"),
+                or(
+                  ...uniqueDocuments.map((row) =>
+                    and(
+                      eq(legislationDocuments.id, row.id),
+                      opensOn(
+                        legislationVersionRef(legislationDocuments),
+                        sql`${row.version}::date`,
+                      ),
                     ),
                   ),
                 ),
-              1,
+              ),
             ),
-        );
-        if (read.type === "overflow") {
-          return panic("A primary-key AST read returned more than one version");
-        }
-        const version = read.rows.at(0);
-        if (version === undefined) {
-          return;
-        }
-        const blocks = await readVersionBlocks({
-          row: version,
-          legislationDb,
-          step: "matterLinkProvision.corpusAst",
-          surface: "search",
-        });
-        anchorsByDocument.set(
-          row.id,
-          new Set(
-            blocks.flatMap(({ anchorId }) =>
-              requestedAnchorSet.has(anchorId) ? [anchorId] : [],
-            ),
-          ),
-        );
-      }),
+          uniqueDocuments.length,
+        ),
     );
+    if (read.type === "overflow") {
+      return panic(
+        "A primary-key AST set read exceeded its requested versions",
+      );
+    }
+    // The canonical reader re-keys legacy duplicate anchors and batches any
+    // Postgres fallback while keeping only two object payloads in flight.
+    const versionsWithBlocks = await readVersionBlocksBatch({
+      rows: read.rows,
+      legislationDb,
+      step: "matterLinkProvision.corpusAst",
+      surface: "search",
+      select: (blocks) =>
+        new Set(
+          blocks.flatMap(({ anchorId }) =>
+            requestedAnchorSet.has(anchorId) ? [anchorId] : [],
+          ),
+        ),
+    });
+    for (const { id, value } of versionsWithBlocks) {
+      anchorsByDocument.set(id, value);
+    }
   }
 
   return requests.map((item): MatterLinkProvisionResolution => {
