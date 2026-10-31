@@ -33,6 +33,7 @@ import {
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { holdFreeFileDeletionDb } from "@/api/tests/helpers/hold-free-file-deletion-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createSelectQueryMock } from "@/api/tests/scoped-db-mock";
 
@@ -81,17 +82,8 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
-const createFileDeletionTx = () =>
-  asTestRaw<Transaction>({
-    select: () => createSelectQueryMock([]),
-    selectDistinct: () => createSelectQueryMock([]),
-  });
-const fileUsageDb = {
-  transaction: async <T>(callback: (tx: Transaction) => Promise<T>) =>
-    await callback(createFileDeletionTx()),
-};
 const uploadDependencies = {
-  organizationFileUsageDb: fileUsageDb,
+  organizationFileUsageDb: holdFreeFileDeletionDb,
   reserveChatObjectCleanupIntent: async () => Result.ok([]),
 };
 

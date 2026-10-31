@@ -32,6 +32,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { OrganizationFileDeletionDb } from "@/api/lib/files/delete-organization-file";
 import type { FileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
@@ -106,6 +107,8 @@ export type CreateEntityVersionFromBufferDependencies = {
   computeVersionDiffStats: typeof computeVersionDiffStats;
   createRootScopedDb: typeof createRootScopedDb;
   broadcast: Parameters<typeof broadcastWorkspaceResourceUpdated>[2];
+  /** Owner database for the cleanup's legal-hold fence; defaults to the root pool. */
+  organizationFileUsageDb?: OrganizationFileDeletionDb;
 };
 
 const CREATE_ENTITY_VERSION_FROM_BUFFER_DEPENDENCIES: CreateEntityVersionFromBufferDependencies =
@@ -237,7 +240,13 @@ export const createEntityVersionFromBuffer = async ({
           try: async () =>
             await withTimeout(
               async (signal) =>
-                await deleteOrganizationFileWithSignal(objectKey, signal),
+                await deleteOrganizationFileWithSignal(
+                  objectKey,
+                  signal,
+                  dependencies.organizationFileUsageDb === undefined
+                    ? {}
+                    : { fileUsageDb: dependencies.organizationFileUsageDb },
+                ),
               {
                 label: "buffer-version-writer-cleanup.delete",
                 timeoutMs: BUFFER_INTENT_DELETE_TIMEOUT_MS,

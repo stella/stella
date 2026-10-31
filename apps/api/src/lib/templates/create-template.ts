@@ -38,6 +38,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import type { OrganizationFileDeletionDb } from "@/api/lib/files/delete-organization-file";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
@@ -82,6 +83,8 @@ export type CreateStoredTemplateOptions = {
    *  organization is refused with a 409 under the same lock as the insert. */
   origin?: TemplateOrigin | undefined;
   recordAuditEvent: AuditRecorder;
+  /** Owner database for the cleanup's legal-hold fence; defaults to the root pool. */
+  organizationFileUsageDb?: OrganizationFileDeletionDb | undefined;
 };
 
 type PrepareTemplateWriteOptions = Pick<
@@ -196,6 +199,7 @@ export const createStoredTemplate = async function* ({
   kind = "document",
   origin = AUTHORED_TEMPLATE_ORIGIN,
   recordAuditEvent,
+  organizationFileUsageDb,
 }: CreateStoredTemplateOptions): SafeHandlerGenerator<CreatedTemplate> {
   const {
     detectedLanguages,
@@ -362,6 +366,9 @@ export const createStoredTemplate = async function* ({
         const deleted = await deleteOrganizationFileWithSignal(
           s3Key,
           AbortSignal.timeout(BUFFER_INTENT_DELETE_TIMEOUT_MS),
+          organizationFileUsageDb === undefined
+            ? {}
+            : { fileUsageDb: organizationFileUsageDb },
         );
         if (Result.isError(deleted)) {
           observeFailure(deleted.error, {

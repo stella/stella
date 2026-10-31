@@ -15,8 +15,11 @@ import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
+/** The owner database the deletion's legal-hold fence and usage settle on. */
+export type OrganizationFileDeletionDb = Pick<MaintenanceDb, "transaction">;
+
 type DeleteOrganizationFileOptions = {
-  fileUsageDb?: Pick<MaintenanceDb, "transaction">;
+  fileUsageDb?: OrganizationFileDeletionDb;
 };
 
 export class DeleteOrganizationFileError extends TaggedError(

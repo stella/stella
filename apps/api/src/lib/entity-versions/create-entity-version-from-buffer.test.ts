@@ -32,6 +32,7 @@ import type { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3, FakeS3Method } from "@/api/tests/helpers/fake-s3";
+import { holdFreeFileDeletionDb } from "@/api/tests/helpers/hold-free-file-deletion-db";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -191,6 +192,7 @@ const dependencies = {
   broadcast: (workspaceId, event) => {
     void broadcastMock(workspaceId, event);
   },
+  organizationFileUsageDb: holdFreeFileDeletionDb,
 } satisfies CreateEntityVersionFromBufferDependencies;
 const baseInput = {
   safeDb,
