@@ -9,6 +9,7 @@ import { expect, request as apiRequestFactory, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   partitionRoundRobin,
@@ -441,17 +442,17 @@ if (baselineMode === "write" || baselineMode === "rewrite") {
 }
 
 const createContact = async (request: APIRequestContext): Promise<string> => {
-  const contactId = randomUUID();
+  const contact = v.parse(
+    v.object({ id: v.string() }),
+    await apiPut(request, "/contacts", {
+      type: "person",
+      displayName: `Route Smoke ${randomUUID().slice(0, 8)}`,
+      firstName: "Route",
+      lastName: "Smoke",
+    }),
+  );
 
-  await apiPut(request, "/contacts", {
-    id: contactId,
-    type: "person",
-    displayName: `Route Smoke ${contactId.slice(0, 8)}`,
-    firstName: "Route",
-    lastName: "Smoke",
-  });
-
-  return contactId;
+  return contact.id;
 };
 
 const smokeRoute = async ({

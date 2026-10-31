@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import * as v from "valibot";
 
 import { apiDelete, apiPut } from "../helpers/api";
 import { seedSidebarState } from "../helpers/sidebar-state";
@@ -174,18 +175,19 @@ for (const email of [null, "a@example.test"]) {
     page,
     request,
   }, testInfo) => {
-    const contactId = randomUUID();
-    const displayName = `Contact click ${contactId.slice(0, 8)}`;
-    await apiPut(request, "/contacts", {
-      id: contactId,
-      type: "person",
-      displayName,
-      ...(email === null
-        ? {}
-        : {
-            emails: [{ type: "work", address: email, isPrimary: true }],
-          }),
-    });
+    const displayName = `Contact click ${randomUUID().slice(0, 8)}`;
+    const { id: contactId } = v.parse(
+      v.object({ id: v.string() }),
+      await apiPut(request, "/contacts", {
+        type: "person",
+        displayName,
+        ...(email === null
+          ? {}
+          : {
+              emails: [{ type: "work", address: email, isPrimary: true }],
+            }),
+      }),
+    );
     try {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
