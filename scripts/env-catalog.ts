@@ -1888,6 +1888,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_PIN_REWRITE",
   // Test-only: dependency remediation fixture states.
   "TEST_QUARANTINED",
+  "TEST_RESOLVER_ERROR",
   "TEST_UPSTREAM_BLOCKED",
   "WXT_STELLA_ORIGINS",
 ]);
