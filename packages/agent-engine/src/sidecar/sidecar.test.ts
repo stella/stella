@@ -341,7 +341,7 @@ describe("harness sidecar over stdio", () => {
       executable: "/nonexistent/claude",
       configDir,
     });
-    const probed = (requestId: string) =>
+    const probed = async (requestId: string) =>
       sidecar.waitFor(
         (
           message,

@@ -23,6 +23,7 @@ import {
   HARNESS_COMPATIBILITY_DISPOSITION,
   resolveHarnessCompatibility,
 } from "../harness/compatibility";
+import { createEventQueue } from "../harness/event-queue";
 import {
   HARNESS_FAILURE_OUTCOME,
   type HarnessEvent,
@@ -184,16 +185,15 @@ const probeOutcome = ({
   };
 };
 
-/**
- * The event stream for a run that ends before its harness starts.
- *
- * @yields The run's one terminal event.
- */
-async function* failedBeforeStart(
+/** The event stream for a run that ends before its harness starts. */
+const failedBeforeStart = (
   failure: HarnessFailure,
-): AsyncGenerator<HarnessEvent> {
-  yield { type: "turn.failed", failure };
-}
+): AsyncIterable<HarnessEvent> => {
+  const queue = createEventQueue<HarnessEvent>();
+  queue.push({ type: "turn.failed", failure });
+  queue.close();
+  return queue.items;
+};
 
 export class SidecarHost {
   private readonly options: SidecarHostOptions;
@@ -477,6 +477,7 @@ export class SidecarHost {
       // SAFETY: the wire checks each message's role only, as the runner
       // socket does; `buildTurnPrompt` reads the content and refuses a
       // transcript it cannot read as `invalid_transcript`.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- see SAFETY above
       transcript: message.messages as unknown as ModelMessage[],
       continuation:
         message.harnessSessionId === null
@@ -568,8 +569,17 @@ export class SidecarHost {
             outcome.value = HARNESS_FAILURE_OUTCOME[event.failure.type];
             yield event;
             break;
-          default:
+          case "text.delta":
+          case "text.completed":
+          case "reasoning.completed":
+          case "tool.started":
+          case "tool.completed":
+          case "retrying":
             yield event;
+            break;
+          default:
+            event satisfies never;
+            panic("Unhandled harness event");
         }
       }
     }
