@@ -1192,6 +1192,29 @@ export type OnlineMigrationStartupReport = {
   pending: PendingOnlineMigrationStep[];
 };
 
+/**
+ * The release depends on its deploy-blocking indexes, so a session that holds
+ * the online lock (a migrate run, or the post-deploy runner) never defers
+ * their check: a catalog read needs no lock and sees each one as it stands.
+ */
+const assertDeployBlockingIndexesValid = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  lifecycle: Readonly<Record<string, OnlineWorkLifecycle>>,
+): Promise<void> => {
+  for (const index of ONLINE_MIGRATION_INDEXES) {
+    if (lifecycleOf(lifecycle, index.name).state !== "deploy_blocking") {
+      continue;
+    }
+    const state = await readIndexState(connection, index);
+    if (state.type === "missing" || !state.isReady || !state.isValid) {
+      panic(
+        `Online index ${index.name} is deploy-blocking but not ${state.type === "missing" ? "present" : "valid"} while the online lock is held elsewhere`,
+      );
+    }
+    assertIndexDefinition(index, state);
+  }
+};
+
 /** Startup validates under the online lock so concurrent rebuilds cannot race it. */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
@@ -1206,6 +1229,10 @@ export const reportOnlineMigrations = async (
     await connection.execute(STARTUP_VALIDATION_TIMEOUT_SQL);
     try {
       if (!(await tryAcquireOnlineMigrationLock(connection))) {
+        await assertDeployBlockingIndexesValid(
+          connection,
+          options.lifecycle ?? ONLINE_WORK_LIFECYCLE,
+        );
         return { type: "migrator_active" };
       }
       try {

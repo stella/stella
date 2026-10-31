@@ -836,8 +836,12 @@ describe("online migrations", () => {
       missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
       onlineLockHeld: true,
     });
+    // Deploy-blocking work is checked even then (see "deploy-blocking work").
     expect(
-      await reportOnlineMigrationsWithOwnership(harness.pool, { repairs: [] }),
+      await reportOnlineMigrationsWithOwnership(harness.pool, {
+        repairs: [],
+        lifecycle: allFinalizedOnlineWork(),
+      }),
     ).toEqual({
       type: "migrator_active",
     });
@@ -1070,6 +1074,39 @@ describe("online migrations", () => {
       ).toEqual({ type: "complete" });
       expect(harness.statements).toContain(blocking.createSql);
       expect(harness.statements).not.toContain(other.createSql);
+    });
+
+    test("startup checks it without the online lock while another session holds that lock", async () => {
+      const { blocking } = pair();
+      const lifecycle = {
+        ...allFinalizedOnlineWork(),
+        [blocking.name]: DEPLOY_BLOCKING,
+      };
+      const held = createHarness({ onlineLockHeld: true });
+      expect(
+        await reportOnlineMigrationsWithOwnership(held.pool, {
+          repairs: [],
+          lifecycle,
+        }),
+      ).toEqual({ type: "migrator_active" });
+
+      for (const [options, state] of [
+        [{ missingIndexes: [blocking.name] }, "present"],
+        [{ indexStates: { [blocking.name]: [false] } }, "valid"],
+      ] as const) {
+        const harness = createHarness({ ...options, onlineLockHeld: true });
+        expect(
+          await rejectionOf(
+            reportOnlineMigrationsWithOwnership(harness.pool, {
+              repairs: [],
+              lifecycle,
+            }),
+          ),
+        ).toMatchObject({
+          message: `Online index ${blocking.name} is deploy-blocking but not ${state} while the online lock is held elsewhere`,
+        });
+        expect(harness.statements).not.toContain(blocking.createSql);
+      }
     });
 
     test("validation fails while it is incomplete, at any migration age", async () => {

@@ -2,6 +2,7 @@ import { expect, expectTypeOf, test } from "bun:test";
 
 import {
   ONLINE_INDEX_REPLACEMENTS,
+  ONLINE_MIGRATION_INDEXES,
   ONLINE_WORK_NAMES,
 } from "./online-migrations";
 import {
@@ -63,6 +64,17 @@ test("migrate-ready work is deploy-blocking or finalized, never pending", () => 
   expectTypeOf<
     Admits<"contacts_external_ref_check", MigrateReadyWorkName>
   >().toEqualTypeOf<false>();
+});
+
+// Startup reads deploy-blocking work from pg_index when another session holds
+// the online lock, which only an index allows.
+test("deploy-blocking work is an online index", () => {
+  const indexes = new Set(ONLINE_MIGRATION_INDEXES.map(({ name }) => name));
+  expect(
+    Object.entries(ONLINE_WORK_LIFECYCLE).flatMap(([name, { state }]) =>
+      state === "deploy_blocking" && !indexes.has(name) ? [name] : [],
+    ),
+  ).toEqual([]);
 });
 
 test("every registered work name needs a lifecycle entry", () => {
