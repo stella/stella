@@ -1,5 +1,6 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 import { panic, Result } from "better-result";
 
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
@@ -11,23 +12,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceAdapter,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   AT_RIS_APPLICATIONS,
   AT_RIS_PART,
@@ -58,7 +42,26 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceAdapter,
+} from "@/api/lib/legal-search/ingestion-types";
+import { AST_CONTENT_LOST } from "@/api/lib/legal-search/parsers/validate-ast";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -66,6 +69,9 @@ import {
   AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
   AT_RIS_METADATA_URL_SCHEMA,
 } from "./at-courts.metadata-urls";
+
+/** The document printed an element outside the RIS vocabulary; its text is kept. */
+const RIS_UNKNOWN_ELEMENT = "case_law.ingestion.ris_unknown_element";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const LANGUAGE = "de";
@@ -1240,6 +1246,27 @@ export const assembleAtRisDecision = (
     });
   }
   const parsed = parseResult.value;
+  if (parsed.unknownElements.length > 0) {
+    logger.warn(RIS_UNKNOWN_ELEMENT, {
+      adapterKey: source.key,
+      caseNumber: data.caseNumber,
+      elements: parsed.unknownElements.join(","),
+    });
+  }
+
+  if (parsed.textFidelity !== undefined) {
+    logger.error(AST_CONTENT_LOST, {
+      parser: source.key,
+      caseNumber: data.caseNumber,
+      language: LANGUAGE,
+      url: data.sourceUrl,
+      codes: "TEXT_FIDELITY_MISMATCH",
+      fidelity: parsed.textFidelity.status,
+      missingChars: parsed.textFidelity.missingChars,
+      extraChars: parsed.textFidelity.extraChars,
+      firstDifferenceAt: parsed.textFidelity.firstDifferenceAt,
+    });
+  }
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
   return plainTextIngestionResult(
@@ -1267,6 +1294,9 @@ export const assembleAtRisDecision = (
         {
           ...decisionMetadata(source, data, parsed.sections),
           headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+          ...(parsed.textFidelity === undefined
+            ? {}
+            : { textFidelity: parsed.textFidelity }),
         },
         AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
       ),

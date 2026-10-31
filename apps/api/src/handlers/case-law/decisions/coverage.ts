@@ -329,17 +329,27 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
             SELECT f.value AS court, f.total AS decisions
-            FROM ${caseLawBrowseFacetCounts} AS f
-            WHERE f.kind = 'court' AND f.source_id = case_law_sources.id
+            FROM LATERAL (
+              SELECT source_facets.value, source_facets.total
+              FROM ${caseLawBrowseFacetCounts} AS source_facets
+              WHERE source_facets.source_id = case_law_sources.id
+                AND source_facets.kind = 'court'
+              ORDER BY source_facets.value, source_facets.total
+            ) AS f
             UNION ALL
             SELECT d.court, 1 AS decisions
             FROM ${publishedCaseLawDecisions} AS d
             WHERE d.source_id = case_law_sources.id
               AND NOT EXISTS (
-                SELECT 1 FROM ${caseLawBrowseFacetCounts} AS source_facets
-                WHERE source_facets.kind = 'court'
-                  AND source_facets.source_id = case_law_sources.id
-                LIMIT 1
+                SELECT 1
+                FROM LATERAL (
+                  SELECT source_facets.value
+                  FROM ${caseLawBrowseFacetCounts} AS source_facets
+                  WHERE source_facets.source_id = case_law_sources.id
+                    AND source_facets.kind = 'court'
+                  ORDER BY source_facets.value
+                  LIMIT 1
+                ) AS source_facets
               )
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
