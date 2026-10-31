@@ -20,8 +20,7 @@ import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type {
-  DispatchCheck,
+import {
   generateTanStackObjectForTask,
   generateTanStackTextForTask,
 } from "@/api/lib/tanstack-ai-generate";
@@ -31,10 +30,10 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
-import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { serveForTest } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createUnreachableTextModel } from "@/api/tests/helpers/unreachable-text-model";
 import {
   createTestIds,
   setupRlsTestData,
@@ -42,6 +41,7 @@ import {
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 import { createDesktopBillingDraftEndpoint } from "./billing-drafts";
+import type { ObjectGeneration, TextGeneration } from "./drafting-model";
 import { createDesktopTimeEntryNarrativeEndpoint } from "./narrative";
 import { generateDesktopTimeEntryNarrative } from "./narrative-model";
 
@@ -157,31 +157,42 @@ const post = async (
   return { status: response.status, body: answer };
 };
 
-type ModelOptions = { beforeEachDispatch?: DispatchCheck | undefined };
-
-/** A model that fails the test's expectation by being reached at all: it
- * counts a request only once the gate let it leave. */
+/**
+ * The real generation path, which runs the gate before every provider
+ * request, over a provider that records any request reaching it. A test
+ * expecting a refusal asserts `sent` stays empty, so it fails the moment the
+ * generation sends a request it should have stopped.
+ */
 const unreachableModel = () => {
-  const sent: unknown[] = [];
-  const generate = async (options: ModelOptions) => {
-    await runDispatchCheck(options.beforeEachDispatch);
-    sent.push(options);
-    throw new Error("The model must not be reached");
-  };
-  return { sent, generate };
+  const provider = createUnreachableTextModel();
+  const generateObject = asTestRaw<ObjectGeneration>(
+    async (options: Parameters<ObjectGeneration>[0]) =>
+      await generateTanStackObjectForTask({
+        ...options,
+        admission: testModelAdmission(ids.orgA, "billing.activity-drafts"),
+        resolveTextModel: provider.resolveTextModel,
+      }),
+  );
+  const generateText: TextGeneration = async (options) =>
+    await generateTanStackTextForTask({
+      ...options,
+      resolveTextModel: provider.resolveTextModel,
+    });
+  return { sent: provider.requests, generateObject, generateText };
 };
 
+type UnreachableModel = ReturnType<typeof unreachableModel>;
+
 const draftEndpoint = ({
-  generate,
+  model,
   beforeRun,
 }: {
-  generate: (options: ModelOptions) => Promise<never>;
+  model: UnreachableModel;
   beforeRun?: () => Promise<void>;
 }) =>
   createDesktopBillingDraftEndpoint({
     authorizeAccount,
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
+    generateObjectForTask: model.generateObject,
     admit: asTestRaw<typeof withActionAdmission>(
       async ({ run }: Parameters<typeof withActionAdmission>[0]) => {
         await beforeRun?.();
@@ -204,10 +215,7 @@ test("drafting refuses an organization switched off and a member without consent
   ] as const) {
     await prepare();
     const model = unreachableModel();
-    const answer = await post(
-      draftEndpoint({ generate: model.generate }),
-      draftBody(),
-    );
+    const answer = await post(draftEndpoint({ model }), draftBody());
     expect(answer).toMatchObject({ status: 403, body: { code } });
     expect(model.sent).toEqual([]);
     await db
@@ -217,10 +225,24 @@ test("drafting refuses an organization switched off and a member without consent
   }
 });
 
+test("a consenting member's draft and narrative reach the provider", async () => {
+  // The control: the same wiring sends the request once the gate allows it.
+  const drafts = unreachableModel();
+  expect(
+    (await post(draftEndpoint({ model: drafts }), draftBody())).status,
+  ).toBe(502);
+  expect(drafts.sent).toEqual(["structuredOutput"]);
+  const narrative = unreachableModel();
+  expect(
+    (await post(narrativeEndpoint({ model: narrative }), narrativeBody)).status,
+  ).toBe(502);
+  expect(narrative.sent).toEqual(["chatStream"]);
+});
+
 test("a consent withdrawn after the context loaded stops the drafting request", async () => {
   const model = unreachableModel();
   const answer = await post(
-    draftEndpoint({ generate: model.generate, beforeRun: withdrawConsent }),
+    draftEndpoint({ model, beforeRun: withdrawConsent }),
     draftBody(),
   );
   expect(answer).toMatchObject({
@@ -231,10 +253,10 @@ test("a consent withdrawn after the context loaded stops the drafting request", 
 });
 
 const narrativeEndpoint = ({
-  generate,
+  model,
   beforeRun,
 }: {
-  generate: (options: ModelOptions) => Promise<never>;
+  model: UnreachableModel;
   beforeRun?: () => Promise<void>;
 }) =>
   createDesktopTimeEntryNarrativeEndpoint({
@@ -264,7 +286,7 @@ const narrativeEndpoint = ({
           }),
           abortSignal: signal,
         },
-        asTestRaw<typeof generateTanStackTextForTask>(generate),
+        model.generateText,
       );
     },
   });
@@ -282,10 +304,7 @@ test("the narrative route refuses an organization switched off and a member with
   ] as const) {
     await prepare();
     const model = unreachableModel();
-    const answer = await post(
-      narrativeEndpoint({ generate: model.generate }),
-      narrativeBody,
-    );
+    const answer = await post(narrativeEndpoint({ model }), narrativeBody);
     expect(answer).toMatchObject({ status: 403, body: { code } });
     expect(model.sent).toEqual([]);
     await db
@@ -298,7 +317,7 @@ test("the narrative route refuses an organization switched off and a member with
 test("a consent withdrawn after the narrative was admitted stops its request", async () => {
   const model = unreachableModel();
   const answer = await post(
-    narrativeEndpoint({ generate: model.generate, beforeRun: withdrawConsent }),
+    narrativeEndpoint({ model, beforeRun: withdrawConsent }),
     narrativeBody,
   );
   expect(answer).toMatchObject({
