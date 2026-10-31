@@ -18,6 +18,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
+import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
@@ -176,6 +177,7 @@ const captureConnection = (
       .replaceAll(/;\s*$/gu, "")
       .trim();
     if (
+      normalized.toUpperCase() === READ_COMMITTED_BEGIN ||
       /^(?:begin|start\s+transaction)(?:\s+(?:work|transaction))?$/iu.test(
         normalized,
       )

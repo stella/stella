@@ -8,6 +8,7 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import * as schema from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { READ_BUDGETS } from "@/api/lib/db/read-budgets";
+import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   corpusProjectionOutstandingIntentProbe,
@@ -155,6 +156,7 @@ test("a measured fixture job cannot hide DDL", () => {
 test("every transaction control form the capture maps is left out of measurement", () => {
   const forms = [
     "BEGIN",
+    READ_COMMITTED_BEGIN,
     "START TRANSACTION",
     "COMMIT",
     "END",
