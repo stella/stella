@@ -410,6 +410,7 @@ const measureBackfillJobRun = async ({
       if (outcome !== undefined && !Result.isOk(outcome)) {
         return panic(
           `${jobId} failed on the fixture: ${outcome.error.message}`,
+          outcome.error,
         );
       }
       capturedConnection.assertBalanced();
