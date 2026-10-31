@@ -34,7 +34,10 @@ import {
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -69,11 +72,7 @@ beforeAll(
       name: "Checkpoint legislation source",
     });
 
-    scopedDb = (async (callback: (tx: unknown) => Promise<unknown>) =>
-      await db.transaction(
-        async (tx) => await callback(tx),
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- pglite test transaction is structurally compatible with the production transaction used by ScopedDb
-      )) as unknown as ScopedDb;
+    scopedDb = createIngestionRoleScopedDb(db);
   },
   { timeout: 30_000 },
 );

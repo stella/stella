@@ -14,7 +14,6 @@ import { drizzle } from "drizzle-orm/pglite";
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
@@ -66,7 +65,10 @@ import {
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createIngestionRoleScopedDb,
+  createTestPglite,
+} from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
 // adapter and the real pipeline: the ruling's payload lands in an in-process
@@ -92,9 +94,7 @@ const connect = (pglite: Awaited<ReturnType<typeof createTestPglite>>) =>
   });
 
 const scopedDb: ScopedDb = async (callback) =>
-  // SAFETY: pglite stands in for the transaction the pipeline expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await createIngestionRoleScopedDb(db)(callback);
 
 beforeAll(async () => {
   client = await createTestPglite();
