@@ -140,10 +140,8 @@ import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
-import {
-  useTimeBillingPreviewEnabled,
-  useTimeChromeVisible,
-} from "@/hooks/use-time-billing-preview";
+import { useTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
+import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";
 import { useWorkflowsPreviewEnabled } from "@/hooks/use-workflows-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";

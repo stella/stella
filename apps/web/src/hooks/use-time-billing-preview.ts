@@ -4,8 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
-import { usePermissions } from "@/hooks/use-permissions";
-import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
@@ -75,11 +73,3 @@ export const useTimeBillingPreviewEnabled = (): boolean => {
 };
 
 export const useTimeBillingRouteEnabled = useTimeBillingPreviewEnabled;
-
-/** The time surfaces in the chrome; a role still loading keeps them in place. */
-export const useTimeChromeVisible = (): boolean => {
-  const enabled = useTimeBillingPreviewEnabled();
-  const canRead = usePermissions({ timeEntry: ["read"] });
-  const rolePending = useQuery(roleOptions).isPending;
-  return enabled && (canRead || rolePending);
-};

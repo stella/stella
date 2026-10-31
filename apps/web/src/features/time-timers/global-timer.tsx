@@ -8,10 +8,8 @@ import { ClockIcon } from "@stll/ui/icons";
 import { timeTimersOptions } from "@/features/time-timers/queries";
 import { useHasMounted } from "@/hooks/use-chrome-query";
 import { usePermissions } from "@/hooks/use-permissions";
-import {
-  useTimeBillingDecision,
-  useTimeChromeVisible,
-} from "@/hooks/use-time-billing-preview";
+import { useTimeBillingDecision } from "@/hooks/use-time-billing-preview";
+import { useTimeChromeVisible } from "@/hooks/use-time-chrome-visible";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 const TimerContent = lazy(async () => {
