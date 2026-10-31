@@ -263,7 +263,11 @@
     ],
     "scripts/generate-npm-release-jobs.test.ts": ["**"],
     "scripts/generate-playwright-devices.test.ts": ["**"],
-    "scripts/generated-conflicts-workflows.test.ts": [".github/**"],
+    "scripts/generated-conflicts-workflows.test.ts": [
+      ".github/**",
+      "packages/property-testing/**",
+      "scripts/**"
+    ],
     "scripts/generated-files-format.test.ts": ["**"],
     "scripts/generated-files-guard.test.ts": ["**"],
     "scripts/generated-files.test.ts": ["**"],

@@ -679,6 +679,17 @@ const scanCovered = ({
   });
 };
 
+export const scanInputDeclaration = (
+  directory: string,
+  root = REPO_ROOT,
+): string => {
+  const repository = repositoryScan(directory, root);
+  if (repository === undefined) {
+    panic(`Cannot declare a scan outside the repository: ${directory}`);
+  }
+  return repository.relative === "" ? "**" : `${repository.relative}/**`;
+};
+
 const tracePid = (line: string): string | undefined =>
   /^\s*(\d+)\s/u.exec(line)?.[1];
 
@@ -1157,8 +1168,9 @@ const run = async ({
       testFile,
     });
     for (const uncovered of scans) {
+      const declaration = scanInputDeclaration(uncovered.directory);
       console.error(
-        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it`,
+        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it; add ${JSON.stringify(declaration)} to inputs[${JSON.stringify(testFile)}] in scripts/script-test-inputs.json`,
       );
     }
     return exitCode === 0 && undeclared.length === 0 && scans.length === 0;

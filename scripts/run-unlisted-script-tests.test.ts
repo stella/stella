@@ -21,6 +21,7 @@ import {
   parseScriptTestArguments,
   prepareStrace,
   SCAN_PRELOAD_PATH,
+  scanInputDeclaration,
   SCRIPT_TEST_TRACE_FILTER,
   SCRIPT_TEST_TRACE_SYSCALLS,
   selectAffectedScriptTests,
@@ -934,6 +935,14 @@ describe("directory scan coverage", () => {
         }).files,
       ).toEqual([testFile]);
     });
+  });
+
+  test("scan diagnostics name the exact declaration", () => {
+    expect(scanInputDeclaration(path.resolve("scripts"))).toBe("scripts/**");
+    expect(
+      scanInputDeclaration(path.resolve("packages/property-testing")),
+    ).toBe("packages/property-testing/**");
+    expect(scanInputDeclaration(path.resolve("."))).toBe("**");
   });
 
   test("a directory listing through any API is a scan", () => {
