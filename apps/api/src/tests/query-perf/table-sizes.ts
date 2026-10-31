@@ -6,6 +6,8 @@
 export const QUERY_PERF_TABLE_SIZES = {
   // The court registry: patterns per country, read whole into the weight cache.
   case_law_court_weights: "small",
+  // One row per source, keyed by source_id.
+  case_law_source_arrivals: "small",
   case_law_sources: "small",
   // One row per country-month or broad invalidation target currently being retired.
   case_law_sitemap_drain_progress: "small",
@@ -15,6 +17,8 @@ export const QUERY_PERF_TABLE_SIZES = {
   corpus_index_jurisdiction_serving: "small",
   corpus_index_projection_intents: "large",
   corpus_index_projection_states: "large",
+  // One checkpoint row per named backfill.
+  database_backfill_states: "small",
   entities: "large",
   entity_versions: "large",
   legislation_documents: "large",

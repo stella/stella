@@ -31,7 +31,12 @@ local-only feature follows every rule below and adds one entry to
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
 - **Single-window capability.** The feature's commands are granted only in
-  its own capability file, for its own windows.
+  its own capability file, for its own windows. Activity settings are the one
+  exception: `activity_settings.rs` takes an `ActivitySettingsCaller`, which
+  also accepts the Settings window, and its read returns settings, deletion
+  state and the names of one day's apps, never the timeline. The Settings
+  window is granted those commands only; the day timeline, its review and
+  copying stay with `ActivityCaller` and the activity window.
 - **No network imports.** Feature modules and the shared machinery
   (`local_store`, `local_window`, `foreground_app`, `idle_time`,
   `feature_gate`) contain no HTTP client or socket code.
@@ -56,8 +61,9 @@ local-only feature follows every rule below and adds one entry to
   modules or shared machinery; the gate fetch never references feature data;
   `fixedCodes` features send no error details and import no telemetry.
 - `tests/local-only-window-boundary.test.ts`: commands granted only to the
-  feature's windows, every command takes the caller proof, and every caller
-  type is listed.
+  feature's windows, every granted command belongs to a feature's owner
+  module, every command takes the caller proof, every caller type is listed,
+  and the Settings window holds no timeline command.
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 
@@ -87,7 +93,7 @@ files remain available when those accounts relink.
 The loaded account uses its configured retention after reading each day's
 pending draft state. Pending days remain available for recovery beyond that
 window; unreadable day files are preserved. Other namespaces remain untouched
-until explicit deletion: the open activity window shows only their aggregate
+until explicit deletion: the activity settings show only their aggregate
 day count and a Delete action with confirmation. It never shows their dates,
 identity or content. Counting needs no key or decryption. Deletion reads each
 inactive account's existing key and refuses the operation if a draft batch
