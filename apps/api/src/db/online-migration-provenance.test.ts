@@ -66,8 +66,8 @@ test("every chat content v3 index carries the repair's introduction", () => {
   const indexes = ONLINE_MIGRATION_INDEXES.filter(({ name }) =>
     names.has(name),
   );
-  expect(indexes.map(({ name }) => name).toSorted()).toEqual(
-    [...names].toSorted(),
+  expect([...names].toSorted()).toEqual(
+    indexes.map(({ name }) => name).toSorted(),
   );
   for (const { introducedBy } of indexes) {
     expect(introducedBy).toEqual(CHAT_CONTENT_V3_REPAIR.introducedBy);

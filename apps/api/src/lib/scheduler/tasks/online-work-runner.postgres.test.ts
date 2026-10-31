@@ -19,6 +19,7 @@ import {
   claimOnlineWorkUnit,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_WORK_NAMES,
+  type OnlineWorkUnitClaim,
 } from "../../../db/online-migrations";
 import { PENDING } from "../../../db/online-work-lifecycle";
 import { terminateReserved } from "../../../db/sql-close";
@@ -433,41 +434,43 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
             Awaited<ReturnType<typeof claimOnlineWorkUnit>>,
             { type: "claimed" }
           >[] = [];
-          const claimAs = (session: "old" | "successor") => async () => {
-            const connection =
-              session === "old" ? oldConnection : successorConnection;
-            const claim = await claimOnlineWorkUnit(
-              { reserve: async () => connection },
-              {
-                name: index.name,
-                lifecycle,
-                repairs: [],
-                indexGate: healthyGate(),
-                reserveObserver: async () => connection,
-              },
-            );
-            if (claim.type !== "claimed") {
-              return claim;
-            }
-            claims.push(claim);
-            const release = async () => {
-              released.push(session);
-              await claim.release();
+          const claimAs =
+            (session: "old" | "successor") =>
+            async (): Promise<OnlineWorkUnitClaim> => {
+              const connection =
+                session === "old" ? oldConnection : successorConnection;
+              const claim = await claimOnlineWorkUnit(
+                { reserve: async () => connection },
+                {
+                  name: index.name,
+                  lifecycle,
+                  repairs: [],
+                  indexGate: healthyGate(),
+                  reserveObserver: async () => connection,
+                },
+              );
+              if (claim.type !== "claimed") {
+                return claim;
+              }
+              claims.push(claim);
+              const release = async () => {
+                released.push(session);
+                await claim.release();
+              };
+              return {
+                type: "claimed" as const,
+                release,
+                run: async (record) => {
+                  walked.push(session);
+                  try {
+                    await successorWalk.promise;
+                    return await record(Result.ok({ type: "complete" }));
+                  } finally {
+                    await release();
+                  }
+                },
+              };
             };
-            return {
-              type: "claimed" as const,
-              release,
-              run: async (record: Parameters<typeof claim.run>[0]) => {
-                walked.push(session);
-                try {
-                  await successorWalk.promise;
-                  return await record(Result.ok({ type: "complete" }));
-                } finally {
-                  await release();
-                }
-              },
-            };
-          };
           const oldRunner = createOnlineWorkRunner({
             names: ONLINE_WORK_NAMES,
             lifecycle,

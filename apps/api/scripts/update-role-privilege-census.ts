@@ -7,6 +7,7 @@ import {
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
+import { MIGRATE_ONLINE_WORK_MODE } from "../src/db/migrate-online-work-mode";
 import { runMigrations } from "../src/db/migration-runner";
 
 const migrationsFolder = path.resolve(import.meta.dir, "../drizzle");
@@ -24,6 +25,7 @@ await withIsolatedPostgresCluster(
       const connection = await database.reserve();
       try {
         await runMigrations({
+          onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_ALL,
           connection,
           databaseUrl: scratchUrl,
           migrationsFolder,

@@ -1281,6 +1281,8 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/generate-online-unique-index-names.ts",
       "apps/api/src/db/online-unique-indexes.ts",
       "apps/api/src/lib/db/migration-history.ts",
+      "apps/api/src/db/online-work-lifecycle.ts",
+      "packages/api-contract/src/own-key.ts",
       "apps/api/src/lib/db/migration-alias-inventory.json",
       "packages/sha256/src/bun.ts",
       "packages/portable-path/src/index.ts",

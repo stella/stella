@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readMigrationFiles } from "drizzle-orm/migrator";
 import nodePath from "node:path";
@@ -90,10 +91,14 @@ describe("migration alias inventory", () => {
       );
       if (typeof repair !== "string") {
         for (const index of repair.indexes) {
-          expect(REWRITTEN_MIGRATION_INDEXES).toContainEqual({
+          expect({
             ...index,
             introducedBy: fileName,
-          });
+          }).toEqual(
+            REWRITTEN_MIGRATION_INDEXES.find(
+              ({ name }) => name === index.name,
+            ) ?? panic(`Missing rewritten migration index ${index.name}`),
+          );
         }
       }
     }

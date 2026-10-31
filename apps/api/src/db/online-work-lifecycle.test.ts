@@ -46,8 +46,8 @@ test("a finalized handle admits finalized work only", () => {
 });
 
 test("every registered work name needs a lifecycle entry", () => {
-  expect([...new Set(ONLINE_WORK_NAMES)].toSorted()).toEqual(
-    Object.keys(ONLINE_WORK_LIFECYCLE).toSorted(),
+  expect(Object.keys(ONLINE_WORK_LIFECYCLE).toSorted()).toEqual(
+    [...new Set(ONLINE_WORK_NAMES)].toSorted(),
   );
   const partial = {
     apikey_personal_owner_keyset_idx:

@@ -421,6 +421,7 @@ describe("online work runner", () => {
       const walked: string[] = [];
       const released: string[] = [];
       let holder: string | undefined;
+      const currentHolder = () => holder;
       const claimAs =
         (session: string) => async (): Promise<OnlineWorkUnitClaim> => {
           if (holder !== undefined) {
@@ -484,7 +485,7 @@ describe("online work runner", () => {
       expect(rows.get(FIRST)).toEqual(successorState);
       expect(walked).toEqual(["successor"]);
       expect(released).toEqual(["old"]);
-      expect(holder).toBe("successor");
+      expect(currentHolder()).toBe("successor");
 
       successorWalk.resolve({ type: "complete" });
       expect(await Promise.all(work)).toEqual([Result.ok(undefined)]);

@@ -769,7 +769,7 @@ export const transitionUpsertBatch = async <
           tx,
           spec,
           values: itemBatch,
-          onConflict,
+          ...(onConflict === undefined ? {} : { onConflict }),
           recordTransitionAuditEvent: ignoreTransitionAudit,
         })),
       );
@@ -852,7 +852,7 @@ export const transitionUpsertBatch = async <
     tx,
     spec,
     values,
-    onConflict,
+    ...(onConflict === undefined ? {} : { onConflict }),
     state,
     insertColumns,
     identityKeys,
