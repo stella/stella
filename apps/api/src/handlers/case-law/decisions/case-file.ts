@@ -242,6 +242,8 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "fulltext",
   // Ingestion reconciliation scheduling is not public document metadata.
   "textlessDetailRecheckedAt",
+  // Extraction diagnostics accompany document content in the detail reader.
+  "extractionWarnings",
   // Text sections belong to the detail reader.
   "sections",
   // Structured document content belongs to the detail reader.
@@ -270,6 +272,17 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "documentFetchAttemptedAt",
   // Document-fetch retry state is internal bookkeeping.
   "documentFetchAttempts",
+  // These materialized publisher fields are already represented in metadata.
+  "nssReporterNumber",
+  "nssReporterYear",
+  "nssReporterIssue",
+  "nssKeywordSearchCode",
+  "nssRegistryCaseNumber",
+  "nssRegistryReferral",
+  "nssRegistryReferralDate",
+  "nssRegistryAgainstCases",
+  "nssRegistryStatus",
+  "nssRegistryAnnotation",
   // Open publisher metadata is deliberately absent from compact document links.
   "metadata",
   // Source change detection is internal bookkeeping.

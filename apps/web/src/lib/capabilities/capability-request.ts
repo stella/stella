@@ -27,3 +27,16 @@ export const invokeCapability = async <TResult>(
   capability: CapabilityId,
   call: (request: CapabilityRequest) => Promise<TResult>,
 ): Promise<TResult> => await call(capabilityRequest(capability));
+
+export type AppOnlyWriteId =
+  | "files.document-properties.update"
+  | "files.email-attachment.save"
+  | "folio-collaboration.join"
+  | "folio-collaboration.refresh-token"
+  | "folio-collaboration.seed.acknowledge";
+
+/** Declares an app-only write that deliberately has no automation capability. */
+export const invokeAppOnlyWrite = async <TResult>(
+  _id: AppOnlyWriteId,
+  call: () => Promise<TResult>,
+): Promise<TResult> => await call();

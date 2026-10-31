@@ -17,6 +17,10 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { WorkspaceStatusAccess } from "@/api/lib/auth";
+import {
+  hasAccountExportAuthority,
+  isAccountExportScope,
+} from "@/api/lib/auth/account-export-policy";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
@@ -961,13 +965,18 @@ const capabilityFeatureEnabled = (
   entry: CatalogEntry,
   context: McpRequestContext,
 ) =>
-  entry.featureAccess === "conditional" ||
-  isMcpDescriptorFeatureEnabled({
-    context,
-    kind: "capabilities",
-    id: entry.id,
-    featureId: entry.featureId,
-  });
+  (!(
+    capabilityDomain(entry.id) === "account-exports" ||
+    requiredScopesOf(entry).some(isAccountExportScope)
+  ) ||
+    hasAccountExportAuthority(context, entry.access)) &&
+  (entry.featureAccess === "conditional" ||
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "capabilities",
+      id: entry.id,
+      featureId: entry.featureId,
+    }));
 
 export const accessibleFeatureCapabilityIds = async (
   context: McpRequestContext,
@@ -975,6 +984,7 @@ export const accessibleFeatureCapabilityIds = async (
   (await getCatalog())
     .filter(
       (entry) =>
+        capabilityFeatureEnabled(entry, context) &&
         resolveMcpDescriptorFeatureId({
           context,
           kind: "capabilities",
@@ -1274,13 +1284,20 @@ type GuardedEndpoint =
  * mapped to a structured `internal_error` envelope instead of escaping as an
  * unhandled rejection. Shared by `describe_capability` and the capability executors.
  */
-const loadEndpointGuarded = async (
-  id: string,
-  toolName: "describe_capability" | McpCapabilityExecutor,
-): Promise<GuardedEndpoint> => {
+type LoadEndpointGuardedOptions = {
+  id: string;
+  toolName: "describe_capability" | McpCapabilityExecutor;
+  loadEndpoint?: typeof loadCapabilityEndpoint | undefined;
+};
+
+const loadEndpointGuarded = async ({
+  id,
+  toolName,
+  loadEndpoint = loadCapabilityEndpoint,
+}: LoadEndpointGuardedOptions): Promise<GuardedEndpoint> => {
   let endpoint: EndpointDefinition | null;
   try {
-    endpoint = await loadCapabilityEndpoint(id);
+    endpoint = await loadEndpoint(id);
   } catch (error) {
     captureError(
       error,
@@ -1335,7 +1352,11 @@ const describeCapabilityHandler: McpToolHandler<
     return featureDisabledResult(entry.feature);
   }
 
-  const loaded = await loadEndpointGuarded(id, "describe_capability");
+  const loaded = await loadEndpointGuarded({
+    id,
+    toolName: "describe_capability",
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }
@@ -1847,10 +1868,11 @@ export const invokedCapabilityConsumesServices = async ({
   if (typeof entry.consumesServices === "boolean") {
     return Result.ok(entry.consumesServices);
   }
-  const loaded = await loadEndpointGuarded(
-    entry.id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+  const loaded = await loadEndpointGuarded({
+    id: entry.id,
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return Result.err(loaded.result);
   }
@@ -2286,10 +2308,11 @@ const executeInvoke = async ({
   validateOnly: boolean;
   confirm: boolean | undefined;
 }): Promise<McpToolResponse> => {
-  const loaded = await loadEndpointGuarded(
+  const loaded = await loadEndpointGuarded({
     id,
-    MCP_CAPABILITY_EXECUTORS[entry.access],
-  );
+    toolName: MCP_CAPABILITY_EXECUTORS[entry.access],
+    loadEndpoint: context.testDependencies?.loadCapabilityEndpoint,
+  });
   if (!loaded.ok) {
     return loaded.result;
   }

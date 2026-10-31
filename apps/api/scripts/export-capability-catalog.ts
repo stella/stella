@@ -149,6 +149,7 @@ const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
  * `apps/api/src/mcp/constants.ts`.
  */
 const DOMAIN_SCOPE: Record<string, string> = {
+  "account-exports": "stella:account_export_write",
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
   // Corpus reads (decision analysis, ingestion status, matter-link list)
@@ -162,6 +163,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // matters-write consent. They get their own dedicated consent bucket rather
   // than borrowing the workspace write scope.
   chat: "stella:chat",
+  dictation: "stella:chat",
   clauses: "stella:knowledge_write",
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
@@ -260,6 +262,8 @@ const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
  * different scope fails the export until pinned in ENTRY_SCOPE_OVERRIDES.
  */
 const SCOPE_STRICTNESS: Record<string, number> = {
+  "stella:account_export_read": 2,
+  "stella:account_export_write": 3,
   "stella:search": 0,
   "stella:read": 1,
   "stella:onboarding": 2,

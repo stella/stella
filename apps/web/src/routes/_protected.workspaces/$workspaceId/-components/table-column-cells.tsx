@@ -1,4 +1,4 @@
-import { type PropsWithChildren, useState } from "react";
+import { type PropsWithChildren, type ReactNode, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -299,16 +299,13 @@ export const PropertyCell = ({
   if (property.tool.type !== "ai-model") {
     return <PropertyCellContent entity={entity} property={property} />;
   }
+  const state = propertyAiCellState(entity.fields[property.id]);
+  let failure: ReactNode;
+  if (content?.type === "error") {
+    failure = <PropertyCellContent entity={entity} property={property} />;
+  }
   return (
-    <AiCell
-      state={propertyAiCellState(content)}
-      preview={preview}
-      failure={
-        content?.type === "error" ? (
-          <PropertyCellContent entity={entity} property={property} />
-        ) : undefined
-      }
-    >
+    <AiCell state={state} preview={preview} failure={failure}>
       <PropertyCellContent entity={entity} property={property} />
     </AiCell>
   );

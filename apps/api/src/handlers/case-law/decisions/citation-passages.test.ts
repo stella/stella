@@ -42,7 +42,6 @@ describe("the excerpt a citation travels with", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: blockText }]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage).toEqual({
@@ -61,7 +60,6 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p4", text: `${filler} ${citationText} ${filler}` },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text.length).toBe(LIMITS.caseLawCitationPassageChars);
@@ -80,7 +78,6 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText,
-      sectionText: undefined,
     });
 
     expect(passage?.text).toEndWith(citationText);
@@ -96,7 +93,6 @@ describe("the excerpt a citation travels with", () => {
         },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
     });
 
     expect(passage?.anchorId).toBe("p9");
@@ -112,7 +108,7 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: classified,
+      classifiedBlockIds: ["b0"],
       evidenceQuote,
     });
     expect(passage).toEqual({
@@ -134,7 +130,6 @@ describe("the excerpt a citation travels with", () => {
         { anchorId: "p2", text: `However, ${evidenceQuote}` },
       ]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
       evidenceQuote,
     });
     expect(passage).toMatchObject({
@@ -148,7 +143,6 @@ describe("the excerpt a citation travels with", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
       citationText: "21 Cdo 500/2019",
-      sectionText: undefined,
       evidenceQuote: "Different facts.",
     });
     expect(passage).not.toHaveProperty("evidenceQuote");
@@ -159,7 +153,6 @@ describe("the excerpt a citation travels with", () => {
       citationPassageIn({
         ast: astOf([{ anchorId: "p1", text: "Nic k věci." }]),
         citationText: "21 Cdo 500/2019",
-        sectionText: undefined,
       }),
     ).toBeNull();
   });

@@ -1,3 +1,10 @@
+/**
+ * Raw capture retains the whole publisher response. Direct capture, aliases,
+ * complete serialization and envelopes are accepted; filter/pick/pickBy/omit/
+ * omitBy/remove, object-rest omission, deletion and JSON replacers are rejected
+ * on paths into raw writes. Analysis follows local bindings and helper bodies;
+ * imported implementations and runtime mutations need their own checks.
+ */
 import { type Context, eslintCompatPlugin } from "@oxlint/plugins";
 
 import {

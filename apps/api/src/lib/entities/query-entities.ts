@@ -16,6 +16,7 @@ import type * as v from "valibot";
 
 import type {
   AgendaItemWireFields,
+  AiCellSettlement,
   EntityFind,
   OcrExportStatus,
 } from "@stll/api-contract";
@@ -170,6 +171,7 @@ export type QueryEntityResult = AgendaItemWireFields & {
     propertyId: string;
     entityId: string;
     content: FieldContent & { truncated?: true };
+    aiSettlement?: AiCellSettlement | null;
     ocrExportStatus?: OcrExportStatus;
   }[];
   cellMetadata: {
@@ -1073,6 +1075,7 @@ const queryEntitiesGenerator = async function* ({
           entityVersionId: fields.entityVersionId,
           id: fields.id,
           propertyId: fields.propertyId,
+          aiSettlement: fields.aiSettlement,
           content:
             textMode === "preview"
               ? sql<FieldContent & { truncated?: true }>`CASE
@@ -1346,6 +1349,7 @@ const queryEntitiesGenerator = async function* ({
         propertyId: field.propertyId,
         entityId: entity.id,
         content: field.content,
+        aiSettlement: field.aiSettlement,
         ocrExportStatus: field.ocrExportStatus,
       })),
       cellMetadata: entityCellMetadata.map((entry) => ({

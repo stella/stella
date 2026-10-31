@@ -110,7 +110,7 @@ describe("every cursor encoder emits a cursor the surface recognizes", () => {
         (score, id, seen) =>
           expect(
             isIssuablePaginationCursor(
-              encodeGlobalSearchCursor({ score, id, seen }),
+              encodeGlobalSearchCursor({ tier: 2, score, id, seen }),
             ),
           ).toBe(true),
       ),
