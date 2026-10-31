@@ -13,11 +13,25 @@
 //   bun scripts/run-unlisted-script-tests.ts
 
 import { panic } from "better-result";
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
+import { buildImportGraph } from "./api-test-impact";
 import { readCiCheckCommandText } from "./ci-check-pool-registry";
+import { changedFilesSince, comparisonBase } from "./ci-comparison-base";
+import scriptTestInputs from "./script-test-inputs.json" with { type: "json" };
+
+const declaredInputs = new Map(Object.entries(scriptTestInputs.inputs));
 
 type ScriptTestArguments =
   | {
@@ -130,17 +144,222 @@ export const unlistedTestCommands = ({
       "bun",
       "test",
       ...(timeout === undefined ? [] : ["--timeout", String(timeout)]),
-      ...group,
+      // A path without `./` is a name filter: Bun would walk the whole tree
+      // for matching files instead of loading the one named.
+      ...group.map((file) =>
+        path.isAbsolute(file) || file.startsWith("./") ? file : `./${file}`,
+      ),
     ]),
     ...shellTests.map((file) => ["bash", file]),
   ];
 };
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
+
+const APT_TIMEOUT_MS = 180_000;
+/** Install strace on a CI runner, through the repository's retry owner. */
+const installStrace = () => {
+  const started = performance.now();
+  for (const args of [
+    ["sudo", "apt-get", "update", "-qq"],
+    [
+      "sudo",
+      "apt-get",
+      "install",
+      "-y",
+      "-qq",
+      "--no-install-recommends",
+      "strace",
+    ],
+  ]) {
+    const installed = Bun.spawnSync(
+      ["bash", path.join(REPO_ROOT, "scripts/retry.sh"), ...args],
+      { stdout: "inherit", stderr: "inherit", timeout: APT_TIMEOUT_MS },
+    );
+    if (installed.exitCode !== 0) {
+      panic(`Installing strace failed: ${args.join(" ")}`);
+    }
+  }
+  console.log(
+    `Installed strace in ${((performance.now() - started) / 1000).toFixed(1)} s.`,
+  );
+};
+
+export const prepareStrace = ({
+  ci,
+  selectedTests,
+  available,
+  install = installStrace,
+}: {
+  readonly ci: boolean;
+  readonly selectedTests: number;
+  readonly available: () => boolean;
+  readonly install?: () => void;
+}): boolean => {
+  if (ci && selectedTests > 0 && !available()) {
+    install();
+  }
+  const installed = available();
+  if (ci && selectedTests > 0 && !installed) {
+    panic(
+      "strace is required in CI; install it with: sudo apt-get install strace",
+    );
+  }
+  return installed;
+};
 const TEST_GLOB = "scripts/**/*.test.{ts,sh}";
 const DEPTH_TESTS = Object.keys(
   await Bun.file(new URL("depth-script-tests.json", import.meta.url)).json(),
 );
+const RUNNER_PATH = "scripts/run-unlisted-script-tests.ts";
+export const SCAN_PRELOAD_PATH = "scripts/script-test-scan-preload.ts";
+
+/**
+ * Files a traced test may open without declaring them: its own import
+ * closure and the runner's instrumentation (the scan preload Bun loads into
+ * every test, with everything it imports).
+ */
+export const tracedAllowance = (
+  closure: (file: string) => ReadonlySet<string>,
+  testFile: string,
+): ReadonlySet<string> =>
+  new Set([...closure(testFile), ...closure(SCAN_PRELOAD_PATH)]);
+
+const SCRIPT_TEST_ALL_RULES = {
+  manifest: /(?:^|\/)package\.json$/u,
+  lockfile: /(?:^|\/)bun\.lockb?$/u,
+  typescript: /(?:^|\/)tsconfig[^/]*\.json$/u,
+  bun: /(?:^|\/)bunfig\.toml$/u,
+} as const;
+
+type ScriptTestSelection = {
+  readonly files: string[];
+  readonly skipped: number;
+  readonly reason?: string;
+};
+
+type SelectScriptTestsOptions = {
+  readonly tests: readonly string[];
+  readonly changed: readonly string[];
+  readonly root?: string;
+  readonly inputs?: Readonly<Record<string, readonly string[]>>;
+  readonly exemptions?: Readonly<Record<string, string>>;
+  /** Tracked files; a closure file outside it is generated output. */
+  readonly tracked?: ReadonlySet<string>;
+};
+
+// A submodule's gitlink is a commit pointer, not a file a test reads; the
+// submodule's own files are not tracked here either.
+const GITLINK_MODE = "160000";
+
+const trackedFiles = (): Set<string> => {
+  const result = Bun.spawnSync(["git", "ls-files", "-z", "--stage"], {
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    panic("Could not list tracked repository files");
+  }
+  return new Set(
+    result.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .flatMap((entry) => {
+        const tab = entry.indexOf("\t");
+        return entry.startsWith(`${GITLINK_MODE} `) || tab === -1
+          ? []
+          : [entry.slice(tab + 1)];
+      }),
+  );
+};
+
+/** Select tests only when HEAD proves their code or declared data changed. */
+export const selectAffectedScriptTests = ({
+  tests,
+  changed,
+  root = REPO_ROOT,
+  inputs = scriptTestInputs.inputs,
+  exemptions = scriptTestInputs.noTrackedInputs,
+  tracked = root === REPO_ROOT ? trackedFiles() : undefined,
+}: SelectScriptTestsOptions): ScriptTestSelection => {
+  const realRoot = realpathSync(root);
+  const graph = buildImportGraph(realRoot, [
+    ...tests.filter((test) => test.endsWith(".ts")),
+    RUNNER_PATH,
+    SCAN_PRELOAD_PATH,
+  ]);
+  // Every test runs with the scan preload, which the runner names but does
+  // not import.
+  const runnerClosure = new Set([
+    ...graph.closure(RUNNER_PATH),
+    ...graph.closure(SCAN_PRELOAD_PATH),
+  ]);
+  if (
+    changed.some(
+      (file) =>
+        runnerClosure.has(file) ||
+        Object.values(SCRIPT_TEST_ALL_RULES).some((rule) => rule.test(file)),
+    )
+  ) {
+    return {
+      files: [...tests],
+      skipped: 0,
+      reason: "shared test configuration or runner changed",
+    };
+  }
+  const undeclared = tests.filter((test) => {
+    const closure = graph.closure(test);
+    return (
+      [...closure].some(
+        (file) => graph.readers.has(file) || graph.scanners.has(file),
+      ) &&
+      (!Object.hasOwn(inputs, test) || inputs[test]?.length === 0) &&
+      !Object.hasOwn(exemptions, test)
+    );
+  });
+  // Generated sources exist only where CI prepared them, and no tracked file
+  // digest covers their generators' inputs. A test reaching one, or an import
+  // that cannot resolve, can never be proven unaffected, so it declares `**`.
+  const runsAlways = (test: string) => inputs[test]?.includes("**") === true;
+  const unresolved = tests.filter(
+    (test) =>
+      !runsAlways(test) &&
+      [...graph.closure(test)].some(
+        (file) =>
+          graph.failed.has(file) ||
+          (tracked !== undefined && !tracked.has(file)),
+      ),
+  );
+  if (undeclared.length > 0 || unresolved.length > 0) {
+    panic(
+      [
+        undeclared.length > 0
+          ? `Script tests with undeclared data inputs: ${undeclared.join(", ")}`
+          : "",
+        unresolved.length > 0
+          ? `Script tests with unresolved or generated imports (declare "**"): ${unresolved.join(", ")}`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    );
+  }
+  const changedSet = new Set(changed);
+  const files = tests.filter((test) => {
+    if (changedSet.has(test)) {
+      return true;
+    }
+    if ([...graph.closure(test)].some((file) => changedSet.has(file))) {
+      return true;
+    }
+    return (inputs[test] ?? []).some((pattern) => {
+      const glob = new Bun.Glob(pattern);
+      return changed.some((file) => glob.match(file));
+    });
+  });
+  return { files, skipped: tests.length - files.length };
+};
 
 /** Workflow text minus comment lines: a mention in a comment runs nothing. */
 const withoutComments = (workflowText: string): string =>
@@ -173,26 +392,788 @@ const scan = (pattern: string): string[] => [
   ...new Bun.Glob(pattern).scanSync({ cwd: REPO_ROOT }),
 ];
 
+const TRACE_STRING_LIMIT = 65_535;
+
+type TraceSyscall =
+  | { type: "file"; argument: number }
+  | { type: "descriptor" | "directory"; argument: number }
+  | { type: "execution"; argument: number; argv: number }
+  | { type: "process"; operation: "fork" }
+  | { type: "process"; operation: "chdir" | "fchdir"; argument: number };
+
+export const SCRIPT_TEST_TRACE_SYSCALLS = {
+  open: { type: "file", argument: 0 },
+  openat: { type: "file", argument: 1 },
+  openat2: { type: "file", argument: 1 },
+  creat: { type: "file", argument: 0 },
+  stat: { type: "file", argument: 0 },
+  lstat: { type: "file", argument: 0 },
+  newfstatat: { type: "file", argument: 1 },
+  statx: { type: "file", argument: 1 },
+  fstat: { type: "descriptor", argument: 0 },
+  statfs: { type: "file", argument: 0 },
+  access: { type: "file", argument: 0 },
+  faccessat: { type: "file", argument: 1 },
+  faccessat2: { type: "file", argument: 1 },
+  readlink: { type: "file", argument: 0 },
+  readlinkat: { type: "file", argument: 1 },
+  getxattr: { type: "file", argument: 0 },
+  lgetxattr: { type: "file", argument: 0 },
+  listxattr: { type: "file", argument: 0 },
+  llistxattr: { type: "file", argument: 0 },
+  execve: { type: "execution", argument: 0, argv: 1 },
+  execveat: { type: "execution", argument: 1, argv: 2 },
+  getdents: { type: "directory", argument: 0 },
+  getdents64: { type: "directory", argument: 0 },
+  clone: { type: "process", operation: "fork" },
+  clone3: { type: "process", operation: "fork" },
+  fork: { type: "process", operation: "fork" },
+  vfork: { type: "process", operation: "fork" },
+  chdir: { type: "process", operation: "chdir", argument: 0 },
+  fchdir: { type: "process", operation: "fchdir", argument: 0 },
+} as const satisfies Record<string, TraceSyscall>;
+
+export const SCRIPT_TEST_TRACE_FILTER = `trace=${Object.keys(SCRIPT_TEST_TRACE_SYSCALLS).join(",")}`;
+const traceSyscalls = new Map(Object.entries(SCRIPT_TEST_TRACE_SYSCALLS));
+
+const syscallArguments = (source: string): string[] => {
+  const args: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let quoted = false;
+  let escaped = false;
+  let annotation = false;
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source.at(index);
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (!annotation && char === '"') {
+      quoted = !quoted;
+      continue;
+    }
+    if (quoted) {
+      continue;
+    }
+    // Socket descriptor annotations include peer arrows inside their brackets.
+    if (char === "<") {
+      annotation = true;
+    } else if (char === ">" && source.at(index - 1) !== "-") {
+      annotation = false;
+    }
+    if (annotation) {
+      continue;
+    }
+    if (char === "(" || char === "[" || char === "{") {
+      depth += 1;
+    } else if (char === ")" && depth === 0) {
+      args.push(source.slice(start, index).trim());
+      return args;
+    } else if (char === ")" || char === "]" || char === "}") {
+      depth -= 1;
+    } else if (char === "," && depth === 0) {
+      args.push(source.slice(start, index).trim());
+      start = index + 1;
+    }
+  }
+  return panic(`Incomplete syscall arguments: ${source}`);
+};
+
+const traceCall = (line: string) => {
+  const match = /\b([a-z][a-z0-9_]*)\(/u.exec(line);
+  if (match === null) {
+    return undefined;
+  }
+  const syscall = traceSyscalls.get(match.at(1) ?? "");
+  if (syscall === undefined) {
+    panic(`Unregistered traced syscall: ${line}`);
+  }
+  return {
+    syscall,
+    args: syscallArguments(line.slice(match.index + match[0].length)),
+  };
+};
+
+const descriptorPath = (argument: string) => {
+  const match = /^(?:AT_FDCWD|\d+)<((?:\\.|[^>])*)>$/u.exec(argument);
+  return match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+};
+
+const traceCallFailed = (line: string) => /\)\s+=\s+-1\b/u.test(line);
+
+const TRACE_ESCAPES: Readonly<Record<string, number>> = {
+  n: 0x0a,
+  t: 0x09,
+  r: 0x0d,
+  v: 0x0b,
+  f: 0x0c,
+  "\\": 0x5c,
+  '"': 0x22,
+  "'": 0x27,
+};
+
+/**
+ * A path as strace printed it, back as the bytes it names: strace writes
+ * `\t`, `\n`, `\\`, `\"` and similar C escapes, and every other unprintable
+ * or non-ASCII byte as a 1–3 digit octal escape.
+ */
+export const decodeTraceString = (value: string): string => {
+  const bytes: number[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const char = String.fromCodePoint(value.codePointAt(index) ?? 0);
+    if (char !== "\\") {
+      bytes.push(...Buffer.from(char, "utf-8"));
+      index += char.length - 1;
+      continue;
+    }
+    const next = value[index + 1] ?? "";
+    const escape = TRACE_ESCAPES[next];
+    if (escape !== undefined) {
+      bytes.push(escape);
+      index += 1;
+      continue;
+    }
+    let digits = "";
+    while (
+      digits.length < 3 &&
+      (value[index + 1 + digits.length] ?? "") >= "0" &&
+      (value[index + 1 + digits.length] ?? "") <= "7"
+    ) {
+      digits += value[index + 1 + digits.length];
+    }
+    if (digits === "") {
+      panic(`Unknown strace escape in trace record: ${value}`);
+    }
+    bytes.push(Number.parseInt(digits, 8));
+    index += digits.length;
+  }
+  return Buffer.from(bytes).toString("utf-8");
+};
+// strace marks a string it cut short with "..." after the closing quote. A
+// quote inside a string is printed escaped (`\"...` in a traced script is
+// text), so only a quote after an even run of backslashes closes one.
+const TRUNCATED_STRING = /(?<!\\)(?:\\\\)*"\.\.\./u;
+const assertWholeRecord = (line: string) => {
+  if (TRUNCATED_STRING.test(line)) {
+    panic(`Truncated trace record; raise the strace string limit: ${line}`);
+  }
+};
+
+export const undeclaredTracedFiles = ({
+  trace,
+  closure,
+  declared,
+  tracked,
+  root = REPO_ROOT,
+}: {
+  readonly trace: string;
+  readonly closure: ReadonlySet<string>;
+  readonly declared: readonly string[];
+  readonly tracked: ReadonlySet<string>;
+  readonly root?: string;
+}): string[] => {
+  const globs = declared.map((pattern) => new Bun.Glob(pattern));
+  const opened = new Set<string>();
+  for (const { line, call, cwd } of traceContexts({ trace, root })) {
+    if (call.syscall.type === "process" || call.syscall.type === "directory") {
+      continue;
+    }
+    const argument = call.args.at(call.syscall.argument) ?? "";
+    const quotedPath = quotedArgument(argument);
+    const openedPath =
+      call.syscall.type === "descriptor"
+        ? descriptorPath(argument)
+        : quotedPath;
+    if (openedPath === undefined) {
+      continue;
+    }
+    if (call.syscall.type === "descriptor" && !path.isAbsolute(openedPath)) {
+      continue;
+    }
+    const directory =
+      call.syscall.type !== "descriptor" && call.syscall.argument > 0
+        ? descriptorPath(call.args.at(0) ?? "")
+        : undefined;
+    const absolute = resolveTracePath({
+      value: openedPath,
+      cwd: directory === undefined ? cwd : workingDirectory(directory),
+      context: `cannot resolve the working directory of a file probe: ${line}`,
+    });
+    const relative = repoRelativePath(root, absolute);
+    if (
+      relative.startsWith("../") ||
+      relative.startsWith("node_modules/") ||
+      relative.startsWith(".git/") ||
+      closure.has(relative) ||
+      (!tracked.has(relative) && !traceCallFailed(line)) ||
+      // Bun reads these for every test, and a change to any of them already
+      // selects every test.
+      Object.values(SCRIPT_TEST_ALL_RULES).some((rule) =>
+        rule.test(relative),
+      ) ||
+      globs.some((glob) => glob.match(relative))
+    ) {
+      continue;
+    }
+    opened.add(relative);
+  }
+  return [...opened].toSorted();
+};
+
+type ScanRecord = {
+  readonly directory: string;
+  readonly pattern?: string;
+  /** Seen only as a directory listing in the trace, from any caller. */
+  readonly listing?: true;
+};
+
+const repositoryScan = (
+  directory: string,
+  root: string,
+): { readonly absolute: string; readonly relative: string } | undefined => {
+  const absolute = path.resolve(root, directory);
+  const relative = repoRelativePath(root, absolute).replace(/\/$/u, "");
+  // Outside the checkout (its parent included), installed packages and Git's
+  // own store are never repository inputs; Bun's resolver lists some of them.
+  const segments = relative.split("/");
+  if (
+    segments[0] === ".." ||
+    segments.includes("node_modules") ||
+    segments[0] === ".git"
+  ) {
+    return undefined;
+  }
+  return { absolute, relative: relative === "." ? "" : relative };
+};
+
+const scanCovered = ({
+  record,
+  declared,
+  root,
+}: {
+  readonly record: ScanRecord;
+  readonly declared: readonly string[];
+  readonly root: string;
+}): boolean => {
+  const repository = repositoryScan(record.directory, root);
+  if (repository === undefined) {
+    return true;
+  }
+  const directorySegments = repository.relative.split("/").filter(Boolean);
+  return declared.some((pattern) => {
+    const segments = pattern.split("/");
+    if (
+      segments.at(-1) !== "**" ||
+      segments.length > directorySegments.length + 1
+    ) {
+      return false;
+    }
+    return segments
+      .slice(0, -1)
+      .every((segment, index) => segment === directorySegments[index]);
+  });
+};
+
+export const scanInputDeclaration = (
+  directory: string,
+  root = REPO_ROOT,
+): string => {
+  const repository = repositoryScan(directory, root);
+  if (repository === undefined) {
+    panic(`Cannot declare a scan outside the repository: ${directory}`);
+  }
+  return repository.relative === "" ? "**" : `${repository.relative}/**`;
+};
+
+const tracePid = (line: string): string | undefined =>
+  /^\s*(\d+)\s/u.exec(line)?.[1];
+
+type WorkingDirectory = {
+  anchor: {
+    state: { type: "unknown" } | { type: "known"; directory: string };
+  };
+  changes: readonly string[];
+};
+
+const workingDirectory = (directory: string | undefined): WorkingDirectory => ({
+  anchor: {
+    state:
+      directory === undefined
+        ? { type: "unknown" }
+        : { type: "known", directory },
+  },
+  changes: [],
+});
+
+const changeWorkingDirectory = (
+  cwd: WorkingDirectory,
+  change: string,
+): WorkingDirectory =>
+  path.isAbsolute(change)
+    ? workingDirectory(change)
+    : { anchor: cwd.anchor, changes: cwd.changes.concat(change) };
+
+// Later annotations can resolve earlier records through their shared anchor;
+// each directory change creates an immutable location relative to that anchor.
+const observeWorkingDirectory = (cwd: WorkingDirectory, observed: string) => {
+  if (cwd.anchor.state.type === "known") {
+    return;
+  }
+  const segments = path
+    .join(...cwd.changes)
+    .split(path.sep)
+    .filter((part) => part !== "" && part !== ".");
+  if (segments.includes("..")) {
+    return;
+  }
+  let original = observed;
+  for (const segment of segments.toReversed()) {
+    if (path.basename(original) !== segment) {
+      return;
+    }
+    original = path.dirname(original);
+  }
+  cwd.anchor.state = { type: "known", directory: original };
+};
+
+type ResolveTracePathOptions = {
+  value: string;
+  cwd: WorkingDirectory;
+  context: string;
+};
+
+const resolveTracePath = ({ value, cwd, context }: ResolveTracePathOptions) => {
+  if (path.isAbsolute(value)) {
+    return path.normalize(value);
+  }
+  switch (cwd.anchor.state.type) {
+    case "known":
+      return path.resolve(cwd.anchor.state.directory, ...cwd.changes, value);
+    case "unknown":
+      return panic(context);
+    default: {
+      cwd.anchor.state satisfies never;
+      return panic("Unhandled working-directory state");
+    }
+  }
+};
+
+const quotedArgument = (argument: string) => {
+  const match = /^"((?:\\.|[^"])*)"$/u.exec(argument);
+  return match === null ? undefined : decodeTraceString(match.at(1) ?? "");
+};
+
+type TraceContext = {
+  line: string;
+  call: NonNullable<ReturnType<typeof traceCall>>;
+  cwd: WorkingDirectory;
+};
+
+type TraceContextsOptions = {
+  trace: string;
+  root: string;
+};
+
+const traceContexts = ({
+  trace,
+  root,
+}: TraceContextsOptions): TraceContext[] => {
+  const records = joinedTraceRecords(trace);
+  const rootPid = tracePid(records.at(0) ?? "");
+  const owners = new Map<string, { cwd: WorkingDirectory }>();
+  const contexts: TraceContext[] = [];
+  for (const line of records) {
+    assertWholeRecord(line);
+    const pid = tracePid(line);
+    const call = traceCall(line);
+    if (pid === undefined || call === undefined) {
+      continue;
+    }
+    let owner = owners.get(pid);
+    if (owner === undefined) {
+      owner = {
+        cwd: workingDirectory(
+          pid === rootPid && call.syscall.type === "execution"
+            ? root
+            : undefined,
+        ),
+      };
+      owners.set(pid, owner);
+    }
+    const descriptor = call.args.at(0) ?? "";
+    const observed = descriptor.startsWith("AT_FDCWD<")
+      ? descriptorPath(descriptor)
+      : undefined;
+    if (observed !== undefined) {
+      observeWorkingDirectory(owner.cwd, observed);
+      owner.cwd = workingDirectory(observed);
+    }
+    if (call.syscall.type !== "process") {
+      contexts.push({ line, call, cwd: owner.cwd });
+      continue;
+    }
+    switch (call.syscall.operation) {
+      case "fork": {
+        const child = /\)\s+=\s+([1-9]\d*)\b/u.exec(line)?.at(1);
+        if (child !== undefined) {
+          owners.set(
+            child,
+            line.includes("CLONE_FS") ? owner : { cwd: owner.cwd },
+          );
+        }
+        break;
+      }
+      case "chdir": {
+        if (/\)\s+=\s+0\b/u.test(line)) {
+          const target =
+            quotedArgument(call.args.at(call.syscall.argument) ?? "") ??
+            panic("Successful chdir is missing its path");
+          owner.cwd = changeWorkingDirectory(owner.cwd, target);
+        }
+        break;
+      }
+      case "fchdir": {
+        if (/\)\s+=\s+0\b/u.test(line)) {
+          owner.cwd = workingDirectory(
+            descriptorPath(call.args.at(call.syscall.argument) ?? ""),
+          );
+        }
+        break;
+      }
+      default: {
+        call.syscall satisfies never;
+        return panic("Unhandled process trace operation");
+      }
+    }
+  }
+  return contexts;
+};
+
+const joinedTraceRecords = (trace: string): string[] => {
+  const records: string[] = [];
+  const unfinished = new Map<string, { source: string; index: number }>();
+  for (const line of trace.split("\n")) {
+    const pid = tracePid(line);
+    if (pid === undefined) {
+      continue;
+    }
+    if (line.includes("<unfinished ...>")) {
+      unfinished.set(pid, {
+        source: line.slice(0, line.lastIndexOf("<unfinished ...>")).trimEnd(),
+        index: records.length,
+      });
+      records.push("");
+      continue;
+    }
+    const resumed = /^\s*\d+\s+<\.\.\.\s+\S+\s+resumed>(.*)$/u.exec(line);
+    if (resumed !== null) {
+      const start = unfinished.get(pid);
+      if (start !== undefined) {
+        records[start.index] = `${start.source}${resumed[1] ?? ""}`;
+        unfinished.delete(pid);
+      }
+      continue;
+    }
+    records.push(line);
+  }
+  if (unfinished.size > 0) {
+    panic("Incomplete syscall trace contains an unfinished call");
+  }
+  return records;
+};
+
+// Git options that come before the subcommand and take a separate value.
+const GIT_VALUE_OPTIONS: ReadonlySet<string> = new Set([
+  "-C",
+  "-c",
+  "--git-dir",
+  "--work-tree",
+  "--namespace",
+  "--config-env",
+  "--exec-path",
+  "--super-prefix",
+]);
+
+/**
+ * The subcommand of a `git` invocation after its global options, the
+ * directory its `-C` options move it to (relative to where it starts), and
+ * the subcommand's own arguments.
+ */
+export const gitInvocation = (args: readonly string[]) => {
+  let directory = ".";
+  let index = 1;
+  while ((args[index] ?? "").startsWith("-")) {
+    const option = args[index] ?? "";
+    if (option === "-C") {
+      // Like `cd`: an absolute operand replaces the directory so far.
+      const operand = args[index + 1] ?? ".";
+      directory = path.isAbsolute(operand)
+        ? path.normalize(operand)
+        : path.join(directory, operand);
+    }
+    index += GIT_VALUE_OPTIONS.has(option) ? 2 : 1;
+  }
+  return {
+    subcommand: args[index],
+    directory,
+    rest: args.slice(index + 1),
+  };
+};
+
+/** The directories a scanning command lists, or undefined for any other. */
+const commandOperands = (
+  executable: string,
+  args: readonly string[],
+  git: ReturnType<typeof gitInvocation> | undefined,
+): string[] | undefined => {
+  const gitArguments = git?.rest ?? [];
+  const separator = gitArguments.indexOf("--");
+  if (git?.subcommand === "ls-files") {
+    return (
+      separator === -1 ? gitArguments : gitArguments.slice(separator + 1)
+    ).filter((argument) => !argument.startsWith("-"));
+  }
+  if (
+    git?.subcommand === "grep" ||
+    (git?.subcommand === "diff" && gitArguments.includes("--name-only"))
+  ) {
+    return separator === -1 ? [] : gitArguments.slice(separator + 1);
+  }
+  if (executable === "find") {
+    const findArguments = args.slice(1);
+    const expression = findArguments.findIndex(
+      (argument) =>
+        argument.startsWith("-") || argument === "!" || argument === "(",
+    );
+    return expression === -1
+      ? findArguments
+      : findArguments.slice(0, expression);
+  }
+  if (executable === "ls") {
+    return args.slice(1).filter((arg) => !arg.startsWith("-"));
+  }
+  return undefined;
+};
+
+type CommandScansOptions = {
+  trace: string;
+  root: string;
+  testFile: string | undefined;
+};
+
+const commandScans = ({
+  trace,
+  root,
+  testFile,
+}: CommandScansOptions): ScanRecord[] => {
+  const scans: ScanRecord[] = [];
+  for (const { line, call, cwd } of traceContexts({ trace, root })) {
+    if (call.syscall.type === "directory") {
+      const directory = descriptorPath(
+        call.args.at(call.syscall.argument) ?? "",
+      );
+      if (directory === undefined) {
+        if (traceCallFailed(line)) {
+          continue;
+        }
+        panic("Directory listing is missing its descriptor path");
+      }
+      scans.push({
+        directory: resolveTracePath({
+          value: directory,
+          cwd,
+          context:
+            "cannot resolve the working directory of a directory listing",
+        }),
+        listing: true,
+      });
+      continue;
+    }
+    if (call.syscall.type !== "execution") {
+      continue;
+    }
+    const argv = call.args.at(call.syscall.argv) ?? "";
+    const args = [...argv.matchAll(/"((?:\\.|[^"\\])*)"/gu)].map((match) =>
+      decodeTraceString(match.at(1) ?? ""),
+    );
+    const executable = path.basename(args.at(0) ?? "");
+    const git = executable === "git" ? gitInvocation(args) : undefined;
+    const invocationCwd =
+      git === undefined ? cwd : changeWorkingDirectory(cwd, git.directory);
+    const operands = commandOperands(executable, args, git);
+    if (operands === undefined) {
+      continue;
+    }
+    for (const operand of operands.length === 0 ? ["."] : operands) {
+      scans.push({
+        directory: resolveTracePath({
+          value: operand,
+          cwd: invocationCwd,
+          context: `${testFile ?? "script test"}: cannot resolve the working directory of a scan by ${executable}`,
+        }),
+      });
+    }
+  }
+  return scans;
+};
+
+export const uncoveredScans = ({
+  scanLog,
+  trace = "",
+  declared,
+  tracked,
+  root = REPO_ROOT,
+  testFile,
+}: {
+  readonly scanLog: string;
+  readonly trace?: string;
+  readonly declared: readonly string[];
+  readonly tracked: ReadonlySet<string>;
+  readonly root?: string;
+  readonly testFile?: string;
+}): ScanRecord[] => {
+  // Kept in the public options because callers already own this census; scan
+  // coverage itself is deliberately independent of today's tracked files.
+  void tracked;
+  const parseRecord = (line: string): ScanRecord => {
+    const parsed: unknown = JSON.parse(line);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("directory" in parsed) ||
+      typeof parsed.directory !== "string" ||
+      ("pattern" in parsed && typeof parsed.pattern !== "string") ||
+      ("recursive" in parsed && parsed.recursive !== true)
+    ) {
+      panic(`Invalid script test scan record: ${line}`);
+    }
+    const directory = resolveTracePath({
+      value: parsed.directory,
+      cwd: workingDirectory(undefined),
+      context: "cannot resolve the working directory of a scan log record",
+    });
+    if ("pattern" in parsed && typeof parsed.pattern === "string") {
+      return {
+        directory,
+        pattern: parsed.pattern,
+      };
+    }
+    return {
+      directory,
+    };
+  };
+  const records = scanLog.split("\n").filter(Boolean).map(parseRecord);
+  const commandRecords = commandScans({ trace, root, testFile });
+  // A syscall trace cannot attribute a listing to the module resolver or
+  // test code, so either requires structural coverage of the directory.
+  return [...records, ...commandRecords].filter(
+    (record) => !scanCovered({ record, declared, root }),
+  );
+};
+
+type RunOptions = {
+  readonly command: readonly string[];
+  readonly testFile: string;
+  readonly trace: boolean;
+  readonly graph: ReturnType<typeof buildImportGraph>;
+  readonly tracked: ReadonlySet<string>;
+};
+
 /**
  * Runs `command` with its output in files, then prints it whole, so commands
  * running at once never interleave their reports. Files, not pipes: a piped
  * stdout is truncated for large test reports.
  */
-const run = async (command: readonly string[]): Promise<boolean> => {
+const run = async ({
+  command,
+  testFile,
+  trace,
+  graph,
+  tracked,
+}: RunOptions): Promise<boolean> => {
   const directory = mkdtempSync(path.join(tmpdir(), "unlisted-script-tests-"));
   const stdoutPath = path.join(directory, "stdout.log");
   const stderrPath = path.join(directory, "stderr.log");
   try {
-    const child = Bun.spawn([...command], {
+    const tracePath = path.join(directory, "trace.log");
+    const scanLogPath = path.join(directory, "scans.log");
+    writeFileSync(scanLogPath, "");
+    const testCommand =
+      command[0] === "bun" && command[1] === "test"
+        ? [
+            command[0],
+            command[1],
+            "--preload",
+            path.join(REPO_ROOT, SCAN_PRELOAD_PATH),
+            ...command.slice(2),
+          ]
+        : [...command];
+    const invoked = trace
+      ? [
+          "strace",
+          "-f",
+          // A kernel filter stops the test only at the traced calls; without
+          // it every syscall of Bun's threads round-trips through strace.
+          "--seccomp-bpf",
+          "-yy",
+          // strace cuts strings at 32 bytes by default; a cut path would
+          // not match a tracked file and escape verification.
+          "-s",
+          String(TRACE_STRING_LIMIT),
+          "-e",
+          SCRIPT_TEST_TRACE_FILTER,
+          "-o",
+          tracePath,
+          ...testCommand,
+        ]
+      : testCommand;
+    const started = performance.now();
+    const child = Bun.spawn(invoked, {
       cwd: REPO_ROOT,
       stdout: Bun.file(stdoutPath),
       stderr: Bun.file(stderrPath),
+      env: { ...process.env, SCRIPT_TEST_SCAN_LOG: scanLogPath },
     });
     const exitCode = await child.exited;
     console.log(`$ ${command.join(" ")}`);
     process.stdout.write(readFileSync(stdoutPath, "utf-8"));
     process.stderr.write(readFileSync(stderrPath, "utf-8"));
-    return exitCode === 0;
+    const traceText = trace ? readFileSync(tracePath, "utf-8") : "";
+    const undeclared = trace
+      ? undeclaredTracedFiles({
+          trace: traceText,
+          closure: tracedAllowance((file) => graph.closure(file), testFile),
+          declared: declaredInputs.get(testFile) ?? [],
+          tracked,
+        })
+      : [];
+    if (trace) {
+      console.log(
+        `Traced ${testFile} in ${Math.round(performance.now() - started)}ms.`,
+      );
+      for (const file of undeclared) {
+        console.error(`${testFile} opened undeclared tracked file ${file}`);
+      }
+    }
+    const scans = uncoveredScans({
+      scanLog: readFileSync(scanLogPath, "utf-8"),
+      trace: traceText,
+      declared: declaredInputs.get(testFile) ?? [],
+      tracked,
+      testFile,
+    });
+    for (const uncovered of scans) {
+      const declaration = scanInputDeclaration(uncovered.directory);
+      console.error(
+        `${testFile}: scans ${uncovered.directory} (${uncovered.pattern ?? "directory entries"}) without a declared glob covering it; add ${JSON.stringify(declaration)} to inputs[${JSON.stringify(testFile)}] in scripts/script-test-inputs.json`,
+      );
+    }
+    return exitCode === 0 && undeclared.length === 0 && scans.length === 0;
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -217,18 +1198,80 @@ if (import.meta.main) {
       workflowText,
     );
     const unlisted = selectScriptTests(discovered, DEPTH_TESTS, options.depth);
-    const commands = unlistedTestCommands({
-      files: unlisted,
-      timeout: options.timeout,
-      groups: UNLISTED_TEST_GROUPS,
-      weightOf: (file) => statSync(path.join(REPO_ROOT, file)).size,
+    const base = comparisonBase();
+    const selection =
+      base === undefined
+        ? {
+            files: unlisted,
+            skipped: 0,
+            reason: "no comparison base is available",
+          }
+        : selectAffectedScriptTests({
+            tests: unlisted,
+            changed: changedFilesSince(base),
+          });
+    console.log(
+      `Selected ${selection.files.length} and skipped ${selection.skipped} unlisted script test file(s).`,
+    );
+    if (selection.reason !== undefined) {
+      console.log(`Full run: ${selection.reason}.`);
+    }
+    const hasStrace = () =>
+      Bun.spawnSync(["sh", "-c", "command -v strace"], { stdout: "ignore" })
+        .exitCode === 0;
+    // Hosted runner images ship without strace. CI installs it only when a
+    // test will run, so a change that selects none pays nothing for it.
+    const straceAvailable = prepareStrace({
+      ci: process.env["CI"] === "true",
+      selectedTests: selection.files.length,
+      available: hasStrace,
     });
-    const results = await Promise.all(
-      commands.map(async (command) => await run(command)),
+    if (!straceAvailable) {
+      console.log("Tracing skipped: strace is not installed.");
+    }
+    const graph = buildImportGraph(REPO_ROOT, [
+      ...selection.files.filter((file) => file.endsWith(".ts")),
+      RUNNER_PATH,
+      SCAN_PRELOAD_PATH,
+    ]);
+    const tracked = trackedFiles();
+    const commands = selection.files.map((file) => ({
+      file,
+      command:
+        unlistedTestCommands({
+          files: [file],
+          timeout: options.timeout,
+          groups: UNLISTED_TEST_GROUPS,
+          weightOf: (entry) => statSync(path.join(REPO_ROOT, entry)).size,
+        })[0] ?? panic(`No command for ${file}`),
+    }));
+    let nextCommand = 0;
+    const results: boolean[] = [];
+    await Promise.all(
+      Array.from(
+        { length: Math.min(UNLISTED_TEST_GROUPS, commands.length) },
+        async () => {
+          while (nextCommand < commands.length) {
+            const entry = commands[nextCommand];
+            nextCommand += 1;
+            if (entry !== undefined) {
+              results.push(
+                await run({
+                  command: entry.command,
+                  testFile: entry.file,
+                  trace: straceAvailable,
+                  graph,
+                  tracked,
+                }),
+              );
+            }
+          }
+        },
+      ),
     );
     if (results.includes(false)) {
       panic("Unlisted script tests failed");
     }
-    console.log(`Ran ${unlisted.length} unlisted script test file(s).`);
+    console.log(`Ran ${selection.files.length} unlisted script test file(s).`);
   }
 }
