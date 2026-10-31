@@ -9,6 +9,8 @@ export const QUERY_PERF_TABLE_SIZES = {
   // One row per source, keyed by source_id.
   case_law_source_arrivals: "small",
   case_law_provision_extraction_scopes: "small",
+  // The name primary key and CHECK allow only scope-bootstrap and state-seed.
+  case_law_provision_repair_cursors: "small",
   case_law_provision_scope_transitions: "small",
   case_law_sources: "small",
   // One row per country-month or broad invalidation target currently being retired.
