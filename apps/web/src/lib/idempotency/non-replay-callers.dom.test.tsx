@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { SampleCaseLoad } from "@/features/avt/types";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -133,7 +135,10 @@ test("a matter creation caller with a generated identity sends no replay key", a
     ),
   });
   await act(async () => {
-    await result.current.mutateAsync({ name: "Review matter" });
+    await result.current.mutateAsync({
+      name: "Review matter",
+      visibility: MATTER_VISIBILITY.assignedOnly,
+    });
   });
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
   expect(requests).toHaveLength(1);

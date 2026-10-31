@@ -22,6 +22,7 @@ import {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { BuildingIcon, LockIcon, UsersIcon } from "@stll/ui/icons";
+import { Label } from "@stll/ui/label";
 import {
   Select,
   SelectItem,
@@ -32,6 +33,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import { roleOptions } from "@/lib/auth-queries";
@@ -106,32 +108,33 @@ export const MatterVisibilityChoice = ({
           const Icon = copy.icon;
           const checked = value === option;
           return (
-            <label
-              aria-label={t(copy.label)}
-              className={cn(
-                "grid min-h-11 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-2.5",
-                checked && "bg-muted/60",
-              )}
+            <div
               key={option}
+              className={cn("px-3 py-2.5", checked && "bg-muted/60")}
             >
-              <input
-                checked={checked}
-                className="accent-primary mt-0.5 size-4"
-                name="matter-visibility"
-                onChange={() => onChange(option)}
-                type="radio"
-                value={option}
-              />
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex items-center gap-1.5 text-sm font-medium">
-                  <Icon className="text-muted-foreground size-3.5" />
-                  {t(copy.label)}
+              <Label
+                aria-label={t(copy.label)}
+                className="grid min-h-11 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-start"
+              >
+                <input
+                  checked={checked}
+                  className="accent-primary mt-0.5 size-4"
+                  name="matter-visibility"
+                  onChange={() => onChange(option)}
+                  type="radio"
+                  value={option}
+                />
+                <span className="flex min-w-0 flex-col gap-0.5">
+                  <span className="flex items-center gap-1.5 text-sm font-medium">
+                    <Icon className="text-muted-foreground size-3.5" />
+                    {t(copy.label)}
+                  </span>
+                  <span className="text-muted-foreground text-xs text-pretty">
+                    {t(copy.description)}
+                  </span>
                 </span>
-                <span className="text-muted-foreground text-xs text-pretty">
-                  {t(copy.description)}
-                </span>
-              </span>
-            </label>
+              </Label>
+            </div>
           );
         })}
       </div>
@@ -175,13 +178,15 @@ export const MatterVisibilityBadge = ({
     return null;
   }
   return (
-    <span
-      className="text-muted-foreground text-2xs inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 leading-4 font-medium"
-      title={badge.title}
+    <Tooltip
+      content={badge.title}
+      render={
+        <span className="text-muted-foreground text-2xs inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 leading-4 font-medium" />
+      }
     >
       <badge.Icon aria-hidden className="size-2.5" />
       {badge.label}
-    </span>
+    </Tooltip>
   );
 };
 
