@@ -261,6 +261,31 @@ const _textTokenList = inArray(timestampCasToken(decisions.updatedAt), [
 // oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
 const _textCastFragment = eq(sql`CAST(${decisions.updatedAt} AS text)`, casToken);
 
+// The helper and the column through the file's own bindings, and the text
+// through a collation, a concatenation or a text function.
+const tokenOf = timestampCasToken;
+const casHelpers = { timestampCasToken };
+const { timestampCasToken: destructuredToken } = casHelpers;
+const { updatedAt: decisionUpdatedAt } = decisions;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textTokenConst = eq(tokenOf(decisions.updatedAt), casToken);
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textTokenMember = eq(casHelpers.timestampCasToken(decisions.updatedAt), casToken);
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textTokenDestructured = eq(destructuredToken(decisions.updatedAt), casToken);
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCollated = sql`${decisions.updatedAt}::text COLLATE "C" = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textCoalesced = sql`coalesce(${decisions.updatedAt}::text, '') = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textConcatenated = sql`${decisions.updatedAt}::text || 'Z' = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textDestructuredColumn = sql`${decisionUpdatedAt}::text = ${casToken}`;
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textComputedColumn = sql`${decisions["updatedAt"]}::text = ${casToken}`; // oxlint-disable-line typescript/dot-notation
+// oxlint-disable-next-line no-truncated-timestamp-comparison/no-truncated-timestamp-comparison
+const _textRawStatement = sql.raw("WHERE updated_at::text = '2026-08-07'");
+
 // --- Cases the rule MUST NOT flag ---
 
 // The shared helper compares the instant, not its printed text.
@@ -278,6 +303,12 @@ const _textTokenAssigned = sql`UPDATE t SET note = ${timestampCasToken(decisions
 
 // Membership of a non-timestamp column's text.
 const _nonTimestampTextList = inArray(decisions.id, [boundaryId]);
+
+// A function of the text that is not the text itself compares something else.
+const _textLength = sql`length(${decisions.updatedAt}::text) = 10`;
+
+// A raw statement that renders no timestamp.
+const _rawNonTimestamp = sql.raw("WHERE id::text = 'row-id'");
 
 // An explicit cast keeps the operand at the column's precision whatever
 // produced it: this is what `timestampMatchesCasToken` emits.
@@ -390,6 +421,17 @@ export const __noTruncatedTimestampComparisonFixture = {
   _textFormattedLiteral,
   _textTokenList,
   _textCastFragment,
+  _textTokenConst,
+  _textTokenMember,
+  _textTokenDestructured,
+  _textCollated,
+  _textCoalesced,
+  _textConcatenated,
+  _textDestructuredColumn,
+  _textComputedColumn,
+  _textRawStatement,
+  _textLength,
+  _rawNonTimestamp,
   _casHelper,
   _nonTimestampTextCast,
   _textCastSelect,
