@@ -26,7 +26,9 @@ import {
 import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { withExceptionScope } from "@/api/lib/observability/exception-scope";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import type {
@@ -48,13 +50,21 @@ import {
   lockSchedulerClaimCandidate,
   withAggregateTransaction,
 } from "../db/aggregate-lock";
-import { tablesForSchedulerTask } from "./jobs";
 import {
   DEFAULT_LEASE_MS,
   DEFAULT_POLL_INTERVAL_MS,
   defaultHeartbeatIntervalMs,
 } from "./lease-timing";
 import type { SchedulerTableName } from "./table-declarations";
+
+const TABLE_LEASE_HEARTBEAT_FAILED = failureSink({
+  event: "scheduler.table_lease_heartbeat_failed",
+  expected: [],
+});
+const TASK_SETTLED_AFTER_COMPLETION_FAILED = failureSink({
+  event: "scheduler.task_settled_after_completion_failed",
+  expected: [],
+});
 
 // Lifecycle writes accompany every execution, including tasks with no domain tables.
 export const SCHEDULER_INFRASTRUCTURE_TABLES = [
@@ -103,7 +113,7 @@ type RunSchedulerOnceOptions = {
   // Wall-clock milliseconds for eligibility tests; production uses PostgreSQL.
   eligibilityNow?: () => number;
   registry: SchedulerTaskRegistry;
-  tablesForTask?: (task: string) => readonly string[];
+  tablesForTask: (task: string) => readonly string[];
   signal?: AbortSignal;
 };
 
@@ -148,7 +158,7 @@ export const runSchedulerOnce = async ({
   maxSweepDurationMs = DEFAULT_SWEEP_DURATION_MS,
   now,
   registry,
-  tablesForTask = tablesForSchedulerTask,
+  tablesForTask,
   rerunLimit = DEFAULT_RERUN_LIMIT,
   runnerId = defaultRunnerId(),
   signal,
@@ -351,7 +361,7 @@ type AcquireNextDueJobOptions = {
   runnerId: string;
   leaseMs: number;
   registry: SchedulerTaskRegistry;
-  tablesForTask?: (task: string) => readonly string[];
+  tablesForTask: (task: string) => readonly string[];
   now?: () => number;
 };
 
@@ -361,7 +371,7 @@ export const acquireNextDueJob = async ({
   now,
   leaseMs,
   registry,
-  tablesForTask = tablesForSchedulerTask,
+  tablesForTask,
   runnerId,
 }: AcquireNextDueJobOptions): Promise<SchedulerJob | null> => {
   if (!Number.isInteger(leaseMs) || leaseMs < MIN_LEASE_MS) {
@@ -681,15 +691,9 @@ const startTaskTableLeaseLifetime = ({
       async () => await renewJobTableLeases(db, holderId, leaseMs),
     );
     if (result.isErr()) {
-      captureError(
-        result.error,
-        handlerErrorContext("scheduler.tableLeaseHeartbeat", {
-          schedulerJobId: jobId,
-        }),
-      );
-      logger.warn("scheduler.table_lease_heartbeat_failed", {
-        "scheduler.holder_id": holderId,
-        "error.type": errorTag(result.error),
+      observeFailure(result.error, {
+        sink: TABLE_LEASE_HEARTBEAT_FAILED,
+        ctx: { jobId },
       });
       if (performance.now() - lastRenewedAt >= leaseMs) {
         markLost();
@@ -743,15 +747,10 @@ const startTaskTableLeaseLifetime = ({
               );
               try {
                 if (outcome.isErr()) {
-                  captureError(
-                    outcome.error,
-                    handlerErrorContext(
-                      "scheduler.taskSettledAfterCompletion",
-                      {
-                        schedulerJobId: jobId,
-                      },
-                    ),
-                  );
+                  observeFailure(outcome.error, {
+                    sink: TASK_SETTLED_AFTER_COMPLETION_FAILED,
+                    ctx: { jobId },
+                  });
                 }
               } finally {
                 await release();

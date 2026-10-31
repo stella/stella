@@ -21,6 +21,7 @@ import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerpr
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
+import { wildcardSchedulerTablesForTask } from "@/api/tests/helpers/scheduler-table-declarations";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -370,6 +371,7 @@ test("the first claim attempt activates the protocol even with no runnable work"
   const emptyRegistry: SchedulerTaskRegistry = new Map();
   expect(
     await acquireNextDueJob({
+      tablesForTask: wildcardSchedulerTablesForTask,
       db,
       leaseMs: LEASE_MS,
       registry: emptyRegistry,
@@ -383,6 +385,7 @@ test("the first claim attempt activates the protocol even with no runnable work"
   expect(first.firstSeenAt).toBeInstanceOf(Date);
   expect(
     await acquireNextDueJob({
+      tablesForTask: wildcardSchedulerTablesForTask,
       db,
       leaseMs: LEASE_MS,
       registry: emptyRegistry,

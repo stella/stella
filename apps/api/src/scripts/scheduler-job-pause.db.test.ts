@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/scheduler/jobs";
 import { acquireNextDueJob } from "@/api/lib/scheduler/runner";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { wildcardSchedulerTablesForTask } from "@/api/tests/helpers/scheduler-table-declarations";
 
 import {
   parseSchedulerJobPauseArgs,
@@ -91,6 +92,7 @@ describe.skipIf(!runPostgresTests)(
           expect(paused?.pausedUntil?.getTime()).toBeGreaterThan(Date.now());
           expect(
             await acquireNextDueJob({
+              tablesForTask: wildcardSchedulerTablesForTask,
               db,
               leaseMs: 180_000,
               now: Date.now,
