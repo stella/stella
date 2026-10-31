@@ -121,6 +121,49 @@ const advanceClock = async (milliseconds: number) => {
   );
 };
 
+type ReaderAnswerStatus = ReaderAnswer["messages"][number]["status"];
+
+/**
+ * Settles once the cached reader answers reach a status, whatever number of
+ * event loop turns the response takes. The cache event fires inside the
+ * query's notification batch, so one zero-time turn afterwards renders it.
+ */
+const cachedLastStatus = (
+  client: InstanceType<typeof QueryClient>,
+  reached: (status: ReaderAnswerStatus | undefined) => boolean,
+) => {
+  const { queryKey } = readerAnswersOptions({
+    decisionId: "decision-1",
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
+  const { promise, resolve } = Promise.withResolvers<
+    ReaderAnswerStatus | undefined
+  >();
+  const check = () => {
+    const status = client
+      .getQueryData(queryKey)
+      ?.at(0)
+      ?.messages.at(-1)?.status;
+    if (reached(status)) {
+      unsubscribe();
+      resolve(status);
+    }
+  };
+  const unsubscribe = client.getQueryCache().subscribe(check);
+  check();
+  return promise;
+};
+
+const renderCachedStatus = async (
+  cached: ReturnType<typeof cachedLastStatus>,
+) => {
+  await act(async () => {
+    await cached;
+  });
+  await advanceClock(0);
+};
+
 const fakeServer = (
   failRegenerate = false,
   errorCode: ReaderAnswerErrorCode = "provider-error",
@@ -1309,7 +1352,8 @@ test.each(["never", "hanging"] as const)(
   "persisted claims stop polling at timeout when the server is %s",
   async (settlement) => {
     const server = pollingServer(settlement);
-    const { wrapper } = setup();
+    const { client, wrapper } = setup();
+    const claimed = cachedLastStatus(client, (status) => status !== undefined);
     jest.useFakeTimers();
     Object.defineProperty(AbortSignal, "timeout", {
       configurable: true,
@@ -1327,16 +1371,16 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    // Flush the mounted query and its notification without advancing the 5000 ms recovery deadline.
-    await advanceClock(0);
-    await advanceClock(0);
+    // Wait for the mounted query to cache the claim without advancing the 5000 ms recovery deadline.
+    await renderCachedStatus(claimed);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
       "streaming",
     );
+    const failed = cachedLastStatus(client, (status) => status === "failed");
     server.releaseRecovery();
     await advanceClock(300);
     await advanceClock(5000);
-    await advanceClock(0);
+    await renderCachedStatus(failed);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)).toMatchObject({
       status: "failed",
       errorCode: "timeout",
