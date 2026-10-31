@@ -1,6 +1,10 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
 import {
+  hasUnownedWorkspaceInsert,
+  isPreVisibilityWorkspaceInsert,
+} from "./sql/workspace-insert.ts";
+import {
   filenameForContext,
   getPropertyName,
   isAstNode,
@@ -12,10 +16,6 @@ import {
   unwrapExpression,
 } from "./utils.ts";
 import type { AstNode, FilenameContext, ScopeContext } from "./utils.ts";
-import {
-  hasUnownedWorkspaceInsert,
-  isPreVisibilityWorkspaceInsert,
-} from "./workspace-insert-sql.ts";
 
 const OWNER = "apps/api/src/lib/workspaces/create-workspace-row";
 const FIXTURE_OWNER = "apps/api/src/tests/gated-test-database";
@@ -441,7 +441,10 @@ export default eslintCompatPlugin({
             reported.clear();
             const filename = filenameForContext(context);
             return (
-              filename.includes("apps/api/") &&
+              (filename.includes("apps/api/") ||
+                filename.includes(
+                  ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.",
+                )) &&
               !filename.endsWith(`${OWNER}.ts`)
             );
           },

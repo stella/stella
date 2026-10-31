@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
-import { hasUnownedWorkspaceInsert } from "../workspace-insert-sql.ts";
+import { hasUnownedWorkspaceInsert } from "../sql/workspace-insert.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const lint = async (
@@ -10,6 +11,25 @@ const lint = async (
   await lintSingleRule("no-unowned-workspace-insert", source, { sourcePath });
 
 const hole = (expression: string) => `\${${expression}}`;
+
+test("the registered fixture proves both rejected and clean creation", async () => {
+  const sourcePath =
+    ".oxlint-plugins/__fixtures__/no-unowned-workspace-insert.fixture.ts";
+  const source = readFileSync(
+    new URL(
+      "../__fixtures__/no-unowned-workspace-insert.fixture.ts",
+      import.meta.url,
+    ),
+    "utf-8",
+  );
+  expect(await lint(source, sourcePath)).toEqual([]);
+  expect(
+    await lint(
+      source.replaceAll(/\/\/ oxlint-disable-next-line[^\n]*\n/gu, ""),
+      sourcePath,
+    ),
+  ).toHaveLength(1);
+});
 
 describe.serial("workspace inserts use the creation owner", () => {
   test("rejects private, missing and unknown row visibility in tests and seeds", async () => {
