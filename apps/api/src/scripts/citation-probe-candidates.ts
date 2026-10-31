@@ -14,7 +14,10 @@ export const standaloneCandidate = (match: string): string => {
 // anonymization placeholders, and statute/collection references.
 const BENIGN: readonly RegExp[] = [
   // Dashes include the non-breaking hyphen (U+2011) some sources print.
-  /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
+  // Anchored to the case-number prefix: an authority reference that only
+  // follows a court docket ("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ") must
+  // not hide the docket.
+  /^(?:[Ss]p\.\s{0,3}[Zz]n\.|[Ss]en\.\s{0,3}[Zz]n\.|[Ss]ygn\.(?:\s{1,3}akt\.?)?|[ČčCc]\.\s{0,3}[Jj]\.:?)\s{0,3}[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]{2,8}[-–‑][\w/–‑-]{0,30}\d/u,
   /X{2,}/u,
   /\b\d{1,5}\/\d{2,4}\s{1,3}Sb\b/u,
   /\bZb\.\s*z\b/u,

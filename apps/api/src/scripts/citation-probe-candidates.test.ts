@@ -20,6 +20,8 @@ describe("citation probe candidates", () => {
       residual(`č. j. ABCD${nb}123456${nb}12/XY${nb}2020${nb}1234AB`),
     ).toBe(false);
     expect(residual(`č. j. ÚOHS${nb}S123/2019/VZ`)).toBe(false);
+    expect(residual(`sp. zn. 12 C 345/2020 ÚOHS${nb}S123/2019/VZ`)).toBe(true);
+    expect(residual("sp. zn. 12 C 345/2020 ÚOHS-S123/2019/VZ")).toBe(true);
   });
 
   test("an enforcement-officer or arbitration file is benign, a docket is not", () => {
