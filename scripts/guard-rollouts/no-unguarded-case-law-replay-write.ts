@@ -1,0 +1,22 @@
+import type { GuardRollout } from "../guard-rollout-policy.ts";
+
+export default {
+  id: "no-unguarded-case-law-replay-write",
+  rules: [
+    "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write",
+  ],
+  type: "changed-lines",
+  expiresAt: "2026-11-07T00:00:00.000Z",
+  check: [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write",
+    ".",
+  ],
+} as const satisfies GuardRollout;

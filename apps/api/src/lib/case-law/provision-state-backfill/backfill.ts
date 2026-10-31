@@ -1,4 +1,6 @@
 import { panic, Result } from "better-result";
+import { sql } from "drizzle-orm";
+import { alias, PgDialect } from "drizzle-orm/pg-core";
 
 import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
@@ -6,6 +8,14 @@ import {
 } from "@stll/legal-atlas/provision-extraction-admission";
 import { Temporal } from "@stll/time";
 
+import {
+  caseLawProvisionAdmission,
+  caseLawProvisionExtractionScopes,
+} from "@/api/db/schema";
+import {
+  replayWrite,
+  replayWriteAssignments,
+} from "@/api/lib/case-law/replay-write";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { PROVISION_CITATION_CHECK_STEP } from "./citation-checks";
@@ -259,27 +269,32 @@ const transitionScopes = async (
 ): Promise<void> => {
   // One bounded mutation owns both the generation and its durable job.
   // Ordering scope locks matches the transition worker's key order.
-  await connection.execute(
-    `WITH changed AS (
-       INSERT INTO case_law_provision_extraction_scopes AS scope
-         (country, language, status, generation)
-       SELECT country, language,
-         CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
-       FROM jsonb_to_recordset($1::text::jsonb)
-         AS input(country varchar, language varchar, action text)
-       ORDER BY country, language
-       ON CONFLICT (country, language) DO UPDATE
-         SET status = EXCLUDED.status, generation = scope.generation + 1
-         WHERE scope.status IS DISTINCT FROM EXCLUDED.status
-       RETURNING country, language, generation, status
-     )
-     INSERT INTO case_law_provision_scope_transitions
-       (country, language, generation, action)
-     SELECT country, language, generation,
-       CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END
-     FROM changed`,
-    [JSON.stringify(transitions)],
-  );
+  const scope = alias(caseLawProvisionExtractionScopes, "scope");
+  const write = replayWrite(scope, {
+    status: sql`EXCLUDED.status`,
+    generation: sql`${scope.generation} + 1`,
+  });
+  const query = new PgDialect().sqlToQuery(sql`
+    WITH changed AS (
+      INSERT INTO ${caseLawProvisionExtractionScopes} AS scope
+        (country, language, status, generation)
+      SELECT country, language,
+        CASE WHEN action = 'activate' THEN 'active' ELSE 'retired' END, 1
+      FROM jsonb_to_recordset(${JSON.stringify(transitions)}::text::jsonb)
+        AS input(country varchar, language varchar, action text)
+      ORDER BY country, language
+      ON CONFLICT (country, language) DO UPDATE
+        SET ${replayWriteAssignments(scope, write)}
+        WHERE scope.status IS DISTINCT FROM EXCLUDED.status AND ${write.setWhere}
+      RETURNING country, language, generation, status
+    )
+    INSERT INTO case_law_provision_scope_transitions
+      (country, language, generation, action)
+    SELECT country, language, generation,
+      CASE WHEN status = 'active' THEN 'activate' ELSE 'retire' END
+    FROM changed
+  `);
+  await connection.execute(query.sql, query.params);
 };
 
 /** The admission revision the scopes were last reconciled to, if any. */
@@ -352,13 +367,16 @@ const scopeSeedStep = (admission: Admission): ProvisionBackfillStep => ({
         return;
       }
       if (applied === null || applied < admission.revision) {
-        await connection.execute(
-          `INSERT INTO case_law_provision_admission AS admission (key, revision)
-           VALUES ('global', $1)
-           ON CONFLICT (key) DO UPDATE
-             SET revision = greatest(admission.revision, EXCLUDED.revision)`,
-          [admission.revision],
-        );
+        const write = replayWrite(caseLawProvisionAdmission, {
+          revision: sql`greatest(${caseLawProvisionAdmission.revision}, EXCLUDED.revision)`,
+        });
+        const query = new PgDialect().sqlToQuery(sql`
+          INSERT INTO ${caseLawProvisionAdmission} (key, revision)
+          VALUES ('global', ${admission.revision})
+          ON CONFLICT (key) DO UPDATE SET ${replayWriteAssignments(caseLawProvisionAdmission, write)}
+          WHERE ${write.setWhere}
+        `);
+        await connection.execute(query.sql, query.params);
         return;
       }
       // Retirements first, then activations.

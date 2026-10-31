@@ -1008,7 +1008,7 @@ const isDatabaseHandle = (
 };
 
 // The static text of a drizzle `sql` template, or of a const holding one.
-const writeSqlText = (
+export const writeSqlText = (
   context: DatabaseWriteContext,
   node: unknown,
   depth = 0,

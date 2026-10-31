@@ -1,6 +1,7 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
@@ -13,6 +14,10 @@ import {
 import { matchCzechDeclinedName } from "@/api/handlers/case-law/judges/czech-declined-name";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteAssignments,
+} from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -213,24 +218,18 @@ export const replaceDecisionJudges = async (
   tx: DecisionJudgeWriter,
   { decisionId, judges }: ReplaceDecisionJudgesOptions,
 ): Promise<void> => {
-  // audit: skip — public case-law data written by ingestion, not a user action
-  await tx
-    .delete(caseLawDecisionJudges)
-    .where(eq(caseLawDecisionJudges.decisionId, decisionId));
-
+  // audit: skip - public case-law judge attributions contain no workspace data
   if (judges.length === 0) {
+    await tx
+      .delete(caseLawDecisionJudges)
+      .where(eq(caseLawDecisionJudges.decisionId, decisionId));
     return;
   }
-
   const decisionCourt = await readDecisionCourt(tx, decisionId);
   const rows = decisionJudgeRows(
     decisionId,
     await keyedJudges(tx, decisionCourt, judges),
   );
-  if (rows.length === 0) {
-    return;
-  }
-
   const unlinked = rows.filter(({ judgeId }) => judgeId === null);
   const rosterIds = await rosterIdsByNameKey(
     tx,
@@ -253,7 +252,44 @@ export const replaceDecisionJudges = async (
     row.judgeId = judgeId;
   }
 
-  await tx.insert(caseLawDecisionJudges).values(rows);
+  // Keep existing keys so unchanged attributions retain their row versions.
+  await tx
+    .delete(caseLawDecisionJudges)
+    .where(
+      and(
+        eq(caseLawDecisionJudges.decisionId, decisionId),
+        rows.length === 0
+          ? undefined
+          : not(
+              or(
+                ...rows.map(({ role, nameKey }) =>
+                  and(
+                    eq(caseLawDecisionJudges.role, role),
+                    eq(caseLawDecisionJudges.nameKey, nameKey),
+                  ),
+                ),
+              ),
+            ),
+      ),
+    );
+  if (rows.length === 0) {
+    return;
+  }
+  await tx
+    .insert(caseLawDecisionJudges)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [
+        caseLawDecisionJudges.decisionId,
+        caseLawDecisionJudges.role,
+        caseLawDecisionJudges.nameKey,
+      ],
+      ...replayWrite(caseLawDecisionJudges, {
+        judgeId: sql`excluded.judge_id`,
+        nameAsPrinted: sql`excluded.name_as_printed`,
+        position: sql`excluded.position`,
+      }),
+    });
 };
 
 type RelinkUnmatchedDecisionJudgesPageOptions = DecisionCourt & {
@@ -290,6 +326,9 @@ export const relinkUnmatchedDecisionJudgesPage = async (
   { country, court, after, size }: RelinkUnmatchedDecisionJudgesPageOptions,
 ): Promise<RelinkUnmatchedDecisionJudgesPage> => {
   // audit: skip — relinks derived public case-law judge attributions
+  const write = replayWrite(alias(caseLawDecisionJudges, "dj"), {
+    judgeId: sql`j.id`,
+  });
   const result = await db.execute(sql`
     WITH page AS (
       SELECT DISTINCT dj.decision_id
@@ -310,9 +349,10 @@ export const relinkUnmatchedDecisionJudgesPage = async (
     ),
     linked AS (
       UPDATE ${caseLawDecisionJudges} AS dj
-         SET judge_id = j.id
+         SET ${replayWriteAssignments(caseLawDecisionJudges, write)}
         FROM page, ${caseLawJudges} AS j
        WHERE dj.decision_id = page.decision_id
+         AND ${write.setWhere}
          AND dj.judge_id IS NULL
          AND dj.name_key = j.name_key
          AND j.country = ${country}

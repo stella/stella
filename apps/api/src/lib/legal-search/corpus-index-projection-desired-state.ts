@@ -14,6 +14,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -538,18 +539,28 @@ const setCanonicalProjectionEpoch = async (
   epoch: bigint,
 ): Promise<void> => {
   switch (subject.family) {
-    case "case_law":
+    case "case_law": {
+      const write = replayWrite(caseLawDecisions, {
+        projectionEpoch: epoch,
+      });
       await tx
         .update(caseLawDecisions)
-        .set({ projectionEpoch: epoch })
-        .where(eq(caseLawDecisions.id, subject.entityId));
+        .set(write.set)
+        .where(and(write.setWhere, eq(caseLawDecisions.id, subject.entityId)));
       return;
-    case "legislation":
+    }
+    case "legislation": {
+      const write = replayWrite(legislationDocuments, {
+        projectionEpoch: epoch,
+      });
       await tx
         .update(legislationDocuments)
-        .set({ projectionEpoch: epoch })
-        .where(eq(legislationDocuments.id, subject.entityId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(legislationDocuments.id, subject.entityId)),
+        );
       return;
+    }
     default:
       subject satisfies never;
       return panic(`Unhandled subject: ${String(subject)}`);
@@ -805,7 +816,7 @@ export const buildCorpusIndexProjectionDesiredStateValues = ({
   desiredIndexId: descriptor.action === "upsert" ? descriptor.indexId : null,
 });
 
-const writeDesiredStates = async (
+export const writeDesiredStates = async (
   tx: Transaction,
   values: (typeof corpusIndexProjectionStates.$inferInsert)[],
 ): Promise<void> => {
@@ -832,22 +843,30 @@ const writeDesiredStates = async (
         corpusIndexProjectionStates.generation,
         corpusIndexProjectionStates.entityId,
       ],
-      set: {
-        desiredAction: sql`excluded.desired_action`,
-        desiredEpoch: sql`excluded.desired_epoch`,
-        desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
-        desiredFingerprint: sql`excluded.desired_fingerprint`,
-        desiredIndexId: sql`excluded.desired_index_id`,
-        workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
-        retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
-        failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
-        appendMode: sql<
-          "batchable" | "single"
-        >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
-        lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
-        lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
-        updatedAt: sql<Date>`clock_timestamp()`,
-      },
+      ...replayWrite(
+        corpusIndexProjectionStates,
+        {
+          desiredAction: sql`excluded.desired_action`,
+          desiredEpoch: sql`excluded.desired_epoch`,
+          desiredAt: sql<Date>`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.desiredAt} ELSE clock_timestamp() END`,
+          desiredFingerprint: sql`excluded.desired_fingerprint`,
+          desiredIndexId: sql`excluded.desired_index_id`,
+          workStatus: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.workStatus} ELSE 'eligible' END`,
+          retryNotBefore: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.retryNotBefore} ELSE NULL END`,
+          failureAttempts: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.failureAttempts} ELSE 0 END`,
+          appendMode: sql<
+            "batchable" | "single"
+          >`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.appendMode} ELSE 'batchable' END`,
+          lastFailureKind: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureKind} ELSE NULL END`,
+          lastFailureMessage: sql`CASE WHEN ${desiredStateUnchanged} THEN ${corpusIndexProjectionStates.lastFailureMessage} ELSE NULL END`,
+        },
+        {
+          modifiedAt: {
+            column: corpusIndexProjectionStates.updatedAt,
+            value: sql`clock_timestamp()`,
+          },
+        },
+      ),
     });
 };
 

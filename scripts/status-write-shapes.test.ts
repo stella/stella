@@ -18,6 +18,7 @@ import {
 } from "./ratchet";
 import {
   countUnmanagedTransitionSpecs,
+  replayWriteSetColumns,
   statusWriteCalls,
   unmanagedTransitionTables,
 } from "./status-write-shapes";
@@ -336,5 +337,73 @@ describe("lifecycle ratchets", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe("immutable replay column plans", () => {
+  const imports =
+    'import { replayWrite as plan } from "@/api/lib/case-law/replay-write"; import { euCompletionControls as rows } from "@/api/db/schema";';
+  const update = "db.update(rows).set(write.set).where(write.setWhere);";
+  const count = (body: string) => measure(`${imports} ${body}`);
+  test("literal SETs and coupled conflict plans retain lifecycle ownership", () => {
+    expect(count(`const write = plan(rows, {cursor: value}); ${update}`)).toBe(
+      0,
+    );
+    expect(count(`const write = plan(rows, {state: value}); ${update}`)).toBe(
+      1,
+    );
+    expect(
+      count(
+        "const write = plan(rows, {cursor: value}); db.insert(rows).values(input).onConflictDoUpdate({...write});",
+      ),
+    ).toBe(0);
+    expect(
+      count(
+        "const write = plan(rows, {state: value}); db.insert(rows).values(input).onConflictDoUpdate({...write});",
+      ),
+    ).toBe(1);
+    expect(
+      count(
+        `const write = plan(rows, {cursor: value}, {modifiedAt: {column: rows.state, value}}); ${update}`,
+      ),
+    ).toBe(1);
+  });
+  test("opaque payloads and mutable or shadowed plans cannot conceal lifecycle columns", () => {
+    for (const body of [
+      `const write = plan(rows, payload); ${update}`,
+      `const write = plan(rows, {...payload}); ${update}`,
+      `const write = plan(rows, {[key]: value}); ${update}`,
+      `const write = plan(rows, {get cursor(){return value;}}); ${update}`,
+      `const write = plan(rows, {cursor: value}, options); ${update}`,
+      `let write = plan(rows, {cursor: value}); ${update}`,
+      `const write = plan(rows, {cursor: value}); write.set = payload; ${update}`,
+      `const write = plan(rows, {cursor: value}); write.set.state = value; ${update}`,
+      `const write = plan(rows, {cursor: value}); Object.assign(write.set, payload); ${update}`,
+      `const write = plan(rows, {cursor: value}); mutate(write); ${update}`,
+      `const write = plan(rows, {cursor: value}); const alias = write; ${update}`,
+      `const write = plan(rows, {cursor: value}); function inner(write) { ${update} }`,
+      `function inner(plan) { const write = plan(rows, {cursor: value}); ${update} }`,
+      `const write = unknown(rows, {cursor: value}); ${update}`,
+      `const write = plan(rows, {cursor: value}); write.setWhere.append(sql); ${update}`,
+    ]) {
+      expect({ body, count: count(body) }).toEqual({ body, count: 1 });
+    }
+  });
+  test("effective columns include schema update hooks and explicit modification columns", () => {
+    const content =
+      'import {replayWrite as plan} from "@/api/lib/case-law/replay-write"; import {caseLawDecisions as rows} from "@/api/db/schema"; const write = plan(rows, {metadata: value}, {modifiedAt: {column: rows.observedAt, value}}); db.update(rows).set(write.set).where(write.setWhere);';
+    expect([
+      ...replayWriteSetColumns({ content, file: "writer.ts" }).values(),
+    ]).toEqual([
+      {
+        table: "caseLawDecisions",
+        columns: ["metadata", "observedAt", "updatedAt"],
+        writtenColumns: ["metadata", "observedAt"],
+      },
+    ]);
+    const facade = content.replace('"@/api/db/schema"', '"./other-schema"');
+    expect(
+      replayWriteSetColumns({ content: facade, file: "writer.ts" }).size,
+    ).toBe(0);
   });
 });

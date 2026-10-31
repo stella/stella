@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+import { readdirSync, readFileSync } from "node:fs";
+import path from "node:path";
 
 import {
   type BindingPattern,
@@ -58,7 +60,7 @@ const receiver = (expression: Expression): Expression | undefined => {
 };
 type Binding =
   | { type: "import"; source: string; name: string }
-  | { type: "value"; expression: Expression }
+  | { type: "value"; expression: Expression; declaration: "const" | "mutable" }
   | { type: "shadow" };
 const isScope = (node: Node): boolean =>
   node.type === "Program" ||
@@ -151,7 +153,15 @@ const bindingsFor = (source: Program) => {
         node.id,
         node.init === null
           ? { type: "shadow" }
-          : { type: "value", expression: node.init },
+          : {
+              type: "value",
+              expression: node.init,
+              declaration:
+                parent?.type === "VariableDeclaration" &&
+                parent.kind === "const"
+                  ? "const"
+                  : "mutable",
+            },
       );
     }
     if (
@@ -425,7 +435,327 @@ const tablesFor = (
   return { lifecycleKeys, mutationKeys };
 };
 
-const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
+type ReplayPlanColumns = {
+  table: string;
+  columns: readonly string[];
+  writtenColumns: readonly string[];
+};
+let automaticReplayColumns: ReadonlyMap<string, readonly string[]> | undefined;
+
+// Derive implicit SET columns from schema syntax rather than assuming timestamps
+// are the only columns with Drizzle update hooks.
+const schemaReplayColumns = () => {
+  if (automaticReplayColumns !== undefined) {
+    return automaticReplayColumns;
+  }
+  const directory = path.resolve(import.meta.dir, "../apps/api/src/db/schema");
+  const result = new Map<string, readonly string[]>();
+  for (const file of readdirSync(directory).filter((name) =>
+    name.endsWith(".ts"),
+  )) {
+    const source = parseSource(
+      file,
+      readFileSync(path.join(directory, file), "utf-8"),
+    ).program;
+    walk(source, (node) => {
+      if (
+        node.type !== "VariableDeclarator" ||
+        node.id.type !== "Identifier" ||
+        node.init?.type !== "CallExpression"
+      ) {
+        return;
+      }
+      let tableBuilder = false;
+      walk(node.init.callee, (part) => {
+        if (part.type === "Identifier" && part.name === "pgTable") {
+          tableBuilder = true;
+        }
+      });
+      const fields = node.init.arguments.at(1);
+      if (
+        !tableBuilder ||
+        fields?.type !== "ObjectExpression" ||
+        fields.properties.some(
+          (field) =>
+            field.type !== "Property" ||
+            field.computed ||
+            field.kind !== "init",
+        )
+      ) {
+        return;
+      }
+      const columns: string[] = [];
+      for (const field of fields.properties) {
+        if (field.type !== "Property") {
+          return;
+        }
+        const name = propertyName(field.key);
+        if (name === undefined) {
+          return;
+        }
+        walk(field.value, (part) => {
+          if (
+            part.type === "CallExpression" &&
+            ["$onUpdate", "$onUpdateFn"].includes(methodName(part.callee) ?? "")
+          ) {
+            columns.push(name);
+          }
+        });
+      }
+      result.set(node.id.name, columns);
+    });
+  }
+  automaticReplayColumns = result;
+  return result;
+};
+
+const explicitFields = (
+  expression: Expression | undefined,
+): readonly Property[] | undefined => {
+  if (expression?.type !== "ObjectExpression") {
+    return undefined;
+  }
+  const fields: Property[] = [];
+  for (const field of expression.properties) {
+    if (
+      field.type !== "Property" ||
+      field.computed ||
+      field.method ||
+      field.kind !== "init" ||
+      propertyName(field.key) === undefined
+    ) {
+      return undefined;
+    }
+    fields.push(field);
+  }
+  return fields;
+};
+const isReplayProjectionRead = (
+  node: Node,
+  parent: Node | undefined,
+  consumer: Node | undefined,
+) => {
+  if (
+    parent?.type !== "MemberExpression" ||
+    parent.object !== node ||
+    parent.computed
+  ) {
+    return false;
+  }
+  const name = propertyName(parent.property);
+  if (name === "setWhere") {
+    return (
+      consumer?.type === "TemplateLiteral" ||
+      (consumer?.type === "CallExpression" &&
+        consumer.callee !== parent &&
+        consumer.arguments.includes(parent))
+    );
+  }
+  return (
+    name === "set" &&
+    consumer?.type === "CallExpression" &&
+    methodName(consumer.callee) === "set" &&
+    consumer.arguments.at(0) === parent
+  );
+};
+
+const replayPlansFor = (
+  source: Program,
+  inspector: ReturnType<typeof mutationsFor>,
+) => {
+  const { bindingFor, mutations, origin } = inspector;
+  const plans = new Map<Binding, ReplayPlanColumns>();
+  const imported = (expression: Expression, name: string): boolean => {
+    const value = unwrap(expression);
+    if (value.type !== "Identifier") {
+      return false;
+    }
+    const binding = bindingFor(value.name, value);
+    return (
+      binding?.type === "import" &&
+      binding.name === name &&
+      binding.source === "@/api/lib/case-law/replay-write"
+    );
+  };
+  const readPlan = (binding: Binding): ReplayPlanColumns | undefined => {
+    if (
+      binding.type !== "value" ||
+      binding.declaration !== "const" ||
+      mutations.has(binding)
+    ) {
+      return undefined;
+    }
+    const call = unwrap(binding.expression);
+    if (
+      call.type !== "CallExpression" ||
+      !imported(call.callee, "replayWrite")
+    ) {
+      return undefined;
+    }
+    const table = call.arguments.at(0);
+    if (table?.type !== "Identifier") {
+      return undefined;
+    }
+    const schema = bindingFor(table.name, table);
+    if (
+      schema?.type !== "import" ||
+      !(
+        schema.source === "@/api/db/schema" ||
+        schema.source.startsWith("@/api/db/schema/")
+      )
+    ) {
+      return undefined;
+    }
+    const automatic = schemaReplayColumns().get(schema.name);
+    const fields = explicitFields(call.arguments.at(1));
+    if (automatic === undefined || fields === undefined) {
+      return undefined;
+    }
+    const columns = fields.flatMap((field) => {
+      const name = propertyName(field.key);
+      return name === undefined ? [] : [name];
+    });
+    const options = call.arguments.at(2);
+    if (call.arguments.length > 3) {
+      return undefined;
+    }
+    if (options !== undefined) {
+      const modifiers = explicitFields(options);
+      if (modifiers === undefined) {
+        return undefined;
+      }
+      for (const modifier of modifiers) {
+        if (propertyName(modifier.key) !== "modifiedAt") {
+          return undefined;
+        }
+        const timestamp = explicitFields(modifier.value);
+        const column = timestamp?.find(
+          (field) => propertyName(field.key) === "column",
+        )?.value;
+        if (
+          timestamp === undefined ||
+          timestamp.length !== 2 ||
+          timestamp.some(
+            (field) =>
+              !["column", "value"].includes(propertyName(field.key) ?? ""),
+          ) ||
+          column?.type !== "MemberExpression" ||
+          column.computed ||
+          column.object.type !== "Identifier" ||
+          bindingFor(column.object.name, column.object) !== schema
+        ) {
+          return undefined;
+        }
+        const name = propertyName(column.property);
+        if (name === undefined) {
+          return undefined;
+        }
+        columns.push(name);
+      }
+    }
+    return {
+      table: schema.name,
+      columns: [...new Set([...columns, ...automatic])],
+      writtenColumns: columns,
+    };
+  };
+  walk(source, (node) => {
+    if (node.type !== "VariableDeclarator" || node.id.type !== "Identifier") {
+      return;
+    }
+    const binding = bindingFor(node.id.name, node.id);
+    if (binding === undefined) {
+      return;
+    }
+    const plan = readPlan(binding);
+    if (plan !== undefined) {
+      plans.set(binding, plan);
+    }
+  });
+  // A plan may only be consumed through its read-only projections or the raw
+  // assignment owner. Escapes and mutation attempts make the shape opaque.
+  walk(source, (node, ancestors) => {
+    if (node.type !== "Identifier") {
+      return;
+    }
+    const binding = bindingFor(node.name, node);
+    if (binding === undefined || !plans.has(binding)) {
+      return;
+    }
+    const parent = ancestors.at(-1);
+    const grandparent = ancestors.at(-2);
+    if (parent?.type === "VariableDeclarator" && parent.id === node) {
+      return;
+    }
+    if (isReplayProjectionRead(node, parent, grandparent)) {
+      return;
+    }
+    if (
+      parent?.type === "SpreadElement" &&
+      grandparent?.type === "ObjectExpression"
+    ) {
+      const call = ancestors.at(-3);
+      if (
+        call?.type === "CallExpression" &&
+        methodName(call.callee) === "onConflictDoUpdate" &&
+        call.arguments.at(0) === grandparent
+      ) {
+        return;
+      }
+    }
+    if (
+      parent?.type === "CallExpression" &&
+      imported(parent.callee, "replayWriteAssignments") &&
+      parent.arguments.at(1) === node
+    ) {
+      return;
+    }
+    plans.delete(binding);
+  });
+  return (expression: Expression): ReplayPlanColumns | undefined => {
+    const value = unwrap(expression);
+    const reference =
+      value.type === "MemberExpression" &&
+      !value.computed &&
+      methodName(value) === "set"
+        ? value.object
+        : value;
+    return reference.type === "Identifier"
+      ? plans.get(
+          origin(reference) ??
+            bindingFor(reference.name, reference) ?? { type: "shadow" },
+        )
+      : undefined;
+  };
+};
+
+/** Precise SET projections for column-ownership guards; unknown shapes stay absent. */
+export const replayWriteSetColumns = ({
+  content,
+  file,
+}: {
+  content: string;
+  file: string;
+}) => {
+  const source = parseSource(file, content).program;
+  const plans = replayPlansFor(source, mutationsFor(source));
+  const columns = new Map<number, ReplayPlanColumns>();
+  walk(source, (node) => {
+    if (node.type !== "MemberExpression" || methodName(node) !== "set") {
+      return;
+    }
+    const plan = plans(node);
+    if (plan !== undefined) {
+      columns.set(node.start, plan);
+    }
+  });
+  return columns;
+};
+
+const payloadsFor = (
+  inspector: ReturnType<typeof mutationsFor>,
+  replayColumns: ReturnType<typeof replayPlansFor>,
+) => {
   const { bindingFor, mutations, origin, payloadKey } = inspector;
   const containsStatus = (
     expression: Expression,
@@ -433,6 +763,10 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
     seen = new Set<Node>(),
   ): boolean => {
     const value = unwrap(expression);
+    const plan = replayColumns(value);
+    if (plan !== undefined) {
+      return plan.columns.some((column) => keys.includes(column));
+    }
     if (seen.has(value)) {
       return false;
     }
@@ -513,6 +847,10 @@ const payloadsFor = (inspector: ReturnType<typeof mutationsFor>) => {
     seen = new Set<Node>(),
   ): boolean => {
     const value = unwrap(expression);
+    const plan = replayColumns(value);
+    if (plan !== undefined) {
+      return plan.columns.some((column) => keys.includes(column));
+    }
     if (seen.has(value)) {
       return false;
     }
@@ -596,7 +934,10 @@ export const statusWriteCalls = ({
   const source = parseSource(file, content).program;
   const inspector = mutationsFor(source);
   const { lifecycleKeys, mutationKeys } = tablesFor(columns, inspector);
-  const { containsStatus, conflictSetWrites } = payloadsFor(inspector);
+  const { containsStatus, conflictSetWrites } = payloadsFor(
+    inspector,
+    replayPlansFor(source, inspector),
+  );
   const { sqlText, concatenatedSql } = sqlTextFor(inspector.literalKey);
   const matches: Node[] = [];
   const recordSql = (node: Node, text: string) => {
