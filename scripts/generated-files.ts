@@ -33,6 +33,8 @@ type GeneratorCheck =
 export type Generator = {
   id: string;
   outputs: readonly string[];
+  /** Ignored, disposable paths that `write` may populate as execution caches. */
+  cacheOutputs?: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   /** Inputs read only while checking generated outputs, never while writing them. */
@@ -883,6 +885,44 @@ const TRANSITIVE_GENERATOR_INPUTS = {
 
 const GENERATOR_DECLARATIONS = [
   {
+    id: "db-registry-entries",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/src/lib/db/aggregate-lock-entries/identities.gen.ts",
+      "apps/api/src/lib/db/read-budget-entries/registry.gen.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/registry.gen.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/registry.gen.ts",
+      "apps/api/src/lib/db/aggregate-chain-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/profile-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/scheduled-job-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/deadline-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/tenant-statement-entries/registry.gen.ts",
+      "apps/api/src/tests/query-perf/corpus-statement-entries/registry.gen.ts",
+    ],
+    inputs: [
+      "scripts/db-registry-entries.ts",
+      "apps/api/src/lib/db/read-budget-entries/*.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-chain-entries/*.ts",
+      "apps/api/src/tests/query-perf/profile-entries/*.ts",
+      "apps/api/src/tests/query-perf/scheduled-job-entries/*.ts",
+      "apps/api/src/tests/query-perf/deadline-entries/*.ts",
+      "apps/api/src/tests/query-perf/tenant-statement-entries/*.ts",
+      "apps/api/src/tests/query-perf/corpus-statement-entries/*.ts",
+    ],
+    checkInputs: [
+      "apps/api/src/lib/db/aggregate-lock.ts",
+      "apps/api/src/lib/db/read-budgets.ts",
+      "apps/api/src/tests/query-perf/registry.ts",
+      "apps/api/src/tests/query-perf/owner-deadlines.ts",
+    ],
+    write: ["bun", "scripts/db-registry-entries.ts"],
+    check: ["bun", "scripts/db-registry-entries.ts", "--check"],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "parser-registry",
     outputKind: "committed",
     outputs: ["apps/api/src/lib/legal-search/parser-registry.gen.ts"],
@@ -1396,9 +1436,21 @@ const GENERATOR_DECLARATIONS = [
       "packages/cli/skills/**",
       "packages/api-contract/src/mcp-chat-tool-policy.gen.ts",
     ],
+    cacheOutputs: [
+      ".turbo/**",
+      "apps/api/.turbo/**",
+      "packages/cli/.turbo/**",
+      ...CI_GENERATED_OUTPUTS.apiTypecheckProjects,
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
+      ...CI_GENERATED_OUTPUTS.cliRuntime,
+    ],
     inputs: [
       "apps/api/src/mcp/**",
       "apps/api/src/handlers/**",
+      "apps/api/src/lib/db/aggregate-chain-entries/*.ts",
+      "apps/api/src/lib/db/aggregate-lock-entries/*.ts",
+      "apps/api/src/lib/db/mcp-read-budget-entries/*.ts",
+      "apps/api/src/lib/db/read-budget-entries/*.ts",
       "apps/api/scripts/export-mcp-tool-registry.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",

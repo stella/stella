@@ -1448,6 +1448,14 @@
     "attachedImage": "Image jointe",
     "attachment": "Pièce jointe",
     "audioContent": "Audio généré",
+    "browserExtension": {
+      "connect": "Connecter l’extension",
+      "connectDescription": "Dans cet onglet, cliquez sur l’icône de l’extension stella dans la barre du navigateur. Autorisez l’accès aux sites si cela vous est demandé, puis connectez cet onglet.",
+      "connected": "Extension connectée",
+      "description": "À votre demande, stella peut ouvrir et lire des sites web dans un autre onglet.",
+      "install": "Installer l’extension",
+      "installDescription": "L’extension stella permet d’ouvrir et de lire des sites web dans un autre onglet à votre demande. Elle s’installe depuis le Chrome Web Store."
+    },
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Posez vos questions sur cette décision — son texte intégral est disponible ici.",
     "chatAbout": "Insérer dans la conversation IA",
