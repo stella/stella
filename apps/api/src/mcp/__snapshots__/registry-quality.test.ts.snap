@@ -1476,7 +1476,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: CZE, SVK; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -1544,7 +1544,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "description": "Gazette collection, e.g. sb."
+                  "description": "Gazette collection, e.g. sb, Zb. or Z. z."
                 },
                 "year": {
                   "type": "string",
@@ -8669,7 +8669,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: CZE, SVK; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -8737,7 +8737,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "description": "Gazette collection, e.g. sb."
+                  "description": "Gazette collection, e.g. sb, Zb. or Z. z."
                 },
                 "year": {
                   "type": "string",
@@ -16328,7 +16328,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: CZE, SVK; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -16396,7 +16396,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "description": "Gazette collection, e.g. sb."
+                  "description": "Gazette collection, e.g. sb, Zb. or Z. z."
                 },
                 "year": {
                   "type": "string",
@@ -18303,7 +18303,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
       "openWorldHint": "Resolve a statute provision is confined to the private workspace or a bounded computation."
     },
     "feature": "FEATURE_PUBLIC_LAW",
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: CZE, SVK; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "annotations": {
       "title": "Resolve a statute provision",
       "destructiveHint": false,
@@ -18371,7 +18371,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 256,
-                  "description": "Gazette collection, e.g. sb."
+                  "description": "Gazette collection, e.g. sb, Zb. or Z. z."
                 },
                 "year": {
                   "type": "string",

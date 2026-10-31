@@ -11,7 +11,7 @@ import committedWeights from "../../mcp-connect-tool-weights.json" with { type: 
 
 // Full contact writes expose their shared validation and nested input readers.
 // These measured limits include that shape; lower them as tools shrink.
-const TOTAL_CONNECT_CHAR_BUDGET = 132_978;
+const TOTAL_CONNECT_CHAR_BUDGET = 132_997;
 const PER_TOOL_CONNECT_CHAR_CAP = 8179;
 
 describe("MCP connect-time tool budget", () => {

@@ -2807,6 +2807,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decisionDate: "2024-02-01",
             decisionId: DECISION_ID,
             decisionType: "judgment",
+            decisionTypeKind: "judgment",
             ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
             identifiers: [
               {
@@ -2947,6 +2948,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decisionId: DECISION_ID,
             resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
             decisionType: "judgment",
+            decisionTypeKind: "judgment",
             ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
             language: "cs",
             matchedQueries: [0],
@@ -3015,6 +3017,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionDate: "2024-02-01",
       decisionId: DECISION_ID,
       decisionType: "judgment",
+      decisionTypeKind: "judgment",
       ecli: null,
       identifiers: [
         {
@@ -3206,6 +3209,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionDate: "2024-02-01",
           decisionId: DECISION_ID,
           decisionType: "judgment",
+          decisionTypeKind: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           identifiers: [
             {
@@ -3276,6 +3280,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
+          decisionTypeKind: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
@@ -3306,6 +3311,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionDate: "2024-02-01",
       decisionId: DECISION_ID,
       decisionType: "judgment",
+      decisionTypeKind: "judgment",
       ecli: null,
       identifiers: [
         {
@@ -3529,6 +3535,7 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionDate: "2024-02-01",
     decisionId,
     decisionType: "judgment",
+    decisionTypeKind: "judgment",
     ecli: null,
     headline,
     textWithheldReason: null,
@@ -4076,6 +4083,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionDate: "2024-02-01",
               decisionId: DECISION_ID,
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: null,
               headline: null,
               textWithheldReason: null,

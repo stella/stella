@@ -11,6 +11,7 @@ import {
   createCaseLawDecisionRouteParams,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
+import type { DecisionTypeKind } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
   type DecisionHeadnotePreview,
@@ -94,6 +95,7 @@ export type Decision = {
   identifiers?: readonly { type: string; value: string }[] | undefined;
   decisionDate: string | null;
   decisionType: string | null;
+  decisionTypeKind: DecisionTypeKind | null;
   sourceUrl?: string | null | undefined;
   /** The search snippet, highlighted, when the row came from a search. */
   headline?: string | null;
