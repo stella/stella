@@ -72,6 +72,7 @@ import type {
   ReadUnavailableCause,
 } from "@/api/lib/errors/read-outcome";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import type { StoredCorpusValidationError } from "@/api/lib/errors/tagged-errors";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { DeferredDocumentAdapterKey } from "@/api/lib/legal-search/adapter-manifest";
@@ -1073,15 +1074,20 @@ const storeBackfilledDocumentOwned = async ({
   fence,
 }: Omit<StoreBackfilledDocumentOptions, "scopedDb"> & {
   fence: DeferredDocumentSourceFence;
-}): Promise<"stored" | "superseded"> => {
+}): Promise<Result<"stored" | "superseded", StoredCorpusValidationError>> => {
   const { scopedDb } = fence;
+  const prepared = prepareCorpusAst({
+    ast: uncheckedDocument.documentAst,
+    fallbackText: uncheckedDocument.fulltext,
+    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    source: ADAPTER_KEYS.SK_COURTS,
+  });
+  if (prepared.isErr()) {
+    return prepared;
+  }
   const document = {
     ...uncheckedDocument,
-    documentAst: prepareCorpusAst({
-      ast: uncheckedDocument.documentAst,
-      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-      source: ADAPTER_KEYS.SK_COURTS,
-    }).ast,
+    documentAst: prepared.value.ast,
   };
   const sections = document.sections.length > 0 ? document.sections : null;
   const ownerPredicate = and(
@@ -1181,7 +1187,7 @@ const storeBackfilledDocumentOwned = async ({
       transfer: fencedTransfer,
       signal: fence.signal,
     });
-    batch.enqueue({
+    const enqueued = batch.enqueue({
       decisionId: decision.id,
       jurisdiction: decision.country,
       payload: {
@@ -1229,6 +1235,9 @@ const storeBackfilledDocumentOwned = async ({
         }
       },
     });
+    if (enqueued.isErr()) {
+      return enqueued;
+    }
     const flushed = await batch.flush();
     if (
       Result.isError(flushed) &&
@@ -1275,7 +1284,7 @@ const storeBackfilledDocumentOwned = async ({
   // the source moved while this fetch was in flight, and the queue's next
   // pass fetches the current version. Reporting it as stored would count a
   // document that is not there.
-  return stored ? "stored" : "superseded";
+  return Result.ok(stored ? "stored" : "superseded");
 };
 
 type WriteDeferredDocumentStateOptions = {
@@ -1730,6 +1739,7 @@ const assertPdfBody = (bytes: Uint8Array): void => {
 
 type ParseFetchedDocumentResult =
   | { type: "parsed"; document: BackfilledDocument | undefined }
+  | { type: "failed"; error: unknown }
   | { type: "parked"; detail: string }
   /** The source moved mid-fetch, so these bytes judge nothing. */
   | { type: "superseded" };
@@ -1753,19 +1763,22 @@ const parseFetchedDocument = async ({
     try: async () => await parsePendingDocument(decision, bytes),
     catch: (error) => error,
   });
-  if (Result.isOk(parsed)) {
-    return { type: "parsed", document: parsed.value };
+  if (Result.isError(parsed)) {
+    if (!isUnreadablePdfError(parsed.error)) {
+      throw parsed.error;
+    }
+    const parked = await parkDocumentFetchOwned({
+      decision,
+      fence,
+    });
+    return parked === "parked"
+      ? { type: "parked", detail: errorTag(parsed.error) }
+      : { type: "superseded" };
   }
-  if (!isUnreadablePdfError(parsed.error)) {
-    throw parsed.error;
+  if (parsed.value.isErr()) {
+    return { type: "failed", error: parsed.value.error };
   }
-  const parked = await parkDocumentFetchOwned({
-    decision,
-    fence,
-  });
-  return parked === "parked"
-    ? { type: "parked", detail: errorTag(parsed.error) }
-    : { type: "superseded" };
+  return { type: "parsed", document: parsed.value.value };
 };
 
 const runDecisionDocumentFetch = async ({
@@ -1990,6 +2003,8 @@ const processClaimedDocument = async ({
   switch (parsed.type) {
     case "parsed":
       break;
+    case "failed":
+      return Result.err(parsed.error);
     case "parked":
       return Result.ok({
         status: "parked",
@@ -2020,7 +2035,10 @@ const processClaimedDocument = async ({
     capturedRaw,
     fence,
   });
-  if (stored === "superseded") {
+  if (stored.isErr()) {
+    return stored;
+  }
+  if (stored.value === "superseded") {
     return Result.ok({ status: "superseded" });
   }
   // Measured once stored, as the pipeline measures every document it writes:
@@ -2150,9 +2168,14 @@ export const claimDocumentFetch = async (
 
 export const storeBackfilledDocument = async (
   options: StoreBackfilledDocumentOptions,
-) =>
-  await ownedDocumentOperation({
-    missingValue: "superseded" as const,
+): Promise<
+  Result<
+    "stored" | "superseded" | DeferredDocumentOwnershipRefusal,
+    StoredCorpusValidationError
+  >
+> => {
+  const result = await ownedDocumentOperation({
+    missingValue: Result.ok("superseded" as const),
     decisionId: options.decision.id,
     claimed: options.decision,
     scopedDb: options.scopedDb,
@@ -2162,6 +2185,11 @@ export const storeBackfilledDocument = async (
         fence,
       }),
   });
+  if (result.status === "busy" || result.status === "lost") {
+    return Result.ok(result);
+  }
+  return result;
+};
 
 export const markDocumentUnavailable = async (
   options: ClaimedFetchWriteOptions,

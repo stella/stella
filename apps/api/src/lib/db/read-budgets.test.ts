@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
@@ -15,7 +17,6 @@ import {
 } from "@/api/tests/query-perf/registry";
 
 import {
-  ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
@@ -48,12 +49,15 @@ describe("read budget declarations", () => {
       if (listed) {
         return [`${job.id}: declares its reads, so remove its ledger entry`];
       }
-      if (job.reads === "load-governed") {
-        return governed.has(job.id)
-          ? []
-          : [
-              `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
-            ];
+      const loadGoverned =
+        job.reads === "load-governed" || "governance" in job.reads;
+      if (loadGoverned && !governed.has(job.id)) {
+        return [
+          `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
+        ];
+      }
+      if (job.reads === "load-governed" || "governance" in job.reads) {
+        return [];
       }
       // Widened: the check holds for every budget a job may declare later.
       const pages: number = READ_BUDGETS[job.reads.budget].pages;
@@ -115,7 +119,11 @@ describe("read budget declarations", () => {
       expect(
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,
-      ).toBe("load-governed");
+      ).toSatisfy(
+        (reads) =>
+          reads === "load-governed" ||
+          (typeof reads === "object" && "governance" in reads),
+      );
     }
   });
 
@@ -149,7 +157,7 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
-        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+        args: ["--base", treeBaseRevision({ repoRoot })],
       }),
     ).toBe(0);
   });

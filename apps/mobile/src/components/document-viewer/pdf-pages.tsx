@@ -13,7 +13,11 @@ import type {
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-const PAGE_GAP = 8;
+/** The canvas showing between pages and around them, as on the web. */
+const PAGE_GAP = 12;
+
+/** The web's dark-mode page: inverted, with hues turned back. */
+const DARK_PAGE_FILTER = "invert(1) hue-rotate(180deg)";
 
 /** A page's height over its width. */
 const pageRatio = async (
@@ -27,10 +31,13 @@ const pageRatio = async (
 /** A PDF drawn by pdf.js, each page when it nears the screen. */
 export const PdfPages = ({
   bytes,
+  invert,
   onReady,
   onFailed,
 }: {
   bytes: Uint8Array;
+  /** Draw the pages inverted, as the web does in dark mode. */
+  invert: boolean;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -78,7 +85,7 @@ export const PdfPages = ({
       return undefined;
     }
     let current = true;
-    let width = document.documentElement.clientWidth;
+    let width = document.documentElement.clientWidth - 2 * PAGE_GAP;
     let ratios: number[] | null = null;
     const show = () => {
       if (current && ratios !== null) {
@@ -116,7 +123,7 @@ export const PdfPages = ({
       }
     };
     const resized = () => {
-      width = document.documentElement.clientWidth;
+      width = document.documentElement.clientWidth - 2 * PAGE_GAP;
       show();
     };
     void measure();
@@ -131,10 +138,14 @@ export const PdfPages = ({
     return null;
   }
   return (
-    <div ref={setScroller} style={{ height: "100%", overflowY: "auto" }}>
+    <div
+      ref={setScroller}
+      style={{ height: "100%", overflowY: "auto", padding: PAGE_GAP }}
+    >
       {layout.ratios.map((ratio, index) => (
         <PdfPage
           height={ratio * layout.width}
+          invert={invert}
           // Pages never reorder; the number is the page's identity.
           key={`page-${String(index + 1)}`}
           number={index + 1}
@@ -150,6 +161,7 @@ export const PdfPages = ({
 };
 
 const PdfPage = ({
+  invert,
   pdf,
   number,
   width,
@@ -158,6 +170,7 @@ const PdfPage = ({
   onPainted,
   onFailed,
 }: {
+  invert: boolean;
   pdf: PDFDocumentProxy;
   number: number;
   width: number;
@@ -249,7 +262,9 @@ const PdfPage = ({
       ref={canvas}
       style={{
         background: "white",
+        boxShadow: "0 0 0 1px var(--border)",
         display: "block",
+        filter: invert ? DARK_PAGE_FILTER : "none",
         height,
         marginBottom: PAGE_GAP,
         width,
