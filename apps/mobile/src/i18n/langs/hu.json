@@ -60,7 +60,8 @@
       "none": "Nincs dátum",
       "today": "Ma",
       "tomorrow": "Holnap",
-      "nextWeek": "Egy hét múlva"
+      "nextWeek": "Egy hét múlva",
+      "pick": "Dátum választása"
     },
     "due": {
       "overdue": "Lejárt",

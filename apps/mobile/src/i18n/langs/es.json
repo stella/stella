@@ -60,7 +60,8 @@
       "none": "Sin fecha",
       "today": "Hoy",
       "tomorrow": "Mañana",
-      "nextWeek": "En una semana"
+      "nextWeek": "En una semana",
+      "pick": "Elegir fecha"
     },
     "due": {
       "overdue": "Vencidas",

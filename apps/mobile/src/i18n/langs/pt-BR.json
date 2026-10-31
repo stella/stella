@@ -60,7 +60,8 @@
       "none": "Sem data",
       "today": "Hoje",
       "tomorrow": "Amanhã",
-      "nextWeek": "Em uma semana"
+      "nextWeek": "Em uma semana",
+      "pick": "Escolher data"
     },
     "due": {
       "overdue": "Atrasadas",

@@ -58,14 +58,19 @@ export const listMyTasks = async ({
     return Result.ok(page.items);
   });
 
-/** Adds a task to a matter; the server assigns it to its creator, so it lists here. */
+/**
+ * Adds a task to a matter, given to `assigneeIds`; without them the server
+ * gives it to its creator, so it lists here.
+ */
 export const createTask = async ({
+  assigneeIds,
   dueDate,
   fetch,
   matterId,
   name,
   source,
 }: {
+  readonly assigneeIds?: readonly string[];
   readonly dueDate: string | null;
   readonly fetch: Fetch;
   readonly matterId: string;
@@ -75,7 +80,11 @@ export const createTask = async ({
   await Result.gen(async function* () {
     const { entityId } = yield* Result.await(
       requestApi({
-        body: { name, ...(dueDate === null ? {} : { dueDate }) },
+        body: {
+          name,
+          ...(dueDate === null ? {} : { dueDate }),
+          ...(assigneeIds === undefined ? {} : { assigneeIds }),
+        },
         fetch,
         method: "PUT",
         path: `${MY_TASKS_PATH}/${encodeURIComponent(matterId)}`,
@@ -154,6 +163,19 @@ export const listMatterMembers = async ({
     schema: matterMembersSchema,
     source,
   });
+
+/**
+ * The people a new task goes to: the chosen ones among the matter's members,
+ * in the members' order. A choice left over from another matter, or the
+ * creator when they are not a member, goes nowhere.
+ */
+export const chosenAssignees = (
+  chosen: ReadonlySet<string>,
+  members: readonly MatterMember[],
+): string[] =>
+  members
+    .filter((member) => chosen.has(member.userId))
+    .map((member) => member.userId);
 
 /** Gives a task to one more person, or takes it from them. */
 export const setTaskAssignee = async ({

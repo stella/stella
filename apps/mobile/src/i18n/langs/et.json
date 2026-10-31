@@ -60,7 +60,8 @@
       "none": "Kuupäevata",
       "today": "Täna",
       "tomorrow": "Homme",
-      "nextWeek": "Nädala pärast"
+      "nextWeek": "Nädala pärast",
+      "pick": "Vali kuupäev"
     },
     "due": {
       "overdue": "Tähtaeg möödas",

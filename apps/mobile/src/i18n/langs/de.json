@@ -60,7 +60,8 @@
       "none": "Kein Datum",
       "today": "Heute",
       "tomorrow": "Morgen",
-      "nextWeek": "In einer Woche"
+      "nextWeek": "In einer Woche",
+      "pick": "Datum wählen"
     },
     "due": {
       "overdue": "Überfällig",

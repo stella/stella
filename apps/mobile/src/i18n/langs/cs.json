@@ -60,7 +60,8 @@
       "none": "Bez termínu",
       "today": "Dnes",
       "tomorrow": "Zítra",
-      "nextWeek": "Za týden"
+      "nextWeek": "Za týden",
+      "pick": "Vybrat datum"
     },
     "due": {
       "overdue": "Po termínu",

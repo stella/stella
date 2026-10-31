@@ -6,7 +6,13 @@ import {
   type StoredSession,
 } from "@/connection/session";
 
-import { listMatterMembers, readTask, setTaskAssignee } from "./tasks";
+import {
+  chosenAssignees,
+  createTask,
+  listMatterMembers,
+  readTask,
+  setTaskAssignee,
+} from "./tasks";
 
 const SESSION: StoredSession = {
   serverUrl: "https://stella.example.com",
@@ -121,5 +127,60 @@ describe("task assignees", () => {
         body: { taskId: "task-1", userId: "user-2" },
       },
     ]);
+  });
+
+  test("a new task sends its assignees and due day, and leaves out what is unset", async () => {
+    const chosen = recording({ entityId: "task-9" });
+    const created = await createTask({
+      assigneeIds: ["user-2", "user-1"],
+      dueDate: "2026-11-06",
+      fetch: chosen.fetch,
+      matterId: "matter-1",
+      name: "Draft the reply",
+      source: sourceFor(chosen.fetch),
+    });
+    expect(created.isOk() ? created.value : null).toBe("task-9");
+    expect(chosen.sent.at(-1)?.body).toEqual({
+      assigneeIds: ["user-2", "user-1"],
+      dueDate: "2026-11-06",
+      name: "Draft the reply",
+    });
+
+    const nobody = recording({ entityId: "task-10" });
+    await createTask({
+      assigneeIds: [],
+      dueDate: null,
+      fetch: nobody.fetch,
+      matterId: "matter-1",
+      name: "Unassigned",
+      source: sourceFor(nobody.fetch),
+    });
+    expect(nobody.sent.at(-1)?.body).toEqual({
+      assigneeIds: [],
+      name: "Unassigned",
+    });
+
+    const unset = recording({ entityId: "task-11" });
+    await createTask({
+      dueDate: null,
+      fetch: unset.fetch,
+      matterId: "matter-1",
+      name: "Mine",
+      source: sourceFor(unset.fetch),
+    });
+    expect(unset.sent.at(-1)?.body).toEqual({ name: "Mine" });
+  });
+
+  test("only chosen people who are the matter's members get a new task, in the members' order", () => {
+    const members = [
+      { userId: "user-3", user: { id: "user-3", name: "Šárka Dvořáková" } },
+      { userId: "user-1", user: { id: "user-1", name: "Jan" } },
+      { userId: "user-2", user: null },
+    ];
+    expect(
+      chosenAssignees(new Set(["user-1", "user-3", "user-9"]), members),
+    ).toEqual(["user-3", "user-1"]);
+    expect(chosenAssignees(new Set(), members)).toEqual([]);
+    expect(chosenAssignees(new Set(["user-1"]), [])).toEqual([]);
   });
 });
