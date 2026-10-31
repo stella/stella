@@ -60,8 +60,8 @@ export type CitationScopeEnvelope = {
   opinions: readonly CitationOpinionScope[];
 };
 
-/** Hash the JSON shape that both jsonb and the corpus payload actually keep. */
-export const citationScopeAstHash = (ast: DocumentAst): string =>
+/** Hash the stored JSON representation, including fields the reader schema omits. */
+export const citationScopeAstHash = (ast: Record<string, unknown>): string =>
   createSha256()
     .update(JSON.stringify(sortDeep(ast)))
     .digest("hex");
@@ -88,7 +88,7 @@ export const validatedCitationScopes = (
     return Result.ok(undefined);
   }
   const parsedAst = v.safeParse(persistedDocumentAstSchema, ast);
-  if (!parsedAst.success) {
+  if (!parsedAst.success || !isRecord(ast)) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
   const documentAst = parsedAst.output;
@@ -109,7 +109,7 @@ export const validatedCitationScopes = (
   ) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  if (value["astHash"] !== citationScopeAstHash(documentAst)) {
+  if (value["astHash"] !== citationScopeAstHash(ast)) {
     return rejected(CITATION_SCOPE_DEFECTS.AST_HASH_MISMATCH, "");
   }
   const opinions = value["opinions"].filter(

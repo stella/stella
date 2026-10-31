@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
-import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
+import {
+  isDocumentAst,
+  persistedDocumentAstSchema,
+  plainTextOf,
+} from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/node";
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -135,6 +140,53 @@ describe("persisted citation scopes", () => {
     expect(envelope.astHash).toBe(citationScopeAstHash(stored.documentAst));
     expect(extract(stored.documentAst).documentAst).toEqual(stored.documentAst);
     expect(extract(stored.documentAst).occurrences).toEqual(first.occurrences);
+  });
+
+  test("round-trips the writer's stored AST with undeclared fields", () => {
+    const documentAst = {
+      ...ast(),
+      parserContext: { revision: 1 },
+    };
+    expect(isDocumentAst(documentAst)).toBe(true);
+    const parsed = v.parse(persistedDocumentAstSchema, documentAst);
+    expect(parsed).not.toEqual(documentAst);
+    const envelope = citationScopeEnvelope(documentAst, opinions);
+    expect(envelope.astHash).not.toBe(citationScopeAstHash(parsed));
+
+    const stored: unknown = structuredClone(documentAst);
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      stored,
+    );
+    expect(checked.unwrap()).toEqual(opinions);
+  });
+
+  test("round-trips stored scopes when head matter follows the body", () => {
+    const documentAst = {
+      ...ast(),
+      blocks: [
+        ...ast().blocks,
+        {
+          id: "late-head-matter",
+          anchorId: "late-head-matter",
+          type: "paragraph",
+          role: "apparatus",
+          inlines: [{ type: "text", text: "Publisher head matter" }],
+          plainText: "Publisher head matter",
+        },
+      ],
+    } satisfies DocumentAst;
+    expect(isDocumentAst(documentAst)).toBe(false);
+    expect(v.safeParse(persistedDocumentAstSchema, documentAst).success).toBe(
+      true,
+    );
+    const envelope = citationScopeEnvelope(documentAst, opinions);
+    const stored: unknown = structuredClone(documentAst);
+    const checked = validatedCitationScopes(
+      { [CITATION_SCOPE_METADATA_KEY]: envelope },
+      stored,
+    );
+    expect(checked.unwrap()).toEqual(opinions);
   });
 
   test("rejects a stale hash even when the old scope names still exist", () => {
