@@ -46,6 +46,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -91,6 +92,10 @@ import {
 } from "./file-object-reconciliation-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
@@ -131,6 +136,7 @@ import type {
 import {
   CLIENT_INVOICE_UNIQUE_INDEXES,
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  IMPORT_PROVENANCE_UNIQUE_INDEXES,
   LEGISLATION_UNIQUE_INDEXES,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -154,6 +160,10 @@ import {
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINTS,
 } from "./time-entry-submitted-constraint-validation";
+import {
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINTS,
+} from "./usage-action-type-constraint-validation";
 
 // Catalog work keeps a short lock budget; every statement that locks a table
 // runs through the gate in `online-ddl.ts`, which lifts it and watches the
@@ -821,6 +831,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "organization_file_objects_org_active_reconcile_idx",
     tableName: "organization_file_objects",
   },
+  ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:
@@ -1031,6 +1042,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINT_VALIDATIONS,
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
+  USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
@@ -1039,6 +1051,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   ...FILE_LIFECYCLE_CONSTRAINT_VALIDATIONS,
   FILE_OBJECT_RECONCILIATION_REPAIR,
   ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_REPAIRS,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
   // Not behind one migration: the OAuth resource set is derived from the MCP
   // audiences in application code, so it is the code that moves and the rows
   // that follow. Its completion is the startup census, so the deploy that
@@ -1047,6 +1060,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
+  CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
 ];
 
 /**
@@ -1074,10 +1088,12 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...BILLING_ACTIVITY_HOUR_CAP_CONSTRAINTS,
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
+    ...USAGE_ACTION_TYPE_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...FILE_LIFECYCLE_CONSTRAINTS,
     ...FILE_OBJECT_RECONCILIATION_CONSTRAINTS,
     ...DOCUMENT_DERIVATIVE_RUN_OWNERSHIP_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {
