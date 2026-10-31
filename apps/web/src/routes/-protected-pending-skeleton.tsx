@@ -1,3 +1,4 @@
+import { use } from "react";
 import type { ReactElement } from "react";
 
 import {
@@ -20,8 +21,8 @@ import {
   inspectorRestorePendingEntry,
   readPersistedInspectorPaneRequested,
 } from "@/components/inspector/inspector-storage-keys";
-import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { PendingInspectorScopeContext } from "@/components/inspector/pending-inspector-scope";
 import {
   SIDEBAR_WIDTH_ICON_PX,
   SIDEBAR_WIDTH_PX,
@@ -53,15 +54,15 @@ const PINNED_ROW_KEYS = ["a", "b", "c"] as const;
 // icons, the rail toggles), so the frame is already the app; only what
 // depends on data or on the active locale shimmers: nav labels, pinned
 // matters, the account card, the breadcrumb and the page body. Intentionally
-// free of hooks, context, data, and Suspense. A page that is the same for
-// every visitor can take the content column's place.
+// free of data fetching and Suspense; the first-frame owner supplies any
+// inspector storage scope. A page that is the same for every visitor can
+// take the content column's place.
 export function ProtectedPendingSkeleton({
   content,
-  inspectorScope,
 }: {
   content?: ReactElement | undefined;
-  inspectorScope?: InspectorStorageScope;
 }) {
+  const inspectorScope = use(PendingInspectorScopeContext);
   const viewportWidth = typeof window === "undefined" ? 0 : window.innerWidth;
   const paneRequested =
     inspectorScope !== undefined &&

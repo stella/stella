@@ -32,6 +32,8 @@ const { writePersistedState, removePersistedState } =
   await import("@/lib/persisted-state/registry");
 const { ProtectedPendingSkeleton } =
   await import("@/routes/-protected-pending-skeleton");
+const { PendingInspectorScopeContext } =
+  await import("@/components/inspector/pending-inspector-scope");
 const pendingScope = { organizationId: "pending-org", userId: "pending-user" };
 
 const storage = deviceStorage("local");
@@ -225,7 +227,9 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
   }).unwrap();
   writePersistedState(inspectorMinimizedEntry, pendingScope, false).unwrap();
   const { container, rerender } = render(
-    <ProtectedPendingSkeleton inspectorScope={pendingScope} />,
+    <PendingInspectorScopeContext value={pendingScope}>
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
   );
   const dockWidth = () =>
     container
@@ -233,12 +237,18 @@ test("the member loading frame reserves the saved inspector before tabs mount", 
       ?.getAttribute("style");
   expect(dockWidth()).toBe("width: 320px;");
   rerender(
-    <ProtectedPendingSkeleton
-      inspectorScope={{ ...pendingScope, userId: "another-user" }}
-    />,
+    <PendingInspectorScopeContext
+      value={{ ...pendingScope, userId: "another-user" }}
+    >
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
   );
   expect(dockWidth()).toBeNull();
   writePersistedState(inspectorMinimizedEntry, pendingScope, true).unwrap();
-  rerender(<ProtectedPendingSkeleton inspectorScope={pendingScope} />);
+  rerender(
+    <PendingInspectorScopeContext value={pendingScope}>
+      <ProtectedPendingSkeleton />
+    </PendingInspectorScopeContext>,
+  );
   expect(dockWidth()).toBeNull();
 });
