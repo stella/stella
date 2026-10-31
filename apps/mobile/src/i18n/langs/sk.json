@@ -89,7 +89,14 @@
     "statusFailed": "Úlohu sa nepodarilo zmeniť. Skúste to znova.",
     "pickTitle": "Vyberte úlohu",
     "pickDescription": "Vyberte úlohu zo zoznamu a zobrazí sa tu.",
-    "openMatter": "Otvoriť spis"
+    "openMatter": "Otvoriť spis",
+    "assignedTo": "Riešiteľ",
+    "nobody": "Nepriradené",
+    "assign": "Priradiť",
+    "doneAssigning": "Hotovo",
+    "someone": "Niekto",
+    "membersFailed": "Členov spisu sa nepodarilo načítať.",
+    "assignFailed": "Úlohu sa nepodarilo prideliť. Skúste to znova."
   },
   "matters": {
     "emptyTitle": "Zatiaľ žiadne spisy",
