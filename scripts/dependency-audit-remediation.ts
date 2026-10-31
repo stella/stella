@@ -18,6 +18,8 @@ export type DependencyAuditRemediationPlan = {
 
 type ResolvedRemediation = {
   assessments: readonly AdvisoryAssessment[];
+  beforeLockfile: string;
+  afterLockfile: string;
   revert: () => Promise<void>;
 };
 
@@ -28,7 +30,27 @@ type VerifyRemediationOptions = PlanRemediationOptions & {
 };
 
 const isPackageWideResolution = (name: string): boolean =>
-  name.startsWith("@") ? name.split("/").length === 2 : !name.includes("/");
+  resolutionSegments(name).length === 1;
+
+// Bun resolution paths use `/` both between packages and inside scoped names.
+// Parse them before comparing so `example` never aliases `@vendor/example`.
+const resolutionSegments = (resolution: string): string[] => {
+  const segments: string[] = [];
+  const parts = resolution.split("/");
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part?.startsWith("@")) {
+      const name = parts[index + 1];
+      if (name !== undefined) {
+        segments.push(`${part}/${name}`);
+        index += 1;
+      }
+    } else if (part !== undefined && part !== "") {
+      segments.push(part);
+    }
+  }
+  return segments;
+};
 
 export const updatedResolutionEntries = (
   current: Readonly<Record<string, unknown>>,
@@ -37,7 +59,10 @@ export const updatedResolutionEntries = (
   const packageWide = [...pins.keys()].filter(isPackageWideResolution);
   return Object.fromEntries([
     ...Object.entries(current).filter(([existing]) =>
-      packageWide.every((name) => !existing.endsWith(`/${name}`)),
+      packageWide.every((name) => {
+        const segments = resolutionSegments(existing);
+        return segments.length === 1 || segments.at(-1) !== name;
+      }),
     ),
     ...pins,
   ]);
@@ -173,6 +198,9 @@ export const planDependencyAuditRemediation = ({
       );
       const packageWideIsValid =
         everyCopyIsVulnerable &&
+        [...resolutionPaths.values()].every(
+          ({ repositoryResolution }) => repositoryResolution !== true,
+        ) &&
         [...resolutionPaths.values()].every(({ requirement }) =>
           accepts(selected, requirement),
         );
@@ -227,6 +255,120 @@ export const planDependencyAuditRemediation = ({
 const advisoryKey = ({ advisory }: AdvisoryAssessment): string =>
   `${advisory.id}/${advisory.package}`;
 
+type LockedCopy = {
+  name: string;
+  version: string;
+  details: Record<string, unknown>;
+};
+
+const lockfileCopies = (lockfile: string): Map<string, LockedCopy> => {
+  const parsed: unknown = Bun.JSONC.parse(lockfile);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    return new Map();
+  }
+  const packages = Reflect.get(parsed, "packages");
+  if (
+    typeof packages !== "object" ||
+    packages === null ||
+    Array.isArray(packages)
+  ) {
+    return new Map();
+  }
+  return new Map(
+    Object.entries(packages).flatMap(([path, entry]) => {
+      if (!Array.isArray(entry) || typeof entry.at(0) !== "string") {
+        return [];
+      }
+      const resolution = entry.at(0);
+      const separator = resolution.indexOf(
+        "@",
+        resolution.startsWith("@") ? 1 : 0,
+      );
+      const details = entry.at(2);
+      return [
+        [
+          path,
+          {
+            name: resolution.slice(0, separator),
+            version: resolution.slice(separator + 1),
+            details:
+              typeof details === "object" &&
+              details !== null &&
+              !Array.isArray(details)
+                ? details
+                : {},
+          },
+        ] as const,
+      ];
+    }),
+  );
+};
+
+const changedCopiesAreSafe = (
+  beforeLockfile: string,
+  afterLockfile: string,
+  targetedCopies: ReadonlySet<string>,
+  requirements: ReadonlyMap<string, readonly string[]>,
+): boolean => {
+  const before = lockfileCopies(beforeLockfile);
+  const after = lockfileCopies(afterLockfile);
+  const paths = new Set([...before.keys(), ...after.keys()]);
+  for (const path of paths) {
+    const oldCopy = before.get(path);
+    const newCopy = after.get(path);
+    if (oldCopy?.version === newCopy?.version) {
+      continue;
+    }
+    if (
+      oldCopy === undefined ||
+      newCopy === undefined ||
+      oldCopy.name !== newCopy.name ||
+      !targetedCopies.has(path)
+    ) {
+      return false;
+    }
+    if (
+      requirements
+        .get(path)
+        ?.some((requirement) => !accepts(newCopy.version, requirement)) === true
+    ) {
+      return false;
+    }
+    for (const field of [
+      "dependencies",
+      "optionalDependencies",
+      "peerDependencies",
+    ] as const) {
+      for (const [parentPath, parent] of before) {
+        const dependencies = parent.details[field];
+        if (
+          typeof dependencies !== "object" ||
+          dependencies === null ||
+          Array.isArray(dependencies)
+        ) {
+          continue;
+        }
+        const requirement = Reflect.get(dependencies, oldCopy.name);
+        if (typeof requirement !== "string") {
+          continue;
+        }
+        const parentSegments = resolutionSegments(parentPath);
+        const candidates = parentSegments.map(
+          (_, index) =>
+            `${parentSegments.slice(0, parentSegments.length - index).join("/")}/${oldCopy.name}`,
+        );
+        if (
+          candidates.includes(path) &&
+          !accepts(newCopy.version, requirement)
+        ) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+};
+
 /**
  * Lets Bun decide whether each package-level proposal is valid. The resolver
  * owns the filesystem transaction and supplies a rollback for a rejected
@@ -261,7 +403,25 @@ export const verifyDependencyAuditRemediation = async ({
     const targets = new Set(group.map(advisoryKey));
     const targetRemains = [...targets].some((key) => remaining.has(key));
     const introducedAdvisory = [...remaining].some((key) => !initial.has(key));
-    if (targetRemains || introducedAdvisory) {
+    const lockfileChangesAreSafe = changedCopiesAreSafe(
+      resolved.beforeLockfile,
+      resolved.afterLockfile,
+      new Set(group.flatMap(({ affectedPaths }) => affectedPaths)),
+      new Map(
+        group.flatMap(({ resolutionPaths }) =>
+          resolutionPaths.map(
+            ({ copyPath }) =>
+              [
+                copyPath,
+                resolutionPaths
+                  .filter((path) => path.copyPath === copyPath)
+                  .map(({ requirement }) => requirement),
+              ] as const,
+          ),
+        ),
+      ),
+    );
+    if (targetRemains || introducedAdvisory || !lockfileChangesAreSafe) {
       await resolved.revert();
       acceptanceDrafts.push(
         ...group.flatMap((assessment) =>

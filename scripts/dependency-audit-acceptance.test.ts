@@ -261,6 +261,8 @@ describe("remediation verifies the resolver result", () => {
       now,
       resolve: async () => ({
         assessments: [assessment],
+        beforeLockfile: JSON.stringify({ packages: {} }),
+        afterLockfile: JSON.stringify({ packages: {} }),
         revert: async () => {
           reverted = true;
         },
@@ -272,6 +274,68 @@ describe("remediation verifies the resolver result", () => {
     expect(plan.acceptanceDrafts.map(({ id }) => id)).toEqual([
       currentAdvisory.id,
     ]);
+  });
+
+  test("rejects a shared resolution key that also changes a safe copy", async () => {
+    let reverted = false;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        parent: ["parent@1.0.0", "", { dependencies: { example: "^1.0.0" } }],
+        "parent/example": ["example@1.4.0", "", {}],
+        "parent@2": [
+          "parent@2.0.0",
+          "",
+          { dependencies: { example: "^2.0.0" } },
+        ],
+        "parent@2/example": ["example@2.0.0", "", {}],
+      },
+    });
+    const afterLockfile = beforeLockfile
+      .replace("example@1.4.0", "example@1.4.1")
+      .replace("example@2.0.0", "example@1.4.1");
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile,
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
+    expect(plan.acceptanceDrafts).toHaveLength(1);
+  });
+
+  test("rejects a changed safe copy even when it remains in its declared range", async () => {
+    let reverted = false;
+    const beforeLockfile = JSON.stringify({
+      packages: {
+        "parent/example": ["example@1.4.0", "", {}],
+        "parent@2/example": ["example@2.0.0", "", {}],
+      },
+    });
+    const plan = await verifyDependencyAuditRemediation({
+      assessments: [assessment],
+      now,
+      resolve: async () => ({
+        assessments: [],
+        beforeLockfile,
+        afterLockfile: beforeLockfile
+          .replace("example@1.4.0", "example@1.4.1")
+          .replace("example@2.0.0", "example@2.0.1"),
+        revert: async () => {
+          reverted = true;
+        },
+      }),
+    });
+
+    expect(reverted).toBe(true);
+    expect([...plan.pins]).toEqual([]);
   });
 
   test("a verified package-wide fix replaces a vulnerable scoped pin", async () => {
@@ -296,6 +360,12 @@ describe("remediation verifies the resolver result", () => {
           resolutions["parent/pkg"] === undefined;
         return {
           assessments: patchedVersionSelected ? [] : [packageAssessment],
+          beforeLockfile: JSON.stringify({
+            packages: { pkg: ["pkg@1.4.0", "", {}] },
+          }),
+          afterLockfile: JSON.stringify({
+            packages: { pkg: ["pkg@1.4.1", "", {}] },
+          }),
           revert: async () => {},
         };
       },
@@ -317,6 +387,23 @@ describe("remediation verifies the resolver result", () => {
         }),
       ),
     ).toMatchObject({ message: "registry unavailable" });
+  });
+});
+
+test("package-wide pins preserve differently named scoped packages", () => {
+  expect(
+    updatedResolutionEntries(
+      {
+        "@vendor/example": "2.0.0",
+        "parent/@vendor/example": "2.0.0",
+        "parent/example": "1.0.0",
+      },
+      new Map([["example", "1.4.1"]]),
+    ),
+  ).toEqual({
+    "@vendor/example": "2.0.0",
+    "parent/@vendor/example": "2.0.0",
+    example: "1.4.1",
   });
 });
 

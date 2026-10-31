@@ -51,6 +51,7 @@ export type AdvisoryAssessment = {
     copyPath: string;
     resolution: string;
     requirement: string;
+    repositoryResolution?: true;
   }[];
   action: string;
 };
@@ -304,44 +305,77 @@ type ResolutionPathsOptions = {
   packages: ReturnType<typeof lockPackages>;
   owners: readonly RequirementOwner[];
   keys: ReadonlySet<string>;
+  sources: readonly ManifestSource[];
 };
+const movableResolution = (
+  sources: readonly ManifestSource[],
+  copyPath: string,
+  packageName: string,
+): string | undefined =>
+  sources
+    .flatMap(({ manifest }) =>
+      MANIFEST_REQUIREMENT_FIELDS.flatMap((field) => {
+        const entries = manifest[field];
+        return record(entries)
+          ? Object.keys(entries).filter(
+              (key) =>
+                keyLocations(key).join("/") === copyPath &&
+                keyLocations(key).at(-1) === packageName,
+            )
+          : [];
+      }),
+    )
+    .at(0);
+
 const dependencyResolutionPaths = ({
   packageName,
   packages,
   owners,
   keys,
+  sources,
 }: ResolutionPathsOptions): AdvisoryAssessment["resolutionPaths"] =>
   packages
     .filter(({ name }) => name === packageName)
     .flatMap((node) =>
-      owners.flatMap((parent) => {
-        for (const field of parent.fields) {
-          const dependencies = parent.details[field];
-          const requirement = record(dependencies)
-            ? dependencies[packageName]
-            : undefined;
-          if (
-            typeof requirement === "string" &&
-            resolvedKey({
-              parent: parent.key,
-              dependency: packageName,
-              keys,
-            }) === node.key
-          ) {
-            const parentPackage = packages.find(
-              ({ key }) => key === parent.key,
-            )?.name;
-            return [
-              {
-                copyPath: node.key,
-                resolution: `${parentPackage ?? parent.key}/${packageName}`,
-                requirement,
-              },
-            ];
-          }
-        }
-        return [];
-      }),
+      movableResolution(sources, node.key, packageName) === undefined
+        ? owners.flatMap((parent) => {
+            for (const field of parent.fields) {
+              const dependencies = parent.details[field];
+              const requirement = record(dependencies)
+                ? dependencies[packageName]
+                : undefined;
+              if (
+                typeof requirement === "string" &&
+                resolvedKey({
+                  parent: parent.key,
+                  dependency: packageName,
+                  keys,
+                }) === node.key
+              ) {
+                const parentPackage = packages.find(
+                  ({ key }) => key === parent.key,
+                )?.name;
+                return [
+                  {
+                    copyPath: node.key,
+                    resolution: `${parentPackage ?? parent.key}/${packageName}`,
+                    requirement,
+                  },
+                ];
+              }
+            }
+            return [];
+          })
+        : [
+            {
+              copyPath: node.key,
+              resolution:
+                movableResolution(sources, node.key, packageName) ??
+                panic("Missing movable resolution"),
+              requirement: "*",
+              repositoryResolution: true,
+            },
+          ],
     );
 
 type ManifestPinsOptions = {
@@ -378,6 +412,39 @@ const manifestPins = ({
   }
   return pins;
 };
+
+// Recommend forward upgrades only: a safe older release is a downgrade, not a patch.
+const patchCandidates = (
+  advisory: Advisory,
+  published: readonly string[],
+  vulnerable: ReturnType<typeof lockPackages>,
+) => {
+  const safeVersions = published.filter(
+    (version) =>
+      Bun.semver.satisfies(version, "*") &&
+      !Bun.semver.satisfies(version, advisory.vulnerableVersions),
+  );
+  const upgradesFrom = (locked: string): string[] =>
+    safeVersions.filter((version) => Bun.semver.order(version, locked) > 0);
+  const oldestLocked =
+    vulnerable
+      .map(({ version }) => version)
+      .toSorted(Bun.semver.order)
+      .at(0) ??
+    invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
+  return { upgradesFrom, patchedVersions: upgradesFrom(oldestLocked) };
+};
+
+const hasPackageWideResolution = (
+  sources: readonly ManifestSource[],
+  packageName: string,
+): boolean =>
+  sources.some(({ manifest }) =>
+    MANIFEST_REQUIREMENT_FIELDS.some((field) => {
+      const entries = manifest[field];
+      return record(entries) && typeof entries[packageName] === "string";
+    }),
+  );
 
 export const assessAdvisories = ({
   advisories,
@@ -418,23 +485,11 @@ export const assessAdvisories = ({
         `Cannot assess ${advisory.id}: no vulnerable ${advisory.package} resolution in bun.lock`,
       );
     }
-    // Recommend forward upgrades only: a safe older release is a downgrade,
-    // not a patch. Each locked copy is judged against releases newer than it,
-    // so an advisory spanning several release lines keeps each line's patch.
-    const safeVersions = published.filter(
-      (version) =>
-        Bun.semver.satisfies(version, "*") &&
-        !Bun.semver.satisfies(version, advisory.vulnerableVersions),
+    const { upgradesFrom, patchedVersions } = patchCandidates(
+      advisory,
+      published,
+      vulnerable,
     );
-    const upgradesFrom = (locked: string): string[] =>
-      safeVersions.filter((version) => Bun.semver.order(version, locked) > 0);
-    const oldestLocked =
-      vulnerable
-        .map(({ version }) => version)
-        .toSorted(Bun.semver.order)
-        .at(0) ??
-      invalidAssessment(`Cannot find an affected version for ${advisory.id}`);
-    const patchedVersions = upgradesFrom(oldestLocked);
     const acceptances = accepted.filter(
       ({ id, package: name }) =>
         id === advisory.id && name === advisory.package,
@@ -457,17 +512,18 @@ export const assessAdvisories = ({
       packages,
       owners,
       keys,
+      sources,
     });
     let selectableVersions = patchedVersions;
-    const overridden = sources.some(({ manifest: source }) =>
-      MANIFEST_REQUIREMENT_FIELDS.some((field) => {
-        const entries = source[field];
-        return record(entries) && typeof entries[advisory.package] === "string";
-      }),
-    );
+    const overridden = hasPackageWideResolution(sources, advisory.package);
     for (const node of vulnerable) {
       const nodePatches = upgradesFrom(node.version);
       let selectableForNode = nodePatches;
+      const nodeResolution = movableResolution(
+        sources,
+        node.key,
+        advisory.package,
+      );
       for (const pin of manifestPins({
         sources,
         packageName: advisory.package,
@@ -489,6 +545,9 @@ export const assessAdvisories = ({
         continue;
       }
       const parents: string[] = [];
+      if (nodeResolution !== undefined) {
+        parents.push(`package.json resolution ${nodeResolution}`);
+      }
       for (const parent of owners) {
         for (const field of parent.fields) {
           const dependencies = parent.details[field];
@@ -503,6 +562,9 @@ export const assessAdvisories = ({
               keys,
             }) !== node.key
           ) {
+            continue;
+          }
+          if (nodeResolution !== undefined) {
             continue;
           }
           parents.push(

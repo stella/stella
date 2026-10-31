@@ -507,6 +507,11 @@ const prepareRemediation = async (advisories: Advisory[]): Promise<void> => {
         const current = await collectGatedAdvisories();
         return {
           assessments: current.length === 0 ? [] : await assessCurrent(current),
+          beforeLockfile:
+            snapshot.at(2)?.at(1) ?? panic("Missing lockfile snapshot"),
+          afterLockfile: await Bun.file(
+            transactionPaths.at(2) ?? panic("Missing lockfile path"),
+          ).text(),
           revert,
         };
       } catch (error) {

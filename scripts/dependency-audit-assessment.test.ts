@@ -214,6 +214,38 @@ test("direct requirements can permit a patched release in another major", () => 
   expect(result?.disposition.status).toBe("fix_available");
 });
 
+test("a repository resolution can move a copy past an exact parent pin", () => {
+  const advisory = { ...sdk, package: "joi", vulnerableVersions: "<18.3.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        mailauth: ["mailauth@4.0.0", "", { dependencies: { joi: "18.0.0" } }],
+        "mailauth/joi": ["joi@18.0.0", "", {}],
+      },
+    }),
+    manifest: { resolutions: { "mailauth/joi": "18.0.0" } },
+    versions: new Map([["joi", ["18.0.0", "18.3.1"]]]),
+  });
+
+  expect(result?.disposition.status).toBe("fix_available");
+  expect(result?.resolutionPaths).toEqual([
+    {
+      copyPath: "mailauth/joi",
+      resolution: "mailauth/joi",
+      requirement: "*",
+      repositoryResolution: true,
+    },
+  ]);
+  expect(
+    planDependencyAuditRemediation({
+      assessments: result === undefined ? [] : [result],
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(new Map([["mailauth/joi", "18.3.1"]]));
+});
+
 test("safe releases below the affected range never count as patched upgrades", () => {
   const advisory = {
     ...sdk,
