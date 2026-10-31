@@ -118,9 +118,12 @@ const argumentType = (
   const equals = statement.text.slice(start, argumentEnd).indexOf("=");
   const typeEnd = equals === -1 ? argumentEnd : start + equals;
   const type = inputTypeWords(input, typeEnd);
-  const arrays =
-    statement.text.slice(start, typeEnd).match(/\[\s*\]/gu)?.length ?? 0;
-  return `${TYPE_ALIASES[type] ?? type}${arrays > 0 ? "[]" : ""}`;
+  const hasArray = statement.text.slice(start, typeEnd).includes("[");
+  const quotedType = input.some(
+    ({ kind, index }) => kind === "identifier" && index < typeEnd,
+  );
+  const identityType = quotedType ? type : (TYPE_ALIASES[type] ?? type);
+  return `${identityType}${hasArray ? "[]" : ""}`;
 };
 
 const readSignature = (

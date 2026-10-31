@@ -15,6 +15,24 @@ const original = `CREATE FUNCTION proof(p_id text DEFAULT 'x') RETURNS bigint LA
 $body$;`;
 
 describe("current migration function column references", () => {
+  test("quoted type names do not acquire keyword aliases", () => {
+    const definition = `CREATE FUNCTION proof(p "integer") RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`;
+    expect(references([definition, "DROP FUNCTION proof(integer);"])).toBe(
+      true,
+    );
+    expect(references([definition, `DROP FUNCTION proof("integer");`])).toBe(
+      false,
+    );
+  });
+
+  test("declared array bounds retain the array identity", () => {
+    const definition = `CREATE FUNCTION proof(p text[2]) RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`;
+    expect(references([definition, "DROP FUNCTION proof(text);"])).toBe(true);
+    expect(references([definition, "DROP FUNCTION proof(text[]);"])).toBe(
+      false,
+    );
+  });
+
   test("preserves punctuation inside quoted parameter type identities", () => {
     const definition = `CREATE FUNCTION proof(p "Matter . State") RETURNS bigint LANGUAGE sql AS $$ SELECT transaction_id FROM proofs; $$;`;
     expect(
