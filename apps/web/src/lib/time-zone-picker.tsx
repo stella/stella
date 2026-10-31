@@ -43,7 +43,9 @@ export const TimeZonePicker = ({
   follow,
 }: TimeZonePickerProps) => {
   const t = useTranslations();
-  const [now] = useState(() => new Date());
+  // Offsets follow the moment the list opens, so a page left open across a
+  // clock change shows the current ones.
+  const [now, setNow] = useState(() => new Date());
   const [browserZone] = useState(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
@@ -71,6 +73,11 @@ export const TimeZonePicker = ({
       itemToStringLabel={(item) => item.label}
       isItemEqualToValue={(item, current) => item.value === current.value}
       value={selected}
+      onOpenChange={(open) => {
+        if (open) {
+          setNow(new Date());
+        }
+      }}
       onValueChange={(item) => {
         if (item !== null) {
           onValueChange(item.value);

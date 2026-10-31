@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { Temporal } from "@stll/time";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
@@ -23,9 +25,19 @@ type TimeZoneOptionsParams = {
   now: Date;
 };
 
-/** Offsets use the supplied instant, including the zone's current DST rules. */
-const timeZoneOffset = (zone: string, now: Date): string =>
-  `UTC${Temporal.Instant.fromEpochMilliseconds(now.getTime()).toZonedDateTimeISO(zone).offset}`;
+/**
+ * Offsets use the supplied instant, including the zone's current DST rules. A
+ * saved zone this browser does not know stays a choice, without an offset.
+ */
+const timeZoneOffset = (zone: string, now: Date): string => {
+  const offset = Result.try(
+    () =>
+      Temporal.Instant.fromEpochMilliseconds(now.getTime()).toZonedDateTimeISO(
+        zone,
+      ).offset,
+  );
+  return offset.isErr() ? "" : `UTC${offset.value}`;
+};
 
 export const timeZoneOptions = ({
   zones,

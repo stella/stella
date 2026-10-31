@@ -24,6 +24,34 @@ const matchingValues = (query: string) =>
     .map(({ value }) => value);
 
 describe("time zone options", () => {
+  test("keeps a saved zone this browser does not know, without an offset", () => {
+    const [unknown] = timeZoneOptions({
+      zones: [],
+      browserZone: "Mars/Olympus_Mons",
+      jurisdictionZones: [],
+      selectedZone: "Mars/Olympus_Mons",
+      now: REFERENCE_INSTANT,
+    });
+    expect(unknown).toEqual({
+      value: "Mars/Olympus_Mons",
+      label: "Mars/Olympus Mons",
+      offset: "",
+    });
+  });
+
+  test("reads each offset at the supplied instant", () => {
+    const offsetAt = (now: Date) =>
+      timeZoneOptions({
+        zones: [],
+        browserZone: "Europe/Prague",
+        jurisdictionZones: [],
+        selectedZone: "Europe/Prague",
+        now,
+      }).at(0)?.offset;
+    expect(offsetAt(REFERENCE_INSTANT)).toBe("UTC+01:00");
+    expect(offsetAt(new Date("2026-07-15T12:00:00.000Z"))).toBe("UTC+02:00");
+  });
+
   test("search matches city labels, regions, raw ids, and offsets", () => {
     expect(matchingValues("Prague")).toEqual(["Europe/Prague"]);
     expect(matchingValues("Europe")).toEqual(["Europe/Prague"]);
