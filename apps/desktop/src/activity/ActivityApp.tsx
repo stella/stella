@@ -31,6 +31,13 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import {
+  Popover,
+  PopoverDescription,
+  PopoverPopup,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@stll/ui/popover";
 import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
@@ -577,15 +584,31 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
     );
   }
   return (
-    <span className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
+    <span className="text-muted-foreground flex items-center gap-1.5 text-xs">
       {snapshot.recordingStatus === "recording" ? (
         <span
           data-activity-recording
           className="bg-destructive size-1.5 rounded-full"
         />
       ) : null}
-      <LockKeyholeIcon aria-hidden="true" className="size-3" />
-      {status} · {t("encrypted")}
+      {status}
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button
+              aria-label={t("encrypted")}
+              size="icon-sm"
+              variant="ghost"
+            />
+          }
+        >
+          <LockKeyholeIcon aria-hidden="true" />
+        </PopoverTrigger>
+        <PopoverPopup className="w-72" side="bottom" align="start">
+          <PopoverTitle>{t("encrypted")}</PopoverTitle>
+          <PopoverDescription>{t("batchPrivacy")}</PopoverDescription>
+        </PopoverPopup>
+      </Popover>
     </span>
   );
 };

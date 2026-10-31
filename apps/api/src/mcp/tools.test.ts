@@ -2801,6 +2801,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decisionDate: "2024-02-01",
             decisionId: DECISION_ID,
             decisionType: "judgment",
+            decisionTypeKind: "judgment",
             ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
             identifiers: [
               {
@@ -2941,6 +2942,7 @@ describe("OpenAI-compatible MCP tools", () => {
             decisionId: DECISION_ID,
             resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
             decisionType: "judgment",
+            decisionTypeKind: "judgment",
             ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
             language: "cs",
             matchedQueries: [0],
@@ -3009,6 +3011,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionDate: "2024-02-01",
       decisionId: DECISION_ID,
       decisionType: "judgment",
+      decisionTypeKind: "judgment",
       ecli: null,
       identifiers: [
         {
@@ -3200,6 +3203,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionDate: "2024-02-01",
           decisionId: DECISION_ID,
           decisionType: "judgment",
+          decisionTypeKind: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           identifiers: [
             {
@@ -3270,6 +3274,7 @@ describe("OpenAI-compatible MCP tools", () => {
           decisionId: DECISION_ID,
           resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
           decisionType: "judgment",
+          decisionTypeKind: "judgment",
           ecli: "ECLI:CZ:NS:2024:29.CDO.123.2024.1",
           language: "cs",
           matchedQueries: [0],
@@ -3300,6 +3305,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionDate: "2024-02-01",
       decisionId: DECISION_ID,
       decisionType: "judgment",
+      decisionTypeKind: "judgment",
       ecli: null,
       identifiers: [
         {
@@ -3523,6 +3529,7 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionDate: "2024-02-01",
     decisionId,
     decisionType: "judgment",
+    decisionTypeKind: "judgment",
     ecli: null,
     headline,
     textWithheldReason: null,
@@ -4070,6 +4077,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionDate: "2024-02-01",
               decisionId: DECISION_ID,
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: null,
               headline: null,
               textWithheldReason: null,
@@ -7510,6 +7518,37 @@ describe("OpenAI-compatible MCP tools", () => {
         text: undefined,
       },
     ]);
+  });
+
+  test("read_case_law_decision answers an entry whose read fails on its own, and reads the rest", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => {
+        if (locator.id === CITING_DECISION_ID) {
+          throw new Error("stored row the read cannot serve");
+        }
+        return {
+          ...base,
+          documentAst: null,
+          fulltext: "Readable text.",
+          id: locator.id,
+        };
+      },
+    );
+
+    const payload = await readDecisions({
+      decision_ids: [CITING_DECISION_ID, DECISION_ID, CITING_DECISION_ID],
+    });
+
+    expect(
+      payload.items.map(({ decisionId, status }) => [decisionId, status]),
+    ).toEqual([
+      [CITING_DECISION_ID, "read_failed"],
+      [DECISION_ID, "found"],
+      [CITING_DECISION_ID, "read_failed"],
+    ]);
+    expect(payload.items.at(0)?.message).toContain("could not be read");
+    expect(payload.items.at(1)?.decision?.text).toBe("Readable text.");
   });
 
   test("read_case_law_decision returns the whole text with full", async () => {

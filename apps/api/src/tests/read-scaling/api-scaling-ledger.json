@@ -1835,6 +1835,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/desktop/time-entries/narrative",
+      "reason": "Model-backed surface over a bounded request; it reads only organization AI settings and persists nothing, awaiting the write harness for statements and emitted response bytes."
+    },
+    {
       "id": "POST /v1/dev/clean",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },

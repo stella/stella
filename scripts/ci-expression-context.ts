@@ -251,7 +251,7 @@ const DEFAULT_STEP_OUTPUTS: Record<string, Record<string, string>> = {
   },
   "legal-atlas-scope": { api_source_required: "false" },
   "marketing-release": { required: "false" },
-  outcome: { required_summary: "" },
+  outcome: { required_summary: "", required_violations: "" },
   "patch-id": {
     patch_id: "",
     workflow_version: "",

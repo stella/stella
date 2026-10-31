@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "AT_FINDOK",
   "key": "at-findok",
-  "parserVersion": 11,
+  "parserVersion": 12,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Revalidate publisher head-matter ordering across the complete document AST; roles have no separate feature storage."
+    "reason": "Keep the line breaks of Findok paragraphs, emphasis, superscripts and links as inlines, so sentences either side of a break stay apart."
   }
 }
