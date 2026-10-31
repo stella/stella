@@ -11,6 +11,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 
 import {
   partitionRoundRobin,
@@ -281,7 +282,10 @@ const declareRouteSmokeGroup = ({
             `${E2E_API_ORIGIN}/v1/organizations`,
             {
               data: {
-                name: `Unenrolled route smoke ${token}`,
+                name: `Unenrolled route smoke ${token}`.slice(
+                  0,
+                  ORGANIZATION_NAME_MAX_LENGTH,
+                ),
                 slug: `unenrolled-smoke-${token}`,
               },
               headers: {
