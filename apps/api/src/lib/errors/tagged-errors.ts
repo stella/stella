@@ -247,7 +247,9 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
-    this.affectedMatters = props.affectedMatters;
+    if (props.affectedMatters !== undefined) {
+      this.affectedMatters = props.affectedMatters;
+    }
     this.workspaceId = props.workspaceId;
   }
 }

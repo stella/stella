@@ -1,6 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
-import type { SQL, SQLWrapper } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
@@ -19,8 +18,11 @@ import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessWorkspaceRows,
@@ -33,39 +35,9 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
-/** The visibilities owners and admins reach without an assignment. */
-const ADMIN_REACHABLE_VISIBILITIES = [
-  MATTER_VISIBILITY.adminsAndAssigned,
-  MATTER_VISIBILITY.allMembers,
-] as const satisfies readonly MatterVisibility[];
-
-/**
- * SQL predicate: a member holding the role in `role` reaches the joined
- * `workspaces` row without an assignment. Mirrors the last branch of the
- * stella_authorized_workspaces view: owners and admins reach
- * `admins_and_assigned` and `all_members` matters, every internal member
- * reaches `all_members` matters, and nobody reaches an `assigned_only` matter
- * this way. A raw query over an aliased matter passes its own `visibility`
- * expression; every SQL statement of the rule is built here.
- */
-export const reachesMatterWithoutAssignmentSql = (
-  role: SQLWrapper,
-  visibility: SQLWrapper = workspaces.visibility,
-): SQL | undefined =>
-  or(
-    and(
-      inArray(role, ORGANIZATION_MATTER_ADMIN_ROLES),
-      inArray(visibility, ADMIN_REACHABLE_VISIBILITIES),
-    ),
-    and(
-      inArray(role, INTERNAL_MEMBER_ROLES),
-      eq(visibility, MATTER_VISIBILITY.allMembers),
-    ),
-  );
-
 /**
  * Does this organization role reach a matter of this visibility without an
- * assignment? The TypeScript twin of {@link reachesMatterWithoutAssignmentSql}.
+ * assignment? The SQL owner is stella_authorized_workspace_ids.
  */
 export const reachesMatterWithoutMembership = ({
   role,
