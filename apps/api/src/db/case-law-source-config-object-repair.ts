@@ -1,6 +1,6 @@
 /**
  * Online repair behind migration
- * 20261031081700_case_law_source_ingestion_config_grant. Per-source state is
+ * 20261031200638_case_law_source_ingestion_config_grant. Per-source state is
  * written with jsonb_set, which fails on a scalar, and some sources hold the
  * JSON string "{}" in `case_law_sources.config` instead of an object. This
  * stores the empty object they mean.
@@ -27,7 +27,7 @@ const hasLegacyStringConfig = async (connection: OnlineMigrationConnection) =>
   ).length > 0;
 
 export const CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR = {
-  introducedBy: "20261031081700_case_law_source_ingestion_config_grant",
+  introducedBy: "20261031200638_case_law_source_ingestion_config_grant",
   name: "case_law_source_string_config",
   readCompletion: async (connection) =>
     (await hasLegacyStringConfig(connection))
