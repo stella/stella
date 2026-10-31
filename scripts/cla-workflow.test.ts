@@ -632,9 +632,9 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
   );
 
 describe("contributor signature workflow", () => {
-  test("CLA app suite receives checks instead of skipped github-actions suite 111_159_303_653", async () => {
+  test("CLA check runs join the CLA app suite rather than a skipped Actions suite", async () => {
     const skippedSuite = {
-      id: 111_159_303_653,
+      id: 42,
       app: { slug: "github-actions" },
       conclusion: "skipped",
       checkRuns: [{ name: "resolve", conclusion: "skipped" }],
