@@ -614,6 +614,9 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
         const coverageMeasurement =
           SCHEDULED_JOB_MEASUREMENTS[coverageJob.id] ??
           panic("The coverage refresh has no measurement");
+        if (coverageMeasurement.type !== "corpus") {
+          panic("The coverage refresh requires a corpus measurement");
+        }
         const measureCoverageInPlace = async (
           admission: Verdict = QUERY_PERF_ADMISSION,
         ) => {
