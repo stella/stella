@@ -4,11 +4,13 @@ import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { CHAT_THREAD_SCOPE_MISMATCH_CODE } from "@stll/api-contract/chat-thread-scope";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
+  chatThreads,
   contacts,
   featureEnrolments,
   workspaceContacts,
@@ -16,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createMembershipScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import getMessages from "@/api/handlers/chat/messages/list";
 import { clientInvoicesRoute } from "@/api/handlers/client-invoices/routes";
 import { resolveClientInvoiceMatters } from "@/api/handlers/client-invoices/selection";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
@@ -113,6 +116,7 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
             }),
           });
         const desktopReads = routes({
+          "/threads/:threadId/messages": { GET: getMessages },
           "/desktop/matters": {
             GET: createDesktopMattersEndpoint(authorizeDesktop),
           },
@@ -156,6 +160,19 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
             visibility: MATTER_VISIBILITY.adminsAndAssigned,
             name: "Řízení Novák",
             reference: workspaceId,
+          });
+          const threadId = createSafeId<"chatThread">();
+          await db.insert(chatThreads).values({
+            id: threadId,
+            workspaceId,
+            organizationId,
+            userId: viewer.userId,
+            title: "Matter discussion",
+          });
+          const hiddenThread = await read(`/threads/${threadId}/messages`);
+          expect(hiddenThread.status).toBe(404);
+          expect(await hiddenThread.json()).toEqual({
+            message: "Chat thread not found",
           });
           await db
             .update(member)
@@ -358,6 +375,12 @@ describe.skipIf(!enabled)("matter visibility reads (postgres)", () => {
           expect(await opened.json()).toMatchObject({
             id: workspaceId,
             visibility: MATTER_VISIBILITY.allMembers,
+          });
+          const readableThread = await read(`/threads/${threadId}/messages`);
+          expect(readableThread.status).toBe(400);
+          expect(await readableThread.json()).toMatchObject({
+            code: CHAT_THREAD_SCOPE_MISMATCH_CODE,
+            workspaceId,
           });
           const remembered = await read("/workspaces/active");
           expect(await remembered.json()).toEqual({
