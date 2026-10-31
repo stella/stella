@@ -263,12 +263,6 @@
     "notice.MANIFESTATION/TYPE": "the ontology classes of the format record",
     "formex.body": "the same decision text the document part carries, in the publisher's semantic encoding; the part is kept so a later parse can be checked against it rather than read into the row today"
   },
-  "hu-bhgy": {
-    "Szoveg": "always null on a listing row; the decision's text is the downloaded document",
-    "RezumeSzovegKornyezet": "keyword-search highlight over Rezume, which is stored whole",
-    "NemHivatkozhatoSzoveg": "null on every row the search serves; the citability filter changes no count it reports",
-    "DownloadLink": "always null; the download URL is rebuilt from IndexId, Azonosito and MeghozoBirosag"
-  },
   "pl-kis": {
     "POZIOM_DOSTEPU_WYBRANEJ_TRESCI": "which of the service's editor groups may see a part of the document; it says nothing about the document",
     "informacja/id": "the same id ID_INFORMACJI states, which keys the row",
