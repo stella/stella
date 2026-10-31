@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
-import * as v from "valibot";
 
 import {
   headMatterOrderDegradations,
   headMatterPrecedesBody,
   PARAGRAPH_ROLES,
-  persistedDocumentAstWriteSchema,
 } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
@@ -59,10 +57,7 @@ const anyOrderDocument = fc
     })),
   }));
 
-// Block order only decides what a writer may store: a stored row is never
-// refused for it, because rows written before an ordering rule would lose
-// their text on read.
-test("block order never refuses a stored row; writers still enforce it", () => {
+test("block order never makes a prepared AST unreadable", () => {
   assertProperty(
     "block order never refuses a stored row; writers still enforce it",
     fc.property(anyOrderDocument, (ast) => {
@@ -77,8 +72,17 @@ test("block order never refuses a stored row; writers still enforce it", () => {
       expect(headMatterOrderDegradations(read.blocks).length === 0).toBe(
         ordered,
       );
-      expect(v.safeParse(persistedDocumentAstWriteSchema, ast).success).toBe(
-        ordered,
+      const prepared = prepareCorpusAst({ ast, fallbackText: "x" }).unwrap();
+      expect(prepared.type).toBe("readable");
+      if (
+        prepared.type !== "readable" ||
+        prepared.ast === null ||
+        !("blocks" in prepared.ast)
+      ) {
+        throw new Error("every generated block order must remain readable");
+      }
+      expect(prepared.ast.blocks.map(({ id }) => id)).toEqual(
+        ast.blocks.map(({ id }) => id),
       );
     }),
   );

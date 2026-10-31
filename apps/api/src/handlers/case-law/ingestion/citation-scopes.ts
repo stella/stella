@@ -1,8 +1,9 @@
 import { Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
-import { isDocumentAst } from "@stll/legal-ast/document-ast";
+import { persistedDocumentAstSchema } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { createSha256 } from "@stll/sha256/bun";
 
@@ -86,9 +87,11 @@ export const validatedCitationScopes = (
   if (value === undefined) {
     return Result.ok(undefined);
   }
-  if (!isDocumentAst(ast)) {
+  const parsedAst = v.safeParse(persistedDocumentAstSchema, ast);
+  if (!parsedAst.success) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
+  const documentAst = parsedAst.output;
   if (
     !isRecord(value) ||
     value["version"] !== CITATION_SCOPE_VERSION ||
@@ -106,7 +109,7 @@ export const validatedCitationScopes = (
   ) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  if (value["astHash"] !== citationScopeAstHash(ast)) {
+  if (value["astHash"] !== citationScopeAstHash(documentAst)) {
     return rejected(CITATION_SCOPE_DEFECTS.AST_HASH_MISMATCH, "");
   }
   const opinions = value["opinions"].filter(
@@ -121,7 +124,7 @@ export const validatedCitationScopes = (
   if (opinions.length !== value["opinions"].length) {
     return rejected(CITATION_SCOPE_DEFECTS.INVALID_ENVELOPE, "");
   }
-  const indexed = indexCitationScopes(ast.blocks, opinions);
+  const indexed = indexCitationScopes(documentAst.blocks, opinions);
   return Result.isError(indexed)
     ? Result.err(indexed.error)
     : Result.ok(opinions);

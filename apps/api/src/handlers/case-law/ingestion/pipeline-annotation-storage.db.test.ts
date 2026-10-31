@@ -866,7 +866,7 @@ test("a metadata refresh retries when a document wins before the scope read", as
 });
 
 test.each([inlineCorpus, packedCorpus])(
-  "the pipeline retains text and reports a reader-rejected AST before storage ($mode)",
+  "the pipeline stores late head matter and reports its degradation ($mode)",
   async (corpus) => {
     const documentId = createSafeId<"caseLawDecision">();
     const ast = sourceAst(documentId, "Decision text.");
@@ -876,7 +876,7 @@ test.each([inlineCorpus, packedCorpus])(
     }
     ast.blocks.push({ ...first, id: "p2", anchorId: "p2", role: "apparatus" });
     expect(isDocumentAst(ast)).toBe(false);
-    const report = spyOn(logger, "error");
+    const report = spyOn(logger, "warn");
     try {
       const outcome = (
         await processDecision({
@@ -894,14 +894,11 @@ test.each([inlineCorpus, packedCorpus])(
       ).unwrap();
       expect(outcome.status).toBe(PROCESS_DECISION_STATUS.COMPLETE);
       expect(report).toHaveBeenCalledWith(
-        "case_law.ingestion.ast_schema_rejected",
+        "case_law.ingestion.ast_head_matter_order",
         expect.objectContaining({
           source: "test",
           parserVersion: 37,
-          checks: expect.arrayContaining([
-            "Head matter must precede the decision body",
-          ]),
-          "error.type": "IngestedAstRejectedError",
+          lateBlockCount: 1,
         }),
       );
       const row = (
@@ -916,13 +913,13 @@ test.each([inlineCorpus, packedCorpus])(
       }
       if (corpus.mode === "off") {
         expect(row.fulltext).toBe("Decision text.");
-        expect(row.documentAst).toEqual({});
+        expect(row.documentAst).toEqual(ast);
       } else {
         const pack = packs.at(-1);
         if (pack === undefined) {
           expect.unreachable("Canonical mode stores a pack");
         }
-        expect(await storedAst(pack, row.id)).toEqual({});
+        expect(await storedAst(pack, row.id)).toEqual(ast);
         const textEntry = pack.entries.find(
           ({ member }) =>
             member.documentId === row.id && member.kind === "text",
@@ -968,7 +965,7 @@ test("the pipeline stores a reader-valid AST unchanged", async () => {
   expect(row?.documentAst).toEqual(decision.documentAst);
 });
 
-test("a pending mirror replay removes unreadable structure while retaining stored text", async () => {
+test("a pending mirror replay retains readable late head matter", async () => {
   const documentId = createSafeId<"caseLawDecision">();
   const decision = input(documentId, "Decision text.");
   (
@@ -997,6 +994,7 @@ test("a pending mirror replay removes unreadable structure while retaining store
     .update(caseLawDecisions)
     .set({
       documentAst: invalid,
+      metadata: {},
       corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
       parserVersion: 37,
     })
@@ -1025,7 +1023,7 @@ test("a pending mirror replay removes unreadable structure while retaining store
       .where(eq(caseLawDecisions.sourceDocumentId, documentId))
   ).at(0);
   expect(row?.fulltext).toBe("Decision text.");
-  expect(row?.documentAst).toEqual({});
+  expect(row?.documentAst).toEqual(invalid);
   const refreshed = (
     await processDecision({
       input: plainTextIngestionResult({
@@ -1052,6 +1050,6 @@ test("a pending mirror replay removes unreadable structure while retaining store
       .where(eq(caseLawDecisions.sourceDocumentId, documentId))
   ).at(0);
   expect(afterRefresh?.fulltext).toBe("Decision text.");
-  expect(afterRefresh?.documentAst).toEqual({});
+  expect(afterRefresh?.documentAst).toEqual(invalid);
   expect(afterRefresh?.metadata?.[CITATION_SCOPE_METADATA_KEY]).toBeUndefined();
 });

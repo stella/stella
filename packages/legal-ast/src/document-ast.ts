@@ -1,4 +1,4 @@
-// parser-output-unchanged: the persisted reader stops refusing stored rows over head-matter order and reports them; writers keep the same order check, so no parser output or stored field changes.
+// parser-output-unchanged: persisted readers and ingestion writers keep stored head-matter order and report late blocks; parser output and stored fields are unchanged.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
@@ -1281,8 +1281,7 @@ const persistedDocumentAstWireSchema = v.object({
  * (`withUniqueBlockIdentities`) and reports each one.
  *
  * Block order is never a reason to refuse a stored row: rows written before
- * an ordering rule existed would lose their text on read. Writers enforce
- * ordering through `persistedDocumentAstWriteSchema`; the reader reports
+ * an ordering rule existed would lose their text on read. The reader reports
  * misplaced head matter (`headMatterOrderDegradations`).
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
@@ -1303,12 +1302,6 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       "Block ids and anchorIds must be unique",
     ),
   );
-
-/** The persisted shape a writer may store: the reader's, plus block order. */
-export const persistedDocumentAstWriteSchema: v.GenericSchema<
-  unknown,
-  DocumentAst
-> = v.pipe(persistedDocumentAstSchema, headMatterOrderCheck);
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
   v.is(documentAstSchema, val);
