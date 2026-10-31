@@ -496,7 +496,6 @@
     "apps/api/src/dev/register-mock-ai.ts": 2,
     "apps/api/src/handlers/agent-auth/routes.ts": 1,
     "apps/api/src/handlers/billing-codes/update.ts": 1,
-    "apps/api/src/handlers/case-law/analysis/prompts/prompt-registry.ts": 1,
     "apps/api/src/handlers/case-law/decisions/citation-graph.ts": 1,
     "apps/api/src/handlers/case-law/decisions/search-telemetry.ts": 2,
     "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 1,

@@ -236,3 +236,18 @@ spyOn(console, "warn");
 // expect-clean: bun-test-hygiene/require-module-mock-reset
 test("restores its spy", () => { const info = spyOn(console, "info"); try { info.mockClear(); } finally { info.mockRestore(); } });
 void mock;
+
+// --- no-wait-for-under-fake-timers ---
+
+check("fake-timer wait", async () => {
+  bt.jest.useFakeTimers();
+  // oxlint-disable-next-line bun-test-hygiene/no-wait-for-under-fake-timers
+  await waitFor(() => true);
+});
+
+check("explicit fake clock", () => {
+  bt.jest.useFakeTimers();
+  bt.jest.advanceTimersByTime(50);
+  // expect-clean: bun-test-hygiene/no-wait-for-under-fake-timers
+  expect(true).toBe(true);
+});
