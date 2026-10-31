@@ -1,6 +1,8 @@
 import { SQL } from "bun";
 import { expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -8,7 +10,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
