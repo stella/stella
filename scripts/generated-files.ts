@@ -1658,7 +1658,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "packages/mcp-apps/scripts/build-mcp-apps.ts"],
     prepare: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
-    check: ["bun", "scripts/check-mcp-generated-tracking.ts", "--outputs"],
+    check: ["bun", "scripts/check-mcp-generated-tracking.ts"],
     checkedBy: "MCP app derived outputs guard",
     autofix: true,
     after: ["mcp-app-contracts"],
