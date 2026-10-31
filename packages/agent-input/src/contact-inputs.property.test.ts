@@ -7,7 +7,9 @@ import { normalizeCurrencyCode } from "./currency-code";
 import { normalizeDataBoxId } from "./data-box-id";
 import { normalizeEmailAddress } from "./email-address";
 
-const letters = fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz");
+const letters = fc
+  .integer({ min: 97, max: 122 })
+  .map((code) => String.fromCodePoint(code));
 const word = fc
   .array(letters, { minLength: 1, maxLength: 20 })
   .map((parts) => parts.join(""));

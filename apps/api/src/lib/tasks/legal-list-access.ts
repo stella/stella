@@ -86,6 +86,7 @@ export const nativeTaskInputUsesLegalLists = (args: unknown): boolean =>
   ((args["item_type"] !== undefined &&
     args["item_type"] !== null &&
     args["item_type"] !== "task") ||
-    ["list_id", "list_section_id", "description"].some(
+    args["description"] !== undefined ||
+    ["list_id", "list_section_id"].some(
       (field) => args[field] !== undefined && args[field] !== null,
     ));

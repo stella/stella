@@ -1900,7 +1900,9 @@ const saveTaskArgsSchema = nullAsAbsent(
       assignee: v.optional(
         v.pipe(
           organizationMemberSelectorSchema,
-          v.description("Organization member user ID or email to assign"),
+          v.description(
+            "Organization member ID or email; must belong to the matter",
+          ),
         ),
       ),
       remove_assignee_user_id: v.optional(
@@ -2340,7 +2342,7 @@ const handleSaveTaskTool: TypedMcpToolHandler<
   const completionNotices: FlowRunCompletionNotice[] = [];
   const saveTaskAndAssignee = async function* (safeDb: SafeDb) {
     if (hasTaskUpdate) {
-      yield* updateTaskHandler({
+      const updated = yield* updateTaskHandler({
         safeDb,
         workspaceId,
         userId: context.userId,
@@ -2369,9 +2371,12 @@ const handleSaveTaskTool: TypedMcpToolHandler<
             : { workflowReason: input.workflow_reason }),
         },
       });
+      if (updated.isErr()) {
+        return updated;
+      }
     }
     if (assigneeUserId !== null) {
-      yield* addAssigneeHandler({
+      return yield* addAssigneeHandler({
         recordAuditEvent,
         safeDb,
         workspaceId,
@@ -2983,19 +2988,18 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create or update a task, and manage its assignees and entity links. " +
-      "Omit task_id to create a task (matter_id and name required). Pass " +
-      "task_id to update: set name, item_type, status, priority, or due_date (ISO " +
-      "YYYY-MM-DD, null to clear); add or remove one assignee " +
-      "(assignee / remove_assignee_user_id); link the task to " +
-      "another entity (link_entity_id) or remove a link (unlink_link_id). " +
-      "Returns the task ID.",
+      "Create or update a task and its assignees and links. " +
+      "Omit task_id to create (matter_id and name required). Pass task_id to " +
+      "update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; " +
+      "null clears). Assign a matter member by ID or email (assignee), or " +
+      "unassign by remove_assignee_user_id. Link with link_entity_id; unlink " +
+      "with unlink_link_id. Returns the task ID.",
     featureInput: {
       featureId: LEGAL_LISTS_FEATURE_ID,
       usesFeature: nativeTaskInputUsesLegalLists,
       projectInputSchema: projectNativeTaskListInput,
       unavailableDescription:
-        "Create or update an ordinary task, manage its assignees and entity links. Omit task_id to create (matter_id and name required). Pass task_id to update name, status, priority or due_date, add or remove an assignee, or manage entity links. Returns the task ID.",
+        "Create or update an ordinary task, manage its assignees and entity links. Omit task_id to create (matter_id and name required). Pass task_id to update name, status, priority or due_date, add or remove an assignee, or manage entity links. The assignee must be a member of the matter. Returns the task ID.",
     },
     inputSchema: saveTaskArgsSchema,
     jsonSchemaProjectionWaiver: {

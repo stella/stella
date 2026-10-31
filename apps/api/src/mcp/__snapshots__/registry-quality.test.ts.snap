@@ -4608,7 +4608,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (assignee / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -4715,7 +4715,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 320,
-          "description": "Organization member user ID or email to assign"
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",
@@ -11801,7 +11801,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (assignee / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -11908,7 +11908,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 320,
-          "description": "Organization member user ID or email to assign"
+          "description": "Organization member ID or email; must belong to the matter"
         },
         "remove_assignee_user_id": {
           "type": "string",

@@ -512,10 +512,10 @@
     {
       "name": "save_task",
       "nameChars": 9,
-      "descriptionChars": 406,
-      "inputSchemaChars": 1851,
-      "totalChars": 2266,
-      "estimatedTokens": 910
+      "descriptionChars": 371,
+      "inputSchemaChars": 1863,
+      "totalChars": 2243,
+      "estimatedTokens": 903
     },
     {
       "name": "save_time_entry",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 132997,
-    "estimatedTokens": 52843
+    "characters": 132974,
+    "estimatedTokens": 52836
   }
 }
