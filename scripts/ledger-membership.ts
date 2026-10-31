@@ -180,6 +180,12 @@ type RunLedgerMembershipGuardOptions = {
   args?: readonly string[];
   log?: (message: string) => void;
   error?: (message: string) => void;
+  reviewedEntryAdmission?:
+    | {
+        type: "reasoned";
+        entries: readonly { id: string; reason: string }[];
+      }
+    | undefined;
 };
 
 export const runLedgerMembershipGuard = ({
@@ -192,6 +198,7 @@ export const runLedgerMembershipGuard = ({
   args = process.argv.slice(2),
   log = console.log,
   error = console.error,
+  reviewedEntryAdmission,
 }: RunLedgerMembershipGuardOptions): number => {
   if (args[0] === "--self-test") {
     return selfTestLedgerMembership(`check-${label}-ledger`);
@@ -222,16 +229,32 @@ export const runLedgerMembershipGuard = ({
     return 2;
   }
   const { added } = comparison;
-  if (added.length === 0) {
+  const reviewedById = new Map(
+    reviewedEntryAdmission?.entries.map(({ id, reason }) => [id, reason]),
+  );
+  const admitted: { id: string; reason: string }[] = [];
+  const refused: string[] = [];
+  for (const id of added) {
+    const reason = reviewedById.get(id);
+    if (reason === undefined || reason.trim().length === 0) {
+      refused.push(id);
+      continue;
+    }
+    admitted.push({ id, reason });
+  }
+  for (const { id, reason } of admitted) {
+    log(`reviewed entry admitted: ${id} (${reason})`);
+  }
+  if (refused.length === 0) {
     log(
-      `${label} ledger: OK. ${current.length} entries, none new vs ${baseRef}.`,
+      `${label} ledger: OK. ${current.length} entries, ${admitted.length === 0 ? "none new" : `${admitted.length} reviewed`} vs ${baseRef}.`,
     );
     return 0;
   }
   error(
-    `${label} ledger: ${added.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
+    `${label} ledger: ${refused.length} entries are not in ${baseRef}. The ledger only shrinks; ${remediation}:`,
   );
-  for (const entry of added) {
+  for (const entry of refused) {
     error(`  ${entry}`);
   }
   return 1;

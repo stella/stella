@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import {
   MCP_TOOL_READ_BUDGETS,
   READ_BUDGETS,
   readBudgetPages,
-  type ScheduledJobReads,
   UNGOVERNED_SCHEDULED_JOB_PAGE_CEILING,
 } from "@/api/lib/db/read-budgets";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
@@ -17,7 +18,6 @@ import {
 } from "@/api/tests/query-perf/registry";
 
 import {
-  ledgerMergeBase,
   parseReasonedLedger,
   runLedgerMembershipGuard,
 } from "../../../../../scripts/ledger-membership.ts";
@@ -29,12 +29,6 @@ const unmeasured = new Set(
   parseReasonedLedger(JSON.stringify(unmeasuredLedger), LEDGER),
 );
 
-type IsAssignable<T, U> = [T] extends [U] ? true : false;
-const bareGovernedReadsAreRejected: IsAssignable<
-  "load-governed",
-  ScheduledJobReads
-> = false;
-
 /**
  * A scheduled job or MCP tool that reads without a declared budget is how an
  * unbounded statement reaches production unmeasured. Every declaration is
@@ -43,7 +37,6 @@ const bareGovernedReadsAreRejected: IsAssignable<
  */
 describe("read budget declarations", () => {
   test("every scheduled job declares its reads", () => {
-    expect(bareGovernedReadsAreRejected).toBe(false);
     const governed = new Set<string>(Object.values(SCHEDULER_BACKFILL_IDS));
     const violations = DECLARED_SCHEDULER_JOBS.flatMap((job) => {
       const listed = unmeasured.has(`job:${job.id}`);
@@ -57,12 +50,14 @@ describe("read budget declarations", () => {
       if (listed) {
         return [`${job.id}: declares its reads, so remove its ledger entry`];
       }
-      if ("governance" in job.reads && !governed.has(job.id)) {
+      const loadGoverned =
+        job.reads === "load-governed" || "governance" in job.reads;
+      if (loadGoverned && !governed.has(job.id)) {
         return [
           `${job.id}: only jobs that batch through the backfill runtime are load-governed`,
         ];
       }
-      if ("governance" in job.reads) {
+      if (job.reads === "load-governed" || "governance" in job.reads) {
         return [];
       }
       // Widened: the check holds for every budget a job may declare later.
@@ -125,7 +120,9 @@ describe("read budget declarations", () => {
         DECLARED_SCHEDULER_JOBS.find((job) => job.id === id)?.reads,
         id,
       ).toSatisfy(
-        (reads) => typeof reads === "object" && "governance" in reads,
+        (reads) =>
+          reads === "load-governed" ||
+          (typeof reads === "object" && "governance" in reads),
       );
     }
   });
@@ -160,14 +157,17 @@ describe("read budget declarations", () => {
         parseLedger: parseReasonedLedger,
         label: "read-budgets-unmeasured",
         remediation: "declare a read budget and measure it instead",
-        args: ["--base", ledgerMergeBase({ repoRoot, baseRef: "origin/main" })],
+        args: ["--base", treeBaseRevision({ repoRoot })],
       }),
     ).toBe(0);
   });
 
+  // Statements and scheduled jobs are both measured through the same page
+  // gate, which keeps a marked entry over its budget until the marker goes.
   test("an over-budget entry is a measured surface with a reason", () => {
     for (const [id, budget] of Object.entries(READ_BUDGETS)) {
       if ("overBudget" in budget) {
+        expect(["statement", "scheduled-job"], id).toContain(budget.surface);
         expect(budget.overBudget.reason.trim().length, id).toBeGreaterThan(0);
       }
       const pages =

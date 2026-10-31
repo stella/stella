@@ -49,6 +49,7 @@ type CompactMessagesForContextProps = ChatCompactionModelProps & {
 };
 
 type SelectMessagesForContextInputProps = {
+  caseLawDb?: Parameters<typeof readLatestChatCompaction>[0]["caseLawDb"];
   messages: ChatMessage[];
   safeDb: SafeDb;
   skipCheckpoint: boolean;
@@ -58,6 +59,7 @@ type SelectMessagesForContextInputProps = {
 export const selectMessagesForContextInput = async ({
   messages,
   safeDb,
+  caseLawDb,
   skipCheckpoint,
   threadId,
 }: SelectMessagesForContextInputProps): Promise<ChatMessage[]> => {
@@ -66,6 +68,7 @@ export const selectMessagesForContextInput = async ({
   }
 
   const checkpointResult = await readLatestChatCompaction({
+    caseLawDb,
     safeDb,
     threadId,
   });

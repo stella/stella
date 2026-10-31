@@ -11,6 +11,7 @@ import {
 
 import { normalizeStringList } from "@stll/agent-input/string-list";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { DECISION_TEXT_AVAILABILITY } from "@stll/api-contract/case-law-text-field";
 import {
   formatDecisionParagraphRange,
   parseDecisionParagraphFragment,
@@ -196,6 +197,13 @@ const ResultTableRow = ({
               )}
             </PreviewCardPopup>
           </PreviewCard>
+          {row.type === "search" &&
+            row.textAvailability ===
+              DECISION_TEXT_AVAILABILITY.METADATA_ONLY && (
+              <span className="text-muted-foreground text-xs">
+                {t("noDecisionText")}
+              </span>
+            )}
           {row.type === "search" && row.match === "some_terms" && (
             <span className="text-muted-foreground text-xs">
               {t("partialMatch")}

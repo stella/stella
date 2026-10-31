@@ -6,7 +6,6 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   PROCESS_DECISION_RETRY_REASON,
@@ -36,6 +35,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
 import { partialObservationFromMetadata } from "@/api/lib/legal-search/ingestion-normalization";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
 import {
   OBSERVATION_DETAIL,

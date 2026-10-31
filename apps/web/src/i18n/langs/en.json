@@ -814,8 +814,10 @@
       "deleteRateTable": "Delete rate table",
       "editRateTable": "Edit rate table",
       "effectiveFrom": "Effective from",
+      "effectiveRateRequired": "No effective rate is set for this matter, person and date. Add a rate or log this time as non-billable.",
       "effectiveTo": "Effective to",
       "hourlyRate": "Hourly rate",
+      "logNonBillable": "Log as non-billable",
       "noRateEntries": "No rate entries yet",
       "noRateFound": "No rate configured",
       "noRateTables": "No rate tables yet",
@@ -941,12 +943,16 @@
         "reasoning": "Reasoning"
       },
       "errors": {
+        "analysisDisabled": "AI analysis generation is disabled on this server. Read the decision text or try again later.",
         "answerIncomplete": "{source, select, organization {Your organization's {provider} key returned an incomplete answer.} other {The AI model returned an incomplete answer.}}",
+        "decisionNotFound": "This decision could not be found. Reopen it from search.",
+        "documentUnparseable": "The decision text is not ready for analysis. Read the original source.",
+        "languageUnsupported": "AI analysis does not yet support this decision’s language. Read the decision text or original source.",
         "providerRefused": "{source, select, organization {{provider} refused the request made with your organization's key. Check the key, its quota and billing in organization settings.} other {The AI provider refused the request.}}",
         "providerUnavailable": "{source, select, organization {{provider} is unavailable for your organization's key right now.} other {The AI provider is unavailable right now.}}",
         "retryAfter": "You can try again after {time}.",
-        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}",
-        "unavailable": "AI analysis is not available for this decision."
+        "sourceRestricted": "The source does not permit AI analysis. Read the decision text or original source.",
+        "timedOut": "{source, select, organization {{provider} did not answer in time using your organization's key.} other {The AI model did not answer in time.}}"
       },
       "generate": "Generate AI headnotes",
       "invitation": "With a free account, AI drafts working notes on this decision.",
@@ -1086,7 +1092,9 @@
     },
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.",
     "filters": {
-      "remove": "Remove filter {filter}"
+      "countryMismatch": "Filters removed because they do not belong to {country}: {filters}.",
+      "remove": "Remove filter {filter}",
+      "showInCountry": "Show {filter} in {country}"
     },
     "languages": {
       "count": "{count, plural, one {# language} other {# languages}}",
@@ -1151,7 +1159,7 @@
     "reader": {
       "documentUpdated": "The document was updated.",
       "expandProvisions": "Expand provisions",
-      "headMatter": "Head matter",
+      "headMatter": "Case information",
       "sourceAttribution": "The source data is freely available at <link>{source}</link>."
     },
     "research": {
@@ -1283,7 +1291,8 @@
       "versionAtDecisionDateInferred": "Version at decision date (inferred)",
       "versionBasisInferredCompact": "Decision date · inferred",
       "versionBasisInferredExplanation": "The version is inferred from the decision date. The decision does not state which wording applies."
-    }
+    },
+    "withdrawnByPublisher": "Withdrawn by publisher"
   },
   "catalogue": {
     "addCustom": "Add custom",
@@ -1341,6 +1350,7 @@
       "toastTitle": "Full view not yet available"
     },
     "activity": {
+      "newerVersion": "This content is shown in a newer version.",
       "review": "Review update"
     },
     "aiPrompt": "AI message composer",
@@ -2079,8 +2089,6 @@
     "clearFilters": "Clear filters",
     "clearSearch": "Clear search",
     "close": "Close",
-    "closeAll": "Close all",
-    "closeOthers": "Close others",
     "columns": "Columns",
     "comfortable": "Comfortable",
     "comingSoon": "Coming soon",
@@ -2354,6 +2362,7 @@
     "unknownUser": "Unknown user",
     "unpin": "Unpin",
     "unsavedChanges": "Unsaved changes",
+    "unsavedChangesClose": "Unsaved changes. Close again to discard",
     "unsavedChangesEscape": "Unsaved changes. Press Esc again to discard",
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?",
     "unverified": "Unverified",
@@ -2395,6 +2404,8 @@
     "returnToAgent": "Return to your agent to continue.",
     "returnsLocally": "Returns you to {clientName} on this computer",
     "returnsTo": "Returns you to {clientName}",
+    "scopeAccountExportRead": "Read your personal data exports",
+    "scopeAccountExportWrite": "Request your personal data exports",
     "scopeAdminRead": "Read your organization's audit log",
     "scopeAdminWrite": "Manage organization members and settings",
     "scopeBillingWrite": "Create, edit, and delete your time entries",
@@ -2865,6 +2876,8 @@
       "forbidden": "You do not have permission to do this.",
       "hostedCheckoutOpen": "A checkout for this organization is already open. Complete it, or start a new one after it expires.",
       "hostedSubscriptionLive": "This organization already has a subscription. Change it under Manage hosted usage.",
+      "idempotencyInProgress": "This request is still being processed. Wait a moment, then try again.",
+      "idempotencyKeyReused": "This submission changed since the previous attempt. Reset the form and try again.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.",
       "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.",
@@ -3667,6 +3680,9 @@
       "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
+    "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
+    "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
+    "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
@@ -4885,7 +4901,9 @@
     "viewOnGithub": "View on GitHub"
   },
   "readerAnswers": {
+    "answerLanguage": "Answer language",
     "budgetError": "The answer budget is exhausted.",
+    "documentLanguage": "Document language ({language})",
     "expand": "Expand answer",
     "explain": "Explain",
     "followUp": "Ask a follow-up",
@@ -5003,7 +5021,6 @@
       "beta": "Beta Features",
       "betaAvt": "AVT document verification",
       "betaAvtDescription": "Check a matter's documents claim by claim against the facts of a list",
-      "betaCaseLawDescription": "Show the public case law search and reader in the sidebar",
       "betaDescription": "Try features that are still in development",
       "betaInbox": "Inbox & notifications",
       "betaInboxDescription": "Show the Inbox and the notification bell",
@@ -5039,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop is linked",
       "desktopCardMissingDetail": "Install it, or connect it if it's already installed on this computer.",
       "desktopCardMissingTitle": "stella desktop isn't linked yet",
+      "desktopCardOpeningDetail": "Linking this computer to <bdi>{identity}</bdi> on {host}. If your browser asks, allow it to open stella desktop.",
+      "desktopCardOpeningTitle": "Opening stella desktop...",
       "desktopCardOutdatedDetail": "Version {version} is linked to <bdi>{identity}</bdi>. Install the latest version to keep documents and activity working.",
       "desktopCardOutdatedTitle": "stella desktop needs an update",
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.",
@@ -5058,6 +5077,7 @@
       "desktopInstallOpenStep": "Open stella desktop once. Clipboard appears immediately and remains available from the macOS menu bar or Windows system tray.",
       "desktopInstallTitle": "Install and open",
       "desktopInstallWindowsStep": "Run the installer and follow the prompts.",
+      "desktopOpenApp": "Open stella desktop",
       "desktopPrivacyDescription": "Clipboard history is encrypted and stored on this device.",
       "desktopPrivacyTitle": "Private by default",
       "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.",
@@ -5067,6 +5087,15 @@
       "displayNameSaved": "Display name updated",
       "enterOtp": "Verification code",
       "otpSentSuccess": "Verification code sent to your email.",
+      "personalDataExportDescription": "Request a downloadable copy of the personal data held in your account. The download is available for one hour.",
+      "personalDataExportExpired": "This export has expired.",
+      "personalDataExportExpiresAt": "Available until {expiresAt}.",
+      "personalDataExportFailed": "Your export could not be prepared.",
+      "personalDataExportReady": "Your export is ready.",
+      "personalDataExportRequest": "Request export",
+      "personalDataExportRequestNew": "Request a new export",
+      "personalDataExportTitle": "Export my data",
+      "personalDataExportWorking": "Preparing your export…",
       "preferredName": "Preferred name",
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.",
       "preferredNamePlaceholder": "Your name",
@@ -5404,6 +5433,7 @@
     "showCitedPartOnly": "Show cited part only",
     "showFullProvision": "Show full provision",
     "showInText": "Show in the text",
+    "sortNeedsYear": "Choose a year in Filters to sort by this column.",
     "statedWindow": "Dates stated by the publisher: {range}",
     "status": {
       "current": "In force",
@@ -6501,6 +6531,14 @@
           "started": "Started a review of"
         },
         "empty": "No activity in this matter yet.",
+        "fields": {
+          "dueDate": "due date",
+          "parentFolder": "parent folder",
+          "priority": "priority",
+          "property": "property",
+          "schedule": "schedule",
+          "sortOrder": "order"
+        },
         "filterLabel": "Filter activity",
         "filters": {
           "all": "All activity",
@@ -6550,6 +6588,7 @@
           "translation": "translation"
         },
         "title": "Matter activity",
+        "updatedFields": "Updated {fields}",
         "views": {
           "list": "List view",
           "timeline": "Timeline view"

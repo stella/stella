@@ -6,11 +6,22 @@ import {
   TransactionRollbackError,
 } from "drizzle-orm";
 
+import type { Verdict } from "@stll/db-load-gate/health";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { databaseRelations } from "@/api/db/database-relations";
+import type { Transaction } from "@/api/db/root";
 import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createDatabase } from "@/api/db/sql-client";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
+import { createSafeId } from "@/api/lib/branded-types";
+import { resetLocalCaseLawConfigForTesting } from "@/api/lib/case-law/local-case-law-config";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
+import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { QUERY_PERF_WRITING_FUNCTIONS } from "@/api/lib/db/read-budgets";
+import { READ_COMMITTED_BEGIN } from "@/api/lib/db/read-committed-unit";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
@@ -18,6 +29,7 @@ import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   createCaseLawProvisionStateBackfillTask,
 } from "@/api/lib/scheduler/tasks/case-law-provision-state-backfill";
+import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { isRecord } from "@/api/lib/type-guards";
 import type {
@@ -39,6 +51,7 @@ import {
   assertPlannerSettings,
   QUERY_PERF_CONNECTION_SETTINGS,
 } from "./settings";
+import { measureJobStatements } from "./statement-measurement";
 
 export type CapturedStatement = {
   text: string;
@@ -182,7 +195,6 @@ const asQuery = ({ text, params }: CapturedStatement): SQL => {
   return sql.join(chunks, sql.raw(""));
 };
 
-const noopTask = () => undefined;
 class CapturedRunRollbackError extends Error {
   override readonly name = "CapturedRunRollbackError";
 }
@@ -232,6 +244,7 @@ const captureConnection = (
       .replaceAll(/;\s*$/gu, "")
       .trim();
     if (
+      normalized.toUpperCase() === READ_COMMITTED_BEGIN ||
       /^(?:begin|start\s+transaction)(?:\s+(?:work|transaction))?$/iu.test(
         normalized,
       )
@@ -385,6 +398,32 @@ export const measureScheduledStatementsInOrder = async ({
   return statements;
 };
 
+const summarizeScheduledRun = (
+  statements: readonly Omit<MeasuredStatement, "actualRows">[],
+) => {
+  const readMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "read")
+      .map(({ metrics }) => metrics),
+  );
+  const writeMetrics = sumMetrics(
+    statements
+      .filter(({ kind }) => kind === "write")
+      .map(({ metrics }) => metrics),
+  );
+  return {
+    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
+    readMetrics,
+    writeMetrics,
+    writtenRows: statements.reduce(
+      (total, statement) => total + statement.writtenRows,
+      0,
+    ),
+    planViolations: statements.flatMap(({ planViolations }) => planViolations),
+    statements,
+  };
+};
+
 /**
  * Pages one run of a declared job reads. The job's registered task runs once
  * against the fixture through a client that records every statement it
@@ -395,7 +434,7 @@ export const measureScheduledStatementsInOrder = async ({
  *
  * Both passes roll back once complete, so the fixture remains unchanged.
  */
-export const measureScheduledJobRun = async ({
+const measureBackfillJobRun = async ({
   database,
   openClient,
   jobId,
@@ -466,13 +505,11 @@ export const measureScheduledJobRun = async ({
               observeStatus: noopTask,
               sleep: async () => await Promise.resolve(),
             })
-          : (createSchedulerTaskRegistry(
-              noopTask,
-              createCaseLawCoverageRefreshTask({
-                compute: computeCaseLawCoverageAnswer,
-              }),
-            ).get(job.task) ??
-            panic(`No registered task ${job.task} for ${jobId}`));
+          : createLegislationExpressionIdBackfill({
+              readVerdict: async () =>
+                await Promise.resolve(QUERY_PERF_ADMISSION),
+              observeStatus: noopTask,
+            });
       const outcome = await task(
         asTestRaw<SchedulerTaskContext>({
           db,
@@ -492,6 +529,7 @@ export const measureScheduledJobRun = async ({
       if (outcome !== undefined && !Result.isOk(outcome)) {
         return panic(
           `${jobId} failed on the fixture: ${outcome.error.message}`,
+          outcome.error,
         );
       }
       capturedConnection.assertBalanced();
@@ -511,25 +549,130 @@ export const measureScheduledJobRun = async ({
     readBudgetId,
     captured,
   });
-  const readMetrics = sumMetrics(
-    statements
-      .filter(({ kind }) => kind === "read")
-      .map(({ metrics }) => metrics),
-  );
-  const writeMetrics = sumMetrics(
-    statements
-      .filter(({ kind }) => kind === "write")
-      .map(({ metrics }) => metrics),
-  );
-  return {
-    metrics: sumMetrics(statements.map(({ metrics }) => metrics)),
-    readMetrics,
-    writeMetrics,
-    writtenRows: statements.reduce(
-      (total, statement) => total + statement.writtenRows,
-      0,
-    ),
-    planViolations: statements.flatMap(({ planViolations }) => planViolations),
-    statements,
-  };
+  return summarizeScheduledRun(statements);
+};
+
+/** Lend fixture transactions through the aggregate savepoint owner. */
+export const scheduledMeasurementDatabase = (
+  tx: Pick<Transaction, "execute" | "transaction">,
+) => ({
+  transaction: async <T>(run: (child: Transaction) => Promise<T>) =>
+    await withAggregateSavepoint(tx, run),
+});
+
+const noopTask = () => undefined;
+
+/**
+ * The load governor's admission for a measured run. The governor holds work
+ * in its configured busy windows, and held work issues only its own
+ * bookkeeping, so the measurement admits explicitly and the time of day
+ * cannot decide whether the measured work happens.
+ */
+export const QUERY_PERF_ADMISSION = {
+  kind: "normal",
+  signals: [],
+} as const satisfies Verdict;
+
+/** Measure the registered task's actual statements without replaying its results. */
+export const measureScheduledJobRun = async ({
+  database,
+  openClient,
+  jobId,
+  task: taskName,
+  admission = QUERY_PERF_ADMISSION,
+  now = new Date("2026-01-10T12:00:00Z"),
+}: {
+  database: GatedTestDb;
+  openClient?: GatedTestClientScope["openClient"];
+  jobId: string;
+  task: string;
+  /** The governor's verdict; a test passes a hold to prove the measurement notices one. */
+  admission?: Verdict;
+  now?: Date;
+}) => {
+  const job =
+    DECLARED_SCHEDULER_JOBS.find(({ id }) => id === jobId) ??
+    panic(`No declared scheduler job ${jobId}`);
+  if (job.task !== taskName) {
+    return panic(`${jobId} runs ${job.task}, not ${taskName}`);
+  }
+  const readBudgetId =
+    typeof job.reads === "object"
+      ? job.reads.budget
+      : panic(`${jobId} has no measured read budget`);
+  if (
+    jobId === SCHEDULER_BACKFILL_IDS.provisionState ||
+    jobId === SCHEDULER_BACKFILL_IDS.expressionIds
+  ) {
+    if (openClient === undefined) {
+      return panic(`${jobId} measurement requires its dedicated connection`);
+    }
+    return await measureBackfillJobRun({
+      database,
+      openClient,
+      jobId,
+      task: taskName,
+    });
+  }
+  const task =
+    createSchedulerTaskRegistry(
+      noopTask,
+      createCaseLawCoverageRefreshTask({
+        compute: computeCaseLawCoverageAnswer,
+        createRuntime: (options) =>
+          createScriptBackfillRuntime({
+            ...options,
+            readVerdict: async () => await Promise.resolve(admission),
+          }),
+      }),
+    ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
+  // The search configuration is cached for 60 s, and the scheduled jobs run
+  // minutes apart, so a production run reads it cold. Every measured run does
+  // too, instead of depending on what an earlier run left in the cache.
+  resetPublicCaseLawConfigForTesting();
+  resetLocalCaseLawConfigForTesting();
+  const measured = await measureJobStatements({
+    database,
+    run: async (db) =>
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          db,
+          job: { id: job.id, task: job.task },
+          payload: "payload" in job ? job.payload : null,
+          dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
+          runId: createSafeId<"schedulerJobRun">(),
+          signal: new AbortController().signal,
+          scheduleContinuation: noopTask,
+          logger: {
+            debug: noopTask,
+            error: noopTask,
+            info: noopTask,
+            warn: noopTask,
+          },
+        }),
+      ),
+  });
+  const outcome = measured.value;
+  if (outcome !== undefined && !Result.isOk(outcome)) {
+    return panic(`${jobId} failed on the fixture: ${outcome.error.message}`);
+  }
+  if (measured.statements.length === 0) {
+    return panic(`${jobId} issued no statement to measure`);
+  }
+  const statements = measured.statements.map(({ query, plan }) => {
+    const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
+    return {
+      ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
+      metrics: metricsFromPlan(plan),
+      planViolations: analyzePlan({
+        document: plan,
+        owner: jobId,
+        ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+        statement,
+        profileId: "corpus",
+      }),
+      statement,
+    };
+  });
+  return summarizeScheduledRun(statements);
 };

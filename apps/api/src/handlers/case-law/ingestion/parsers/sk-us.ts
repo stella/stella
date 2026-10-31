@@ -1,3 +1,5 @@
+// parser-output-unchanged: The retention check moved to the pipeline, which runs it against the stored XHTML; the parse itself is unchanged.
+// parser-output-unchanged: Validation reparses the original XHTML before hidden-run normalization; stored parser output remains unchanged.
 /**
  * Slovak Constitutional Court document parser (the markup rendering).
  *
@@ -29,7 +31,10 @@ import { type AnyNode, isTag, isText } from "domhandler";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { COURT_PARAGRAPH_NUMBERING_LIMITS } from "@stll/legal-ast/court-paragraph-numbers";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import {
+  hasInlineChildren,
+  withUniqueBlockIdentities,
+} from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
@@ -66,7 +71,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { collapseLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
-import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 /**
  * What a dropped anonymized run reads as.
@@ -1293,20 +1297,12 @@ export const parseSkUsDocumentXhtml = ({
   for (const line of lines) {
     setInlines(line, readTypography(line.inlines, words));
   }
-  const blocks = courtParagraphNumbers(classifyLines(lines), {
-    parser: "sk-us",
-    caseNumber,
-    url: documentUrl,
-  });
-
-  validateAndLog(
-    {
+  const blocks = withUniqueBlockIdentities(
+    courtParagraphNumbers(classifyLines(lines), {
       parser: "sk-us",
       caseNumber,
       url: documentUrl,
-    },
-    xhtml,
-    blocks,
+    }),
   );
 
   const fulltext = blocks
