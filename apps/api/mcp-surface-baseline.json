@@ -90,8 +90,8 @@
       "default": {"title": 22, "description": 474, "inputSchema": 664, "outputSchema": 429, "annotations": 123, "payloadUtf8Bytes": 1816}
     },
     "list_audit_log": {
-      "advanced": {"title": 14, "description": 389, "inputSchema": 1256, "outputSchema": 660, "annotations": 92, "payloadUtf8Bytes": 2510},
-      "default": {"title": 14, "description": 389, "inputSchema": 1256, "outputSchema": 660, "annotations": 92, "payloadUtf8Bytes": 2510}
+      "advanced": {"title": 14, "description": 430, "inputSchema": 1256, "outputSchema": 752, "annotations": 92, "payloadUtf8Bytes": 2645},
+      "default": {"title": 14, "description": 430, "inputSchema": 1256, "outputSchema": 752, "annotations": 92, "payloadUtf8Bytes": 2645}
     },
     "list_capabilities": {
       "advanced": {"title": 17, "description": 602, "inputSchema": 851, "outputSchema": 875, "annotations": 95, "payloadUtf8Bytes": 2544}
