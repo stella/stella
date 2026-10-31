@@ -1090,10 +1090,11 @@ describe("online migrations", () => {
         }),
       ).toEqual({ type: "migrator_active" });
 
-      for (const [options, state] of [
+      const unready: [HarnessOptions, string][] = [
         [{ missingIndexes: [blocking.name] }, "present"],
         [{ indexStates: { [blocking.name]: [false] } }, "valid"],
-      ] as const) {
+      ];
+      for (const [options, state] of unready) {
         const harness = createHarness({ ...options, onlineLockHeld: true });
         expect(
           await rejectionOf(

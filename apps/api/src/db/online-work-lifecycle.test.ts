@@ -69,7 +69,9 @@ test("migrate-ready work is deploy-blocking or finalized, never pending", () => 
 // Startup reads deploy-blocking work from pg_index when another session holds
 // the online lock, which only an index allows.
 test("deploy-blocking work is an online index", () => {
-  const indexes = new Set(ONLINE_MIGRATION_INDEXES.map(({ name }) => name));
+  const indexes = new Set<string>(
+    ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+  );
   expect(
     Object.entries(ONLINE_WORK_LIFECYCLE).flatMap(([name, { state }]) =>
       state === "deploy_blocking" && !indexes.has(name) ? [name] : [],
