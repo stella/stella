@@ -12,7 +12,6 @@ import {
   caseLawDecisions,
 } from "@/api/db/schema";
 import { proceduralKeysFromMetadata } from "@/api/handlers/case-law/citation-kind";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,
   decisionIdentifiersFromMetadata,
@@ -70,6 +69,7 @@ import {
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   markupResidueIn,
   markupResidueWarnings,
@@ -633,6 +633,7 @@ export const planDecisionWrite = async ({
   }
   const extraction = extractDecisionCitations({
     country: result.country,
+    language: result.language,
     sections: sections.map(({ index, text }) => ({ index, text })),
     documentAst: hasUsableAst(result.documentAst)
       ? result.documentAst

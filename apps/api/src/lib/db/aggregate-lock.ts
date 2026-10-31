@@ -33,7 +33,7 @@ import type {
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
 import type { Transaction } from "@/api/db/root";
-import type { InvoiceStatus, SearchProjectionKind } from "@/api/db/schema";
+import type { InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
@@ -64,70 +64,12 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { isRecord } from "@/api/lib/type-guards";
 
+import aggregateChains from "./aggregate-chain-entries/registry.gen";
+import type { AggregateIdentities } from "./aggregate-lock-entries/identities.gen";
+import aggregateLocks from "./aggregate-lock-entries/registry.gen";
+
 /** Registered blocking chains share one physical transaction order. */
-export const AGGREGATE_LOCKS = {
-  requestReceipt: { rank: -10, kind: "row" },
-  account: { rank: -20, kind: "row" },
-  accountExport: { rank: -10, kind: "row" },
-  accountDeletionRequest: { rank: -10, kind: "row" },
-  organizationObjectIntent: { rank: -1, kind: "advisory" },
-  organization: { rank: 0, kind: "row" },
-  professionalUseAcceptance: { rank: 5, kind: "advisory" },
-  orgFeatureAdmission: { rank: 10, kind: "advisory" },
-  schedulerClaim: { rank: 20, kind: "row" },
-  definitionCap: { rank: 30, kind: "advisory" },
-  definition: { rank: 40, kind: "row" },
-  // Global fence for linking republished rulings and discovering their aliases.
-  // Take it before any case-law decision row lock: link pages use exclusive
-  // mode, while erasures use shared mode so independent erasures can proceed.
-  caseLawRepublication: { rank: 45, kind: "advisory" },
-  // One public sitemap month, held by the refresh from its count to its write
-  // so overlapping refreshes never interleave on a month.
-  caseLawSitemapMonth: { rank: 46, kind: "advisory" },
-  // Public-corpus work fence is taken before its legacy projection/expression locks.
-  legislationAmendmentWork: { rank: 50, kind: "advisory" },
-  scoutCensus: { rank: 60, kind: "row" },
-  desktopMembership: { rank: 70, kind: "row" },
-  desktopCredential: { rank: 80, kind: "row" },
-  desktopBatch: { rank: 90, kind: "advisory" },
-  chatOwnerStoredContentEgress: { rank: 95, kind: "advisory" },
-  workspace: { rank: 100, kind: "row" },
-  memberCleanup: { rank: 110, kind: "row" },
-  chatStoredContentEgress: { rank: 115, kind: "advisory" },
-  // A chat interaction's fences: the thread, then the turn awaiting input,
-  // then the receipt it produced.
-  chatThread: { rank: 120, kind: "row" },
-  readerAnswer: { rank: 120, kind: "row" },
-  readerAnnotation: { rank: 120, kind: "advisory" },
-  readerAnswerMessage: { rank: 130, kind: "row" },
-  chatTurn: { rank: 130, kind: "row" },
-  chatSecret: { rank: 140, kind: "row" },
-  chatToolGrants: { rank: 150, kind: "advisory" },
-  outboundAction: { rank: 160, kind: "row" },
-  run: { rank: 200, kind: "row" },
-  currentStep: { rank: 300, kind: "row" },
-  obligation: { rank: 400, kind: "row" },
-  folioCollabRoom: { rank: 450, kind: "row" },
-  entity: { rank: 500, kind: "row" },
-  entityVersion: { rank: 510, kind: "row" },
-  field: { rank: 520, kind: "row" },
-  memory: { rank: 530, kind: "row" },
-  searchProjectionRepair: { rank: 540, kind: "row" },
-  signal: { rank: 600, kind: "row" },
-  automatedFlowRunCap: { rank: 700, kind: "advisory" },
-  processingClaim: { rank: 600, kind: "row" },
-  contactCapacity: { rank: 700, kind: "advisory" },
-  fileComparisonCapacity: { rank: 700, kind: "advisory" },
-  billingCodeCapacity: { rank: 700, kind: "advisory" },
-  expenseCapacity: { rank: 700, kind: "advisory" },
-  rateTableWorkspace: { rank: 700, kind: "advisory" },
-  mcpOAuthState: { rank: 700, kind: "advisory" },
-  personalCatalog: { rank: 700, kind: "advisory" },
-  sampleCase: { rank: 700, kind: "advisory" },
-  searchHistory: { rank: 710, kind: "row" },
-  chatMessage: { rank: 810, kind: "row" },
-  signingSession: { rank: 900, kind: "row" },
-} as const;
+export const AGGREGATE_LOCKS = { ...aggregateLocks } as const;
 
 export type AggregateName = keyof typeof AGGREGATE_LOCKS;
 
@@ -149,6 +91,16 @@ export const queryOrganizationFencedRepairBatch = async ({
 }: OrganizationFencedRepairBatchOptions) =>
   await connection.query(`${query} FOR KEY SHARE OF tenant`, params);
 
+/** Native online repairs serialize a maintenance checkpoint inside their batch transaction. */
+export const lockBackfillCheckpoint = async (
+  connection: Pick<OnlineMigrationConnection, "query">,
+  name: string,
+) =>
+  await connection.query(
+    "SELECT cursor AS last_country FROM public.database_backfill_states WHERE name = $1 FOR UPDATE",
+    [name],
+  );
+
 type InvoiceRepairBatchOptions = {
   connection: Pick<OnlineMigrationConnection, "query">;
   predicate: string;
@@ -167,102 +119,7 @@ export const lockInvoiceRepairBatch = async ({
   );
 
 /** Derive rank proofs from the same registry used for acquisitions. */
-export const AGGREGATE_CHAINS = {
-  requestReceipt: ["requestReceipt", "organization", "workspace", "entity"],
-  existing: [
-    "organization",
-    "workspace",
-    "run",
-    "currentStep",
-    "obligation",
-    "entity",
-  ],
-  automated: [
-    "orgFeatureAdmission",
-    "schedulerClaim",
-    "definitionCap",
-    "definition",
-  ],
-  flowEffect: [
-    "orgFeatureAdmission",
-    "workspace",
-    "run",
-    "currentStep",
-    "obligation",
-    "entity",
-  ],
-  deadlineClaim: ["orgFeatureAdmission", "processingClaim"],
-  deadlineAcceptance: ["orgFeatureAdmission", "entity", "processingClaim"],
-  deadlineEmission: [
-    "orgFeatureAdmission",
-    "scoutCensus",
-    "entity",
-    "processingClaim",
-  ],
-  scoutRun: ["orgFeatureAdmission", "scoutCensus"],
-  legislationAmendments: ["legislationAmendmentWork"],
-  caseLawRepublication: ["caseLawRepublication"],
-  caseLawSitemapMonth: ["caseLawSitemapMonth"],
-  chatSecret: ["chatThread", "chatTurn", "chatSecret"],
-  chatToolGrants: ["chatThread", "chatToolGrants"],
-  outboundAction: ["outboundAction"],
-  chatStoredContent: [
-    "chatOwnerStoredContentEgress",
-    "chatStoredContentEgress",
-    "chatThread",
-    "chatTurn",
-  ],
-  memberPrefix: [
-    "workspace",
-    "memberCleanup",
-    "run",
-    "currentStep",
-    "obligation",
-    "entity",
-  ],
-  accountExport: ["account", "accountExport"],
-  accountDeletionRequest: ["account", "accountDeletionRequest"],
-  organizationObjectIntentLifecycle: [
-    "organizationObjectIntent",
-    "organization",
-  ],
-  organizationObjectIntentWriter: ["organizationObjectIntent", "workspace"],
-  professionalUseAcceptance: ["professionalUseAcceptance"],
-  desktopRenewal: ["desktopMembership", "desktopCredential"],
-  desktopBatch: ["desktopBatch", "workspace"],
-  documentSource: [
-    "workspace",
-    "entity",
-    "entityVersion",
-    "field",
-    "processingClaim",
-  ],
-  folioPublication: [
-    "workspace",
-    "folioCollabRoom",
-    "entity",
-    "entityVersion",
-    "field",
-    "processingClaim",
-  ],
-  signal: ["signal"],
-  automatedFlowRunCap: ["automatedFlowRunCap"],
-  contactCapacity: ["contactCapacity"],
-  fileComparisonCapacity: ["fileComparisonCapacity"],
-  billingCodeCapacity: ["billingCodeCapacity"],
-  expenseCapacity: ["expenseCapacity"],
-  rateTableWorkspace: ["rateTableWorkspace"],
-  mcpOAuthState: ["mcpOAuthState"],
-  personalCatalog: ["personalCatalog"],
-  sampleCase: ["workspace", "sampleCase"],
-  searchHistory: ["desktopMembership", "searchHistory"],
-  memory: ["memory"],
-  searchProjectionRepair: ["searchProjectionRepair"],
-  chatRevision: ["chatThread", "chatMessage"],
-  readerAnswer: ["readerAnswer", "readerAnswerMessage"],
-  readerAnnotation: ["readerAnnotation"],
-  signingSession: ["workspace", "signingSession"],
-} as const satisfies Record<string, readonly AggregateName[]>;
+export const AGGREGATE_CHAINS = { ...aggregateChains } as const;
 
 export const ROW_LOCK_MODES = [
   "key share",
@@ -296,165 +153,6 @@ const modeCovers = (
     return false;
   }
   return MODE_COVERS[held].some((mode) => mode === requested);
-};
-
-type AggregateIdentities = {
-  requestReceipt: {
-    id: SafeId<"requestIdempotencyReceipt">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  legislationAmendmentWork: {
-    sourceId: SafeId<"legislationSource">;
-    eli: string;
-    language: string;
-  };
-  account: SafeId<"user">;
-  accountExport: { id: string; userId: SafeId<"user"> };
-  accountDeletionRequest: SafeId<"accountDeletionRequest">;
-  sampleCase: { workspaceId: SafeId<"workspace"> };
-  organizationObjectIntent: SafeId<"organization">;
-  organization: SafeId<"organization">;
-  professionalUseAcceptance: { userId: SafeId<"user"> };
-  desktopMembership: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  desktopCredential: { id: string; userId: SafeId<"user"> };
-  desktopBatch: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-    idempotencyKey: string;
-  };
-  orgFeatureAdmission: {
-    organizationId: SafeId<"organization">;
-    featureId: "flows" | "signals";
-  };
-  schedulerClaim: { id: string };
-  definitionCap: { definitionId: SafeId<"flowDefinition"> };
-  definition: {
-    id: SafeId<"flowDefinition">;
-    organizationId: SafeId<"organization">;
-  };
-  caseLawRepublication: "global";
-  caseLawSitemapMonth: { country: string; year: string; month: string };
-  scoutCensus: {
-    type: "run";
-    id: SafeId<"scoutRun">;
-    organizationId: SafeId<"organization">;
-  };
-  workspace: {
-    id: SafeId<"workspace">;
-    organizationId: SafeId<"organization">;
-  };
-  memberCleanup:
-    | {
-        type: "organization-member";
-        id: string;
-        organizationId: SafeId<"organization">;
-      }
-    | {
-        type: "workspace-member";
-        id: string;
-        workspaceId: SafeId<"workspace">;
-      };
-  chatOwnerStoredContentEgress: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  chatStoredContentEgress: SafeId<"chatThread">;
-  chatThread: {
-    id: SafeId<"chatThread">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  readerAnswer: {
-    id: SafeId<"legalReaderAnswer">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  readerAnnotation: {
-    id: SafeId<"legalReaderAnnotation">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  readerAnswerMessage: {
-    id: SafeId<"legalReaderAnswerMessage">;
-    answerId: SafeId<"legalReaderAnswer">;
-  };
-  chatTurn: {
-    threadId: SafeId<"chatThread">;
-    toolCallId: string;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  chatSecret: {
-    id: string;
-    threadId: SafeId<"chatThread">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  run: { id: SafeId<"flowRun">; workspaceId: SafeId<"workspace"> };
-  currentStep: { id: SafeId<"flowRunStep">; workspaceId: SafeId<"workspace"> };
-  obligation: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
-  folioCollabRoom: {
-    id: SafeId<"folioCollabRoom">;
-    workspaceId: SafeId<"workspace">;
-  };
-  entity: { id: SafeId<"entity">; workspaceId: SafeId<"workspace"> };
-  entityVersion: {
-    id: SafeId<"entityVersion">;
-    workspaceId: SafeId<"workspace">;
-  };
-  field: { id: SafeId<"field">; workspaceId: SafeId<"workspace"> };
-  memory: {
-    id: SafeId<"aiMemory">;
-    organizationId: SafeId<"organization">;
-  };
-  searchProjectionRepair: {
-    kind: SearchProjectionKind;
-    revision: string;
-    sourceId: string;
-  };
-  signal: { id: SafeId<"signal">; organizationId: SafeId<"organization"> };
-  automatedFlowRunCap: SafeId<"flowDefinition">;
-  processingClaim: {
-    id: SafeId<"documentProcessingRun">;
-    workspaceId: SafeId<"workspace">;
-  };
-  contactCapacity: { organizationId: SafeId<"organization"> };
-  chatToolGrants: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  outboundAction: {
-    id: SafeId<"outboundAction">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  fileComparisonCapacity: { organizationId: SafeId<"organization"> };
-  billingCodeCapacity: { workspaceId: SafeId<"workspace"> };
-  expenseCapacity: { workspaceId: SafeId<"workspace"> };
-  rateTableWorkspace: { workspaceId: SafeId<"workspace"> };
-  mcpOAuthState: {
-    connectorId: SafeId<"mcpConnector">;
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  personalCatalog: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  searchHistory: {
-    organizationId: SafeId<"organization">;
-    userId: SafeId<"user">;
-  };
-  chatMessage: { id: SafeId<"chatMessage">; threadId: SafeId<"chatThread"> };
-  signingSession: {
-    id: SafeId<"pdfSigningSession">;
-    workspaceId: SafeId<"workspace">;
-    organizationId: SafeId<"organization">;
-  };
 };
 
 // Advisory first-key namespaces are a deployed contract: old and new workers
