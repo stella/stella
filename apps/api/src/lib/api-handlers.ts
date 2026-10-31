@@ -234,7 +234,8 @@ type McpCapabilityReason =
   | "correspondence"
   | "personal_history"
   | "assistant_memory"
-  | "notification_inbox";
+  | "notification_inbox"
+  | "organization_admin";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

@@ -1960,6 +1960,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/require-search-scope.ts",
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
+    "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
     "./.oxlint-plugins/no-raw-parser-html.ts",
@@ -4648,6 +4649,15 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-bare-case-law-source-ingestion-lease.fixture.ts",
+      ],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
+          "error",
+      },
+    },
+    {
+      files: [
         "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
       ],
@@ -5535,6 +5545,14 @@ const config = defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
+          "error",
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts"],
+      rules: {
+        "no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease":
           "error",
       },
     },
