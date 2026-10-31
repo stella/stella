@@ -83,7 +83,7 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { buildEditedUserMessage } from "@/components/chat/user-message-edit.logic";
-import type { UserMessageEditDraft } from "@/components/chat/user-message-edit.logic";
+import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { queryView } from "@/lib/query-view.logic";
 import "@/components/chat/create-document-draft-inspector";
@@ -1135,12 +1135,12 @@ export const useChatSession = ({
    * message is sent under the same id.
    */
   const editUserMessage = useCallback(
-    async (messageId: string, draft: UserMessageEditDraft) => {
+    async (messageId: string, edit: UserMessageEdit) => {
       await replayFromTruncation(
         { type: "user-message", messageId },
         async (options) => {
           await sendChatMessage(
-            buildEditedUserMessage({ draft, messageId }),
+            buildEditedUserMessage({ edit, messageId }),
             options,
           );
         },

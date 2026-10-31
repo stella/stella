@@ -1385,7 +1385,12 @@ export const consumeReaderAnnotationWriteToolCalls = ({
   return hasWrite;
 };
 
-export const getUserMessageHtmlHistory = (
+/**
+ * The user's sent messages, newest first, as their text parts hold them: the
+ * composer's markup for one just sent, stored Markdown once the server has
+ * it. `userMessageComposerContent` reads either back into the composer.
+ */
+export const getUserMessageHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {
   const history: string[] = [];

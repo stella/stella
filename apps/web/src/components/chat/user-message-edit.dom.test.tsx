@@ -78,30 +78,29 @@ const renderMessage = ({
     </IntlProvider>,
   );
 
+const REMOVE_NDA = en.chat.editMessageRemoveAttachment.replace(
+  "{name}",
+  "nda.pdf",
+);
+
 const openEditor = (view: ReturnType<typeof renderMessage>) => {
   fireEvent.click(view.getByRole("button", { name: en.chat.editMessage }));
-  const field = view.getByRole("textbox", { name: en.chat.editMessageInput });
-  if (!(field instanceof HTMLTextAreaElement)) {
-    throw new TypeError("The edit field is a text area");
-  }
-  return field;
+  return view.getByRole("textbox", { name: en.chat.editMessageInput });
 };
 
 describe("editing a sent message", () => {
-  test("opens on the message's text and attachments, stopping a running turn first", () => {
+  test("opens on the message's content and attachments, stopping a running turn first", () => {
     const { actions, started } = createActions();
     const view = renderMessage({ actions });
 
     const field = openEditor(view);
 
     expect(started).toHaveLength(1);
-    expect(field.value).toBe("Review the draft NDA");
+    expect(field.textContent).toBe("Review the draft NDA");
+    // Bold text opens bold, as the composer holds it.
+    expect(field.querySelector("strong")?.textContent).toBe("draft");
     expect(view.queryByText(SENT_BODY)).toBeNull();
-    expect(
-      view.getByRole("button", {
-        name: en.chat.editMessageRemoveAttachment.replace("{name}", "nda.pdf"),
-      }),
-    ).toBeDefined();
+    expect(view.getByRole("button", { name: REMOVE_NDA })).toBeDefined();
     expect(view.getByText(en.chat.editMessageNotice)).toBeDefined();
   });
 
@@ -109,15 +108,15 @@ describe("editing a sent message", () => {
     const { actions, submitted } = createActions();
     const view = renderMessage({ actions });
 
-    fireEvent.change(openEditor(view), {
-      target: { value: "Something else" },
-    });
+    openEditor(view);
+    fireEvent.click(view.getByRole("button", { name: REMOVE_NDA }));
     fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
 
     expect(view.getByText(SENT_BODY)).toBeDefined();
     expect(submitted).toEqual([]);
-    // The next edit starts from the message again, not the abandoned draft.
-    expect(openEditor(view).value).toBe("Review the draft NDA");
+    // The next edit starts from the message again, attachment included.
+    openEditor(view);
+    expect(view.getByRole("button", { name: REMOVE_NDA })).toBeDefined();
   });
 
   test("escape cancels the edit", () => {
@@ -130,24 +129,22 @@ describe("editing a sent message", () => {
     expect(submitted).toEqual([]);
   });
 
-  test("send replaces the message with the edited text and the kept attachments", () => {
+  test("send writes the composer's markup and the kept attachments", () => {
     const { actions, submitted } = createActions();
     const view = renderMessage({ actions });
 
-    fireEvent.change(openEditor(view), {
-      target: { value: "Review the signed NDA" },
-    });
-    fireEvent.click(
-      view.getByRole("button", {
-        name: en.chat.editMessageRemoveAttachment.replace("{name}", "nda.pdf"),
-      }),
-    );
+    openEditor(view);
+    fireEvent.click(view.getByRole("button", { name: REMOVE_NDA }));
     fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
 
-    expect(submitted).toHaveLength(1);
-    expect(submitted.at(0)).toEqual([
-      MESSAGE_ID,
-      { attachments: [], chips: [], text: "Review the signed NDA" },
+    expect(submitted).toEqual([
+      [
+        MESSAGE_ID,
+        {
+          attachments: [],
+          html: "<p>Review the <strong>draft</strong> NDA</p>",
+        },
+      ],
     ]);
     // The form closes; the sent copy takes the message's place.
     expect(
@@ -155,117 +152,62 @@ describe("editing a sent message", () => {
     ).toBeNull();
   });
 
-  test("enter sends, shift and enter starts a new line", () => {
+  test("enter sends", () => {
     const { actions, submitted } = createActions();
     const view = renderMessage({ actions });
-    const field = openEditor(view);
 
-    fireEvent.keyDown(field, { key: "Enter", shiftKey: true });
-    expect(submitted).toEqual([]);
+    fireEvent.keyDown(openEditor(view), { key: "Enter" });
 
-    fireEvent.keyDown(field, { key: "Enter" });
-    expect(submitted).toHaveLength(1);
+    expect(submitted.at(0)?.[1]).toEqual({
+      attachments: [ndaDocument],
+      html: "<p>Review the <strong>draft</strong> NDA</p>",
+    });
   });
 
-  test("waits for a running turn to stop, and for something to send", () => {
+  test("a numbered list the user typed comes back with its numbers", () => {
     const { actions, submitted } = createActions();
-    const running = renderMessage({ actions, isGenerating: true });
-    openEditor(running);
-    const send = running.getByRole("button", { name: en.chat.sendPrompt });
+    const view = renderMessage({
+      actions,
+      target: {
+        id: MESSAGE_ID,
+        parts: [{ type: "text", content: "1. Parties  \n2. Term" }],
+        role: "user",
+      },
+    });
+
+    expect(openEditor(view).textContent).toBe("1. Parties2. Term");
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    expect(submitted.at(0)?.[1].html).toBe("<p>1. Parties<br>2. Term</p>");
+  });
+
+  test("a just-sent message opens from the composer markup it holds", () => {
+    const { actions, submitted } = createActions();
+    const view = renderMessage({
+      actions,
+      target: {
+        id: MESSAGE_ID,
+        parts: [{ type: "text", content: "<p>Just <strong>sent</strong></p>" }],
+        role: "user",
+      },
+    });
+
+    openEditor(view);
+    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
+    expect(submitted.at(0)?.[1].html).toBe("<p>Just <strong>sent</strong></p>");
+  });
+
+  test("waits for a running turn to stop", () => {
+    const { actions, submitted } = createActions();
+    const view = renderMessage({ actions, isGenerating: true });
+
+    openEditor(view);
+    const send = view.getByRole("button", { name: en.chat.sendPrompt });
     expect(
       send.hasAttribute("disabled") ||
         send.getAttribute("aria-disabled") === "true",
     ).toBe(true);
     fireEvent.click(send);
     expect(submitted).toEqual([]);
-    cleanup();
-
-    const idle = renderMessage({ actions });
-    fireEvent.change(openEditor(idle), { target: { value: "   " } });
-    fireEvent.click(
-      idle.getByRole("button", {
-        name: en.chat.editMessageRemoveAttachment.replace("{name}", "nda.pdf"),
-      }),
-    );
-    fireEvent.click(idle.getByRole("button", { name: en.chat.sendPrompt }));
-    expect(submitted).toEqual([]);
-  });
-
-  test("a just-sent message keeps its mention chips as tokens", () => {
-    const { actions, submitted } = createActions();
-    const view = renderMessage({
-      actions,
-      target: {
-        id: MESSAGE_ID,
-        parts: [
-          {
-            type: "text",
-            content:
-              '<p>Compare <entity-mention data-id="018f0000-0000-7000-8000-0000000000d1" data-label="NDA.docx" data-category="entity"></entity-mention> today</p>',
-          },
-        ],
-        role: "user",
-      },
-    });
-
-    const field = openEditor(view);
-    expect(field.value).toBe("Compare @NDA.docx today");
-
-    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
-    const [, draft] = submitted.at(0) ?? [];
-    expect(draft?.chips.map(({ token }) => token)).toEqual(["@NDA.docx"]);
-    expect(draft?.chips.at(0)?.html).toContain('data-label="NDA.docx"');
-  });
-
-  test("a stored message opening with an autolink or a literal < opens intact", () => {
-    for (const [stored, editable] of [
-      [
-        "<https://example.com/terms> has the terms",
-        "https://example.com/terms has the terms",
-      ],
-      ["<3 thanks for the draft", "<3 thanks for the draft"],
-    ] as const) {
-      const view = renderMessage({
-        actions: createActions().actions,
-        target: {
-          id: MESSAGE_ID,
-          parts: [{ type: "text", content: stored }],
-          role: "user",
-        },
-      });
-      expect(openEditor(view).value).toBe(editable);
-      cleanup();
-    }
-  });
-
-  test("a just-sent link keeps its destination", () => {
-    const { actions, submitted } = createActions();
-    const view = renderMessage({
-      actions,
-      target: {
-        id: MESSAGE_ID,
-        parts: [
-          {
-            type: "text",
-            content:
-              '<p>Read the <a href="https://example.com/terms">terms</a> first</p>',
-          },
-        ],
-        role: "user",
-      },
-    });
-
-    expect(openEditor(view).value).toBe(
-      "Read the [terms](https://example.com/terms) first",
-    );
-    fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
-    const [, draft] = submitted.at(0) ?? [];
-    expect(draft?.chips).toEqual([
-      {
-        html: '<a href="https://example.com/terms">terms</a>',
-        token: "[terms](https://example.com/terms)",
-      },
-    ]);
   });
 
   test("offers no edit without actions or on another role", () => {

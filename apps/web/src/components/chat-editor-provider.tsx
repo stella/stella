@@ -10,10 +10,6 @@ import {
 import type React from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
-import Bold from "@tiptap/extension-bold";
-import HardBreak from "@tiptap/extension-hard-break";
-import Paragraph from "@tiptap/extension-paragraph";
-import Text from "@tiptap/extension-text";
 import { Placeholder, UndoRedo } from "@tiptap/extensions";
 import { closeHistory } from "@tiptap/pm/history";
 import type {
@@ -39,6 +35,10 @@ import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
 import { stellaToast } from "@stll/ui/toast";
 
 import {
+  chatComposerHtml,
+  createChatComposerSchemaExtensions,
+} from "@/components/chat-composer-schema";
+import {
   decisionPassageContent,
   readDecisionPassage,
 } from "@/components/chat-decision-passage";
@@ -47,20 +47,21 @@ import {
   CHAT_DRAFT_ECHO_META,
   updateCarriesDraftEcho,
 } from "@/components/chat-editor-echo";
-import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
+import {
+  createChatComposerDocument,
+  userMessageComposerContent,
+} from "@/components/chat-editor-markdown.logic";
 import {
   insertCredentialPasteRequest,
   readChatPaste,
 } from "@/components/chat-editor-paste.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
-import { ChatMention } from "@/components/chat-mention-extension";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import { insertChatMention } from "@/components/chat-mention-helpers";
 import {
   ChatPastedTextAttachments,
   insertPastedTextChip,
   PASTED_TEXT_ATTACHMENTS_ATTR,
-  PastedText,
   pastedTextChipContent,
   readPastedTextAttachments,
 } from "@/components/chat-pasted-text-extension";
@@ -75,7 +76,6 @@ import {
   mountEditor,
 } from "@/components/mounted-editors.logic";
 import type { MountedEditors } from "@/components/mounted-editors.logic";
-import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useRequiredRouteProvider } from "@/components/route-provider-scope/route-provider-scope";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -365,9 +365,6 @@ const isSuggestionPluginActive = (state: EditorState): boolean =>
     const pluginState: unknown = plugin.getState(state);
     return isSuggestionPluginState(pluginState) && pluginState.active;
   });
-
-const getEditorHtml = (editor: Editor) =>
-  editor.isEmpty ? "" : editor.getHTML().trim();
 
 const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
   editor !== null && editor !== undefined && !editor.isDestroyed;
@@ -666,14 +663,14 @@ export const useChatEditor = ({
   followupAnalytics,
   onDraftStart,
   placeholder,
-  sentMessageHistoryHtml,
+  sentMessageHistory,
   threadRef,
   suggestedFollowupPrompt,
 }: {
   followupAnalytics?: { surface: FollowupSurface } | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
-  sentMessageHistoryHtml?: readonly string[] | undefined;
+  sentMessageHistory?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
@@ -729,7 +726,7 @@ export const useChatEditor = ({
   const markDraftStartedRef = useRef<(() => void) | null>(null);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
   sentMessageHistoryHtmlRef.current =
-    sentMessageHistoryHtml ?? EMPTY_SENT_MESSAGE_HISTORY;
+    sentMessageHistory ?? EMPTY_SENT_MESSAGE_HISTORY;
   const threadKey = getChatThreadKey(threadRef);
   const { getPluginRegistrations, registerActiveEditor } =
     useChatEditorManager();
@@ -813,7 +810,7 @@ export const useChatEditor = ({
       editorAuthoredDocsRef.current = new WeakSet();
       committedThreadKeyRef.current = threadKey;
     }
-  }, [sentMessageHistoryHtml, threadKey]);
+  }, [sentMessageHistory, threadKey]);
 
   // Flush-time persist of the editor's live doc into the draft store. The
   // debounce is load-bearing, not cosmetic: the draft store is a mirror of
@@ -972,7 +969,7 @@ export const useChatEditor = ({
         return false;
       }
 
-      const currentHtml = getEditorHtml(targetEditor);
+      const currentHtml = chatComposerHtml(targetEditor);
       if (currentIndex === null && currentHtml !== "") {
         return false;
       }
@@ -993,18 +990,23 @@ export const useChatEditor = ({
       } else if (currentIndex !== null && currentIndex > 0) {
         nextIndex = currentIndex - 1;
       }
-      const nextHtml = nextIndex === null ? "" : (history.at(nextIndex) ?? "");
+      const nextMessage =
+        nextIndex === null ? "" : (history.at(nextIndex) ?? "");
 
       event.preventDefault();
       isNavigatingHistoryRef.current = true;
       try {
-        targetEditor.commands.setContent(nextHtml);
+        // A sent message is stored Markdown once the server has it; read it
+        // the way an edit does, so a typed `1.` stays its text.
+        targetEditor.commands.setContent(
+          nextMessage === "" ? "" : userMessageComposerContent(nextMessage),
+        );
         targetEditor.commands.focus("end");
       } finally {
         isNavigatingHistoryRef.current = false;
       }
       messageHistoryIndexRef.current = nextIndex;
-      if (nextHtml !== "") {
+      if (nextMessage !== "") {
         markDraftStartedRef.current?.();
       }
       return true;
@@ -1025,33 +1027,14 @@ export const useChatEditor = ({
   // excludes them from the comparison and always calls the latest one.
   // oxlint-disable-next-line react/refs -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
   const [extensions] = useState(() => [
-    createPromptEditorDocument(),
-    Paragraph,
-    Text,
-    Bold,
+    // The composer's content; a sent message reopened for an edit uses the
+    // same schema (`createChatComposerSchemaExtensions`).
+    ...createChatComposerSchemaExtensions(),
     ChatComposerLinks,
-    // Shift+Enter inserts a hard break (newline) instead of
-    // splitting the paragraph; matches expected chat-input
-    // behaviour everywhere — Slack, Discord, ChatGPT, etc.
-    // Chained with `scrollIntoView()` so adding a new line at
-    // the bottom of an overflowed input keeps the cursor in
-    // view (ProseMirror's auto-scroll only fires on selection
-    // changes that already include the flag — `setHardBreak`
-    // alone doesn't).
-    HardBreak.extend({
-      addKeyboardShortcuts() {
-        return {
-          "Shift-Enter": () =>
-            this.editor.chain().setHardBreak().scrollIntoView().run(),
-        };
-      },
-    }),
     Placeholder.configure({
       placeholder: () => placeholderRef.current,
     }),
     UndoRedo,
-    ChatMention.configure({ deleteTriggerWithBackspace: true }),
-    PastedText,
     ChatPastedTextAttachments,
     // Decorates nothing until a chat surface's anonymization layer
     // stores pairs via `setChatAnonDecorationPairs`. Installed here
@@ -1554,7 +1537,7 @@ export const useChatEditor = ({
       if (!isUsableEditor(editor)) {
         return;
       }
-      const html = editor.isEmpty ? "" : editor.getHTML().trim();
+      const html = chatComposerHtml(editor);
       const doc = editor.getJSON();
       const files = attachmentsRef.current;
 

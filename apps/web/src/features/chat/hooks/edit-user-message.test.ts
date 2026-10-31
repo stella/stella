@@ -4,6 +4,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_TURN_ID_HEADER, CHAT_TURN_INTENT } from "@stll/api-contract";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
+import { storedUserMessageDocument } from "@/components/chat-editor-markdown.logic";
 import type {
   ChatPart,
   PersistedChatMessage,
@@ -221,14 +222,16 @@ describe("the edit request", () => {
         return `attachment-${String(nextId)}`;
       },
     );
-    expect(draft.text).toBe("Review the draft NDA");
+    expect(draft.content).toEqual(
+      storedUserMessageDocument("Review the **draft** NDA"),
+    );
     const edited = {
-      ...draft,
-      // The user removes the pasted text and keeps the document.
-      attachments: draft.attachments.filter(
-        ({ part }) => part.type === "document",
-      ),
-      text: "Review the signed NDA",
+      // The user removes the pasted text and keeps the document; the editor
+      // sends the composer's markup for the edited text.
+      attachments: draft.attachments
+        .filter(({ part }) => part.type === "document")
+        .map(({ part }) => part),
+      html: "<p>Review the <strong>signed</strong> NDA</p>",
     };
 
     // What `replayFromTruncation` does: rewind the page, then send with the
@@ -241,7 +244,7 @@ describe("the edit request", () => {
     runtime.setMessages(plan.messages);
     await sendThreadChatMessage(
       runtime,
-      buildEditedUserMessage({ draft: edited, messageId: SECOND }),
+      buildEditedUserMessage({ edit: edited, messageId: SECOND }),
       snapshotChatRequestOptions({
         docxEditRepresentation: undefined,
         editApplyMode: undefined,
@@ -258,7 +261,10 @@ describe("the edit request", () => {
       message: {
         id: SECOND,
         parts: [
-          { content: "<p>Review the signed NDA</p>", type: "text" },
+          {
+            content: "<p>Review the <strong>signed</strong> NDA</p>",
+            type: "text",
+          },
           attachment,
         ],
         role: "user",

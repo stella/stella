@@ -1,13 +1,21 @@
-import { useRef, useState } from "react";
-import type { KeyboardEvent, ReactNode } from "react";
+import { useState } from "react";
+import type { ReactNode } from "react";
 
+import { Extension } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
+import { UndoRedo } from "@tiptap/extensions";
+import type { EditorProps } from "@tiptap/pm/view";
+import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import { useTranslations } from "use-intl";
 
 import { isChatPastedTextPart } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
-import { Textarea } from "@stll/ui/textarea";
 
+import {
+  chatComposerHtml,
+  createChatComposerSchemaExtensions,
+} from "@/components/chat-composer-schema";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
@@ -15,11 +23,12 @@ import {
   hasUserMessageEditContent,
 } from "@/components/chat/user-message-edit.logic";
 import type {
+  UserMessageEdit,
   UserMessageEditAttachment,
   UserMessageEditDraft,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
 import { createUuid } from "@/lib/uuid";
 
@@ -27,8 +36,8 @@ import { createUuid } from "@/lib/uuid";
 export type UserMessageEditActions = {
   /** The editor opened; a running turn is stopped first. */
   onStart: () => void;
-  /** Replace the message with the draft and run the assistant again. */
-  onSubmit: (messageId: string, draft: UserMessageEditDraft) => Promise<void>;
+  /** Replace the message with the edit and run the assistant again. */
+  onSubmit: (messageId: string, edit: UserMessageEdit) => Promise<void>;
 };
 
 const attachmentTitle = (
@@ -53,53 +62,111 @@ const attachmentMimeType = ({ part }: UserMessageEditAttachment): string =>
     ? part.source.mimeType
     : "application/octet-stream";
 
+/** Enter sends the edit and Escape cancels it; Shift+Enter keeps the
+ *  composer's line break. */
+const UserMessageEditKeys = Extension.create<{
+  onCancel: () => void;
+  onSubmit: (editor: Editor) => void;
+}>({
+  name: "userMessageEditKeys",
+  priority: 1000,
+  addOptions() {
+    return { onCancel: () => undefined, onSubmit: () => undefined };
+  },
+  addKeyboardShortcuts() {
+    return {
+      Enter: () => {
+        this.options.onSubmit(this.editor);
+        return true;
+      },
+      Escape: () => {
+        this.options.onCancel();
+        return true;
+      },
+    };
+  },
+});
+
 type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
   isGenerating: boolean;
   onCancel: () => void;
-  onChange: (draft: UserMessageEditDraft) => void;
-  onSubmit: () => void;
+  onSubmit: (edit: UserMessageEdit) => void;
 };
 
+/**
+ * The sent message, back in an editor with the composer's own content: its
+ * paragraphs, line breaks, bold text and chips load as the composer holds
+ * them, and sending writes the markup a new message would carry.
+ */
 const UserMessageEditForm = ({
   draft,
   isGenerating,
   onCancel,
-  onChange,
   onSubmit,
 }: UserMessageEditFormProps) => {
   const t = useTranslations();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  useMountEffect(() => {
-    const textarea = textareaRef.current;
-    textarea?.focus();
-    textarea?.setSelectionRange(textarea.value.length, textarea.value.length);
+  const [attachments, setAttachments] = useState(draft.attachments);
+  // The editor outlives a render, so its handlers read the latest props.
+  const submitFrom = useLatestCallback((current: Editor) => {
+    const edit: UserMessageEdit = {
+      attachments: attachments.map(({ part }) => part),
+      html: chatComposerHtml(current),
+    };
+    if (hasUserMessageEditContent(edit) && !isGenerating) {
+      onSubmit(edit);
+    }
   });
-  const canSend = hasUserMessageEditContent(draft) && !isGenerating;
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Escape") {
+  const cancel = useLatestCallback(() => {
+    onCancel();
+  });
+  const [extensions] = useState(() => [
+    ...createChatComposerSchemaExtensions(),
+    UndoRedo,
+    UserMessageEditKeys.configure({ onCancel: cancel, onSubmit: submitFrom }),
+  ]);
+  const [editorProps] = useState<EditorProps>(() => ({
+    attributes: {
+      role: "textbox",
+      "aria-multiline": "true",
+      "aria-label": t("chat.editMessageInput"),
+      dir: "auto",
+      class:
+        "field-sizing-content min-h-10 text-sm wrap-anywhere focus-visible:outline-none",
+    },
+    // Like the composer, a paste never brings clipboard markup into the
+    // message: it is inserted as the text it is.
+    handlePaste: (view, event) => {
       event.preventDefault();
-      onCancel();
-      return;
-    }
-    if (
-      event.key === "Enter" &&
-      !event.shiftKey &&
-      !event.nativeEvent.isComposing
-    ) {
-      event.preventDefault();
-      if (canSend) {
-        onSubmit();
+      const text = event.clipboardData?.getData("text/plain") ?? "";
+      if (text.length > 0) {
+        view.dispatch(view.state.tr.insertText(text));
       }
-    }
-  };
+      return true;
+    },
+  }));
+  const editor = useEditor({
+    autofocus: "end",
+    content: draft.content,
+    editorProps,
+    extensions,
+  });
+  const html = useEditorState({
+    editor,
+    selector: ({ editor: current }) =>
+      current === null ? "" : chatComposerHtml(current),
+  });
+  const canSend =
+    hasUserMessageEditContent({
+      attachments: attachments.map(({ part }) => part),
+      html: html ?? "",
+    }) && !isGenerating;
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-2" data-chat-message-edit>
-      {draft.attachments.length > 0 && (
+      {attachments.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {draft.attachments.map((attachment) => {
+          {attachments.map((attachment) => {
             const title = attachmentTitle(attachment, t("chat.attachment"));
             const pasted = isChatPastedTextPart(attachment.part);
             return (
@@ -114,12 +181,11 @@ const UserMessageEditForm = ({
                       <XIcon aria-hidden="true" className={className} />
                     ),
                     onClick: () => {
-                      onChange({
-                        ...draft,
-                        attachments: draft.attachments.filter(
+                      setAttachments(
+                        attachments.filter(
                           (candidate) => candidate.id !== attachment.id,
                         ),
-                      });
+                      );
                     },
                   },
                 ]}
@@ -141,15 +207,9 @@ const UserMessageEditForm = ({
           })}
         </div>
       )}
-      <Textarea
-        aria-label={t("chat.editMessageInput")}
-        onChange={(event) => {
-          onChange({ ...draft, text: event.currentTarget.value });
-        }}
-        onKeyDown={handleKeyDown}
-        ref={textareaRef}
-        value={draft.text}
-      />
+      <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 focus-within:ring-3">
+        <EditorContent editor={editor} />
+      </div>
       <p className="text-muted-foreground text-xs">
         {t("chat.editMessageNotice")}
       </p>
@@ -157,7 +217,15 @@ const UserMessageEditForm = ({
         <Button onClick={onCancel} size="sm" variant="ghost">
           {t("common.cancel")}
         </Button>
-        <Button disabled={!canSend} onClick={onSubmit} size="sm">
+        <Button
+          disabled={!canSend}
+          onClick={() => {
+            if (editor !== null) {
+              submitFrom(editor);
+            }
+          }}
+          size="sm"
+        >
           {t("chat.sendPrompt")}
         </Button>
       </div>
@@ -175,7 +243,7 @@ type UserMessageEditOptions = {
 
 /**
  * The edit action of a sent user message: `editor` is its pencil, or while
- * editing the form that holds the message's text and attachments, shown in
+ * editing the form that holds the message's content and attachments, shown in
  * place of the message body (`editing`). Cancel puts the message back as it
  * was; send replaces it, dropping every later turn.
  */
@@ -201,13 +269,12 @@ export const useUserMessageEdit = ({
           onCancel={() => {
             setDraft(null);
           }}
-          onChange={setDraft}
-          onSubmit={() => {
+          onSubmit={(edit) => {
             // The sent copy takes this message's id and place, so the form
             // closes now rather than staying open over it.
             setDraft(null);
             detached(
-              actions.onSubmit(message.id, draft),
+              actions.onSubmit(message.id, edit),
               "user-message-edit.submit",
             );
           }}

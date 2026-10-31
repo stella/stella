@@ -16,7 +16,7 @@ import {
   getChatToolTitleKey,
   getCurrentApprovalPendingMessageId,
   getToolApprovalGrant,
-  getUserMessageHtmlHistory,
+  getUserMessageHistory,
   hasApprovalResponseAwaitingModelStep,
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalOnceChatToolName,
@@ -1372,10 +1372,10 @@ describe("sanitizeRunningToolCalls", () => {
   });
 });
 
-describe("getUserMessageHtmlHistory", () => {
-  test("returns user message HTML from newest to oldest", () => {
+describe("getUserMessageHistory", () => {
+  test("returns user message texts from newest to oldest", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Older prompt", type: "text" }],
@@ -1397,7 +1397,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("skips user messages without text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "Reusable prompt", type: "text" }],
@@ -1424,7 +1424,7 @@ describe("getUserMessageHtmlHistory", () => {
 
   test("trims history entries and skips whitespace-only text", () => {
     expect(
-      getUserMessageHtmlHistory([
+      getUserMessageHistory([
         {
           id: "message-1",
           parts: [{ content: "   ", type: "text" }],
