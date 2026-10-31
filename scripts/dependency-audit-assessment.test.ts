@@ -278,6 +278,41 @@ test("a parent-qualified resolution governs its hoisted copy", () => {
   ]);
 });
 
+test("every parent resolution governing a shared hoisted copy is planned", () => {
+  const advisory = { ...sdk, package: "example", vulnerableVersions: "<1.4.1" };
+  const [result] = assessAdvisories({
+    advisories: [advisory],
+    accepted: [],
+    lockfile: JSON.stringify({
+      packages: {
+        one: ["one@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        two: ["two@1.0.0", "", { dependencies: { example: "1.4.0" } }],
+        example: ["example@1.4.0", "", {}],
+      },
+    }),
+    manifest: {
+      resolutions: { "one/example": "1.4.0", "two/example": "1.4.0" },
+    },
+    versions: new Map([["example", ["1.4.0", "1.4.1"]]]),
+  });
+
+  expect(result?.resolutionPaths.map(({ resolution }) => resolution)).toEqual([
+    "one/example",
+    "two/example",
+  ]);
+  expect(
+    planDependencyAuditRemediation({
+      assessments: result === undefined ? [] : [result],
+      now: new Date("2026-10-31T12:00:00Z"),
+    }).pins,
+  ).toEqual(
+    new Map([
+      ["one/example", "1.4.1"],
+      ["two/example", "1.4.1"],
+    ]),
+  );
+});
+
 test("safe releases below the affected range never count as patched upgrades", () => {
   const advisory = {
     ...sdk,

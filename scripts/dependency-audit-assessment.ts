@@ -330,20 +330,25 @@ type GoverningResolutionOptions = {
 };
 
 // A hoisted copy keeps its lockfile key (`joi`) even when a `parent/joi`
-// resolution governs it, so the owning parents' paths are checked too.
-const governingRepositoryResolution = ({
+// resolution governs it, so the owning parents' paths are checked too; a copy
+// shared by several parents can be governed by each of their resolutions.
+const governingRepositoryResolutions = ({
   resolutions,
   copyPath,
   packageName,
   parentNames,
-}: GoverningResolutionOptions): string | undefined =>
-  [
-    copyPath,
-    ...parentNames.map((parent) => `${parent}/${packageName}`),
-    packageName,
-  ]
-    .map((location) => resolutions.get(location))
-    .find((resolution) => resolution !== undefined);
+}: GoverningResolutionOptions): string[] => [
+  ...new Set(
+    [
+      copyPath,
+      ...parentNames.map((parent) => `${parent}/${packageName}`),
+      packageName,
+    ].flatMap((location) => {
+      const resolution = resolutions.get(location);
+      return resolution === undefined ? [] : [resolution];
+    }),
+  ),
+];
 
 const dependencyResolutionPaths = ({
   packageName,
@@ -371,13 +376,13 @@ const dependencyResolutionPaths = ({
           ? [packages.find(({ key }) => key === parent.key)?.name ?? parent.key]
           : [],
       );
-      const governing = governingRepositoryResolution({
+      const governing = governingRepositoryResolutions({
         resolutions: resolutionsByPath,
         copyPath: node.key,
         packageName,
         parentNames,
       });
-      return governing === undefined
+      return governing.length === 0
         ? owners.flatMap((parent) => {
             for (const field of parent.fields) {
               const dependencies = parent.details[field];
@@ -406,14 +411,12 @@ const dependencyResolutionPaths = ({
             }
             return [];
           })
-        : [
-            {
-              copyPath: node.key,
-              resolution: governing,
-              requirement: "*",
-              repositoryResolution: true,
-            },
-          ];
+        : governing.map((resolution) => ({
+            copyPath: node.key,
+            resolution,
+            requirement: "*",
+            repositoryResolution: true,
+          }));
     });
 
 type ManifestPinsOptions = {

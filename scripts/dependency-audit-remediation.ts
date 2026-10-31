@@ -501,9 +501,11 @@ export const verifyDependencyAuditRemediation = async ({
       quarantineExclusions.push(...proposal.quarantineExclusions);
     }
   } catch (error) {
-    await Promise.all(
-      appliedReverts.toReversed().map(async (revert) => revert()),
-    );
+    // Each revert restores a cumulative snapshot, so they must finish one at a
+    // time, newest first.
+    for (const revert of appliedReverts.toReversed()) {
+      await revert();
+    }
     throw error;
   }
 

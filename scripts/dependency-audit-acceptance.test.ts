@@ -580,6 +580,47 @@ describe("remediation verifies the resolver result", () => {
     ).toMatchObject({ message: "second resolver failed" });
     expect(firstReverted).toBe(true);
   });
+
+  test("reverts run one at a time, newest first", async () => {
+    const packageAssessment = (name: string) =>
+      ({
+        ...assessment,
+        advisory: { ...assessment.advisory, package: name },
+        affectedPaths: [name],
+        copies: [{ path: name, version: "1.4.0" }],
+        resolutionPaths: [],
+      }) satisfies AdvisoryAssessment;
+    const events: string[] = [];
+    let calls = 0;
+
+    await rejectionOf(
+      verifyDependencyAuditRemediation({
+        assessments: ["first", "second", "third"].map(packageAssessment),
+        now,
+        resolve: async () => {
+          calls += 1;
+          if (calls === 3) {
+            throw new TypeError("third resolver failed");
+          }
+          const applied = calls;
+          return {
+            assessments: [],
+            beforeLockfile: JSON.stringify({ packages: {} }),
+            afterLockfile: JSON.stringify({ packages: {} }),
+            // Each revert restores a cumulative snapshot; overlapping reverts
+            // would interleave their start and end events.
+            revert: async () => {
+              events.push(`start ${String(applied)}`);
+              await Promise.resolve();
+              await Promise.resolve();
+              events.push(`end ${String(applied)}`);
+            },
+          };
+        },
+      }),
+    );
+    expect(events).toEqual(["start 2", "end 2", "start 1", "end 1"]);
+  });
 });
 
 test("a shared copy retains every parent-qualified resolution", () => {
