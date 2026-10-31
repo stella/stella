@@ -174,6 +174,37 @@ describe("search results follow the caller's granted scopes", () => {
   }
 });
 
+describe("the type facet follows the caller's granted scopes", () => {
+  for (const { name, scopes, seesChat } of callers) {
+    test(`${name} ${seesChat ? "gets" : "never gets"} a chat bucket`, async () => {
+      // Every source finds two matches, so each permitted type has a bucket.
+      rootDbExecuteMock.mockImplementation(async (query) =>
+        dialect.sqlToQuery(query).sql.includes("AS total")
+          ? await Promise.resolve([{ total: 2 }])
+          : await Promise.resolve([]),
+      );
+
+      const result = await searchResults.handler(
+        asTestRaw<Parameters<typeof searchResults.handler>[0]>(
+          restContext(scopes, {
+            ...filters([]),
+            workspaceIds: [],
+            limit: LIMITS.searchPageSizeDefault,
+          }),
+        ),
+      );
+
+      const visibleTypes: GlobalSearchResultType[] = seesChat
+        ? ["case-law", "chat", "contact", "matter"]
+        : ["case-law", "contact", "matter"];
+      expect(result).toMatchObject({
+        facets: { type: visibleTypes.map((value) => ({ value, count: 2 })) },
+      });
+      expect(readChat()).toBe(seesChat);
+    });
+  }
+});
+
 describe("search facets follow the caller's granted scopes", () => {
   const facetBody = (types: GlobalSearchResultType[]) => ({
     facet: "workspace",
