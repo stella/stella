@@ -6,8 +6,9 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import {
   FALLBACK_DECISION_CONTENT_INDEX,
   FALLBACK_DECISION_IDENTITY_INDEX,
+  FALLBACK_DECISION_IDENTITY_MIGRATION,
 } from "@/api/lib/case-law/fallback-decision-identity-constants";
-import type { RequiredMigrationIndex } from "@/api/lib/db/migration-history";
+import type { IntroducedMigrationIndex } from "@/api/lib/db/migration-history";
 
 export const FALLBACK_DECISION_INDEXES = [
   {
@@ -17,6 +18,7 @@ export const FALLBACK_DECISION_INDEXES = [
     isUnique: true,
     name: FALLBACK_DECISION_IDENTITY_INDEX,
     tableName: "case_law_decisions",
+    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
   },
   {
     createSql: `CREATE UNIQUE INDEX CONCURRENTLY "${FALLBACK_DECISION_CONTENT_INDEX}" ON public."case_law_decisions" USING btree ("source_id", "fallback_content_hash") WHERE "source_document_id" IS NULL AND "fallback_content_hash" IS NOT NULL`,
@@ -25,6 +27,7 @@ export const FALLBACK_DECISION_INDEXES = [
     isUnique: true,
     name: FALLBACK_DECISION_CONTENT_INDEX,
     tableName: "case_law_decisions",
+    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
   },
   {
     createSql:
@@ -34,6 +37,7 @@ export const FALLBACK_DECISION_INDEXES = [
     isUnique: false,
     name: "case_law_decisions_source_fallback_cohort_idx",
     tableName: "case_law_decisions",
+    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
   },
   {
     createSql:
@@ -43,6 +47,7 @@ export const FALLBACK_DECISION_INDEXES = [
     isUnique: false,
     name: "case_law_decisions_source_fallback_publication_idx",
     tableName: "case_law_decisions",
+    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
   },
   {
     createSql:
@@ -52,8 +57,9 @@ export const FALLBACK_DECISION_INDEXES = [
     isUnique: false,
     name: "case_law_decisions_source_docket_cohort_idx",
     tableName: "case_law_decisions",
+    introducedBy: FALLBACK_DECISION_IDENTITY_MIGRATION,
   },
-] as const satisfies readonly (RequiredMigrationIndex & {
+] as const satisfies readonly (IntroducedMigrationIndex & {
   createSql: string;
 })[];
 
