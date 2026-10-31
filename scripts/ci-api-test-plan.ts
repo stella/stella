@@ -15,6 +15,15 @@ import {
   isApiTestShardId,
 } from "./api-test-shard-plan";
 import { selectedTestJobs } from "./ci-affected-selection";
+import { encodePlanFileList } from "./plan-output-codec";
+
+/**
+ * An empty selection stays an empty output: readers treat "" as "no explicit
+ * selection" and run every file, as the raw newline list did.
+ */
+export const serializeApiTestFilesOutput = (
+  files: readonly string[],
+): string => (files.length === 0 ? "" : encodePlanFileList(files));
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),
@@ -178,15 +187,16 @@ if (import.meta.main) {
   }
   const matrix =
     plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
+  const encodedFiles = serializeApiTestFilesOutput(plan.impact.files);
   writeFileSync(
     path.join(
       process.env["RUNNER_TEMP"] ?? panic("Missing RUNNER_TEMP"),
       "api-test-files",
     ),
-    plan.impact.files.join("\n"),
+    encodedFiles,
   );
   appendFileSync(
     process.env["GITHUB_OUTPUT"] ?? panic("Missing GITHUB_OUTPUT"),
-    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files<<API_TEST_FILES_END\n${plan.impact.files.join("\n")}\nAPI_TEST_FILES_END\n`,
+    `ci_tests_required=${plan.type === "run"}\nci_tests_matrix=${JSON.stringify(matrix)}\napi_test_shards=${plan.impact.shards}\ntest_scope=${testScope}\napi_test_files_encoded=${encodedFiles}\n`,
   );
 }
