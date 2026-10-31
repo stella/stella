@@ -16,6 +16,7 @@ import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case
 import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { createLeasedSchedulerJobFixture } from "@/api/tests/helpers/leased-scheduler-job";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { metricsFromPlan, sumMetrics } from "./measurement";
@@ -95,7 +96,12 @@ export const measureScheduledJobRun = async ({
       await task(
         asTestRaw<SchedulerTaskContext>({
           db,
-          job: { id: job.id, task: job.task },
+          job: createLeasedSchedulerJobFixture({
+            id: job.id,
+            task: job.task,
+            nextRunAt: now,
+            payload: "payload" in job ? job.payload : null,
+          }),
           payload: "payload" in job ? job.payload : null,
           dueAt: DueSlot.of({ nextRunAt: now, lockedAt: now }),
           runId: createSafeId<"schedulerJobRun">(),
