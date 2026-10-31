@@ -159,9 +159,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         requestCreation({ api, browser, key: `${suffix}-race-a` }),
         requestCreation({ api, browser, key: `${suffix}-race-b` }),
       ]);
-      expect(responses.map(({ status }) => status).toSorted()).toEqual([
-        200, 403,
-      ]);
+      expect(
+        responses
+          .map(({ status }) => status)
+          .toSorted((left, right) => left - right),
+      ).toEqual([200, 403]);
       for (const response of responses) {
         if (response.status === 403) {
           await expectQuotaRefusal(response);

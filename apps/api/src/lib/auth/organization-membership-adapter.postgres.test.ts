@@ -1,5 +1,6 @@
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization as organizationPlugin } from "better-auth/plugins";
+import type { OrganizationOptions } from "better-auth/plugins";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
@@ -83,7 +84,7 @@ if (!databaseUrl || !runPostgresTests) {
                   },
                 },
               },
-            }),
+            } satisfies OrganizationOptions),
           ],
         },
         expectedMetadata: { label: "fixture" },

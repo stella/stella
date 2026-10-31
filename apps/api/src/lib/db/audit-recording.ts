@@ -637,6 +637,6 @@ export const recordOrganizationCreationAudit = async (
       return;
     default:
       evaluation satisfies never;
-      return panic("Unhandled organization evaluation grant");
+      panic("Unhandled organization evaluation grant");
   }
 };

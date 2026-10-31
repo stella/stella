@@ -29,91 +29,92 @@ const creationFixture = () => {
     expect(params).toEqual([USER_ID, REQUEST_KEY]);
     return REQUEST_KEY;
   };
-  const transaction = asTestRaw<Transaction>({
-    rollback: () => panic("The fixture rolls back by rejecting the callback"),
-    insert: (
-      table: typeof organizationCreationRequests | typeof accountAuditLogs,
-    ) => {
-      if (table === organizationCreationRequests) {
-        return {
-          values: (
-            value: typeof organizationCreationRequests.$inferInsert,
-          ) => ({
-            onConflictDoNothing: () => ({
-              returning: async () => {
-                if (receipts.has(value.key)) {
-                  return [];
-                }
-                receipts.set(value.key, {
-                  ...value,
-                  organizationId: null,
-                  name: null,
-                  slug: null,
-                  createdAt: new Date("2026-10-30T12:00:00Z"),
-                });
-                return [{ key: value.key }];
-              },
+  const createTransaction = (): Transaction =>
+    asTestRaw<Transaction>({
+      rollback: () => panic("The fixture rolls back by rejecting the callback"),
+      insert: (
+        table: typeof organizationCreationRequests | typeof accountAuditLogs,
+      ) => {
+        if (table === organizationCreationRequests) {
+          return {
+            values: (
+              value: typeof organizationCreationRequests.$inferInsert,
+            ) => ({
+              onConflictDoNothing: () => ({
+                returning: async () => {
+                  if (receipts.has(value.key)) {
+                    return [];
+                  }
+                  receipts.set(value.key, {
+                    ...value,
+                    organizationId: null,
+                    name: null,
+                    slug: null,
+                    createdAt: new Date("2026-10-30T12:00:00Z"),
+                  });
+                  return [{ key: value.key }];
+                },
+              }),
             }),
-          }),
+          };
+        }
+        return {
+          values: async (values: (typeof accountAuditLogs.$inferInsert)[]) => {
+            audits.push(...values);
+          },
         };
-      }
-      return {
-        values: async (values: (typeof accountAuditLogs.$inferInsert)[]) => {
-          audits.push(...values);
+      },
+      select: () => ({
+        from: () => ({
+          where: (condition: SQL) => ({
+            limit: async () => {
+              const receipt = receipts.get(matchingKey(condition));
+              return receipt === undefined ? [] : [receipt];
+            },
+          }),
+        }),
+      }),
+      delete: () => ({
+        where: async (condition: SQL) => {
+          receipts.delete(matchingKey(condition));
         },
-      };
-    },
-    select: () => ({
-      from: () => ({
-        where: (condition: SQL) => ({
-          limit: async () => {
-            const receipt = receipts.get(matchingKey(condition));
-            return receipt === undefined ? [] : [receipt];
+      }),
+      update: () => ({
+        set: (result: Pick<Receipt, "organizationId" | "name" | "slug">) => ({
+          where: async (condition: SQL) => {
+            const key = matchingKey(condition);
+            const receipt = receipts.get(key);
+            if (receipt === undefined) {
+              panic("Completion requires a claimed receipt");
+            }
+            receipts.set(key, { ...receipt, ...result });
           },
         }),
       }),
-    }),
-    delete: () => ({
-      where: async (condition: SQL) => {
-        receipts.delete(matchingKey(condition));
-      },
-    }),
-    update: () => ({
-      set: (result: Pick<Receipt, "organizationId" | "name" | "slug">) => ({
-        where: async (condition: SQL) => {
-          const key = matchingKey(condition);
-          const receipt = receipts.get(key);
-          if (receipt === undefined) {
-            return panic("Completion requires a claimed receipt");
+      transaction: async (run: (tx: Transaction) => Promise<unknown>) => {
+        const previousReceipts = new Map(receipts);
+        const previousAuditCount = audits.length;
+        const result = await Result.tryPromise({
+          try: async () => await run(createTransaction()),
+          catch: (cause) => cause,
+        });
+        if (result.isErr()) {
+          receipts.clear();
+          for (const [key, receipt] of previousReceipts) {
+            receipts.set(key, receipt);
           }
-          receipts.set(key, { ...receipt, ...result });
-        },
-      }),
-    }),
-    transaction: async (run: (tx: Transaction) => Promise<unknown>) => {
-      const previousReceipts = new Map(receipts);
-      const previousAuditCount = audits.length;
-      const result = await Result.tryPromise({
-        try: async () => await run(asTestRaw<Transaction>({ ...transaction })),
-        catch: (cause) => cause,
-      });
-      if (result.isErr()) {
-        receipts.clear();
-        for (const [key, receipt] of previousReceipts) {
-          receipts.set(key, receipt);
+          audits.splice(previousAuditCount);
+          throw result.error;
         }
-        audits.splice(previousAuditCount);
-        throw result.error;
-      }
-      return result.value;
-    },
-  });
+        return result.value;
+      },
+    });
   const created = (slug: string) => ({
     id: "created-organization",
     name: NAME,
     slug,
   });
-  const database = { transaction: transaction.transaction };
+  const database = { transaction: createTransaction().transaction };
   return { database, receipts, audits, created };
 };
 
@@ -191,7 +192,7 @@ describe("organization creation provider refusals", () => {
       );
       expect(result.isErr()).toBe(true);
       if (result.isOk()) {
-        return panic("An explicit slug conflict must be refused");
+        panic("An explicit slug conflict must be refused");
       }
       expect(result.error).toBeInstanceOf(HandlerError);
       expect(result.error).toMatchObject({
@@ -218,7 +219,7 @@ describe("organization creation provider refusals", () => {
     );
     expect(result.isErr()).toBe(true);
     if (result.isOk()) {
-      return panic("A provider refusal must not create an organization");
+      panic("A provider refusal must not create an organization");
     }
     expect(result.error).toBeInstanceOf(HandlerError);
     expect(result.error).toMatchObject({
@@ -256,7 +257,7 @@ describe("organization creation provider refusals", () => {
       });
       expect(refused.isErr()).toBe(true);
       if (refused.isOk()) {
-        return panic("The provider refusal must reach the caller");
+        panic("The provider refusal must reach the caller");
       }
       expect(fixture.receipts.size).toBe(0);
       expect(refused.error).toMatchObject({ code });
@@ -299,9 +300,7 @@ describe("organization creation provider refusals", () => {
     );
     expect(result.isErr()).toBe(true);
     if (result.isOk() || !HandlerError.is(result.error)) {
-      return panic(
-        "Unknown creation failures must preserve their original cause",
-      );
+      panic("Unknown creation failures must preserve their original cause");
     }
     expect(result.error.status).toBe(500);
     expect(result.error.message).toBe(

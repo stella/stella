@@ -18,7 +18,11 @@ const batchOrganizationMemberships = (
   // Better Auth's fallback join reads each organization separately. Keep
   // batching inside the bound adapter so its transforms and transaction apply.
   findMany: async <T>(args: Parameters<typeof adapter.findMany>[0]) => {
-    if (args.model !== MEMBER_MODEL || !args.join?.[ORGANIZATION_MODEL]) {
+    if (
+      args.model !== MEMBER_MODEL ||
+      args.join?.[ORGANIZATION_MODEL] === undefined ||
+      args.join[ORGANIZATION_MODEL] === false
+    ) {
       return await adapter.findMany<T>({
         model: args.model,
         where: args.where,

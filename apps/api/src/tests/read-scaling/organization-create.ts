@@ -11,7 +11,10 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { isRecord } from "@/api/lib/type-guards";
 import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { authorizedMcpContextForTest } from "@/api/tests/helpers/authorized-mcp-context";
 import {
   createTestHandlerContext,
@@ -46,7 +49,7 @@ const seedCreationHistory = async (size: number) => {
   await rootDb.insert(organization).values(history);
   await rootDb.insert(member).values(
     history.map(({ id }) => ({
-      id: mintAuthProviderId<"member">(),
+      id: mintAuthProviderIdValue(),
       organizationId: id,
       userId,
       role: "owner",
@@ -99,10 +102,7 @@ export const organizationCreateScalingScenario = {
             scopedDb: NO_DB,
           }),
         );
-        if (
-          response instanceof HttpStatusResponse ||
-          response.role !== "owner"
-        ) {
+        if (response instanceof HttpStatusResponse) {
           return panic(
             "Creation scaling requires a successful owned organization",
           );
@@ -158,16 +158,18 @@ export const measureCreateOrganizationTool = async ({
           recordAuditEvent: forbiddenDatabase,
           request: new Request("https://example.test/mcp", { method: "POST" }),
           testDependencies: {
-            consumeInvokeCapabilityRateLimit: async () => ({
-              ok: true,
-              retryAfterSeconds: 3600,
-            }),
-            loadOrgSettingsForAuth: async () => ({
-              orgAIConfig: null,
-              orgAIConfigStatus: "ok",
-              managedAIResidency: "eu",
-              promptCachingEnabled: false,
-            }),
+            consumeInvokeCapabilityRateLimit: async () =>
+              await Promise.resolve({
+                ok: true,
+                retryAfterSeconds: 3600,
+              }),
+            loadOrgSettingsForAuth: async () =>
+              await Promise.resolve({
+                orgAIConfig: null,
+                orgAIConfigStatus: "ok",
+                managedAIResidency: "eu",
+                promptCachingEnabled: false,
+              }),
           },
         }),
       );

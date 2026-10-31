@@ -267,8 +267,7 @@ const restDeclarationOf = async (
     endpoint.type === "capability" &&
     rawCatalog.find(({ id }) => id === endpoint.id)?.handlerKind === "session";
   if (
-    config === undefined ||
-    config.accountAccess === undefined ||
+    config?.accountAccess === undefined ||
     (config.permissions === undefined && !sessionScoped)
   ) {
     // Organization-scoped writes declare a member grant; session writes

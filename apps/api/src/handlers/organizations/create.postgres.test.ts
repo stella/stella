@@ -131,9 +131,6 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           keepCurrentActiveOrganization: true,
         },
       });
-      if (baseline === null) {
-        panic("Onboarding baseline organization required");
-      }
       await using api = serveRoutesForTest(organizationsRoute);
       const input = {
         browser,

@@ -8,7 +8,7 @@ const creationTransaction = new AsyncLocalStorage<Transaction>();
 export const currentOrganizationCreationTransaction = () =>
   creationTransaction.getStore();
 
-export const withOrganizationCreationTransaction = <T>(
+export const withOrganizationCreationTransaction = async <T>(
   tx: Transaction,
   run: () => Promise<T>,
-) => creationTransaction.run(tx, run);
+) => await creationTransaction.run(tx, run);

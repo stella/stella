@@ -103,10 +103,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
         { createOrganization: createOrganizationInTransaction },
       );
       if (result.isErr()) {
-        return panic(
-          "Successful fixture must create an organization",
-          result.error,
-        );
+        panic("Successful fixture must create an organization", result.error);
       }
       expect(
         await rootDb
