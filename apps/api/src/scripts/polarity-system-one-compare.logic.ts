@@ -835,7 +835,7 @@ export const renderComparisonReport = ({
       ({ label, count }) => `| read failed: ${label} | ${count} |`,
     ),
     "",
-    "## Confusion matrix: stored label × decision model",
+    "## Confusion matrix — stored label × decision model",
     "",
     `| stored | ${CLASSIFIABLE_POLARITIES.join(" | ")} | not read | total |`,
     `| --- | ${CLASSIFIABLE_POLARITIES.map(() => "---:").join(" | ")} | ---: | ---: |`,

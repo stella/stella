@@ -30,7 +30,7 @@ const config = {
     "call, each with an optional note. Best effort and idempotent: the " +
     "response reports every decision asked for, under `linked` (newly " +
     "pinned), `existing` (already pinned, returned unchanged with the note " +
-    "recorded earlier) or `rejected` with a reason: `not_found` for a " +
+    "recorded earlier) or `rejected` with a reason — `not_found` for a " +
     "decision that is not in the corpus, `limit` for one that would push the " +
     "matter past its maximum number of links. A decision already pinned " +
     "never counts against that maximum. The whole call is one transaction: " +

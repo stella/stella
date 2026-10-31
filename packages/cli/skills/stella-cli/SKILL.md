@@ -81,7 +81,7 @@ default scopes are `openid profile email offline_access stella:read stella:searc
   (windowed, so follow `--cursor`).
 - **MCP resources**: `stella reference list` enumerates static server resources;
   `stella reference show <name>` prints one.
-- **Uploading a file**: `stella upload --file <file> --matter-id <matter-id>` uploads a local file as a new document; add `--entity-id <id>` to upload it as a new version of an existing document instead: a CLI-native path (the CLI reads the file itself), separate from the MCP `upload_document_version`/`open_document_version_upload` tools (which take a host-supplied file reference and are excluded from the CLI).
+- **Uploading a file**: `stella upload --file <file> --matter-id <matter-id>` uploads a local file as a new document; add `--entity-id <id>` to upload it as a new version of an existing document instead — a CLI-native path (the CLI reads the file itself), separate from the MCP `upload_document_version`/`open_document_version_upload` tools (which take a host-supplied file reference and are excluded from the CLI).
 
 ## Command tree
 
@@ -163,231 +163,231 @@ requires (request it at `stella auth login --scopes`).
 
 ## Command flags
 
-Required: `--flag: description (type)`. Optional: one `optional: --a,
+Required: `--flag — description (type)`. Optional: one `optional: --a,
 --b (enum1|enum2)` line, names only (`--help` has full descriptions).
 Global flags (output/cursor/limit/all/yes/input; see Conventions above)
 are omitted here. Input union keys are required unless marked `?`.
 
 - `stella annotation create`
-  - `--target-type`: decision (case law) or statute (legislation). (enum: decision, statute)
-  - `--target-id`: The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
+  - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
+  - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
   - optional: --visibility (private|shared)
   - via `--input` only: mark, passages
   - mark: kind="highlight": none; kind="comment": body:string. Example: `--input '{"mark":{"kind":"highlight"}}'`
 - `stella annotation delete`
-  - `--annotation-id`: The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
+  - `--annotation-id` — The mark to delete: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
 - `stella annotation list`
-  - `--target-type`: decision (case law) or statute (legislation). (enum: decision, statute)
-  - `--target-id`: The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
+  - `--target-type` — decision (case law) or statute (legislation). (enum: decision, statute)
+  - `--target-id` — The document: for a decision, its decisionId (read_case_law_decision, search_case_law); for a statute, the documentId of the consolidated version (read_statute). A statute's marks belong to that one version. (string)
 - `stella annotation update`
-  - `--annotation-id`: The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
+  - `--annotation-id` — The mark to change: annotationId from list_reader_annotations, or the mark id the chat lists beside the user's marks. (string)
   - via `--input` only: change
   - change: type="body": body:string; type="color": color:"yellow" | "green" | "sky" | "violet" | "red"; type="style": style:string; type="visibility": visibility:"private" | "shared". Example: `--input '{"change":{"type":"body","body":"x"}}'`
 - `stella audit-log list`
   - optional: --matter-id, --action, --resource-type, --resource-id, --user-id, --from, --to
 - `stella capability describe`
-  - `--capability`: Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
+  - `--capability` — Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create"). (string)
 - `stella capability list`
   - optional: --domain, --query, --access (all|read|write)
 - `stella capability read`
-  - `--capability`: Capability id to invoke. Use an id list_capabilities returned. (string)
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
 - `stella capability write`
-  - `--capability`: Capability id to invoke. Use an id list_capabilities returned. (string)
+  - `--capability` — Capability id to invoke. Use an id list_capabilities returned. (string)
   - optional: --validate-only
   - via `--input` only: input
 - `stella case-law citations`
-  - `--decision-id`: Case-law decision ID (string)
-  - `--direction`: Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
+  - `--decision-id` — Case-law decision ID (string)
+  - `--direction` — Which side of the citation graph to read: 'cites' for the decisions this decision cites, 'cited_by' for the decisions that cite it. Citing is not agreeing: both sides carry negative treatments. (enum: cites, cited_by)
   - optional: --doctrine (distinguishes|limits), --polarity (negative|neutral|positive|supportive|mixed|unclassified)
 - `stella case-law coverage`
   - optional: --country
 - `stella case-law open`
-  - `--decision-id`: Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
+  - `--decision-id` — Decision ID from search_case_law results or resolve_case_law_decision document.decisionId. (string)
   - optional: --paragraphs
 - `stella case-law read`
-  - `--decision-ids`: The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
+  - `--decision-ids` — The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest. (string-array, repeatable)
   - optional: --max-chars, --page, --full, --text-version, --query, --include (details|metadata|textFields|source|citations|outline)
 - `stella case-law resolve`
-  - `--country`: Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--identifier`: Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
+  - `--country` — Country of the deciding court; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--identifier` — Docket (and sheet if known) or ECLI. For CZ/SK, add a court name or alias to constrain it; search_case_law handles descriptions. (string)
 - `stella case-law search`
-  - `--country`: Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--country` — Required corpus country. Admitted: CZE, EU, HUN, POL, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --facets (court|decisionType|source|language|year|courtYear), --queries, --court, --courts, --category, --provision, --has-legal-sentence, --language, --decision-type, --source-id, --date-from, --date-to, --sort (relevance|newest), --strict
 - `stella clause delete`
-  - `--clause-id`: Clause id to delete (string)
+  - `--clause-id` — Clause id to delete (string)
 - `stella clause list`
   - optional: --clause-id, --version-id, --category-id, --query, --include-categories
 - `stella clause save`
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
   - via `--input` only: body, expected_body, metadata
 - `stella contact check-counterparty`
-  - `--check`: cz-insolvency: ISIR proceedings, company ID or person with full birth date. cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. sanctions: all EU, UN and national lists; company ID, organization name, or person with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability, sanctions)
+  - `--check` — cz-insolvency: ISIR proceedings, company ID or person with full birth date. cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. sanctions: all EU, UN and national lists; company ID, organization name, or person with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability, sanctions)
   - via `--input` only: subject
   - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, date_of_birth?:{precision="year"|"month"|"day"}, nationality_codes?:string[]; type="organization": name:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
 - `stella contact delete`
-  - `--contact-id`: Contact ID to delete (string)
+  - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
   - optional: --query, --type (person|organization)
 - `stella contact lookup-registry`
-  - `--registry`: Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
-  - `--query`: Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
+  - `--registry` — Business register to query (enum: ares, brreg, companies-house, denue, edgar, gcis, krs, orsr, prh, recherche-entreprises, rpo, vies)
+  - `--query` — Canonical identifier (e.g. company number, VAT number) or company name (KRS names are verified) (string)
   - optional: --detail (standard|full)
 - `stella contact read`
-  - `--contact-id`: Contact ID (string)
+  - `--contact-id` — Contact ID (string)
 - `stella contact save`
   - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes
   - via `--input` only: date_of_birth
   - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
-  - `--base-tracked-changes`: Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
-  - `--target-tracked-changes`: Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
-  - `--output-mode`: preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
+  - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
+  - `--target-tracked-changes` — Tracked changes the target version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
+  - `--output-mode` — preview compares without writing. download returns each redline as a temporary link and saves nothing to the document. version saves each redline as a derived version and needs a stored-version source. (enum: preview, download, version)
   - optional: --mode (strict|best-effort), --granularity (word|character)
   - via `--input` only: source
   - source: type="versions": document_id:string, base_version_id:string, target_version_ids:string[]; type="previous": document_id:string, target_version_id:string; type="uploads": base_upload_id:string, target_upload_id:string. Example: `--input '{"source":{"type":"versions","document_id":"00000000-0000-4000-8000-000000000000","base_version_id":"00000000-0000-4000-8000-000000000000","target_version_ids":["00000000-0000-4000-8000-000000000000"]}}'`
 - `stella document comparison prepare`
-  - `--base.name`: File name to show the user, including the .docx suffix. (string)
-  - `--base.size`: Exact byte length of the file, at most 50 MB. (int 1..52428800)
-  - `--base.sha256-hex`: SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
-  - `--target.name`: File name to show the user, including the .docx suffix. (string)
-  - `--target.size`: Exact byte length of the file, at most 50 MB. (int 1..52428800)
-  - `--target.sha256-hex`: SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
+  - `--base.name` — File name to show the user, including the .docx suffix. (string)
+  - `--base.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--base.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
+  - `--target.name` — File name to show the user, including the .docx suffix. (string)
+  - `--target.size` — Exact byte length of the file, at most 50 MB. (int 1..52428800)
+  - `--target.sha256-hex` — SHA-256 of the exact bytes you will PUT, as 64 hexadecimal characters. (string)
 - `stella document comparison prepare-from-links`
-  - `--base.url`: HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
-  - `--target.url`: HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
+  - `--base.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
+  - `--target.url` — HTTPS link the server downloads the .docx from. A share link that opens a web page is not the file; use the direct-download form. (string)
   - optional: --base.name, --target.name
 - `stella document content`
-  - `--entity-id`: Entity ID (string)
+  - `--entity-id` — Entity ID (string)
 - `stella document delete`
-  - `--entity-id`: Document entity ID to delete (string)
+  - `--entity-id` — Document entity ID to delete (string)
   - optional: --version-id
 - `stella document field set`
-  - `--entity-id`: Document entity ID whose cell to set (string)
-  - `--property-id`: Property ID, as returned by list_properties (string)
+  - `--entity-id` — Document entity ID whose cell to set (string)
+  - `--property-id` — Property ID, as returned by list_properties (string)
   - via `--input` only: content
   - content: type="text": value:string; type="single-select": value:string|null; type="multi-select": value:string[]; type="date": value:string|null; type="int": value:integer, currency?:string|null. Example: `--input '{"content":{"type":"text","value":"xxxxx"}}'`
 - `stella document list`
-  - `--matter-id`: Matter ID to list documents in. (string)
+  - `--matter-id` — Matter ID to list documents in. (string)
   - optional: --mode (flat|children), --parent-id
 - `stella document properties list`
-  - `--matter-id`: Matter ID to list properties for. (string)
+  - `--matter-id` — Matter ID to list properties for. (string)
 - `stella document read`
-  - `--entity-id`: Document entity ID (string)
+  - `--entity-id` — Document entity ID (string)
   - optional: --version-id, --compare-with-version-id, --include-versions, --versions-cursor
 - `stella document save`
   - optional: --entity-id, --matter-id, --name, --parent-id, --kind (document|folder), --move-to-root, --version-id, --label, --description
 - `stella feedback prepare`
-  - `--kind`: bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
-  - `--area`: Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
-  - `--title`: One line naming the problem, not the symptom's location. (string)
-  - `--what-happened`: What stella actually did. (string)
+  - `--kind` — bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
+  - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
+  - `--title` — One line naming the problem, not the symptom's location. (string)
+  - `--what-happened` — What stella actually did. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
 - `stella feedback submit`
-  - `--kind`: bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
-  - `--area`: Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
-  - `--title`: One line naming the problem, not the symptom's location. (string)
-  - `--what-happened`: What stella actually did. (string)
-  - `--approval-token`: From prepare_feedback; covers only that report. (string)
+  - `--kind` — bug (it behaved wrongly), idea (it could be better), missing_capability (there is no way to do this), docs (the reference or description is wrong or missing). (enum: bug, idea, missing_capability, docs)
+  - `--area` — Which part of stella the report is about. (enum: matters, documents, templates, case_law, legislation, contacts, tasks, billing, chat, mcp_cli, web_app, desktop, other)
+  - `--title` — One line naming the problem, not the symptom's location. (string)
+  - `--what-happened` — What stella actually did. (string)
+  - `--approval-token` — From prepare_feedback; covers only that report. (string)
   - optional: --expected, --steps, --evidence, --context.client (mcp|cli|web|desktop|other), --context.client-version, --context.request-id, --context.route, --context.error-reference
 - `stella invoice list`
   - optional: --matter-id, --invoice-id
 - `stella legislation boe-search`
   - optional: --query, --title, --department-code, --legal-range-code, --matter-code, --date-from, --date-to, --law-id, --block-id, --relation-type (modifies|modifiedBy|derogates|derogatedBy|all), --full-text
 - `stella legislation history`
-  - `--eli`: European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
-  - `--anchor`: Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes. (string)
+  - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
+  - `--anchor` — Publisher provision anchor; confirm it in read_statute's outline for the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, -odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to that subdivision. Other publishers may use different schemes. (string)
   - optional: --language, --text-cursor
-- `stella legislation provisions`: no flags; pass `--input` with items
+- `stella legislation provisions` — no flags; pass `--input` with items
 - `stella legislation read`
-  - `--eli`: European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
+  - `--eli` — European Legislation Identifier of the work, as search_legislation returns it (for example https://www.e-sbirka.cz/eli/cz/sb/2012/89). It addresses the act, not one consolidation of it. A short, prefix-less or reordered ELI is read as the canonical one. (string)
   - optional: --language, --as-of
 - `stella legislation resolve`
-  - `--country`: Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
-  - `--section`: Section number, with optional §, e.g. 1729 or § 5a. (string)
+  - `--country` — Country of the cited law; alpha-2, alpha-3 or country name. Unrecognized or unsupported countries return country_unavailable. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--section` — Section number, with optional §, e.g. 1729 or § 5a. (string)
   - optional: --as-of
   - via `--input` only: source
   - source: type="citation": citation:string; type="structured": collection:string, year:string, number:string. Example: `--input '{"source":{"type":"citation","citation":"x"}}'`
 - `stella legislation search`
-  - `--query`: Search query (string)
-  - `--country`: Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
+  - `--query` — Search query (string)
+  - `--country` — Required corpus country. Admitted: CZE, SVK. An ISO 3166-1 alpha-3 or alpha-2 code, or the country's name, is read. (string)
   - optional: --document-type, --status, --language, --date-from, --date-to, --as-of
 - `stella matter add-member`
-  - `--matter-id`: Matter ID (string)
-  - `--user-id`: Existing organization member ID (string)
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Existing organization member ID (string)
 - `stella matter delete`
-  - `--matter-id`: Matter ID to delete (string)
+  - `--matter-id` — Matter ID to delete (string)
 - `stella matter link-contact`
-  - `--matter-id`: Matter ID (string)
+  - `--matter-id` — Matter ID (string)
   - optional: --contact-id, --role (opposing_party|opposing_counsel|co_counsel|witness|expert_witness|third_party|judge|mediator|other), --matter-contact-id
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
 - `stella matter remove-member`
-  - `--matter-id`: Matter ID (string)
-  - `--user-id`: Matter member ID (string)
+  - `--matter-id` — Matter ID (string)
+  - `--user-id` — Matter member ID (string)
   - optional: --reassign-to
 - `stella matter save`
   - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
-- `stella organization set-jurisdictions`: no flags; pass `--input` with jurisdictions
+- `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
 - `stella playbook list`
   - optional: --playbook-id
 - `stella playbook run`
-  - `--matter-id`: Matter ID to run the playbook over. (string)
-  - `--playbook-id`: Playbook id to run (string)
+  - `--matter-id` — Matter ID to run the playbook over. (string)
+  - `--playbook-id` — Playbook id to run (string)
 - `stella playbook save`
   - optional: --playbook-id, --expected-updated-at, --name, --description, --scope.document-type-key, --scope.perspective (buyer|seller|neutral), --remove-source-ids
   - via `--input` only: positions
   - positions[]: mode="extract": issue:string, sources?:string[], ask:{question}; mode="graded": issue:string, sources?:string[], severity:"blocker" | "high" | "medium" | "low", tiers:object, negotiation?:object. Example: `--input '{"positions":[{"mode":"extract","issue":"x","ask":{"question":"x"}}]}'`
 - `stella rate resolve`
-  - `--matter-id`: Matter ID to resolve the rate in. (string)
-  - `--user-id`: User ID to resolve the rate for (string)
-  - `--date`: Date to resolve the rate on (ISO YYYY-MM-DD) (string)
+  - `--matter-id` — Matter ID to resolve the rate in. (string)
+  - `--user-id` — User ID to resolve the rate for (string)
+  - `--date` — Date to resolve the rate on (ISO YYYY-MM-DD) (string)
   - optional: --activity-code
 - `stella search matters`
-  - `--query`: Search query (string)
+  - `--query` — Search query (string)
 - `stella task delete`
-  - `--task-id`: Task entity ID to delete (string)
+  - `--task-id` — Task entity ID to delete (string)
 - `stella task list`
   - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
   - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
-  - `--template-id`: Template to configure, as returned by create_template or list_templates (string)
+  - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
   - via `--input` only: fields
 - `stella template create`
   - optional: --template-id, --name, --docx-base64, --file.download-url, --file.file-id, --file.mime-type, --file.file-name, --file <path>
 - `stella template fill`
-  - `--template-id`: Template id, as returned by list_templates (string)
+  - `--template-id` — Template id, as returned by list_templates (string)
   - optional: --allow-unused-values, --completion-mode (require_complete|allow_partial), --output-mode (text|docx)
   - via `--input` only: values
 - `stella template list`
   - optional: --template-id
 - `stella template preview-conditions`
-  - `--template-id`: Template whose AI-decided conditions to ask about, as returned by list_templates (string)
+  - `--template-id` — Template whose AI-decided conditions to ask about, as returned by list_templates (string)
   - via `--input` only: values
 - `stella template save-filled new-document`
-  - `--template-id`: Template id, as returned by list_templates (string)
-  - `--matter-id`: Matter receiving the filled DOCX. (string)
-  - `--idempotency-key`: Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
+  - `--template-id` — Template id, as returned by list_templates (string)
+  - `--matter-id` — Matter receiving the filled DOCX. (string)
+  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
   - optional: --parent-id, --name, --completion-mode (require_complete|allow_partial)
   - via `--input` only: values
 - `stella template save-filled new-version`
-  - `--template-id`: Template id, as returned by list_templates (string)
-  - `--matter-id`: Matter receiving the filled DOCX. (string)
-  - `--idempotency-key`: Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
-  - `--entity-id`: Existing document entity id; required only for create_version (string)
+  - `--template-id` — Template id, as returned by list_templates (string)
+  - `--matter-id` — Matter receiving the filled DOCX. (string)
+  - `--idempotency-key` — Unique retry key for this save operation; reuse it only to recover the same timed-out request (string)
+  - `--entity-id` — Existing document entity id; required only for create_version (string)
   - optional: --name, --completion-mode (require_complete|allow_partial)
   - via `--input` only: values
 - `stella time-entry delete`
-  - `--time-entry-id`: Time entry ID to delete or write off (string)
+  - `--time-entry-id` — Time entry ID to delete or write off (string)
 - `stella time-entry list`
   - optional: --matter-id, --time-entry-id, --entity-id, --user-id, --date-from, --date-to, --status (draft|submitted|approved|billed|written_off)
 - `stella time-entry save`
   - optional: --time-entry-id, --matter-id, --entity-id, --date-worked, --timezone-id, --duration-minutes, --narrative, --narrative-language, --invoice-narrative, --billable, --no-charge, --task-code, --activity-code
-- `stella usage get`: no arguments
+- `stella usage get` — no arguments
 
 ## Exit codes
 

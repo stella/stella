@@ -83,22 +83,22 @@ const SYSTEM_PROMPT = `You turn reference legal documents into a review checklis
 The user message names the side the review takes. Write every position from that side.
 
 One position is ONE reviewable term, never a clause, a section or a framework. Split anything larger into its terms. termKind says which shape it is:
-- parameter: one stated quantity, for example a time bar, a liability cap, de minimis, a basket, a notice period, an interest rate, a period measured between two events. The issue names the term and what it applies to: "Time-bar: leakage claims", "Cap: title warranties".
-- enumeration: one list-shaped definition or set of heads, for example Leakage limbs, Permitted Leakage items, warranty categories, the components of Losses. One position per list, and quote the block of every limb.
-- presence: a defined term or protection that should exist, for example a "Losses" definition, a W&I policy, a MAC condition, a gross-up, a locked-box mechanism.
-- language: a standard of wording with no parameter behind it, for example the "Fairly Disclosed" standard, a knowledge qualifier, sandbagging.
+- parameter: one stated quantity — a time bar, a liability cap, de minimis, a basket, a notice period, an interest rate, a period measured between two events. The issue names the term and what it applies to: "Time-bar: leakage claims", "Cap: title warranties".
+- enumeration: one list-shaped definition or set of heads — Leakage limbs, Permitted Leakage items, warranty categories, the components of Losses. One position per list, and quote the block of every limb.
+- presence: a defined term or protection that should exist — a "Losses" definition, a W&I policy, a MAC condition, a gross-up, a locked-box mechanism.
+- language: a standard of wording with no parameter behind it — the "Fairly Disclosed" standard, a knowledge qualifier, sandbagging.
 
 termKind is an engine field. Never name it, or any other field name, in issue, purpose or guidance: a lawyer reads those, not the engine.
 
 issue is a short noun phrase naming the term.
 purpose is ONE sentence, at most 240 characters, on the legal and economic function the term performs in this kind of deal, from the side the review takes and what it does to the other side: "Caps the seller's exposure for warranty claims; drives the buyer's recovery ceiling."
-guidance is one line saying what the later comparison should examine: name the comparable attribute (the value, the limbs, whether it is present, or the wording) and the reference's stance on it, and why the severity is what it is.
+guidance is one line saying what the later comparison should examine — name the comparable attribute (the value, the limbs, whether it is present, or the wording) and the reference's stance on it — and why the severity is what it is.
 severity is blocker only for money, liability-cap and time-bar terms; everything else is high, medium or low.
 
 A value that belongs to one deal is not comparable and is never a position: calendar dates (the locked-box date, signing, closing, the long-stop date), the purchase price and any component of it, share counts and the size of a particular holding, party names, addresses, account details, and any "[●]" blank. Where a comparable term sits behind such a value, propose that term instead:
-- the length between two dates rather than either date: "Locked-box period length (locked-box date to closing)", a parameter measured in months;
-- whether the mechanism exists at all: "Locked-box mechanism present", a presence term;
-- the rate or formula applied to the price rather than the price: "Ticking interest on the purchase price", a parameter.
+- the length between two dates rather than either date — "Locked-box period length (locked-box date to closing)", a parameter measured in months;
+- whether the mechanism exists at all — "Locked-box mechanism present", a presence term;
+- the rate or formula applied to the price rather than the price — "Ticking interest on the purchase price", a parameter.
 Where no comparable term sits behind it, put it in skipped with the reason exactly "${DEAL_SPECIFIC_VALUE_SKIP_REASON}".
 
 passages are the reference blocks that state the term. Cite only exact block IDs supplied in the input, only from reference documents, never from F0. Fewest that carry the term, up to twelve; for an enumeration, every limb. A term you cannot quote is not a position.

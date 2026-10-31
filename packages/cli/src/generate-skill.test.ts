@@ -154,7 +154,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
       CAPABILITY,
     );
     expect(skill).toContain(
-      "- `stella inspect subject`: no flags; pass `--input` with subject\n\n",
+      "- `stella inspect subject` — no flags; pass `--input` with subject\n\n",
     );
     expect(skill).not.toContain("subject: variant");
     expect(skill).not.toContain("Example: `--input");

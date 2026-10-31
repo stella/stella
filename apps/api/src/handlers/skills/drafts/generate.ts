@@ -271,9 +271,9 @@ SKILL.md rules:
 
 Companion files (the "resources" array):
 - Each path must start with one of ${RESOURCE_FOLDER_LIST} and end in .md. Lowercase letters, digits, hyphens, dots, and underscores only. Subfolders are allowed to organise material by topic, jurisdiction, or source type. Examples: references/01-foundations.md, references/draft-summary.prompt.md, references/checklists.md, references/cz/act-110.md, references/case-law/supreme.md.
-- scripts/*: Markdown instructions for helper scripts.
-- assets/*: supporting text assets.
-- references/*: checklists, lookup tables, format guides.
+- scripts/* — Markdown instructions for helper scripts.
+- assets/* — supporting text assets.
+- references/* — checklists, lookup tables, format guides.
 - Each file is plain Markdown. No frontmatter on companion files.
 - Return at most ${AI_RESOURCES_MAX} files. Only include a file if it genuinely helps the skill; return an empty array if none are needed.
 - Never invent legal facts, jurisdictions, citations, or company details. Stay generic unless the user supplied specifics.`,

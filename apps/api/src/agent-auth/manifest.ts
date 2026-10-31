@@ -29,12 +29,12 @@ export const getAgentAuthManifest = (): string => {
     "FEATURE_AGENT_ID_JAG",
   )
     ? `
-- \`identity_assertion\`: present an audience-bound ID-JAG
+- \`identity_assertion\` — present an audience-bound ID-JAG
   (\`urn:ietf:params:oauth:token-type:id-jag\`) signed by a trusted provider; exchange it
   via the RFC 7523 jwt-bearer grant.`
     : "";
 
-  return `# stella: agent registration (auth.md)
+  return `# stella — agent registration (auth.md)
 
 stella implements the [auth.md](https://github.com/workos/auth.md) agent-registration
 protocol (pinned to v${AUTH_MD_SPEC_VERSION}). An agent registers on a user's behalf and
@@ -43,15 +43,15 @@ receives a scoped, revocable OAuth access token.
 ## Discovery (two-hop)
 
 1. Protected Resource Metadata: \`${getMcpProtectedResourceMetadataUrl()}\`
-2. Authorization Server Metadata: \`${getAuthIssuerUrl()}/.well-known/oauth-authorization-server\`;
-   read the \`agent_auth\` block for endpoints and supported flows.
+2. Authorization Server Metadata: \`${getAuthIssuerUrl()}/.well-known/oauth-authorization-server\`
+   — read the \`agent_auth\` block for endpoints and supported flows.
 
 ## Identity types
 
-- \`service_auth\`: supply the user's \`login_hint\` (email); a claim ceremony binds the
+- \`service_auth\` — supply the user's \`login_hint\` (email); a claim ceremony binds the
   agent once the user signs in and confirms a \`user_code\`. Poll the token endpoint with
   the claim grant to complete.
-- \`anonymous\`: register with no user identity; receive a reduced-scope token limited to
+- \`anonymous\` — register with no user identity; receive a reduced-scope token limited to
   anonymized/public resources. Claimable by a user later.${identityAssertionListItem}
 
 ## Scopes

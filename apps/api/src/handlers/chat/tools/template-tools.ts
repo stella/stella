@@ -92,8 +92,8 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "Fields configured as AI-fillable are drafted automatically when you " +
   "omit them. A required field that is not AI-fillable must be provided: " +
   "omitting or emptying it rejects the fill with the exact missing " +
-  "fields instead of guessing a value or leaving a placeholder unfilled; " +
-  "ask the user for those values and retry. Returns the rendered text " +
+  "fields instead of guessing a value or leaving a placeholder unfilled " +
+  "— ask the user for those values and retry. Returns the rendered text " +
   "plus any placeholders left unfilled, `completionStatus` (`partial` " +
   "with a `shortfall` list when a placeholder, an AI draft or an " +
   "AI-decided condition was left open; supply those and retry), and " +

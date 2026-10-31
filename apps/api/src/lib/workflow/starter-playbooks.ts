@@ -251,7 +251,7 @@ const NDA_POSITIONS: StarterPositionInput[] = [
         "The definition is the foundation of the whole agreement: too broad and everything ever mentioned becomes a restricted secret; too narrow (or missing standard carve-outs) and the receiving party is exposed to claims over information it never should have had to protect.",
       talkingPoints: [
         "The four standard carve-outs (public, prior knowledge, independent development, third-party source) are market-standard; their absence is a red flag, not a negotiating position.",
-        "Push back on any requirement that oral disclosures are confidential from the moment of disclosure with no written confirmation window; it is unworkable in practice.",
+        "Push back on any requirement that oral disclosures are confidential from the moment of disclosure with no written confirmation window — it is unworkable in practice.",
       ],
       escalation:
         "Escalate if the counterparty refuses to include the standard carve-outs, since that shifts real risk onto the receiving party's ordinary business operations.",
@@ -472,7 +472,7 @@ const DPA_POSITIONS: StarterPositionInput[] = [
         "Every other obligation in a DPA (instructions, sub-processing, breach notice, deletion) hangs off the controller/processor designation; without it, neither party's downstream compliance obligations are clear.",
       talkingPoints: [
         "Confirm the processor commits to acting only on the controller's documented instructions, not on its own initiative.",
-        "Flag any clause letting the processor use personal data for its own separate purposes; that is controller behaviour, not processor behaviour.",
+        "Flag any clause letting the processor use personal data for its own separate purposes — that is controller behaviour, not processor behaviour.",
       ],
       escalation:
         "Escalate any request for the processor to process data beyond the controller's instructions (e.g. for the processor's own product improvement).",

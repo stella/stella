@@ -526,7 +526,7 @@ await runScriptWithErrorOutput(async () => {
             citationId: row.citationId,
           });
     console.log(
-      `\n${row.caseNumber}: stored ${row.stored}, ${options.decisionProvider} ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
+      `\n${row.caseNumber} — stored ${row.stored}, ${options.decisionProvider} ${read.polarity} (${read.confidence.toFixed(2)})\n  ${row.citationText}\n  ${row.excerpt}`,
     );
   }
   console.log(`\nwrote ${jsonPath} and ${markdownPath}`);

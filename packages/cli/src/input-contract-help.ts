@@ -247,7 +247,7 @@ const lineFor = ({
   description: string | undefined;
   indent: number;
 }): string => {
-  const suffix = description === undefined ? "" : `: ${description}`;
+  const suffix = description === undefined ? "" : ` — ${description}`;
   return `${"  ".repeat(indent)}${path}  ${type}  ${required ? "required" : "optional"}${suffix}`;
 };
 

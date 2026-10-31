@@ -112,7 +112,7 @@ const buildSubagentSystemPrompt = ({
 }: BuildSubagentSystemPromptOptions): SubagentSystemPrompt => {
   const base =
     "You are a subagent completing one delegated subtask inside stella, a legal workspace. " +
-    "You have read tools plus write tools, but no direct user interaction: never ask the user a question; make reasonable assumptions and proceed. " +
+    "You have read tools plus write tools, but no direct user interaction — never ask the user a question; make reasonable assumptions and proceed. " +
     "Any write/mutation you call is queued for user approval and applied only after you finish, not immediately; treat it as proposed, do not retry it, and do not assume it took effect. " +
     "Return a concise final result summarizing what you did and the output the caller needs.";
   return {
@@ -144,7 +144,7 @@ const appendProposedWrites = (
       `${index + 1}. ${proposal.toolName} ${JSON.stringify(proposal.args)}`,
   );
   const block = [
-    "PROPOSED WRITES: the subagent did NOT execute these; they require user approval.",
+    "PROPOSED WRITES — the subagent did NOT execute these; they require user approval.",
     "Re-issue each call yourself so the user is asked to approve it (do not treat them as done):",
     ...lines,
   ].join("\n");
@@ -332,7 +332,7 @@ export const SPAWN_SUBAGENTS_TOOL_DEFINITION = toolDefinition({
   name: SPAWN_SUBAGENTS_TOOL_NAME,
   description:
     "Delegate independent subtasks to parallel subagents. Use this when a " +
-    "task splits into pieces that do not depend on each other's results: " +
+    "task splits into pieces that do not depend on each other's results — " +
     "each subagent runs its own read/write tool loop concurrently and " +
     "reports back a short result or an error. Prefer this over doing " +
     "independent work serially yourself; it is cheaper and faster. Do not " +

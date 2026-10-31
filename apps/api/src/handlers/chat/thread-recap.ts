@@ -40,7 +40,7 @@ const RECAP_GENERATION_TIMEOUT_MS = 20_000;
 
 const RECAP_SYSTEM_PROMPT = `You write a brief "where you left off" recap for someone returning to an earlier conversation with a legal assistant after a break.
 
-Write 2 to 4 sentences of plain prose: no markdown, no headings, no bullet points, no greeting. First state what was discussed or accomplished, then what still remains open: unanswered questions, next steps, or unfinished work. If nothing remains open, only summarise what was covered.
+Write 2 to 4 sentences of plain prose: no markdown, no headings, no bullet points, no greeting. First state what was discussed or accomplished, then what still remains open — unanswered questions, next steps, or unfinished work. If nothing remains open, only summarise what was covered.
 
 Write in the language the user writes their messages in, even when the transcript labels, these instructions, cited titles or notes in parentheses are in English. Never switch to English for a conversation held in another language. Be specific: name the actual topics, documents, and decisions rather than describing the conversation in the abstract. You may address the reader in the second person, but never write in the assistant's first person and do not describe the assistant as a person. Do not invent anything that is not in the transcript. Reply with the recap text only.`;
 

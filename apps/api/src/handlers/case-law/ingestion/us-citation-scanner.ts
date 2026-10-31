@@ -146,7 +146,7 @@ export type ScannedPin =
   /** A pin list running past what an annotation can hold. */
   | { type: "overlong" };
 
-const DASH = "[-‐‑‒–\u2014―−]";
+const DASH = "[-‐‑‒–—―−]";
 const NOTE_ITEM = String.raw`nn?\.\s?\d{1,4}(?:\s?${DASH}\s?\d{1,4})?`;
 const PIN_ITEM = String.raw`(?:¶¶?\s?\d{1,5}(?:\s?${DASH}\s?\d{1,5})?|${NOTE_ITEM}|\*?\d{1,5}(?:\s?${DASH}\s?\*?\d{1,5})?(?:\s?,?\s?(?:&\s?|and\s)?${NOTE_ITEM})?)`;
 // A pin never ends where a reporter abbreviation begins: in

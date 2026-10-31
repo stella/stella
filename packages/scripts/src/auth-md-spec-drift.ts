@@ -315,11 +315,11 @@ const check = async (): Promise<void> => {
 
   if (actionable.length > 0) {
     console.error(
-      `\n✗ auth.md spec drifted upstream: ${actionable.length} change(s) need review:`,
+      `\n✗ auth.md spec drifted upstream — ${actionable.length} change(s) need review:`,
     );
     for (const { key, drift } of actionable) {
       const label = drift.kind.toUpperCase();
-      console.error(`  ✗ [${label}] ${key}: ${drift.detail}`);
+      console.error(`  ✗ [${label}] ${key} — ${drift.detail}`);
     }
     console.error(
       "\nReconcile by reviewing the upstream diff, updating our manifest /\n" +

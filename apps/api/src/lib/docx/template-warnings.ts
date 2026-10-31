@@ -97,7 +97,7 @@ const markerDefectWarning = (
         code: kind,
         path: raw,
         message: `${raw} computes "${construct}" inside the marker; the dialect prints values, it does not evaluate expressions.`,
-        hint: 'Move the arithmetic into a formula filter ({{ total | formula("rent * 12") }}) or fill the value from the input.',
+        hint: 'Move the arithmetic into a formula filter — {{ total | formula("rent * 12") }} — or fill the value from the input.',
       };
     case "bracket_index":
       return {
@@ -402,7 +402,7 @@ export const rowBlockAcrossRowsWarning = ({
     "wrapping a row's text acts on ONE row, so the two halves must sit in " +
     "different cells of the SAME row.",
   hint:
-    `Move ${opener} to the front of the first cell of the row that repeats: ` +
+    `Move ${opener} to the front of the first cell of the row that repeats — ` +
     "the row with the values in it, not the header row.",
 });
 

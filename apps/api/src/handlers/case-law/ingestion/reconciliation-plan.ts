@@ -229,7 +229,7 @@ export const floorSliceWalk = <TWalk extends SourceSliceWalk>({
   const refuse = (detail: string): Result<never, ConfigurationError> =>
     Result.err(
       new ConfigurationError({
-        message: `${adapterKey}: unusable reconciliation floor: ${detail}`,
+        message: `${adapterKey}: unusable reconciliation floor — ${detail}`,
       }),
     );
 

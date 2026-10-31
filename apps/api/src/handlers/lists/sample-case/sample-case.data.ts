@@ -21,7 +21,7 @@ type SampleFact = {
 export const SAMPLE_FACTS = [
   {
     statement:
-      'Calendar invitation "Intro: E.W. / J. Harrow" shown as accepted.',
+      'Calendar invitation "Intro — E.W. / J. Harrow" shown as accepted.',
     details: {
       occurredOn: "2021-03-09",
       occurredOnPrecision: "day",
@@ -182,7 +182,7 @@ export const SAMPLE_FACTS = [
     },
   },
   {
-    statement: 'Calendar "Brightwater review, Boardroom 2", 09:30.',
+    statement: 'Calendar "Brightwater review — Boardroom 2", 09:30.',
     details: {
       occurredOn: "2021-05-03",
       occurredOnPrecision: "day",
@@ -207,7 +207,7 @@ export const SAMPLE_FACTS = [
     },
   },
   {
-    statement: 'Handwritten margin note: "approx £40k, confirm w/ E".',
+    statement: 'Handwritten margin note: "approx £40k — confirm w/ E".',
     details: {
       occurredOn: null,
       occurredOnPrecision: null,

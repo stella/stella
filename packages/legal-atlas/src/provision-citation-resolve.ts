@@ -179,7 +179,7 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "iu",
     ),
     continuation: new RegExp(
-      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–\u2014]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|${LETTER}\)))`,
+      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|${LETTER}\)))`,
       "iu",
     ),
     laterSubdivision: new RegExp(
@@ -193,7 +193,7 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "iu",
     ),
     laterBareContinuation: new RegExp(
-      String.raw`(?:[,;]|[-–\u2014]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*\d{1,4}[a-z]?(?![\p{L}\p{N}])(?!\s*\/)`,
+      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*\d{1,4}[a-z]?(?![\p{L}\p{N}])(?!\s*\/)`,
       "iu",
     ),
     andFollowing: new RegExp(
@@ -212,11 +212,11 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "giu",
     ),
     laterLetterContinuation: new RegExp(
-      String.raw`(?:[,;]|[-–\u2014]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*${LETTER}\)`,
+      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*${LETTER}\)`,
       "iu",
     ),
     letterContinuation: new RegExp(
-      String.raw`^\s*(?:[,;]|[-–\u2014]|(?:${connectorSource(profile)})(?=\s))\s*${LETTER}(?![\p{L}\p{N}])`,
+      String.raw`^\s*(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*${LETTER}(?![\p{L}\p{N}])`,
       "iu",
     ),
     sectionUnits: new Map(

@@ -1561,8 +1561,8 @@ function ScrollToTopPlayground() {
         <div className="text-muted-foreground flex flex-col gap-4 text-sm">
           {Array.from({ length: 20 }, (_, index) => (
             <p key={index}>
-              Scroll row {index + 1}: keep scrolling to reveal the scroll-to-top
-              button.
+              Scroll row {index + 1} — keep scrolling to reveal the
+              scroll-to-top button.
             </p>
           ))}
         </div>

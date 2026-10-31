@@ -299,8 +299,7 @@ export const indexDecision = async (
     return Result.ok(undefined);
   }
 
-  // Preserve the persisted projection title format without re-projecting the corpus.
-  const title = `${decision.caseNumber} \u2014 ${decision.court}`;
+  const title = `${decision.caseNumber} — ${decision.court}`;
   const bodyText =
     decision.fulltext ??
     // SAFETY: sections is typed as unknown in Drizzle's JSONB

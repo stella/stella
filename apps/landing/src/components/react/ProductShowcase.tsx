@@ -65,7 +65,7 @@ const ProductShowcase = () => (
     </div>
 
     <style>{`
-        /* Stagger the per-tile reveal: set as CSS vars rather than
+        /* Stagger the per-tile reveal — set as CSS vars rather than
            inline style so the React type checker stays out of CSS
            variable territory. */
         .showcase-grid > .showcase-tile:nth-child(1) { --reveal-delay: 0ms; }
@@ -102,7 +102,7 @@ const ProductShowcase = () => (
           }
         }
 
-        /* --- Line-art illustrations --- */
+        /* ——— Line-art illustrations ——— */
 
         /* The brand accent is on the scan line statically; the drafting
            cursor word is set dynamically per-frame by the rAF driver so

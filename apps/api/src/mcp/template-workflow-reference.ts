@@ -143,14 +143,14 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "reported. Each entry's `source` is " +
       "ONE object naming who fills that field (`person`, `ai`, `lookup`, " +
       "`contact`, `party`, `matter`, `attorney`, `firm`, `formula`, " +
-      "`condition`); omit it for a field the person fills; see " +
+      "`condition`); omit it for a field the person fills — see " +
       `${TEMPLATE_FIELD_REFERENCE_URI}. The response echoes the full ` +
       `configuration in the ${LIST_TEMPLATES} detail shape, plus ` +
       "`issues[]` (`path`, `index`, `message`, `hint`): one entry per " +
       "configuration that could NOT be applied. The call rewrites whatever " +
-      "carries the field (its own markers, the `{% if %}` and `{% elif %}` " +
+      "carries the field — its own markers, the `{% if %}` and `{% elif %}` " +
       "tags a `condition` source's expression replaces, or the keyed markers " +
-      "that render a `lookup` source's hit) and publishes the document, so " +
+      "that render a `lookup` source's hit — and publishes the document, so " +
       "a property you send " +
       "replaces what the marker said and one you leave out keeps it; naming " +
       "a `source` replaces the whole answer to who fills the field. The call " +
@@ -200,7 +200,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       "defaults to `text`: `paragraphs` (the rendered paragraphs and table " +
       "cells), `charCount`, `truncated`, `completionStatus` (`complete` or " +
       "`partial`), `templateName`, `fileName`, `unmatchedPlaceholders`, " +
-      "`unusedValues`, `structureErrors`, and `decisions`: one entry per " +
+      "`unusedValues`, `structureErrors`, and `decisions` — one entry per " +
       "AI-decided condition in the same shape " +
       `${PREVIEW_TEMPLATE_CONDITIONS} returns, with \`decided_by\` naming ` +
       "which settled it (`decision_model`, `generative_model`, or `user` " +
@@ -221,7 +221,7 @@ const WORKFLOW_STEPS: readonly WorkflowStep[] = [
       `${SAVE_FILLED_TEMPLATE} with \`action\` (\`create_document\`, ` +
       "optionally under `parent_id`, or `create_version` with `entity_id`), " +
       "`template_id`, `matter_id`, `values`, and an `idempotency_key` unique " +
-      "to this save; reuse it only to recover the same timed-out request. " +
+      "to this save — reuse it only to recover the same timed-out request. " +
       "The fill happens server-side; no byte upload. Returns the entity and " +
       "version identifiers plus `unmatchedPlaceholders` and `unusedValues`.",
   },
@@ -267,7 +267,7 @@ const AUTHORING_RULES = [
       "paragraph, and a pair either shares a block-level parent or is " +
       "confined to a single table row (which repeats the row). Within one row " +
       "the pair may instead prefix a cell's text and suffix a LATER cell's " +
-      "text: `{% for d in deliverables %}{{ d.item }}` in one cell and " +
+      "text — `{% for d in deliverables %}{{ d.item }}` in one cell and " +
       "`{{ d.fee }}{% endfor %}` in another act on the whole row; both " +
       "halves must be in the same row and in different cells. A pair that " +
       "straddles a table boundary is refused either way, and how it is " +

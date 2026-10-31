@@ -79,7 +79,7 @@ describe("renderPrefillTargets", () => {
 
     expect(rendered).toBe(
       [
-        'f1: company.name, "Company name" (text)',
+        'f1: company.name — "Company name" (text)',
         "f2: signing_date (date, ISO 8601 (YYYY-MM-DD))",
         'f3: court (select, one of: "Praha", "Brno")',
       ].join("\n"),
@@ -97,7 +97,7 @@ describe("renderPrefillTargets", () => {
       ]),
     );
     expect(rendered).toBe(
-      'f1: company.krs, "KRS number" (text); hint: "10-digit number from the register"',
+      'f1: company.krs — "KRS number" (text) — hint: "10-digit number from the register"',
     );
   });
 });
