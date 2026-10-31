@@ -90,7 +90,7 @@ const KNOWN_NON_FAMILY_MODEL_PATTERNS = {
     /^gemini-\d+(?:\.\d+)?-flash-lite-image$/u,
   ],
   mistral: [
-    /^(?:codestral|devstral|glm|labs-|magistral|ministral|open-|pixtral|voxtral|zai-)/u,
+    /^(?:codestral|deepseek-|devstral|glm|labs-|magistral|ministral|open-|pixtral|voxtral|zai-)/u,
     /^mistral-(?:embed|nemo)$/u,
     /^mistral-(?:large|medium|small)-(?:latest|\d{4})$/u,
   ],
