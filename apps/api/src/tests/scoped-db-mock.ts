@@ -11,6 +11,7 @@ import {
   featureEnrolments,
   fields,
 } from "@/api/db/schema";
+import { advisoryExecutionRows } from "@/api/tests/fixtures/aggregate-lock-order";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =
@@ -231,8 +232,12 @@ export const createScopedDbMock = (
         ? providedQuery.documentProcessingRuns
         : {};
     const transaction = {
-      execute: async () => {
+      // Advisory fences such as the contact capacity lock read no fixture
+      // data, so every handler that takes one acquires it here. Other
+      // statements stay unanswered unless the test supplies `execute`.
+      execute: async (statement: unknown) => {
         await Promise.resolve();
+        return advisoryExecutionRows(statement);
       },
       ...(options?.authorizedWorkspaceIds === undefined
         ? {}
