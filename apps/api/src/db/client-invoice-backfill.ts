@@ -37,10 +37,14 @@ export const CLIENT_INVOICE_TENANT_KEY = {
 const CLIENT_BACKFILL_BATCH_SIZE = 500;
 const PENDING_CLIENT_INVOICES = `SELECT i.id FROM public.invoices i JOIN public.workspaces w ON w.id=i.workspace_id AND w.organization_id=i.organization_id WHERE i.client_id IS NULL AND w.client_id IS NOT NULL`;
 
-/** A committed row leaves the predicate, so interrupted deployments resume without replaying writes. */
+/**
+ * A committed row leaves the predicate, so interrupted deployments resume
+ * without replaying writes. It runs once its partial index is built.
+ */
 export const CLIENT_INVOICE_BACKFILL = {
   introducedBy: "20261026220000_client_invoices",
   name: "client-invoice-clients",
+  dependsOn: ["invoices_client_backfill_idx"],
   readCompletion: async (connection) => {
     const pending = await connection.query(
       `${PENDING_CLIENT_INVOICES} LIMIT 1`,

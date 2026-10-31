@@ -18,7 +18,10 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
-import { CLIENT_INVOICE_TENANT_KEY } from "./client-invoice-backfill";
+import {
+  CLIENT_INVOICE_BACKFILL,
+  CLIENT_INVOICE_TENANT_KEY,
+} from "./client-invoice-backfill";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
@@ -1208,9 +1211,12 @@ describe("online migrations", () => {
   // A fresh database has none of the online work; build_finalized builds only
   // what every migrate run owns, and startup must still validate what it left.
   test("startup validates a fresh database that build_finalized migrated, reporting work that waits on pending work", async () => {
+    // Schema migrations create every index without an online build.
     const harness = createHarness({
       emptyRepairTables: true,
-      missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+      missingIndexes: ONLINE_MIGRATION_INDEXES.filter(declaresOnlineBuild).map(
+        ({ name }) => name,
+      ),
     });
     expect(
       await runOnlineMigrations(harness.pool, {
@@ -1228,12 +1234,33 @@ describe("online migrations", () => {
     expect(pending.has(INVOICE_TENANT_UNIQUE_INDEX.name)).toBe(true);
     expect(pending.has(CLIENT_INVOICE_TENANT_KEY.name)).toBe(true);
     expect(pending.has("invoices_original_organization_fk")).toBe(true);
+    // An empty table leaves nothing to backfill; it still waits on its index.
+    expect(pending.has(CLIENT_INVOICE_BACKFILL.name)).toBe(true);
     // Work every migrate run owns is complete, so nothing it owns is pending.
     expect(
       Object.entries(ONLINE_WORK_LIFECYCLE).flatMap(([name, entry]) =>
         pending.has(name) && isMigrateReady(entry) ? [name] : [],
       ),
     ).toEqual([]);
+  });
+
+  // Any one pending index can be the one the runner has not built yet; work
+  // that presupposes it waits instead of reading a catalog it is not in.
+  test("startup validates with any one pending index missing, reporting it pending", async () => {
+    const pendingIndexes = ONLINE_MIGRATION_INDEXES.filter(
+      ({ name }) => ONLINE_WORK_LIFECYCLE[name].state === "pending",
+    ).map(({ name }) => name);
+    expect(pendingIndexes).toContain(INVOICE_TENANT_UNIQUE_INDEX.name);
+    for (const missing of pendingIndexes) {
+      const report = await reportOnlineMigrations(
+        createHarness({ missingIndexes: [missing] }).pool,
+        { repairs: ONLINE_MIGRATION_REPAIRS, lifecycle: ONLINE_WORK_LIFECYCLE },
+      );
+      expect({
+        missing,
+        pending: report.pending.some(({ name }) => name === missing),
+      }).toEqual({ missing, pending: true });
+    }
   });
 
   test("every validation a registered repair runs is declared, and each runs once", async () => {

@@ -85,6 +85,9 @@ test("every prerequisite precedes its dependent in walk order", () => {
   expect(ONLINE_WORK_DEPENDENCIES.get("client-invoice-tenant-key")).toEqual([
     "invoices_id_org_unique",
   ]);
+  expect(ONLINE_WORK_DEPENDENCIES.get("client-invoice-clients")).toEqual([
+    "invoices_client_backfill_idx",
+  ]);
 });
 
 // Startup reads deploy-blocking work from pg_index when another session holds

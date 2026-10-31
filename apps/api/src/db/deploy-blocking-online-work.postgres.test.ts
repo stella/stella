@@ -12,7 +12,9 @@ import {
   type MigrateOnlineWorkMode,
 } from "./migrate-online-work-mode";
 import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
+import type { OnlineMigrationPool } from "./online-migration-connection";
 import {
+  ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
   reportOnlineMigrations,
 } from "./online-migrations";
@@ -50,6 +52,49 @@ const indexValidity = async (admin: SQL, names: readonly string[]) => {
     .toSorted((left, right) => (left.name < right.name ? -1 : 1));
 };
 
+const PENDING_INDEXES = ONLINE_MIGRATION_INDEXES.filter(
+  ({ name }) => ONLINE_WORK_LIFECYCLE[name].state === "pending",
+);
+
+/** Startup validation over one reserved session, which stays the caller's. */
+const sessionPool = (session: SQL): OnlineMigrationPool => ({
+  reserve: async () => ({
+    execute: async (query, params = []) => {
+      await session.unsafe(query, [...params]);
+    },
+    query: async (query, params = []) =>
+      await session.unsafe(query, [...params]),
+    release: () => undefined,
+  }),
+});
+
+type Validation = {
+  type: "validated" | "migrator_active" | "threw";
+  pending: readonly string[];
+  message?: string;
+};
+
+/** What startup validation ended with, a throw included, as plain data. */
+const validationOf = async (session: SQL): Promise<Validation> => {
+  try {
+    const outcome = await reportOnlineMigrations(sessionPool(session), {
+      repairs: ONLINE_MIGRATION_REPAIRS,
+    });
+    return outcome.type === "validated"
+      ? {
+          type: outcome.type,
+          pending: outcome.report.pending.map(({ name }) => name),
+        }
+      : { type: outcome.type, pending: [] };
+  } catch (error) {
+    return {
+      type: "threw",
+      pending: [],
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
+};
+
 // CI owns this isolated PostgreSQL database and applies the committed bundle.
 describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
   // The suites' database starts empty and is migrated with build_finalized,
@@ -70,21 +115,83 @@ describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
             ebs: { type: "disabled" },
           }),
         ).toMatchObject({ status: "applied" });
-        expect(
-          await reportOnlineMigrations(
-            {
-              reserve: async () => ({
-                execute: async (query, params = []) => {
-                  await connection.unsafe(query, [...params]);
-                },
-                query: async (query, params = []) =>
-                  await connection.unsafe(query, [...params]),
-                release: () => undefined,
-              }),
-            },
-            { repairs: ONLINE_MIGRATION_REPAIRS },
-          ),
-        ).toMatchObject({ type: "validated" });
+        const validation = await validationOf(connection);
+        expect(validation).toMatchObject({ type: "validated" });
+        // The tenant key waits for its unique index, the foreign key
+        // validation for the tenant key that installs it, and the client
+        // backfill for its partial index: each stays pending.
+        expect(validation.pending).toEqual(
+          expect.arrayContaining([
+            "invoices_id_org_unique",
+            "client-invoice-tenant-key",
+            "invoices_original_organization_fk",
+            "invoices_client_backfill_idx",
+            "client-invoice-clients",
+          ]),
+        );
+      } finally {
+        await connection.release();
+      }
+    });
+  }, 180_000);
+
+  // Each pending index can be the one the post-deploy runner has not built
+  // yet. Startup validation over every such state reports that index pending
+  // and never fails on work that presupposes it. Each state is built and
+  // discarded inside one transaction.
+  // timeout: a migrate run over the committed bundle builds online indexes
+  test("startup validates a database missing any one pending online index, reporting it pending", async () => {
+    expect(PENDING_INDEXES.length).toBeGreaterThan(0);
+    const url = databaseUrl ?? panic("DATABASE_URL is required");
+    await withGatedTestClients(url, async ({ openClient }) => {
+      const { sql: admin } = openClient({ max: 1 });
+      const connection = await admin.reserve();
+      try {
+        await runMigrationsUntilSettled({
+          onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
+          connection,
+          migrationsFolder,
+          databaseUrl: url,
+          ebs: { type: "disabled" },
+        });
+        await connection.unsafe("BEGIN");
+        try {
+          for (const { name, createSql } of PENDING_INDEXES) {
+            const [present] = await connection<{ present: boolean }[]>`
+              SELECT to_regclass(${`public."${name}"`}) IS NOT NULL AS present`;
+            if (present?.present !== true) {
+              const build = (
+                createSql ?? panic(`Pending index ${name} has no build`)
+              ).replace(/\bCONCURRENTLY\s+/u, "");
+              await connection.unsafe(build);
+            }
+          }
+          const outcomes: {
+            name: string;
+            validation: Omit<Validation, "pending">;
+            reportsItPending: boolean;
+          }[] = [];
+          for (const { name } of PENDING_INDEXES) {
+            await connection.unsafe("SAVEPOINT one_index_missing");
+            await connection.unsafe(`DROP INDEX public."${name}"`);
+            const { pending, ...validation } = await validationOf(connection);
+            await connection.unsafe("ROLLBACK TO SAVEPOINT one_index_missing");
+            outcomes.push({
+              name,
+              validation,
+              reportsItPending: pending.includes(name),
+            });
+          }
+          expect(outcomes).toEqual(
+            PENDING_INDEXES.map(({ name }) => ({
+              name,
+              validation: { type: "validated" },
+              reportsItPending: true,
+            })),
+          );
+        } finally {
+          await connection.unsafe("ROLLBACK");
+        }
       } finally {
         await connection.release();
       }
@@ -141,18 +248,21 @@ describe.skipIf(!runPostgresTests)("deploy-blocking online work", () => {
           await admin`INSERT INTO contacts (id, organization_id, type, display_name, external_source, external_id, external_change_key, imported_at)
             VALUES (${contact}, ${organization}, 'person', 'Duplicate import', 'fixture-import', 'same-ref', 'v1', now())`;
         }
-        const connection = await admin.reserve();
-        const rejection = await rejectionOf(
-          runMigrations({
-            onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED,
-            connection,
-            migrationsFolder,
-            databaseUrl: url,
-            ebs: { type: "disabled" },
-          }).finally(async () => {
+        const migrateRelease = async () => {
+          const connection = await admin.reserve();
+          try {
+            return await runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED,
+              connection,
+              migrationsFolder,
+              databaseUrl: url,
+              ebs: { type: "disabled" },
+            });
+          } finally {
             await connection.release();
-          }),
-        );
+          }
+        };
+        const rejection = await rejectionOf(migrateRelease());
         expect(rejection).toBeInstanceOf(Error);
         const left = await indexValidity(admin, ["contacts_org_external_uidx"]);
         expect(left.every(({ valid }) => !valid)).toBe(true);
