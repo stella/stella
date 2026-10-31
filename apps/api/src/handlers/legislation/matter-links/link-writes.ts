@@ -1,7 +1,5 @@
 import { and, count, eq, inArray, or, sql } from "drizzle-orm";
 
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
-
 import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
@@ -14,7 +12,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import type { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
-import { publishedLegislationDocumentIn } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   legislationVersionRef,
   opensOn,
@@ -129,7 +127,7 @@ export const linkProvisionsToMatter = async ({
                     : [],
                 ),
               ),
-              publishedLegislationDocumentIn(PUBLIC_LEGISLATION_COUNTRIES),
+              publishedLegislationDocumentFor("search"),
             ),
           )
           .limit(documentIds.length);

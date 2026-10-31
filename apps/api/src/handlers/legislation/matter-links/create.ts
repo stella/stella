@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { agentInputNormalization } from "@stll/agent-input";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { linkProvisionsToMatter } from "@/api/handlers/legislation/matter-links/link-writes";
@@ -9,14 +10,24 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
+import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { workspaceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 export const legislationMatterLinkItemSchema = v.strictObject({
   statuteId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
   provisionId: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
   version: v.pipe(v.string(), v.isoDate()),
-  jurisdiction: v.pipe(v.string(), v.minLength(3), v.maxLength(3)),
+  jurisdiction: v.pipe(
+    tPublicLawCountry,
+    v.metadata(
+      agentInputNormalization({
+        kind: "country",
+        country: { spelling: "alpha-3" },
+      }),
+    ),
+  ),
 });
 export const createLegislationMatterLinkBodySchema =
   legislationMatterLinkItemSchema;
@@ -75,40 +86,47 @@ const config = {
   body: createLegislationMatterLinkBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
-export const createLegislationMatterLink = createSafeHandler(
-  config,
-  async function* ({
-    body,
-    recordAuditEvent,
-    safeDb,
-    session,
-    user,
-    workspaceId,
-  }) {
-    const provisions = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await resolveMatterLinkProvisions({
-            items: [body],
-            legislationDb: legislationPublicReadDb,
-          }),
-      ),
-    );
-    const outcome = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await linkProvisionsToMatter({
-            tx,
-            workspaceId,
-            userId: user.id,
-            provisions,
-            organizationId: session.activeOrganizationId,
-            recordAuditEvent,
-          }),
-      ),
-    );
-    return Result.ok(responseForOutcome(outcome));
-  },
+export const createLegislationMatterLinkHandler = (
+  legislationDb: LegislationReadDb,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      body,
+      recordAuditEvent,
+      safeDb,
+      session,
+      user,
+      workspaceId,
+    }) {
+      const provisions = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await resolveMatterLinkProvisions({
+              items: [body],
+              legislationDb,
+            }),
+        ),
+      );
+      const outcome = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await linkProvisionsToMatter({
+              tx,
+              workspaceId,
+              userId: user.id,
+              provisions,
+              organizationId: session.activeOrganizationId,
+              recordAuditEvent,
+            }),
+        ),
+      );
+      return Result.ok(responseForOutcome(outcome));
+    },
+  );
+
+export const createLegislationMatterLink = createLegislationMatterLinkHandler(
+  legislationPublicReadDb,
 );
 
 declareAggregateMutation(createLegislationMatterLink, {

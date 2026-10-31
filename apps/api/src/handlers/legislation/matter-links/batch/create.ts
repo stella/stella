@@ -10,6 +10,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { resolveMatterLinkProvisions } from "@/api/lib/legal-search/legislation-matter-link-provisions";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
+import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { workspaceResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
@@ -36,41 +37,47 @@ const config = {
   },
   body: createLegislationMatterLinksBatchBodySchema,
 } satisfies WorkspaceHandlerConfig;
-const createLegislationMatterLinksBatch = createSafeHandler(
-  config,
-  async function* ({
-    body,
-    recordAuditEvent,
-    safeDb,
-    session,
-    user,
-    workspaceId,
-  }) {
-    const provisions = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await resolveMatterLinkProvisions({
-            items: body.items,
-            legislationDb: legislationPublicReadDb,
-          }),
-      ),
-    );
-    const outcome = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await linkProvisionsToMatter({
-            tx,
-            workspaceId,
-            userId: user.id,
-            provisions,
-            organizationId: session.activeOrganizationId,
-            recordAuditEvent,
-          }),
-      ),
-    );
-    return Result.ok(outcome);
-  },
-);
+export const createLegislationMatterLinksBatchHandler = (
+  legislationDb: LegislationReadDb,
+) =>
+  createSafeHandler(
+    config,
+    async function* ({
+      body,
+      recordAuditEvent,
+      safeDb,
+      session,
+      user,
+      workspaceId,
+    }) {
+      const provisions = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await resolveMatterLinkProvisions({
+              items: body.items,
+              legislationDb,
+            }),
+        ),
+      );
+      const outcome = yield* Result.await(
+        safeDb(
+          async (tx) =>
+            await linkProvisionsToMatter({
+              tx,
+              workspaceId,
+              userId: user.id,
+              provisions,
+              organizationId: session.activeOrganizationId,
+              recordAuditEvent,
+            }),
+        ),
+      );
+      return Result.ok(outcome);
+    },
+  );
+
+const createLegislationMatterLinksBatch =
+  createLegislationMatterLinksBatchHandler(legislationPublicReadDb);
 
 declareAggregateMutation(createLegislationMatterLinksBatch, {
   type: "aggregate",
