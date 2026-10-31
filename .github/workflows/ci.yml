@@ -1752,6 +1752,8 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+          GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
+          GH_TOKEN: ${{ github.token }}
         # Remove the tooling checkout so later source checks see only the
         # candidate tree. A digest that only needs a mechanical refresh is
         # rewritten by the autofix generator; this check (the script's
@@ -7140,6 +7142,7 @@ jobs:
     permissions:
       contents: read
       actions: write
+      pull-requests: read
     steps: *quick-checks-steps
 
   # Aggregation job for branch protection. The ruleset requires
