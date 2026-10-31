@@ -70,8 +70,12 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
     today.add({ days: 1 }).toString(),
   );
   const [matterId, setMatterId] = useState(params.matterId ?? null);
+  // The chosen matter's members, loading; held in a box so a new matter
+  // replaces the load rather than chaining onto it.
   const membersOf = (id: string | null) =>
-    id === null ? null : listMatterMembers({ fetch, matterId: id, source });
+    id === null
+      ? null
+      : { load: listMatterMembers({ fetch, matterId: id, source }) };
   const [members, setMembers] = useState(() => membersOf(matterId));
   const [chosen, setChosen] = useState<ReadonlySet<string>>(
     () => new Set([source.session().userId]),
@@ -101,7 +105,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       const created = await createTask({
         assigneeIds: newTaskAssignees(
           chosen,
-          members === null ? null : await members,
+          members === null ? null : await members.load,
         ),
         dueDate,
         fetch,
@@ -230,7 +234,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <Suspense fallback={<ActivityIndicator color={colors.muted} />}>
               <MemberList
                 assigned={chosen}
-                load={members}
+                load={members.load}
                 onToggle={(member, assign) => {
                   setChosen((current) => {
                     const next = new Set(current);
