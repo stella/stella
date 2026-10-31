@@ -51,6 +51,7 @@ import type {
 import {
   ALL_WORK_SCOPE,
   FINALIZED_SCOPE,
+  ONLINE_MIGRATION_REPAIRS,
   reportOnlineMigrations,
   runOnlineMigrations,
 } from "./online-migrations";
@@ -707,7 +708,7 @@ const runOnlinePhase = async ({
     case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
       return await runOnline(pool, { ...build, scope: BUILD_SCOPE[mode] });
     case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED: {
-      const outcome = await validateOnline(pool);
+      const outcome = await validateOnline(pool, { repairs: build.repairs });
       switch (outcome.type) {
         case "validated":
           return { type: "complete" };
@@ -941,6 +942,7 @@ export const runMigrations = async ({
         indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
         reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
         timing: onlineTiming,
+        repairs: ONLINE_MIGRATION_REPAIRS,
       },
       runOnline,
       validateOnline,

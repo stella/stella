@@ -2103,7 +2103,7 @@ jobs:
 
       - name: Turbo remote cache
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2416,7 +2416,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2958,7 +2958,7 @@ jobs:
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3449,7 +3449,7 @@ jobs:
 
       - name: Turbo remote cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3584,7 +3584,7 @@ jobs:
         # code-quality runs cacheable workspace and root checks. Restore the
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -6567,7 +6567,7 @@ jobs:
   # check/clippy/doc must run where the desktop crate actually builds
   # so platform-gated macOS and Windows code is covered.
   #
-  # The matrix mirrors the release matrix (macos-14 + windows-latest)
+  # The matrix mirrors the release matrix (macos-15 + windows-latest)
   # rather than Linux: the desktop app ships only those two targets,
   # and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
@@ -6591,7 +6591,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest
@@ -6773,7 +6773,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest
@@ -7380,6 +7380,11 @@ jobs:
           # every exit, so its verdict is this step's exit status.
           RECORDED_NEEDS="$NEEDS"
           required_jobs='[]'
+          # The unmet checks the full-depth verdict found, published beside
+          # (never inside) the required-jobs record as `ci-required-violations`
+          # so a reader can tell a failure it may excuse from one it may not.
+          violations=""
+          violations_evaluated=false
           reused_from_run_id=""
           # Set by each exit that passes without evaluating any job.
           pass_through_reason=""
@@ -7417,6 +7422,13 @@ jobs:
                 not_required: ([keys[] | select(. != "ci-plan")] - $counted),
                 verdict: (if $status == "0" then "success" else "failure" end)}' <<< "$RECORDED_NEEDS") || return 1
             echo "required_summary=$record" >> "${GITHUB_OUTPUT:-}"
+            violations_record=$(jq -nce --arg run "${GITHUB_RUN_ID:-}" --arg attempt "${GITHUB_RUN_ATTEMPT:-}" \
+              --arg head "${HEAD_SHA:-}" --arg evaluated "$violations_evaluated" --arg violations "${violations:-}" '
+              def nonempty: if . == "" then null else . end;
+              def count: if test("^[1-9][0-9]*$") then tonumber else null end;
+              {run_id: ($run | count), run_attempt: ($attempt | count), head_sha: ($head | nonempty),
+                evaluated: ($evaluated == "true"), violations: ($violations | nonempty)}') || return 1
+            echo "required_violations=$violations_record" >> "${GITHUB_OUTPUT:-}"
           }
           trap 'record_required_jobs "$?" || echo "::error::The required-jobs record could not be written."' EXIT
           # The required-jobs record a CI run uploaded, checked against its id.
@@ -7878,6 +7890,7 @@ jobs:
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
               violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
+              violations_evaluated=true
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
@@ -8068,6 +8081,34 @@ jobs:
           name: ci-required-summary
           overwrite: true
           path: ${{ runner.temp }}/ci-required-summary/ci-required-summary.json
+          retention-days: 90
+          if-no-files-found: error
+
+      # The unmet checks behind the verdict, as an artifact of their own: the
+      # required-jobs record above has a fixed key set that other readers
+      # parse strictly. The release health gate reads both.
+      - name: Write required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          REQUIRED_VIOLATIONS: ${{ steps.outcome.outputs.required_violations }}
+          RECORD_PATH: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
+        run: |
+          if [[ -z "$REQUIRED_VIOLATIONS" ]]; then
+            echo "::error::Evaluate CI outcome wrote no required-violations record."
+            exit 1
+          fi
+          mkdir -p "$(dirname "$RECORD_PATH")"
+          printf '%s\n' "$REQUIRED_VIOLATIONS" > "$RECORD_PATH"
+
+      - name: Upload required-violations record
+        if: always() && steps.outcome.outcome != 'skipped'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-required-violations
+          overwrite: true
+          path: ${{ runner.temp }}/ci-required-violations/ci-required-violations.json
           retention-days: 90
           if-no-files-found: error
 

@@ -7,11 +7,7 @@ import {
   INVOICE_SENT_AT_BACKFILL,
 } from "@/api/lib/billing/invoice-payment-backfill";
 import { CASE_LAW_COURT_DATE_PUBLISHED_INDEX } from "@/api/lib/case-law/court-date-index";
-import {
-  CASE_LAW_COVERAGE_COURT_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_INDEX,
-} from "@/api/lib/case-law/coverage-index";
+import { CASE_LAW_COVERAGE_INDEXES } from "@/api/lib/case-law/coverage-index";
 import {
   publishedCaseLawDecisionIndexDefinitionPredicateSql,
   publishedCaseLawDecisionIndexPredicateSql,
@@ -50,6 +46,7 @@ import {
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
+import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -86,6 +83,7 @@ import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
+import { LEGAL_LIST_SOURCE_DECISION_BACKFILL } from "./legal-list-source-decision-backfill";
 import {
   LIST_VERIFICATION_CONSTRAINT_VALIDATION,
   LIST_VERIFICATION_CONSTRAINTS,
@@ -369,9 +367,7 @@ export const ONLINE_MIGRATION_INDEXES = [
   ...MONITORING_SESSION_INDEXES,
   chatContentV3Index(CHAT_CONTENT_V3_SOURCES.message),
   chatContentV3Index(CHAT_CONTENT_V3_SOURCES.revision),
-  CASE_LAW_COVERAGE_INDEX,
-  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
-  CASE_LAW_COVERAGE_COURT_INDEX,
+  ...CASE_LAW_COVERAGE_INDEXES,
   // Reviewed doctrine per cited decision: few rows carry a finding.
   {
     createSql: `CREATE INDEX CONCURRENTLY "case_law_citations_doctrine_cited_idx" ON public."case_law_citations" USING btree ("cited_decision_id") WHERE "doctrinal_treatment" IN ('distinguishes', 'limits')`,
@@ -982,6 +978,8 @@ export const ONLINE_MIGRATION_REPAIRS = [
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
+  LEGAL_LIST_SOURCE_DECISION_BACKFILL,
+  CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
 ] as const satisfies readonly OnlineRepair[];
 
 export type OnlineWorkName =
@@ -1054,7 +1052,7 @@ type OnlineMigrationMode =
 type RepairMode = Extract<OnlineMigrationMode, { operation: "repair" }>;
 
 type OnlineMigrationOptions = {
-  repairs?: readonly OnlineRepair[];
+  repairs: readonly OnlineRepair[];
   lifecycle?: Readonly<Record<string, OnlineWorkLifecycle>>;
   log?: (record: {
     event: "online_repair_pending";
@@ -1163,7 +1161,7 @@ export type OnlineMigrationStartupReport = {
 /** Startup validates under the online lock so concurrent rebuilds cannot race it. */
 export const reportOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  options: OnlineMigrationOptions,
 ): Promise<
   | { type: "validated"; report: OnlineMigrationStartupReport }
   | { type: "migrator_active" }
@@ -1458,7 +1456,7 @@ const walkOnlineMigrations = async ({
     connection,
     inScope,
     mode,
-    repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
+    repairs: options.repairs,
     log:
       options.log ??
       ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),

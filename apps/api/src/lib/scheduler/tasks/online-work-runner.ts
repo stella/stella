@@ -35,6 +35,7 @@ import type {
 import {
   claimOnlineWorkUnit,
   type ClaimOnlineWorkUnitOptions,
+  ONLINE_MIGRATION_REPAIRS,
   ONLINE_WORK_NAMES,
   type OnlineWorkName,
   type OnlineWorkUnitClaim,
@@ -489,6 +490,7 @@ const processRunner = (): RunnerByDb => {
         await claimOnlineWorkUnit(maintenancePool(), {
           name,
           lifecycle,
+          repairs: ONLINE_MIGRATION_REPAIRS,
           indexGate: {
             // Background work waits on a missing setting instead of failing
             // every tick; the gate reports it and holds the build.

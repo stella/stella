@@ -309,7 +309,10 @@ export const DECLARED_SCHEDULER_JOBS = [
       everyMs: CASE_LAW_COVERAGE_REFRESH_INTERVAL_MS,
     },
     task: REFRESH_CASE_LAW_COVERAGE_TASK,
-    reads: "load-governed",
+    reads: {
+      budget: "scheduled.caseLaw.refreshCoverage",
+      governance: "load-governed",
+    },
   },
   {
     description: "Report scheduler pauses older than 24 hours",

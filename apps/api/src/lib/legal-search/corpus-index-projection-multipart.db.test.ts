@@ -127,14 +127,16 @@ beforeAll(
       name: "Multipart test",
       descriptor: null,
     });
-    const written = await writeCorpusDocument({
-      documentId: DOCUMENT_ID,
-      jurisdiction: "CZE",
-      text: TEXT,
-      sections: null,
-      ast: null,
-      stored: null,
-    });
+    const written = (
+      await writeCorpusDocument({
+        documentId: DOCUMENT_ID,
+        jurisdiction: "CZE",
+        text: TEXT,
+        sections: null,
+        ast: null,
+        stored: null,
+      })
+    ).unwrap();
     if (written.type !== "written") {
       panic("Seeded corpus payload was not written");
     }

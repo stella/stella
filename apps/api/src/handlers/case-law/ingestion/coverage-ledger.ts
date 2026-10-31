@@ -16,9 +16,9 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCoverageSlices } from "@/api/db/schema";
-import type { SliceCoverage } from "@/api/handlers/case-law/ingestion/adapter";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { SliceCoverage } from "@/api/lib/legal-search/ingestion-types";
 
 export type RecordSliceCoverageInput = {
   sourceId: SafeId<"caseLawSource">;

@@ -204,6 +204,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
                 {
                   name,
                   lifecycle,
+                  repairs: [],
                   indexGate: healthyGate(),
                   reserveObserver: async () => adapter(observer),
                   timing: { clock: () => 0, emit: () => undefined },
@@ -284,6 +285,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
               {
                 name: index.name,
                 lifecycle,
+                repairs: [],
                 indexGate: healthyGate(),
                 reserveObserver: async () => connection,
               },
@@ -399,6 +401,7 @@ describe.skipIf(!enabled)("online work runner on Postgres", () => {
           {
             name: index.name,
             lifecycle,
+            repairs: [],
             indexGate: healthyGate(),
             reserveObserver: async () => adapter(session),
           },

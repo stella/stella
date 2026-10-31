@@ -1477,9 +1477,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
   "CACHE_WRITE",
-  // Native cache action state is restored only for its own post hook.
-  "STATE_key",
-  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
@@ -1538,6 +1535,8 @@ export const TOOLING_ENV_KEYS = new Set([
   // The release resolve job exports the network retry helper's path, staged
   // from the workflow's own revision, for its git fetches.
   "NETWORK_RETRY_SCRIPT",
+  // The release rehearsal workflow provides its deployment-repository target.
+  "STAGING_DEPLOY_REPOSITORY",
   // A release-candidate staging deploy starts staging (scripts/staging-wake.sh):
   // the commit it deploys, the infrastructure repository and its App token,
   // the readiness endpoint and edge header, and the bounds tests shorten.
@@ -1651,6 +1650,9 @@ export const TOOLING_ENV_KEYS = new Set([
   "FLAKY_TEST_QUARANTINE_REGISTRY",
   "FLAKY_TEST_QUARANTINE_REPORT_DIR",
   "GH_READ_TOKEN",
+  // Served API journeys: the listening port and captured server log.
+  "SERVED_MCP_API_LOG",
+  "SERVED_MCP_API_PORT",
   "HEAD_SHA",
   "HEAVY_ONLY",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.
@@ -1683,6 +1685,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_CANARY_FRONTEND_URL",
   "MCP_CANARY_MODE",
   "MCP_CANARY_REQUIRE_CREDENTIALS",
+  "MCP_CANARY_THIRD_PARTY_FETCHES",
   "MCP_CANARY_TOKEN",
   "MERGE_GROUP_HEAD_REF",
   "MODE",

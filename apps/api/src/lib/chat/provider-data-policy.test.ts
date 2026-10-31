@@ -11,6 +11,7 @@ import {
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { MODEL_DEFAULTS_LEDGER } from "@stll/ai-catalog/model-defaults-ledger";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import { DECISION_MODEL_PROVIDERS } from "@/api/lib/ai-config";
@@ -46,7 +47,6 @@ import {
   findTranscriptProblems,
   providerWireFormatOf,
 } from "@/api/tests/helpers/provider-request-transcript";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
