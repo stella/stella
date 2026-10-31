@@ -186,3 +186,43 @@ test("a grant or preference change on a stale revision writes nothing", async ()
   });
   expect(await audited()).toHaveLength(auditedBefore);
 });
+
+test("a revision read in one session time zone matches in any other", async () => {
+  let revision =
+    (
+      await write({
+        change: { type: "set_preference", revision: null, preference: "Kept" },
+        timeZone: "UTC",
+      })
+    )?.revision ?? null;
+  for (const timeZone of ["Europe/Prague", "America/New_York"]) {
+    // The fixture reaches the fault: the stored instant prints differently
+    // in this zone, so a text comparison would refuse a current revision.
+    const printed = (
+      await createSafeDb(
+        db,
+        [],
+        ids.orgA,
+        ids.userA1,
+      )(async (tx) => {
+        await tx.execute(sql`select set_config('TimeZone', ${timeZone}, true)`);
+        return await tx
+          .select({
+            text: sql<string>`${billingDraftUserSettings.updatedAt}::text`,
+          })
+          .from(billingDraftUserSettings)
+          .where(eq(billingDraftUserSettings.userId, ids.userA1))
+          .limit(1);
+      })
+    ).unwrap();
+    expect(printed.at(0)?.text).not.toBe(revision);
+
+    const granted = await write({
+      change: { type: "grant_consent", revision },
+      timeZone,
+    });
+
+    expect(granted?.consentAt).toBeInstanceOf(Date);
+    revision = granted?.revision ?? null;
+  }
+});
