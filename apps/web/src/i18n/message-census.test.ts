@@ -96,7 +96,14 @@ const addArgumentType = (
   argumentTypes.set(argument, types);
 };
 
+const analyses = new Map<string, Analysis>();
+
+// Every English source is compared against each locale, so parse each message once.
 const analyzeMessage = (message: string): Analysis => {
+  const cached = analyses.get(message);
+  if (cached !== undefined) {
+    return cached;
+  }
   const analysis: Analysis = {
     arguments: new Set(),
     argumentTypes: new Map(),
@@ -161,7 +168,21 @@ const analyzeMessage = (message: string): Analysis => {
   for (const argument of plainArguments) {
     analysis.numericArguments.add(argument);
   }
+  analyses.set(message, analysis);
   return analysis;
+};
+
+const pluralRulesByLocale = new Map<string, Intl.PluralRules>();
+
+const pluralRules = (locale: string, type: PluralElement["pluralType"]) => {
+  const cacheKey = `${locale}\0${type}`;
+  const cached = pluralRulesByLocale.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const rules = new Intl.PluralRules(locale, { type });
+  pluralRulesByLocale.set(cacheKey, rules);
+  return rules;
 };
 
 const sorted = (values: Iterable<string>) => [...values].toSorted();
@@ -199,9 +220,8 @@ const censusErrors = (
   }
 
   for (const [index, plural] of translationAnalysis.plurals.entries()) {
-    const categories = new Intl.PluralRules(locale, {
-      type: plural.pluralType,
-    }).resolvedOptions().pluralCategories;
+    const categories = pluralRules(locale, plural.pluralType).resolvedOptions()
+      .pluralCategories;
     if (categories.length > 1) {
       const missing = categories.filter(
         (category) => !(category in plural.options),
@@ -245,6 +265,8 @@ const selectedPluralOption = (
   return category in plural.options ? category : "other";
 };
 
+const pluralOptionValues = new Map<string, number | undefined>();
+
 const valueForPluralOption = (
   plural: PluralElement,
   option: string,
@@ -253,13 +275,27 @@ const valueForPluralOption = (
   if (option.startsWith("=")) {
     return Number(option.slice(1));
   }
-  const rules = new Intl.PluralRules(locale, { type: plural.pluralType });
+  // The selected option depends only on the locale rules, offset, and declared options.
+  const cacheKey = JSON.stringify([
+    locale,
+    plural.pluralType,
+    plural.offset,
+    Object.keys(plural.options),
+    option,
+  ]);
+  if (pluralOptionValues.has(cacheKey)) {
+    return pluralOptionValues.get(cacheKey);
+  }
+  const rules = pluralRules(locale, plural.pluralType);
+  let found: number | undefined;
   for (const value of pluralCandidates()) {
     if (selectedPluralOption(plural, rules, value) === option) {
-      return value;
+      found = value;
+      break;
     }
   }
-  return undefined;
+  pluralOptionValues.set(cacheKey, found);
+  return found;
 };
 
 const selectedSelectOption = (select: SelectElement, value: string) =>
@@ -299,7 +335,7 @@ const branchScenarios = (analysis: Analysis, locale: string) => {
           (isPluralElement(element)
             ? selectedPluralOption(
                 element,
-                new Intl.PluralRules(locale, { type: element.pluralType }),
+                pluralRules(locale, element.pluralType),
                 Number(existing),
               ) !== option
             : selectedSelectOption(element, String(existing)) !== option)
@@ -437,33 +473,33 @@ const catalogFiles = sourceFileIndex(
   },
 );
 
-test("every translation preserves source arguments and complete plural forms", () => {
-  const catalogs = new Map<string, Catalog>();
-  for (const { relativePath, sourceText } of catalogFiles) {
-    catalogs.set(
-      relativePath.slice(0, -".json".length),
-      JSON.parse(sourceText),
-    );
-  }
+const catalogs = new Map<string, Catalog>(
+  catalogFiles.map(({ relativePath, sourceText }) => [
+    relativePath.slice(0, -".json".length),
+    JSON.parse(sourceText),
+  ]),
+);
+const englishMessages = new Map(
+  flattenMessages(catalogs.get("en")).map(({ key, value }) => [key, value]),
+);
+const translatedLocales = [...catalogs.keys()].filter(
+  (locale) => locale !== "en",
+);
 
-  const englishCatalog = catalogs.get("en");
-  expect(englishCatalog).toBeDefined();
-  if (englishCatalog === undefined) {
-    return;
-  }
-  const englishMessages = new Map(
-    flattenMessages(englishCatalog).map(({ key, value }) => [key, value]),
-  );
-  const failures: string[] = [];
+test("the census covers the English source and its translations", () => {
+  expect(catalogs.has("en")).toBe(true);
+  expect(englishMessages.size).toBeGreaterThan(0);
+  expect(translatedLocales).not.toEqual([]);
+});
 
-  for (const [locale, catalog] of catalogs) {
-    for (const { key, value } of flattenMessages(catalog)) {
-      if (locale === "en") {
-        continue;
-      }
+test.each(translatedLocales)(
+  "every %s translation preserves source arguments and complete plural forms",
+  (locale) => {
+    const failures: string[] = [];
+    for (const { key, value } of flattenMessages(catalogs.get(locale))) {
       const source = englishMessages.get(key);
-      expect(source, `${locale}:${key} exists in English`).toBeDefined();
       if (source === undefined) {
+        failures.push(`${locale}:${key}: missing from English`);
         continue;
       }
       for (const error of censusErrors(source, value, locale)) {
@@ -479,9 +515,9 @@ test("every translation preserves source arguments and complete plural forms", (
         }
       }
     }
-  }
-  expect(failures).toEqual([]);
-});
+    expect(failures).toEqual([]);
+  },
+);
 
 test("census rejects argument and plural regressions", () => {
   expect(censusErrors("{count}", "done", "de")).not.toEqual([]);
