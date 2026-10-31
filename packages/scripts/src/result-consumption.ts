@@ -17,6 +17,7 @@ import {
   type CodeCheckLeg,
   ownsCodeCheckPath,
 } from "./code-quality-partition";
+import { importDependents } from "./import-dependents";
 import { createProgram } from "./typescript-program";
 
 const asyncSome = async <T>(
@@ -1027,6 +1028,17 @@ const changedSourceFiles = (repositoryRoot: string, base: string): string[] => {
     .toSorted();
 };
 
+const productSourceFiles = (repositoryRoot: string): string[] =>
+  execFileSync(
+    "git",
+    ["ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+    { maxBuffer: 2 ** 30, cwd: repositoryRoot, encoding: "utf-8" },
+  )
+    .split("\0")
+    .filter((file) => file.length > 0 && isProductSourcePath(file))
+    .map((file) => path.join(repositoryRoot, file))
+    .filter((file) => existsSync(file));
+
 const workspaceConfig = (
   repositoryRoot: string,
   sourceFile: string,
@@ -1171,13 +1183,28 @@ const run = async (): Promise<number> => {
     console.log("result-consumption: no changed product TypeScript files");
     return 0;
   }
+  // A change that makes a function return a Result breaks unchanged callers,
+  // so the changed files are checked together with every module importing
+  // them.
+  let checkedFiles: string[] | undefined;
+  if (changedFiles !== undefined) {
+    const importers = importDependents({
+      repositoryRoot,
+      candidates: productSourceFiles(repositoryRoot),
+      changed: changedFiles,
+    });
+    console.log(
+      `result-consumption: ${changedFiles.length} changed file(s) and ${importers.size} importer(s)`,
+    );
+    checkedFiles = [...changedFiles, ...importers].toSorted();
+  }
 
   const diagnosticsByLocation = new Map<string, ResultConsumptionDiagnostic>();
 
   const discoveredProjects =
-    changedFiles === undefined
+    checkedFiles === undefined
       ? findResultWorkspaceConfigs(repositoryRoot)
-      : groupChangedFilesByConfig(repositoryRoot, changedFiles);
+      : groupChangedFilesByConfig(repositoryRoot, checkedFiles);
   const projects =
     cli.leg === undefined
       ? discoveredProjects
