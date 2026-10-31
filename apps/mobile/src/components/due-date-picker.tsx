@@ -7,7 +7,6 @@ export type DueDatePickerProps = {
   readonly day: string;
   /** The first day it offers, YYYY-MM-DD. */
   readonly earliest: string;
-  readonly label: string;
   readonly onChange: (day: string) => void;
 };
 

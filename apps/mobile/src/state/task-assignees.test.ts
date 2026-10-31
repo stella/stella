@@ -178,8 +178,8 @@ describe("task assignees", () => {
 
   test("only chosen people who are the matter's members get a new task, in the members' order", () => {
     const members = [
-      { userId: "user-3", user: { id: "user-3", name: "Šárka Dvořáková" } },
-      { userId: "user-1", user: { id: "user-1", name: "Jan" } },
+      { userId: "user-3", user: { id: "user-3", name: "Member Three" } },
+      { userId: "user-1", user: { id: "user-1", name: "Member One" } },
       { userId: "user-2", user: null },
     ];
     expect(
@@ -191,7 +191,7 @@ describe("task assignees", () => {
 
   test("a new task leaves its assignees to the server only when there is no member list", () => {
     const members = [
-      { userId: "user-1", user: { id: "user-1", name: "Jan" } },
+      { userId: "user-1", user: { id: "user-1", name: "Member One" } },
       { userId: "user-2", user: null },
     ];
     const chosen = new Set(["user-2"]);

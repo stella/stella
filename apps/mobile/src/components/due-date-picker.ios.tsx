@@ -8,7 +8,6 @@ import { pickedDay, pickerDate, swiftUiClock } from "@/state/picked-day";
 export const DueDatePicker = ({
   day,
   earliest,
-  label,
   onChange,
 }: DueDatePickerProps) => {
   const clock = swiftUiClock();
@@ -24,7 +23,6 @@ export const DueDatePicker = ({
           start: pickerDate(earliest, { ...clock, plainTime: "00:00" }),
         }}
         selection={pickerDate(day, clock)}
-        title={label}
       />
     </Host>
   );

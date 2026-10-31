@@ -59,8 +59,8 @@ export const listMyTasks = async ({
   });
 
 /**
- * Adds a task to a matter, given to `assigneeIds`; without them the server
- * gives it to its creator, so it lists here.
+ * Adds a task to a matter, given to `assigneeIds`: an empty list gives it to
+ * nobody. Left out, the server gives it to its creator, so it lists here.
  */
 export const createTask = async ({
   assigneeIds,

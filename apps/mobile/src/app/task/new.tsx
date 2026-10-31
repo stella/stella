@@ -202,7 +202,6 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
             <DueDatePicker
               day={pickedOn}
               earliest={today.toString()}
-              label={t("dueTitle")}
               onChange={setPickedOn}
             />
           ) : null}
