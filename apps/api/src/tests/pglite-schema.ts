@@ -1182,7 +1182,7 @@ export const caseLawParsedInputStateStatements = (): string[] => {
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261030140000_case_law_parsed_input_state",
+      "20261031041157_case_law_parsed_input_state",
       "migration.sql",
     ),
   ).filter((statement) => {

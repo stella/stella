@@ -1,6 +1,6 @@
 /**
  * `case_law_decisions.parsed_input_state`, introduced by migration
- * 20261030140000_case_law_parsed_input_state: whether the parse stored for a
+ * 20261031041157_case_law_parsed_input_state: whether the parse stored for a
  * decision was made from its current input. A trigger derives it on every
  * write through `case_law_parsed_input_state()`, the one owner of that
  * comparison; rows written before the trigger stay NULL until a backfill
