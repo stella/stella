@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -118,6 +119,7 @@ if (!databaseUrl || !enabled) {
         );
         await db.insert(workspaces).values(
           [workspaceId, otherWorkspaceId].map((id) => ({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id,
             organizationId,
             name: "Parent lock fixture",

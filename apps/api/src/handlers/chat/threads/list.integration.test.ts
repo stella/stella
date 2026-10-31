@@ -3,7 +3,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  RESOURCE_TYPE,
+  resourceRef,
+} from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -475,6 +479,7 @@ describe("chat thread list context", () => {
     seededWorkspaceIds.push(...matterIds);
     await testDb.insert(workspaces).values(
       matterIds.map((id, index) => ({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         clientId: ids.contactA,
         id,
         name: `Zeta matter ${index}`,
@@ -586,6 +591,7 @@ describe("chat thread list matter filter", () => {
     const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
     seededWorkspaceIds.push(matterId);
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       clientId: ids.contactA,
       id: matterId,
       name: "Filter matter",

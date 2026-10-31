@@ -328,7 +328,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--user-id` — Matter member ID (string)
   - optional: --reassign-to
 - `stella matter save`
-  - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
+  - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived), --visibility (all_members|admins_and_assigned|assigned_only)
 - `stella organization set-jurisdictions` — no flags; pass `--input` with jurisdictions
 - `stella organization update-settings`
   - optional: --matter-number-pattern, --matter-number-padding, --matter-numbering-enabled, --prompt-caching-enabled, --document-processing-mode (off|searchable-text), --time-minimum-unit-minutes, --time-edit-window-days, --time-locked-through-month, --time-narrative-required, --time-zone
@@ -413,7 +413,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 444
+Beyond the curated commands above, the CLI generates 445
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;

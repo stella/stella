@@ -61,6 +61,7 @@ export type ScanOccurrence = {
     position: string;
     name: string | null;
     relations: readonly string[];
+    functions: readonly string[];
   }[];
 };
 
@@ -230,6 +231,10 @@ const subplansOf = (node: PlanNode, position: string) => {
           position: childPosition,
           name: field(child, "Subplan Name"),
           relations,
+          functions: [child, ...descendants(child)].flatMap((candidate) => {
+            const name = field(candidate, "Function Name");
+            return name === null ? [] : [name];
+          }),
         });
       }
       visit(child, childPosition);
@@ -537,16 +542,18 @@ export const heapFetchRiskViolations = (
 export const withoutAuthorizationSubplans = (scan: ScanOccurrence): string => {
   let filter = scan.filter ?? "";
   for (const subplan of scan.subplans) {
+    if (subplan.name === null) {
+      continue;
+    }
+    const escapedName = subplan.name.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     if (
-      subplan.name !== null &&
       subplan.relations.includes("aw") &&
-      subplan.relations.includes("workspace_members") &&
-      subplan.relations.includes("workspaces")
+      subplan.relations.includes("workspaces") &&
+      (subplan.relations.includes("workspace_members") ||
+        (subplan.relations.includes("member") &&
+          subplan.functions.includes("stella_authorized_workspace_ids") &&
+          new RegExp(`hashed ${escapedName}(?!\\d)`, "u").test(filter)))
     ) {
-      const escapedName = subplan.name.replaceAll(
-        /[.*+?^${}()|[\]\\]/gu,
-        "\\$&",
-      );
       filter = filter.replaceAll(new RegExp(`${escapedName}(?!\\d)`, "gu"), "");
     }
   }

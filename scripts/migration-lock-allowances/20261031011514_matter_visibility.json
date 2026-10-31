@@ -1,0 +1,9 @@
+{
+  "replace-view": "Replacing the existing authorization view changes its stored query without materializing or scanning matter rows; the online cutover runs after the bounded backfill, with lock acquisition bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-column": "The visibility text column uses a nonvolatile constant default, so PostgreSQL records the value and NOT NULL metadata without rewriting existing matter rows; lock acquisition is bounded by 1s lock_timeout and each statement by 5s statement_timeout.",
+  "add-constraint": "The visibility CHECK is added NOT VALID without scanning existing matter rows; the governed online repair validates it after its bounded backfill, with this catalog addition bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-trigger": "These trigger definitions only update catalog metadata and do not execute their functions or backfill existing rows during creation; legacy repair runs separately through the bounded online owner, with each trigger installation bounded by 1s lock_timeout and 5s statement_timeout.",
+  "alter-column": "The only column alteration drops the temporary visibility default, which changes catalog metadata without scanning or rewriting matter rows; the preceding insert trigger supplies legacy writers, with lock acquisition bounded by 1s lock_timeout and the statement by 5s statement_timeout.",
+  "row-level-security": "Row-level security is enabled on the newly created empty stewardship proof table before any application can write it; this catalog change is bounded by 1s lock_timeout and 5s statement_timeout.",
+  "create-policy": "The owner-only policy is installed on the newly created empty stewardship proof table without scanning existing data; application roles have no table privileges, with policy installation bounded by 1s lock_timeout and 5s statement_timeout."
+}

@@ -37,6 +37,7 @@ import {
 } from "../packages/scripts/src/syntax-tree";
 import { BASELINE_PATHS } from "./baseline-paths";
 import { registryEntryNames } from "./db-registry-entries";
+import matterStewardRecovery from "./ownership/matter-steward-recovery";
 
 type Identifier = Extract<Node, { type: "Identifier" }>;
 
@@ -302,7 +303,13 @@ type HandlerImplementationOptions = {
   visited?: Set<string>;
 };
 type HandlerImplementation =
-  { body: Node; source: SourceTree; file: string } | undefined;
+  | {
+      body: Node;
+      source: SourceTree;
+      file: string;
+      factoryCalls?: readonly CallExpression[];
+    }
+  | undefined;
 /** The handler constructor call a local factory returns, as its arrow body or only statement. */
 const factoryReturn = (node: Callable): CallExpression | undefined => {
   const { body } = node;
@@ -382,13 +389,19 @@ const handlerImplementation = ({
         return undefined;
       }
       visited.add(key);
-      return handlerImplementation({
+      const implementation = handlerImplementation({
         handler: returned,
         source,
         file,
         access,
         visited,
       });
+      return implementation === undefined
+        ? undefined
+        : {
+            ...implementation,
+            factoryCalls: [...(implementation.factoryCalls ?? []), handler],
+          };
     }
     if (
       factory?.kind !== "import" ||
@@ -939,8 +952,8 @@ const JOINING_RUNNERS = {
     handles: { module: `${API}db/root.ts`, exported: ["rootDb", "rlsDb"] },
   },
   /**
-   * Followed callees only: better-result `Result.tryPromise({ try })`. It
-   * joins `try` but passes it no transaction.
+   * Better-result `Result.tryPromise({ try })` joins `try` in handlers and
+   * followed callees, but passes it no transaction.
    */
   calleeResultProperties: [
     { method: "tryPromise", property: "try", suppliesTransaction: false },
@@ -1374,7 +1387,9 @@ const awaitedAggregateNames = ({
             implementation,
             access,
             handlerSafeDb: true,
-          }))
+          }) ||
+          resultPropertyCredit({ callback: node, implementation, access }) !==
+            undefined)
     ) {
       return;
     }
@@ -1399,6 +1414,16 @@ const awaitedAggregateNames = ({
         names.add("workspace");
       }
       if (hasInvoiceMatterAcquisition(node.argument, access)) {
+        names.add("workspace");
+      }
+      if (
+        isTrustedImport({
+          identifier: node.argument.callee,
+          access,
+          module: REGISTRY,
+          exported: ["lockMatterStewardship"],
+        })
+      ) {
         names.add("workspace");
       }
       if (
@@ -1498,6 +1523,99 @@ const isDirectNamedExport = (source: SourceTree, name: string) => {
   return declared;
 };
 
+/** Only the ownership-declared root operation may cross an injected factory seam. */
+const trustedRecoveryDependency = ({
+  binding,
+  implementation,
+  access,
+}: {
+  binding: Extract<TrustedBinding, { kind: "parameter" }>;
+  implementation: Exclude<HandlerImplementation, undefined>;
+  access: SourceAccess;
+}): TrustedBinding | undefined => {
+  if (
+    !matterStewardRecovery.enforcement.allowed.some(
+      ({ path: allowedPath }) => allowedPath === implementation.file,
+    ) ||
+    binding.element === undefined
+  ) {
+    return undefined;
+  }
+  const key = binding.element.key;
+  if (binding.element.computed || key.type !== "Identifier") {
+    return undefined;
+  }
+  for (const call of implementation.factoryCalls ?? []) {
+    if (call.callee.type !== "Identifier") {
+      continue;
+    }
+    const factory = trustedBinding({ identifier: call.callee, access });
+    if (factory?.kind !== "function" || factory.node !== binding.scope) {
+      continue;
+    }
+    const options = call.arguments.at(binding.index);
+    if (options?.type !== "ObjectExpression") {
+      continue;
+    }
+    const property = options.properties.find(
+      (item) =>
+        item.type === "Property" && staticPropertyKey(item) === key.name,
+    );
+    if (
+      property === undefined ||
+      property.type !== "Property" ||
+      property.method ||
+      property.kind !== "init" ||
+      !isFinalProperty(property) ||
+      property.value.type !== "Identifier"
+    ) {
+      continue;
+    }
+    const dependency = trustedBinding({
+      identifier: property.value,
+      access,
+    });
+    if (
+      dependency?.kind === "import" &&
+      dependency.module === matterStewardRecovery.owner[0] &&
+      matterStewardRecovery.enforcement.names.some(
+        (name) => name === dependency.exported,
+      )
+    ) {
+      return dependency;
+    }
+  }
+  return undefined;
+};
+
+const isRootRecoveryTransaction = (
+  implementation: Exclude<HandlerImplementation, undefined>,
+  access: SourceAccess,
+) => {
+  const body = implementation.body;
+  if (
+    body.type !== "AwaitExpression" ||
+    body.argument.type !== "CallExpression"
+  ) {
+    return false;
+  }
+  const call = body.argument;
+  const handle = call.arguments.at(0);
+  return (
+    call.callee.type === "Identifier" &&
+    isTrustedImport({
+      identifier: call.callee,
+      access,
+      module: REGISTRY,
+      exported: ["withAggregateTransaction"],
+    }) &&
+    handle !== undefined &&
+    handle.type === "Identifier" &&
+    handle.name === "rootDb" &&
+    trustedBinding({ identifier: handle, access })?.kind === "const"
+  );
+};
+
 /**
  * Resolves a direct call to a function defined in the caller's file or in a
  * module of the same package. Both the call's binding and the definition
@@ -1507,14 +1625,26 @@ const isDirectNamedExport = (source: SourceTree, name: string) => {
  */
 const calleeImplementation = ({
   call,
-  implementation: { source, file },
+  implementation,
   access,
 }: CalleeImplementationOptions): HandlerImplementation => {
+  const { source, file } = implementation;
   const root = packageRoot(file);
   if (!(call.callee.type === "Identifier") || root === undefined) {
     return undefined;
   }
-  const binding = trustedBinding({ identifier: call.callee, access });
+  const originalBinding = trustedBinding({
+    identifier: call.callee,
+    access,
+  });
+  const binding =
+    originalBinding?.kind === "parameter"
+      ? trustedRecoveryDependency({
+          binding: originalBinding,
+          implementation,
+          access,
+        })
+      : originalBinding;
   if (binding?.kind === "function") {
     return isCreditableFunction(binding.node)
       ? { body: binding.body, source, file }
@@ -1541,9 +1671,20 @@ const calleeImplementation = ({
     source: target,
     access,
   });
-  return definition?.kind === "function" &&
-    isCreditableFunction(definition.node)
-    ? { body: definition.body, source: target, file: binding.module }
+  if (
+    definition?.kind !== "function" ||
+    !isCreditableFunction(definition.node)
+  ) {
+    return undefined;
+  }
+  const resolved = {
+    body: definition.body,
+    source: target,
+    file: binding.module,
+  };
+  return originalBinding?.kind !== "parameter" ||
+    isRootRecoveryTransaction(resolved, access)
+    ? resolved
     : undefined;
 };
 

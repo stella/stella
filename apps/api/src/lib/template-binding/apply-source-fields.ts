@@ -7,7 +7,7 @@
  * formatting downstream all see the resolved value.
  *
  * A field is left untouched when its source record is absent (a transient fill,
- * a personal matter with no client, a role with no contact, a removed attorney)
+ * a matter with no client, a role with no contact, a removed attorney)
  * or when the field is empty on that record, mirroring how an unmatched lookup
  * leaves its field unfilled. The resolvers are pure — they take structural
  * `*SourceRecord` shapes, not Drizzle rows — so they unit-test without a

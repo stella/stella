@@ -959,6 +959,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
   "POST /v1/vat-rates/apply-preset": {
     type: "replay",
   },
+  "POST /v1/workspaces/:workspaceId/recover-steward": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "PUT /v1/case/research/columns/order": {
     type: "non-replay",
     reason: "current-state",

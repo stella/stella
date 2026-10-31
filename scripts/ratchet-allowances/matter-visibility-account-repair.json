@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/account-deletion-steps.ts",
+  "delta": 1,
+  "reason": "Account deletion batches all led matters per organization so steward repairs and audit writes use that organization’s bound recorder in the same transaction. The loop runs per organization membership, never per matter."
+}

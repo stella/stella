@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -75,6 +77,7 @@ if (!databaseUrl || !runPostgres) {
           createdAt: new Date(),
         });
         await firstDb.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Billing test matter",

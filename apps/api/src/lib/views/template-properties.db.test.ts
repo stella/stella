@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { transactionAbortError } from "@/api/db/safe-db";
@@ -73,6 +75,7 @@ const seedWorkspace = async (): Promise<SafeId<"workspace">> => {
       createdAt: new Date(),
     });
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Template column matter",

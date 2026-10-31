@@ -7,6 +7,7 @@ import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { createDetached } from "@stll/errors";
 import { stellaToast } from "@stll/ui/toast";
 
+import { MatterStewardHandoverContent } from "@/components/matter-steward-handover-content";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
@@ -212,6 +213,15 @@ export const notifyUserError = <Cause>(
   const diagnostic = providerDiagnosticFromThrown(error);
   const toast = {
     ...options,
+    ...(APIError.is(error) &&
+    error.affectedMatters !== undefined &&
+    error.affectedMatters.length > 0
+      ? {
+          description: createElement(MatterStewardHandoverContent, {
+            matters: error.affectedMatters,
+          }),
+        }
+      : {}),
     title:
       diagnostic === undefined
         ? title

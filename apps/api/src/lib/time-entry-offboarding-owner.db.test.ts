@@ -18,6 +18,7 @@ import {
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -42,6 +43,7 @@ describe.skipIf(!enabled)(
           await client.unsafe(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS;
           GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
           GRANT stella TO ${ownerRole} WITH INHERIT FALSE, SET TRUE;
+          GRANT EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) TO ${ownerRole};
           GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${ownerRole};
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           SET search_path TO ${schema}, public`);
@@ -140,14 +142,15 @@ describe.skipIf(!enabled)(
           if (typeof login !== "string") {
             panic("Fixture login required");
           }
-          await client.unsafe(`CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id text);
+          const PRE_VISIBILITY_SCHEMA = `CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id text);
             ALTER TABLE workspaces OWNER TO ${ownerRole};
             CREATE TABLE billing_arrangements (LIKE public.billing_arrangements INCLUDING ALL);
             ALTER TABLE billing_arrangements OWNER TO ${ownerRole};
             ALTER TABLE billing_arrangements ENABLE ROW LEVEL SECURITY;
             ALTER TABLE billing_arrangements FORCE ROW LEVEL SECURITY;
             GRANT SELECT, INSERT, UPDATE, DELETE ON billing_arrangements TO stella;
-            CREATE POLICY reset_census ON billing_arrangements FOR SELECT TO "${login.replaceAll('"', '""')}" USING (true)`);
+            CREATE POLICY reset_census ON billing_arrangements FOR SELECT TO "${login.replaceAll('"', '""')}" USING (true)`;
+          await client.unsafe(PRE_VISIBILITY_SCHEMA);
           const billingMigration = await Bun.file(
             new URL(
               "../../drizzle/20261003122900_billing_modes/migration.sql",
@@ -164,7 +167,11 @@ describe.skipIf(!enabled)(
               await client.unsafe(statement);
             }
           }
-          await client`INSERT INTO workspaces VALUES (${firstWorkspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId})`;
+          await withLegacyWorkspaceFixture({
+            tx: db,
+            insert: async () =>
+              await client`INSERT INTO workspaces VALUES (${firstWorkspaceId}, ${organizationId}), (${secondWorkspaceId}, ${organizationId})`,
+          });
           await createScopedDb(
             markRlsDatabase(db),
             workspaceIds,
@@ -223,7 +230,9 @@ describe.skipIf(!enabled)(
           ).toHaveLength(0);
         } finally {
           await client.unsafe(
-            `RESET ROLE; RESET search_path; DROP SCHEMA ${schema} CASCADE; DROP ROLE IF EXISTS ${ownerRole}`,
+            `RESET ROLE; RESET search_path; DROP SCHEMA ${schema} CASCADE;
+            REVOKE EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) FROM ${ownerRole};
+            DROP ROLE IF EXISTS ${ownerRole}`,
           );
         }
       });

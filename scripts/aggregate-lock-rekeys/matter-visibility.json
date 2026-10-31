@@ -1,0 +1,38 @@
+[
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "0f0556ddff0a0353c8e9733fcd221854b54c55dc49a0fc05e42757c4b6ac48f3",
+    "to": "9933038ce8e93adb147ddc41191400e18a2810441a67e0039f694e07605b478a",
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
+    "from": "ce0491ea9028a00b6ea1b0cb2ef3680ec461521b191cae44fcef9ea43c6f3c27",
+    "to": "4b8183fa336a4825837a531571dc5b7a5dc1ef7424ca9cf6381bc06ab6f9be51",
+    "reason": "Existing seed transaction now upserts the owner-normalized matter row under the canonical creation prefix; its timestamp conflict update and transaction boundary are unchanged."
+  },
+  {
+    "file": "apps/api/scripts/seed-email-viewer-demo.ts",
+    "from": "f3a6b9f8efa089291a3fbb01903f9d4b61f1964203578969cbe5dbf12508b525",
+    "to": "3230f7f5dc1c53915141f7460530b7b5f2871dfccba3d7a57fc5df713587f9b6",
+    "reason": "Existing email fixture transaction now creates the matter through the canonical creation owner before assigning its lead; the transaction boundary is unchanged."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "from": "87c32a58ba6b1c5a18031d920289b53b0b64354edf4e2507a9c0158a9d201f85",
+    "to": "2f5507d8eb48a66ea1d3a7eeadb72c071990dc4a8137972e021ee5bfc1147d7d",
+    "reason": "The existing matter update lock remains a covered subset after the canonical lifecycle, candidate membership and matter prefix; its selected visibility supports access checks."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "from": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
+    "to": "6180d6835d6c7a5c454ef296ae4f9ecf127d4b32eef799852746351cd2b587f6",
+    "reason": "The existing matter update lock remains a covered subset after the canonical lifecycle, candidate membership and matter prefix; its selected visibility supports access checks."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/members/remove.ts",
+    "from": "ba1a1d7aa4a573add1f207d1da3ab3199a0ad1743393d7e6b63466864c53906b",
+    "to": "48566d006d6427a93e31a251c4503a31d443aad042f78357f65baf8adeb8c04c",
+    "reason": "The existing matter selection remains a covered subset of the canonical lifecycle, candidate membership and matter prefix acquired before removal."
+  }
+]

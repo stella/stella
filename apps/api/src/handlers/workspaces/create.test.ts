@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
-import { member } from "@/api/db/auth-schema";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
@@ -59,18 +60,12 @@ describe("createWorkspaces", () => {
         }),
       }),
     };
-    const lockedMemberOrder: unknown[] = [];
     const membersSelect = {
       from: () => ({
         where: () => ({
-          orderBy: (column: unknown) => {
-            lockedMemberOrder.push(column);
-            return {
-              limit: () => ({
-                for: async () => [{ userId: validTeamMemberId }],
-              }),
-            };
-          },
+          orderBy: () => ({
+            limit: async () => [{ userId: validTeamMemberId }],
+          }),
         }),
       }),
     };
@@ -114,12 +109,10 @@ describe("createWorkspaces", () => {
         message: "Some users are not members of this organization",
       },
     });
-    // Granted memberships lock in the order organization removal uses.
-    expect(lockedMemberOrder).toEqual([member.userId]);
     expect(getCallCount()).toBe(1);
   });
 
-  test("personal workspace skips the contacts lookup", async () => {
+  test("a matter without a client skips the contacts lookup", async () => {
     // Force an early return on the workspaces-limit branch so the
     // handler never reaches the audit log (which the test fixture
     // does not set up). The assertion of interest is that the
@@ -152,9 +145,7 @@ describe("createWorkspaces", () => {
           from: () => ({
             where: () => ({
               orderBy: () => ({
-                limit: () => ({
-                  for: async () => [{ userId: "user_test123" }],
-                }),
+                limit: async () => [{ userId: "user_test123" }],
               }),
             }),
           }),
@@ -181,16 +172,20 @@ describe("createWorkspaces", () => {
 
     // 400 from the workspaces-limit branch confirms we got past the
     // schema gate without a client lookup; 0 calls confirms the
-    // contacts table was never queried for a personal matter.
+    // contacts table was never queried for a matter without a client.
     expect(result).toEqual({
       code: 400,
       response: { message: "Workspaces limit reached" },
     });
     expect(clientSelectCalls).toBe(0);
   });
-  test("personal creation holds its creator's organization membership", async () => {
-    let strength: string | undefined;
+  test("creation without a client holds its creator's organization membership", async () => {
+    const executedStatements: string[] = [];
     const { safeDb, scopedDb } = createScopedDbMock({
+      execute: async (query: SQL) => {
+        executedStatements.push(new PgDialect().sqlToQuery(query).sql);
+        return await Promise.resolve([]);
+      },
       select: (fields: Record<string, unknown>) => ({
         from: () => ({
           where: (): unknown => {
@@ -202,12 +197,7 @@ describe("createWorkspaces", () => {
             }
             return {
               orderBy: () => ({
-                limit: () => ({
-                  for: async (lock: string) => {
-                    strength = lock;
-                    return [];
-                  },
-                }),
+                limit: async () => [],
               }),
             };
           },
@@ -226,7 +216,9 @@ describe("createWorkspaces", () => {
         scopedDb,
       }),
     );
-    expect(strength).toBe("update");
+    expect(executedStatements.at(0)).toContain(
+      "stella_lock_matter_stewardship",
+    );
     expect(response).toMatchObject({
       code: 400,
       response: { message: "Some users are not members of this organization" },

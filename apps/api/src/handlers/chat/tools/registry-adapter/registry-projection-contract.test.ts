@@ -491,6 +491,7 @@ const CONTRACT_CORPUS = {
               name: "Acme retainer",
               reference: "REF-1",
               status: "active",
+              visibility: "admins_and_assigned",
               lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
               createdAt: new Date("2026-01-01T00:00:00.000Z"),
             },
@@ -513,6 +514,7 @@ const CONTRACT_CORPUS = {
           billingReference: null,
           color: null,
           status: "active",
+          visibility: "admins_and_assigned",
           lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
           createdAt: new Date("2026-01-01T00:00:00.000Z"),
           client: {

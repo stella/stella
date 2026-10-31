@@ -1023,10 +1023,12 @@ describe("correspondence offboarding", () => {
               );
               const result = await Result.gen(() =>
                 removeWorkspaceMemberHandler({
+                  organizationId: ids.orgA,
                   safeDb,
                   workspaceId: ids.wsA2,
                   userId: ids.userA1,
                   actorUserId: ids.userA2,
+                  managesOrganizationMatters: false,
                   recordAuditEvent: createAuditRecorder({
                     organizationId: ids.orgA,
                     workspaceId: ids.wsA2,

@@ -10,7 +10,7 @@
  * constructing a client anywhere else.
  */
 import { panic } from "better-result";
-import type { SQL } from "bun";
+import type { SQL, TransactionSQL } from "bun";
 import { afterAll } from "bun:test";
 import { sql } from "drizzle-orm";
 import type { Logger } from "drizzle-orm";
@@ -23,6 +23,29 @@ import {
   queryCountLogger,
 } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { withWorkspaceCreation } from "@/api/lib/workspaces/create-workspace-row";
+import type {
+  NormalizedWorkspaceCreationRow,
+  WorkspaceCreationRow,
+} from "@/api/lib/workspaces/create-workspace-row";
+
+type GatedWorkspaceCreationOptions<T> = {
+  tx: TransactionSQL;
+  rows: readonly WorkspaceCreationRow[];
+  insert: (rows: readonly NormalizedWorkspaceCreationRow[]) => Promise<T>;
+};
+
+/** Keep policy-test statements on their raw transaction under the creation owner. */
+export const withGatedWorkspaceCreation = async <T>({
+  tx,
+  rows,
+  insert,
+}: GatedWorkspaceCreationOptions<T>) =>
+  await withWorkspaceCreation({
+    tx: createDatabase({ client: tx }),
+    rows,
+    insert,
+  });
 
 const openDatabase = (client: SQL, logger?: Logger) =>
   createDatabase({

@@ -1,4 +1,6 @@
+// parser-output-unchanged: Optional HTTP matter handover metadata and its leaf import leave ingestion adapter records and stop kinds unchanged.
 // parser-output-unchanged: registers typed error fingerprint dimensions without changing error payloads or parser results.
+
 // parser-output-unchanged: [pl-courts] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-sn] ParseXmlError moved to its parser module; successful parser output is identical.
 // parser-output-unchanged: [pl-kio] ParseXmlError moved to its parser module; successful parser output is identical.
@@ -29,6 +31,7 @@
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
+import type { MatterStewardHandoverMatter } from "@stll/api-contract/matter-visibility";
 import { TimeoutError } from "@stll/concurrency/with-timeout";
 import {
   declareFailureClass,
@@ -187,6 +190,8 @@ type HandlerErrorBaseProps<
    *  path, so a caller can fix the exact entries it sent rather than parsing
    *  the summary message. */
   issues?: HandlerErrorValidationIssue[] | undefined;
+  /** Only matters the authenticated caller already reaches. */
+  affectedMatters?: MatterStewardHandoverMatter[] | undefined;
   workspaceId?: string | undefined;
   retryable?: boolean | undefined;
   retryAfterMs?: number | undefined;
@@ -223,6 +228,7 @@ export class HandlerError<
   declare stepUp?: HandlerErrorStepUp | undefined;
   declare requiredFields?: HandlerErrorMissingRequiredField[] | undefined;
   declare issues?: HandlerErrorValidationIssue[] | undefined;
+  declare affectedMatters?: HandlerErrorProps["affectedMatters"];
   declare workspaceId?: string | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
@@ -241,6 +247,9 @@ export class HandlerError<
     this.stepUp = props.stepUp;
     this.requiredFields = props.requiredFields;
     this.issues = props.issues;
+    if (props.affectedMatters !== undefined) {
+      this.affectedMatters = props.affectedMatters;
+    }
     this.workspaceId = props.workspaceId;
   }
 }

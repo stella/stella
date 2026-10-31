@@ -23,6 +23,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { MatterVisibilityBadge } from "@/components/workspaces/matter-visibility";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { draggable } from "@/lib/drag-and-drop/element-registration";
@@ -182,6 +183,7 @@ export const MatterCard = ({
                   </Link>
                 )}
               </h2>
+              <MatterVisibilityBadge visibility={workspace.visibility} />
               {showMatterNumber &&
                 rename.status !== "editing" &&
                 workspace.reference && (

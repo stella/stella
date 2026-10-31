@@ -13,6 +13,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract/matter-visibility";
+
 import * as authSchema from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
@@ -22,6 +24,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { startStragglerCatchUp } from "@/api/lib/workflow/straggler-catchup";
 import type { StragglerRunStarter } from "@/api/lib/workflow/straggler-catchup";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -128,24 +131,32 @@ beforeAll(
       type: "person",
       displayName: "Straggler Contact",
     });
-    await db.insert(schema.workspaces).values([
-      {
-        id: WS_ID,
-        organizationId: ORG_ID,
-        clientId: CONTACT_ID,
-        name: "Straggler WS",
-        reference: "REF-STRAGGLER",
-        status: "active",
-      },
-      {
-        id: OTHER_WS_ID,
-        organizationId: ORG_ID,
-        clientId: CONTACT_ID,
-        name: "Other WS",
-        reference: "REF-OTHER",
-        status: "active",
-      },
-    ]);
+    await db.transaction(
+      async (tx) =>
+        await insertWorkspaceRowsInTransaction({
+          tx,
+          rows: [
+            {
+              id: WS_ID,
+              organizationId: ORG_ID,
+              clientId: CONTACT_ID,
+              name: "Straggler WS",
+              reference: "REF-STRAGGLER",
+              status: "active",
+              visibility: defaultMatterVisibilityFor({ hasClient: true }),
+            },
+            {
+              id: OTHER_WS_ID,
+              organizationId: ORG_ID,
+              clientId: CONTACT_ID,
+              name: "Other WS",
+              reference: "REF-OTHER",
+              status: "active",
+              visibility: defaultMatterVisibilityFor({ hasClient: true }),
+            },
+          ],
+        }),
+    );
   },
   { timeout: 30_000 },
 );

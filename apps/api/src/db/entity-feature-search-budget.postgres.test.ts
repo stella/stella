@@ -4,6 +4,8 @@ import { is, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
@@ -428,8 +430,8 @@ describe.skipIf(!enabled)(
             VALUES (${userId}, 'Search budget user', ${`${userId}@example.test`})`;
         await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${memberId}, ${organizationId}, ${userId}, 'owner', now())`;
-        await client`INSERT INTO workspaces (id, organization_id, name, reference)
-            VALUES (${workspaceId}, ${organizationId}, 'Search budget matter', ${reference})`;
+        await client`INSERT INTO workspaces (id, organization_id, name, reference, visibility)
+            VALUES (${workspaceId}, ${organizationId}, 'Search budget matter', ${reference}, ${MATTER_VISIBILITY.adminsAndAssigned})`;
         seeded = true;
         reportStage("scope-seeded");
 

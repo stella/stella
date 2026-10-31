@@ -10,6 +10,7 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import {
   DestructiveActionConfirmation,
@@ -63,7 +64,7 @@ import { authClient } from "@/lib/auth-client";
 import { sessionOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { unwrapApiResponse } from "@/lib/errors/api";
+import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
@@ -323,6 +324,12 @@ function ProfilePageBody() {
     onError: (err: unknown) => {
       const msg = err instanceof Error ? err.message : t("errors.actionFailed");
       setOtpError(msg);
+      if (
+        APIError.is(err) &&
+        err.code === MATTER_STEWARD_HANDOVER_REQUIRED_CODE
+      ) {
+        notifyUserError(err, t("errors.actionFailed"));
+      }
     },
   });
 

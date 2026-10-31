@@ -8251,6 +8251,16 @@
   },
   {
     "schema": "public",
+    "table": "matter_stewardship_locks",
+    "policy": "matter_stewardship_lock_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('matter_stewardship_locks'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('matter_stewardship_locks'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
     "table": "mcp_connector_authorization_reviews",
     "policy": "organization_delete",
     "command": "DELETE",

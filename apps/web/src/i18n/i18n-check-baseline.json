@@ -105,7 +105,6 @@
     "consent.error",
     "contacts.deleteContact",
     "contacts.emailTypes.other",
-    "contacts.emailTypes.personal",
     "contacts.fields.vatPayerUnknown",
     "contacts.phoneTypes.other",
     "contacts.search",
@@ -264,7 +263,6 @@
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
-    "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
     "workspaces.playbooks.run",
     "workspaces.properties.addOption",
@@ -925,9 +923,6 @@
     "workspaces.parties.partyRoles.mediator": [
       "de",
       "pl"
-    ],
-    "workspaces.parties.personalLabel": [
-      "es"
     ],
     "workspaces.pdf.selection.pageLocator": [
       "es",

@@ -10,9 +10,11 @@ import {
 } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
@@ -53,6 +55,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { cents } from "@/api/lib/money";
 import {
   authorizedMemberRole,
@@ -157,6 +160,7 @@ beforeAll(async () => {
 
   workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Shared matter",
@@ -921,15 +925,28 @@ describe("admin ending a member's timer", () => {
   test("admin end refuses a matter the timekeeper can no longer access", async () => {
     const id = await seedTimer();
     const before = await readTimer(id);
-    const membership = await testDb
-      .delete(workspaceMembers)
-      .where(
-        and(
-          eq(workspaceMembers.workspaceId, workspaceId),
-          eq(workspaceMembers.userId, actors.timekeeper.userId),
-        ),
-      )
-      .returning();
+    const membership = await testDb.transaction(async (tx) => {
+      await lockMatterStewardship({
+        tx: asTestRaw<Transaction>(tx),
+        requests: [
+          {
+            organizationId,
+            workspaceIds: [workspaceId],
+            userIds: [actors.timekeeper.userId],
+          },
+        ],
+        mode: "update",
+      });
+      return await tx
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, workspaceId),
+            eq(workspaceMembers.userId, actors.timekeeper.userId),
+          ),
+        )
+        .returning();
+    });
     expect(membership).toHaveLength(1);
     expect(await stopAs({ actor: "admin", id })).toMatchObject({
       code: 404,
@@ -966,20 +983,45 @@ describe("admin ending a member's timer", () => {
     await testDb.delete(timeTimers).where(eq(timeTimers.id, pausedId));
   });
 
-  test("admin listing hides an unstaffed clientless matter identifier", async () => {
+  test("admin listing excludes all timer metadata for an inaccessible assigned-only matter", async () => {
     const hiddenMatterId = createSafeId<"workspace">();
     try {
-      await testDb.insert(workspaces).values({
-        id: hiddenMatterId,
-        organizationId,
-        name: "Private matter",
-        reference: `PRIVATE-${hiddenMatterId}`,
-        status: "active",
+      await testDb.transaction(async (tx) => {
+        await lockMatterStewardship({
+          tx: asTestRaw<Transaction>(tx),
+          requests: [
+            {
+              organizationId,
+              workspaceIds: [hiddenMatterId],
+              userIds: [actors.timekeeper.userId],
+            },
+          ],
+          mode: "update",
+        });
+        await tx.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
+          id: hiddenMatterId,
+          organizationId,
+          name: "Private matter",
+          reference: `PRIVATE-${hiddenMatterId}`,
+          status: "active",
+        });
+        await tx.insert(workspaceMembers).values({
+          id: createSafeId<"workspaceMember">(),
+          workspaceId: hiddenMatterId,
+          userId: actors.timekeeper.userId,
+        });
+        await tx
+          .update(workspaces)
+          .set({
+            leadUserId: actors.timekeeper.userId,
+            visibility: MATTER_VISIBILITY.assignedOnly,
+          })
+          .where(eq(workspaces.id, hiddenMatterId));
       });
-      await testDb.insert(workspaceMembers).values({
-        id: createSafeId<"workspaceMember">(),
-        workspaceId: hiddenMatterId,
-        userId: actors.timekeeper.userId,
+      const unassignedId = await seedTimer({
+        owner: "colleague",
+        matterId: null,
       });
       const id = await seedTimer({ matterId: hiddenMatterId });
       const result = await adminListTimers.handler(
@@ -991,11 +1033,14 @@ describe("admin ending a member's timer", () => {
       if (!("items" in result)) {
         throw new Error(`Admin list failed: ${JSON.stringify(result)}`);
       }
-      expect(result.items.find((item) => item.id === id)).toMatchObject({
-        id,
-        ownerId: actors.timekeeper.userId,
+      expect(result.items.find((item) => item.id === id)).toBeUndefined();
+      expect(
+        result.items.find((item) => item.id === unassignedId),
+      ).toMatchObject({
+        id: unassignedId,
         matterId: null,
       });
+      await testDb.delete(timeTimers).where(eq(timeTimers.id, unassignedId));
     } finally {
       await testDb
         .delete(timeTimers)
@@ -1016,6 +1061,7 @@ describe("admin ending a member's timer", () => {
         organizationName: "Client",
       });
       await testDb.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: clientMatterId,
         organizationId,
         clientId,

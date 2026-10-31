@@ -585,7 +585,9 @@ const ROOT_CHECK_READER_MODULES: Readonly<Record<string, readonly string[]>> = {
   ],
   "ci-checks-rest/Check migration identity against the base branch": [],
   "ci-checks-rest/Test dead-columns reference matching": [
+    "apps/api/src/lib/db/pending-contract-migrations/registry.ts",
     "scripts/check-dead-columns.ts",
+    "scripts/check-migration-safety.ts",
   ],
   "ci-checks-rest/Test projection-totality classification": [
     "scripts/check-projection-totality.test.ts",

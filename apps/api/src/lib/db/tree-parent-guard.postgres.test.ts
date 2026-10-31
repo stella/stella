@@ -4,6 +4,7 @@ import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { organization } from "@/api/db/auth-schema";
@@ -167,6 +168,7 @@ const createScope = async (db: GatedTestDb): Promise<Scope> => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Tree guard tests",

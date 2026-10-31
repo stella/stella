@@ -169,6 +169,7 @@ const readWorkspaces = createSafeRootHandler(
         name: workspace.name,
         reference: workspace.reference,
         clientId: workspace.clientId,
+        visibility: workspace.visibility,
         color: workspace.color,
         leadUserId: workspace.leadUserId,
         lastActivityAt: workspace.lastActivityAt,

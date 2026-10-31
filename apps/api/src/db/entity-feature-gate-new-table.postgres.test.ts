@@ -185,8 +185,8 @@ describe.skipIf(!runPostgresTests)(
 
           await client`INSERT INTO organization (id, name, slug, created_at)
             VALUES (${organizationId}, 'New gate table', ${`new-gate-${organizationId}`}, now())`;
-          await client`INSERT INTO workspaces (id, organization_id, name, reference)
-            VALUES (${workspaceId}, ${organizationId}, 'New gate table', ${`new-gate-${workspaceId}`})`;
+          await client`INSERT INTO workspaces (id, organization_id, name, reference, visibility)
+            VALUES (${workspaceId}, ${organizationId}, 'New gate table', ${`new-gate-${workspaceId}`}, 'admins_and_assigned')`;
           await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             VALUES (${itemEntityId}, ${workspaceId}, 'task', 'fact', 'List fact'),
               (${sourceEntityId}, ${workspaceId}, 'document', NULL, 'Source document')`;

@@ -10,7 +10,10 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { boolean, integer, pgTable, text } from "drizzle-orm/pg-core";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  TIME_ENTRY_ACTIVITY_GROUP,
+} from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
@@ -728,6 +731,7 @@ test("one approval batch reconciles each client matter independently and exclude
   const matters = [firstMatter, secondMatter];
   await db.insert(workspaces).values(
     matters.map((id) => ({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id,
       organizationId: ids.orgA,
       name: "Approval cap test",

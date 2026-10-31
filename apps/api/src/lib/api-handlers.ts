@@ -644,6 +644,7 @@ type SafeErrorBody = {
   retryAfterMs?: number;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
+  affectedMatters?: HandlerError["affectedMatters"];
   /** Matter destination for a scope correction the caller may follow. */
   workspaceId?: string;
   /**
@@ -2172,6 +2173,9 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
     ? {}
     : { retryAfterMs: error.retryAfterMs }),
   ...(error.issues ? { issues: error.issues } : {}),
+  ...(error.affectedMatters === undefined
+    ? {}
+    : { affectedMatters: error.affectedMatters }),
   ...(error.workspaceId ? { workspaceId: error.workspaceId } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).

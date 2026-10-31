@@ -26,6 +26,63 @@ import {
   timerSeconds,
 } from "@/api/lib/billing/time-timers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
+
+type RemovedMemberTimerScopeOptions = {
+  organizationId: SafeId<"organization">;
+  tx: Transaction;
+  userId: SafeId<"user">;
+};
+
+const holdRemovedMemberTimerScope = async ({
+  organizationId,
+  tx: ownerTx,
+  userId,
+}: RemovedMemberTimerScopeOptions) => {
+  const owner = { organizationId, userId };
+  const readActiveTimer = async () =>
+    (
+      await ownerTx
+        .select({ id: timeEntries.id, workspaceId: timeEntries.workspaceId })
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.organizationId, organizationId),
+            eq(timeEntries.userId, userId),
+            isNotNull(timeEntries.timerStartedAt),
+            isNull(timeEntries.timerStoppedAt),
+          ),
+        )
+        .limit(1)
+    ).at(0);
+  const preliminary = await readActiveTimer();
+  await lockMatterStewardship({
+    tx: ownerTx,
+    requests: [
+      {
+        organizationId,
+        workspaceIds: preliminary?.workspaceId ? [preliminary.workspaceId] : [],
+        userIds: [userId],
+      },
+    ],
+    mode: "update",
+  });
+  await lockTimerOwner(ownerTx, owner);
+  await ownerTx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
+  const activeTimer = await readActiveTimer();
+  if (
+    activeTimer?.id !== preliminary?.id ||
+    activeTimer?.workspaceId !== preliminary?.workspaceId
+  ) {
+    return Result.err(
+      new APIError("CONFLICT", {
+        code: "timer_scope_changed",
+        message: "The timer changed. Reload timers and retry.",
+      }),
+    );
+  }
+  return Result.ok(activeTimer);
+};
 
 /**
  * Close the removed member's single active timer while the caller's
@@ -35,34 +92,21 @@ export const closeRemovedMemberActiveTimer = async ({
   organizationId,
   tx: ownerTx,
   userId,
-  lockWorkspaces,
 }: {
   organizationId: SafeId<"organization">;
   tx: Transaction;
   userId: SafeId<"user">;
-  lockWorkspaces?: (tx: Transaction) => Promise<void>;
 }) => {
   const owner = { organizationId, userId };
-  await lockTimerOwner(ownerTx, owner);
-  await ownerTx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
-
-  await lockWorkspaces?.(ownerTx);
-
-  const [activeTimer] = await ownerTx
-    .select({
-      id: timeEntries.id,
-      workspaceId: timeEntries.workspaceId,
-    })
-    .from(timeEntries)
-    .where(
-      and(
-        eq(timeEntries.organizationId, organizationId),
-        eq(timeEntries.userId, userId),
-        isNotNull(timeEntries.timerStartedAt),
-        isNull(timeEntries.timerStoppedAt),
-      ),
-    )
-    .limit(1);
+  const scope = await holdRemovedMemberTimerScope({
+    organizationId,
+    tx: ownerTx,
+    userId,
+  });
+  if (scope.isErr()) {
+    return scope;
+  }
+  const activeTimer = scope.value;
 
   return await runScopedWorkInTransaction({
     tx: ownerTx,

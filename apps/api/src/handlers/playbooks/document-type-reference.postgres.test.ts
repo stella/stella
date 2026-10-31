@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -181,6 +183,7 @@ const seedFixture = async (db: GatedTestDb) => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Reference test matter",

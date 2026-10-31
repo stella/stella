@@ -12,12 +12,15 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockBillingTimeEntrySources,
+  lockMatterStewardship,
+  lockTimerOwnerIdentities,
   withBillingMatterAdvisoryLocks,
 } from "@/api/lib/db/aggregate-lock";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const RUNNING_TIMER_STATE = "running";
 export const timeEntryIsRunning = () => sql<boolean>`COALESCE((
@@ -91,92 +94,122 @@ const lockSelectedMatters = async (
   );
 };
 
-export function guardRunningTimeEntries(
-  options: InvoiceRunningGuardOptions,
-): Promise<Result<AcquiredInvoiceMatterLocks, HandlerError>>;
-export function guardRunningTimeEntries(
-  options: OtherRunningGuardOptions,
-): Promise<HandlerError | null>;
-export async function guardRunningTimeEntries(
-  options: GuardRunningTimeEntriesOptions,
-): Promise<
-  Result<AcquiredInvoiceMatterLocks, HandlerError> | HandlerError | null
-> {
-  const { tx, selection, actorUserId } = options;
-  const refuse = (error: HandlerError) =>
-    selection.type === "invoice" ? Result.err(error) : error;
-  let acquiredInvoiceMatters: AcquiredInvoiceMatterLocks | undefined;
-  const selectedEntries = (() => {
-    switch (selection.type) {
-      case "approval_batch":
-      case "entries":
-        return inArray(timeEntries.id, selection.ids);
-      case "invoice": {
-        const additional =
-          selection.additionalIds === undefined
-            ? sql`false`
-            : inArray(timeEntries.id, selection.additionalIds);
-        // sql-perf-allow: bounded by invoice ID and the time_entries_invoice_idx source index.
-        return sql`((${timeEntries.invoiceId} = ${selection.invoiceId} AND EXISTS (SELECT 1 FROM ${invoices} visible_invoice WHERE visible_invoice.id = ${selection.invoiceId})) OR ${additional})`;
-      }
-      case "none":
-        return sql`false`;
-      default:
-        selection satisfies never;
-        return panic("Unknown time entry selection");
-    }
-  })();
-  const condition = and(
-    "organizationId" in options
-      ? eq(timeEntries.organizationId, options.organizationId)
-      : eq(timeEntries.workspaceId, options.workspaceId),
-    selectedEntries,
+const readSelectedEntryScope = async (
+  tx: RunningGuardBase["tx"],
+  condition: Parameters<typeof lockBillingTimeEntrySources>[1],
+) =>
+  await readBounded(
+    tx
+      .select({
+        id: timeEntries.id,
+        organizationId: timeEntries.organizationId,
+        workspaceId: timeEntries.workspaceId,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(condition),
+    LIMITS.timeEntriesPerWorkspace,
   );
-  const snapshot = await tx
-    .select({ id: timeEntries.id, workspaceId: timeEntries.workspaceId })
-    .from(timeEntries)
-    .where(condition)
-    .limit(LIMITS.timeEntriesPerWorkspace + 1);
-  if (snapshot.length > LIMITS.timeEntriesPerWorkspace) {
-    return refuse(
-      new HandlerError({
-        status: 409,
-        message: "Time entry selection exceeds the matter limit",
-      }),
-    );
-  }
-  const ids = snapshot.map(({ id }) => id);
-  // Timer transitions acquire the owner lock before touching a matter or entry.
-  // Batch acquisition uses sorted keys so overlapping selections cannot deadlock.
-  await tx.execute(sql`
-    SELECT pg_advisory_xact_lock(owner_locks.lock_key)
-    FROM (
-      SELECT DISTINCT hashtext('timer:' || ${timeEntries.organizationId} || ':' || ${timeEntries.userId}) AS lock_key
-      FROM ${timeEntries}
-      WHERE ${condition}
-        AND ${inArray(timeEntries.id, ids)}
-        AND ${timeEntries.userId} IS NOT NULL
-      ORDER BY lock_key
-    ) AS owner_locks
-    ORDER BY owner_locks.lock_key
-  `);
-  if ("organizationId" in options) {
-    const invoiceMatters =
-      selection.type === "invoice"
-        ? await tx
-            .select({ workspaceId: invoiceLines.workspaceId })
-            .from(invoiceLines)
-            .where(eq(invoiceLines.invoiceId, selection.invoiceId))
-            .limit(LIMITS.invoiceLinesPerInvoice + 1)
-        : [];
-    if (invoiceMatters.length > LIMITS.invoiceLinesPerInvoice) {
-      return refuse(
-        new HandlerError({
-          status: 409,
-          message: "Invoice line selection exceeds the invoice limit",
-        }),
-      );
+
+type LockRunningEntryPrefixOptions = {
+  options: GuardRunningTimeEntriesOptions;
+  snapshot: Extract<
+    Awaited<ReturnType<typeof readSelectedEntryScope>>,
+    { type: "complete" }
+  >["rows"];
+  invoiceMatters: { workspaceId: SafeId<"workspace"> }[];
+};
+const lockRunningEntryPrefix = async ({
+  options,
+  snapshot,
+  invoiceMatters,
+}: LockRunningEntryPrefixOptions) => {
+  const { tx, actorUserId } = options;
+  const additionalWorkspaceIds =
+    "additionalWorkspaceIds" in options ? options.additionalWorkspaceIds : [];
+  const explicitWorkspaceIds = [
+    ...("workspaceId" in options ? [options.workspaceId] : []),
+    ...additionalWorkspaceIds,
+    ...invoiceMatters.map((matter) => matter.workspaceId),
+  ];
+  const explicitMatters =
+    "organizationId" in options
+      ? explicitWorkspaceIds.map((id) => ({
+          id,
+          organizationId: options.organizationId,
+        }))
+      : await tx
+          .select({
+            id: workspaces.id,
+            organizationId: workspaces.organizationId,
+          })
+          .from(workspaces)
+          .where(inArray(workspaces.id, explicitWorkspaceIds))
+          .limit(explicitWorkspaceIds.length);
+  const rowsByOrganization = Map.groupBy(snapshot, (row) => row.organizationId);
+  for (const matter of explicitMatters) {
+    if (!rowsByOrganization.has(matter.organizationId)) {
+      rowsByOrganization.set(matter.organizationId, []);
     }
+  }
+  if (
+    "organizationId" in options &&
+    !rowsByOrganization.has(options.organizationId)
+  ) {
+    rowsByOrganization.set(options.organizationId, []);
+  }
+  await lockMatterStewardship({
+    tx,
+    requests: [...rowsByOrganization].map(([organizationId, rows]) => ({
+      organizationId,
+      workspaceIds: [
+        ...new Set([
+          ...explicitMatters
+            .filter((matter) => matter.organizationId === organizationId)
+            .map(({ id }) => id),
+          ...rows.flatMap((row) =>
+            row.workspaceId === null ? [] : [row.workspaceId],
+          ),
+        ]),
+      ],
+      userIds: [
+        ...new Set([
+          actorUserId,
+          ...rows.flatMap((row) => (row.userId === null ? [] : [row.userId])),
+        ]),
+      ],
+    })),
+    // Billing writes hold reach stable; they do not change matter stewardship.
+    mode: "share",
+  });
+  await lockTimerOwnerIdentities({
+    tx,
+    owners: snapshot.flatMap((row) =>
+      row.userId === null
+        ? []
+        : [
+            {
+              organizationId: row.organizationId,
+              userId: brandPersistedUserId(row.userId),
+            },
+          ],
+    ),
+  });
+};
+
+type LockRunningBillingMattersOptions = LockRunningEntryPrefixOptions & {
+  condition: Parameters<typeof lockBillingTimeEntrySources>[1];
+};
+const lockRunningBillingMatters = async ({
+  options,
+  snapshot,
+  invoiceMatters,
+  condition,
+}: LockRunningBillingMattersOptions): Promise<
+  Result<AcquiredInvoiceMatterLocks | null, HandlerError>
+> => {
+  const { tx } = options;
+  if ("organizationId" in options) {
     if ("workspaceId" in options) {
       const workspaceIds = new Set([
         options.workspaceId,
@@ -210,7 +243,7 @@ export async function guardRunningTimeEntries(
           (line) => !workspaceIds.has(line.workspaceId),
         )
       ) {
-        return refuse(
+        return Result.err(
           new HandlerError({
             status: 409,
             code: "invoice_participation_changed",
@@ -218,26 +251,105 @@ export async function guardRunningTimeEntries(
           }),
         );
       }
-      acquiredInvoiceMatters = {
+      return Result.ok({
         type: "acquired",
         invoiceId: options.selection.invoiceId,
         workspaceIds,
-      };
-    } else {
-      const selectedMatters =
-        options.additionalWorkspaceIds === undefined
-          ? sql``
-          : sql`UNION SELECT hashtext(${workspaces.id}::text) AS lock_key FROM ${workspaces} WHERE ${inArray(workspaces.id, [...options.additionalWorkspaceIds])} AND ${workspaces.organizationId}=${options.organizationId}`;
-      await withBillingMatterAdvisoryLocks(
-        tx,
-        sql`
+      } as const);
+    }
+    const selectedMatters =
+      options.additionalWorkspaceIds === undefined
+        ? sql``
+        : sql`UNION SELECT hashtext(${workspaces.id}::text) AS lock_key FROM ${workspaces} WHERE ${inArray(workspaces.id, [...options.additionalWorkspaceIds])} AND ${workspaces.organizationId}=${options.organizationId}`;
+    await withBillingMatterAdvisoryLocks(
+      tx,
+      sql`
         SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key
         FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ${selectedMatters}
       `,
-      );
-    }
+    );
   } else {
     await lockSelectedMatters(tx, options);
+  }
+  return Result.ok(null);
+};
+
+export function guardRunningTimeEntries(
+  options: InvoiceRunningGuardOptions,
+): Promise<Result<AcquiredInvoiceMatterLocks, HandlerError>>;
+export function guardRunningTimeEntries(
+  options: OtherRunningGuardOptions,
+): Promise<HandlerError | null>;
+export async function guardRunningTimeEntries(
+  options: GuardRunningTimeEntriesOptions,
+): Promise<
+  Result<AcquiredInvoiceMatterLocks, HandlerError> | HandlerError | null
+> {
+  const { tx, selection, actorUserId } = options;
+  const refuse = (error: HandlerError) =>
+    selection.type === "invoice" ? Result.err(error) : error;
+  const selectedEntries = (() => {
+    switch (selection.type) {
+      case "approval_batch":
+      case "entries":
+        return inArray(timeEntries.id, selection.ids);
+      case "invoice": {
+        const additional =
+          selection.additionalIds === undefined
+            ? sql`false`
+            : inArray(timeEntries.id, selection.additionalIds);
+        // sql-perf-allow: bounded by invoice ID and the time_entries_invoice_idx source index.
+        return sql`((${timeEntries.invoiceId} = ${selection.invoiceId} AND EXISTS (SELECT 1 FROM ${invoices} visible_invoice WHERE visible_invoice.id = ${selection.invoiceId})) OR ${additional})`;
+      }
+      case "none":
+        return sql`false`;
+      default:
+        selection satisfies never;
+        return panic("Unknown time entry selection");
+    }
+  })();
+  const condition = and(
+    "organizationId" in options
+      ? eq(timeEntries.organizationId, options.organizationId)
+      : eq(timeEntries.workspaceId, options.workspaceId),
+    selectedEntries,
+  );
+  const snapshotRead = await readSelectedEntryScope(tx, condition);
+  if (snapshotRead.type === "overflow") {
+    return refuse(
+      new HandlerError({
+        status: 409,
+        message: "Time entry selection exceeds the matter limit",
+      }),
+    );
+  }
+  const snapshot = snapshotRead.rows;
+  const ids = snapshot.map(({ id }) => id);
+  const invoiceMatters =
+    selection.type === "invoice"
+      ? await tx
+          .select({ workspaceId: invoiceLines.workspaceId })
+          .from(invoiceLines)
+          .where(eq(invoiceLines.invoiceId, selection.invoiceId))
+          .limit(LIMITS.invoiceLinesPerInvoice + 1)
+      : [];
+  if (invoiceMatters.length > LIMITS.invoiceLinesPerInvoice) {
+    return refuse(
+      new HandlerError({
+        status: 409,
+        message: "Invoice line selection exceeds the invoice limit",
+      }),
+    );
+  }
+  await lockRunningEntryPrefix({ options, snapshot, invoiceMatters });
+  const matterLocks = await lockRunningBillingMatters({
+    options,
+    snapshot,
+    invoiceMatters,
+    condition,
+  });
+  if (matterLocks.isErr()) {
+    return refuse(matterLocks.error);
   }
   const lockedRead = await lockBillingTimeEntrySources(tx, condition);
   if (lockedRead.type === "overflow") {
@@ -250,10 +362,21 @@ export async function guardRunningTimeEntries(
     );
   }
   const locked = lockedRead.rows;
-  const snapshotIds = new Set(ids);
+  const currentScope = await readSelectedEntryScope(tx, condition);
+  const snapshotById = new Map(snapshot.map((row) => [row.id, row]));
   if (
     locked.length !== snapshot.length ||
-    locked.some(({ id }) => !snapshotIds.has(id))
+    currentScope.type === "overflow" ||
+    currentScope.rows.length !== snapshot.length ||
+    currentScope.rows.some((row) => {
+      const previous = snapshotById.get(row.id);
+      return (
+        previous === undefined ||
+        previous.organizationId !== row.organizationId ||
+        previous.workspaceId !== row.workspaceId ||
+        previous.userId !== row.userId
+      );
+    })
   ) {
     return refuse(
       new HandlerError({
@@ -295,7 +418,7 @@ export async function guardRunningTimeEntries(
   }
   if (selection.type === "invoice") {
     return Result.ok(
-      acquiredInvoiceMatters ??
+      matterLocks.value ??
         panic("Invoice guard did not acquire its matter set"),
     );
   }

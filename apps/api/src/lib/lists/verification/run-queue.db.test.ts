@@ -4,6 +4,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -90,6 +91,7 @@ beforeAll(async () => {
     createdAt: new Date(),
   });
   await db.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: "Queue matter",

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, not } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import type { MatterVisibility } from "@stll/api-contract";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -12,9 +12,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessAssignments,
-  lockMatterAccessWorkspaceRows,
+  lockMatterStewardship,
   lockMemberAccessRow,
-  lockWorkspaceLifecycle,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
@@ -29,6 +28,7 @@ import {
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { reachesMatterWithoutMembership } from "@/api/lib/workspaces/visibility";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -109,14 +109,16 @@ const actorCanAccessWorkspace = async ({
   actorUserId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   tx: Transaction;
-  workspace: { clientId: string | null; id: SafeId<"workspace"> };
+  workspace: { visibility: MatterVisibility; id: SafeId<"workspace"> };
 }): Promise<boolean> => {
   // This condition only preserves the assignment-lock scope. The database
   // rule in the later statement alone decides matter reach.
-  if (!(
-    workspace.clientId !== null &&
-    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
-  )) {
+  if (
+    !reachesMatterWithoutMembership({
+      role: actorRole,
+      visibility: workspace.visibility,
+    })
+  ) {
     await lockMatterAccessAssignments({
       tx,
       organizationId,
@@ -166,6 +168,17 @@ export const executeAuthorizedWorkspaceDeletion = async (
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
     try {
       return await withAggregateTransaction(database, async (tx) => {
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              organizationId,
+              workspaceIds: [workspaceId],
+              userIds: [actorUserId],
+            },
+          ],
+          mode: "update",
+        });
         const actorRole = await lockAuthorizedActorRole({
           actorUserId,
           organizationId,
@@ -175,18 +188,10 @@ export const executeAuthorizedWorkspaceDeletion = async (
           return { status: "not-authorized" } as const;
         }
 
-        await lockWorkspaceLifecycle(tx, workspaceId);
-        await lockMatterAccessWorkspaceRows({
-          tx,
-          organizationId,
-          workspaceIds: [workspaceId],
-          mode: "update",
-        });
-
         const workspaceRows = await tx
           .select({
             billingReference: workspaces.billingReference,
-            clientId: workspaces.clientId,
+            visibility: workspaces.visibility,
             color: workspaces.color,
             id: workspaces.id,
             name: workspaces.name,

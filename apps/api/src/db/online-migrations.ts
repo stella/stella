@@ -92,6 +92,7 @@ import {
   MATTER_TIME_EXPENSE_RETENTION_CONSTRAINTS,
   MATTER_TIME_EXPENSE_RETENTION_VALIDATIONS,
 } from "./matter-time-expense-retention-validation";
+import { MATTER_VISIBILITY_REPAIR } from "./matter-visibility-repair";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import {
@@ -939,6 +940,7 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  MATTER_VISIBILITY_REPAIR,
   ...FUNCTION_DEPENDENT_INDEX_REINDEXES,
   CHAT_RUN_TEXT_BOUNDARIES,
   ACCOUNT_AUDIT_CONSTRAINT_VALIDATION,
@@ -949,6 +951,7 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   CASE_LAW_PARSED_SOURCE_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   ...AGENT_SKILL_BINDING_CONSTRAINT_VALIDATIONS,
+
   CHAT_CONTENT_V3_REPAIR,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,

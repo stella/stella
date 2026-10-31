@@ -25,6 +25,7 @@ import {
 } from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
+import { matterStewardRecoveryScalingScenario } from "./matter-steward-recovery";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -48,6 +49,7 @@ import { writeScalingScenarios } from "./write-scenarios";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
+  matterStewardRecoveryScalingScenario,
   matterVocabularyScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,

@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import { matterInboundAddresses, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -126,18 +128,21 @@ beforeAll(async () => {
   ]);
   await db.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceA1,
       organizationId: organizationA,
       name: "A1",
       reference: "A1",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceA2,
       organizationId: organizationA,
       name: "A2",
       reference: "A2",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceB1,
       organizationId: organizationB,
       name: "B1",

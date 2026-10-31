@@ -1447,6 +1447,7 @@ const handleListMattersTool: TypedMcpToolHandler<
         name: workspaces.name,
         reference: workspaces.reference,
         status: workspaces.status,
+        visibility: workspaces.visibility,
         lastActivityAt: workspaces.lastActivityAt,
         createdAt: workspaces.createdAt,
       })
@@ -1485,6 +1486,7 @@ const handleListMattersTool: TypedMcpToolHandler<
     name: matter.name,
     reference: matter.reference,
     status: matter.status,
+    visibility: matter.visibility,
     lastActivityAt: matter.lastActivityAt.toISOString(),
     createdAt: matter.createdAt.toISOString(),
   }));
@@ -1594,6 +1596,7 @@ const readMatterOverview = async ({
     name: workspace.name,
     reference: workspace.reference,
     status: workspace.status,
+    visibility: workspace.visibility,
     clientName: workspace.client?.displayName ?? null,
   };
   const contactCards = contacts.value.contacts.flatMap((workspaceContact) => {

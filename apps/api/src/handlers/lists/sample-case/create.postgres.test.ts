@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { MATTER_VISIBILITY } from "@stll/api-contract/matter-visibility";
 import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -15,7 +16,7 @@ import {
   legalLists,
   pendingUploads,
   properties,
-  workspaces,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -23,6 +24,7 @@ import { HttpStatusResponse } from "@/api/http/status";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId } from "@/api/lib/branded-types";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import type { CreateEntityFromBufferDependencies } from "@/api/lib/entities/create-from-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -37,6 +39,7 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -125,11 +128,21 @@ const withSampleFixture = async (
           role: "owner",
           createdAt: new Date(),
         });
-        await db.insert(workspaces).values({
-          id: workspaceId,
-          organizationId,
-          name: "Sample matter",
-          reference: workspaceId,
+        await db.transaction(async (tx) => {
+          await insertWorkspaceRowsInTransaction({
+            tx,
+            rows: [
+              {
+                id: workspaceId,
+                organizationId,
+                name: "Sample matter",
+                reference: workspaceId,
+                visibility: MATTER_VISIBILITY.assignedOnly,
+                leadUserId: userId,
+              },
+            ],
+          });
+          await tx.insert(workspaceMembers).values({ workspaceId, userId });
         });
         await db.insert(properties).values({
           id: createSafeId<"property">(),
@@ -183,9 +196,22 @@ const withSampleFixture = async (
         });
       } finally {
         requests.stop();
-        await db
-          .delete(organization)
-          .where(eq(organization.id, organizationId));
+        await db.transaction(async (tx) => {
+          await lockMatterStewardship({
+            tx,
+            requests: [
+              {
+                organizationId,
+                workspaceIds: [workspaceId],
+                userIds: [userId],
+              },
+            ],
+            mode: "update",
+          });
+          await tx
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+        });
         await db.delete(user).where(eq(user.id, userId));
       }
     },

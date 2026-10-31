@@ -14,6 +14,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { VERIFICATION_RUN_STATUSES } from "@/api/lib/lists/verification/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { addEntityFeatureFixtureColumns } from "@/api/tests/helpers/entity-feature-fixture-columns";
+import { withLegacyWorkspaceFixture } from "@/api/tests/helpers/workspace-creation";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const migrationName = "20261005120600_verification_document_cascade";
@@ -39,7 +40,7 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         await client.unsafe(`SET search_path TO ${schema}, public`);
         // The verification tables come from committed migrations; only their
         // external parent relations are minimal fixtures.
-        await client.unsafe(`
+        const PRE_VISIBILITY_SCHEMA = `
           CREATE TABLE organization (id varchar(128) PRIMARY KEY);
           CREATE TABLE "user" (id text PRIMARY KEY);
           CREATE TABLE workspaces (id uuid PRIMARY KEY, organization_id varchar(128), UNIQUE (id, organization_id));
@@ -49,7 +50,8 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
           GRANT USAGE ON SCHEMA ${schema} TO stella;
           GRANT SELECT ON stella_authorized_workspaces TO stella;
           GRANT SELECT, DELETE ON entities TO stella;
-        `);
+        `;
+        await client.unsafe(PRE_VISIBILITY_SCHEMA);
         // The cleanup records each removed run; keep that record in this
         // schema with the shared table's columns, defaults and organization
         // reference, so a row the shared table would reject fails here too.
@@ -97,7 +99,11 @@ describe.skipIf(!enabled)("document-owned verification history", () => {
         ]);
         await client`INSERT INTO organization VALUES (${organizationId})`;
         await client`INSERT INTO "user" VALUES (${userId})`;
-        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`;
+        await withLegacyWorkspaceFixture({
+          tx: db,
+          insert: async () =>
+            await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId})`,
+        });
         await client`INSERT INTO entities VALUES (${documentId}, ${workspaceId}), (${retainedDocumentId}, ${workspaceId})`;
 
         const fixtureScoped = createScopedDb(

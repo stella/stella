@@ -28,6 +28,7 @@ import {
 import { panic, Result } from "better-result";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
   PROFESSIONAL_USE_REQUIRED_CODE,
@@ -36,7 +37,12 @@ import {
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
 import { isUiLocale } from "@stll/locales";
-import { ac, assignableRoles, roles } from "@stll/permissions";
+import {
+  ac,
+  assignableRoles,
+  INTERNAL_MEMBER_ROLES,
+  roles,
+} from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -51,6 +57,7 @@ import {
   isPartnerOAuthClient,
   rlsDb,
   rootDb,
+  withMemberRoleStewardship,
 } from "@/api/db/root";
 import {
   featureEnrolments,
@@ -384,6 +391,7 @@ import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { leadsAssignedOnlyMatter } from "@/api/lib/workspaces/visibility";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -1697,11 +1705,35 @@ export const createAuth = (
     });
     return {
       ...adapter,
-      // The hook's preflight cannot hold a lock across this plugin write.
-      // Translate the database's final refusal at the adapter boundary.
+      // The plugin hook is outside its adapter write transaction. Acquire the
+      // stewardship prefix and perform role writes on the same connection.
       update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
         const update = await Result.tryPromise({
-          try: async () => await adapter.update<T>(args),
+          try: async () => {
+            if (args.model !== "member" || !("role" in args.update)) {
+              return await adapter.update<T>(args);
+            }
+            const selector = args.where.at(0);
+            if (
+              args.where.length !== 1 ||
+              selector?.field !== "id" ||
+              (selector.operator !== undefined && selector.operator !== "eq") ||
+              typeof selector.value !== "string"
+            ) {
+              return panic(
+                "Membership role update requires one member ID selector",
+              );
+            }
+            const memberId = selector.value;
+            return await withMemberRoleStewardship({
+              memberId,
+              write: async (tx) =>
+                await drizzleAdapter(
+                  tx,
+                  AUTH_DATABASE_ADAPTER_OPTIONS,
+                )(options).update<T>(args),
+            });
+          },
           catch: mapMembershipInvariantError,
         });
         if (Result.isError(update)) {
@@ -1975,6 +2007,27 @@ export const createAuth = (
           brandPersistedOrganizationId(org.id),
           newRole,
         );
+        if (
+          !INTERNAL_MEMBER_ROLES.some((role) => role === newRole) &&
+          (await createMembershipScopedDb(rlsDb, {
+            organizationId: brandPersistedOrganizationId(org.id),
+            userId: brandPersistedUserId(updatedMember.userId),
+            serverValidatedWorkspaceIds: [],
+          })(
+            async (tx) =>
+              await leadsAssignedOnlyMatter(tx, {
+                organizationId: brandPersistedOrganizationId(org.id),
+                userId: brandPersistedUserId(updatedMember.userId),
+              }),
+          ))
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+            affectedMatters: [],
+            message:
+              "Hand over the matters this member leads that are visible to assigned members only before changing their role.",
+          });
+        }
         if (newRole !== "owner") {
           await refuseLastOwnerChange(
             brandPersistedOrganizationId(org.id),
@@ -2046,6 +2099,9 @@ export const createAuth = (
                   {
                     message: error.message,
                     ...(error.code === undefined ? {} : { code: error.code }),
+                    ...(error.affectedMatters === undefined
+                      ? {}
+                      : { affectedMatters: error.affectedMatters }),
                     ...(error.retryable === undefined
                       ? {}
                       : { retryable: error.retryable }),

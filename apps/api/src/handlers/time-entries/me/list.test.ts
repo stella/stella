@@ -1,7 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  TIME_ENTRY_ACTIVITY_GROUP,
+} from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
@@ -60,6 +63,7 @@ beforeAll(async () => {
 
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: internalWorkspaceId,
       organizationId: ids.orgA,
       clientId: null,
@@ -67,6 +71,7 @@ beforeAll(async () => {
       reference: `TEST-${internalWorkspaceId}`,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: inaccessibleWorkspaceId,
       organizationId: ids.orgA,
       clientId: ids.contactA,
@@ -74,6 +79,7 @@ beforeAll(async () => {
       reference: `TEST-${inaccessibleWorkspaceId}`,
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: deletingWorkspaceId,
       organizationId: ids.orgA,
       clientId: ids.contactA,

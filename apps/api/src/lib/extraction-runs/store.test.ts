@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { extractionRuns, workspaces } from "@/api/db/schema";
@@ -54,12 +56,14 @@ beforeAll(async () => {
   });
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Extraction matter",
       reference: "EXTRACT",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: otherWorkspaceId,
       organizationId: otherOrganizationId,
       name: "Other extraction matter",

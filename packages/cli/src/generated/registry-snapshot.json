@@ -2942,7 +2942,7 @@
       "scope": "matters_write"
     },
     "name": "save_matter",
-    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "description": "Create or update a matter; returns its ID. Omit matter_id to create (name required, client_id optional). With matter_id, update name, client, reference, billing_reference, visibility or status ('archived'/'active').",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -2962,13 +2962,13 @@
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
+          "description": "Client contact ID: creates a client matter, or attaches/replaces an existing matter's client."
         },
         "reference": {
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "Matter reference (file number). Only valid when updating."
+          "description": "File number (update only)."
         },
         "billing_reference": {
           "anyOf": [
@@ -2980,12 +2980,17 @@
               "type": "null"
             }
           ],
-          "description": "Billing reference; pass null to clear. Only valid when updating."
+          "description": "Billing reference (update only); null clears."
         },
         "status": {
           "enum": ["active", "archived"],
           "type": "string",
-          "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+          "description": "Update only: 'archived' archives; 'active' unarchives."
+        },
+        "visibility": {
+          "enum": ["all_members", "admins_and_assigned", "assigned_only"],
+          "type": "string",
+          "description": "all_members: internal members; admins_and_assigned: owners/admins/assignees; assigned_only: assignees. Default with client: admins_and_assigned; otherwise assigned_only. Client changes preserve it. Lead/owner/admin may update."
         }
       }
     },
@@ -3102,7 +3107,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Display name; when creating it defaults to first + last name (person) or organization name (organization); non-empty when updating"
+          "description": "Non-empty display name; creation defaults to first + last name (person) or organization name."
         },
         "first_name": {
           "anyOf": [

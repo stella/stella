@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { createTestState } from "@stll/test-state";
 
@@ -88,6 +89,7 @@ if (!databaseUrl || !runPostgres) {
           createdAt: new Date(),
         });
         await db.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Fixture matter",

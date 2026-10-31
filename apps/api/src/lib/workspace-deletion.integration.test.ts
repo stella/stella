@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -51,6 +53,7 @@ import {
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import type { WorkspaceDeletionDatabase } from "@/api/lib/workspace-deletion";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -196,6 +199,7 @@ beforeAll(async () => {
   ]);
   await testDb.insert(workspaces).values([
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: targetWorkspaceId,
       organizationId,
       name: "Deleted matter",
@@ -203,6 +207,7 @@ beforeAll(async () => {
       status: "active",
     },
     {
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: retainedWorkspaceId,
       organizationId,
       name: "Retained matter",
@@ -707,6 +712,7 @@ describe("workspace deletion", () => {
   test("rolls back the seal, outbox, and rows when the audit write fails", async () => {
     const workspaceId = createSafeId<"workspace">();
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId: fixture.organizationId,
       name: "Rollback matter",
@@ -797,18 +803,27 @@ describe("workspace deletion", () => {
     });
     const seedMatter = async (reference: string) => {
       const workspaceId = createSafeId<"workspace">();
-      await testDb.insert(workspaces).values({
-        id: workspaceId,
-        clientId,
-        organizationId: fixture.organizationId,
-        name: reference,
-        reference,
-        status: "active",
-      });
-      await testDb.insert(workspaceMembers).values({
-        id: createSafeId<"workspaceMember">(),
-        workspaceId,
-        userId: fixture.actorUserId,
+      await testDb.transaction(async (tx) => {
+        await insertWorkspaceRowsInTransaction({
+          tx,
+          candidateUserIds: [fixture.actorUserId],
+          rows: [
+            {
+              id: workspaceId,
+              clientId,
+              organizationId: fixture.organizationId,
+              name: reference,
+              reference,
+              status: "active",
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
+            },
+          ],
+        });
+        await tx.insert(workspaceMembers).values({
+          id: createSafeId<"workspaceMember">(),
+          workspaceId,
+          userId: fixture.actorUserId,
+        });
       });
       return workspaceId;
     };

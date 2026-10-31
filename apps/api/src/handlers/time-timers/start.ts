@@ -9,6 +9,7 @@ import {
   timerDetails,
   timerItem,
 } from "@/api/lib/billing/time-timers";
+import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 
@@ -34,6 +35,17 @@ const startTimer = createSafeRootHandler(
     };
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        await lockMatterStewardship({
+          tx,
+          requests: [
+            {
+              ...owner,
+              workspaceIds: body.matterId ? [body.matterId] : [],
+              userIds: [owner.userId],
+            },
+          ],
+          mode: "share",
+        });
         await lockTimerOwner(tx, owner);
         const now = new Date();
         if (

@@ -26,8 +26,8 @@ type PromotionDialogState =
   { type: "closed" } | { type: "confirming"; drop: PromoteDrop };
 
 // Applies a matter card dropped on another client's group. Moving between
-// clients happens at once; promoting a personal matter shares it with the team
-// and cannot be undone, so it waits for confirmation.
+// clients happens at once; attaching a client to a matter without one waits
+// for confirmation and preserves who can see it.
 export const useMatterClientDrop = () =>
   useMatterClientDropState(useUpdateWorkspace());
 

@@ -5,6 +5,7 @@ import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import {
   BUSINESS_REGISTRY_LOOKUP_DETAILS,
   CONTACT_TYPES,
+  MATTER_VISIBILITIES,
   RESOURCE_TYPE,
   resourceRef,
   WORKSPACE_CONTACT_ROLES,
@@ -72,6 +73,7 @@ import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
 import { LIMITS } from "@/api/lib/limits";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
   brandPersistedContactId,
@@ -96,7 +98,10 @@ import {
 } from "@/api/lib/usage/action-costs/context";
 import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import type { McpRequestResources } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   defineTextFieldSpec,
   deriveTextFieldPaths,
@@ -290,7 +295,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       client_id: v.optional(
         uuidInputSchema(
-          "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client.",
+          "Client contact ID: creates a client matter, or attaches/replaces an existing matter's client.",
         ),
       ),
       reference: v.optional(
@@ -298,24 +303,28 @@ const saveMatterArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(64),
-          v.description(
-            "Matter reference (file number). Only valid when updating.",
-          ),
+          v.description("File number (update only)."),
         ),
       ),
       billing_reference: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(128))),
-          v.description(
-            "Billing reference; pass null to clear. Only valid when updating.",
-          ),
+          v.description("Billing reference (update only); null clears."),
         ),
       ),
       status: v.optional(
         v.pipe(
           v.picklist(MATTER_STATUSES),
           v.description(
-            "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
+            "Update only: 'archived' archives; 'active' unarchives.",
+          ),
+        ),
+      ),
+      visibility: v.optional(
+        v.pipe(
+          v.picklist(MATTER_VISIBILITIES),
+          v.description(
+            "all_members: internal members; admins_and_assigned: owners/admins/assignees; assigned_only: assignees. Default with client: admins_and_assigned; otherwise assigned_only. Client changes preserve it. Lead/owner/admin may update.",
           ),
         ),
       ),
@@ -348,15 +357,25 @@ const saveMatterArgsSchema = nullAsAbsent(
         ["reference"],
         ["billing_reference"],
         ["status"],
+        ["visibility"],
       ],
-      ({ matter_id, name, client_id, reference, billing_reference, status }) =>
+      ({
+        matter_id,
+        name,
+        client_id,
+        reference,
+        billing_reference,
+        status,
+        visibility,
+      }) =>
         matter_id === undefined ||
         name !== undefined ||
         client_id !== undefined ||
         reference !== undefined ||
         billing_reference !== undefined ||
-        status !== undefined,
-      "Provide at least one change: name, client_id, reference, billing_reference, or status",
+        status !== undefined ||
+        visibility !== undefined,
+      "Provide at least one change: name, client_id, reference, billing_reference, status, or visibility",
     ),
   ),
 );
@@ -409,6 +428,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.client_id === undefined
             ? {}
             : { clientId: brandPersistedContactId(input.client_id) }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
         },
       }),
     );
@@ -448,7 +470,8 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       input.name === undefined &&
       input.client_id === undefined &&
       input.reference === undefined &&
-      input.billing_reference === undefined;
+      input.billing_reference === undefined &&
+      input.visibility === undefined;
     if (!isPureUnarchive) {
       if (input.status === "archived") {
         return errorResult("Matter is already archived");
@@ -463,10 +486,18 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     input.name !== undefined ||
     input.client_id !== undefined ||
     input.reference !== undefined ||
-    input.billing_reference !== undefined
+    input.billing_reference !== undefined ||
+    input.visibility !== undefined
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: context.userId,
+          managesOrganizationMatters: hasManagementPermission(
+            mcpMemberAuthority(context),
+            { workspace: ["update"] },
+          ),
+        },
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -482,6 +513,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.billing_reference === undefined
             ? {}
             : { billingReference: input.billing_reference }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
         },
       }),
     );
@@ -729,9 +763,7 @@ const saveContactArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(512),
           v.description(
-            "Display name; when creating it defaults to first + last name " +
-              "(person) or organization name (organization); non-empty when " +
-              "updating",
+            "Non-empty display name; creation defaults to first + last name (person) or organization name.",
           ),
         ),
       ),
@@ -2453,11 +2485,9 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
-      "create a new matter (name required; pass client_id to attach a client " +
-      "contact). Pass matter_id to update an existing matter: set name, " +
-      "reference, or billing_reference, and/or set status to 'archived' or " +
-      "'active' to archive or unarchive it. Returns the matter ID.",
+      "Create or update a matter; returns its ID. Omit matter_id to create " +
+      "(name required, client_id optional). With matter_id, update name, client, " +
+      "reference, billing_reference, visibility or status ('archived'/'active').",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check", "partial_check"],

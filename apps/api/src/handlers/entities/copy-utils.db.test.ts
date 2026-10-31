@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -95,6 +97,7 @@ const seedMatter = async (): Promise<SeededMatter> => {
       email: `${userId}@example.test`,
     });
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Copy abort matter",
@@ -419,6 +422,7 @@ const seedTargetMatter = async ({
   await testDb.transaction(async (tx: TestDatabaseTransaction) => {
     await tx.execute(sql.raw("RESET ROLE"));
     await tx.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Target matter",

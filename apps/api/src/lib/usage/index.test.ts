@@ -8,6 +8,8 @@ import {
 } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -284,6 +286,7 @@ describe("usage ledger — allocation + usage math", () => {
       const fx = await setupFixture(tx);
       const workspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
       await tx.insert(workspaces).values({
+        visibility: MATTER_VISIBILITY.adminsAndAssigned,
         id: workspaceId,
         organizationId: fx.organizationId,
         name: "Test Matter",

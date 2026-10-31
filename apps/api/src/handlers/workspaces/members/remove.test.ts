@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -30,8 +32,18 @@ import {
 
 // Every advisory acquisition in these fixtures succeeds under one identity.
 const ADVISORY_LOCK_ROW = { acquired: true, key1: 1, key2: 2 };
+const executeRemovalStatement = (workspaceId: string) => async (query: SQL) => {
+  const { sql: statement } = new PgDialect().sqlToQuery(query);
+  if (statement.includes("stella_lock_matter_stewardship")) {
+    return [{ id: workspaceId }];
+  }
+  if (statement.includes("AS acquired") || statement.includes("AS key1")) {
+    return [ADVISORY_LOCK_ROW];
+  }
+  // These matters are not assigned-only, so steward repair changes no rows.
+  return [];
+};
 const revokeWorkspaceSseAccessMock = mock(async () => undefined);
-
 beforeEach(() => {
   revokeWorkspaceSseAccessMock.mockClear();
 });
@@ -89,38 +101,45 @@ describe("removeWorkspaceMember", () => {
     let deleteCalled = false;
 
     const { safeDb } = createScopedDbMock({
-      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
-      select: () => ({
-        from: (table: unknown) => ({
-          where: () => ({
-            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
-            limit: () =>
-              Object.assign(
-                Promise.resolve(
-                  table === workspaces
-                    ? [{ organizationId: "org_test123" }]
-                    : [],
+      execute: executeRemovalStatement(workspaceId),
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
+            where: () => ({
+              limit: (count: number) =>
+                Object.assign(
+                  createSelectQueryMock(
+                    table === workspaces
+                      ? [{ organizationId: "org_timer_test" }]
+                      : [],
+                  )
+                    .from()
+                    .where()
+                    .limit(count),
+                  {
+                    for: async () =>
+                      table === timeEntries ? [{ id: "timer_test" }] : [],
+                  },
                 ),
-                {
-                  for: async () =>
-                    table === timeEntries ? [{ id: "timer_test" }] : [],
-                },
-              ),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: null }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_timer", userId },
-                  { id: "wm_other", userId: "user_other_test" },
-                ];
-              }
-              return [];
-            },
+              for: async () => {
+                if (table === workspaces) {
+                  return [{ leadUserId: null }];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_timer", userId },
+                    { id: "wm_other", userId: "user_other_test" },
+                  ];
+                }
+                return [];
+              },
+            }),
           }),
-        }),
-      }),
+        };
+      },
       delete: () => {
         deleteCalled = true;
         return {};
@@ -129,10 +148,12 @@ describe("removeWorkspaceMember", () => {
 
     const result = await Result.gen(() =>
       removeWorkspaceMemberHandler({
+        organizationId: toSafeId<"organization">("org_timer_test"),
         safeDb,
         workspaceId,
         userId,
         actorUserId,
+        managesOrganizationMatters: false,
         recordAuditEvent: async () => undefined,
       }),
     );
@@ -155,42 +176,60 @@ describe("removeWorkspaceMember", () => {
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
-      execute: async () => await Promise.resolve([ADVISORY_LOCK_ROW]),
-      select: () => ({
-        from: (table: unknown) => ({
-          innerJoin: () => ({
-            where: createSelectQueryMock([]).from().where,
+      execute: executeRemovalStatement("ws_test123"),
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("role" in selectedFields) {
+          return createSelectQueryMock([{ role: "owner" }]);
+        }
+        return {
+          from: (table: unknown) => ({
             innerJoin: () => ({
-              where: () => ({ as: () => ({}) }),
+              where: createSelectQueryMock([]).from().where,
+              innerJoin: () => ({
+                where: () => ({ as: () => ({}) }),
+              }),
+            }),
+            where: () => ({
+              orderBy: () => ({
+                limit: () => ({
+                  for: async () =>
+                    table === workspaces ? [{ id: "ws_test123" }] : [],
+                }),
+              }),
+              limit: (count: number) =>
+                Object.assign(
+                  createSelectQueryMock(
+                    table === workspaces
+                      ? [{ organizationId: "org_test123" }]
+                      : [],
+                  )
+                    .from()
+                    .where()
+                    .limit(count),
+                  { for: async () => [] },
+                ),
+              for: async () => {
+                if (table === workspaces) {
+                  return [
+                    {
+                      id: "ws_test123",
+                      leadUserId: "user_lead",
+                      organizationId: "org_test123",
+                    },
+                  ];
+                }
+                if (table === workspaceMembers) {
+                  return [
+                    { id: "wm_lead", userId: "user_lead" },
+                    { id: "wm_other", userId: "user_other" },
+                  ];
+                }
+                return [];
+              },
             }),
           }),
-          where: () => ({
-            orderBy: async () => await createSelectQueryMock([]).from().where(),
-            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the query promise and discard its for method
-            limit: () =>
-              Object.assign(
-                Promise.resolve(
-                  table === workspaces
-                    ? [{ organizationId: "org_test123" }]
-                    : [],
-                ),
-                { for: async () => [] },
-              ),
-            for: async () => {
-              if (table === workspaces) {
-                return [{ leadUserId: "user_lead" }];
-              }
-              if (table === workspaceMembers) {
-                return [
-                  { id: "wm_lead", userId: "user_lead" },
-                  { id: "wm_other", userId: "user_other" },
-                ];
-              }
-              return [];
-            },
-          }),
-        }),
-      }),
+        };
+      },
       delete: (table: unknown) => ({
         where: () => ({
           returning: async () => {
@@ -231,6 +270,7 @@ describe("removeWorkspaceMember", () => {
     expect(deletedWorkspaceMembers).toEqual([workspaceMembers]);
     // Signing transitions require a held session; this fixture has none.
     expect(updates).toEqual([
+      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { takeoverRequestedBy: null, takeoverRequestedAt: null },
@@ -243,7 +283,6 @@ describe("removeWorkspaceMember", () => {
         table: getTableName(correspondence),
         value: { assigneeId: null, updatedAt: expect.any(Date) },
       },
-      { table: getTableName(workspaces), value: { leadUserId: null } },
       {
         table: getTableName(desktopEditSessions),
         value: { status: "cancelled", closedAt: expect.any(Date) },

@@ -2,6 +2,8 @@ import type { InferOk } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization } from "@/api/db/auth-schema";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -28,6 +30,7 @@ beforeAll(
       createdAt: new Date(),
     });
     await db.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Contact order",

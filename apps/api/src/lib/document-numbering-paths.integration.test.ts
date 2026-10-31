@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentCounters,
@@ -77,6 +79,7 @@ const duplicateWorkspace = createDuplicateWorkspace({
 const createMatter = async (reference: string) => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId: ids.orgA,
     name: `Numbering path ${reference}`,

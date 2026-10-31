@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import type { ParsedCorrespondence } from "@stll/api-contract/correspondence";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
@@ -192,6 +193,7 @@ if (!databaseUrl || !runPostgresTests) {
               createdAt: new Date(),
             });
             await writerDb.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: workspaceId,
               organizationId,
               name: "Concurrent matter",

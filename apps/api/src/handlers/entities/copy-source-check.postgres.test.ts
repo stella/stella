@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
@@ -100,12 +102,14 @@ if (!databaseUrl || !runPostgresTests) {
           });
           await setup.db.insert(workspaces).values([
             {
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: sourceWorkspaceId,
               organizationId,
               name: "Source",
               reference: "SRC",
             },
             {
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: targetWorkspaceId,
               organizationId,
               name: "Target",

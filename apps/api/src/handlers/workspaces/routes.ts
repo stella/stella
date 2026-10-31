@@ -39,6 +39,7 @@ import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import readOverviewActivity from "@/api/handlers/workspaces/read-overview-activity";
 import readOverviewActivityActors from "@/api/handlers/workspaces/read-overview-activity-actors";
 import readSearchPreview from "@/api/handlers/workspaces/search-preview/get";
+import recoverMatterSteward from "@/api/handlers/workspaces/steward/update";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateWorkspace from "@/api/handlers/workspaces/update";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
@@ -140,6 +141,7 @@ export const workspacesRoute = mount(
       "/member-previews": { GET: listWorkspaceMemberPreviews },
       "/navigation": { GET: readWorkspaceNavigation },
       "/active": { GET: readActiveWorkspace },
+      "/:workspaceId/recover-steward": { POST: recoverMatterSteward },
     }),
     routes(
       {

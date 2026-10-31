@@ -295,6 +295,7 @@ export const TAGGED_FAILURE_REASON = {
   McpTokenVerificationError: "tagged_failure",
   MemoryWriteRefusedError: "tagged_failure",
   MetadataUrlDefect: "tagged_failure",
+  MatterVisibilityRepairBlocked: "tagged_failure",
   MigrationLockWaitError: "tagged_failure",
   MissingCorpusObjectError: "tagged_failure",
   MissingFilePropertyError: "tagged_failure",

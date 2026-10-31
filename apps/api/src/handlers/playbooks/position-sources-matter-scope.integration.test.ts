@@ -17,6 +17,8 @@ import {
  */
 import { eq, inArray } from "drizzle-orm";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -253,6 +255,7 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: SEALED_WORKSPACE_ID,
     organizationId: ids.orgA,
     clientId: ids.contactA,

@@ -6,6 +6,7 @@ import { plugin } from "bun";
 import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { parseTimeZoneId } from "@stll/time";
 
 import { routeSearchRefusals } from "@/__fixtures__/route-shell/route-search-totality";
@@ -289,6 +290,7 @@ const installFixtureNetwork = () => {
     id: toSafeId<"workspace">("00000000-0000-4000-8000-000000000001"),
     organizationId: session.activeOrganizationId,
     name: "Fixture matter",
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     reference: "2026/1",
     clientId: null,
     leadUserId: null,

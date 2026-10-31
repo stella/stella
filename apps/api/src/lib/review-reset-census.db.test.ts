@@ -114,7 +114,8 @@ describe.skipIf(!enabled)("review reset policy census", () => {
         }
         await client`INSERT INTO member VALUES (${organizationId}, ${reviewerId}, 'owner')`;
         for (const workspaceId of workspaceIds) {
-          await client`INSERT INTO workspaces (id, organization_id) VALUES (${workspaceId}, ${organizationId})`;
+          await client`INSERT INTO workspaces (id, organization_id, visibility)
+            VALUES (${workspaceId}, ${organizationId}, 'admins_and_assigned')`;
         }
         for (const name of RESET_TABLES) {
           const table = identifier(name);

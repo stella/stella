@@ -37,6 +37,7 @@ const JSON_MEMBER_REFERENCE_COLUMNS = [
   "flow_run_steps.output",
   "flow_runs.trigger_source",
   "legal_list_generation_candidates.suggested_assignee_user_ids",
+  "matter_stewardship_locks.proof",
   "saved_searches.criteria",
   "signal_events.payload",
   "signals.evidence",
@@ -215,6 +216,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
 
 /** Member references both removal paths keep, and why. */
 const RETAINED_MEMBER_COLUMNS = {
+  "matter_stewardship_locks.proof":
+    "Owner-only transaction coordination references membership row IDs; proofs apply only to their transaction and later transactions prune completed proofs.",
   "desktop_time_entry_batches.user_id":
     "Terminal billing replay receipt; current membership gates access and the row cascades with account or organization deletion.",
   "account_audit_logs.user_id":

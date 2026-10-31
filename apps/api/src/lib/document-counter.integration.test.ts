@@ -10,7 +10,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  MATTER_REFERENCE_RETIRED_CODE,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -58,6 +61,7 @@ const createMatter = async (
 ): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
   await testDb.insert(workspaces).values({
+    visibility: MATTER_VISIBILITY.adminsAndAssigned,
     id: workspaceId,
     organizationId,
     name: `Matter ${reference}`,
@@ -80,12 +84,15 @@ const setReference = async (
     .where(eq(workspaces.id, workspaceId));
 };
 
-const scopeFor = (workspaceIds: SafeId<"workspace">[]) => ({
+const scopeFor = (
+  workspaceIds: SafeId<"workspace">[],
+  userId = ids.userA1,
+) => ({
   safeDb: asTestRaw<SafeDb>(
-    createSafeDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    createSafeDb(testDb, workspaceIds, ids.orgA, userId),
   ),
   scopedDb: asTestRaw<ScopedDb>(
-    createScopedDb(testDb, workspaceIds, ids.orgA, ids.userA1),
+    createScopedDb(testDb, workspaceIds, ids.orgA, userId),
   ),
 });
 
@@ -299,9 +306,13 @@ describe("matter reference change", () => {
     workspaceId: SafeId<"workspace">,
     reference: string,
   ) => {
-    const { safeDb } = scopeFor([workspaceId]);
+    const { safeDb } = scopeFor([workspaceId], ids.userAdmin);
     return await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: ids.userAdmin,
+          managesOrganizationMatters: true,
+        },
         safeDb,
         organizationId: ids.orgA,
         workspaceId,
@@ -626,9 +637,13 @@ describe("client attachment", () => {
       displayName: "Acme",
     });
     try {
-      const { safeDb } = scopeFor([workspaceId]);
+      const { safeDb } = scopeFor([workspaceId], ids.userAdmin);
       const result = await Result.gen(() =>
         updateWorkspaceHandler({
+          actor: {
+            userId: ids.userAdmin,
+            managesOrganizationMatters: true,
+          },
           safeDb,
           organizationId: ids.orgA,
           workspaceId,

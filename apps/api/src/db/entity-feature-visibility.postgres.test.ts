@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, count, eq, sql } from "drizzle-orm";
 
+import { defaultMatterVisibilityFor } from "@stll/api-contract";
 import { cents } from "@stll/money";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -24,6 +25,7 @@ import {
   searchDocuments,
   timeEntries,
   workObligations,
+  workspaceMembers,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -34,6 +36,7 @@ import {
   WORK_OBLIGATION_CONTEXT_EXTRAS,
   WORK_OBLIGATION_EVENT_CONTEXT_EXTRAS,
 } from "@/api/lib/work-obligations/read-context";
+import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -77,8 +80,24 @@ describe.skipIf(!runPostgresTests)(
             VALUES (${userId}, 'Feature user', ${`${userId}@example.test`})`;
             await client`INSERT INTO member (id, organization_id, user_id, role, created_at)
             VALUES (${mintAuthProviderIdValue()}, ${organizationId}, ${userId}, 'owner', now())`;
-            await client`INSERT INTO workspaces (id, organization_id, name, reference)
-            VALUES (${workspaceId}, ${organizationId}, 'Feature matter', ${workspaceId})`;
+            await db.transaction(async (tx) => {
+              await insertWorkspaceRowsInTransaction({
+                tx,
+                rows: [
+                  {
+                    id: workspaceId,
+                    organizationId,
+                    name: "Feature matter",
+                    reference: workspaceId,
+                    visibility: defaultMatterVisibilityFor({
+                      hasClient: false,
+                    }),
+                    leadUserId: userId,
+                  },
+                ],
+              });
+              await tx.insert(workspaceMembers).values({ workspaceId, userId });
+            });
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name)
             VALUES (${factId}, ${workspaceId}, 'task', 'fact', 'Reference fact')`;
             await client`INSERT INTO entities (id, workspace_id, kind, list_item_type, name, parent_id)

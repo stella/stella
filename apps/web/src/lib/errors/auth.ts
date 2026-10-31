@@ -1,6 +1,6 @@
 import { TaggedError } from "better-result";
 
-import { APIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import {
   STATUS_ERROR_KEYS,
   STATUS_TO_KEY,
@@ -25,6 +25,7 @@ type ToAuthClientErrorProps = {
   message?: string | undefined;
   status: number;
   statusText: string;
+  affectedMatters?: unknown;
 };
 
 const AUTH_ERROR_KEYS = {
@@ -52,11 +53,9 @@ export const toAuthClientError = (props: ToAuthClientErrorProps) => {
       statusText,
     });
   }
-  return new APIError({
-    code,
-    message,
-    rawMessage: props.message,
+  return toAPIError({
     status,
+    value: { ...props, code, message: props.message ?? message },
   });
 };
 

@@ -1,11 +1,3 @@
-/**
- * An `ai` step with `includeDocuments` must not silently proceed when a selected
- * input has no extracted content (extraction pending/failed, or a non-extraction
- * entity surfaced by the summaries picker). Producing legal output from an
- * incomplete document set is not acceptable, so the step fails and names the
- * unavailable inputs. Driven against a real (PGlite) database under RLS.
- */
-
 import {
   afterAll,
   beforeAll,
@@ -15,6 +7,8 @@ import {
   test,
 } from "bun:test";
 import { eq } from "drizzle-orm";
+
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { organization, user } from "@/api/db/auth-schema";
 import {
@@ -81,6 +75,7 @@ describe("loadInputDocuments", () => {
       email: `${userId}@test.local`,
     });
     await testDb.insert(workspaces).values({
+      visibility: MATTER_VISIBILITY.adminsAndAssigned,
       id: workspaceId,
       organizationId,
       name: "Docs matter",

@@ -10,12 +10,17 @@ import {
   ENCRYPTED_CONTENT_ERROR_CODE,
   IDEMPOTENCY_IN_PROGRESS_CODE,
   IDEMPOTENCY_KEY_REUSED_CODE,
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  matterStewardHandoverMattersSchema,
   MEMBER_REMOVAL_BUSY_CODE,
   normalizeApiError,
   parseApiErrorValue,
   parseApiValidationIssues,
 } from "@stll/api-contract";
-import type { ApiValidationIssue } from "@stll/api-contract";
+import type {
+  ApiValidationIssue,
+  MatterStewardHandoverMatter,
+} from "@stll/api-contract";
 import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
@@ -55,6 +60,7 @@ export class APIError extends TaggedError(API_ERROR_TAG)<{
   rawMessage?: string | undefined;
   details?: Record<string, unknown> | undefined;
   providerDiagnostic?: ProviderDiagnostic | undefined;
+  affectedMatters?: MatterStewardHandoverMatter[] | undefined;
   transportKind?: "network" | "timeout" | "aborted" | undefined;
   cause?: unknown;
 }> {}
@@ -185,7 +191,23 @@ export const toAPIError = (error: ToAPIErrorProps): APIError => {
   if (malformedResponse !== null) {
     throw new ClientOperationError(malformedResponse);
   }
+  const affectedMatters =
+    code === MATTER_STEWARD_HANDOVER_REQUIRED_CODE
+      ? v.safeParse(
+          matterStewardHandoverMattersSchema,
+          details?.["affectedMatters"],
+        )
+      : undefined;
+  if (affectedMatters !== undefined && !affectedMatters.success) {
+    throw new ClientOperationError({
+      action: "parse-matter-handover-refusal",
+      message: "Invalid matter handover response",
+    });
+  }
   return new APIError({
+    ...(affectedMatters?.success
+      ? { affectedMatters: affectedMatters.output }
+      : {}),
     ...(diagnostic?.success ? { providerDiagnostic: diagnostic.output } : {}),
     ...(code === undefined ? {} : { code }),
     ...(details === undefined ? {} : { details }),
@@ -237,6 +259,8 @@ const CODE_ERROR_KEYS = {
   [IDEMPOTENCY_KEY_REUSED_CODE]: "errors.apiCodes.idempotencyKeyReused",
   [GLOBAL_SEARCH_RANK_WORK_LIMIT_CODE]: "caseLaw.pagination.refineForMore",
   ...AI_FAILURE_ERROR_KEYS,
+  [MATTER_STEWARD_HANDOVER_REQUIRED_CODE]:
+    "errors.apiCodes.matterStewardHandoverRequired",
   ...VERIFICATION_RUN_CAP_ERROR_KEYS,
   [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
     "errors.apiCodes.filePropertyTypeImmutable",

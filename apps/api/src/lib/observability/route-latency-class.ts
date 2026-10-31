@@ -810,6 +810,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/workspaces/:workspaceId/justifications/query": "crud",
   "POST /v1/workspaces/:workspaceId/playbooks/:playbookId/run": "crud",
   "POST /v1/workspaces/:workspaceId/playbooks/auto-run": "crud",
+  "POST /v1/workspaces/:workspaceId/recover-steward": "crud",
   "POST /v1/workspaces/:workspaceId/reports/export": "crud",
   "POST /v1/workspaces/:workspaceId/reports/templates/clone-builtin": "crud",
   "POST /v1/workspaces/:workspaceId/unarchive": "crud",

@@ -2,7 +2,10 @@ import { panic, Result } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITY,
+  MEMBER_REMOVAL_BUSY_CODE,
+} from "@stll/api-contract";
 import { DESKTOP_HANDOFF_MIN_SUPPORTED_PROTOCOL } from "@stll/api-contract/desktop-handoff";
 
 import { invitation, member, organization, user } from "@/api/db/auth-schema";
@@ -53,10 +56,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import { completeRequestReceipt } from "@/api/lib/idempotency/request-receipts";
-import {
-  removeOrganizationMemberInTransaction,
-  tryLockMemberCleanupWorkspace,
-} from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -148,6 +148,7 @@ if (!databaseUrl || !runPostgresTests) {
           })),
         );
         await db.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Receipt matter",
@@ -506,7 +507,10 @@ if (!databaseUrl || !runPostgresTests) {
           const { db: secondDb } = openClient({
             logger: {
               logQuery: (query) => {
-                if (/select.*from "(?:workspaces|member)"/iu.test(query)) {
+                if (
+                  /select.*from "(?:workspaces|member)"/iu.test(query) ||
+                  query.includes("stella_lock_matter_stewardship")
+                ) {
                   attempted.resolve(undefined);
                 }
               },
@@ -566,6 +570,7 @@ if (!databaseUrl || !runPostgresTests) {
               },
             ]);
             await checkDb.insert(workspaces).values({
+              visibility: MATTER_VISIBILITY.adminsAndAssigned,
               id: workspaceId,
               organizationId,
               name: "Assignment matter",
@@ -623,6 +628,7 @@ if (!databaseUrl || !runPostgresTests) {
                     safeDb,
                     organizationId,
                     workspaceId,
+                    actorUserId,
                     recordAuditEvent,
                     body: { userId: leaverUserId },
                   }),
@@ -687,10 +693,12 @@ if (!databaseUrl || !runPostgresTests) {
               if (!contactWrite && kind !== "membership") {
                 return await Result.gen(() =>
                   removeWorkspaceMemberHandler({
+                    organizationId,
                     safeDb,
                     workspaceId,
                     userId: leaverUserId,
                     actorUserId,
+                    managesOrganizationMatters: false,
                     recordAuditEvent,
                     dependencies,
                   }),
@@ -988,6 +996,7 @@ if (!databaseUrl || !runPostgresTests) {
       const retainedInviteId = Bun.randomUUIDv7();
       try {
         await db.insert(workspaces).values({
+          visibility: MATTER_VISIBILITY.adminsAndAssigned,
           id: workspaceId,
           organizationId,
           name: "Removal matter",
@@ -1408,6 +1417,7 @@ if (!databaseUrl || !runPostgresTests) {
             })),
           );
           await db.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Exchange matter",
@@ -1487,10 +1497,12 @@ if (!databaseUrl || !runPostgresTests) {
           const remove = async () =>
             Result.gen(() =>
               removeWorkspaceMemberHandler({
+                organizationId,
                 safeDb,
                 workspaceId,
                 userId,
                 actorUserId,
+                managesOrganizationMatters: false,
                 recordAuditEvent,
                 dependencies,
               }),
@@ -1645,6 +1657,7 @@ if (!databaseUrl || !runPostgresTests) {
             },
           ]);
           await holdingDb.insert(workspaces).values({
+            visibility: MATTER_VISIBILITY.adminsAndAssigned,
             id: workspaceId,
             organizationId,
             name: "Busy matter",
@@ -1694,26 +1707,12 @@ if (!databaseUrl || !runPostgresTests) {
             try: async () =>
               await removalDb.transaction(async (tx) => {
                 if (lockedRow === "workspace") {
-                  await tx
-                    .select({ id: member.id })
-                    .from(member)
-                    .where(eq(member.id, memberId))
-                    .for("update");
-                  await tryLockMemberCleanupWorkspace(
-                    asTestRaw<Transaction>(tx),
-                    workspaceId,
-                  );
-                } else {
-                  await removeOrganizationMemberInTransaction(
-                    asTestRaw<Transaction>(tx),
-                    {
-                      organizationId,
-                      memberId,
-                      userId,
-                      actorUserId,
-                    },
-                  );
+                  await tx.execute(sql`SET LOCAL lock_timeout = '25ms'`);
                 }
+                await removeOrganizationMemberInTransaction(
+                  asTestRaw<Transaction>(tx),
+                  { organizationId, memberId, userId, actorUserId },
+                );
               }),
             catch: (error) => error,
           });
