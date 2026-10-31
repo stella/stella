@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { withoutCiEventContext } from "../packages/scripts/src/without-ci-event-context";
 import { checkMergeGroupJobClassification } from "./check-ci-job-classification";
 import {
   readDecisions,
@@ -168,6 +169,7 @@ const repository = (base: Fixture, head: Fixture, commit = false) => {
 const run = (root: string, ...args: string[]) => {
   const result = Bun.spawnSync([process.execPath, SCRIPT, ...args], {
     cwd: root,
+    env: withoutCiEventContext(),
     stdout: "pipe",
     stderr: "pipe",
   });
