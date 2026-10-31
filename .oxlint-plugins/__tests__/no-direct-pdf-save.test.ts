@@ -96,22 +96,25 @@ describe.serial("no-direct-pdf-save", () => {
 
   test("keeps the unguarded save helpers to their owning modules", async () => {
     const source = [
-      'import { appendSigningRevision, savePdfForModelInput, savePdfRewrite } from "@/api/lib/files/pdf-signatures";',
-      "export const all = [appendSigningRevision, savePdfForModelInput, savePdfRewrite];",
+      'import { appendAnnotationRevision, appendSigningRevision, savePdfForModelInput, savePdfRewrite } from "@/api/lib/files/pdf-signatures";',
+      "export const all = [appendAnnotationRevision, appendSigningRevision, savePdfForModelInput, savePdfRewrite];",
     ];
 
-    // Anywhere else, both unguarded helpers are reported; the guarded one
+    // Anywhere else, every unguarded helper is reported; the guarded one
     // is not.
-    expect(await lint(source)).toEqual([1, 1]);
+    expect(await lint(source)).toEqual([1, 1, 1]);
     expect(
       await lint(
         source,
         "apps/api/src/lib/files/pdf-signing/validation-data.ts",
       ),
-    ).toEqual([1]);
+    ).toEqual([1, 1]);
     expect(
       await lint(source, "apps/api/src/lib/workflow/generate-batch.ts"),
-    ).toEqual([1]);
+    ).toEqual([1, 1]);
+    expect(await lint(source, "apps/api/src/lib/files/marked-pdf.ts")).toEqual([
+      1, 1,
+    ]);
   });
 
   test("reports nothing on the API's own PDF code", async () => {
