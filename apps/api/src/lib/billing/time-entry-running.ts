@@ -98,20 +98,25 @@ const readSelectedEntryScope = (
   tx: RunningGuardBase["tx"],
   condition: Parameters<typeof lockBillingTimeEntrySources>[1],
 ) =>
-  tx
-    .select({
-      id: timeEntries.id,
-      organizationId: timeEntries.organizationId,
-      workspaceId: timeEntries.workspaceId,
-      userId: timeEntries.userId,
-    })
-    .from(timeEntries)
-    .where(condition)
-    .limit(LIMITS.timeEntriesPerWorkspace + 1);
+  readBounded(
+    tx
+      .select({
+        id: timeEntries.id,
+        organizationId: timeEntries.organizationId,
+        workspaceId: timeEntries.workspaceId,
+        userId: timeEntries.userId,
+      })
+      .from(timeEntries)
+      .where(condition),
+    LIMITS.timeEntriesPerWorkspace,
+  );
 
 type LockRunningEntryPrefixOptions = {
   options: GuardRunningTimeEntriesOptions;
-  snapshot: Awaited<ReturnType<typeof readSelectedEntryScope>>;
+  snapshot: Extract<
+    Awaited<ReturnType<typeof readSelectedEntryScope>>,
+    { type: "complete" }
+  >["rows"];
   invoiceMatters: { workspaceId: SafeId<"workspace"> }[];
 };
 const lockRunningEntryPrefix = async ({
@@ -312,8 +317,8 @@ export async function guardRunningTimeEntries(
       : eq(timeEntries.workspaceId, options.workspaceId),
     selectedEntries,
   );
-  const snapshot = await readSelectedEntryScope(tx, condition);
-  if (snapshot.length > LIMITS.timeEntriesPerWorkspace) {
+  const snapshotRead = await readSelectedEntryScope(tx, condition);
+  if (snapshotRead.type === "overflow") {
     return refuse(
       new HandlerError({
         status: 409,
@@ -321,6 +326,7 @@ export async function guardRunningTimeEntries(
       }),
     );
   }
+  const snapshot = snapshotRead.rows;
   const ids = snapshot.map(({ id }) => id);
   const invoiceMatters =
     selection.type === "invoice"
@@ -363,8 +369,9 @@ export async function guardRunningTimeEntries(
   const snapshotById = new Map(snapshot.map((row) => [row.id, row]));
   if (
     locked.length !== snapshot.length ||
-    currentScope.length !== snapshot.length ||
-    currentScope.some((row) => {
+    currentScope.type === "overflow" ||
+    currentScope.rows.length !== snapshot.length ||
+    currentScope.rows.some((row) => {
       const previous = snapshotById.get(row.id);
       return (
         previous === undefined ||
