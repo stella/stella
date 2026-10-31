@@ -236,12 +236,14 @@ describe("API test batch planning", () => {
       'import rootDb from "@/api/db/root";',
       'import * as pglite from "@electric-sql/pglite";',
       'import "@/api/db/root";',
+      'import {} from "@/api/db/root";',
     ]) {
       expect(isDbTest(testPath, source)).toBe(true);
     }
 
     for (const source of [
       'import type { RootDb } from "@/api/db/root";',
+      'import type {} from "@/api/db/root";',
       'import { type RootDb } from "@/api/db/root";',
       'import type * as pglite from "@electric-sql/pglite";',
       'const example = "@/api/db/root";',

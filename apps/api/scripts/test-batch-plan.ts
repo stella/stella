@@ -651,11 +651,18 @@ export const isDbTest = (testPath: string, source: string) => {
   if (DB_TEST_PATH_RE.test(testPath)) {
     return true;
   }
-  return parseSource(testPath, source).module.staticImports.some(
-    ({ entries, moduleRequest }) =>
+  return parseSource(testPath, source).program.body.some(
+    (statement) =>
+      statement.type === "ImportDeclaration" &&
+      statement.importKind !== "type" &&
       // A bare or empty import runs the module; an import of only types does
       // not.
-      (entries.length === 0 || entries.some(({ isType }) => !isType)) &&
-      DB_TEST_MARKERS.some((marker) => moduleRequest.value.includes(marker)),
+      (statement.specifiers.length === 0 ||
+        statement.specifiers.some(
+          (specifier) =>
+            specifier.type !== "ImportSpecifier" ||
+            specifier.importKind !== "type",
+        )) &&
+      DB_TEST_MARKERS.some((marker) => statement.source.value.includes(marker)),
   );
 };
