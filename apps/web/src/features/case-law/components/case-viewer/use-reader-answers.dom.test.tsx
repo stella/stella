@@ -121,6 +121,36 @@ const advanceClock = async (milliseconds: number) => {
   );
 };
 
+/**
+ * Resolve once the decision's cached answers hold a streaming claim.
+ *
+ * The response body settles over a load-dependent number of event-loop
+ * turns, so a fixed count of flushes passes locally and fails on a busy
+ * runner. The cache notifies synchronously on every write; subscribe before
+ * the hook mounts.
+ */
+const streamingClaimCached = async (
+  client: InstanceType<typeof QueryClient>,
+) => {
+  const { queryKey } = readerAnswersOptions({
+    decisionId: "decision-1",
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  });
+  const { promise, resolve } = Promise.withResolvers<undefined>();
+  const unsubscribe = client.getQueryCache().subscribe(() => {
+    const status = client
+      .getQueryData(queryKey)
+      ?.at(0)
+      ?.messages.at(-1)?.status;
+    if (status === "streaming") {
+      unsubscribe();
+      resolve(undefined);
+    }
+  });
+  return promise;
+};
+
 const fakeServer = (
   failRegenerate = false,
   errorCode: ReaderAnswerErrorCode = "provider-error",
@@ -1309,7 +1339,8 @@ test.each(["never", "hanging"] as const)(
   "persisted claims stop polling at timeout when the server is %s",
   async (settlement) => {
     const server = pollingServer(settlement);
-    const { wrapper } = setup();
+    const { client, wrapper } = setup();
+    const claimCached = streamingClaimCached(client);
     jest.useFakeTimers();
     Object.defineProperty(AbortSignal, "timeout", {
       configurable: true,
@@ -1327,8 +1358,11 @@ test.each(["never", "hanging"] as const)(
         }),
       { wrapper },
     );
-    // Flush the mounted query and its notification without advancing the 5000 ms recovery deadline.
-    await advanceClock(0);
+    await act(async () => {
+      await claimCached;
+    });
+    // Deliver the scheduled observer notification without advancing the
+    // 5000 ms recovery deadline.
     await advanceClock(0);
     expect(hook.result.current.answers.at(0)?.messages.at(-1)?.status).toBe(
       "streaming",

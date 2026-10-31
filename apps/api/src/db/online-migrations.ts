@@ -47,6 +47,7 @@ import {
   CASE_LAW_PARSED_SOURCE_VALIDATION,
 } from "./case-law-parsed-source-hash-repair";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR } from "./case-law-source-config-object-repair";
 import {
   CHAT_CONTENT_V3_CONSTRAINTS,
   CHAT_CONTENT_V3_REPAIR,
@@ -98,6 +99,10 @@ import {
 } from "./matter-time-expense-retention-validation";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
+import {
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
+  NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
+} from "./notification-task-assigned-constraint-validation";
 import {
   createIndexConcurrently,
   createOnlineTableGate,
@@ -982,6 +987,7 @@ export const ONLINE_MIGRATION_REPAIRS = [
   EMAIL_UNDELIVERABLE_CONSTRAINT_VALIDATION,
   TIME_ENTRY_SUBMITTED_CONSTRAINT_VALIDATION,
   USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION,
+  ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINT_VALIDATIONS,
   CONTACT_VAT_ID_REPAIR,
   INVOICE_SENT_AT_BACKFILL,
   INVOICE_LEGACY_PAYMENT_BACKFILL,
@@ -997,6 +1003,7 @@ export const ONLINE_MIGRATION_REPAIRS = [
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
+  CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR,
 ] as const satisfies readonly OnlineRepair[];
 
 export type OnlineWorkName = keyof typeof ONLINE_WORK_LIFECYCLE;
@@ -1048,6 +1055,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...USAGE_ACTION_TYPE_CONSTRAINTS,
+    ...NOTIFICATION_TASK_ASSIGNED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
     ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];

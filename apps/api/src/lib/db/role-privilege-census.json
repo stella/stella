@@ -8473,6 +8473,7 @@
     "memberships": [],
     "privileges": [
       "column:public.case_law_sources.checkpoint_observation_order:UPDATE:GRANTABLE:false",
+      "column:public.case_law_sources.config:UPDATE:GRANTABLE:false",
       "column:public.case_law_sources.decision_merge_epoch:UPDATE:GRANTABLE:false",
       "column:public.case_law_sources.ingestion_lease_expires_at:UPDATE:GRANTABLE:false",
       "column:public.case_law_sources.ingestion_lease_purpose:UPDATE:GRANTABLE:false",

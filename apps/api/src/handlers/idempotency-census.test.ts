@@ -646,6 +646,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organizations/slug": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/playbooks": {
     type: "non-replay",
     reason: "authorization-in-handler",
@@ -1334,7 +1338,9 @@ test("every create route and capability declares JSON request replay or a reason
   const creates = new Set(mounted.map(({ file }) => file));
   for (const file of new Bun.Glob(
     "src/mcp/generated/capability-dispatch/*.ts",
-  ).scanSync({ cwd: apiRoot })) {
+  ).scanSync({
+    cwd: apiRoot,
+  })) {
     for (const handler of collectCreateCapabilities(
       readFileSync(path.join(apiRoot, file), "utf-8"),
     )) {

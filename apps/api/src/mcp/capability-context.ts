@@ -92,7 +92,13 @@ const mcpMemberCaller = async (
 
   return {
     user: { id: context.userId, email: context.userEmail },
-    session: { id: null, activeOrganizationId: context.organizationId },
+    session: {
+      id: null,
+      activeOrganizationId: context.organizationId,
+      ...(context.sessionCredentialType === undefined
+        ? {}
+        : { credentialType: context.sessionCredentialType }),
+    },
     ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
