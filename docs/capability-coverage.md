@@ -477,6 +477,12 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `saved-time-narratives.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list` |
 | `saved-time-narratives.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
 
+## search
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `search.results.list` | read | stella:read | — | curated tool `search` |
+
 ## search-history
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -753,11 +759,12 @@ mechanics, and similar), not gaps in coverage.
 | health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
+| native_device | 2 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
 | public_indexing | 9 |
 | realtime_stream | 9 |
-| search_ui | 19 |
+| search_ui | 20 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
 | upload_mechanics | 21 |

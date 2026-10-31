@@ -35,7 +35,7 @@ import {
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchPreviewOptions } from "@/lib/search";
+import { searchInfiniteOptions, searchPreviewOptions } from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -598,6 +598,25 @@ const PER_USER_READS: Record<string, PerUserRead> = {
         type: "matter",
         updatedAt: "2026-01-01T00:00:00Z",
         userId: USER,
+      }).queryKey,
+    ],
+  },
+  "search/results/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchInfiniteOptions({
+        editedByUserIds: [],
+        enabled: true,
+        kinds: [],
+        mimeTypes: [],
+        organizationId: ORG,
+        query: "query",
+        types: [],
+        userId: USER,
+        workspaceIds: [],
       }).queryKey,
     ],
   },

@@ -204,6 +204,32 @@ describe("which routes an API access token opens", () => {
     }
   });
 
+  test("the app registers and unregisters its push device with the read grant alone", () => {
+    for (const [method, route] of [
+      ["PUT", "/v1/me/push-devices"],
+      ["DELETE", "/v1/me/push-devices/:token"],
+    ] as const) {
+      expect(
+        admitApiAccessTokenRoute({ method, route, scopes: ["stella:read"] }),
+      ).toEqual({ admitted: true });
+      expect(
+        admitApiAccessTokenRoute({
+          method,
+          route,
+          scopes: ["stella:chat", "stella:matters_write"],
+        }),
+      ).toEqual({ admitted: false, reason: "scope" });
+    }
+    // Only the routes the app uses: listing devices stays closed.
+    expect(
+      admitApiAccessTokenRoute({
+        method: "GET",
+        route: "/v1/me/push-devices",
+        scopes: ["stella:read"],
+      }),
+    ).toEqual({ admitted: false, reason: "route" });
+  });
+
   test("a file attached to a chat message goes up with it, at the chat scope only", () => {
     const send = { method: "POST", route: "/v1/chat" } as const;
     expect(

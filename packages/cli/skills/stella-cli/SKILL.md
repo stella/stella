@@ -237,8 +237,8 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella contact read`
   - `--contact-id` — Contact ID (string)
 - `stella contact save`
-  - optional: --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes, --external.source, --external.id
-  - via `--input` only: date_of_birth
+  - optional: --prefix, --middle-name, --suffix, --color, --registration-number, --tax-id, --vat-id, --vat-payer, --default-hourly-rate, --currency, --payment-term-days, --invoice-language (ar|cs|de|en|es|et|fr|hu|lt|lv|pl|pt-BR|sk), --originating-attorney-id, --responsible-attorney-id, --contact-id, --type (person|organization), --display-name, --first-name, --last-name, --organization-name, --notes, --nationality-codes, --external.source, --external.id
+  - via `--input` only: emails, phones, addresses, metadata, tags, bank_accounts, billing_address, date_of_birth
   - date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer. Example: `--input '{"date_of_birth":{"precision":"year","year":1900}}'`
 - `stella document compare`
   - `--base-tracked-changes` — Tracked changes the base version already carries: accept compares its final text, keep leaves them in place, reject compares its original text. (enum: keep, accept, reject)
@@ -353,7 +353,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella task list`
   - optional: --matter-id, --task-id, --assignee (me|any|unassigned), --date-from, --date-to, --status
 - `stella task save`
-  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --list-description, --due-date, --workflow-reason, --add-assignee-user-id, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
+  - optional: --task-id, --matter-id, --name, --status (open|in_progress|in_review|done|cancelled), --priority (none|urgent|high|medium|low), --item-type (task|fact|issue|requirement|event), --list-id, --list-section-id, --description, --due-date, --workflow-reason, --assignee, --remove-assignee-user-id, --link-entity-id, --unlink-link-id
 - `stella template configure-fields`
   - `--template-id` — Template to configure, as returned by create_template or list_templates (string)
   - via `--input` only: fields
@@ -413,7 +413,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 445
+Beyond the curated commands above, the CLI generates 446
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through `read_capability` or `write_capability`
 paths. Every generated command lives at `stella capability <domain> <action>`;
@@ -437,7 +437,7 @@ multi-segment capability actions are flattened with hyphens into `<action>`.
 ### When no curated command fits
 
 The curated commands above cover common tasks; anything else goes through the
-generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
+generic capability path. Current domains: `account-exports`, `audit-logs`, `billing-codes`, `case-law`, `catalogue`, `chat`, `clauses`, `client-invoices`, `contacts`, `document-translations`, `document-types`, `documents`, `docx-suggestions`, `entities`, `entity-views`, `expenses`, `fields`, `flows`, `invoices`, `legal-reader`, `legislation`, `lists`, `matters`, `memories`, `notifications`, `number-series`, `organization-settings`, `playbooks`, `properties`, `rates`, `reports`, `saved-time-narratives`, `search`, `search-history`, `seller-profiles`, `signals`, `skills`, `style-sets`, `tasks`, `template-packs`, `template-recipes`, `templates`, `time-entries`, `time-timers`, `uploads`, `usage`, `vat-rates`, `view-templates`, `views`, `work-obligations`.
 
 - Start a document translation run: `stella capability document-translations runs-create --matter-id <matter-id> --input '{"body":{"entityId":"value","fieldId":"value","targetLang":"value","engine":"deepl","output":"translated"}}'`.
 - Start workflow extraction: `stella capability matters workflow-start --matter-id <matter-id>`.

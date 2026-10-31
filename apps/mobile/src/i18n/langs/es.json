@@ -140,7 +140,9 @@
     },
     "add": "Añadir",
     "scanDocument": "Escanear un documento",
-    "newTask": "Nueva tarea"
+    "newTask": "Nueva tarea",
+    "uploadDocument": "Subir documento",
+    "uploadFailed": "No se pudo subir el documento. Inténtelo de nuevo."
   },
   "entity": {
     "type": "Tipo",

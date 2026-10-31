@@ -140,7 +140,9 @@
     },
     "add": "Hinzufügen",
     "scanDocument": "Dokument scannen",
-    "newTask": "Neue Aufgabe"
+    "newTask": "Neue Aufgabe",
+    "uploadDocument": "Dokument hochladen",
+    "uploadFailed": "Das Dokument konnte nicht hochgeladen werden. Versuchen Sie es erneut."
   },
   "entity": {
     "type": "Typ",
