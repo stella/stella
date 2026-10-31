@@ -1043,7 +1043,10 @@ const applyOnlinePhase = async ({
   databaseUrl,
 }: ApplyOnlinePhaseOptions) =>
   await runOnline(
-    { reserve: async () => createOnlineSession(connection, session) },
+    {
+      reserve: async () =>
+        await Promise.resolve(createOnlineSession(connection, session)),
+    },
     {
       indexGate: { ebs, hold: onlineIndexHold, lockTelemetry },
       reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
@@ -1135,7 +1138,9 @@ const assertPendingMigrationCutover = async ({
     },
     query: async (query, params = []) =>
       await connection.unsafe<unknown[]>(query, [...params]),
-    release: () => connection.release(),
+    release: async () => {
+      await connection.release();
+    },
   } satisfies OnlineMigrationConnection;
   const events: MigrationCutoverEvent[] = [];
   await withAggregateTransaction(database, async (tx) => {
@@ -1152,7 +1157,9 @@ const assertPendingMigrationCutover = async ({
         });
         await recordTableLeaseProtocol(tx);
       },
-      emit: (event) => events.push(event),
+      emit: (event) => {
+        events.push(event);
+      },
     });
   });
   for (const event of events) {

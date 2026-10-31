@@ -51,7 +51,7 @@ export const assertMigrationCutover = async ({
       break;
     default:
       confirmation satisfies never;
-      return panic("Unknown migration drain confirmation");
+      panic("Unknown migration drain confirmation");
   }
   // Cutover rollout replaces every runner; rollback below this protocol must clear the marker or use the manual drain.
   const [{ markerExists, jobsExist }] = v.parse(

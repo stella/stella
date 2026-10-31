@@ -84,7 +84,9 @@ test.each([
     bootstrapProtocol: async () => {
       bootstraps++;
     },
-    emit: (event) => events.push(event),
+    emit: (event) => {
+      events.push(event);
+    },
   });
   if (outcome === "refused") {
     const error = await rejectionOf(admission);
@@ -128,7 +130,9 @@ test.each([{ tables: [] }, { tables: ["scheduler_jobs"] }])(
       ).unwrap(),
       bootstrapProtocol: async () =>
         panic("Manual confirmation must not bootstrap the protocol"),
-      emit: (event) => events.push(event),
+      emit: (event) => {
+        events.push(event);
+      },
     });
     expect(reads).toBe(0);
     expect(events).toEqual([

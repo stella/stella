@@ -102,7 +102,9 @@ const withCutoverFixture = async (
               },
               query: async (query, params = []) =>
                 await connection.unsafe<unknown[]>(query, [...params]),
-              release: () => connection.release(),
+              release: async () => {
+                await connection.release();
+              },
             } satisfies OnlineMigrationConnection;
             try {
               await work({
@@ -174,7 +176,11 @@ describe.skipIf(!enabled)(
           async ({ run, query, tableCount }) => {
             const events: MigrationCutoverEvent[] = [];
             expect(
-              await run({ emit: (event) => events.push(event) }),
+              await run({
+                emit: (event) => {
+                  events.push(event);
+                },
+              }),
             ).toMatchObject({
               status: "applied",
               insertedNames: [migrationName],
@@ -204,7 +210,11 @@ describe.skipIf(!enabled)(
           await createScheduler();
           const events: MigrationCutoverEvent[] = [];
           expect(
-            await run({ emit: (event) => events.push(event) }),
+            await run({
+              emit: (event) => {
+                events.push(event);
+              },
+            }),
           ).toMatchObject({
             status: "applied",
             insertedNames: [TABLE_LEASE_MIGRATION],
@@ -289,7 +299,11 @@ describe.skipIf(!enabled)(
             await recordProtocol();
             const events: MigrationCutoverEvent[] = [];
             expect(
-              await run({ emit: (event) => events.push(event) }),
+              await run({
+                emit: (event) => {
+                  events.push(event);
+                },
+              }),
             ).toMatchObject({
               status: "applied",
               insertedNames: [migrationName],
@@ -377,7 +391,9 @@ describe.skipIf(!enabled)(
                 confirmation: parseMigrationDrainConfirmation(
                   "Scheduler workers drained for isolated maintenance",
                 ).unwrap(),
-                emit: (event) => events.push(event),
+                emit: (event) => {
+                  events.push(event);
+                },
               }),
             ).toMatchObject({
               status: "applied",

@@ -38,7 +38,9 @@ const adapt = (connection: ReservedSQL): OnlineMigrationConnection => ({
   },
   query: async (query, params = []) =>
     await connection.unsafe<unknown[]>(query, [...params]),
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
 });
 
 const fixture = async (
@@ -202,7 +204,9 @@ describe.skipIf(!enabled)("Postgres table lease queue", () => {
             holderId: migrationId,
             onLeaseLost: noLeaseLost,
             waitMs: 0,
-            emit: (event) => events.push(event),
+            emit: (event) => {
+              events.push(event);
+            },
           });
           try {
             schemaStatements += 1;
@@ -266,7 +270,9 @@ describe.skipIf(!enabled)("Postgres table lease queue", () => {
           tables: [],
           holderId: migrationId,
           onLeaseLost: noLeaseLost,
-          emit: (event) => events.push(event),
+          emit: (event) => {
+            events.push(event);
+          },
         });
         expect(await claim(connection, holderId)).toBe(true);
         await hold.assertHeld();

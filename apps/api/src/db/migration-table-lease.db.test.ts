@@ -49,7 +49,9 @@ const adapt = (connection: ReservedSQL): OnlineMigrationConnection => ({
   },
   query: async (query, parameters = []) =>
     await connection.unsafe<unknown[]>(query, [...parameters]),
-  release: () => connection.release(),
+  release: async () => {
+    await connection.release();
+  },
 });
 
 const withDatabase = async (
@@ -139,7 +141,9 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
               runOnline: runOnlineComplete,
               tableLeaseOptions: {
                 waitMs: 0,
-                emit: (event) => events.push(event),
+                emit: (event) => {
+                  events.push(event);
+                },
               },
             }),
           );
@@ -251,7 +255,9 @@ describe.skipIf(!enabled)("migration runner table lease admission", () => {
             runOnline: runOnlineComplete,
             tableLeaseOptions: {
               waitMs: 0,
-              emit: (event) => events.push(event),
+              emit: (event) => {
+                events.push(event);
+              },
             },
           });
           expect(result).toMatchObject({

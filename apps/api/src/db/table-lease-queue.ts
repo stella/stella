@@ -214,7 +214,7 @@ export const acquireMigrationTableLeases = async ({
   const names = [...new Set(tables)].toSorted();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let renewal: Promise<void> | undefined;
-  let lost: unknown;
+  let lost: Error | undefined;
   let state: "waiting" | "held" | "releasing" | "released" = "waiting";
   const startedAt = performance.now();
   let holders: v.InferOutput<typeof blockerSchema> = [];
@@ -290,9 +290,9 @@ export const acquireMigrationTableLeases = async ({
         const result = await Result.tryPromise(renew);
         if (result.isErr()) {
           lost = result.error;
-          const cancellation = await Result.tryPromise(() =>
-            onLeaseLost(result.error),
-          );
+          const cancellation = await Result.tryPromise(async () => {
+            await onLeaseLost(result.error);
+          });
           if (cancellation.isErr()) {
             lost = cancellation.error;
           }
@@ -365,7 +365,7 @@ export const acquireMigrationTableLeases = async ({
       await new Promise<void>((resolve) => {
         timer = setTimeout(resolve, Math.min(checkEveryMs, remainingMs));
       });
-      return await attemptGrant();
+      await attemptGrant();
     };
     await attemptGrant();
     scheduleRenewal();
