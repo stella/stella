@@ -25,9 +25,15 @@ test("every prepared writer AST is readable", () => {
   assertProperty(
     "every prepared writer AST is readable",
     fc.property(fc.oneof(sparseDocument, fc.jsonValue()), (ast) => {
-      const prepared = prepareCorpusAst({ ast });
+      const prepared = prepareCorpusAst({
+        fallbackText: "Decision text.",
+        ast,
+      }).unwrap();
       const read = parsePersistedCorpusAst(prepared.ast);
-      expect(prepareCorpusAst({ ast: read }).ast).toEqual(read);
+      expect(
+        prepareCorpusAst({ fallbackText: "Decision text.", ast: read }).unwrap()
+          .ast,
+      ).toEqual(read);
     }),
   );
 });

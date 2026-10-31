@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
+import { caseLawSourceLanguagesOf } from "@stll/api-contract/case-law-source-languages";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
   hasUsableAst,
@@ -47,6 +48,7 @@ import {
   readWholeDecisionHeadnote,
 } from "@/api/lib/case-law/decision-text";
 import { decisionPayloadKey } from "@/api/lib/case-law/decision-versioned-payload";
+import { decisionWorkOf } from "@/api/lib/case-law/decision-work";
 import { listPublicDecisionLanguageAlternates } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -352,6 +354,7 @@ export const decisionRecordQuery = (
       languageGroupKey: publishedCaseLawDecisions.languageGroupKey,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       decisionType: publishedCaseLawDecisions.decisionType,
+      extractionWarnings: publishedCaseLawDecisions.extractionWarnings,
       citationCount: publishedCaseLawDecisions.citationCount,
       pgAstPresent: sql<boolean>`${publishedCaseLawDecisions.documentAst} IS NOT NULL`,
       sourceUrl: publishedCaseLawDecisions.sourceUrl,
@@ -464,6 +467,8 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     const { metadata, textFields } = readDecisionTextMetadata(
       decision.metadata,
     );
+    // Both citation streams list the citations of every language version.
+    const work = decisionWorkOf(subject);
 
     const [
       courtWeights,
@@ -487,7 +492,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         : listOutgoingDecisionCitations({
             tx,
             cursor: citationPageCursor(citationCursors.from),
-            decisionId,
+            work: await work,
             countries: subject.countries,
           }),
       citationCursors.to.status === CITATION_STREAM_CURSOR_STATUS.EXHAUSTED
@@ -495,7 +500,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
         : listIncomingDecisionCitations({
             tx,
             cursor: citationPageCursor(citationCursors.to),
-            decisionId,
+            work: await work,
             countries: subject.countries,
           }),
       listCaseFileDocuments({ tx, decision, cursor: caseFileCursor }),
@@ -627,6 +632,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       decisionType: decision.decisionType,
       citationCount: decision.citationCount,
       documentAst,
+      extractionWarnings: decision.extractionWarnings,
       sections,
       projectionDigest:
         decision.redactedAt === null ? astRead.projectionDigest : null,
@@ -641,6 +647,10 @@ export const readDecisionHandler = definePublicLawSharedQuery(
       }),
       documentUrl: decision.documentUrl,
       metadata,
+      // The publisher's list of the work's languages, served as its own field:
+      // the metadata projection is node-budgeted, and a multilingual record's
+      // manifest is exactly what that budget would cut.
+      sourceLanguages: caseLawSourceLanguagesOf(decision.metadata),
       // The whole publisher sentence the list and search cut a preview from.
       // Metadata only, deliberately: the rows read the same sources in SQL
       // and nothing else, so a reader asking for the rest of a cut line gets

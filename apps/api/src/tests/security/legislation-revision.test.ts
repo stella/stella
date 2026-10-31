@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, expectTypeOf, test } from "bun:test";
 
 import { LegislationRevision } from "@/api/handlers/legislation/revision";
@@ -62,9 +63,9 @@ test("revision writers reject separately assembled metadata and body", async () 
       writeInputs.push(input.text ?? "");
       const plan = planCorpusDocumentWrite(input);
       if (plan.type === "put") {
-        return { type: "written", written: plan.written };
+        return Result.ok({ type: "written", written: plan.written });
       }
-      return plan;
+      return Result.ok(plan);
     },
   });
   expect(writeInputs).toEqual([second.values(sourceRaw).fulltext ?? ""]);

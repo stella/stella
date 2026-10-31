@@ -4,6 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import * as v from "valibot";
 
+import type { ExtractionWarnings } from "@stll/api-contract/case-law-extraction-warnings";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import {
@@ -1442,6 +1443,12 @@ test("citation passages retry when sections replace the AST version they accompa
       },
     ],
   });
+  const oldWarnings = [
+    { rule: "html-tag", count: 1, firstOffsets: [0] },
+  ] satisfies ExtractionWarnings;
+  const newWarnings = [
+    { rule: "html-tag", count: 2, firstOffsets: [8, 16] },
+  ] satisfies ExtractionWarnings;
   const oldUpdatedAt = new Date("2026-10-01T00:00:00.000Z");
   const newUpdatedAt = new Date("2026-10-02T00:00:00.000Z");
   const newAst = astOf(newText, "new-anchor");
@@ -1456,6 +1463,7 @@ test("citation passages retry when sections replace the AST version they accompa
       documentAst: astOf(oldText, "old-anchor"),
       sections: [{ index: 0, type: "unknown", title: null, text: oldText }],
       contentHash: "a".repeat(64),
+      extractionWarnings: oldWarnings,
       updatedAt: oldUpdatedAt,
     },
     {
@@ -1491,6 +1499,7 @@ test("citation passages retry when sections replace the AST version they accompa
               { index: 0, type: "unknown", title: null, text: newText },
             ],
             contentHash: "b".repeat(64),
+            extractionWarnings: newWarnings,
             updatedAt: newUpdatedAt,
           })
           .where(eq(caseLawDecisions.id, citingId));
@@ -1509,7 +1518,14 @@ test("citation passages retry when sections replace the AST version they accompa
   });
   expect(first).toMatchObject({
     type: "page",
-    page: { items: [{ passage: { anchorId: "new-anchor", text: newText } }] },
+    page: {
+      items: [
+        {
+          extractionWarnings: newWarnings,
+          passage: { anchorId: "new-anchor", text: newText },
+        },
+      ],
+    },
   });
 });
 
@@ -1582,4 +1598,69 @@ test("a reviewed doctrine quote cannot bypass the source text disposition", asyn
     textWithheldReason: "source_licence",
   });
   expect(read.page.items.at(0)).not.toHaveProperty("evidenceQuote");
+});
+
+test("citation digests apply each printing manifestation's source policy", async () => {
+  const allowedId = createSafeId<"caseLawDecision">();
+  const restrictedId = createSafeId<"caseLawDecision">();
+  const languageGroupKey = "ECLI:CZ:US:2026:DIGEST.POLICY";
+  await db.insert(caseLawDecisions).values([
+    {
+      id: allowedId,
+      sourceId: openSourceId,
+      country: "CZE",
+      court: "Court",
+      caseNumber: "digest-policy",
+      language: "cs",
+      languageGroupKey,
+    },
+    {
+      id: restrictedId,
+      sourceId: withheldSourceId,
+      country: "CZE",
+      court: "Court",
+      caseNumber: "digest-policy",
+      language: "en",
+      languageGroupKey,
+    },
+  ]);
+  await db.insert(caseLawCitations).values([
+    {
+      citingDecisionId: allowedId,
+      citationText: "allowed-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+    {
+      citingDecisionId: restrictedId,
+      citationText: "allowed-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+    {
+      citingDecisionId: restrictedId,
+      citationText: "restricted-reference",
+      kind: CITATION_KIND.PRECEDENT,
+    },
+  ]);
+  const digest = await readGatedDecisionCitationDigest({
+    caseLawDb,
+    decisionId: allowedId,
+    surface: "search",
+  });
+  expect(digest?.cites).toHaveLength(2);
+  expect(digest?.cites).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        citationText: "allowed-reference",
+        textWithheldReason: null,
+      }),
+    ]),
+  );
+  expect(digest?.cites).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        citationText: null,
+        textWithheldReason: "source_licence",
+      }),
+    ]),
+  );
 });
