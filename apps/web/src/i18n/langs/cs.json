@@ -6808,7 +6808,7 @@
         "addAnother": "Přidat další sloupec",
         "createFailed": "Sloupce se nepodařilo vytvořit",
         "createMany": "Vytvořit {count} sloupců",
-        "createdMany": "Vytvořeno {count} sloupců",
+        "createdMany": "{count, plural, one {Vytvořen # sloupec} few {Vytvořeny # sloupce} many {Vytvořeno # sloupce} other {Vytvořeno # sloupců}}",
         "createdOne": "Sloupec vytvořen",
         "promptPlaceholder": "Co má tento sloupec extrahovat? Chcete-li použít / a @, upřesněte ho v dialogu sloupce.",
         "title": "Přidat sloupce"

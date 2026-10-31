@@ -6808,7 +6808,7 @@
         "addAnother": "Pridėti kitą stulpelį",
         "createFailed": "Nepavyko sukurti stulpelių",
         "createMany": "Sukurti {count} stulpelius",
-        "createdMany": "Sukurta {count} stulpelių",
+        "createdMany": "{count, plural, one {Sukurtas # stulpelis} few {Sukurti # stulpeliai} many {Sukurta # stulpelio} other {Sukurta # stulpelių}}",
         "createdOne": "Stulpelis sukurtas",
         "promptPlaceholder": "Ką turėtų išgauti šis stulpelis? Norėdami naudoti / ir @, patikslinkite jį stulpelio dialogo lange.",
         "title": "Pridėti stulpelius"
