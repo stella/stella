@@ -104,10 +104,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:DELETE /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:DELETE /v1/document-types/:documentTypeId",
     "reason": "pending gate classification"
   },
@@ -497,38 +493,6 @@
   },
   {
     "key": "unclassified-route:GET /v1/clauses/template-slot-preview/:templateId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/:contactId/sanctions",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/business-registries",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/export",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/sanctions/events",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/sanctions/matches",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:GET /v1/contacts/search",
     "reason": "pending gate classification"
   },
   {
@@ -1460,42 +1424,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:POST /v1/contacts/:contactId",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/:contactId/sanctions/monitoring",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/:contactId/sanctions/reviews",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/business-registries/checks",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/extract-from-procuracao",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/inspect",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/preview",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/import/validate",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:POST /v1/contacts/procuracao-upload",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:POST /v1/desktop-edit-handoffs/:handoffId/opened",
     "reason": "pending gate classification"
   },
@@ -2217,14 +2145,6 @@
   },
   {
     "key": "unclassified-route:PUT /v1/clauses/import",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PUT /v1/contacts",
-    "reason": "pending gate classification"
-  },
-  {
-    "key": "unclassified-route:PUT /v1/contacts/import",
     "reason": "pending gate classification"
   },
   {

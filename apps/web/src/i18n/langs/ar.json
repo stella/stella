@@ -2541,9 +2541,16 @@
       "value": "قيمة الحقل"
     },
     "datePrecision": "دقة التاريخ",
+    "deleteBlockedByMattersCount": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
+    "deleteBlockedCount": "جهات الاتصال التي لم تُزل: {count}",
     "deleteContact": "حذف جهة الاتصال",
     "deleteContactBlockedByMatters": "ما زالت جهة الاتصال هذه مُكلَّفة كعميل في ملفات قانونية. أعد تكليف تلك الملفات أو احذفها قبل حذف جهة الاتصال.",
     "deleteContactConfirmDescription": "هل أنت متأكد من رغبتك في حذف جهة الاتصال هذه؟ لا يمكن التراجع عن هذا الإجراء.",
+    "deleteNotFoundCount": "جهات الاتصال التي تعذّر العثور عليها: {count}.",
+    "deleteSelected": "حذف {count, plural, zero {لا جهات اتصال} one {جهة اتصال واحدة} two {جهتي اتصال} few {# جهات اتصال} many {# جهة اتصال} other {# جهة اتصال}}",
+    "deleteSelectedConfirm": "هل تريد حذف {count, plural, zero {لا جهات اتصال} one {جهة الاتصال هذه} two {جهتي الاتصال هاتين} few {جهات الاتصال الـ # هذه} many {جهات الاتصال الـ # هذه} other {جهات الاتصال الـ # هذه}} نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.",
+    "deleteSelectedLimit": "حدّد ما لا يزيد عن {limit} جهة اتصال لحذفها دفعة واحدة.",
+    "deletedCount": "تم حذف {count, plural, zero {لا جهات اتصال} one {جهة اتصال واحدة} two {جهتي اتصال} few {# جهات اتصال} many {# جهة اتصال} other {# جهة اتصال}}",
     "editContact": "تعديل جهة الاتصال",
     "emailTypes": {
       "other": "أخرى",
@@ -2674,6 +2681,7 @@
       "taxIdSchemeBrCpfCnpj": "الرقم البرازيلي CPF/CNPJ (مجموع تحقق)",
       "taxIdSchemeNone": "بدون تحقق من الرقم الضريبي",
       "title": "استيراد جهات الاتصال",
+      "undoImport": "التراجع عن الاستيراد ({count})",
       "validateFailed": "تعذّر التحقق من جهات الاتصال هذه.",
       "warning": {
         "ignored_populated_column": "يحتوي العمود «{column}» على بيانات، ولكن سيتم تجاهله.",
@@ -2703,6 +2711,7 @@
     "saved": "تم حفظ بيانات جهة الاتصال.",
     "search": "البحث في جهات الاتصال...",
     "searchCountries": "ابحث عن البلدان",
+    "selectContact": "تحديد {name}",
     "title": "العملاء",
     "type": {
       "organization": "مؤسسة",

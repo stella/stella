@@ -2541,9 +2541,16 @@
       "value": "Lauko reikšmė"
     },
     "datePrecision": "Datos tikslumas",
+    "deleteBlockedByMattersCount": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
+    "deleteBlockedCount": "Nepašalinti kontaktai: {count}",
     "deleteContact": "Ištrinti kontaktą",
     "deleteContactBlockedByMatters": "Šis kontaktas vis dar priskirtas kaip klientas bylose. Prieš ištrindami kontaktą, perskirkite arba ištrinkite tas bylas.",
     "deleteContactConfirmDescription": "Ar tikrai norite ištrinti šį kontaktą? Šio veiksmo negalima atšaukti.",
+    "deleteNotFoundCount": "Nerasti kontaktai: {count}.",
+    "deleteSelected": "Ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}",
+    "deleteSelectedConfirm": "Visam laikui ištrinti {count, plural, one {# kontaktą} few {# kontaktus} many {# kontakto} other {# kontaktų}}? Šio veiksmo anuliuoti negalima.",
+    "deleteSelectedLimit": "Vienu metu pasirinkite ištrinti ne daugiau kaip {limit} kontaktų.",
+    "deletedCount": "Ištrinta {count, plural, one {# kontaktas} few {# kontaktai} many {# kontakto} other {# kontaktų}}",
     "editContact": "Redaguoti kontaktą",
     "emailTypes": {
       "other": "Kitas",
@@ -2674,6 +2681,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazilijos CPF/CNPJ (kontrolinė suma)",
       "taxIdSchemeNone": "Mokesčių mokėtojo kodas netikrinamas",
       "title": "Kontaktų importavimas",
+      "undoImport": "Atšaukti importavimą ({count})",
       "validateFailed": "Nepavyko patikrinti šių kontaktų.",
       "warning": {
         "ignored_populated_column": "Stulpelyje „{column}“ yra duomenų, tačiau jis ignoruojamas.",
@@ -2703,6 +2711,7 @@
     "saved": "Kontaktiniai duomenys išsaugoti.",
     "search": "Ieškoti kontaktų...",
     "searchCountries": "Ieškoti šalių",
+    "selectContact": "Pasirinkti {name}",
     "title": "Klientai",
     "type": {
       "organization": "Organizacija",

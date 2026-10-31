@@ -2541,9 +2541,16 @@
       "value": "Mező értéke"
     },
     "datePrecision": "Dátum pontossága",
+    "deleteBlockedByMattersCount": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
+    "deleteBlockedCount": "El nem távolított névjegyek: {count}",
     "deleteContact": "Kapcsolat törlése",
     "deleteContactBlockedByMatters": "Ez a kapcsolat még ügyfélként szerepel ügyekben. A kapcsolat törlése előtt rendelje át vagy törölje ezeket az ügyeket.",
     "deleteContactConfirmDescription": "Biztosan törölni szeretné ezt a kontaktot? Ez a művelet nem vonható vissza.",
+    "deleteNotFoundCount": "Nem található névjegyek: {count}.",
+    "deleteSelected": "{count, plural, one {# névjegy törlése} other {# névjegy törlése}}",
+    "deleteSelectedConfirm": "Véglegesen töröl {count, plural, one {# névjegyet} other {# névjegyet}}? Ez a művelet nem vonható vissza.",
+    "deleteSelectedLimit": "Egyszerre legfeljebb {limit} törlendő névjegyet válasszon ki.",
+    "deletedCount": "{count, plural, one {# névjegy törölve} other {# névjegy törölve}}",
     "editContact": "Kapcsolat szerkesztése",
     "emailTypes": {
       "other": "Egyéb",
@@ -2674,6 +2681,7 @@
       "taxIdSchemeBrCpfCnpj": "Brazil CPF/CNPJ (ellenőrző összeg)",
       "taxIdSchemeNone": "Nincs adószám-ellenőrzés",
       "title": "Kapcsolatok importálása",
+      "undoImport": "Importálás visszavonása ({count})",
       "validateFailed": "Nem sikerült ellenőrizni ezeket a kapcsolatokat.",
       "warning": {
         "ignored_populated_column": "A(z) „{column}” oszlop adatokat tartalmaz, de figyelmen kívül marad.",
@@ -2703,6 +2711,7 @@
     "saved": "A kapcsolati adatok mentve.",
     "search": "Kapcsolatok keresése...",
     "searchCountries": "Országok keresése",
+    "selectContact": "{name} kijelölése",
     "title": "Ügyfelek",
     "type": {
       "organization": "Szervezet",

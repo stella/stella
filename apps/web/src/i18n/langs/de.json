@@ -2541,9 +2541,16 @@
       "value": "Feldwert"
     },
     "datePrecision": "Datumsgenauigkeit",
+    "deleteBlockedByMattersCount": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
+    "deleteBlockedCount": "Nicht entfernte Kontakte: {count}",
     "deleteContact": "Kontakt löschen",
     "deleteContactBlockedByMatters": "Dieser Kontakt ist noch als Klient in Akten zugeordnet. Weisen Sie diese Akten neu zu oder löschen Sie sie, bevor Sie den Kontakt löschen.",
     "deleteContactConfirmDescription": "Möchten Sie diesen Kontakt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteNotFoundCount": "Nicht gefundene Kontakte: {count}.",
+    "deleteSelected": "{count, plural, one {# Kontakt} other {# Kontakte}} löschen",
+    "deleteSelectedConfirm": "{count, plural, one {Diesen Kontakt} other {Diese # Kontakte}} endgültig löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "deleteSelectedLimit": "Wählen Sie höchstens {limit} Kontakte aus, um sie auf einmal zu löschen.",
+    "deletedCount": "{count, plural, one {# Kontakt} other {# Kontakte}} gelöscht",
     "editContact": "Kontakt bearbeiten",
     "emailTypes": {
       "other": "Sonstige",
@@ -2674,6 +2681,7 @@
       "taxIdSchemeBrCpfCnpj": "Brasilianische CPF/CNPJ (Prüfsumme)",
       "taxIdSchemeNone": "Keine Prüfung der Steuernummer",
       "title": "Kontakte importieren",
+      "undoImport": "Import rückgängig machen ({count})",
       "validateFailed": "Diese Kontakte konnten nicht geprüft werden.",
       "warning": {
         "ignored_populated_column": "Die Spalte „{column}“ enthält Daten, wird aber ignoriert.",
@@ -2703,6 +2711,7 @@
     "saved": "Kontaktdaten gespeichert.",
     "search": "Kontakte suchen...",
     "searchCountries": "Länder suchen",
+    "selectContact": "{name} auswählen",
     "title": "Klienten",
     "type": {
       "organization": "Organisation",
