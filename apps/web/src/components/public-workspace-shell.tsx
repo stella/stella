@@ -51,7 +51,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import { formatHotkeyForPlatform, HOTKEYS } from "@/lib/hotkeys";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { isPublicLawSsrRouteEnabled } from "@/lib/public-law-launch";
+import { isPublicLawEnabled } from "@/lib/public-law-launch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 
@@ -233,7 +233,7 @@ const PublicSidebar = ({
   const primaryNavItems = getWorkspacePrimaryNavItems({
     // Member feature navigation belongs to AppSidebar, including after its lazy load.
     includeInbox: false,
-    includePublicLaw: isPublicLawSsrRouteEnabled(),
+    includePublicLaw: isPublicLawEnabled(),
     includePublicTools: isPublicToolsRouteEnabled(),
     includeTimesheets: false,
     publicKnowledge: isPublicKnowledgeEnabled(),

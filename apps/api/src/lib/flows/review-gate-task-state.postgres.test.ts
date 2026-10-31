@@ -120,7 +120,7 @@ const taskAction = async ({
         status: taskStatus,
         name: "Changed review task",
         due_date: "2026-10-10",
-        add_assignee_user_id: f.userId,
+        assignee: f.userId,
       },
       context,
     });

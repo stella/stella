@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { newNotificationRealtimeEvent } from "@stll/api-contract";
+import { isMobilePushKind } from "@stll/api-contract/mobile-push";
 import type {
   NotificationEntityType,
   NotificationKind,
@@ -20,6 +21,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 import { activityFeatureOwnerVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
+import { schedulePushDeliveries } from "@/api/lib/push/push-delivery-queue";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastToUser } from "@/api/lib/sse";
 
@@ -50,6 +52,11 @@ type TotalEntityRefMap<
 type NotificationEntityRefByKind = TotalEntityRefMap<{
   [NOTIFICATION_KIND.MENTION]: {
     entityType: "entity";
+    entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  };
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: {
+    entityType: "task";
     entityId: SafeId<"entity">;
     workspaceId: SafeId<"workspace">;
   };
@@ -87,6 +94,7 @@ type NotificationEntityRefByKind = TotalEntityRefMap<{
 
 const NOTIFICATION_OWNER_BY_KIND = {
   [NOTIFICATION_KIND.MENTION]: "entity",
+  [NOTIFICATION_KIND.TASK_ASSIGNED]: "entity",
   [NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED]: "shared",
   [NOTIFICATION_KIND.REPORT_EXPORT_FAILED]: "shared",
   [NOTIFICATION_KIND.FLOW_RUN_COMPLETED]: "flows",
@@ -132,19 +140,28 @@ export type NotificationFanOutDb = {
 };
 
 /**
- * One recipient stream owed a content-free "your notifications changed" ping.
+ * One recipient stream owed a content-free "your notifications changed" ping,
+ * with the notifications this write filed for it.
  *
  * Handed back rather than sent from inside the write so the ping cannot
  * outrun the row it announces: a client answers each event with exactly one
  * re-read, so a ping delivered before its transaction commits buys the reader
- * a stale badge until something unrelated refetches.
+ * a stale badge until something unrelated refetches. The ids are what the
+ * recipient's devices are alerted about, once the same commit has happened.
  */
 export type NotificationPing = {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
+  /**
+   * Rows this write inserted that a phone takes (`MOBILE_PUSH_KINDS`); a
+   * replayed idempotency key adds none.
+   */
+  notificationIds: SafeId<"notification">[];
 };
 
 type NotificationInsertRow = {
+  id: SafeId<"notification">;
+  kind: NotificationKind;
   userId: string;
   organizationId: SafeId<"organization">;
 };
@@ -174,13 +191,14 @@ const insertNotifications = async (
   const inserted: NotificationInsertRow[] = [];
   for (const batch of chunkItems(values, NOTIFICATION_INSERT_BATCH_SIZE)) {
     const batchRows = await writeBatch(async (tx) => {
-      const mentionEntityIds = batch.flatMap((row) =>
-        row.kind === NOTIFICATION_KIND.MENTION && row.entityId !== null
+      const linkedEntityIds = batch.flatMap((row) =>
+        NOTIFICATION_OWNER_BY_KIND[row.kind] === "entity" &&
+        row.entityId !== null
           ? [row.entityId]
           : [],
       );
       const entityOwners = new Map<string, EntityFeatureOwner>();
-      if (mentionEntityIds.length > 0) {
+      if (linkedEntityIds.length > 0) {
         const linked = await tx
           .select({
             entityId: entities.id,
@@ -188,7 +206,7 @@ const insertNotifications = async (
             featureOwner: entities.featureOwner,
           })
           .from(entities)
-          .where(inArray(sql`${entities.id}::text`, mentionEntityIds));
+          .where(inArray(sql`${entities.id}::text`, linkedEntityIds));
         for (const { entityId, workspaceId, featureOwner } of linked) {
           entityOwners.set(`${workspaceId}:${entityId}`, featureOwner);
         }
@@ -226,6 +244,8 @@ const insertNotifications = async (
       // Admission applies to the recipient, including cross-user fan-out.
       return await tx
         .select({
+          id: notifications.id,
+          kind: notifications.kind,
           userId: notifications.userId,
           organizationId: notifications.organizationId,
         })
@@ -249,21 +269,25 @@ const insertNotifications = async (
   }
 
   // One ping per recipient stream. Collapsed per (user, organization) so an
-  // announcement does not emit a burst to the same tab.
-  const seen = new Set<string>();
-  const pings: NotificationPing[] = [];
+  // announcement does not emit a burst to the same tab; each stream keeps the
+  // ids it was filed.
+  const pings = new Map<string, NotificationPing>();
+  // Only the kinds a phone takes carry their ids on to push.
   for (const row of inserted) {
     const key = `${row.userId}:${row.organizationId}`;
-    if (seen.has(key)) {
-      continue;
+    const ping =
+      pings.get(key) ??
+      ({
+        userId: brandPersistedUserId(row.userId),
+        organizationId: row.organizationId,
+        notificationIds: [],
+      } satisfies NotificationPing);
+    pings.set(key, ping);
+    if (isMobilePushKind(row.kind)) {
+      ping.notificationIds.push(row.id);
     }
-    seen.add(key);
-    pings.push({
-      userId: brandPersistedUserId(row.userId),
-      organizationId: row.organizationId,
-    });
   }
-  return pings;
+  return [...pings.values()];
 };
 
 /**
@@ -325,13 +349,21 @@ export const fanOutCrossUserNotifications = async (
  * back, once the transaction they belong to has committed. The event carries
  * no payload, so a recipient's client answers it by re-reading the ordinary
  * authorized endpoint.
+ *
+ * The same moment queues an alert to each recipient's registered mobile
+ * devices, one per notification. Queueing is detached and captured: a failure
+ * there never reaches the write that filed the notification.
  */
 export const pingNotificationRecipients = (
   pings: readonly NotificationPing[],
+  schedulePush: (
+    notificationIds: readonly SafeId<"notification">[],
+  ) => void = schedulePushDeliveries,
 ): void => {
   for (const { organizationId, userId } of pings) {
     broadcastToUser(userId, organizationId, newNotificationRealtimeEvent());
   }
+  schedulePush(pings.flatMap(({ notificationIds }) => notificationIds));
 };
 
 /**

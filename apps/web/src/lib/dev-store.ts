@@ -7,14 +7,12 @@ import { deviceStorage } from "@/lib/account/browser-storage";
 type State = {
   tanstackDevtools: boolean;
   sourceInspector: boolean;
-  publicLawPreview: boolean;
   simulateSlowLoad: boolean;
 };
 
 type Actions = {
   setTanstackDevtools: (value: boolean) => void;
   setSourceInspector: (value: boolean) => void;
-  setPublicLawPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
 
@@ -23,7 +21,6 @@ export const useDevStore = create<State & Actions>()(
     (set) => ({
       tanstackDevtools: false,
       sourceInspector: false,
-      publicLawPreview: false,
       simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
@@ -31,9 +28,6 @@ export const useDevStore = create<State & Actions>()(
       },
       setSourceInspector: (sourceInspector) => {
         set({ sourceInspector });
-      },
-      setPublicLawPreview: (publicLawPreview) => {
-        set({ publicLawPreview });
       },
       setSimulateSlowLoad: (simulateSlowLoad) => {
         set({ simulateSlowLoad });

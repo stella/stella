@@ -129,6 +129,8 @@ export type LeafCommandSpec = {
   additionalScopes?: readonly ToolScope[];
   requestTimeoutMs?: number;
   toolName: string;
+  /** Registry read classification; absence must be treated as a possible write. */
+  readOnlyHint?: boolean;
   /** The tool's authored description, first sentence; the command's `--help` brief. */
   description?: string;
   discriminatorInject?: Record<string, string>;
@@ -214,6 +216,7 @@ export type CapabilityLeafSpec = {
   itemsKey?: string;
   destructive: boolean;
   confirmation?: "required";
+  idempotency?: { type: "replay" };
   scope?: ToolScope;
   additionalScopes?: readonly ToolScope[];
   /**

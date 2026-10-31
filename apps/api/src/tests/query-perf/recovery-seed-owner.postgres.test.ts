@@ -23,16 +23,16 @@ import { queryPerfDatabaseName } from "@/api/tests/query-perf/profiles";
 import { measureScheduledJobRunRaw } from "@/api/tests/query-perf/scheduled-run";
 
 import {
+  RECOVERY_READ_SIZES,
+  type RecoveryScenario,
+} from "./recovery-measurement";
+import {
   cleanupRecoveryScenarios,
   RECOVERY_ORGANIZATION_PREFIX,
   RECOVERY_USER_PREFIX,
   seedRecoveryScenario,
 } from "./recovery-seed";
-import {
-  RECOVERY_READ_SIZES,
-  recoveryMeasurementRuns,
-  type RecoveryScenario,
-} from "./registry";
+import { recoveryMeasurementRuns } from "./registry";
 
 const enabled = process.env["STELLA_RUN_QUERY_PERF_TESTS"] === "true";
 const databaseUrl = process.env["DATABASE_URL"];
@@ -140,9 +140,7 @@ describe.skipIf(!enabled)("query perf fixture ownership (postgres)", () => {
         timeoutMs: 300_000,
         run: async (database) => {
           await seedRecoveryScenario(database, scenario);
-          const organizationPattern = `${escapeLike(
-            `${RECOVERY_ORGANIZATION_PREFIX}-`,
-          )}%`;
+          const organizationPattern = `${escapeLike(`${RECOVERY_ORGANIZATION_PREFIX}-`)}%`;
           const beforeReceipts = await database
             .select({ rows: sql<number>`count(*)`.mapWith(Number) })
             .from(flowUploadTriggerIntents)
@@ -264,9 +262,7 @@ describe.skipIf(!enabled)("query perf fixture ownership (postgres)", () => {
         timeoutMs: 300_000,
         run: async (database) => {
           await seedRecoveryScenario(database, scenario);
-          const organizationPattern = `${escapeLike(
-            `${RECOVERY_ORGANIZATION_PREFIX}-`,
-          )}%`;
+          const organizationPattern = `${escapeLike(`${RECOVERY_ORGANIZATION_PREFIX}-`)}%`;
           const receiptCount = async () =>
             (
               await database

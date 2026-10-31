@@ -10,6 +10,7 @@ import {
   foldStatuteQuery,
   parseStatuteQuery,
   readStatuteQueryReferences,
+  type StatuteQueryIntent,
 } from "./statute-query-intent";
 
 const countries = Object.keys(STATUTE_ALIASES).filter(
@@ -77,9 +78,9 @@ describe("reading an act number", () => {
     );
   });
 
-  test("every lenient spelling of a Slovak number names the same act", () => {
+  test("Slovak number spellings preserve the collection era", () => {
     assertProperty(
-      "every lenient spelling of a Slovak number names the same act",
+      "Slovak number spellings preserve the collection era",
       fc.property(
         number,
         year,
@@ -87,6 +88,18 @@ describe("reading an act number", () => {
         fc.array(space, { minLength: 3, maxLength: 3 }),
         (n, y, [suffix, collection], spaces) => {
           const raw = spelled([String(n), "/", String(y), suffix], spaces);
+
+          if (
+            suffix !== "" &&
+            (foldStatuteQuery(suffix).replaceAll(".", "") === "zb") !== y < 1993
+          ) {
+            expect(parseStatuteQuery("svk", raw)).toEqual({
+              type: "text",
+              text: raw.trim(),
+            });
+            expect(readStatuteQueryReferences("svk", raw)).toEqual([]);
+            return;
+          }
 
           expect(parseStatuteQuery("svk", raw)).toEqual({
             type: "act",
@@ -108,6 +121,38 @@ describe("reading an act number", () => {
       year: "2012",
     });
   });
+
+  test.each([
+    ["1992", "Zb.", "Z. z."],
+    ["1993", "Z. z.", "Zb."],
+  ])(
+    "the Slovak collection boundary in %s is preserved",
+    (publicationYear, valid, invalid) => {
+      const expected = {
+        type: "act",
+        collection: "zz",
+        label: null,
+        number: "1",
+        provision: null,
+        year: publicationYear,
+      } as const satisfies StatuteQueryIntent;
+      expect(parseStatuteQuery("svk", `1/${publicationYear}`)).toEqual(
+        expected,
+      );
+      expect(parseStatuteQuery("svk", `1/${publicationYear} ${valid}`)).toEqual(
+        expected,
+      );
+      expect(
+        parseStatuteQuery("svk", `1/${publicationYear} ${invalid}`).type,
+      ).toBe("text");
+      expect(
+        readStatuteQueryReferences(
+          "svk",
+          `zákona č. 1/${publicationYear} ${invalid}`,
+        ),
+      ).toEqual([]);
+    },
+  );
 
   test("a provision ahead of the number is kept as a jump target", () => {
     expect(parseStatuteQuery("cze", "§ 2079 zákona č. 89/2012 Sb.")).toEqual({

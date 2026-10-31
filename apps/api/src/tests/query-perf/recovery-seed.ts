@@ -13,7 +13,7 @@ import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import {
   RECOVERY_COHORT_SETUP,
   type RecoveryScenario,
-} from "@/api/tests/query-perf/registry";
+} from "@/api/tests/query-perf/recovery-measurement";
 
 export const RECOVERY_ORGANIZATION_PREFIX = "query-perf-recovery";
 export const RECOVERY_USER_PREFIX = `${RECOVERY_ORGANIZATION_PREFIX}-user`;

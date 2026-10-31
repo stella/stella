@@ -24,11 +24,6 @@ import { and, asc, eq, gt, inArray, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
-import type {
-  SourceAdapter,
-  StoredRawReparseRejection,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -36,6 +31,11 @@ import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/su
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type {
+  SourceAdapter,
+  StoredRawReparseRejection,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 
 /** What folding one stored row came to. */
 export const SUPPLEMENT_FOLD_OUTCOME = {

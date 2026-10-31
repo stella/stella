@@ -53,7 +53,7 @@ const config = {
     "pagination: the audit entries recorded against the item and against the " +
     "task behind it, each with its action, the actor's name, the recorded " +
     "changes, and the operation label. changesStatus is visible or " +
-    "feature_unavailable; unavailable changes and operation are null.",
+    "feature_unavailable; non-visible changes and operation are null.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   access: "read",

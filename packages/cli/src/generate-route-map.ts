@@ -667,12 +667,14 @@ const toolMetadata = ({
   const additionalScopes = annotation?.additionalScopes;
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
+  const readOnlyHint = listing.annotations?.readOnlyHint;
   return {
     ...(feature === undefined ? {} : { feature }),
     ...(featureId === undefined ? {} : { featureId }),
     ...(additionalScopes === undefined ? {} : { additionalScopes }),
     ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
     ...(scope === undefined ? {} : { scope }),
+    ...(readOnlyHint === undefined ? {} : { readOnlyHint }),
   };
 };
 

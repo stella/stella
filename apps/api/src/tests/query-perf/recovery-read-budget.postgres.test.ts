@@ -25,9 +25,9 @@ import {
   RECOVERY_COHORT_SETUP,
   RECOVERY_READ_SIZES,
   type RecoveryJob,
-  recoveryMeasurementRuns,
   type RecoveryScenario,
-} from "@/api/tests/query-perf/registry";
+} from "@/api/tests/query-perf/recovery-measurement";
+import { recoveryMeasurementRuns } from "@/api/tests/query-perf/registry";
 import { measureScheduledJobRun } from "@/api/tests/query-perf/scheduled-run";
 
 import type { QueryPerfDeadline } from "./deadline";
@@ -212,7 +212,10 @@ describe.skipIf(!enabled)("recovery read corpus (postgres)", () => {
                     statementCounts: result.statementCounts,
                     metrics: result.metrics,
                     statements: result.statements.map(
-                      ({ metrics, statement }) => ({ metrics, statement }),
+                      ({ metrics, statement }) => ({
+                        metrics,
+                        statement,
+                      }),
                     ),
                   })}\n`,
                 );

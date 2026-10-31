@@ -41,8 +41,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
+  createNotificationsInTransaction,
   fanOutNotifications,
   NOTIFICATION_INSERT_BATCH_SIZE,
+  pingNotificationRecipients,
 } from "@/api/lib/notifications";
 import type { NewNotification } from "@/api/lib/notifications";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -431,7 +433,9 @@ describe("unread count", () => {
     // The other firm's badge is untouched.
     expect(
       await listAs({ userId: ids.userA1, organizationId: ids.orgB }),
-    ).toMatchObject({ unreadCount: 1 });
+    ).toMatchObject({
+      unreadCount: 1,
+    });
   });
 });
 
@@ -868,4 +872,109 @@ test("revoking flows hides retained notifications and linked work until re-grant
       .set({ emailVerified: identity.emailVerified })
       .where(eq(user.id, userId));
   }
+});
+
+describe("push alerts for committed notifications", () => {
+  const mention = (idempotencyKey: string): NewNotification => ({
+    kind: NOTIFICATION_KIND.MENTION,
+    metadata: { actorName: "Ada" },
+    entityType: "entity",
+    entityId: ids.entityA1,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    idempotencyKey,
+  });
+
+  const exportReady = (idempotencyKey: string): NewNotification => ({
+    kind: NOTIFICATION_KIND.REPORT_EXPORT_SUCCEEDED,
+    metadata: {},
+    entityType: "report_export",
+    entityId: createSafeId<"reportExport">(),
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    organizationId: ids.orgA,
+    idempotencyKey,
+  });
+
+  const fileAsRecipient = async (rows: readonly NewNotification[]) =>
+    await createScopedDb(
+      testDb,
+      [ids.wsA1],
+      ids.orgA,
+      ids.userA1,
+    )(
+      async (tx) =>
+        await createNotificationsInTransaction(
+          rows,
+          asTestRaw<Parameters<typeof createNotificationsInTransaction>[1]>(tx),
+        ),
+    );
+
+  test("the write hands back the ids it filed, and after commit each is queued for the recipient's devices", async () => {
+    const pings = await fileAsRecipient([
+      mention("test:push-a"),
+      mention("test:push-b"),
+    ]);
+    const filed = pings.flatMap(({ notificationIds }) => notificationIds);
+    seeded.push(...filed);
+
+    expect(pings).toEqual([
+      {
+        userId: ids.userA1,
+        organizationId: ids.orgA,
+        notificationIds: filed,
+      },
+    ]);
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(inArray(notifications.id, filed));
+    expect(stored).toHaveLength(2);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(pings, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([filed]);
+  });
+
+  test("a kind that asks nothing of the person is filed and pinged, never pushed", async () => {
+    const pings = await fileAsRecipient([exportReady("test:push-export")]);
+    const written = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, "test:push-export"));
+    seeded.push(...written.map(({ id }) => id));
+
+    expect(written).toHaveLength(1);
+    expect(pings).toEqual([
+      { userId: ids.userA1, organizationId: ids.orgA, notificationIds: [] },
+    ]);
+  });
+
+  test("a replayed write files nothing new, so nothing is queued twice", async () => {
+    const first = await fileAsRecipient([mention("test:push-replay")]);
+    seeded.push(...first.flatMap(({ notificationIds }) => notificationIds));
+
+    const replay = await fileAsRecipient([mention("test:push-replay")]);
+    expect(replay).toEqual([]);
+
+    const queued: string[][] = [];
+    pingNotificationRecipients(replay, (notificationIds) => {
+      queued.push([...notificationIds]);
+    });
+    expect(queued).toEqual([[]]);
+  });
+
+  test("filing does not depend on push: unconfigured, the write and its ping still go through", async () => {
+    const row = mention("test:push-unconfigured");
+    await fanOutNotifications([row], fanOutDb());
+    const stored = await testDb
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(eq(notifications.idempotencyKey, row.idempotencyKey));
+    seeded.push(...stored.map(({ id }) => id));
+    expect(stored).toHaveLength(1);
+  });
 });

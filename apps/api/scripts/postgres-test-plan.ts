@@ -164,6 +164,7 @@ const CLUSTER_VISIBILITY_TESTS = new Set([
   "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
   "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
   "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
   "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
 ]);
