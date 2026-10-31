@@ -97,11 +97,11 @@ const cutover = async (connection: OnlineMigrationConnection) => {
   await connection.execute("BEGIN");
   const result = await Result.tryPromise(async () => {
     await setDedicatedLockTimeout(
-      (statement) => connection.execute(statement),
+      async (statement) => await connection.execute(statement),
       1000,
     );
     await setDedicatedStatementTimeout(
-      (statement) => connection.execute(statement),
+      async (statement) => await connection.execute(statement),
       60_000,
     );
     for (const statement of readMatterVisibilityCutoverSql()) {

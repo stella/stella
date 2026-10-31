@@ -94,11 +94,11 @@ const lockSelectedMatters = async (
   );
 };
 
-const readSelectedEntryScope = (
+const readSelectedEntryScope = async (
   tx: RunningGuardBase["tx"],
   condition: Parameters<typeof lockBillingTimeEntrySources>[1],
 ) =>
-  readBounded(
+  await readBounded(
     tx
       .select({
         id: timeEntries.id,
@@ -126,10 +126,7 @@ const lockRunningEntryPrefix = async ({
 }: LockRunningEntryPrefixOptions) => {
   const { tx, actorUserId } = options;
   const additionalWorkspaceIds =
-    "additionalWorkspaceIds" in options &&
-    options.additionalWorkspaceIds !== undefined
-      ? options.additionalWorkspaceIds
-      : [];
+    "additionalWorkspaceIds" in options ? options.additionalWorkspaceIds : [];
   const explicitWorkspaceIds = [
     ...("workspaceId" in options ? [options.workspaceId] : []),
     ...additionalWorkspaceIds,
