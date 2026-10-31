@@ -183,7 +183,8 @@
     "server": "Server",
     "signOut": "Abmelden",
     "deleteAccount": "Konto löschen",
-    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können."
+    "deleteAccountHint": "Öffnet Ihr Konto im Web, wo Sie es mit allem, was Ihnen gehört, löschen können.",
+    "signOutFailed": "Die Abmeldung konnte nicht abgeschlossen werden. Versuchen Sie es erneut."
   },
   "header": {
     "search": "Suchen"

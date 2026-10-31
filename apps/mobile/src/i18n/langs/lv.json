@@ -183,7 +183,8 @@
     "server": "Serveris",
     "signOut": "Atslēgties",
     "deleteAccount": "Dzēst kontu",
-    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu."
+    "deleteAccountHint": "Atver jūsu kontu tīmeklī, kur varat to dzēst kopā ar visu, kas ir jūsu.",
+    "signOutFailed": "Neizdevās pabeigt izrakstīšanos. Mēģiniet vēlreiz."
   },
   "header": {
     "search": "Meklēt"

@@ -183,7 +183,8 @@
     "server": "Servidor",
     "signOut": "Sair",
     "deleteAccount": "Excluir conta",
-    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu."
+    "deleteAccountHint": "Abre sua conta na web, onde você pode excluí-la com tudo o que é seu.",
+    "signOutFailed": "Não foi possível concluir a saída. Tente novamente."
   },
   "header": {
     "search": "Pesquisar"

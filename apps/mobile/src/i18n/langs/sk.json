@@ -183,7 +183,8 @@
     "server": "Server",
     "signOut": "Odhlásiť sa",
     "deleteAccount": "Odstrániť účet",
-    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše."
+    "deleteAccountHint": "Otvorí váš účet na webe, kde ho môžete odstrániť aj so všetkým, čo je vaše.",
+    "signOutFailed": "Odhlásenie sa nepodarilo dokončiť. Skúste to znova."
   },
   "header": {
     "search": "Hľadať"
