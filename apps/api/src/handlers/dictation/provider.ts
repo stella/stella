@@ -318,7 +318,7 @@ type TranscribeAudioOptions = {
   scheduleTimeout?: WithTimeoutScheduler | undefined;
 };
 
-export type AdmittedTranscription = {
+type AdmittedTranscription = {
   transcript: TranscriptionResult;
   admittedDurationMs: number;
 };
