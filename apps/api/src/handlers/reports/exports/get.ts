@@ -21,6 +21,7 @@ import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { callerDownloadSource, presignDownloadUrl } from "@/api/lib/s3-presign";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 import { resolvedReportResultFieldId } from "../result-field";
 
@@ -49,6 +50,7 @@ const config = {
   description:
     "Read a report export's status. Completed downloads include a short-lived URL; workspace exports include the created document ID.",
   permissions: { workspace: ["read"] },
+  personApprovedEffect: PERSON_APPROVED_EFFECT.exportsRecords,
   mcp: {
     type: "capability",
     reason: "reporting_export",

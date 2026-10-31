@@ -14,6 +14,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
+import { PERSON_APPROVED_EFFECT } from "@/api/mcp/person-approved-effect";
 
 const acknowledgeParams = workspaceParams({
   entityId: resourceIdSchema("entity"),
@@ -26,6 +27,7 @@ const acknowledgeWorkObligation = createSafeHandler(
     description:
       "Acknowledge ownership of governed work assigned to the signed-in user.",
     permissions: { entity: ["update"] },
+    personApprovedEffect: PERSON_APPROVED_EFFECT.recordsAttestation,
     accountAccess: ACCOUNT_ACCESS.sandbox,
     realtime: workObligationRealtimeUpdates,
     mcp: {
