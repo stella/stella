@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -13,6 +13,7 @@ import {
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { QUEUE_REQUEUE_OUTCOME } from "@/api/lib/bullmq-requeue";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import {
   DATA_EXPORT_HANDOFF_PAGE_SIZE,
   DATA_EXPORT_MAX_HANDOFF_PAGES,
@@ -25,6 +26,7 @@ import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
 import { measureScheduledJobRun } from "./scheduled-run";
+import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -100,9 +102,25 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
   test("export measurement executes every cohort once without replaying writes", async () => {
     await withQueryPerfFixture({
       databaseUrl:
-        process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
+        process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
+        process.env["DATABASE_URL"] ??
+        panic("Missing PostgreSQL test URL"),
       profileId: "corpus",
-      run: async (db) => {
+      run: async (_database, _deadline, openClient) => {
+        const { db } = openClient({
+          max: 1,
+          connection: {
+            ...QUERY_PERF_CONNECTION_SETTINGS,
+            plan_cache_mode: "force_generic_plan",
+          },
+        });
+        expect(
+          executedRows(
+            await db.execute(
+              sql`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user`,
+            ),
+          ).at(0),
+        ).toEqual({ rolsuper: false, rolbypassrls: false });
         const exportRows = async () =>
           await db
             .select({
@@ -113,9 +131,13 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
             })
             .from(organizationDataExports)
             .orderBy(asc(organizationDataExports.id))
-            .limit(600);
+            .limit(12_000);
         for (const cohort of ["quiet", "transitions", "queued"] as const) {
-          const scenario = { type: "data-exports", rows: 600, cohort } as const;
+          const scenario = {
+            type: "data-exports",
+            rows: 12_000,
+            cohort,
+          } as const;
           await seedDataExportScenario(db, scenario);
           const original = await exportRows();
           let enqueued = 0;
