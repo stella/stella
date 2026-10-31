@@ -865,6 +865,112 @@ const boundMcpToolResult = async ({
   return omittedWriteToolResult();
 };
 
+type MonitorLegacyStreamOptions = {
+  body: ReadableStream<Uint8Array>;
+  request: Request;
+  teardown: () => Promise<void>;
+  reportTransportError: (
+    error: unknown,
+    operation: "cancel_stream" | "read_stream",
+  ) => void;
+};
+
+const monitorLegacyStream = ({
+  body,
+  request,
+  teardown,
+  reportTransportError,
+}: MonitorLegacyStreamOptions): ReadableStream<Uint8Array> => {
+  const reader = takeStreamReaderOwnership(body);
+  let readerReleased = false;
+  const completeExchange = async () => {
+    request.signal.removeEventListener("abort", abortExchange);
+    if (!readerReleased) {
+      reader.releaseLock();
+      readerReleased = true;
+    }
+    await teardown();
+  };
+  const abortExchange = () => {
+    detached(
+      (async () => {
+        try {
+          await reader.cancel(request.signal.reason);
+        } catch (error) {
+          reportTransportError(error, "cancel_stream");
+        } finally {
+          await completeExchange();
+        }
+      })(),
+      "mcp.legacy-stream-teardown",
+    );
+  };
+  request.signal.addEventListener("abort", abortExchange, {
+    once: true,
+  });
+
+  // A pull is suspended across the upstream read and the teardown that
+  // follows it, and the consumer can cancel `monitoredBody` during either
+  // await. Cancelling closes the controller, so the close/enqueue that
+  // resumes afterwards throws, and the catch below would report that as a
+  // failed transport read. A cancelled body is a normal end of the
+  // exchange, so absorb the closed-controller throw here, the way the SSE
+  // connection registries do, and leave the catch for real read failures.
+  const closeMonitoredBody = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+  ): void => {
+    try {
+      controller.close();
+    } catch {
+      // Already closed by a concurrent cancel.
+    }
+  };
+  const enqueueMonitoredChunk = (
+    controller: ReadableStreamDefaultController<Uint8Array>,
+    chunk: Uint8Array,
+  ): void => {
+    try {
+      controller.enqueue(chunk);
+    } catch {
+      // Already closed by a concurrent cancel.
+    }
+  };
+
+  return new ReadableStream<Uint8Array>({
+    pull: async (controller) => {
+      if (readerReleased) {
+        closeMonitoredBody(controller);
+        return;
+      }
+      try {
+        const readResult: unknown = await reader.read();
+        if (!isByteStreamReadResult(readResult)) {
+          panic("MCP transport returned a non-byte stream");
+        }
+        if (readResult.done) {
+          await completeExchange();
+          closeMonitoredBody(controller);
+          return;
+        }
+        enqueueMonitoredChunk(controller, readResult.value);
+      } catch (error) {
+        reportTransportError(error, "read_stream");
+        await completeExchange();
+        controller.error(error);
+      }
+    },
+    cancel: async (reason) => {
+      try {
+        await reader.cancel(reason);
+      } catch (error) {
+        reportTransportError(error, "cancel_stream");
+      } finally {
+        await completeExchange();
+      }
+    },
+  });
+};
+
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
   chargeReadBytes = chargeMcpReadBytes,
@@ -1386,93 +1492,11 @@ export const createMcpHttpRequestHandler = ({
         userId: session.userId,
       });
 
-      const reader = takeStreamReaderOwnership(response.body);
-      let readerReleased = false;
-      const completeExchange = async () => {
-        request.signal.removeEventListener("abort", abortExchange);
-        if (!readerReleased) {
-          reader.releaseLock();
-          readerReleased = true;
-        }
-        await teardown();
-      };
-      const abortExchange = () => {
-        detached(
-          (async () => {
-            try {
-              await reader.cancel(request.signal.reason);
-            } catch (error) {
-              reportTransportError(error, "cancel_stream");
-            } finally {
-              await completeExchange();
-            }
-          })(),
-          "mcp.legacy-stream-teardown",
-        );
-      };
-      request.signal.addEventListener("abort", abortExchange, {
-        once: true,
-      });
-
-      // A pull is suspended across the upstream read and the teardown that
-      // follows it, and the consumer can cancel `monitoredBody` during either
-      // await. Cancelling closes the controller, so the close/enqueue that
-      // resumes afterwards throws, and the catch below would report that as a
-      // failed transport read. A cancelled body is a normal end of the
-      // exchange, so absorb the closed-controller throw here, the way the SSE
-      // connection registries do, and leave the catch for real read failures.
-      const closeMonitoredBody = (
-        controller: ReadableStreamDefaultController<Uint8Array>,
-      ): void => {
-        try {
-          controller.close();
-        } catch {
-          // Already closed by a concurrent cancel.
-        }
-      };
-      const enqueueMonitoredChunk = (
-        controller: ReadableStreamDefaultController<Uint8Array>,
-        chunk: Uint8Array,
-      ): void => {
-        try {
-          controller.enqueue(chunk);
-        } catch {
-          // Already closed by a concurrent cancel.
-        }
-      };
-
-      const monitoredBody = new ReadableStream<Uint8Array>({
-        pull: async (controller) => {
-          if (readerReleased) {
-            closeMonitoredBody(controller);
-            return;
-          }
-          try {
-            const readResult: unknown = await reader.read();
-            if (!isByteStreamReadResult(readResult)) {
-              panic("MCP transport returned a non-byte stream");
-            }
-            if (readResult.done) {
-              await completeExchange();
-              closeMonitoredBody(controller);
-              return;
-            }
-            enqueueMonitoredChunk(controller, readResult.value);
-          } catch (error) {
-            reportTransportError(error, "read_stream");
-            await completeExchange();
-            controller.error(error);
-          }
-        },
-        cancel: async (reason) => {
-          try {
-            await reader.cancel(reason);
-          } catch (error) {
-            reportTransportError(error, "cancel_stream");
-          } finally {
-            await completeExchange();
-          }
-        },
+      const monitoredBody = monitorLegacyStream({
+        body: response.body,
+        request,
+        teardown,
+        reportTransportError,
       });
 
       return new Response(monitoredBody, {
