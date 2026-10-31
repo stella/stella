@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The web message census parses every source and translated ICU message to compare arguments and plural forms. It needs the ICU message parser the repository scripts already pin at the same version; there is no first-party parser to reuse."
+}

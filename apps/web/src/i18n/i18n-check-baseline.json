@@ -317,9 +317,6 @@
     "auth.emailPlaceholder": [
       "ar"
     ],
-    "avt.claimDetail.sourceCount": [
-      "fr"
-    ],
     "avt.verification.documentView.original": [
       "de",
       "es",
@@ -562,9 +559,6 @@
     "inspector.metadata.documentProperties.keys.slides": [
       "pt-BR"
     ],
-    "inspector.review.passagesCount": [
-      "fr"
-    ],
     "inspector.review.passagesToggle": [
       "fr"
     ],
@@ -804,9 +798,6 @@
       "de",
       "pl",
       "pt-BR"
-    ],
-    "templates.conditionCount": [
-      "fr"
     ],
     "templates.conditionDecidedNo": [
       "es"
