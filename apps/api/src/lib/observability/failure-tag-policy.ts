@@ -353,6 +353,7 @@ export const TAGGED_FAILURE_REASON = {
   RawSourceObjectCopyError: "tagged_failure",
   RawSourceObjectUnhomeableError: "tagged_failure",
   RawSourceWriteWindowClosedError: "tagged_failure",
+  ReadCommittedUnitError: "tagged_failure",
   ReaderAnswerCorpusError: "tagged_failure",
   ReaderProvisionSpanMismatchError: "tagged_failure",
   ReaderTextScaleStorageError: "tagged_failure",

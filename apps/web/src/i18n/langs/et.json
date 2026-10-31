@@ -814,8 +814,10 @@
       "deleteRateTable": "Kustuta määratabel",
       "editRateTable": "Muuda määratabelist",
       "effectiveFrom": "Kehtiv alates",
+      "effectiveRateRequired": "Selle toimiku, isiku ja kuupäeva jaoks pole kehtivat tunnihinda määratud. Lisage tunnihind või registreerige aeg mittearveldatavana.",
       "effectiveTo": "Kehtiv kuni",
       "hourlyRate": "Tunnimäär",
+      "logNonBillable": "Registreeri mittearveldatavana",
       "noRateEntries": "Määrakandeid pole veel",
       "noRateFound": "Määr seadistamata",
       "noRateTables": "Määratabeleid pole veel",
@@ -5019,7 +5021,6 @@
       "beta": "Beetafunktsioonid",
       "betaAvt": "AVT dokumentide kontroll",
       "betaAvtDescription": "Kontrolli toimiku dokumente väide väite haaval loendi faktide vastu",
-      "betaCaseLawDescription": "Kuva avalik kohtupraktika otsing ja lugeja külgribal",
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "betaInbox": "Postkast ja teavitused",
       "betaInboxDescription": "Kuva postkast ja teavituste kell",
@@ -5055,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop on seotud",
       "desktopCardMissingDetail": "Paigaldage see või ühendage, kui see on selles arvutis juba paigaldatud.",
       "desktopCardMissingTitle": "stella desktop pole veel ühendatud",
+      "desktopCardOpeningDetail": "Seome selle arvuti kontoga <bdi>{identity}</bdi> serveris {host}. Kui brauser küsib, lubage tal stella desktop avada.",
+      "desktopCardOpeningTitle": "stella desktop avaneb...",
       "desktopCardOutdatedDetail": "Versioon {version} on seotud kontoga <bdi>{identity}</bdi>. Paigaldage uusim versioon, et dokumendid ja tegevus töötaksid edasi.",
       "desktopCardOutdatedTitle": "stella desktop vajab uuendust",
       "desktopClipboardDescription": "Avage, otsige, korraldage ja kasutage uuesti mis tahes rakendusest kopeeritud teksti.",
@@ -5074,6 +5077,7 @@
       "desktopInstallOpenStep": "Avage stella desktop üks kord. Lõikelaud ilmub kohe ja jääb kättesaadavaks macOS-i menüüribalt või Windowsi süsteemisalvest.",
       "desktopInstallTitle": "Installimine ja avamine",
       "desktopInstallWindowsStep": "Käivitage installer ja järgige juhiseid.",
+      "desktopOpenApp": "Ava stella desktop",
       "desktopPrivacyDescription": "Lõikelaua ajalugu krüpteeritakse ja talletatakse selles seadmes.",
       "desktopPrivacyTitle": "Vaikimisi privaatne",
       "desktopSelfHostDescription": "Usaldage seda stella URL-i allkirjastatud töölauarakenduses, et selle paigalduse dokumendid avaneksid lokaalselt.",
@@ -6527,6 +6531,14 @@
           "started": "Alustas ülevaatust dokumendile"
         },
         "empty": "Selles toimikus pole veel tegevust.",
+        "fields": {
+          "dueDate": "tähtaeg",
+          "parentFolder": "ülemkaust",
+          "priority": "prioriteet",
+          "property": "omadus",
+          "schedule": "ajakava",
+          "sortOrder": "järjestus"
+        },
         "filterLabel": "Filtreeri tegevust",
         "filters": {
           "all": "Kogu tegevus",
@@ -6576,6 +6588,7 @@
           "translation": "tõlge"
         },
         "title": "Tegevus",
+        "updatedFields": "Uuendati: {fields}",
         "views": {
           "list": "Loendivaade",
           "timeline": "Ajajoone vaade"

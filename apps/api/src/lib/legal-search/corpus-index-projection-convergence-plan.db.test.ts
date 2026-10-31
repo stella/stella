@@ -32,6 +32,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import type { ScanOccurrence } from "@/api/tests/query-plans/plan-walker";
@@ -241,9 +242,15 @@ const probeScans = async (
     const explained = await client.query(
       `EXPLAIN (FORMAT JSON) EXECUTE convergence_probe${values.length > 0 ? `(${values.join(", ")})` : ""}`,
     );
-    return scanOccurrences(explainRoot(explained)).filter(({ relation }) =>
+    const root = explainRoot(explained);
+    const scans = scanOccurrences(root).filter(({ relation }) =>
       PROJECTION_TABLES.has(relation),
     );
+    const paths = [...PROJECTION_TABLES].flatMap((relation) =>
+      indexedAccessPaths(root, relation),
+    );
+    expect(paths).toHaveLength(scans.length);
+    return scans;
   } finally {
     await client.exec("DEALLOCATE convergence_probe");
     await client.exec("RESET plan_cache_mode");
@@ -268,18 +275,13 @@ const planProbes = async (mode: PlanMode): Promise<ProbePlans> => ({
   unpublishedIntent: await probeScans(PROBES.unpublishedIntent(), mode),
 });
 
-const INDEX_PATHS: ReadonlySet<string> = new Set([
-  "Index Scan",
-  "Index Only Scan",
-]);
-
 /** Every projection scan is an index range of the probed generation. */
 const expectGenerationRanges = (scans: readonly ScanOccurrence[]) => {
   expect(scans.length).toBeGreaterThan(0);
   for (const scan of scans) {
     expect({
       relation: scan.relation,
-      indexPath: INDEX_PATHS.has(scan.nodeType),
+      indexPath: scan.index !== null,
       generationBound: (scan.indexCond ?? "").includes("generation"),
     }).toEqual({
       relation: scan.relation,

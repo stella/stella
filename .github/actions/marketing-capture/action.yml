@@ -192,6 +192,13 @@ runs:
         STELLA_LOCAL_DEV: "1"
       run: bun --filter @stll/api db:seed-dev
 
+    # Every step above prepares the stack. The release health gate excuses a
+    # screenshot failure only when it happened after this marker and before
+    # the capture step below finished (see release-heavy-verdict.jq).
+    - name: Mark screenshot comparison started
+      shell: bash
+      run: touch "$RUNNER_TEMP/marketing-comparison-started"
+
     - name: Capture marketing screenshots
       shell: bash
       env:
@@ -210,6 +217,7 @@ runs:
           bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:marketing || status=$?
           bun "$GITHUB_WORKSPACE/scripts/marketing-screenshot-verdict.ts" "$PLAYWRIGHT_JSON_OUTPUT_FILE" "$status"
         fi
+        rm -f "$RUNNER_TEMP/marketing-comparison-started"
 
     - name: Stop production web server
       if: always() && steps.e2e-stack.outcome == 'success'

@@ -6,14 +6,14 @@ import fc from "fast-check";
 import { assertProperty } from "@stll/property-testing";
 
 import {
-  decodeSourceRawEnvelope,
-  STORED_RAW_REPARSE_REJECTION,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
   skCourtsListingIdentity,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import {
+  decodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/lib/legal-search/ingestion-types";
 import { entityResidueIn } from "@/api/lib/legal-search/parsers/entity-residue";
 
 const fixture = () =>

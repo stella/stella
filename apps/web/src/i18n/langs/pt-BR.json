@@ -814,8 +814,10 @@
       "deleteRateTable": "Excluir tabela de taxas",
       "editRateTable": "Editar tabela de taxas",
       "effectiveFrom": "Vigente a partir de",
+      "effectiveRateRequired": "Não há uma taxa vigente para este caso, esta pessoa e esta data. Adicione uma taxa ou registre o tempo como não faturável.",
       "effectiveTo": "Vigente até",
       "hourlyRate": "Valor por hora",
+      "logNonBillable": "Registrar como não faturável",
       "noRateEntries": "Ainda não há entradas de taxas",
       "noRateFound": "Nenhuma taxa configurada",
       "noRateTables": "Ainda não há tabelas de taxas",
@@ -5019,7 +5021,6 @@
       "beta": "Recursos beta",
       "betaAvt": "Verificação de documentos AVT",
       "betaAvtDescription": "Conferir os documentos de um caso, afirmação por afirmação, com os fatos de uma lista",
-      "betaCaseLawDescription": "Mostrar a pesquisa e o leitor de jurisprudência pública na barra lateral",
       "betaDescription": "Experimente recursos que ainda estão em desenvolvimento",
       "betaInbox": "Caixa de entrada e notificações",
       "betaInboxDescription": "Mostrar a caixa de entrada e o sino de notificações",
@@ -5055,6 +5056,8 @@
       "desktopCardConnectedTitle": "stella desktop está vinculado",
       "desktopCardMissingDetail": "Instale-o, ou conecte-o se já estiver instalado neste computador.",
       "desktopCardMissingTitle": "stella desktop ainda não está vinculado",
+      "desktopCardOpeningDetail": "Vinculando este computador a <bdi>{identity}</bdi> em {host}. Se o navegador pedir, permita que ele abra o stella desktop.",
+      "desktopCardOpeningTitle": "Abrindo stella desktop...",
       "desktopCardOutdatedDetail": "A versão {version} está vinculada a <bdi>{identity}</bdi>. Instale a versão mais recente para que documentos e atividade continuem funcionando.",
       "desktopCardOutdatedTitle": "stella desktop precisa de atualização",
       "desktopClipboardDescription": "Abra, pesquise, organize e reutilize textos copiados de qualquer aplicativo.",
@@ -5074,6 +5077,7 @@
       "desktopInstallOpenStep": "Abra o stella desktop uma vez. A área de transferência aparece na hora e continua disponível pela barra de menus do macOS ou pela bandeja do sistema do Windows.",
       "desktopInstallTitle": "Instalar e abrir",
       "desktopInstallWindowsStep": "Execute o instalador e siga as instruções.",
+      "desktopOpenApp": "Abrir stella desktop",
       "desktopPrivacyDescription": "O histórico da área de transferência é criptografado e armazenado neste dispositivo.",
       "desktopPrivacyTitle": "Privado por padrão",
       "desktopSelfHostDescription": "Confie nesta URL da stella no app desktop assinado para abrir localmente os documentos desta instalação.",
@@ -6527,6 +6531,14 @@
           "started": "Iniciou uma revisão de"
         },
         "empty": "Ainda não há atividade neste caso.",
+        "fields": {
+          "dueDate": "data de vencimento",
+          "parentFolder": "pasta principal",
+          "priority": "prioridade",
+          "property": "propriedade",
+          "schedule": "programação",
+          "sortOrder": "ordem"
+        },
         "filterLabel": "Filtrar atividade",
         "filters": {
           "all": "Toda a atividade",
@@ -6576,6 +6588,7 @@
           "translation": "tradução"
         },
         "title": "Atividade",
+        "updatedFields": "Atualizado: {fields}",
         "views": {
           "list": "Visualização em lista",
           "timeline": "Visualização da linha do tempo"
