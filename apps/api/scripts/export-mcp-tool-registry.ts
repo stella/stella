@@ -131,7 +131,7 @@ await Bun.write(
 process.stderr.write(`Wrote ${connectWeightPath.pathname}\n`);
 
 const projectChatGrantPolicy = (
-  tool: StaticMcpToolDefinition,
+  tool: Extract<StaticMcpToolDefinition, { access: "write" }>,
 ): "approve-once" | "grantable" => {
   const { access } = describeAgentAccess({
     target: { type: "tool", name: tool.name, access: tool.access },
