@@ -121,6 +121,8 @@ const normalizeGroupedWhole = ({
   return groups.join("");
 };
 
+const ASCII_DECIMAL_MARKS = [".", ","] as const;
+
 type NormalizeInputSeparatorsParams = {
   unsigned: string;
   decimal: string;
@@ -134,7 +136,11 @@ const normalizeInputSeparators = ({
   group,
   primaryGroupSize,
 }: NormalizeInputSeparatorsParams) => {
-  const alternateDecimal = decimal === "," ? "." : ",";
+  // A locale whose own mark is neither (Arabic "٫") takes either ASCII mark.
+  const alternateDecimal =
+    ASCII_DECIMAL_MARKS.filter((mark) => mark !== decimal).find((mark) =>
+      unsigned.includes(mark),
+    ) ?? (decimal === "," ? "." : ",");
   const alternateParts = unsigned.split(alternateDecimal);
   const hasLocaleDecimal = unsigned.includes(decimal);
   const hasSingleAlternate = alternateParts.length === 2;

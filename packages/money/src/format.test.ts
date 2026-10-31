@@ -17,6 +17,24 @@ import {
 describe("parseLocaleMinorUnits", () => {
   const locales = ["sk-SK", "cs-CZ", "en-US", "en-IN", "de-DE", "pl-PL"];
 
+  test("a locale whose decimal mark is neither ASCII mark takes either one", () => {
+    for (const locale of ["ar-u-nu-arab", "ar-EG"]) {
+      for (const amount of ["150.50", "150,50", "١٥٠٫٥٠"]) {
+        expect(
+          parseLocaleMinorUnits({ amount, currency: "EUR", locale }).unwrap(),
+        ).toBe(cents(15_050));
+      }
+      for (const amount of ["1.234", "1,234"]) {
+        const parsed = parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale,
+        });
+        expect(parsed.isErr() && parsed.error.reason).toBe("ambiguous");
+      }
+    }
+  });
+
   test("round-trips locale-formatted minor-unit amounts", () => {
     let state = 24_301;
     for (const locale of locales) {

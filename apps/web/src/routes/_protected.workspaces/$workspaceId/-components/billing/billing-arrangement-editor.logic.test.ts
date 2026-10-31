@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { cents } from "@stll/money";
+import { cents, formatLocaleDecimalInput } from "@stll/money";
 
 import { hourlyArrangementSchema } from "./billing-arrangement-editor.logic";
 
-const schema = hourlyArrangementSchema("Invalid cap");
+const schema = hourlyArrangementSchema("Invalid cap", "en");
 const input = {
   currency: "USD",
   capAmount: "",
@@ -69,3 +69,17 @@ test.each([
     ).toEqual({ currency, capAmount: expected, alertThresholdBps: 8000 });
   },
 );
+
+test("a saved minute cap redisplayed in locale digits saves unchanged", () => {
+  for (const locale of ["ar-u-nu-arab", "sk", "en-IN"]) {
+    const redisplayed = {
+      currency: "USD",
+      capAmount: "",
+      capMinutes: formatLocaleDecimalInput({ amount: "60", locale }),
+      alertThreshold: formatLocaleDecimalInput({ amount: "80", locale }),
+    };
+    expect(
+      v.parse(hourlyArrangementSchema("Invalid cap", locale), redisplayed),
+    ).toEqual({ currency: "USD", capMinutes: 60, alertThresholdBps: 8000 });
+  }
+});

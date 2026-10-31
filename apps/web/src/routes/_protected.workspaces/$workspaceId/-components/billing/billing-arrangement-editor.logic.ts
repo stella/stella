@@ -12,7 +12,7 @@ import {
 import { currencyCodeSchema } from "@stll/api-contract/currency-code";
 import { parseLocaleDecimal, parseLocaleMinorUnits } from "@stll/money";
 
-export const hourlyArrangementSchema = (invalidCap: string, locale = "en") =>
+export const hourlyArrangementSchema = (invalidCap: string, locale: string) =>
   v.pipe(
     v.strictObject({
       currency: currencyCodeSchema,
@@ -34,12 +34,16 @@ export const hourlyArrangementSchema = (invalidCap: string, locale = "en") =>
         addIssue({ message: invalidCap });
         return NEVER;
       }
+      // The cap redisplays in locale digits, so it is read back the same way.
       const minuteResult = value.capMinutes
-        ? parseIntegerToken(value.capMinutes, {
-            sign: "unsigned",
-            min: 1,
-            max: BILLING_CAP_MINUTES_MAX,
-          })
+        ? parseIntegerToken(
+            parseLocaleDecimal({
+              amount: value.capMinutes,
+              locale,
+              maximumFractionDigits: 0,
+            }).unwrapOr(""),
+            { sign: "unsigned", min: 1, max: BILLING_CAP_MINUTES_MAX },
+          )
         : undefined;
       if (minuteResult !== undefined && Result.isError(minuteResult)) {
         addIssue({ message: invalidCap });
