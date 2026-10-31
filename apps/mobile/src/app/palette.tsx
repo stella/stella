@@ -268,6 +268,7 @@ const PaletteScreen = () => {
           />
         </View>
         <FlatList
+          alwaysBounceVertical={false}
           contentContainerStyle={{ paddingVertical: 8 }}
           data={results}
           keyboardShouldPersistTaps="handled"

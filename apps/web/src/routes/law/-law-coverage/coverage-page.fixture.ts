@@ -19,6 +19,7 @@ export const NEARLY_COMPLETE: CaseLawCoverageSource = {
   name: "Nejvyšší soud",
   publicHomeUrl: "https://rozhodnuti.nsoud.cz/",
   health: "current",
+  edition: { type: "live" },
   lastSyncAt: OBSERVED_AT,
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
@@ -43,6 +44,7 @@ export const NEVER_MEASURED: CaseLawCoverageSource = {
   name: "Ústavní soud",
   publicHomeUrl: "https://nalus.usoud.cz/",
   health: "delayed",
+  edition: { type: "live" },
   lastSyncAt: OBSERVED_AT,
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
@@ -61,6 +63,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   name: "Nejvyšší správní soud",
   publicHomeUrl: "https://vyhledavac.nssoud.cz/",
   health: "current",
+  edition: { type: "live" },
   lastSyncAt: OBSERVED_AT,
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
@@ -109,6 +112,7 @@ export const CZECHIA = {
 export const COVERAGE: CaseLawCoverage = {
   provisionProcessing: [],
   generatedAt: "2026-09-19T08:00:00.000Z",
+  freshness: { status: "current", ageSeconds: 0 },
   totals: {
     addedLastWeek: 12,
     searchable: 4_200_000,

@@ -5,6 +5,7 @@ import { FlatList, RefreshControl, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
 import { Loader } from "@stll/ui/loader";
+import { StellaMark } from "@stll/ui/stella-mark";
 import { Text } from "@stll/ui/text";
 
 import { ChatComposer } from "@/components/chat-composer";
@@ -213,6 +214,35 @@ const ThreadMessages = ({
     setOlder("failed");
   };
 
+  // A conversation with nothing in it yet is the web's new chat: the mark,
+  // the greeting and the message box together, centred, not a card over a
+  // box at the bottom.
+  if (shown.length === 0 && live === null && cursor === null) {
+    return (
+      <View style={styles.fill}>
+        <View style={[screenStyles.readable, styles.landing]}>
+          <View style={styles.greeting}>
+            <StellaMark size={28} />
+            <Text className="text-center" variant="title">
+              {t("greeting")}
+            </Text>
+            <Text className="text-center" variant="caption">
+              {t("greetingSubtitle")}
+            </Text>
+          </View>
+          {/* The composer says why a send was refused, as in a thread. */}
+          <ChatComposer
+            busy={turn.busy}
+            canStop={turn.canStop}
+            onSend={turn.send}
+            onStop={turn.stop}
+            sendError={turn.sendError}
+          />
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.fill}>
       <FlatList
@@ -222,14 +252,6 @@ const ThreadMessages = ({
         keyExtractor={(entry) => entry.id}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          live === null ? (
-            <EmptyCard
-              description={t("threadEmptyDescription")}
-              title={t("threadTitle")}
-            />
-          ) : undefined
-        }
         // Inverted, the footer sits above the oldest message.
         ListFooterComponent={
           <PagingFooter
@@ -242,7 +264,9 @@ const ThreadMessages = ({
         }
         // And the header below the newest.
         ListHeaderComponent={
-          live === null ? undefined : <LiveTurnView turn={live} />
+          live === null ? undefined : (
+            <LiveTurnView accepted={turn.canStop} turn={live} />
+          )
         }
         onEndReached={() => {
           void loadOlder();
@@ -257,25 +281,31 @@ const ThreadMessages = ({
         }
         renderItem={({ item }) => <ChatMessage entry={item} />}
       />
-      {turn.sendFailed ? (
-        <Text style={[styles.notice, { color: colors.muted }]}>
-          {t("sendFailed")}
-        </Text>
-      ) : null}
       <View style={screenStyles.readable}>
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
           onStop={turn.stop}
+          sendError={turn.sendError}
         />
       </View>
     </View>
   );
 };
 
-/** The turn answering now: the message sent from here, and the answer as it arrives. */
-const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
+/**
+ * The turn answering now: the message sent from here, and the answer as it
+ * arrives. Until the server has `accepted` the message, its files are still
+ * going up.
+ */
+const LiveTurnView = ({
+  accepted,
+  turn,
+}: {
+  accepted: boolean;
+  turn: LiveTurn;
+}) => {
   const colors = useAppColors();
   const t = useTranslations("chat");
   const answer: ChatEntry = answerEntry(turn.answer, turn.startedAt);
@@ -287,11 +317,15 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
     "needs-input": t("answerNeedsInput"),
     failed: t("answerFailed"),
   }[status];
+  const uploading =
+    !accepted &&
+    status === "streaming" &&
+    (turn.question?.files.length ?? 0) > 0;
 
   return (
     <View style={styles.live}>
       {turn.question === undefined ? null : (
-        <ChatMessage entry={turn.question} />
+        <ChatMessage entry={turn.question} uploading={uploading} />
       )}
       {answer.text === "" && answer.tools.length === 0 ? null : (
         <ChatMessage entry={answer} />
@@ -300,7 +334,7 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
         <View style={styles.working}>
           <Loader size="sm" />
           <Text style={[styles.notice, { color: colors.muted }]}>
-            {t("answerWorking")}
+            {uploading ? t("attachmentUploading") : t("answerWorking")}
           </Text>
         </View>
       ) : null}
@@ -320,6 +354,16 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+  },
+  greeting: {
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  landing: {
+    flex: 1,
+    gap: 24,
+    justifyContent: "center",
   },
   live: {
     gap: 16,

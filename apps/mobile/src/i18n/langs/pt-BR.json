@@ -22,7 +22,8 @@
     "toolUsed": "Usado: {tool}",
     "threadTitle": "Conversa",
     "threadLoadFailed": "Não foi possível carregar esta conversa.",
-    "threadEmptyDescription": "Esta conversa ainda não tem mensagens.",
+    "greeting": "No que você gostaria de trabalhar?",
+    "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "sections": {
       "today": "Hoje",
       "yesterday": "Ontem",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Esta resposta precisa da sua ação. Continue-a na stella pela web.",
     "answerFailed": "Não foi possível concluir a resposta.",
     "composerMenu": "Abrir o menu de anexos e ferramentas",
+    "attachFile": "Anexar arquivo",
+    "attachment": "Anexo",
+    "fileTooLarge": "O arquivo excede o limite {maxSize}",
+    "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
+    "unsupportedFileType": "Tipo de arquivo não suportado",
+    "uploadFailed": "Falha ao processar o arquivo",
+    "scanDocument": "Digitalizar um documento",
+    "removeAttachment": "Remover {name}",
+    "attachmentReading": "Preparando…",
+    "attachmentUploading": "Enviando…",
+    "pickFailed": "Não foi possível abrir o seletor de arquivos. Tente novamente.",
+    "sendFileRefused": "Não foi possível enviar um arquivo, então a mensagem não foi enviada. Remova o arquivo e tente novamente.",
+    "sendFileNotAnonymizable": "Esta conversa é anonimizada e a stella não conseguiu anonimizar um dos arquivos, então nada foi enviado. Remova o arquivo e tente novamente.",
     "pickTitle": "Escolha uma conversa",
     "pickDescription": "Escolha uma conversa da lista ou comece uma nova com +."
   },
@@ -75,7 +89,14 @@
     "statusFailed": "Não foi possível alterar a tarefa. Tente novamente.",
     "pickTitle": "Escolha uma tarefa",
     "pickDescription": "Escolha uma tarefa da lista para vê-la aqui.",
-    "openMatter": "Abrir caso"
+    "openMatter": "Abrir caso",
+    "assignedTo": "Atribuída a",
+    "nobody": "Não atribuído",
+    "assign": "Atribuir",
+    "doneAssigning": "Concluído",
+    "someone": "Alguém",
+    "membersFailed": "Não foi possível carregar os membros do caso.",
+    "assignFailed": "Não foi possível atribuir a tarefa. Tente novamente."
   },
   "matters": {
     "emptyTitle": "Ainda não há casos",
@@ -127,6 +148,22 @@
     "currentVersion": "Versão atual",
     "loadFailed": "Não foi possível carregar este item."
   },
+  "document": {
+    "title": "Documento",
+    "failedTitle": "Não foi possível abrir este documento",
+    "failure": {
+      "offline": "Você está offline. Conecte-se à internet e tente novamente.",
+      "noFile": "Este documento ainda não tem arquivo.",
+      "failed": "Algo deu errado ao abrir. Tente novamente em instantes.",
+      "unsupported": "Atualize o app para abrir documentos.",
+      "android": "Ainda não é possível abrir documentos no app para Android."
+    },
+    "retry": "Tentar novamente",
+    "preview": "Abrir pré-visualização",
+    "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
+    "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
+    "details": "Detalhes"
+  },
   "signIn": {
     "beta": "Beta",
     "headline": "Clareza para cada caso.",
@@ -163,11 +200,11 @@
     "newest": "Decisões mais recentes",
     "noResults": "Nada corresponde às palavras exigidas por esta pesquisa.",
     "noResultsHint": "Tente menos palavras ou outras: os termos que uma decisão usaria, não a frase em que se faz uma pergunta.",
-    "unavailable": "A pesquisa está temporariamente indisponível",
     "retry": "Tente novamente",
     "headnote": "Ementa",
     "textUnavailable": "Não há texto disponível para esta decisão",
     "openSource": "Abrir fonte original",
+    "openFailed": "Não foi possível abrir o link.",
     "loadFailed": "Não foi possível carregar a jurisprudência.",
     "share": "Compartilhar"
   },
@@ -179,6 +216,14 @@
   "writes": {
     "consentNeeded": "Para fazer alterações pelo app, a stella precisa da sua permissão. Entre novamente para concedê-la.",
     "signInAgain": "Entrar novamente"
+  },
+  "loads": {
+    "offline": "A stella não conseguiu acessar seu servidor. Verifique sua conexão e tente novamente.",
+    "outdated": "Seu servidor respondeu em um formato que esta versão do app não entende. Atualize o app, ou o servidor se você o administra.",
+    "consent": "Este login não permite que o app leia isto. Entre novamente para conceder o acesso.",
+    "session": "Seu login expirou. Entre novamente.",
+    "server": "Seu servidor teve um problema (erro {status}). Tente novamente em instantes.",
+    "refused": "Seu servidor recusou a solicitação (erro {status})."
   },
   "timers": {
     "title": "Cronômetros",
@@ -213,7 +258,27 @@
     "matterTitle": "Caso",
     "uploadFailed": "Não foi possível enviar a digitalização. Tente novamente.",
     "failedTitle": "Falha na digitalização",
-    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente."
+    "failed": "A câmera não conseguiu salvar a digitalização. Tente novamente.",
+    "save": "Salvar",
+    "saveTitle": "Salvar em um caso",
+    "share": "Compartilhar",
+    "addPages": "Adicionar páginas",
+    "page": "Página {number}",
+    "rotatePage": "Girar a página {number}",
+    "removePage": "Remover a página {number}",
+    "deletePage": "Apagar",
+    "movePage": "Mover a página {number}",
+    "moveUp": "Mover para cima",
+    "moveDown": "Mover para baixo",
+    "noPages": "Não restam páginas. Digitalize mais em Adicionar páginas.",
+    "kilobytes": "{size} KB",
+    "megabytes": "{size} MB",
+    "pdfFailed": "Não foi possível criar o PDF. Tente novamente.",
+    "shareFailed": "Não foi possível compartilhar o PDF. Tente novamente.",
+    "discardTitle": "Descartar esta digitalização?",
+    "discardMessage": "As páginas não foram salvas em um caso e serão apagadas deste dispositivo.",
+    "discard": "Descartar",
+    "keepEditing": "Continuar editando"
   },
   "shortcuts": {
     "search": "Pesquisar",

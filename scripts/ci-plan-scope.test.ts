@@ -23,6 +23,7 @@ import {
   type ChangedFileScopeInput,
   computeChangedFileScope,
   DEFAULT_DETECTORS,
+  failClosedServiceSuites,
   type ScopeOutput,
 } from "./ci-plan-scope";
 import { sourceImportClosure } from "./detect-route-smoke-changes";
@@ -570,6 +571,92 @@ test("migration detector skips only on a successful explicit false answer", () =
     }
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("migration detector crashes fall back and emit a typed infrastructure annotation", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "migration-detector-"));
+  mkdirSync(nodePath.join(root, "scripts"));
+  writeFileSync(
+    nodePath.join(root, "scripts/detect-security-workflow-changes.sh"),
+    "printf '%s\\n' unknown\n",
+  );
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    const scope = computeChangedFileScope({
+      ...detectorInput("pull_request"),
+      changedFiles: ["README.md"],
+      root,
+    });
+    expect(scope["database_migrations_required"]).toBe("true");
+    expect(lines.join("\n")).toContain(
+      'kind=infra class=scope-detector detector="migration change"',
+    );
+  } finally {
+    console.log = original;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("service suite scope without an API manifest uses checkout runner metadata", () => {
+  const root = mkdtempSync(nodePath.join(tmpdir(), "service-suite-scope-"));
+  const checkout = nodePath.resolve(import.meta.dirname, "..");
+  mkdirSync(nodePath.join(root, "apps/api"), { recursive: true });
+  mkdirSync(nodePath.join(root, "apps"), { recursive: true });
+  for (const entry of ["src", "scripts"]) {
+    symlinkSync(
+      nodePath.join(checkout, "apps/api", entry),
+      nodePath.join(root, "apps/api", entry),
+    );
+  }
+  symlinkSync(
+    nodePath.join(checkout, "apps/collab"),
+    nodePath.join(root, "apps/collab"),
+  );
+  symlinkSync(
+    nodePath.join(checkout, "packages"),
+    nodePath.join(root, "packages"),
+  );
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    expect(failClosedServiceSuites(["README.md"], root)).toEqual({
+      postgres: true,
+      corpus: true,
+      valkey: true,
+      collab: false,
+      devSeed: false,
+    });
+    expect(lines.join("\n")).not.toContain("kind=infra class=scope-detector");
+  } finally {
+    console.log = original;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("service suite detector crashes fall back and emit a typed infrastructure annotation", () => {
+  const lines: string[] = [];
+  const original = console.log;
+  console.log = (...values) => {
+    lines.push(values.join(" "));
+  };
+  try {
+    const plan = failClosedServiceSuites([], undefined, () => {
+      throw new Error("forced detector crash");
+    });
+    expect(Object.values(plan).every(Boolean)).toBe(true);
+    expect(lines.join("\n")).toContain(
+      'kind=infra class=scope-detector detector="service suite"',
+    );
+  } finally {
+    console.log = original;
   }
 });
 

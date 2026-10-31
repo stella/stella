@@ -12,8 +12,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   encodePlSnCursor,
   normalizePlSnListingItem,
@@ -25,7 +23,11 @@ import {
   readPlSnEnvelope,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-sn";
 import { readGzipJson } from "@/api/lib/gzip-json";
-import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  RawIngestionResult,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";

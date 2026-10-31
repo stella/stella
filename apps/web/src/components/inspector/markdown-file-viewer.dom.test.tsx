@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
+import { sleep } from "@stll/concurrency/sleep";
 import { assertProperty } from "@stll/property-testing";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
@@ -229,6 +230,11 @@ const advance = async (ms: number) => {
     });
   });
 };
+const restoreRealTimersWithPendingRequest = () => {
+  // Flush short UI cleanup without advancing as far as the API's live 30s
+  // total deadline. restoreRealTimers() deliberately drains every timer.
+  restoreRealTimers({ advanceMs: 1000 });
+};
 const startTransport = async () => {
   // Eden's browser multipart path uses two FileReader timer stages. Each
   // stage is scheduled after an async continuation, independently of debounce.
@@ -281,7 +287,7 @@ test("publication captures the displayed source inside the debounce interval", a
   edit(view.container, "Draft B");
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  restoreRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Draft B");
   await publish();
   expect(view.container.textContent).toContain("Draft B");
@@ -313,7 +319,7 @@ test.each([true, false])(
     fireEvent.keyDown(editor, { key: "e", metaKey: true });
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
-    restoreRealTimers();
+    restoreRealTimers({ advanceMs: 1000 });
     if (succeeded) {
       await publish();
       await waitFor(() =>
@@ -333,9 +339,11 @@ test.each([true, false])(
         ).toBe(false),
       );
     }
-    jest.useFakeTimers();
     edit(view.container, "Draft C");
-    await advance(400);
+    await act(async () => {
+      // real-time: this assertion covers the editor's production debounce.
+      await sleep(400);
+    });
     expect(view.container.textContent).toContain("Draft C");
     expect(
       view.getByRole("button", { name: "Save" }).hasAttribute("disabled"),
@@ -369,7 +377,7 @@ test("cancel restores the model and cancels a pending emission before later inpu
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  restoreRealTimers();
+  restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Server text appended");
 });
 
@@ -424,7 +432,7 @@ test("publication settlement preserves metadata confirmed while it was pending",
   await advance(400);
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await startTransport();
-  restoreRealTimers();
+  restoreRealTimersWithPendingRequest();
   fireEvent.click(view.getByRole("button", { name: "Rename" }));
   await waitFor(() =>
     expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({

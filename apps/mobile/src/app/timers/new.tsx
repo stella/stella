@@ -97,6 +97,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         }}
       />
       <ScrollView
+        alwaysBounceVertical={false}
         className="bg-background flex-1"
         contentContainerStyle={screenStyles.content}
         contentInsetAdjustmentBehavior="automatic"

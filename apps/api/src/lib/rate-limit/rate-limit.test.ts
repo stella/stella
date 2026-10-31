@@ -327,60 +327,64 @@ class FakeRedisClient {
   }
 }
 
-test("HTTP quota rejection emits its named policy once without the counter key", async () => {
-  const context = new TrackingRateLimitContext();
-  const logs = installRecordingLogger();
-  const metrics: string[] = [];
-  setMetricLineSinkForTesting((line) => {
-    metrics.push(line);
-  });
-  const server = serveLimited(
-    { "/limited": { POST: answering(() => "served") } },
-    [
-      rateLimit({
-        context,
-        duration: WINDOW_MS,
-        max: 1,
-        generator: () => "private-caller-credential",
-        budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
-      }),
-    ],
-  );
-  try {
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(200);
-    expect(metrics).toHaveLength(0);
-    expect(
-      (await server.fetch("http://localhost/limited", { method: "POST" }))
-        .status,
-    ).toBe(429);
-    const rejections = logs.records.filter(
-      ({ message }) => message === "rate_limit.rejected",
-    );
-    expect(rejections).toHaveLength(1);
-    expect(rejections.at(0)?.attributes).toEqual({
-      budget: "mcp.transport.bearer",
-      "budget.keyKind": "bearer",
-      "budget.windowMs": WINDOW_MS,
-      "http.status_code": 429,
+test.each([429, 503] as const)(
+  "HTTP budget rejection reports its actual %i status without the counter key",
+  async (refusalStatus) => {
+    const context = new TrackingRateLimitContext();
+    const logs = installRecordingLogger();
+    const metrics: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metrics.push(line);
     });
-    expect(metrics).toHaveLength(1);
-    expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
-      budgetName: "mcp.transport.bearer",
-      RateLimitRejected: 1,
-    });
-    expect(JSON.stringify(rejections)).not.toContain(
-      "private-caller-credential",
+    const server = serveLimited(
+      { "/limited": { POST: answering(() => "served") } },
+      [
+        rateLimit({
+          context,
+          refusalStatus,
+          duration: WINDOW_MS,
+          max: 1,
+          generator: () => "private-caller-credential",
+          budget: () => ({ name: "mcp.transport.bearer", keyKind: "bearer" }),
+        }),
+      ],
     );
-  } finally {
-    await server.stop();
-    logs.restore();
-    resetMetricLineSinkForTesting();
-    context.kill();
-  }
-});
+    try {
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(200);
+      expect(metrics).toHaveLength(0);
+      expect(
+        (await server.fetch("http://localhost/limited", { method: "POST" }))
+          .status,
+      ).toBe(refusalStatus);
+      const rejections = logs.records.filter(
+        ({ message }) => message === "rate_limit.rejected",
+      );
+      expect(rejections).toHaveLength(1);
+      expect(rejections.at(0)?.attributes).toEqual({
+        budget: "mcp.transport.bearer",
+        "budget.keyKind": "bearer",
+        "budget.windowMs": WINDOW_MS,
+        "http.status_code": refusalStatus,
+      });
+      expect(metrics).toHaveLength(1);
+      expect(JSON.parse(metrics.at(0) ?? "{}")).toMatchObject({
+        budgetName: "mcp.transport.bearer",
+        RateLimitRejected: 1,
+      });
+      expect(JSON.stringify(rejections)).not.toContain(
+        "private-caller-credential",
+      );
+    } finally {
+      await server.stop();
+      logs.restore();
+      resetMetricLineSinkForTesting();
+      context.kill();
+    }
+  },
+);
 
 describe("RedisRateLimitContext", () => {
   test("keeps one refund identity per request while sharing the counter key", async () => {

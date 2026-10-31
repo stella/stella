@@ -1,14 +1,32 @@
+// parser-output-unchanged: the text-layer read moved here unchanged from the pl-sn and sk-courts readers: the same load, the same pages, the same extraction.
 /**
  * Shared utilities for parsers using libpdf/core.
  *
  * libpdf/core extracts PDF text with per-span font info
- * (bold, size, position). These helpers handle common
- * quirks: non-breaking spaces, word-splitting across spans,
- * and bold range mapping.
+ * (bold, size, position). This module is the one place a
+ * court parser reads a PDF's text layer
+ * (`scripts/ownership/court-pdf-text-layer.ts`); its helpers
+ * handle common quirks: non-breaking spaces, word-splitting
+ * across spans, and bold range mapping.
  */
+
+import { PDF } from "@libpdf/core";
 
 // parser-output-unchanged: imports the document AST from its package owner
 import type { Inline } from "@stll/legal-ast/document-ast";
+
+/** One page's text layer: its lines with spans, fonts and positions. */
+export type PdfTextPage = ReturnType<
+  ReturnType<PDF["getPages"]>[number]["extractText"]
+>;
+
+/** Every page's text layer, in page order. */
+export const readPdfTextPages = async (
+  pdfBytes: Uint8Array,
+): Promise<PdfTextPage[]> => {
+  const pdf = await PDF.load(pdfBytes);
+  return pdf.getPages().map((page) => page.extractText());
+};
 
 // ── Types ────────────────────────────────────────────────
 
@@ -23,6 +41,10 @@ type BoldRange = {
   start: number;
   end: number;
   bold: boolean;
+};
+
+type FontStyleRange = BoldRange & {
+  italic: boolean;
 };
 
 // ── Text normalization ───────────────────────────────────
@@ -48,7 +70,7 @@ export const isBoldFont = (fontName: string): boolean =>
   /bold/iu.test(fontName);
 
 /**
- * Map bold state from individual spans onto a line's text.
+ * Map font emphasis from individual spans onto a line's text.
  *
  * libpdf/core assembles `line.text` from spans with proper
  * word joining. We walk spans in order and track character
@@ -58,13 +80,13 @@ export const isBoldFont = (fontName: string): boolean =>
  * "N" + "apadnuté" → "Napadnuté").
  *
  * Returns an array of ranges, each with start/end offsets
- * and a bold flag. Consecutive same-bold ranges are merged.
+ * and font-style flags. Consecutive ranges of the same style are merged.
  */
-export const buildBoldRanges = (
-  spans: PdfSpan[],
+export const buildFontStyleRanges = (
+  spans: readonly PdfSpan[],
   lineText: string,
-): BoldRange[] => {
-  const ranges: BoldRange[] = [];
+): FontStyleRange[] => {
+  const ranges: FontStyleRange[] = [];
   let offset = 0;
 
   for (const span of spans) {
@@ -74,6 +96,7 @@ export const buildBoldRanges = (
     }
 
     const bold = isBoldFont(span.fontName);
+    const italic = /italic|oblique/iu.test(span.fontName);
 
     // Find this span's text in the remaining line text
     const pattern = text
@@ -89,19 +112,19 @@ export const buildBoldRanges = (
     const start = offset + match.index;
     const end = start + match[0].length;
     if (ranges.length === 0 && start > 0) {
-      ranges.push({ start: 0, end: start, bold: false });
+      ranges.push({ start: 0, end: start, bold: false, italic: false });
     }
 
-    // Merge with previous range if same bold state
+    // Merge only when both styles agree.
     const last = ranges.at(-1);
-    if (last?.bold === bold) {
+    if (last?.bold === bold && last.italic === italic) {
       last.end = end;
     } else {
-      // Fill gap between ranges with previous bold state
+      // Fill gaps with the preceding span's style.
       if (last && last.end < start) {
         last.end = start;
       }
-      ranges.push({ start, end, bold });
+      ranges.push({ start, end, bold, italic });
     }
 
     offset = end;
@@ -118,9 +141,27 @@ export const buildBoldRanges = (
       start: 0,
       end: lineText.length,
       bold: false,
+      italic: false,
     });
   }
 
+  return ranges;
+};
+
+/** Bold-only readers keep one range across an italic-only style change. */
+export const buildBoldRanges = (
+  spans: PdfSpan[],
+  lineText: string,
+): BoldRange[] => {
+  const ranges: BoldRange[] = [];
+  for (const { start, end, bold } of buildFontStyleRanges(spans, lineText)) {
+    const previous = ranges.at(-1);
+    if (previous?.bold === bold) {
+      previous.end = end;
+    } else {
+      ranges.push({ start, end, bold });
+    }
+  }
   return ranges;
 };
 

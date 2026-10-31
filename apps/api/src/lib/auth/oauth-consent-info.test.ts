@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { mobileClientMetadataUrl } from "@stll/api-contract/mobile-client";
+
 import {
   getOAuthConsentInfo,
   getVerifiedOAuthOrigins,
@@ -37,6 +39,7 @@ const documentClient = (clientId: string) =>
 const CLAUDE_CALLBACK = "https://claude.ai/api/mcp/auth_callback";
 const CLAUDE_HOSTED_DOCUMENT =
   "https://claude.ai/oauth/mcp-oauth-client-metadata";
+const MOBILE_DOCUMENT = mobileClientMetadataUrl("https://stella.example") ?? "";
 
 describe("OAuth consent app details", () => {
   test("uses registered redirect destinations", () => {
@@ -226,12 +229,43 @@ describe("OAuth consent app details", () => {
       ["https://chatgpt.com/oauth/client.json", "chatgpt"],
       ["https://chatgpt.com/oauth/codex/client.json", "codex"],
       ["https://stella.example/oauth/cli.json", "stella"],
+      [MOBILE_DOCUMENT, "stella_ios"],
+      [
+        "https://stella.example/v1/mcp/oauth/cli-client-metadata.json",
+        "stella",
+      ],
     ] as const) {
       expect(documentClient(clientId), clientId).toEqual({
         type: "verified",
         brand,
       });
     }
+  });
+
+  test("only the mobile client's own document names the iOS app", () => {
+    expect(MOBILE_DOCUMENT).toStartWith("https://stella.example/");
+    for (const clientId of [
+      `${MOBILE_DOCUMENT}?v=1`,
+      `${MOBILE_DOCUMENT}/`,
+      MOBILE_DOCUMENT.replace(".json", ".json.bak"),
+    ]) {
+      expect(documentClient(clientId), clientId).toEqual({
+        type: "verified",
+        brand: "stella",
+      });
+    }
+    expect(redirectClient([MOBILE_DOCUMENT])).toEqual({
+      type: "verified",
+      brand: "stella",
+    });
+    expect(
+      documentClient(
+        MOBILE_DOCUMENT.replace(
+          "https://stella.example",
+          "https://other.example",
+        ),
+      ).type,
+    ).toBe("unverified");
   });
 
   test("a metadata document is verified only at its documented URL", () => {
