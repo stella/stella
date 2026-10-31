@@ -41,6 +41,7 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINT_VALIDATION,
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
+import { CASE_LAW_REPLAY_PENDING_INDEX } from "./case-law-parsed-input-state";
 import {
   CASE_LAW_PARSE_PENDING_INDEX,
   CASE_LAW_PARSED_SOURCE_CONSTRAINT,
@@ -302,6 +303,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
 
   CASE_LAW_PARSE_PENDING_INDEX,
+  CASE_LAW_REPLAY_PENDING_INDEX,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:

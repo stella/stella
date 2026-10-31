@@ -3270,12 +3270,14 @@ if (!databaseUrl || !enabled) {
                 );
                 // The walker attributes bitmap index descendants to their heap
                 // scan; requiring those names also rejects sequential scans.
+                // `LIKE ... INCLUDING ALL` names the copied replay-pending index
+                // after its columns.
                 expect(
                   decisions.flatMap(({ index }) => index?.split(", ") ?? []),
                 ).toEqual(
                   expect.arrayContaining([
                     expect.stringMatching(
-                      /^case_law_decisions_replay_(sparse|walk)_idx$/u,
+                      /^case_law_decisions_(replay_(sparse|walk)_idx|source_id_parser_version_parsed_\w*idx)$/u,
                     ),
                   ]),
                 );

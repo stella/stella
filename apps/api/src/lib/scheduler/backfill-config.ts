@@ -14,6 +14,7 @@ export const SCHEDULER_BACKFILL_IDS = {
   coverage: "caseLaw.refreshCoverage.fiveMinute",
   decisionIdentifiers: "caseLaw.reconcileDecisionIdentifiers.minutely",
   provisionState: "caseLaw.backfillProvisionState.minutely",
+  parsedInputState: "caseLaw.backfillParsedInputState.fiveMinute",
   expressionIds: "legislation.backfillExpressionIds.fiveMinute",
 } as const;
 

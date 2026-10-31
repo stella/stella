@@ -1,3 +1,5 @@
+import { Temporal } from "@stll/time";
+
 import { runWithStatementCeiling } from "@/api/lib/db/statement-ceiling";
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
@@ -37,6 +39,10 @@ import {
   REPORT_CASE_LAW_FRESHNESS_TASK,
   reportCaseLawFreshnessTask,
 } from "@/api/lib/scheduler/tasks/case-law-freshness-report";
+import {
+  BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK,
+  createCaseLawParsedInputStateBackfill,
+} from "@/api/lib/scheduler/tasks/case-law-parsed-input-state-backfill";
 import {
   BACKFILL_CASE_LAW_PROVISION_STATE_TASK,
   backfillCaseLawProvisionState,
@@ -292,6 +298,10 @@ const SCHEDULER_TASKS = {
   [SWEEP_REGISTRATIONS_TASK]: sweepRegistrationRecords,
   [PURGE_SYSTEM_AUDIT_RUNS_TASK]: purgeSystemAuditRunsTask,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
+  [BACKFILL_CASE_LAW_PARSED_INPUT_STATE_TASK]:
+    createCaseLawParsedInputStateBackfill({
+      clock: () => Temporal.Now.instant().epochMilliseconds,
+    }),
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,
   [REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK]: repairSearchSemanticTimestampsTask,

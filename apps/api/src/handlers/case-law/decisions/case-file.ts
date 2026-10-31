@@ -282,6 +282,7 @@ const UNPROJECTED_CASE_FILE_COLUMNS = [
   "parsedSourceHash",
   "parsedSourceHashVersion",
   "parsedSourceRawS3Key",
+  "parsedInputState",
   // Source observation timing is internal bookkeeping.
   "sourceObservedAt",
   // Source observation ordering is internal bookkeeping.

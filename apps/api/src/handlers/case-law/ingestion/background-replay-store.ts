@@ -47,6 +47,7 @@ import {
   lockCaseLawDecisionRows,
   lockCaseLawReplayBatch,
   lockCaseLawReplayPendingBatch,
+  withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import { transitionLifecycle } from "@/api/lib/db/transitions";
@@ -95,12 +96,15 @@ import {
   replayFailure,
 } from "./replay-failure";
 
+/** Every statement of a replay transaction, the lag probe included. */
+export const REPLAY_STATEMENT_TIMEOUT_MS = 5000;
+
 const withReplayTransaction = async <T>(
   db: CaseLawRootHandle,
   work: (tx: Transaction) => Promise<T>,
 ) =>
-  await db.transaction(async (tx) => {
-    await setSharedStatementTimeout(tx, 5000);
+  await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(tx, REPLAY_STATEMENT_TIMEOUT_MS);
     await setSharedLockTimeout(tx, 1000);
     return await work(tx);
   });
