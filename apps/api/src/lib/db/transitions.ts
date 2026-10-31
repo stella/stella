@@ -269,7 +269,7 @@ export const defineScopedTransitions = <
  * guard (`scripts/check-conflict-target-lifecycle.ts`) resolves a target built
  * at runtime only through this owner.
  */
-export const scopedTransitionConflictTarget = (
+const scopedTransitionConflictTarget = (
   spec: ScopedTransitionDeclaration,
 ): SQL => {
   const columns: Readonly<Record<string, AnyPgColumn>> = getColumns(spec.table);
