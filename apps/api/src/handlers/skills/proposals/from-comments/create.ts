@@ -139,7 +139,7 @@ const createProposalFromComments = createSafeRootHandler(
     user,
   }) {
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
-      return Result.err(storedAIConfigUnreadableError(undefined));
+      return Result.err(storedAIConfigUnreadableError());
     }
 
     yield* requireTanStackAIAvailableForTask({

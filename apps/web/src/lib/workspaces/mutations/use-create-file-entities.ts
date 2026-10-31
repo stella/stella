@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -13,6 +9,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useStartWorkflow } from "@/components/workspaces/hooks/use-start-workflow";
 import { MAX_PARALLEL_FILE_UPLOADS } from "@/consts";
 import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
+import { getTranslator } from "@/i18n/translator";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -20,6 +17,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   hashActiveUploadFile,
   withActiveUpload,
@@ -30,6 +28,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-queries";
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
+import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -244,7 +243,9 @@ const prepareSingleFileEntityUpload = async ({
   );
   if (presign.error) {
     const error = toAPIError(presign.error);
-    attachResponseForRetry(error, presign.response);
+    if ("response" in presign) {
+      attachResponseForRetry(error, presign.response);
+    }
     throw error;
   }
 
@@ -328,7 +329,9 @@ const finalizeFileEntity = async ({
     .finalize.post(undefined, { fetch: { signal } });
   if (finalize.error) {
     const error = toAPIError(finalize.error);
-    attachResponseForRetry(error, finalize.response);
+    if ("response" in finalize) {
+      attachResponseForRetry(error, finalize.response);
+    }
     throw error;
   }
 
@@ -718,7 +721,8 @@ export const useCreateFileEntities = (workspaceId: string) => {
     }
   };
 
-  const { isPending, mutate } = useMutation({
+  const { isPending, mutate } = useIdempotentMutation({
+    idempotencyScope: workspaceId,
     mutationFn: async (input: CreateFileEntitiesInput) => {
       const parentId = input.parentId ?? null;
 
@@ -782,6 +786,7 @@ export const useCreateFileEntities = (workspaceId: string) => {
         fingerprintKey: "useCreateFileEntities:failure",
         scope: { type: "handler", handlerId: "useCreateFileEntities:failure" },
       });
+      notifyUserError(error, getTranslator()("errors.actionFailed"));
     },
     onSettled: () => {
       detached(

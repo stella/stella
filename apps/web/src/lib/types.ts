@@ -1,5 +1,6 @@
 import type {
   AgendaItemWireFields,
+  AiCellSettlement,
   EntityPriority,
   OcrExportStatus,
   ReviewFlag,
@@ -190,6 +191,7 @@ export type WorkspaceField = {
   id: FieldId;
   propertyId: PropertyId;
   content: WorkspaceFieldContent;
+  aiSettlement?: AiCellSettlement | null;
   ocrExportStatus?: OcrExportStatus;
 };
 

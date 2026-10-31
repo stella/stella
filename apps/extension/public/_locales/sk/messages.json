@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "Prístup k webom je vypnutý. Jednorazovým povolením umožníte stelle používať weby, na ktorých ste prihlásení."
-  },
-  "accessReady": {
-    "message": "Pripravené. stella môže používať vyhradenú kartu a vaše prihlásenia zostanú aktívne."
-  },
   "accessUpdateFailed": {
     "message": "Chromu sa nepodarilo zmeniť prístup k webom."
   },
-  "adoptTab": {
-    "message": "Použiť túto kartu so stellou"
-  },
   "adoptUnsupported": {
     "message": "So stellou možno používať iba verejné stránky na HTTPS."
-  },
-  "adoptedTab": {
-    "message": "stella teraz môže čítať $ORIGIN$ na tejto karte. Spýtajte sa na ňu v chate.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Kontrola prístupu k webom…"
-  },
-  "connectTab": {
-    "message": "Pripojiť aktuálnu kartu stella"
-  },
-  "controllerReady": {
-    "message": "Pripojené k $ORIGIN$. Každá akcia stále vyžaduje schválenie v stelle.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Odpojiť kartu"
   },
   "downloadKept": {
     "message": "Sťahovania dokončené počas ovládania karty stellou a ponechané: $COUNT$. Pred otvorením overte, odkiaľ pochádzajú.",
@@ -72,13 +38,68 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Povoliť všetky weby"
+  "unsupportedTab": {
+    "message": "Otvorte kartu aplikácie stella a skúste to znova."
+  },
+  "connectionPurpose": {
+    "message": "Keď o to požiadate v chate, stella môže na samostatnej karte otvárať a čítať weby pomocou vašich prihlásení."
+  },
+  "statusConnected": {
+    "message": "Pripojené k $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Nepripojené"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "Je potrebný prístup k webom"
+  },
+  "statusOpenStella": {
+    "message": "Na pripojenie otvorte stellu"
+  },
+  "statusTabHandedOver": {
+    "message": "Karta odovzdaná stelle: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Povoliť prístup k webom a pripojiť"
+  },
+  "allowWebsiteAccess": {
+    "message": "Povoliť prístup k webom"
+  },
+  "connectTab": {
+    "message": "Pripojiť túto kartu stelly"
+  },
+  "adoptTab": {
+    "message": "Použiť túto kartu so stellou"
+  },
+  "disconnectTab": {
+    "message": "Odpojiť"
+  },
+  "disconnectDescription": {
+    "message": "stella prestane používať pripojenú kartu."
   },
   "revokeAccess": {
     "message": "Odobrať prístup k webom"
   },
-  "unsupportedTab": {
-    "message": "Otvorte kartu aplikácie stella a skúste to znova."
+  "revokeDescription": {
+    "message": "Odoberie povolenie otvárať a čítať weby."
+  },
+  "checkingAccess": {
+    "message": "Kontrola pripojenia…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Je pripojená iná karta stelly"
+  },
+  "connectTabInstead": {
+    "message": "Pripojiť namiesto nej túto kartu stelly"
   }
 }

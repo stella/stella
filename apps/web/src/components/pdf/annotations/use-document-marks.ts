@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 
+import { placeMark } from "@stll/api-contract/pdf-mark-placement";
+import type { MarkPlacement } from "@stll/api-contract/pdf-mark-placement";
 import { Temporal } from "@stll/time";
 
 import type {
@@ -21,18 +23,17 @@ import {
 import type { DocumentAnnotation } from "@/components/pdf/annotations/document-annotations-query";
 import {
   locateSelection,
-  placeMark,
   SELECTION_REFUSAL,
 } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import type {
   LocatedSelection,
   LocatedSpan,
-  MarkPlacement,
   SelectedLayerText,
 } from "@/components/pdf/annotations/document-mark-anchor.logic";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
+import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import type { PDFPageSource } from "@/lib/pdf/pdf-page-source";
 import { queryView } from "@/lib/query-view.logic";
 import { toSafeId } from "@/lib/safe-id";
@@ -105,6 +106,7 @@ export const useDocumentMarks = ({
 }: DocumentMarksScope): DocumentMarks => {
   const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
+  const submitIntent = useIdempotentSubmit();
   const options = documentAnnotationsOptions({
     entityId,
     fieldId,
@@ -154,9 +156,12 @@ export const useDocumentMarks = ({
     queryKey: options.queryKey,
     create: async ({ spans, ...input }: CreateDocumentMarkInput) =>
       unwrapApiResponse(
-        await routes()
-          .field({ fieldId: toSafeId<"field">(fieldId) })
-          .annotations.post({
+        await submitIntent.run({
+          operation: JSON.stringify([
+            "document-annotations.create",
+            { entityId, fieldId, workspaceId },
+          ]),
+          body: {
             ...input,
             spans: spans.map(
               ({ endOffset, pageNumber, quote, startOffset }) => ({
@@ -166,7 +171,10 @@ export const useDocumentMarks = ({
                 startOffset,
               }),
             ),
-          }),
+          },
+          send: routes().field({ fieldId: toSafeId<"field">(fieldId) })
+            .annotations.post,
+        }),
       ),
     pendingRows: ({ author, input, stamp }): DocumentAnnotation[] => {
       const { groupId, rowId } = pendingMarkIds(stamp, input.spans.length);

@@ -197,11 +197,13 @@ export const DOMAIN_ACTION_VERBS = [
   "suggest",
   "summarize",
   "sync",
+  "transcribe",
   "transition",
   "unarchive",
   "unlink",
   "upload",
   "upsert",
+  "void",
 ] as const;
 
 const ALLOWED_ACTION_VERBS: ReadonlySet<string> = new Set([
@@ -709,7 +711,9 @@ export const CAPABILITY_DISPATCH = {
               exportName: record.exportName,
               id: record.id,
             });
-      const loader = `load: async () => await import(${JSON.stringify(importPath)})`;
+      // The registry exposes opaque modules; retaining handler return types would
+      // pull runtime routes into consumers that only need capability ids.
+      const loader = `load: async (): Promise<Record<string, unknown>> => await import(${JSON.stringify(importPath)})`;
       const named =
         exportName === undefined
           ? ""
@@ -1366,6 +1370,7 @@ export const WRITE_ONLY_SCOPES: ReadonlySet<string> = new Set(
  * there, and that is correct.
  */
 const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
+  "stella:account_export_write": "stella:account_export_read",
   "stella:admin_write": "stella:admin_read",
   "stella:billing_write": "stella:read",
   "stella:contacts_write": "stella:read",

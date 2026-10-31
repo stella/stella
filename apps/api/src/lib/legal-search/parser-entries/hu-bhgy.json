@@ -1,0 +1,11 @@
+{
+  "type": "parser",
+  "name": "HU_BHGY",
+  "key": "hu-bhgy",
+  "parserVersion": 23,
+  "sourceFingerprintVersion": 0,
+  "scope": {
+    "type": "all",
+    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read the publisher citation restriction from retained raw records into decision metadata; null or absent restrictions remain absent."
+  }
+}

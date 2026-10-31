@@ -7,7 +7,9 @@ import { compareCodeUnit } from "@stll/collation";
 /**
  * These suites change committed tables in the common PostgreSQL test database.
  * They run after every ordinary suite, each in its own test process, so no CRUD
- * transaction can retain a conflicting table lock while their DDL runs.
+ * transaction can retain a conflicting table lock while their DDL runs. Each
+ * starts on a fresh clone of the template, so rows the earlier suites left in
+ * shared tables cannot change what it observes.
  */
 export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
   new Set([
@@ -18,6 +20,7 @@ export const EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS: ReadonlySet<string> =
     "src/handlers/entities/versions/list.postgres.test.ts",
     "src/lib/account-export/store.postgres.test.ts",
     "src/lib/business-registries/desktop/proof.postgres.test.ts",
+    "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
     "src/lib/hosted-usage-provider/replay.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-concurrency.postgres.test.ts",
     "src/lib/lists/sanctions/monitoring-migrations.postgres.test.ts",
@@ -154,13 +157,24 @@ const isMigrationRunnerModule = (testPath: string, specifier: string) => {
 // `require` calls and dynamic `import()`, never type-only imports.
 const runtimeImports = new Bun.Transpiler({ loader: "ts" });
 
-/** Migration bundles can change roles shared by every database in the cluster. */
-export const clusterExclusiveMigrationTests = (
+// Snapshot visibility depends on transactions across the entire cluster.
+const CLUSTER_VISIBILITY_TESTS = new Set([
+  "src/lib/case-law/sitemap-fairness-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-removal-refresh.postgres.test.ts",
+  "src/lib/case-law/sitemap-shard-refresh.postgres.test.ts",
+  "src/db/case-law-sitemap-packing-enrollment.postgres.test.ts",
+  "src/lib/case-law/sitemap-backlog-drain.postgres.test.ts",
+  "src/lib/case-law/sitemap-visibility-drain.postgres.test.ts",
+]);
+
+/** Migration roles and visibility proofs require every other cluster worker to finish. */
+export const clusterExclusivePostgresTests = (
   sources: ReadonlyMap<string, string>,
 ): Set<string> => {
   const paths = new Set<string>();
   for (const [testPath, source] of sources) {
     if (
+      CLUSTER_VISIBILITY_TESTS.has(testPath) ||
       runtimeImports
         .scanImports(source)
         .some(({ path: specifier }) =>
@@ -193,7 +207,7 @@ export const classifyPostgresTestIsolation = async (
     sharedTables: readSharedTableNames(apiRoot),
   });
   if (violations.length === 0) {
-    return clusterExclusiveMigrationTests(sources);
+    return clusterExclusivePostgresTests(sources);
   }
   return panic(
     `PostgreSQL tests that run DDL on shared tables require an exclusive test process:\n${violations

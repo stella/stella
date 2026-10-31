@@ -377,7 +377,7 @@ const WorkspaceKanbanColumnHeading = ({
         dragHandle={
           canEdit ? (
             <div
-              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100"
+              className="text-muted-foreground hover:text-foreground shrink-0 cursor-grab opacity-0 transition-opacity group-hover/column:opacity-100 pointer-coarse:opacity-100"
               ref={dragHandleRef}
             >
               <GripVerticalIcon className="size-3.5" />

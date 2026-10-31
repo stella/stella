@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
+import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import { clearRootDbMocks } from "@/api/tests/helpers/mock-root-db";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const { createAtCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/at-courts");
@@ -17,7 +18,7 @@ const { plCourtsAdapter } =
 const { skCourtsAdapter } =
   await import("@/api/handlers/case-law/ingestion/adapters/sk-courts");
 
-const originalFetch = globalThis.fetch;
+let originalFetch = globalThis.fetch;
 
 // The registry's adapter reserves a slot on the process-wide RIS publisher
 // gate before every request, so a file that walked any RIS adapter within the
@@ -38,7 +39,7 @@ type MockRoute = {
 };
 
 const mockFetchWithBodies = (routes: MockRoute[]) => {
-  const mockedFetch: typeof fetch = Object.assign(
+  const mockedFetch = asFetchMock(
     async (input: string | URL | Request): Promise<Response> => {
       const url = (() => {
         if (typeof input === "string") {
@@ -65,9 +66,6 @@ const mockFetchWithBodies = (routes: MockRoute[]) => {
           "Content-Type": match.contentType ?? "application/json",
         },
       });
-    },
-    {
-      preconnect: originalFetch.preconnect.bind(originalFetch),
     },
   );
 
@@ -384,7 +382,7 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when a detail request times out", async () => {
-    globalThis.fetch = Object.assign(
+    globalThis.fetch = asFetchMock(
       async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
@@ -422,9 +420,6 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
       },
     );
 
@@ -501,7 +496,7 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts keeps rawHash stable when detail fetch availability changes", async () => {
     let detailMode: "ok" | "timeout" = "ok";
 
-    globalThis.fetch = Object.assign(
+    globalThis.fetch = asFetchMock(
       async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
@@ -559,9 +554,6 @@ describe("case-law adapter nullish optionals", () => {
 
         return new Response("Not found", { status: 404 });
       },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
     );
 
     const first = await plCourtsAdapter.fetchPage(null, {});
@@ -592,7 +584,7 @@ describe("case-law adapter nullish optionals", () => {
   });
 
   test("PL Courts falls back to the dump item when detail JSON is malformed", async () => {
-    globalThis.fetch = Object.assign(
+    globalThis.fetch = asFetchMock(
       async (input: string | URL | Request): Promise<Response> => {
         const url = (() => {
           if (typeof input === "string") {
@@ -633,9 +625,6 @@ describe("case-law adapter nullish optionals", () => {
 
         return new Response("Not found", { status: 404 });
       },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
-      },
     );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
@@ -651,7 +640,7 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts sends the shared ingestion User-Agent on detail requests", async () => {
     let detailUserAgent: string | null = null;
 
-    globalThis.fetch = Object.assign(
+    globalThis.fetch = asFetchMock(
       async (
         input: string | URL | Request,
         init?: RequestInit,
@@ -707,9 +696,6 @@ describe("case-law adapter nullish optionals", () => {
         }
 
         return new Response("Not found", { status: 404 });
-      },
-      {
-        preconnect: originalFetch.preconnect.bind(originalFetch),
       },
     );
 
@@ -793,4 +779,20 @@ describe("case-law adapter nullish optionals", () => {
   test("PL Courts uses the extended page timeout budget for sequential detail fetches", () => {
     expect(plCourtsAdapter.pageTimeoutMs).toBe(280_000);
   });
+});
+
+test("route fixtures work when the captured fetch has no native static methods", async () => {
+  const captured = originalFetch;
+  originalFetch = asFetchMock(async () => new Response("unused"));
+  expect(Reflect.deleteProperty(originalFetch, "preconnect")).toBe(true);
+  try {
+    mockFetchWithBodies([
+      { pattern: "/fixture", body: '{"value":"retained"}' },
+    ]);
+    const response = await fetch("https://example.test/fixture");
+    expect(await response.json()).toEqual({ value: "retained" });
+    expect(typeof fetch.preconnect).toBe("function");
+  } finally {
+    originalFetch = captured;
+  }
 });

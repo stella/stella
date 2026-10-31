@@ -20,6 +20,7 @@ import {
   parseChatEvent,
   probeChatTurn,
   sendChatMessage,
+  streamConnectTimeout,
 } from "./chat-stream";
 import type { ChatEvent, StreamedAnswer, StreamFetch } from "./chat-stream";
 
@@ -31,6 +32,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 /** A source whose refresh answers `access-1`, so a retried request shows it. */
@@ -152,6 +154,7 @@ describe("drawing an answer from its events", () => {
       createdAt: "2026-10-20T10:00:00.000Z",
       text: "Checking the register\n\nTwo found.",
       tools: ["list_templates"],
+      files: [],
     });
   });
 
@@ -232,6 +235,61 @@ describe("the send envelope", () => {
     expect(body.messages).toEqual([
       { id: MESSAGE_ID, role: "user", content: "Check the register" },
     ]);
+  });
+
+  test("carries attached files after the text, and files alone without it", () => {
+    const pdf = {
+      name: "Lease.pdf",
+      mimeType: "application/pdf",
+      dataUrl: "data:application/pdf;base64,JVBERg==",
+    };
+    const filePart = {
+      type: "document",
+      source: {
+        type: "url",
+        value: "data:application/pdf;base64,JVBERg==",
+        mimeType: "application/pdf",
+      },
+      metadata: { filename: "Lease.pdf" },
+    };
+    const withText = chatSendBody({
+      anonymized: false,
+      files: [pdf],
+      matterId: undefined,
+      messageId: MESSAGE_ID,
+      runId: "run-1",
+      text: "Summarise this",
+      threadId: THREAD_ID,
+    });
+    expect(withText.forwardedProps.message.parts).toEqual([
+      { type: "text", content: "Summarise this" },
+      filePart,
+    ]);
+    expect(withText.data).toEqual(withText.forwardedProps);
+    // The envelope names the message; the file goes up once per copy of
+    // the forwarded input, not again here.
+    expect(withText.messages).toEqual([
+      { id: MESSAGE_ID, role: "user", content: "Summarise this" },
+    ]);
+    expect(
+      chatSendBody({
+        anonymized: false,
+        files: [pdf],
+        matterId: undefined,
+        messageId: MESSAGE_ID,
+        runId: "run-1",
+        text: "",
+        threadId: THREAD_ID,
+      }).forwardedProps.message.parts,
+    ).toEqual([filePart]);
+  });
+
+  test("waits for a body with files to go up, within the longest upload", () => {
+    expect(streamConnectTimeout(0)).toBe(20_000);
+    expect(streamConnectTimeout(2000)).toBe(20_040);
+    // A 10 MB file, encoded and carried twice, on a slow network.
+    expect(streamConnectTimeout(28_000_000)).toBe(5 * 60_000);
+    expect(streamConnectTimeout(5_000_000)).toBe(120_000);
   });
 
   test("keeps a thread that sent anonymized text anonymized", () => {

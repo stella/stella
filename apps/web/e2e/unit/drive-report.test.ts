@@ -27,8 +27,10 @@ const request = (dbQueries: number | null, responseBytes: number | null) => ({
   dbQueryHeaderMissing: dbQueries === null,
   method: "GET",
   pathname: "/v1/contacts",
-  responseBytes,
-  responseBytesUnavailable: false,
+  responseSize:
+    responseBytes === null
+      ? { status: "streamed" as const }
+      : { status: "measured" as const, bytes: responseBytes },
 });
 
 describe("parseDriveArgs", () => {
