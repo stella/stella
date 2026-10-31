@@ -5285,6 +5285,13 @@
       "renameDescription": "Members will see the new name immediately.",
       "renameTitle": "Rename organization",
       "renameTypeToConfirm": "Type the new name to confirm: {name}",
+      "slug": {
+        "change": "Change slug",
+        "conflict": "This slug is already used by another organization.",
+        "description": "Choose a new slug or generate a random one. The previous slug will stop working.",
+        "opaque": "Generate a random slug",
+        "title": "Organization slug"
+      },
       "timePolicy": {
         "description": "Set time rounding, editing limits and monthly locks.",
         "editWindow": "Editing window (days)",

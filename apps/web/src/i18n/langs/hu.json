@@ -5285,6 +5285,13 @@
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",
       "renameTypeToConfirm": "A megerősítéshez írja be az új nevet: {name}",
+      "slug": {
+        "change": "Azonosító módosítása",
+        "conflict": "Ezt az azonosítót már egy másik szervezet használja.",
+        "description": "Válasszon új azonosítót, vagy hozzon létre egy véletlenszerűt. A korábbi azonosító nem lesz többé használható.",
+        "opaque": "Véletlenszerű azonosító létrehozása",
+        "title": "Szervezeti azonosító"
+      },
       "timePolicy": {
         "description": "Állítsa be az idő kerekítését, a szerkesztési határidőket és a hónapok zárolását.",
         "editWindow": "Szerkesztési határidő (nap)",

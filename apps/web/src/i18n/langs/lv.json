@@ -5285,6 +5285,13 @@
       "renameDescription": "Dalībnieki jauno nosaukumu redzēs uzreiz.",
       "renameTitle": "Pārdēvēt organizāciju",
       "renameTypeToConfirm": "Lai apstiprinātu, ievadiet jauno nosaukumu: {name}",
+      "slug": {
+        "change": "Mainīt identifikatoru",
+        "conflict": "Šo identifikatoru jau izmanto cita organizācija.",
+        "description": "Izvēlieties jaunu identifikatoru vai ģenerējiet nejaušu. Iepriekšējais identifikators vairs nedarbosies.",
+        "opaque": "Ģenerēt nejaušu identifikatoru",
+        "title": "Organizācijas identifikators"
+      },
       "timePolicy": {
         "description": "Iestatiet laika noapaļošanu, rediģēšanas termiņus un mēnešu bloķēšanu.",
         "editWindow": "Rediģēšanas termiņš (dienas)",
