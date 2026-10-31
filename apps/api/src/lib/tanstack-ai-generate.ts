@@ -163,6 +163,14 @@ type SystemPromptOrigin = "server-built" | "embeds-untrusted";
 type GenerateTanStackBaseOptions = {
   abortSignal?: AbortSignal | undefined;
   analytics?: TanStackAIAnalyticsCallbacks | undefined;
+  /**
+   * Runs right before every provider request the call sends: the first one,
+   * a retry after a provider's stated delay, a standard-tier retry, a repair
+   * turn and a fallback model. A caller whose permission to send can lapse
+   * during the call checks it again here; an error stops the call before that
+   * request leaves, and the call fails with that error.
+   */
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens?: number | undefined;
   modelId?: string | undefined;
@@ -530,6 +538,7 @@ const generateTanStackTextWithin = async (
     for await (const delta of streamTanStackTextDeltas({
       abortController,
       analytics: options.analytics,
+      beforeEachDispatch: options.beforeEachDispatch,
       caching: options.caching,
       maxOutputTokens: options.maxOutputTokens,
       messages: requestMessages,
@@ -737,9 +746,33 @@ export const collectTanStackTextRun = async (
   return result.value;
 };
 
+/** A caller's check before one provider request; an error refuses it. */
+export type DispatchCheck = () => Promise<Result<void, unknown>>;
+
+/** Runs the caller's check and stops the run when it refuses. */
+const checkBeforeDispatch = async (check: DispatchCheck | undefined) => {
+  if (check === undefined) {
+    return;
+  }
+  const verdict = await check();
+  if (Result.isError(verdict)) {
+    throw verdict.error;
+  }
+};
+
+// A request stream that first runs the caller's per-request check.
+const afterDispatchCheck = async function* <TChunk>(
+  beforeEachDispatch: DispatchCheck | undefined,
+  stream: () => AsyncIterable<TChunk>,
+): AsyncIterable<TChunk> {
+  await checkBeforeDispatch(beforeEachDispatch);
+  yield* stream();
+};
+
 const streamTanStackTextDeltas = async function* ({
   abortController,
   analytics,
+  beforeEachDispatch,
   caching,
   maxOutputTokens,
   messages,
@@ -751,6 +784,7 @@ const streamTanStackTextDeltas = async function* ({
 }: {
   abortController: AbortController | undefined;
   analytics: TanStackAIAnalyticsCallbacks | undefined;
+  beforeEachDispatch?: DispatchCheck | undefined;
   caching: CachingDecision;
   maxOutputTokens: number | undefined;
   messages: GuardedModelMessages<ModelMessage[]>;
@@ -766,20 +800,24 @@ const streamTanStackTextDeltas = async function* ({
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      streamChatChunks({
-        adapter: textAdapterWithNormalizedStops(model),
-        messages,
-        ...systemPromptsPatch({ caching, model, system }),
-        modelOptions: mergeGenerationOptions({
-          caching,
-          model,
-          maxOutputTokens,
-          serviceTier: requestedServiceTier,
-          temperature,
+      afterDispatchCheck(beforeEachDispatch, () =>
+        streamChatChunks({
+          adapter: textAdapterWithNormalizedStops(model),
+          messages,
+          ...systemPromptsPatch({ caching, model, system }),
+          modelOptions: mergeGenerationOptions({
+            caching,
+            model,
+            maxOutputTokens,
+            serviceTier: requestedServiceTier,
+            temperature,
+          }),
+          ...(modelAnalytics
+            ? { middleware: [modelAnalytics.middleware] }
+            : {}),
+          ...(abortController ? { abortController } : {}),
         }),
-        ...(modelAnalytics ? { middleware: [modelAnalytics.middleware] } : {}),
-        ...(abortController ? { abortController } : {}),
-      }),
+      ),
     onChunk: (chunk) => {
       if (chunk.type === EventType.RUN_FINISHED) {
         onFinish?.(finishedRunOf(chunk));
@@ -1566,8 +1604,9 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
               abortSignal: abortController?.signal,
               model: requestModel,
               serviceTier: options.serviceTier,
-              run: async (serviceTier) =>
-                await generateChatObject({
+              run: async (serviceTier) => {
+                await checkBeforeDispatch(options.beforeEachDispatch);
+                return await generateChatObject({
                   adapter: requestModel.adapter,
                   messages,
                   outputSchema: tanStackOutputSchema,
@@ -1587,7 +1626,8 @@ const generateTanStackObjectWithin = async <TSchema extends v.GenericSchema>(
                   }),
                   ...(analytics ? { middleware: [analytics.middleware] } : {}),
                   ...(abortController ? { abortController } : {}),
-                }),
+                });
+              },
             }),
           deadlineAt,
         ),

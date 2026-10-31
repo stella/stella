@@ -1,6 +1,6 @@
 import { convertSchemaToJsonSchema, EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
-import { Panic, TaggedError, UnhandledException } from "better-result";
+import { Panic, Result, TaggedError, UnhandledException } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -1486,6 +1486,50 @@ describe("TanStack AI model-ingress guard", () => {
     ]);
   });
 
+  test("a text request runs the caller's dispatch check first and a refusal sends nothing", async () => {
+    const options = {
+      caching: noCaching,
+      finishPolicy: "require-complete" as const,
+      organizationId: null,
+      userId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer" as const,
+      managedAIResidency: "eu" as const,
+      orgAIConfig: null,
+      prompt: "Summarize.",
+      task: "chat" as const,
+      serviceTier: "standard" as const,
+      tenantWorkspaceIds: [],
+    };
+    queueRun(textRun(["ok"], "stop"));
+    const sentBeforeCheck: number[] = [];
+    expect(
+      await generateTextForTestModel({
+        ...options,
+        beforeEachDispatch: async () => {
+          sentBeforeCheck.push(providerRequests.length);
+          return await Promise.resolve(Result.ok(undefined));
+        },
+      }),
+    ).toBe("ok");
+    expect(sentBeforeCheck).toEqual([0]);
+
+    resetProvider();
+    queueRun(textRun(["ok"], "stop"));
+    const refusal = new Error("Consent withdrawn");
+    const caught = await generateTextForTestModel({
+      ...options,
+      beforeEachDispatch: async () =>
+        await Promise.resolve(Result.err(refusal)),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    // The run may wrap what the check threw; nothing reached the provider.
+    expect(caught).toBeInstanceOf(Error);
+    expect(providerRequests).toEqual([]);
+  });
+
   test("leaves a request without tenant ids untouched and silent", async () => {
     queueRun(textRun(["ok"], "stop"));
 
@@ -2599,6 +2643,48 @@ describe("a structured answer its schema rejects gets one repair turn", () => {
     expect(outcomeLogs()).toEqual([
       { result: "ok", rung: "model_repair", issueTypes: "number" },
     ]);
+  });
+
+  test("the caller's dispatch check runs before every request, the repair turn included", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    const sentBeforeCheck: number[] = [];
+
+    const object = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        sentBeforeCheck.push(providerRequests.length);
+        return await Promise.resolve(Result.ok(undefined));
+      },
+    });
+
+    expect(object).toEqual({ answer: "ok", page: 3 });
+    expect(sentBeforeCheck).toEqual([0, 1]);
+  });
+
+  test("a dispatch check that refuses before the repair turn sends no repair", async () => {
+    queueRun(objectRun({ answer: "ok", page: "three" }));
+    queueRun(objectRun({ answer: "ok", page: 3 }));
+    let checks = 0;
+
+    const caught = await generateObjectForTestModel({
+      ...objectOptions,
+      beforeEachDispatch: async () => {
+        checks += 1;
+        return await Promise.resolve(
+          checks > 1
+            ? Result.err(new Error("Consent withdrawn"))
+            : Result.ok(undefined),
+        );
+      },
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(Error);
+    expect(checks).toBe(2);
+    expect(providerRequests).toHaveLength(1);
   });
 
   test("a repair that still breaks the schema fails as invalid output after one turn", async () => {
