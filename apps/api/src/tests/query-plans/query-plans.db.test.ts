@@ -31,6 +31,7 @@ import {
   accessPathViolations,
   explainRoot,
   heapFetchRiskViolations,
+  indexedAccessPaths,
   scanOccurrences,
   withoutAuthorizationSubplans,
 } from "@/api/tests/query-plans/plan-walker";
@@ -126,7 +127,7 @@ afterAll(async () => {
 
 type PlanRole = (typeof QUERY_PLAN_REGISTRY)[number]["role"];
 
-const explainOn =
+const explainPlanOn =
   (database: ReturnType<typeof drizzle>) =>
   async (
     role: PlanRole,
@@ -144,7 +145,7 @@ const explainOn =
       const result = await roleTx.execute(
         sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
       );
-      return scanOccurrences(explainRoot(result));
+      return explainRoot(result);
     };
 
     if (role === "root") {
@@ -163,11 +164,26 @@ const explainOn =
     });
   };
 
+const explainOn =
+  (database: ReturnType<typeof drizzle>) =>
+  async (
+    role: PlanRole,
+    build: (tx: Transaction) => SQLWrapper,
+    planMode?: "covering-index",
+  ) =>
+    scanOccurrences(await explainPlanOn(database)(role, build, planMode));
+
 const explainPhysical = async (
   role: PlanRole,
   build: (tx: Transaction) => SQLWrapper,
   planMode?: "covering-index",
 ) => await explainOn(db)(role, build, planMode);
+
+const explainPhysicalPlan = async (
+  role: PlanRole,
+  build: (tx: Transaction) => SQLWrapper,
+  planMode?: "covering-index",
+) => await explainPlanOn(db)(role, build, planMode);
 
 test("every guarded table has the physical seed before statistics injection", async () => {
   for (const table of PLAN_GUARD_TABLES) {
@@ -293,16 +309,23 @@ test("outstanding-document probe is an index-only LIMIT 1 lookup", async () => {
     QUERY_PLAN_REGISTRY.find(
       ({ id }) => id === "case-law.outstanding-document-probe",
     ) ?? panic("Outstanding-document probe is absent from the plan registry");
-  const scans = await explainPhysical(
+  const plan = await explainPhysicalPlan(
     entry.role,
     entry.build,
     "planMode" in entry ? entry.planMode : undefined,
   );
+  const scans = scanOccurrences(plan);
+  const paths = indexedAccessPaths(plan, "case_law_decisions", {
+    accessKind: "index-only",
+  });
   expect(scans.some(({ nodeType }) => nodeType === "Seq Scan")).toBe(false);
   expect(scans).toHaveLength(1);
+  expect(paths).toHaveLength(1);
+  expect(paths[0]?.branches.map(({ indexName }) => indexName)).toEqual([
+    "case_law_decisions_document_outstanding_idx",
+  ]);
   expect(scans[0]).toMatchObject({
     relation: "case_law_decisions",
-    nodeType: "Index Only Scan",
     index: "case_law_decisions_document_outstanding_idx",
     limitAbove: true,
   });
@@ -421,19 +444,21 @@ test(
 test(
   "the old unbounded sitemap refresh exposes heap-fetch risk",
   async () => {
-    const oldScans = await explainPhysical(
+    const oldPlan = await explainPhysicalPlan(
       "root",
       oldSitemapBucketCountsQuery,
       "covering-index",
     );
-    expect(
-      oldScans.some(
-        ({ relation, nodeType, limitAbove }) =>
-          relation === "case_law_decisions" &&
-          nodeType === "Index Only Scan" &&
-          !limitAbove,
-      ),
-    ).toBe(true);
+    const oldScans = scanOccurrences(oldPlan);
+    const coveringPaths = indexedAccessPaths(oldPlan, "case_law_decisions", {
+      accessKind: "index-only",
+    });
+    const decisionScans = oldScans.filter(
+      ({ relation }) => relation === "case_law_decisions",
+    );
+    expect(coveringPaths.length).toBeGreaterThan(0);
+    expect(coveringPaths).toHaveLength(decisionScans.length);
+    expect(decisionScans.some(({ limitAbove }) => !limitAbove)).toBe(true);
     expect(heapFetchRiskViolations(oldScans, "aggregate")).toContain(
       "root/0/0/0: heap-fetch risk on case_law_decisions: declare one mitigation",
     );

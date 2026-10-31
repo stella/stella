@@ -143,6 +143,38 @@ describe("model catalog newer-generation guard", () => {
     ).toEqual([]);
   });
 
+  test("a Mistral-hosted DeepSeek model passes as a known non-family id", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("deepseek-v4-1-flash-1017");
+
+    expect(
+      findNewerGenerationModels({
+        upstreamIds,
+        offered: emptyProviderMap(),
+        asOf: "2026-10-10",
+      }),
+    ).toEqual([]);
+  });
+
+  test("an unknown Mistral family shape fails closed", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.mistral.push("mistral-ultra-3");
+
+    expect(
+      findNewerGenerationModels({
+        upstreamIds,
+        offered: emptyProviderMap(),
+        asOf: "2026-10-10",
+      }),
+    ).toEqual([
+      {
+        type: "unparseable",
+        provider: "mistral",
+        modelId: "mistral-ultra-3",
+      },
+    ]);
+  });
+
   test("a dated, reasoned exclusion passes until expiry", () => {
     expect(
       haikuGuard("claude-haiku-5-6", {

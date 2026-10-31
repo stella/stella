@@ -560,6 +560,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
@@ -760,6 +761,18 @@ const noRetiredHttpFrameworkImports = [
   name,
   message:
     "Routes use the API's own HTTP core (apps/api/src/http) and valibot schemas; the browser uses @stll/api-client.",
+}));
+
+// Transactional emails render through @stll/transactional's own components
+// and renderer: react-email brought a Tailwind compiler, a syntax
+// highlighter and a formatter into the API bundle that no email used.
+const noReactEmailImports = [
+  "@react-email/components",
+  "@react-email/render",
+].map((name) => ({
+  name,
+  message:
+    "Build emails from packages/transactional/components and render them with '@stll/transactional/render'.",
 }));
 
 // Every module of the retired frameworks, by scope, for files whose
@@ -1317,6 +1330,7 @@ const config = defineConfig({
     // and scripts/check-oxlint-effective-config.ts fails on that.
     "stella-lowercase/stella-lowercase": "error",
     "no-first-observer-entry/no-first-observer-entry": "error",
+    "no-plan-scan-node-literals/no-plan-scan-node-literals": "error",
     "no-raw-colors/no-raw-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
@@ -1510,6 +1524,7 @@ const config = defineConfig({
           noFastXmlParserImport,
           noClassicTypeScriptImport,
           ...noRetiredHttpFrameworkImports,
+          ...noReactEmailImports,
         ],
       },
     ],
@@ -1852,6 +1867,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
@@ -2303,6 +2319,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
             ],
             patterns: noRetiredHttpFrameworkImportPatterns,
           },
@@ -2397,6 +2414,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
@@ -4214,6 +4232,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4235,6 +4254,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               uiPragmaticDragAdapterImport,
             ],
             patterns: [
@@ -4259,6 +4279,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
             ],
             patterns: [
               ...uiStandaloneImports,
@@ -4289,6 +4310,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               workspaceUiUseIntlFormattingImport,
             ],
           },
@@ -4444,6 +4466,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4476,6 +4499,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4516,6 +4540,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
               webUseIntlLocaleImport,
@@ -4729,6 +4754,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4766,6 +4792,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4798,6 +4825,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4838,6 +4866,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4889,6 +4918,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -4938,6 +4968,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               webPragmaticDragAdapterImport,
               ...webFolioAllLocalesImports,
               webUseIntlFormatterImport,
@@ -5757,6 +5788,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -5787,6 +5819,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               {
                 name: "@/api/db/root",
                 message:
@@ -5821,6 +5854,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5842,6 +5876,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
               ...apiProviderAdapterImports,
@@ -5866,6 +5901,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
@@ -6377,6 +6413,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               {
                 name: "@/api/lib/branded-types",
@@ -6433,6 +6470,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
             ],
           },
@@ -6507,6 +6545,7 @@ const config = defineConfig({
               noFastXmlParserImport,
               noClassicTypeScriptImport,
               ...noRetiredHttpFrameworkImports,
+              ...noReactEmailImports,
               apiValibotJsonSchemaImport,
               apiSafeIdBrandingImport,
               apiPortableSafeIdBrandingImport,
