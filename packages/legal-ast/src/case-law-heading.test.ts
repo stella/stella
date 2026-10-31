@@ -15,6 +15,38 @@ describe("case-law section heading", () => {
     });
   });
 
+  test("keeps a title that ends in the citation of the act it names", () => {
+    // IV. ÚS 1394/24: the full stop belongs to the collection's abbreviation.
+    expect(
+      caseLawSectionHeading(
+        "III. B. Neplatnost nacistické konfiskace a uplatnění nároku na restituci podle zákona č. 128/1946 Sb.",
+      ),
+    ).toEqual({ level: 3 });
+    expect(
+      caseLawSectionHeading(
+        "VI. B. Účel a podmínky restitučního nároku podle § 2 odst. 2 zákona č. 243/1992 Sb.",
+      ),
+    ).toEqual({ level: 3 });
+    expect(labelledHeading("IV. Smlouva č. 52/1959 Sb. m. s.")?.title).toBe(
+      "Smlouva č. 52/1959 Sb. m. s.",
+    );
+    expect(labelledHeading("2. Zákon č. 543/2002 Z. z.")?.title).toBe(
+      "Zákon č. 543/2002 Z. z.",
+    );
+  });
+
+  test("an act's citation at the end does not make a ruling item a title", () => {
+    expect(
+      caseLawSectionHeading(
+        "IX. Řízení se zastavuje podle zákona č. 99/1963 Sb.",
+      ),
+    ).toBeNull();
+    expect(
+      caseLawSectionHeading("VII. Žaloba se zamítá podle § 5 odst. 2."),
+    ).toBeNull();
+    expect(labelledHeading("3. Soud rozhodl podle § 5 odst. 2.")).toBeNull();
+  });
+
   test("leaves prose and implausibly long labels as paragraphs", () => {
     expect(caseLawSectionHeading("Text odůvodnění.")).toBeNull();
     expect(

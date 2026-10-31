@@ -1,6 +1,6 @@
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import { caseLawSectionHeading, isRomanItem } from "./case-law-heading.js";
+import { caseLawSectionHeading, romanItemNumber } from "./case-law-heading.js";
 import type { Block, DocumentAst } from "./document-ast.js";
 
 const REASONING_HEADING = /^Odůvodnění\s*:?$/iu;
@@ -16,6 +16,8 @@ export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
   let changed = false;
   let inReasoning = false;
   let inQuotedRun = false;
+  /** The numeral the quoted ruling's next item carries. */
+  let nextQuotedItem = 0;
   let previousText = "";
   for (const block of ast.blocks) {
     if (
@@ -25,12 +27,17 @@ export const normalizeCaseLawDecisionAst = (ast: DocumentAst): DocumentAst => {
       inReasoning = true;
     }
     const text = block.plainText.trim();
-    const isItem = block.type === "paragraph" && isRomanItem(text);
-    if (inQuotedRun && !isItem) {
+    const item = block.type === "paragraph" ? romanItemNumber(text) : null;
+    // A quoted ruling counts its items on (I., II., III.); a numeral that
+    // does not continue it is the court's own outline again.
+    if (inQuotedRun && item !== nextQuotedItem) {
       inQuotedRun = false;
     }
-    if (!inQuotedRun && isItem && QUOTE_INTRO.test(previousText)) {
+    if (!inQuotedRun && item !== null && QUOTE_INTRO.test(previousText)) {
       inQuotedRun = true;
+    }
+    if (inQuotedRun && item !== null) {
+      nextQuotedItem = item + 1;
     }
     previousText = text;
     if (

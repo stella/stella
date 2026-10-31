@@ -350,9 +350,12 @@ describe("parseUsDecisionHtml", () => {
       expect(holdingTexts.some((t) => t.includes("zrušuje"))).toBe(true);
     });
 
+    // A synthetic page with no recorded legacy segmentation, built the way
+    // the other synthetic inputs are.
     const sbnuRuling = (tail: string[]) =>
-      parseUsDecisionHtml(
-        baseInput(`
+      parseUsDecisionHtml({
+        ...baseInput(""),
+        html: `
         <html><body>
           <span id="lblDecisionForm">NÁLEZ</span>
           <input id="docContentHidden" value="${[
@@ -363,8 +366,8 @@ describe("parseUsDecisionHtml", () => {
           ].join("\n")}" />
           <input id="docIdHidden" value="99999" />
         </body></html>
-      `),
-      ).documentAst.blocks;
+      `,
+      }).documentAst.blocks;
 
     test("opens the ruling at the SbNU nález caption, which prints no takto:", () => {
       const blocks = sbnuRuling([

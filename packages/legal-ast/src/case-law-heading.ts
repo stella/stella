@@ -1,5 +1,7 @@
-// parser-output-unchanged: [sk-courts] adds `labelledHeading`, which only the Czech parsers call; `caseLawSectionHeading` is unchanged.
-// parser-output-unchanged: [sk-us] adds `labelledHeading`, which only the Czech parsers call; `caseLawSectionHeading` is unchanged.
+// parser-output-unchanged: [sk-courts] only the Czech parsers call these headings and items; this parser reads none of them.
+// parser-output-unchanged: [sk-us] only the Czech parsers call these headings and items; this parser reads none of them.
+import { romanValue } from "./heading-designator-levels.js";
+
 export type CaseLawSectionHeading = {
   level: 3 | 4;
 };
@@ -15,20 +17,35 @@ const LABELLED_TITLE_MAX_CHARS = 120;
 const SENTENCE_END_RE = /[.;,:!?]$/u;
 
 /**
+ * A title that names an act ends in the act's citation, whose collection
+ * abbreviation ends in a full stop: `… podle zákona č. 128/1946 Sb.`,
+ * `… č. 243/1992 Sb.`, a treaty's `Sb. m. s.`, a Slovak act's `Z. z.`.
+ */
+const ENDS_IN_ACT_CITATION_RE =
+  /\d{1,4}\/\d{2,4}\s+(?:Sb\.(?:\s*m\.\s*s\.)?|Z\.\s*z\.)$/u;
+
+/** Whether a title ends as a sentence does, not as an act's citation. */
+const endsSentence = (title: string): boolean =>
+  SENTENCE_END_RE.test(title) && !ENDS_IN_ACT_CITATION_RE.test(title);
+
+/**
  * A finite operative verb marks a quoted or issued ruling item, never a title.
  * Appellate decisions quote the lower court's verdict as `I. Žalovaný je
  * povinen zaplatit…`.
  */
 const OPERATIVE_VERB_RE =
   /(?<!\p{L})(?:je|jsou)\s+povinn\p{L}*|(?<!\p{L})se\s+(?:zamítá|zamítají|ruší|zrušuje|mění|potvrzuje|odmítá|zastavuje)(?!\p{L})|(?<!\p{L})zaplatit(?!\p{L})/iu;
-const ROMAN_ITEM_RE = /^(?=[IVX])(?:X{0,3}(?:IX|IV|V?I{0,3}))\.\s+\S/u;
+const ROMAN_ITEM_RE = /^(?<numeral>(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3}))\.\s+\S/u;
 
-/** A paragraph opening with a Roman numeral, whatever follows it. */
-export const isRomanItem = (text: string): boolean => ROMAN_ITEM_RE.test(text);
+/** The number of a paragraph opening with a Roman numeral, whatever follows it. */
+export const romanItemNumber = (text: string): number | null => {
+  const numeral = ROMAN_ITEM_RE.exec(text)?.groups?.["numeral"];
+  return numeral === undefined ? null : romanValue(numeral);
+};
 
 /** A title carries no sentence end and no operative verb. */
 export const isHeadingTitleShape = (title: string): boolean =>
-  !SENTENCE_END_RE.test(title) && !OPERATIVE_VERB_RE.test(title);
+  !endsSentence(title) && !OPERATIVE_VERB_RE.test(title);
 
 export type LabelledHeading = {
   /** The numeral as printed, without its full stop: `I`, `4`. */
@@ -52,7 +69,7 @@ export const labelledHeading = (text: string): LabelledHeading | null => {
     label === undefined ||
     title === undefined ||
     title.length > LABELLED_TITLE_MAX_CHARS ||
-    SENTENCE_END_RE.test(title)
+    endsSentence(title)
   ) {
     return null;
   }
