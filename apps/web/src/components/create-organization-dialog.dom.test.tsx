@@ -260,7 +260,7 @@ const renderCreationSurface = async ({
   });
   const other = createRoute({
     getParentRoute: () => root,
-    path: "/other",
+    path: "/admin",
     component: () => <div>{messages.common.settings}</div>,
   });
   const router = createRouter({
@@ -587,7 +587,7 @@ test("a creation that completes after leaving the route waits for an explicit sw
   createOrganization(messages);
   await waitFor(() => expect(creationKeys).toHaveLength(1));
   await act(async () => {
-    await router.navigate({ to: "/other" });
+    await router.navigate({ to: "/admin" });
     await drainReactScheduler();
   });
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -595,7 +595,7 @@ test("a creation that completes after leaving the route waits for an explicit sw
     creation.resolve(createdResponse());
     await creation.promise;
   });
-  expect(router.state.location.pathname).toBe("/other");
+  expect(router.state.location.pathname).toBe("/admin");
   expect(switchRequests()).toHaveLength(0);
   await act(async () => {
     await router.navigate({ to: "/settings" });

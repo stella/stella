@@ -104,6 +104,7 @@ export const CreateOrganizationDialog = ({
       // Creation never changes the active organization. Even an offscreen
       // completion waits in the account owner for an explicit switch.
       owner.created(intent, result.value);
+      return result.value;
     },
   });
   const switchOrganization = useMutation({
@@ -150,6 +151,7 @@ export const CreateOrganizationDialog = ({
       if (result.value) {
         onOpenChange(false);
       }
+      return result.value;
     },
   });
 

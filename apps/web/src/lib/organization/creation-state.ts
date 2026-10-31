@@ -22,8 +22,20 @@ const REFUSAL_MESSAGES = {
   organization_slug_conflict: "organization.creationSlugConflict",
 } as const satisfies Record<string, TranslationKey>;
 
+// Messages stay a closed set: a translator call over every key is too wide to type.
+type RefusalMessage = Extract<
+  TranslationKey,
+  | (typeof REFUSAL_MESSAGES)[keyof typeof REFUSAL_MESSAGES]
+  | "organization.creationRefused"
+>;
+
+type OrganizationCreationMessage = Extract<
+  TranslationKey,
+  RefusalMessage | "organization.creationOutcomeUnknown" | "errors.actionFailed"
+>;
+
 type CreationFailure =
-  { type: "refused"; message: TranslationKey } | { type: "unknown" };
+  { type: "refused"; message: RefusalMessage } | { type: "unknown" };
 
 const classifyCreationFailure = (error: unknown): CreationFailure => {
   // Only a parsed server envelope can establish a definite refusal. A pending
@@ -60,7 +72,7 @@ type CreatedOrganization = {
 
 type OrganizationCreationState =
   | { status: "draft"; name: string }
-  | { status: "refused"; name: string; message: TranslationKey }
+  | { status: "refused"; name: string; message: RefusalMessage }
   | { status: "creating"; intent: CreationIntent }
   | { status: "retry"; intent: CreationIntent }
   | { status: "confirm_restart"; intent: CreationIntent }
@@ -145,13 +157,13 @@ const createOrganizationCreationOwner = () => {
           return;
         default:
           failure satisfies never;
-          return panic("Unhandled organization creation failure");
+          panic("Unhandled organization creation failure");
       }
     },
     requestRestart: () => {
       const current = state.getState();
       if (current.status !== "retry") {
-        return panic("Only an uncertain creation can be discarded");
+        panic("Only an uncertain creation can be discarded");
       }
       state.setState(
         { status: "confirm_restart", intent: current.intent },
@@ -161,14 +173,14 @@ const createOrganizationCreationOwner = () => {
     cancelRestart: () => {
       const current = state.getState();
       if (current.status !== "confirm_restart") {
-        return panic("No organization restart confirmation is pending");
+        panic("No organization restart confirmation is pending");
       }
       state.setState({ status: "retry", intent: current.intent }, true);
     },
     confirmRestart: () => {
       const current = state.getState();
       if (current.status !== "confirm_restart") {
-        return panic("Discarding an uncertain creation requires confirmation");
+        panic("Discarding an uncertain creation requires confirmation");
       }
       state.setState({ status: "draft", name: current.intent.name }, true);
     },
@@ -201,7 +213,7 @@ const createOrganizationCreationOwner = () => {
     switchFailed: () => {
       const current = state.getState();
       if (current.status !== "switching") {
-        return panic("Organization switch failed without a pending switch");
+        panic("Organization switch failed without a pending switch");
       }
       state.setState(
         {
@@ -249,7 +261,18 @@ export const getOrganizationCreationOwner = (
   return owner;
 };
 
-export const organizationCreationView = (state: OrganizationCreationState) => {
+type OrganizationCreationView = {
+  name: string;
+  pending: boolean;
+  message: OrganizationCreationMessage | null;
+  editable: boolean;
+  organization: CreatedOrganization | null;
+  canRestart: boolean;
+};
+
+export const organizationCreationView = (
+  state: OrganizationCreationState,
+): OrganizationCreationView => {
   switch (state.status) {
     case "draft":
       return {
