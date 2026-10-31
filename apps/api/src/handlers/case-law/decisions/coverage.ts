@@ -65,7 +65,10 @@ import {
   decisionDateWithinBoundsSql,
 } from "@/api/lib/decision-date-bounds-sql";
 import { errorTag } from "@/api/lib/errors/utils";
-import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import {
+  ADAPTER_MANIFESTS,
+  type AdapterEdition,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
   createUnrecognizedSourceReporter,
@@ -127,7 +130,15 @@ type CaseLawCoverageSource = {
   /** Where the publisher offers it, for attribution. */
   publicHomeUrl: string;
   health: CaseLawCoverageHealth;
-  /** ISO 8601; null before the first run. */
+  /**
+   * What the publisher can still add: `live`, or one fixed `snapshot` and the
+   * day it was taken, which is how current such a source can ever be.
+   */
+  edition: AdapterEdition;
+  /**
+   * When the publisher last answered a sync, ISO 8601; null before the first
+   * answer. A run that asked nothing, or whose requests all failed, leaves it.
+   */
   lastSyncAt: string | null;
   /** Exact decision-year bounds for decisions held from this source. */
   decisionYearFrom: number | null;
@@ -329,17 +340,27 @@ export const readCaseLawCoverageSourcesQuery = definePublicLawSharedQuery(
         courts: sql<CoverageCourt[]>`coalesce((
           WITH population AS (
             SELECT f.value AS court, f.total AS decisions
-            FROM ${caseLawBrowseFacetCounts} AS f
-            WHERE f.kind = 'court' AND f.source_id = case_law_sources.id
+            FROM LATERAL (
+              SELECT source_facets.value, source_facets.total
+              FROM ${caseLawBrowseFacetCounts} AS source_facets
+              WHERE source_facets.source_id = case_law_sources.id
+                AND source_facets.kind = 'court'
+              ORDER BY source_facets.value, source_facets.total
+            ) AS f
             UNION ALL
             SELECT d.court, 1 AS decisions
             FROM ${publishedCaseLawDecisions} AS d
             WHERE d.source_id = case_law_sources.id
               AND NOT EXISTS (
-                SELECT 1 FROM ${caseLawBrowseFacetCounts} AS source_facets
-                WHERE source_facets.kind = 'court'
-                  AND source_facets.source_id = case_law_sources.id
-                LIMIT 1
+                SELECT 1
+                FROM LATERAL (
+                  SELECT source_facets.value
+                  FROM ${caseLawBrowseFacetCounts} AS source_facets
+                  WHERE source_facets.source_id = case_law_sources.id
+                    AND source_facets.kind = 'court'
+                  ORDER BY source_facets.value
+                  LIMIT 1
+                ) AS source_facets
               )
           ), normalized AS (
             SELECT nullif(btrim(court), '') AS court, decisions FROM population
@@ -580,10 +601,12 @@ export const loadCaseLawCoverage = async ({
       name: manifest.publisher,
       publicHomeUrl: manifest.publicHomeUrl,
       health: caseLawSourceHealth({
+        edition: manifest.edition,
         enabled: source.enabled,
         lastSyncAt: source.lastSyncAt,
         now,
       }),
+      edition: manifest.edition,
       lastSyncAt: source.lastSyncAt?.toISOString() ?? null,
       decisionYearFrom: source.decisionYearFrom,
       decisionYearTo: source.decisionYearTo,

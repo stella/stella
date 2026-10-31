@@ -29,7 +29,7 @@ export const declareVisualSandboxSmoke = () => {
     const nonce = createRandomUuid();
     const frameUrl = `${sandboxUrl}#n=${nonce}`;
     const collector = createNetworkCollector();
-    const stopTracking = collector.trackPage(page);
+    const stopTracking = await collector.trackPage(page);
     const errors = createBrowserErrorCollector();
     const stopErrors = errors.trackPage(page);
     const frameRequests: string[] = [];
@@ -135,7 +135,7 @@ export const declareVisualSandboxSmoke = () => {
       errors.assertEmpty(VISUAL_SANDBOX_PATH);
     } finally {
       stopErrors();
-      stopTracking();
+      await stopTracking();
     }
   });
 };

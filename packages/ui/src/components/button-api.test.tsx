@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { Button } from "./button";
+import { Button, ButtonTextRun } from "./button";
 
 const classesOf = (markup: string): string[] =>
   /class="(?<cls>[^"]*)"/u.exec(markup)?.groups?.["cls"]?.split(" ") ?? [];
@@ -80,11 +80,11 @@ describe("Button size inline", () => {
     expect(classes.some((cls) => cls.includes("active:scale"))).toBe(false);
   });
 
-  test("sits in the line as an inline box whose text can be copied and wraps", () => {
+  test("sits in the line with copyable text and wraps inside its own box", () => {
     const classes = classesOf(
       renderToStaticMarkup(
         <Button size="inline" tooltip="Open the cited provision" variant="link">
-          § 2 odst. 1 zákona č. 89/2012 Sb., občanský zákoník
+          § 2 odst. 1
         </Button>,
       ),
     );
@@ -153,6 +153,50 @@ describe("Button variant plain", () => {
     expect(markup).toContain('aria-disabled="true"');
     expect(markup).toContain("data-base-ui-tooltip-trigger");
   });
+
+  test("paints a selected treatment that only the pressed marker turns on", () => {
+    const selected = renderToStaticMarkup(
+      <Button selected variant="plain">
+        Card
+      </Button>,
+    );
+    const unselected = renderToStaticMarkup(
+      <Button variant="plain">Card</Button>,
+    );
+
+    expect(classesOf(selected)).toEqual(
+      expect.arrayContaining([
+        "data-pressed:outline-2",
+        "data-pressed:outline-solid",
+      ]),
+    );
+    expect(selected).toContain('data-pressed=""');
+    expect(unselected).not.toContain('data-pressed=""');
+  });
+});
+
+describe("ButtonTextRun", () => {
+  test("a native label holds the button it labels, then the text", () => {
+    const markup = renderToStaticMarkup(
+      <p>
+        Viz{" "}
+        <ButtonTextRun onClick={() => undefined}>
+          rozsudek Nejvyššího soudu ze dne 30. 11. 2016, sp. zn. 29 Cdo
+          4632/2015
+        </ButtonTextRun>
+        .
+      </p>,
+    );
+    const inner = /<label[^>]*>(?<inner>.*)<\/label>/u.exec(markup)?.groups?.[
+      "inner"
+    ];
+
+    expect(inner).toMatch(
+      /^<button[^>]*type="button"[^>]*><\/button>rozsudek/u,
+    );
+    expect(markup).toContain("select-text");
+    expect(markup).not.toContain("role=");
+  });
 });
 
 describe("Button focusRing", () => {
@@ -173,6 +217,20 @@ describe("Button focusRing", () => {
     expect(inside).not.toContain("focus-visible:ring-offset-1");
     expect(outside).toContain("focus-visible:ring-offset-1");
     expect(outside).not.toContain("focus-visible:ring-inset");
+  });
+
+  test("a selected plain button is marked pressed and draws its ring", () => {
+    const markup = renderToStaticMarkup(
+      <Button selected variant="plain">
+        Thumb
+      </Button>,
+    );
+
+    expect(markup).toContain('data-pressed=""');
+    expect(classesOf(markup)).toContain("data-pressed:outline-2");
+    expect(
+      renderToStaticMarkup(<Button variant="plain">Thumb</Button>),
+    ).not.toContain('data-pressed=""');
   });
 });
 

@@ -6,6 +6,7 @@ import type {
 import * as v from "valibot";
 
 import { resolveDefaultModel } from "@stll/ai-catalog";
+import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
 import {
@@ -28,7 +29,6 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

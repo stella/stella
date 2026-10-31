@@ -29,6 +29,18 @@ function MenuTrigger({
   });
 }
 
+// Cursor-anchored menus are opened by a visible row or control. Their required
+// trigger registration must never become a second keyboard or accessibility target.
+const MenuAnchor = () => (
+  <MenuPrimitive.Trigger
+    aria-hidden="true"
+    data-slot="menu-anchor"
+    nativeButton={false}
+    render={<span hidden />}
+    tabIndex={-1}
+  />
+);
+
 const MenuPopup = ({
   children,
   className,
@@ -345,6 +357,7 @@ const MenuSubPopup = ({
 };
 
 export {
+  MenuAnchor,
   MenuCreateHandle,
   MenuCreateHandle as DropdownMenuCreateHandle,
   Menu,
