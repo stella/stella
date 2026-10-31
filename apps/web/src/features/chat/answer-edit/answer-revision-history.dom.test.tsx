@@ -1,6 +1,15 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
-import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  expect,
+  type Mock,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -77,28 +86,33 @@ const readPage = (input: RequestInfo | URL) => {
 let readStatus = 200;
 let writeStatus = 200;
 const writes: unknown[] = [];
-const boundary = spyOn(globalThis, "fetch").mockImplementation(
-  Object.assign(
-    async (input: RequestInfo | URL, init?: RequestInit) => {
-      const request = new Request(input, init);
-      if (request.method === "POST") {
-        writes.push(await request.json());
+let boundary: Mock<typeof globalThis.fetch>;
+beforeEach(() => {
+  boundary = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        if (request.method === "POST") {
+          writes.push(await request.json());
+          return Response.json(
+            writeStatus === 409
+              ? { message: "Changed" }
+              : { revision: 4, edited: true },
+            { status: writeStatus },
+          );
+        }
         return Response.json(
-          writeStatus === 409
-            ? { message: "Changed" }
-            : { revision: 4, edited: true },
-          { status: writeStatus },
+          readStatus === 200 ? readPage(input) : { message: "Failed" },
+          { status: readStatus },
         );
-      }
-      return Response.json(
-        readStatus === 200 ? readPage(input) : { message: "Failed" },
-        { status: readStatus },
-      );
-    },
-    { preconnect: () => undefined },
-  ),
-);
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+});
+
 afterEach(async () => {
+  mock.restore();
   await act(async () => cleanup());
   writes.length = 0;
   readStatus = 200;

@@ -36,8 +36,10 @@ const PUBLIC_CACHE_HEADERS: ReadonlyMap<ApiRouteKey, string> = new Map([
       ] as const,
   ),
   ["GET /auth.md", "public, max-age=300"],
+  ["GET /favicon.ico", "public, max-age=86400, stale-while-revalidate=604800"],
   ["GET /v1/mcp/oauth/client-metadata.json", "public, max-age=3600"],
   ["GET /v1/mcp/oauth/cli-client-metadata.json", "public, max-age=3600"],
+  ["GET /v1/mcp/oauth/mobile-client-metadata.json", "public, max-age=3600"],
   ["GET /v1/case/coverage", "public, max-age=900, stale-while-revalidate=3600"],
   ["GET /v1/case/judges/:judgeId/portrait", "public, max-age=86400"],
   [

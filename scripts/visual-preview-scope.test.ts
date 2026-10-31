@@ -58,6 +58,11 @@ const runScope = ({
     Bun.which("grep") ?? panic("Scope tests require grep"),
     path.join(bin, "grep"),
   );
+  // The retried fetch runs scripts/retry.sh, which sleeps between attempts.
+  symlinkSync(
+    Bun.which("sleep") ?? panic("Scope tests require sleep"),
+    path.join(bin, "sleep"),
+  );
   writeFileSync(output, "");
   writeFileSync(calls, "");
   writeFileSync(
@@ -77,6 +82,8 @@ esac
     const result = Bun.spawnSync([bash, "-e", "-c", source], {
       env: {
         PATH: bin,
+        GITHUB_WORKSPACE: path.resolve(import.meta.dir, ".."),
+        RETRY_DELAYS_SECONDS: "0",
         EVENT_NAME: event,
         BASE_SHA: "a".repeat(40),
         GITHUB_OUTPUT: output,

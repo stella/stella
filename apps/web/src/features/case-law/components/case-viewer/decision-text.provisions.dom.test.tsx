@@ -8,6 +8,7 @@ import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
+import { statuteDisplayLabel } from "@stll/api-contract/statute-display-label";
 import { sleep } from "@stll/concurrency/sleep";
 import type { DecisionProvisionAnchor } from "@stll/decision-reader/reader-types";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -173,7 +174,7 @@ const provisionAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id: documentId,
         slug: "test-act",
@@ -185,7 +186,12 @@ const provisionAnchor = ({
         eli: "/eli/cz/sb/2026/1",
         jurisdiction: "CZE",
         provisionLabel: citation,
-        statuteTitle: "Test Act",
+        // The anchors hook hands the card the act's display label.
+        statuteTitle: statuteDisplayLabel({
+          country: "CZE",
+          eli: "/eli/cz/sb/2026/1",
+          title: "Test Act",
+        }).text,
         versionCount: 1,
         versionValidFrom: "2026-01-01",
       },
@@ -574,7 +580,7 @@ const citationAnchor = ({
     spanStart: start,
     target: {
       document: {
-        country: "cz",
+        country: "CZE",
         eli: "/eli/cz/sb/2026/1",
         id,
         slug: "test-act",
@@ -737,11 +743,11 @@ describe("one card per cited provision in a paragraph", () => {
     expect(cards).toHaveLength(1);
     expect(cards.map(cardLabel)).toEqual([PART_ONE]);
     expect(
-      cards.at(0)?.querySelectorAll('[data-slot="provision-card-wording"] > *'),
+      cards.at(0)?.querySelectorAll('[data-slot="provision-card-wording"] p'),
     ).toHaveLength(1);
   });
 
-  test("citations of two parts of one provision share a card that marks each part", async () => {
+  test("citations of two parts of one provision share a card that quotes each part", async () => {
     const view = await renderDecision(true, [
       repeatCitation(PART_ONE, "1"),
       repeatCitation(PART_TWO, "2"),
@@ -753,11 +759,16 @@ describe("one card per cited provision in a paragraph", () => {
     expect(cardLabel(card ?? panic("No card"))).toBe(
       `${PART_ONE}, ${PART_TWO}`,
     );
-    const marked = [...(card?.querySelectorAll("[data-cited]") ?? [])];
-    expect(marked.map((block) => block.textContent)).toEqual([
+    const quoted = [
+      ...(card?.querySelectorAll('[data-slot="provision-card-wording"] p') ??
+        []),
+    ];
+    expect(quoted.map((block) => block.textContent)).toEqual([
       "Wording of par_226-odst_1 in force since 2026-01-01.",
       "Wording of par_226-odst_2 in force since 2026-01-01.",
     ]);
+    // Everything quoted is cited, so a mark would set nothing apart.
+    expect(card?.querySelectorAll("[data-cited]")).toHaveLength(0);
   });
 
   test("the same provision applied in two consolidations keeps a card for each", async () => {
@@ -838,7 +849,13 @@ describe("the provision card header", () => {
     const header =
       peek.querySelector('[data-slot="provision-card-header"]') ??
       panic("The hover card has no header");
-    expect(headerParts(header)).toEqual(["provision-card-summary", "button"]);
+    expect(headerParts(header)).toEqual([
+      "provision-card-summary",
+      "provision-card-open",
+    ]);
+    expect(
+      header.querySelector('[data-slot="provision-card-open"] > button'),
+    ).not.toBeNull();
     const summary =
       header.querySelector('[data-slot="provision-card-summary"]') ??
       panic("The header has no summary");
@@ -890,6 +907,52 @@ describe("the provision card header", () => {
     expect(
       header.querySelector('[data-slot="provision-card-date"]')?.textContent,
     ).toBe(WORDING_VERSION_LABEL);
+  });
+
+  test("a card's open button waits for its own card, stays reachable by keyboard and shows on touch", async () => {
+    const view = await renderDecision(true);
+    const REVEAL = [
+      "opacity-0",
+      "group-hover/provision-card:opacity-100",
+      "group-focus-within/provision-card:opacity-100",
+      "pointer-coarse:opacity-100",
+    ];
+    const cards = [
+      ...view.container.querySelectorAll<HTMLElement>(
+        '[data-slot="provision-card"]',
+      ),
+    ];
+    expect(cards.length).toBeGreaterThan(0);
+    for (const card of cards) {
+      // The group is the card itself, not the paragraph around it: pointing
+      // at the text must not light every card's button at once.
+      expect(card.classList.contains("group/provision-card")).toBe(true);
+      const slot =
+        card.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
+        panic("The card has no open button slot");
+      for (const token of REVEAL) {
+        expect(slot.classList.contains(token)).toBe(true);
+      }
+      const open = within(card).getByRole("button", {
+        name: messages.statutes.openProvision,
+      });
+      expect(slot.contains(open)).toBe(true);
+      // Hidden by opacity alone: still in the tab order, so focus reveals it.
+      expect(open.tabIndex).toBe(0);
+      expect(
+        open.closest("[inert], [hidden], [aria-hidden='true']"),
+      ).toBeNull();
+      act(() => open.focus());
+      // Focus inside the card is what `group-focus-within` reveals it on.
+      expect(open.ownerDocument.activeElement).toBe(open);
+      expect(card.contains(open.ownerDocument.activeElement)).toBe(true);
+    }
+    // The hover card is already what the reader looks at: its button stays.
+    const peek = await openPeek(view, FIRST_CITATION);
+    const peekSlot =
+      peek.querySelector<HTMLElement>('[data-slot="provision-card-open"]') ??
+      panic("The hover card has no open button slot");
+    expect(peekSlot.classList.contains("opacity-0")).toBe(false);
   });
 
   test("drops the hierarchy line when it would not fit on one line", async () => {

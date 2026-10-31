@@ -1,12 +1,19 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { type Block, projectPlainText } from "@stll/legal-ast/document-ast";
+import {
+  type Block,
+  type Inline,
+  projectPlainText,
+} from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import { courtListenerValidationPolicy } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/validation-policy";
 
-import { validateAst as validateSharedAst } from "./validate-ast";
+import {
+  validateAst as validateSharedAst,
+  validationInlineText,
+} from "./validate-ast";
 
 const validateAst = (
   html: string,
@@ -110,4 +117,31 @@ test("canonical validation does not invent words across folded OCR lines", () =>
     ),
     { numRuns: 20 },
   );
+});
+
+test("owned validation projection preserves the previous inline text contract", () => {
+  const previousProjection = (inlines: readonly Inline[]): string => {
+    let text = "";
+    for (const node of inlines) {
+      if (node.type === "text") {
+        text += node.text;
+      } else if (node.type === "line-break") {
+        text += " ";
+      } else if (node.type !== "page-anchor") {
+        text += previousProjection(node.children);
+      }
+    }
+    return text;
+  };
+  const inlines = [
+    { type: "text", text: "art. 505\n" },
+    { type: "superscript", children: [{ type: "text", text: "9" }] },
+    { type: "page-anchor", label: "2" },
+    {
+      type: "bold",
+      children: [{ type: "line-break" }, { type: "text", text: "k.p.c. 398³" }],
+    },
+  ] satisfies Inline[];
+  expect(validationInlineText(inlines)).toBe(previousProjection(inlines));
+  expect(validationInlineText(inlines)).toBe("art. 505\n9 k.p.c. 398³");
 });

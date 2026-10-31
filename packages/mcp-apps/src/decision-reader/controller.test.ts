@@ -13,6 +13,7 @@ type ToolResponse = Awaited<ReturnType<ReaderBridge["requestTool"]>>;
 type BridgeSnapshot = ReturnType<ReaderBridge["getSnapshot"]>;
 
 const metadata = {
+  extractionWarnings: [],
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "1 C 1/2026",
   caseNumberType: "case-number",
@@ -295,6 +296,7 @@ describe("MCP decision reader controller", () => {
     previewCall.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -426,6 +428,7 @@ describe("MCP decision reader controller", () => {
     await settle();
     const preview = {
       url: null,
+      country: "CZE",
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-1",
@@ -490,6 +493,7 @@ describe("MCP decision reader controller", () => {
     call.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -558,6 +562,7 @@ describe("MCP decision reader controller", () => {
     previewCall.resolve(
       response({
         url: null,
+        country: "CZE",
         documentId: metadata.decisionId,
         language: "cs",
         anchorId: "par-1",
@@ -596,6 +601,7 @@ describe("MCP decision reader controller", () => {
     const secondCall = host.nextCall();
     const preview = {
       url: "https://stella.example/legislation/1#par-2",
+      country: "CZE",
       documentId: metadata.decisionId,
       language: "cs",
       anchorId: "par-2",

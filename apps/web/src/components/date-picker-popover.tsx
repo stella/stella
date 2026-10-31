@@ -4,7 +4,7 @@ import { Temporal, todayFor } from "@stll/time";
 import { DatePickerPopover as UIDatePickerPopover } from "@stll/ui/date-picker-popover";
 import type { DatePickerPopoverProps } from "@stll/ui/date-picker-popover";
 
-import { useLocale } from "@/i18n/formatting-context";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 
 export const getPickerToday = () =>
   todayFor(Temporal.Now.timeZoneId()).toString();
@@ -24,7 +24,7 @@ const DatePickerPopover = ({
   todayLabel,
   ...props
 }: DatePickerPopoverProps) => {
-  const appLocale = useLocale();
+  const appLocale = useFormattingLocale();
   const t = useTranslations();
 
   return (

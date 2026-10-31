@@ -242,6 +242,7 @@ test("every bundle resolves its file assets from its runner directory", () => {
 const STANDALONE_BUNDLES = [
   "/app/bundles/collab.js",
   "/app/bundles/document-processing-worker.js",
+  "/app/bundles/file-derivative-worker.js",
   "/app/bundles/server.js",
 ];
 
@@ -273,6 +274,7 @@ test("long-running API builds map frames to source without embedded source text"
   for (const output of [
     "/app/server.js",
     "/app/document-processing-worker.js",
+    "/app/file-derivative-worker.js",
   ]) {
     const bundle = buildForOutput(output);
     expect(bundle, output).toContain("--sourcemap=linked");
@@ -356,13 +358,23 @@ test("the builder stage sets NODE_ENV before its first bundle", () => {
 
 // A published artifact refuses local development access at startup only if
 // the release flag is compiled into it.
-test("every builder bundle is a release build", () => {
+// Minified with kept names: error tags and logs read class and function names
+// (errorClassName), which plain --minify would rename.
+const RELEASE_FLAGS = [RELEASE_DEFINE, "--minify", "--keep-names"] as const;
+
+test("every builder bundle is a minified release build", () => {
   const bundles = bundleBuilds(stage("builder"));
   expect(bundles.length).toBeGreaterThan(0);
-  expect(bundles.filter((bundle) => !bundle.includes(RELEASE_DEFINE))).toEqual(
-    [],
-  );
-  expect(runnerPackage.scripts.build).toContain(RELEASE_DEFINE);
+  for (const flag of RELEASE_FLAGS) {
+    expect(bundles.filter((bundle) => !bundle.includes(flag))).toEqual([]);
+  }
+  const runnerBuilds = runnerPackage.scripts.build
+    .split(/\bbun build\b/u)
+    .slice(1);
+  expect(runnerBuilds.length).toBeGreaterThan(0);
+  for (const flag of RELEASE_FLAGS) {
+    expect(runnerBuilds.filter((build) => !build.includes(flag))).toEqual([]);
+  }
 });
 
 // A package that loads its native binding by a path relative to its own module

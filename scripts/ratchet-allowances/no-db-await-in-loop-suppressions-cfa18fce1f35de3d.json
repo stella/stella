@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/chat/thread-stored-content-egress.ts",
+  "delta": 1,
+  "reason": "Account erasure tries one chat owner egress fence per organization the account reaches, without waiting and in ascending id order. Each try goes through the aggregate lock owner so the transaction's lock history records it; the count is bounded by the account's organizations."
+}

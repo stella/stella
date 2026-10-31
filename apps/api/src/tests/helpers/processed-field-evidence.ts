@@ -34,6 +34,7 @@ import {
   readPlTkRuling,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-tk";
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
+import { parseUkFclDecision } from "@/api/handlers/case-law/ingestion/parsers/uk-fcl";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 import { decodeSourceRawEnvelope } from "@/api/lib/legal-search/ingestion-types";
 import type { ProcessedFieldSourceKey } from "@/api/lib/legal-search/processed-field-inventory";
@@ -386,6 +387,17 @@ export const PROCESSED_FIELD_EVIDENCE_READERS = {
   "at-findok": readAtFindok,
   "eu-ecj": readEuEcj,
   "hu-bhgy": readHuBhgy,
+  "uk-fcl": async (fixture) => [
+    {
+      id: fixture,
+      ast: parseUkFclDecision({
+        xml: await textOf(fixture),
+        documentId: "d-00000000-0000-4000-8000-000000000001",
+        sourceUrl:
+          "https://caselaw.nationalarchives.gov.uk/d-00000000-0000-4000-8000-000000000001",
+      }).unwrap().documentAst,
+    },
+  ],
   "pl-kis": null,
   "pl-uodo": null,
   "pl-uokik": null,

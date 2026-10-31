@@ -1,4 +1,6 @@
-// One oxc parse per (dialect, text), shared by the ratchet's counters.
+import path from "node:path";
+
+// One oxc parse per (extension, text), shared by the ratchet counters.
 //
 // The ratchet runs dozens of counters over each file in turn, and most of them
 // parse it. A parse is a pure function of the text and the dialect (the
@@ -54,12 +56,8 @@ export const syntaxDialect = (fileName: string): SyntaxDialect => {
   return /\.[cm]?js$/u.test(fileName) ? "js" : "ts";
 };
 
-const RECENT_SYNTAX_TREES = {
-  js: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  jsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  ts: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-  tsx: memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT),
-} as const satisfies Record<SyntaxDialect, RecentMemo<ParsedSource>>;
+// The extension selects grammar and module mode.
+const RECENT_SYNTAX_TREES = new Map<string, RecentMemo<ParsedSource>>();
 
 /** The oxc syntax tree of `text`, shared by every reader of the same text. */
 export const parseSyntax = ({
@@ -67,7 +65,14 @@ export const parseSyntax = ({
   text,
 }: ParseSourceOptions): ParsedSource => {
   const parse = () => parseSyntaxTree(fileName, text);
-  return DECLARATION_FILE_NAME.test(fileName)
-    ? parse()
-    : RECENT_SYNTAX_TREES[syntaxDialect(fileName)](text, parse);
+  if (DECLARATION_FILE_NAME.test(fileName)) {
+    return parse();
+  }
+  const extension = path.extname(fileName);
+  let memo = RECENT_SYNTAX_TREES.get(extension);
+  if (memo === undefined) {
+    memo = memoizeRecent<ParsedSource>(RECENT_TEXTS_PER_DIALECT);
+    RECENT_SYNTAX_TREES.set(extension, memo);
+  }
+  return memo(text, parse);
 };

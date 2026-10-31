@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The deploy repair that links the first-party native OAuth clients to the API resource writes OAuth resource policy rows, which no actor owns and no account event describes; it is idempotent and runs only inside the online migration that repairs the OAuth resource policy."
+}

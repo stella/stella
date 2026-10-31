@@ -23,7 +23,7 @@ describe("membership role control policy", () => {
         options.length,
       );
 
-      const schema = inviteMemberSchema(actorRole);
+      const schema = inviteMemberSchema(actorRole, "Invalid email");
       const accepted = ORGANIZATION_ROLE_NAMES.filter(
         (role) =>
           v.safeParse(schema, { email: "member@example.com", role }).success,
@@ -54,7 +54,7 @@ describe("membership role control policy", () => {
     expect(roleAssignmentOptions(undefined)).toEqual([]);
     for (const role of ORGANIZATION_ROLE_NAMES) {
       expect(
-        v.safeParse(inviteMemberSchema(undefined), {
+        v.safeParse(inviteMemberSchema(undefined, "Invalid email"), {
           email: "member@example.com",
           role,
         }).success,

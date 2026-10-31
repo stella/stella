@@ -3,9 +3,15 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
-import { CalendarCell } from "@stll/ui/calendar";
+import { CalendarCell } from "@stll/ui/calendar-primitives";
 import { PlusIcon, SquareCheckIcon } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import {
+  Menu,
+  MenuAnchor,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/menu";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
@@ -70,6 +76,7 @@ export const CalendarDayCell = ({
 
   // Context menu state
   const [ctxOpen, setCtxOpen] = useState(false);
+  const [ctxOpener, setCtxOpener] = useState<HTMLElement | null>(null);
   const [ctxAnchor, setCtxAnchor] = useState<{
     getBoundingClientRect: () => DOMRect;
   } | null>(null);
@@ -79,6 +86,9 @@ export const CalendarDayCell = ({
       return;
     }
     e.preventDefault();
+    setCtxOpener(
+      e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
+    );
     const x = e.clientX;
     const y = e.clientY;
     setCtxAnchor({
@@ -158,10 +168,11 @@ export const CalendarDayCell = ({
               render={
                 <button
                   aria-label={t("common.add")}
-                  className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover/day:opacity-100"
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground inline-flex size-5 items-center justify-center rounded opacity-0 transition-opacity group-hover/day:opacity-100 pointer-coarse:opacity-100"
                   type="button"
                 />
               }
+              tooltip={t("common.add")}
             >
               <PlusIcon className="size-3.5" />
             </MenuTrigger>
@@ -211,11 +222,11 @@ export const CalendarDayCell = ({
           }}
           open={ctxOpen}
         >
-          <MenuTrigger
-            nativeButton={false}
-            render={<span className="sr-only" />}
-          />
-          <MenuPopup anchor={ctxAnchor ?? undefined}>
+          <MenuAnchor />
+          <MenuPopup
+            anchor={ctxAnchor ?? undefined}
+            finalFocus={() => ctxOpener}
+          >
             <MenuItem onClick={() => onCreate("task")}>
               <SquareCheckIcon />
               {t("tasks.newTask")}

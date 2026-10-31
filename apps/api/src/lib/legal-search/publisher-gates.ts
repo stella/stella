@@ -42,6 +42,11 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  */
 export const PUBLISHER_GATES = {
   "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
+  "bfdi-de": {
+    publisher: "BfDI",
+    intervalMs: 30_000,
+    hosts: ["www.bfdi.bund.de"],
+  },
   "uohs-cz": { publisher: "ÚOHS", intervalMs: 1000, hosts: ["uohs.gov.cz"] },
   "edpb-eu": {
     publisher: "European Data Protection Board",
@@ -112,11 +117,11 @@ export const PUBLISHER_GATES = {
     intervalMs: POLITE_INTERVAL_MS,
     hosts: ["rozhodnuti.nsoud.cz"],
   },
-  /** vyhledavac.nssoud.cz. */
+  /** NSS search portal and the court's original-document registry. */
   "nssoud-cz": {
     publisher: "Nejvyšší správní soud",
     intervalMs: POLITE_INTERVAL_MS,
-    hosts: ["vyhledavac.nssoud.cz"],
+    hosts: ["vyhledavac.nssoud.cz", "www.nssoud.cz"],
   },
   /** rozhodnuti.justice.cz. */
   "justice-cz": {
@@ -190,6 +195,11 @@ export const PUBLISHER_GATES = {
     publisher: "Prezes UOKiK",
     intervalMs: 2000,
     hosts: ["decyzje.uokik.gov.pl"],
+  },
+  "fcl-uk": {
+    publisher: "Find Case Law",
+    intervalMs: 500,
+    hosts: ["caselaw.nationalarchives.gov.uk"],
   },
   /** eakta.birosag.hu. */
   "birosag-hu": {

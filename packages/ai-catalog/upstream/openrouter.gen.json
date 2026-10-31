@@ -463,12 +463,6 @@
       }
     },
     {
-      "id": "mistralai/mistral-small-2603:batch",
-      "reasoning": {
-        "default_effort": "high"
-      }
-    },
-    {
       "id": "moonshotai/kimi-k3",
       "reasoning": {
         "default_effort": "max"
@@ -500,12 +494,6 @@
     },
     {
       "id": "nvidia/nemotron-3-super-120b-a12b",
-      "reasoning": {
-        "default_effort": "medium"
-      }
-    },
-    {
-      "id": "nvidia/nemotron-3-super-120b-a12b:free",
       "reasoning": {
         "default_effort": "medium"
       }
@@ -878,6 +866,30 @@
     },
     {
       "id": "openai/gpt-6.1-sol:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra-pro",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra-pro:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "openai/gpt-6.1-terra:batch",
       "reasoning": {
         "default_effort": "medium"
       }
