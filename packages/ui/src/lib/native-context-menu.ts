@@ -53,7 +53,11 @@ const elementOf = (target: EventTarget | null): Element | null => {
 const contentEditableState = (
   value: string | null,
 ): "editable" | "inherit" | "not-editable" => {
-  switch (value?.toLowerCase()) {
+  // A missing attribute inherits, like an invalid one.
+  if (value === null) {
+    return "inherit";
+  }
+  switch (value.toLowerCase()) {
     case "":
     case "true":
     case "plaintext-only":
