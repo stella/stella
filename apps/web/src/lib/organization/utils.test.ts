@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import {
-  ORGANIZATION_NAME_MAX_LENGTH,
-  ORGANIZATION_SLUG_MAX_LENGTH,
-} from "@stll/api-contract/organization-create";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
+import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 
 import { getOrganizationSchema } from "@/lib/organization/utils";
 
@@ -39,7 +37,7 @@ describe("organization creation form", () => {
     expect(
       v.safeParse(schema, {
         name: "New firm",
-        slug: "a".repeat(ORGANIZATION_SLUG_MAX_LENGTH + 1),
+        slug: "a".repeat(ORGANIZATION_SLUG_RULES.maxLength + 1),
       }).success,
     ).toBe(false);
     expect(

@@ -137,7 +137,9 @@ describe("organization creation provider refusals", () => {
         },
         {
           database: fixture.database,
-          randomBytes: () => new Uint8Array(10).fill(entropy++),
+          fillRandom: (bytes) => {
+            bytes.fill(entropy++);
+          },
           createOrganization: async ({ body: { slug } }) => {
             attemptedSlugs.push(slug);
             if (attemptedSlugs.length === 1) {
@@ -182,7 +184,7 @@ describe("organization creation provider refusals", () => {
         },
         {
           database: fixture.database,
-          randomBytes: () =>
+          fillRandom: () =>
             panic("Explicit slugs must not consume random bytes"),
           createOrganization: async ({ body: { slug } }) => {
             attemptedSlugs.push(slug);

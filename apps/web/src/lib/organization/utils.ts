@@ -1,11 +1,8 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  ORGANIZATION_NAME_MAX_LENGTH,
-  ORGANIZATION_SLUG_MAX_LENGTH,
-  ORGANIZATION_SLUG_PATTERN,
-} from "@stll/api-contract/organization-create";
+import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
+import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
@@ -26,8 +23,11 @@ export const getOrganizationSchema = () => {
       v.optional(
         v.pipe(
           v.string(),
-          v.maxLength(ORGANIZATION_SLUG_MAX_LENGTH, t("validation.slugFormat")),
-          v.regex(ORGANIZATION_SLUG_PATTERN, t("validation.slugFormat")),
+          v.maxLength(
+            ORGANIZATION_SLUG_RULES.maxLength,
+            t("validation.slugFormat"),
+          ),
+          v.regex(ORGANIZATION_SLUG_RULES.pattern, t("validation.slugFormat")),
         ),
       ),
     ),

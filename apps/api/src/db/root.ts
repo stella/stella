@@ -5,11 +5,10 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import {
-  createOrganizationSlug,
   ORGANIZATION_EVALUATION_LIMIT,
   ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE,
-  ORGANIZATION_SLUG_RANDOM_BYTES,
 } from "@stll/api-contract/organization-create";
+import { createOpaqueOrganizationSlug } from "@stll/auth-model";
 import { classifyFailure, declareFailureClass } from "@stll/errors";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -475,7 +474,7 @@ export type CreateOrganizationOptions = {
 };
 
 export type OrganizationCreationDependencies = {
-  randomBytes?: () => Uint8Array;
+  fillRandom?: (bytes: Uint8Array) => void;
   database?: Pick<RootDatabase, "transaction">;
   createOrganization: (input: {
     transaction: Transaction;
@@ -489,7 +488,7 @@ export type OrganizationCreationDependencies = {
 };
 
 type OrganizationProviderDependencies = Required<
-  Pick<OrganizationCreationDependencies, "createOrganization" | "randomBytes">
+  Pick<OrganizationCreationDependencies, "createOrganization" | "fillRandom">
 > & { transaction: Transaction };
 
 const createWithAvailableSlug = async (
@@ -500,14 +499,14 @@ const createWithAvailableSlug = async (
   }: Pick<CreateOrganizationOptions, "userId" | "name" | "slug">,
   {
     createOrganization,
-    randomBytes,
+    fillRandom,
     transaction,
   }: OrganizationProviderDependencies,
 ) => {
   const created = await Result.tryPromise(
     {
       try: async () => {
-        const candidate = slug ?? createOrganizationSlug(randomBytes());
+        const candidate = slug ?? createOpaqueOrganizationSlug(fillRandom);
         return await withAggregateSavepoint(
           transaction,
           async (tx) =>
@@ -568,8 +567,9 @@ export const createOrganizationForAccount = async (
   {
     database = rootDb,
     createOrganization,
-    randomBytes = () =>
-      crypto.getRandomValues(new Uint8Array(ORGANIZATION_SLUG_RANDOM_BYTES)),
+    fillRandom = (bytes) => {
+      crypto.getRandomValues(bytes);
+    },
   }: OrganizationCreationDependencies,
 ) => {
   const fingerprint = fingerprintRequest({
@@ -662,7 +662,7 @@ export const createOrganizationForAccount = async (
         }
         const created = await createWithAvailableSlug(
           { userId, name, ...(slug === undefined ? {} : { slug }) },
-          { createOrganization, randomBytes, transaction: tx },
+          { createOrganization, fillRandom, transaction: tx },
         );
         if (created.isErr()) {
           return abortTransaction(created.error);
