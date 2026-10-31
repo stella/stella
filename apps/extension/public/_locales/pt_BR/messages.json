@@ -1,43 +1,9 @@
 {
-  "accessOff": {
-    "message": "O acesso a sites está desativado. Conceda-o uma vez para que a stella use os sites nos quais você já entrou."
-  },
-  "accessReady": {
-    "message": "Pronto. A stella pode usar uma guia dedicada enquanto você permanece conectado aos sites."
-  },
   "accessUpdateFailed": {
     "message": "O Chrome não conseguiu alterar o acesso a sites."
   },
-  "adoptTab": {
-    "message": "Usar esta aba com a stella"
-  },
   "adoptUnsupported": {
     "message": "Com a stella só é possível usar páginas HTTPS públicas."
-  },
-  "adoptedTab": {
-    "message": "A stella agora pode ler $ORIGIN$ nesta aba. Pergunte sobre ela no chat.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "checkingAccess": {
-    "message": "Verificando o acesso a sites…"
-  },
-  "connectTab": {
-    "message": "Conectar a guia atual da stella"
-  },
-  "controllerReady": {
-    "message": "Conectado a $ORIGIN$. Cada ação ainda precisa de aprovação na stella.",
-    "placeholders": {
-      "origin": {
-        "content": "$1"
-      }
-    }
-  },
-  "disconnectTab": {
-    "message": "Desconectar guia"
   },
   "downloadKept": {
     "message": "Downloads concluídos enquanto o stella controlava uma aba e mantidos: $COUNT$. Verifique a origem antes de abri-los.",
@@ -72,13 +38,68 @@
   "extensionName": {
     "message": "stella"
   },
-  "grantAccess": {
-    "message": "Permitir todos os sites"
+  "unsupportedTab": {
+    "message": "Abra uma guia do aplicativo stella e tente novamente."
+  },
+  "connectionPurpose": {
+    "message": "Quando você pedir no chat, a stella poderá abrir e ler sites em outra guia usando suas sessões iniciadas."
+  },
+  "statusConnected": {
+    "message": "Conectada a $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "statusNotConnected": {
+    "message": "Não conectada"
+  },
+  "statusWebsiteAccessNeeded": {
+    "message": "É necessário acessar sites"
+  },
+  "statusOpenStella": {
+    "message": "Abra a stella para conectar"
+  },
+  "statusTabHandedOver": {
+    "message": "Guia entregue à stella: $ORIGIN$",
+    "placeholders": {
+      "origin": {
+        "content": "$1"
+      }
+    }
+  },
+  "allowAndConnect": {
+    "message": "Permitir acesso e conectar"
+  },
+  "allowWebsiteAccess": {
+    "message": "Permitir acesso a sites"
+  },
+  "connectTab": {
+    "message": "Conectar esta guia da stella"
+  },
+  "adoptTab": {
+    "message": "Usar esta guia com a stella"
+  },
+  "disconnectTab": {
+    "message": "Desconectar"
+  },
+  "disconnectDescription": {
+    "message": "A stella deixa de usar a guia conectada."
   },
   "revokeAccess": {
     "message": "Remover acesso a sites"
   },
-  "unsupportedTab": {
-    "message": "Abra uma guia do aplicativo stella e tente novamente."
+  "revokeDescription": {
+    "message": "Remove a permissão para abrir e ler sites."
+  },
+  "checkingAccess": {
+    "message": "Verificando a conexão…"
+  },
+  "statusConnectedElsewhere": {
+    "message": "Outra aba do stella está conectada"
+  },
+  "connectTabInstead": {
+    "message": "Conectar esta aba do stella no lugar dela"
   }
 }

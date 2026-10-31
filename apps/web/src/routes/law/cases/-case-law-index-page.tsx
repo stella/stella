@@ -10,6 +10,7 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { isDecisionTypeKind } from "@stll/api-contract/case-law-decision-types";
 import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
@@ -88,6 +89,7 @@ import {
   decisionFilterFacets,
   useDecisionBrowseFacets,
 } from "@/features/case-law/decision-filter-facets";
+import { decisionTypeKindLabel } from "@/features/case-law/decision-filter-facets.logic";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import {
   decisionDateOrder,
@@ -166,14 +168,18 @@ const chipValue = (
   key: CaseLawFilterKey,
   value: string,
   format: ReturnType<typeof useFormatter>,
+  t: Parameters<typeof decisionTypeKindLabel>[1],
 ): string => {
   switch (key) {
     case "lang":
       return languageLabel(format, value);
     case "court":
     case "sourceId":
-    case "type":
       return value;
+    case "type":
+      return isDecisionTypeKind(value)
+        ? decisionTypeKindLabel(value, t)
+        : value;
     default:
       key satisfies never;
       return panic(`Unhandled case-law filter: ${String(key)}`);
@@ -634,7 +640,7 @@ export function PublicCaseLawIndex({
         key === "sourceId"
           ? (facets.source.find((bucket) => bucket.value === value)?.label ??
             value)
-          : chipValue(key, value, format),
+          : chipValue(key, value, format, t),
     });
   }
   // Enter on an identifier opens the decision when exactly one answers to it.
