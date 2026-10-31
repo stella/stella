@@ -7,6 +7,7 @@ import { safeDbFromScoped } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { HttpStatusResponse } from "@/api/http/status";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
@@ -94,7 +95,7 @@ const createVia = async (tenant: Tenant, body: CreateContactBody) => {
   );
 };
 
-const createdId = (result: unknown): string => {
+const createdId = (result: unknown): SafeId<"contact"> => {
   if (
     result instanceof Response ||
     result instanceof HttpStatusResponse ||
@@ -105,7 +106,7 @@ const createdId = (result: unknown): string => {
   ) {
     return panic("Contact create did not return a contact");
   }
-  return result.id;
+  return toSafeId<"contact">(result.id);
 };
 
 const tenants: Tenant[] = [];
