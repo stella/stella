@@ -297,8 +297,8 @@ const typeQuery = async (
   await testing.act(async () => {
     testing.fireEvent.input(input, { target: { value } });
     jest.advanceTimersByTime(301);
-    restoreRealTimers();
   });
+  restoreRealTimers();
   await testing.waitFor(() =>
     expect(testing.screen.getAllByText(expectedTitle).length).toBeGreaterThan(
       0,

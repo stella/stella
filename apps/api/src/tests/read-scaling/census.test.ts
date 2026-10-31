@@ -19,7 +19,10 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
-import { documentAnnotationScalingScenarios } from "./document-annotations";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
@@ -58,6 +61,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,

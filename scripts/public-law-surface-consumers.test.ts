@@ -102,6 +102,7 @@ const CONSUMERS = {
   "apps/api/src/handlers/legislation/search-schema.ts": "search",
   "apps/api/src/lib/legal-search/legislation-matter-link-provisions.ts":
     "search",
+  "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/lib/observability/data-invariants/catalog.ts": "search",
   "apps/web/src/lib/case-law-route.ts": "search",
