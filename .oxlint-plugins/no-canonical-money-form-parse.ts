@@ -3,7 +3,62 @@
 // aliases and values returned by other functions are outside its analysis.
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
-import { isIdentifierReference, resolveVariable } from "./utils.ts";
+import {
+  type AstNode,
+  everyNode,
+  getPropertyName,
+  isAstNode,
+  isIdentifier,
+  isIdentifierReference,
+  memberPropertyName,
+  resolveVariable,
+  unwrapExpression,
+} from "./utils.ts";
+
+const FORM_FIELD_OWNERS = new Set([
+  "currentTarget",
+  "dataset",
+  "state",
+  "target",
+]);
+const FORM_TEXT_NAMES = new Set(["amountInputValue", "draft", "input"]);
+
+/** The expression that carries the amount: its `amount` property, or the argument. */
+const amountExpression = (argument: unknown): unknown => {
+  const unwrapped = unwrapExpression(argument);
+  if (
+    unwrapped?.type !== "ObjectExpression" ||
+    !Array.isArray(unwrapped.properties)
+  ) {
+    return unwrapped;
+  }
+  const properties: unknown[] = unwrapped.properties;
+  return properties
+    .filter(isAstNode)
+    .find(
+      (property) =>
+        property.type === "Property" &&
+        getPropertyName(property.key) === "amount",
+    )?.value;
+};
+
+/** A read of a form field's value, or of a name that holds form text. */
+const isFormText = (node: AstNode): boolean => {
+  if (isIdentifier(node)) {
+    return FORM_TEXT_NAMES.has(node.name);
+  }
+  if (
+    node.type !== "MemberExpression" ||
+    memberPropertyName(node) !== "value"
+  ) {
+    return false;
+  }
+  const owner = unwrapExpression(node.object);
+  const ownerName = isIdentifier(owner)
+    ? owner.name
+    : memberPropertyName(owner);
+  return ownerName !== null && FORM_FIELD_OWNERS.has(ownerName);
+};
 
 export default eslintCompatPlugin({
   meta: { name: "no-canonical-money-form-parse" },
@@ -49,11 +104,8 @@ export default eslintCompatPlugin({
             if (binding === null || !canonicalBindings.has(binding)) {
               return;
             }
-            const text = context.sourceCode.getText(node.arguments.at(0));
             if (
-              /\b(?:currentTarget|target|state|dataset)\.value\b|\b(?:amountInputValue|draft|input)\b/u.test(
-                text,
-              )
+              everyNode(amountExpression(node.arguments.at(0))).some(isFormText)
             ) {
               context.report({ node, messageId: "localeParser" });
             }
