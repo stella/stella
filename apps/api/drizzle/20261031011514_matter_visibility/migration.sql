@@ -143,18 +143,18 @@ BEGIN
       )
     )
   ) w;
-  SELECT COALESCE(array_agg(DISTINCT m.id ORDER BY m.id), '{}'::text[]) INTO candidates
-  FROM public.member m
-  JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
-    ON r.organization_id = m.organization_id
-  WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
-    OR EXISTS (
-      SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
-        AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
-          SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
-        ))
-    );
   IF held IS NOT NULL THEN
+    SELECT COALESCE(array_agg(DISTINCT m.id ORDER BY m.id), '{}'::text[]) INTO candidates
+    FROM public.member m
+    JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
+      ON r.organization_id = m.organization_id
+    WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
+      OR EXISTS (
+        SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
+          AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
+            SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
+          ))
+      );
     IF (p_mode = 'update' AND held->>'mode' <> 'update')
       OR NOT (held->'workspaces' @> to_jsonb(targets))
       OR NOT (held->'members' @> to_jsonb(candidates)) THEN
@@ -171,13 +171,38 @@ BEGIN
   PERFORM pg_advisory_xact_lock(hashtext(target.id::text))
   FROM unnest(targets) AS target(id)
   ORDER BY target.id;
+  -- Lifecycle locks precede the locking discovery. A member removed while
+  -- the statement waits is omitted by PostgreSQL's current-row recheck.
   IF p_mode = 'update' THEN
-    SELECT COALESCE(array_agg(locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
-    FROM (SELECT m.id FROM public.member m WHERE m.id = ANY(candidates) ORDER BY m.id FOR NO KEY UPDATE) locked;
+    SELECT COALESCE(array_agg(DISTINCT locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
+    FROM (SELECT m.id
+      FROM public.member m
+      JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
+      ON r.organization_id = m.organization_id
+      WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
+      OR EXISTS (
+      SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
+      AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
+      SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
+      ))
+      )
+      ORDER BY m.id FOR NO KEY UPDATE OF m) locked;
   ELSE
-    SELECT COALESCE(array_agg(locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
-    FROM (SELECT m.id FROM public.member m WHERE m.id = ANY(candidates) ORDER BY m.id FOR SHARE) locked;
+    SELECT COALESCE(array_agg(DISTINCT locked.id ORDER BY locked.id), '{}'::text[]) INTO locked_candidates
+    FROM (SELECT m.id
+      FROM public.member m
+      JOIN jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], user_ids text[], membership_user_ids text[])
+      ON r.organization_id = m.organization_id
+      WHERE m.user_id = ANY(COALESCE(r.user_ids, '{}') || COALESCE(r.membership_user_ids, '{}'))
+      OR EXISTS (
+      SELECT 1 FROM public.workspaces w WHERE w.organization_id = r.organization_id
+      AND w.id = ANY(targets) AND (w.lead_user_id = m.user_id OR EXISTS (
+      SELECT 1 FROM public.workspace_members a WHERE a.workspace_id = w.id AND a.user_id = m.user_id
+      ))
+      )
+      ORDER BY m.id FOR SHARE OF m) locked;
   END IF;
+  candidates := locked_candidates;
   SELECT COALESCE(array_agg(DISTINCT w.id ORDER BY w.id), '{}'::uuid[]) INTO fresh_targets
   FROM jsonb_to_recordset(p_requests) AS r(organization_id text, workspace_ids uuid[], membership_user_ids text[])
   CROSS JOIN LATERAL (

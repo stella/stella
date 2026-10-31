@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract/error";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -21,7 +22,9 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { lockMatterStewardship } from "@/api/lib/db/aggregate-lock";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";
 import type { MemberAccessHold } from "@/api/lib/db/member-access-hold";
+import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { hasCurrentTimerMatterAccess } from "@/api/lib/time-entry-timer-access";
 import { executeAuthorizedWorkspaceDeletion } from "@/api/lib/workspace-deletion";
 import {
@@ -300,6 +303,74 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("member access hold (postgres)", () => {
+    test("scope growth aborts once without retaining its writes", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const seeded = await seedMember(db);
+        try {
+          const before = await db
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(eq(workspaces.id, seeded.workspaceId));
+          let attempts = 0;
+          const refused = await Result.tryPromise(
+            async () =>
+              await db.transaction(async (tx) => {
+                attempts += 1;
+                await lockMatterStewardship({
+                  tx,
+                  requests: [
+                    {
+                      organizationId: seeded.organizationId,
+                      workspaceIds: [],
+                      userIds: [seeded.userId],
+                    },
+                  ],
+                  mode: "update",
+                });
+                expect(
+                  await tx
+                    .update(workspaces)
+                    .set({ name: "Rolled back scope" })
+                    .where(eq(workspaces.id, seeded.workspaceId))
+                    .returning({ name: workspaces.name }),
+                ).toEqual([{ name: "Rolled back scope" }]);
+                await lockMatterStewardship({
+                  tx,
+                  requests: [
+                    {
+                      organizationId: seeded.organizationId,
+                      workspaceIds: [seeded.workspaceId],
+                      userIds: [seeded.userId],
+                    },
+                  ],
+                  mode: "update",
+                });
+              }),
+          );
+          expect(refused.isErr()).toBe(true);
+          if (refused.isErr()) {
+            expect(getPgErrorCode(refused.error)).toBe(
+              PG_ERROR.LOCK_NOT_AVAILABLE,
+            );
+            expect(resolveHandlerError(refused.error)).toMatchObject({
+              status: 409,
+              code: MEMBER_REMOVAL_BUSY_CODE,
+              retryable: true,
+            });
+          }
+          expect(attempts).toBe(1);
+          expect(
+            await db
+              .select({ name: workspaces.name })
+              .from(workspaces)
+              .where(eq(workspaces.id, seeded.workspaceId)),
+          ).toEqual(before);
+        } finally {
+          await seeded.cleanUp();
+        }
+      });
+    });
     describe.each(Object.entries(ACCESS_READERS))(
       "private matter %s access",
       (_reader, readAccess) => {
@@ -692,6 +763,17 @@ if (!databaseUrl || !runPostgresTests) {
           let attempts = 0;
           try {
             const holding = holdingDb.transaction(async (tx) => {
+              await lockMatterStewardship({
+                tx,
+                requests: [
+                  {
+                    organizationId: seeded.organizationId,
+                    workspaceIds: [seeded.workspaceId],
+                    userIds: [seeded.userId],
+                  },
+                ],
+                mode: "share",
+              });
               await tx
                 .select({ id: member.id })
                 .from(member)
