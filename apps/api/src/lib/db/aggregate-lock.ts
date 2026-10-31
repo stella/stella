@@ -3382,22 +3382,31 @@ export const readLockedLegalHolds = async ({
 export const lockLegalHoldOrganizations = async ({
   tx,
   predicate,
+  mode = "update",
 }: {
   tx: Transaction;
   predicate: SQL;
+  mode?: RowLockMode;
 }) => {
   const rows = await tx
     .select({ id: organization.id })
     .from(organization)
     .where(predicate);
-  const locked = await withAggregateParentBatch({
-    tx,
-    organizationIds: rows.map(({ id }) => brandPersistedOrganizationId(id)),
-    mode: "update",
-  });
-  return rows.filter(({ id }) =>
-    locked.organizationIds.has(brandPersistedOrganizationId(id)),
-  );
+  for (const { id } of rows.toSorted(({ id: a }, { id: b }) =>
+    compareCodeUnit(a, b),
+  )) {
+    // db-await-in-loop: legal-hold fences acquire in organization ID order.
+    if (mode === "share") {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock_shared(19054, hashtext(${id}))`,
+      );
+    } else {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(19054, hashtext(${id}))`,
+      );
+    }
+  }
+  return rows;
 };
 
 /** In-flight upload cancellation keeps content belonging to held matters. */

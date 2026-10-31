@@ -40,7 +40,10 @@ import {
 } from "@/api/lib/files/utils";
 import { collectFolioCollabStoredRoomFiles } from "@/api/lib/folio-collab-rooms";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
-import { requireNoHold } from "@/api/lib/legal-holds/holds";
+import {
+  lockLegalHoldOrganization,
+  requireNoHold,
+} from "@/api/lib/legal-holds/holds";
 import { legalHoldRefusal } from "@/api/lib/legal-holds/refusal";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -85,6 +88,12 @@ export const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
+      await lockLegalHoldOrganization({
+        tx,
+        organizationId,
+        mode: "share",
+      });
+      await lockWorkspaceLifecycle(tx, workspaceId);
       const deletionEntities = await tx
         .select({ id: entities.id })
         .from(entities)
@@ -114,7 +123,6 @@ export const deleteEntitiesHandler = async function* ({
       if (entityHolds.isErr()) {
         return { status: "rejected" as const, error: entityHolds.error };
       }
-      await lockWorkspaceLifecycle(tx, workspaceId);
       await withAggregateParentBatch({
         tx,
         organizationIds: [],

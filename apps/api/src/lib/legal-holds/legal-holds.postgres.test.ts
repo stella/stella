@@ -17,6 +17,7 @@ import {
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
 import { deleteEntitiesHandler } from "@/api/handlers/entities/delete";
+import { moveEntities } from "@/api/handlers/entities/move";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -26,6 +27,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { withInterleaving } from "@/api/tests/helpers/transaction-interleaving";
 
 import { holdsBlocking, requireNoHold } from "./holds";
 import { placeLegalHold, releaseLegalHold } from "./lifecycle";
@@ -472,6 +474,149 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           await db
             .delete(organization)
             .where(eq(organization.id, otherOrganizationId));
+          await db.delete(user).where(eq(user.id, userId));
+        }
+      });
+    });
+
+    test("moving a held item into a concurrently deleted folder cannot bypass the hold", async () => {
+      if (!databaseUrl) {
+        throw new TypeError("DATABASE_URL is required for Postgres tests");
+      }
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const { db } = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const userId = mintAuthProviderId<"user">();
+        const workspaceId = createSafeId<"workspace">();
+        const folderId = createSafeId<"entity">();
+        const heldEntityId = createSafeId<"entity">();
+        const holdId = createSafeId<"legalHold">();
+        const recordAuditEvent = createAuditRecorder({
+          organizationId,
+          workspaceId,
+          userId,
+          request: new Request("http://localhost/legal-holds/concurrency"),
+          server: null,
+        });
+        let deletionCode: string | undefined;
+        try {
+          await db.insert(user).values({
+            id: userId,
+            name: "Concurrent hold owner",
+            email: `${userId}@hold.test`,
+          });
+          await db.insert(organization).values({
+            id: organizationId,
+            name: "Concurrent hold organization",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId,
+            userId,
+            role: "owner",
+            createdAt: new Date(),
+          });
+          await db.insert(workspaces).values({
+            id: workspaceId,
+            organizationId,
+            name: "Concurrent hold matter",
+            reference: "HOLD-CONCURRENT",
+          });
+          await db.insert(entities).values([
+            {
+              id: folderId,
+              workspaceId,
+              kind: "folder",
+              name: "Deletion target",
+            },
+            {
+              id: heldEntityId,
+              workspaceId,
+              name: "Held evidence",
+            },
+          ]);
+          await db.insert(legalHolds).values({
+            id: holdId,
+            organizationId,
+            scopeType: "entity",
+            entityId: heldEntityId,
+            reason: "Retain during folder move",
+            placedBy: userId,
+          });
+
+          await withInterleaving({
+            databaseUrl,
+            schedules: [["b.move", "a.delete", "b.commit", "a.commit"]],
+            a: {
+              steps: [
+                {
+                  name: "delete",
+                  run: async (tx) => {
+                    const deletion = await Result.gen(() =>
+                      deleteEntitiesHandler({
+                        safeDb: async (run) =>
+                          await Result.tryPromise(async () => await run(tx)),
+                        organizationId,
+                        workspaceId,
+                        recordAuditEvent,
+                        body: { entityIds: [folderId] },
+                      }),
+                    );
+                    const resolved = deletion.isErr()
+                      ? resolveHandlerError(deletion.error)
+                      : null;
+                    deletionCode = resolved?.code;
+                  },
+                },
+              ],
+            },
+            b: {
+              steps: [
+                {
+                  name: "move",
+                  run: async (tx) => {
+                    const moved = await moveEntities({
+                      tx,
+                      workspaceId,
+                      entityIds: [heldEntityId],
+                      parentId: folderId,
+                      recordAuditEvent,
+                    });
+                    expect(moved.isOk()).toBe(true);
+                  },
+                },
+              ],
+            },
+            reset: async () => {
+              deletionCode = undefined;
+              await db
+                .update(entities)
+                .set({ parentId: null })
+                .where(eq(entities.id, heldEntityId));
+            },
+            readState: async () =>
+              await db
+                .select({ id: entities.id, parentId: entities.parentId })
+                .from(entities)
+                .where(inArray(entities.id, [folderId, heldEntityId])),
+            invariant: ({ outcomes, state }) => {
+              expect(outcomes.a.status).toBe("committed");
+              expect(outcomes.b.status).toBe("committed");
+              expect(deletionCode).toBe(LEGAL_HOLD_ACTIVE);
+              expect(state).toEqual(
+                expect.arrayContaining([
+                  expect.objectContaining({ id: folderId }),
+                  { id: heldEntityId, parentId: folderId },
+                ]),
+              );
+            },
+          });
+        } finally {
+          await db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
           await db.delete(user).where(eq(user.id, userId));
         }
       });

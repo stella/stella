@@ -56,13 +56,16 @@ export type HoldTarget =
 export const lockLegalHoldOrganization = async ({
   tx,
   organizationId,
+  mode = "update",
 }: {
   tx: Transaction;
   organizationId: SafeId<"organization">;
+  mode?: "share" | "update";
 }) => {
   await lockLegalHoldOrganizations({
     tx,
     predicate: eq(organization.id, organizationId),
+    mode,
   });
 };
 
@@ -165,7 +168,7 @@ export const holdsBlocking = async ({
 }: HoldOptions): Promise<
   { type: "clear" } | { type: "held"; holds: HoldSummary[] }
 > => {
-  await lockLegalHoldOrganization({ tx, organizationId });
+  await lockLegalHoldOrganization({ tx, organizationId, mode: "share" });
   const rows = await readLockedLegalHolds({
     tx,
     predicate:
@@ -213,18 +216,16 @@ export const requireNoHold = async (
   options: HoldOptions,
 ): Promise<Result<void, LegalHoldActiveError>> => {
   const outcome = await holdsBlocking(options);
-  switch (outcome.type) {
-    case "clear":
-      return Result.ok();
-    case "held":
-      return Result.err(
-        new LegalHoldActiveError({
-          code: LEGAL_HOLD_ACTIVE,
-          message: "An active legal hold prevents deletion.",
-          holds: outcome.holds,
-        }),
-      );
+  if (outcome.type === "clear") {
+    return Result.ok();
   }
+  return Result.err(
+    new LegalHoldActiveError({
+      code: LEGAL_HOLD_ACTIVE,
+      message: "An active legal hold prevents deletion.",
+      holds: outcome.holds,
+    }),
+  );
 };
 
 export const heldMatterIdsForAccount = async ({
