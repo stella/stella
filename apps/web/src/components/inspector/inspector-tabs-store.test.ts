@@ -193,6 +193,8 @@ const installFakeBroadcastChannel = () => {
     configurable: true,
     value: {
       BroadcastChannel: FakeBroadcastChannel,
+      setTimeout: globalThis.setTimeout,
+      clearTimeout: globalThis.clearTimeout,
       localStorage: new MemoryStorage(),
       sessionStorage: new MemoryStorage(),
     },

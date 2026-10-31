@@ -160,7 +160,7 @@
     "reasons": ["Support non-trivial for..of inits"]
   },
   "apps/web/src/features/chat/hooks/use-chat-session.ts::useChatSession": {
-    "memos": 34,
+    "memos": 36,
     "reasons": [
       "(BuildHIR::lowerExpression) Handle Import expressions",
       "Cannot access refs during render"
@@ -201,10 +201,6 @@
   "apps/web/src/routes/-protected-app.tsx::ProtectedAppFrame": {
     "memos": 1,
     "reasons": ["(BuildHIR::lowerExpression) Handle Import expressions"]
-  },
-  "apps/web/src/routes/-protected-app.tsx::ProtectedContent": {
-    "memos": 0,
-    "reasons": ["Cannot access refs during render"]
   },
   "apps/web/src/routes/_protected.chat/index.tsx::ChatIndex": {
     "memos": 4,
