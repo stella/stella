@@ -35,7 +35,11 @@ import {
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { notificationsOptions } from "@/lib/notification-queries";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { searchInfiniteOptions, searchPreviewOptions } from "@/lib/search";
+import {
+  searchFacetOptions,
+  searchInfiniteOptions,
+  searchPreviewOptions,
+} from "@/lib/search";
 import { usageLaneOptions } from "@/lib/usage-queries";
 import {
   DEFAULT_MATTER_ACTIVITY_FILTERS,
@@ -124,6 +128,18 @@ const OAUTH_REDIRECT = "an OAuth redirect, not cached";
 const OWN_EDIT_SESSION = "marks the caller's own open edit session";
 const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 const READ_FRESH = "read fresh at each use, never cached";
+
+const SEARCH_PROBE = {
+  editedByUserIds: [],
+  enabled: true,
+  kinds: [],
+  mimeTypes: [],
+  organizationId: ORG,
+  query: "query",
+  types: [],
+  userId: USER,
+  workspaceIds: [],
+};
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
@@ -601,24 +617,23 @@ const PER_USER_READS: Record<string, PerUserRead> = {
       }).queryKey,
     ],
   },
+  // Facet buckets count only the matters and result types the caller may see.
+  "search/facets/list.ts": {
+    kind: "keyed",
+    calls: ["api.search.facets.post"],
+    files: ["lib/search.ts"],
+    opaqueKeys: { "searchKeys.facet(params)": KEY_TYPE_HAS_USER },
+    keys: () => [
+      searchFacetOptions({ ...SEARCH_PROBE, facet: "workspace", search: "" })
+        .queryKey,
+    ],
+  },
   "search/results/list.ts": {
     kind: "keyed",
     calls: ["api.search.post"],
     files: ["lib/search.ts"],
     opaqueKeys: { "searchKeys.query(params)": KEY_TYPE_HAS_USER },
-    keys: () => [
-      searchInfiniteOptions({
-        editedByUserIds: [],
-        enabled: true,
-        kinds: [],
-        mimeTypes: [],
-        organizationId: ORG,
-        query: "query",
-        types: [],
-        userId: USER,
-        workspaceIds: [],
-      }).queryKey,
-    ],
+    keys: () => [searchInfiniteOptions(SEARCH_PROBE).queryKey],
   },
   "sharepoint/list-drive-root.ts": {
     kind: "no-web-caller",
