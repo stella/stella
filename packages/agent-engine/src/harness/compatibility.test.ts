@@ -22,12 +22,14 @@ const DESKTOP_VERSION = "0.0.1";
  * version. The policy must support and recommend each pinned release, so a
  * pin bump or a policy edit cannot leave the installed CLI refused.
  */
-const DESKTOP_DIR = path.join(import.meta.dir, "../../../../apps/desktop");
 const MANAGED_RELEASES_PATH = path.join(
-  DESKTOP_DIR,
-  "src-tauri/harness/releases.gen.json",
+  import.meta.dir,
+  "../../../../apps/desktop/src-tauri/harness/releases.gen.json",
 );
-const DESKTOP_PACKAGE_PATH = path.join(DESKTOP_DIR, "package.json");
+const DESKTOP_PACKAGE_PATH = path.join(
+  import.meta.dir,
+  "../../../../apps/desktop/package.json",
+);
 const ManagedReleasesSchema = v.object({
   harnesses: v.record(v.string(), v.object({ version: v.string() })),
 });
