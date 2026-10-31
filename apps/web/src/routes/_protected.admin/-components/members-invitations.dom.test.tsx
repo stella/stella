@@ -68,7 +68,9 @@ test("only open invitations count as pending; history excludes accepted and lets
           <MembersInvitations
             invitations={invitations}
             now={NOW}
-            onResend={(invitation) => resent.push(invitation)}
+            onResend={(invitation) => {
+              resent.push(invitation);
+            }}
             onCancel={() => {}}
             resendPending={false}
             cancelPending={false}

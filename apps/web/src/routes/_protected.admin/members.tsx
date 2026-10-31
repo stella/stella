@@ -286,13 +286,15 @@ function Members() {
           inviteMember.mutate(
             { email: invitation.email, role: invitation.role, resend: true },
             {
-              onSuccess: () =>
+              onSuccess: () => {
                 stellaToast.add({
                   title: t("success.invitationResent"),
                   type: "success",
-                }),
-              onError: (error) =>
-                notifyUserError(error, t("errors.actionFailed")),
+                });
+              },
+              onError: (error) => {
+                notifyUserError(error, t("errors.actionFailed"));
+              },
             },
           )
         }
