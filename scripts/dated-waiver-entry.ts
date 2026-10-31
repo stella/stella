@@ -3,7 +3,10 @@ import { panic } from "better-result";
 import { compareCodeUnit } from "@stll/collation";
 
 import {
+  type BindingPattern,
+  type BindingRestElement,
   type Expression,
+  type FormalParameterRest,
   type Node,
   type ParsedSource,
   parseSource,
@@ -57,7 +60,9 @@ const declarationsIn = (ast: ParsedSource) => {
 // every entry that consumes it, without treating sibling insertions as edits.
 const AST_METADATA = new Set(["start", "end", "loc", "range", "raw"]);
 
-const bindingNames = (node: Node): string[] => {
+const bindingNames = (
+  node: BindingPattern | BindingRestElement | FormalParameterRest,
+): string[] => {
   switch (node.type) {
     case "Identifier":
       return [node.name];
@@ -74,7 +79,8 @@ const bindingNames = (node: Node): string[] => {
     case "RestElement":
       return bindingNames(node.argument);
     default:
-      return [];
+      node satisfies never;
+      return panic("Unknown binding pattern");
   }
 };
 
@@ -87,7 +93,13 @@ const localBindingsIn = (ast: ParsedSource) => {
       node.type === "FunctionDeclaration"
     ) {
       bindings.set(node, [
-        ...node.params.flatMap(bindingNames),
+        ...node.params.flatMap((parameter) =>
+          bindingNames(
+            parameter.type === "TSParameterProperty"
+              ? parameter.parameter
+              : parameter,
+          ),
+        ),
         ...(node.type !== "ArrowFunctionExpression" && node.id
           ? [node.id.name]
           : []),
