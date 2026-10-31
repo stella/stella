@@ -14,8 +14,8 @@ import {
   DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
 } from "@/api/lib/data-export/manifest-values";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
 
 /** Stable naming order shared by planning and packing. */
 export const compareArchiveNames = (

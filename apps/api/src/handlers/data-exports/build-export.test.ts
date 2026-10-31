@@ -39,7 +39,7 @@ import {
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
   dataExportArchivePathSchema,
 } from "@/api/lib/data-export/manifest-values";
-import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
 const CREATED_AT = new Date("2026-10-01T08:00:00.000Z");
 const encoder = new TextEncoder();

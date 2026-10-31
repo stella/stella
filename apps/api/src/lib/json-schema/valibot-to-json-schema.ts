@@ -133,7 +133,9 @@ const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
 
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
-export type JsonSchema = ValibotJsonSchema & Utf8ByteBoundsKeywords;
+type ApiJsonSchema = ValibotJsonSchema & Utf8ByteBoundsKeywords;
+
+export type { JsonSchema } from "@valibot/to-json-schema";
 
 /** A valibot schema: route and tool schemas reach shared code as `unknown`. */
 export const isValibotSchema = (value: unknown): value is GenericSchema =>
@@ -143,7 +145,7 @@ export const isValibotSchema = (value: unknown): value is GenericSchema =>
   value["~standard"]["vendor"] === "valibot";
 
 /** A schema node where JSON Schema allows `true`/`false` in place of one. */
-export type JsonSchemaDefinition = JsonSchema | boolean;
+export type JsonSchemaDefinition = ValibotJsonSchema | boolean;
 
 /**
  * The only sanctioned Valibot to JSON Schema conversion in the API; a lint
@@ -152,7 +154,7 @@ export type JsonSchemaDefinition = JsonSchema | boolean;
 export const toJsonSchema = (
   schema: GenericSchema,
   config?: ValibotJsonSchemaConfig,
-): JsonSchema =>
+): ApiJsonSchema =>
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
@@ -250,8 +252,8 @@ const typedLiteral: NonNullable<ConversionConfig["overrideSchema"]> = ({
 
 /** An object with no required property says nothing by listing none. */
 const withoutEmptyRequired = (
-  jsonSchema: JsonSchema,
-): JsonSchema | undefined => {
+  jsonSchema: ApiJsonSchema,
+): ApiJsonSchema | undefined => {
   if (!isUnknownArray(jsonSchema.required) || jsonSchema.required.length > 0) {
     return undefined;
   }
@@ -286,7 +288,7 @@ const jsonScalars = (value: unknown): JsonScalar | JsonScalar[] | undefined => {
  * route's `x-` extension keywords are kept. Every bound the rendering shows is
  * one the route enforces.
  */
-export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
+export const toRouteJsonSchema = (schema: GenericSchema): ApiJsonSchema =>
   convertToJsonSchema(schema, {
     errorMode: "ignore",
     overrideSchema: (context) => {

@@ -6,7 +6,7 @@ import { safeIdSchema } from "@stll/api-contract/safe-id";
 import { UUID_PATTERN } from "@stll/uuid-codec";
 
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
-import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
 type Utf8ByteBounds = { maxBytes: number; maxSegmentBytes?: number };
 

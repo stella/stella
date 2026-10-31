@@ -18,7 +18,7 @@ import {
   DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
   DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES as MAX_SEGMENT_BYTES,
 } from "@/api/lib/data-export/manifest-values";
-import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
+import { utf8ByteLength } from "@/api/lib/json-schema/utf8-byte-length";
 
 // ICU collation checks the fixture equivalence independently of the allocation key.
 const filesystemNames = new Intl.Collator("cs", {

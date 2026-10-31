@@ -906,7 +906,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/data-export/problem-schema.ts",
       "apps/api/src/lib/data-export/version-scope.ts",
       "apps/api/src/lib/custom-schema.ts",
-      "apps/api/src/lib/utf8-byte-length.ts",
+      "apps/api/src/lib/json-schema/utf8-byte-length.ts",
       "apps/api/src/lib/type-guards.ts",
       "apps/api/src/lib/json-schema/valibot-to-json-schema.ts",
       "packages/api-contract/src/**",
