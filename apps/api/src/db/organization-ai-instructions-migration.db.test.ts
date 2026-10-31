@@ -26,8 +26,8 @@ test("organization instructions expand existing settings and validate their boun
       )
     ).rows,
   ).toEqual([{ ai_instructions: "" }, { ai_instructions: "" }]);
-  const constraintState = () =>
-    database.query<{ convalidated: boolean }>(
+  const constraintState = async () =>
+    await database.query<{ convalidated: boolean }>(
       "SELECT convalidated FROM pg_constraint WHERE conname = 'organization_settings_ai_instructions_length_check'",
     );
   expect((await constraintState()).rows).toEqual([{ convalidated: false }]);

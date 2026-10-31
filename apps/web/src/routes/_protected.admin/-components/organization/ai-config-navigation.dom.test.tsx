@@ -7,6 +7,7 @@ import {
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
 } from "@stll/ai-catalog";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
@@ -26,7 +27,12 @@ Object.assign(document, {
   queryCommandValue: () => "",
 });
 const originalFetch = globalThis.fetch;
-const requests: { method: string; url: string; body: string }[] = [];
+const requests: {
+  method: string;
+  url: string;
+  body: string;
+  headers: Headers;
+}[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
 let previewBarrier: Promise<void> | undefined;
@@ -166,7 +172,14 @@ globalThis.fetch = Object.assign(
         })),
       });
     }
-    requests.push({ method, url, body });
+    requests.push({
+      method,
+      url,
+      body,
+      headers: new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      ),
+    });
     if (pathname.endsWith("/auth/get-session")) {
       return Response.json({
         session: { userId: "user", activeOrganizationId: sessionOrganization },
@@ -504,6 +517,30 @@ test("organization instruction edits block navigation before the editor debounce
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/admin");
   expect(writes()).toEqual([]);
+});
+
+test("clearing organization instructions declares its capability and submit identity", async () => {
+  organizationSettings = {
+    ...organizationSettings,
+    aiInstructions: "Řiďte se českým právem.",
+  };
+  await mount();
+  const controls = settingsSectionQueries(
+    messages.organization.aiInstructions.title,
+  );
+  fireEvent.click(
+    controls.getByRole("button", { name: messages.common.remove }),
+  );
+  fireEvent.click(controls.getByRole("button", { name: messages.common.save }));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  const write =
+    writes().at(0) ?? panic("Instruction save did not send a request");
+  expect(JSON.parse(write.body)).toEqual({ aiInstructions: "" });
+  expect(write.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
+    "organization-settings.update",
+  );
+  expect(write.headers.get("Idempotency-Key")).toBeTruthy();
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
 });
 
 test("instruction refetches preserve drafts and compare edits with the latest saved instructions", async () => {

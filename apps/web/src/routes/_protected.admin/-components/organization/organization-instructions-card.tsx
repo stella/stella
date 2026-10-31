@@ -14,6 +14,7 @@ import { useUnsavedWork } from "@/hooks/use-unsaved-work";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { queryView } from "@/lib/query-view.logic";
 import {
@@ -87,9 +88,17 @@ const OrganizationInstructionsEditor = ({
       type: "handler",
       handlerId: "OrganizationInstructionsEditor.save",
     },
-    mutationFn: async (aiInstructions: string) =>
-      unwrapApiResponse(
-        await api["organization-settings"].post({ aiInstructions }),
+    mutationFn: async (aiInstructions: string, intentRequest) =>
+      await invokeCapability("organization-settings.update", async (request) =>
+        unwrapApiResponse(
+          await api["organization-settings"].post(
+            { aiInstructions },
+            {
+              ...request,
+              fetch: { headers: intentRequest.headers },
+            },
+          ),
+        ),
       ),
     invalidate: organizationSettingsKeys.all,
     successToast: { title: t("common.saved") },

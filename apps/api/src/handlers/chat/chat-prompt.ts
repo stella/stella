@@ -998,28 +998,23 @@ export const buildChatSystemPromptParts = async ({
     // third-party PII.
     const documentedChatReads =
       activeSkillContext === null ? [] : activeSkillContext.documentedChatReads;
+    const sharedPromptProps = {
+      featureAccessContext,
+      documentedChatReads,
+      organizationAIInstructions,
+      practiceJurisdictions,
+      skillMetadata: promptSkillMetadata,
+      toolAvailability,
+      userContext: userContext ?? null,
+    };
     const safeParts =
       workspaceId === null
-        ? buildGlobalPromptParts({
-            featureAccessContext,
-            documentedChatReads,
-            organizationAIInstructions,
-            practiceJurisdictions,
-            skillMetadata: promptSkillMetadata,
-            toolAvailability,
-            userContext: userContext ?? null,
-          })
+        ? buildGlobalPromptParts(sharedPromptProps)
         : yield* Result.await(
             buildWorkspacePromptPartsFromDb({
-              featureAccessContext,
-              documentedChatReads,
-              organizationAIInstructions,
-              practiceJurisdictions,
+              ...sharedPromptProps,
               refRegistry,
               safeDb,
-              skillMetadata: promptSkillMetadata,
-              toolAvailability,
-              userContext: userContext ?? null,
               workspaceId,
             }),
           );
