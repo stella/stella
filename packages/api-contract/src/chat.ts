@@ -1,5 +1,6 @@
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { BrowserExtensionStatus } from "./browser-control";
 import type { SafeId } from "./safe-id";
 
 export type ChatTurnTiming =
@@ -281,11 +282,14 @@ type ChatSendRequestBase = {
     templateId: SafeId<"template">;
   };
   /**
-   * The extension protocol the client speaks. Any version is accepted so a
-   * stale tab can still chat; the server offers the browser tool only when it
-   * matches its own `BROWSER_CONTROL_PROTOCOL_VERSION`.
+   * Any positive integer protocol version is accepted so a stale tab can still
+   * chat; the server offers the browser tool only for its own
+   * `BROWSER_CONTROL_PROTOCOL_VERSION`. Status must be known.
    */
-  browserClient?: { protocolVersion: number };
+  browserExtension?: {
+    protocolVersion: number;
+    status: BrowserExtensionStatus;
+  };
   contextMatterIds?: SafeId<"workspace">[];
   devModelId?: string;
   docxEditRepresentation?: "tracked-changes" | "direct";

@@ -56,6 +56,7 @@ const GENERATED_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  "20261030193033_database_temporary_owner_only/migration.sql:82d31d5f5d5854ee07c1f5f30649257c039f4f42fa34cb286b70d2d3d5f89932",
   // Installs the stored-key organization guard function and trigger without
   // dynamic SQL or timeout changes.
   "20261020000100_stored_keys_organization_scope/migration.sql:a8f5e5afd839562bffe89b8c47b72fa43ccc40ef80a824bf3279151ed3e1dcb5",

@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import {
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_EXTENSION_STATUS,
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_RICH_PART_LIMITS,
   CHAT_TURN_INTENT,
@@ -49,7 +50,7 @@ import {
   activeTemplateSchema,
   agUiSendMessageBodySchema,
   parseMessage,
-  resolveBrowserClientCapability,
+  resolveBrowserExtensionCapability,
   resolveEditedUserMessageId,
   sendMessageBodySchema,
   validateMessage as validateMessageWithPersistence,
@@ -503,19 +504,33 @@ describe("browser client capability", () => {
     },
   };
 
-  test("a tab on another extension protocol can still send", () => {
-    for (const protocolVersion of [
-      BROWSER_CONTROL_PROTOCOL_VERSION,
-      BROWSER_CONTROL_PROTOCOL_VERSION - 1,
-      BROWSER_CONTROL_PROTOCOL_VERSION + 1,
-    ]) {
+  test("accepts every known status on the current protocol", () => {
+    for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
       expect(
         v.is(sendMessageBodySchema, {
           ...request,
-          browserClient: { protocolVersion },
+          browserExtension: {
+            protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+            status,
+          },
         }),
       ).toBe(true);
     }
+  });
+
+  test.each([
+    BROWSER_CONTROL_PROTOCOL_VERSION - 1,
+    BROWSER_CONTROL_PROTOCOL_VERSION + 1,
+  ])("accepts protocol version %s so chat can continue", (protocolVersion) => {
+    const parsed = v.parse(sendMessageBodySchema, {
+      ...request,
+      browserExtension: { protocolVersion, status: "connected" },
+    });
+    expect(parsed.browserExtension).toEqual({
+      protocolVersion,
+      status: "connected",
+    });
+    expect(parsed.runId).toBe(request.runId);
   });
 
   test("rejects a malformed browser capability", () => {
@@ -523,38 +538,44 @@ describe("browser client capability", () => {
       expect(
         v.is(sendMessageBodySchema, {
           ...request,
-          browserClient: { protocolVersion },
+          browserExtension: { protocolVersion, status: "connected" },
         }),
       ).toBe(false);
     }
     expect(
       v.is(sendMessageBodySchema, {
         ...request,
-        browserClient: {
+        browserExtension: {
           protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "future-status",
+        },
+      }),
+    ).toBe(false);
+    expect(
+      v.is(sendMessageBodySchema, {
+        ...request,
+        browserExtension: {
+          protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+          status: "connected",
           arbitraryJavaScript: true,
         },
       }),
     ).toBe(false);
   });
 
-  test("offers the browser tool only to the current extension protocol", () => {
+  test("resolves the typed extension state and defaults non-web clients", () => {
     expect(
-      resolveBrowserClientCapability({
+      resolveBrowserExtensionCapability({
         protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+        status: "connected",
       }),
-    ).toEqual({ protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION });
-    expect(
-      resolveBrowserClientCapability({
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION - 1,
-      }),
-    ).toBeUndefined();
-    expect(
-      resolveBrowserClientCapability({
-        protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION + 1,
-      }),
-    ).toBeUndefined();
-    expect(resolveBrowserClientCapability(undefined)).toBeUndefined();
+    ).toEqual({
+      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+      status: "connected",
+    });
+    expect(resolveBrowserExtensionCapability(undefined).status).toBe(
+      "unsupported-browser",
+    );
   });
 });
 
