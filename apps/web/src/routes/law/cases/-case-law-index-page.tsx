@@ -10,6 +10,7 @@ import { panic } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { isDecisionTypeKind } from "@stll/api-contract/case-law-decision-types";
 import { namedDecisionsOf } from "@stll/api-contract/decision-query-intent";
 import { SEARCH_QUERY_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
@@ -88,6 +89,7 @@ import {
   decisionFilterFacets,
   useDecisionBrowseFacets,
 } from "@/features/case-law/decision-filter-facets";
+import { decisionTypeKindLabel } from "@/features/case-law/decision-filter-facets.logic";
 import type { DecisionFilterFacets } from "@/features/case-law/decision-filter-facets.logic";
 import {
   decisionDateOrder,
@@ -104,6 +106,7 @@ import {
   usePrefetchedDecisionPage,
 } from "@/features/case-law/queries/decisions";
 import type { CaseLawBrowseFacets } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import {
   QuestionColumnControls,
   useQuestionColumns,
@@ -114,7 +117,6 @@ import { useDecisionFind } from "@/features/case-law/use-decision-find";
 import { useExpandedDecisionFilters } from "@/features/case-law/use-expanded-decision-filters";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getMessageLocale } from "@/i18n/i18n-store";
-import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import {
   searchTiming,
@@ -166,14 +168,18 @@ const chipValue = (
   key: CaseLawFilterKey,
   value: string,
   format: ReturnType<typeof useFormatter>,
+  t: Parameters<typeof decisionTypeKindLabel>[1],
 ): string => {
   switch (key) {
     case "lang":
       return languageLabel(format, value);
     case "court":
     case "sourceId":
-    case "type":
       return value;
+    case "type":
+      return isDecisionTypeKind(value)
+        ? decisionTypeKindLabel(value, t)
+        : value;
     default:
       key satisfies never;
       return panic(`Unhandled case-law filter: ${String(key)}`);
@@ -233,7 +239,7 @@ export function PublicCaseLawIndex({
   const t = useTranslations();
   const format = useFormatter();
   const queryClient = useQueryClient();
-  const uiLocale = useMessageLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const search = Route.useSearch({
     select: ({
       country,
@@ -338,12 +344,17 @@ export function PublicCaseLawIndex({
   // search required. On the first page it is the page on screen as well, and
   // the two reads are one query.
   const firstPageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: 1, pageSize }),
+    ...decisionsPageOptions({ filters, page: 1, pageSize, readingLanguages }),
     // The count and the facets stay drawn while a new search is in flight.
     placeholderData: keepPreviousData,
   });
   const pageQuery = useQuery({
-    ...decisionsPageOptions({ filters, page: wantedPage, pageSize }),
+    ...decisionsPageOptions({
+      filters,
+      page: wantedPage,
+      pageSize,
+      readingLanguages,
+    }),
     // The rows on screen stay while another page or another search arrives,
     // so a step never blanks the table.
     placeholderData: keepPreviousData,
@@ -418,6 +429,7 @@ export function PublicCaseLawIndex({
     filters,
     page: rows === "rows" ? pager.nextPage : null,
     pageSize,
+    readingLanguages,
   });
   // Keep the pager reachable for another keyboard step after the rows change.
   const requestPage = usePublicLawPageArrival({
@@ -634,7 +646,7 @@ export function PublicCaseLawIndex({
         key === "sourceId"
           ? (facets.source.find((bucket) => bucket.value === value)?.label ??
             value)
-          : chipValue(key, value, format),
+          : chipValue(key, value, format, t),
     });
   }
   // Enter on an identifier opens the decision when exactly one answers to it.
@@ -653,7 +665,7 @@ export function PublicCaseLawIndex({
         navigate: routerNavigate,
         queryClient,
         search: { ...scopedSearch, q: entry },
-        uiLocale,
+        readingLanguages,
       }),
       "cases.open-match",
     );
