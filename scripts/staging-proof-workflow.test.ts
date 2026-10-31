@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { compareCodeUnit } from "../packages/collation/src/collation";
 import { isPathInside } from "../packages/portable-path/src/index";
 import { evaluate } from "./github-expression";
 
@@ -446,9 +447,12 @@ test("mock-model journeys run alongside promotion for the same eligible commit w
   expect(journeys["environment"]).toBeUndefined();
   const serialized = JSON.stringify(journeys);
   const secrets = [...serialized.matchAll(/secrets\.([A-Z_]+)/gu)].map(
-    (match) => match[1],
+    (match) => match[1] ?? "",
   );
-  expect(secrets.toSorted()).toEqual(["DOCKERHUB_TOKEN", "DOCKERHUB_USERNAME"]);
+  expect(secrets.toSorted(compareCodeUnit)).toEqual([
+    "DOCKERHUB_TOKEN",
+    "DOCKERHUB_USERNAME",
+  ]);
   const steps = journeys["steps"].filter(isRecord);
   const checkout = steps.find(
     (step) => step["name"] === "Checkout journey source",

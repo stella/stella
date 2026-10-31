@@ -711,6 +711,16 @@ jobs:
           ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
+      - name: Require target journey harness
+        timeout-minutes: 2
+        run: |
+          for required in .github/actions/user-journeys/action.yml apps/web/e2e/playwright.journeys.config.ts; do
+            if [[ ! -f "$required" ]]; then
+              echo "::error::The target commit must contain the journey harness: $required"
+              exit 1
+            fi
+          done
+
       - name: Setup Bun
         timeout-minutes: 3
         uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
