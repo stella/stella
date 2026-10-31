@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { apiApp } from "@/api/server";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -37,6 +38,11 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
           index,
           scenario,
         ] of legislationMatterLinkScalingScenarios.entries()) {
+          expect(
+            apiApp.routes.some(
+              ({ definition }) => definition === scenario.definition,
+            ),
+          ).toBe(true);
           const at10 = small.at(index) ?? panic(`${scenario.name}: unmeasured`);
           const at200 =
             large.at(index) ?? panic(`${scenario.name}: unmeasured`);
