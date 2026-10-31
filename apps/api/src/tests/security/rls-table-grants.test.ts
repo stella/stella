@@ -193,6 +193,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Scheduler admission and its activation receipt are database-owner state.
+  "scheduler_table_leases",
+  "scheduler_table_lease_protocol",
   // Work-identifier aliases are served through the public-law reader; the
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",
@@ -899,12 +902,22 @@ describe("RLS table grants", () => {
         if (!upper.startsWith("REVOKE ALL PRIVILEGES ON TABLE ")) {
           continue;
         }
-        if (!upper.endsWith(" FROM STELLA")) {
+        const fromMarker = " FROM ";
+        const fromIndex = sqlKeywordIndex({
+          keyword: fromMarker,
+          sql: statement,
+        });
+        if (
+          fromIndex === -1 ||
+          !identifierNamesFromSql(
+            statement.slice(fromIndex + fromMarker.length),
+          ).some((role) => role.toLowerCase() === "stella")
+        ) {
           continue;
         }
         const tablesSql = statement.slice(
           "REVOKE ALL PRIVILEGES ON TABLE ".length,
-          -" FROM stella".length,
+          fromIndex,
         );
         for (const table of identifierNamesFromSql(tablesSql)) {
           revokedTables.add(table);
