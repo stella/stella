@@ -12,6 +12,12 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 const fixtures: string[] = [];
+// Host git config (signed tags, hooks) must not change fixture repositories.
+const HERMETIC_GIT_ENV = {
+  ...process.env,
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+};
 const table = (
   type = "text",
 ) => `import { pgTable, ${type} } from "drizzle-orm/pg-core";
@@ -35,10 +41,11 @@ const createFixture = () => {
   const git = (...args: string[]) => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: root,
+      env: HERMETIC_GIT_ENV,
       stdout: "pipe",
       stderr: "pipe",
     });
-    expect(result.exitCode).toBe(0);
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
   };
   git("init", "-b", "main");
   git("config", "user.name", "Test User");
@@ -57,7 +64,7 @@ const createFixture = () => {
   }
   return { root, git };
 };
-const runGuard = (root: string, env = process.env) =>
+const runGuard = (root: string, env = HERMETIC_GIT_ENV) =>
   Bun.spawnSync(
     ["bun", path.resolve(import.meta.dir, "check-migration-schema.ts"), "base"],
     { cwd: root, env, stdout: "pipe", stderr: "pipe" },
