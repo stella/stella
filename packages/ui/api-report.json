@@ -551,6 +551,11 @@
           "space": "value"
         },
         {
+          "name": "DIALOG_SIZE_CLASS_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "DataTable",
           "kind": "variable",
           "space": "value"
@@ -661,6 +666,11 @@
           "space": "value"
         },
         {
+          "name": "DialogLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "DialogMobileLayout",
           "kind": "type",
           "space": "type"
@@ -689,6 +699,11 @@
           "name": "DialogProvider",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "DialogSize",
+          "kind": "type",
+          "space": "type"
         },
         {
           "name": "DialogTitle",
@@ -1517,6 +1532,11 @@
         },
         {
           "name": "Menu",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MenuAnchor",
           "kind": "variable",
           "space": "value"
         },
@@ -3320,19 +3340,14 @@
         }
       ]
     },
-    "./calendar": {
+    "./calendar-primitives": {
       "type": "module",
-      "file": "./src/calendar/index.d.ts",
+      "file": "./src/calendar/primitives.d.ts",
       "exports": [
         {
           "name": "CalendarCell",
           "kind": "variable",
           "space": "value"
-        },
-        {
-          "name": "CalendarDateRange",
-          "kind": "type",
-          "space": "type"
         },
         {
           "name": "CalendarEntryButton",
@@ -3356,66 +3371,6 @@
         },
         {
           "name": "CalendarHeaderRow",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "ResourceCalendar",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "ResourceCalendarColumn",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarEntry",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarEntryTone",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarLaneLayout",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarLanePlacement",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarPlacement",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "ResourceCalendarResource",
-          "kind": "type",
-          "space": "type"
-        },
-        {
-          "name": "assertConsecutiveCalendarDates",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "getResourceCalendarPlacement",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "layoutResourceCalendarEntries",
-          "kind": "variable",
-          "space": "value"
-        },
-        {
-          "name": "nextCalendarDate",
           "kind": "variable",
           "space": "value"
         }
@@ -4283,6 +4238,11 @@
           "space": "value"
         },
         {
+          "name": "DIALOG_SIZE_CLASS_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "Dialog",
           "kind": "variable",
           "space": "value"
@@ -4328,6 +4288,11 @@
           "space": "value"
         },
         {
+          "name": "DialogLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "DialogMobileLayout",
           "kind": "type",
           "space": "type"
@@ -4356,6 +4321,11 @@
           "name": "DialogProvider",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "DialogSize",
+          "kind": "type",
+          "space": "type"
         },
         {
           "name": "DialogTitle",
@@ -4712,6 +4682,11 @@
         },
         {
           "name": "Menu",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "MenuAnchor",
           "kind": "variable",
           "space": "value"
         },
@@ -6129,6 +6104,163 @@
         }
       ]
     },
+    "./day-calendar": {
+      "type": "module",
+      "file": "./src/calendar/day-calendar.d.ts",
+      "exports": [
+        {
+          "name": "DayCalendar",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DayCalendarBlock",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarColumn",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarEntryState",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarRangeSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarSelection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarTone",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./day-calendar.logic": {
+      "type": "module",
+      "file": "./src/calendar/day-calendar.logic.d.ts",
+      "exports": [
+        {
+          "name": "DAY_CALENDAR_GRANULARITIES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DAY_CALENDAR_SLOT_HEIGHT_PX",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "DayCalendarGranularity",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarLanePlacement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "DayCalendarRange",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "MergedSegment",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "SnapDirection",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "boundsHeight",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "clampToBounds",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "extendRange",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getDayBounds",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getHourTicks",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "granularityMs",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "isRepeatedWallTime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "layoutOverlaps",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "mergeShortSegments",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "moveRange",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "offsetToTime",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "rangeFromDrag",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "slotAt",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "snapToGrid",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "timeToOffset",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./destructive-action-confirmation": {
       "type": "module",
       "file": "./src/components/destructive-action-confirmation.d.ts",
@@ -6192,6 +6324,11 @@
           "space": "value"
         },
         {
+          "name": "DIALOG_SIZE_CLASS_NAMES",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "Dialog",
           "kind": "variable",
           "space": "value"
@@ -6237,6 +6374,11 @@
           "space": "value"
         },
         {
+          "name": "DialogLabels",
+          "kind": "type",
+          "space": "type"
+        },
+        {
           "name": "DialogMobileLayout",
           "kind": "type",
           "space": "type"
@@ -6265,6 +6407,11 @@
           "name": "DialogProvider",
           "kind": "variable",
           "space": "value"
+        },
+        {
+          "name": "DialogSize",
+          "kind": "type",
+          "space": "type"
         },
         {
           "name": "DialogTitle",
@@ -7848,6 +7995,17 @@
         }
       ]
     },
+    "./identity-text": {
+      "type": "module",
+      "file": "./src/components/identity-text.d.ts",
+      "exports": [
+        {
+          "name": "IdentityText",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
     "./initials": {
       "type": "module",
       "file": "./src/lib/initials.d.ts",
@@ -9125,6 +9283,11 @@
           "space": "value"
         },
         {
+          "name": "MenuAnchor",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
           "name": "MenuCheckboxItem",
           "kind": "variable",
           "space": "value"
@@ -9528,6 +9691,83 @@
         },
         {
           "name": "Prose",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./resource-calendar": {
+      "type": "module",
+      "file": "./src/calendar/resource-calendar.d.ts",
+      "exports": [
+        {
+          "name": "ResourceCalendar",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "ResourceCalendarColumn",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarEntry",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarEntryTone",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarResource",
+          "kind": "type",
+          "space": "type"
+        }
+      ]
+    },
+    "./resource-calendar.logic": {
+      "type": "module",
+      "file": "./src/calendar/resource-calendar.logic.d.ts",
+      "exports": [
+        {
+          "name": "CalendarDateRange",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarLaneLayout",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarLanePlacement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "ResourceCalendarPlacement",
+          "kind": "type",
+          "space": "type"
+        },
+        {
+          "name": "assertConsecutiveCalendarDates",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "getResourceCalendarPlacement",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "layoutResourceCalendarEntries",
+          "kind": "variable",
+          "space": "value"
+        },
+        {
+          "name": "nextCalendarDate",
           "kind": "variable",
           "space": "value"
         }
@@ -10206,9 +10446,20 @@
         }
       ]
     },
-    "./stella-mark": {
+    "./stella-mark [default]": {
       "type": "module",
       "file": "./src/components/stella-mark.d.ts",
+      "exports": [
+        {
+          "name": "StellaMark",
+          "kind": "variable",
+          "space": "value"
+        }
+      ]
+    },
+    "./stella-mark [react-native]": {
+      "type": "module",
+      "file": "./src/components/stella-mark.native.d.ts",
       "exports": [
         {
           "name": "StellaMark",
@@ -10897,7 +11148,8 @@
     }
   },
   "declarations": {
-    "./src/calendar/index.d.ts": "export { CalendarCell, CalendarEntryButton, CalendarEntrySurface, CalendarGrid, CalendarHeaderCell, CalendarHeaderRow, } from \"./primitives\";\nexport type { CalendarDateRange, ResourceCalendarLaneLayout, ResourceCalendarLanePlacement, ResourceCalendarPlacement, } from \"./resource-calendar.logic\";\nexport { assertConsecutiveCalendarDates, getResourceCalendarPlacement, layoutResourceCalendarEntries, nextCalendarDate, } from \"./resource-calendar.logic\";\nexport type { ResourceCalendarColumn, ResourceCalendarEntry, ResourceCalendarEntryTone, ResourceCalendarResource, } from \"./resource-calendar\";\nexport { ResourceCalendar } from \"./resource-calendar\";\n",
+    "./src/calendar/day-calendar.logic.d.ts": "export declare const DAY_CALENDAR_GRANULARITIES: readonly [\n    15,\n    30,\n    60\n];\nexport type DayCalendarGranularity = (typeof DAY_CALENDAR_GRANULARITIES)[number];\nexport declare const DAY_CALENDAR_SLOT_HEIGHT_PX: {\n    readonly 15: 22;\n    readonly 30: 32;\n    readonly 60: 44;\n};\nexport type DayCalendarRange = {\n    endMs: number;\n    startMs: number;\n};\nexport declare const granularityMs: (granularity: DayCalendarGranularity) => number;\ntype DayBoundsOptions = {\n    date: string;\n    endHour: number;\n    startHour: number;\n    timeZone: string;\n};\nexport declare const getDayBounds: ({ date, endHour, startHour, timeZone, }: DayBoundsOptions) => DayCalendarRange;\nexport declare const isRepeatedWallTime: (ms: number, timeZone: string) => boolean;\nexport declare const getHourTicks: (bounds: DayCalendarRange) => number[];\ntype OffsetOptions = {\n    granularity: DayCalendarGranularity;\n    bounds: DayCalendarRange;\n};\nexport declare const timeToOffset: (ms: number, { granularity, bounds }: OffsetOptions) => number;\nexport declare const offsetToTime: (offsetPx: number, { granularity, bounds }: OffsetOptions) => number;\nexport declare const boundsHeight: (options: OffsetOptions) => number;\nexport declare const clampToBounds: (ms: number, bounds: DayCalendarRange) => number;\nexport type SnapDirection = \"ceil\" | \"floor\" | \"nearest\";\nexport declare const snapToGrid: (ms: number, { direction, granularity, bounds, }: OffsetOptions & {\n    direction: SnapDirection;\n}) => number;\nexport declare const rangeFromDrag: ({ anchorMs, pointerMs }: {\n    anchorMs: number;\n    pointerMs: number;\n}, options: OffsetOptions) => DayCalendarRange;\nexport declare const moveRange: (range: DayCalendarRange, slots: number, { granularity, bounds }: OffsetOptions) => DayCalendarRange;\nexport declare const extendRange: (range: DayCalendarRange, slots: number, options: OffsetOptions) => DayCalendarRange;\nexport declare const slotAt: (ms: number, options: OffsetOptions) => DayCalendarRange;\nexport type DayCalendarLanePlacement = {\n    lane: number;\n    laneCount: number;\n};\nexport declare const layoutOverlaps: (ranges: readonly (DayCalendarRange & {\n    id: string;\n})[]) => Map<string, DayCalendarLanePlacement>;\nexport type MergedSegment<Segment extends DayCalendarRange & {\n    id: string;\n}> = {\n    segment: Segment;\n    type: \"single\";\n} | {\n    endMs: number;\n    id: string;\n    sources: Segment[];\n    startMs: number;\n    type: \"mixed\";\n};\nexport declare const mergeShortSegments: <Segment extends DayCalendarRange & {\n    id: string;\n}>(segments: readonly Segment[], { thresholdMs }: {\n    thresholdMs: number;\n}) => MergedSegment<Segment>[];\nexport {};\n",
+    "./src/calendar/day-calendar.d.ts": "import type { ReactElement, ReactNode } from \"react\";\nimport type { DayCalendarGranularity, DayCalendarRange } from \"./day-calendar.logic\";\nexport type DayCalendarTone = {\n    color: string | null;\n    matterId: string;\n    type: \"matter\";\n} | {\n    type: \"neutral\";\n};\nexport type DayCalendarEntryState = \"draft\" | \"final\";\ntype DayCalendarBlockFields = DayCalendarRange & {\n    accessibleLabel: string;\n    detail?: ReactNode;\n    id: string;\n    title: ReactNode;\n    tone: DayCalendarTone;\n};\nexport type DayCalendarBlock = (DayCalendarBlockFields & {\n    kind: \"entry\";\n    state: DayCalendarEntryState;\n}) | (DayCalendarBlockFields & {\n    kind: \"mixed\";\n}) | (DayCalendarBlockFields & {\n    kind: \"segment\";\n});\nexport type DayCalendarRangeSelection = {\n    label: string;\n    type: \"enabled\";\n} | {\n    type: \"disabled\";\n};\ntype DayCalendarColumnHeader = {\n    badge?: ReactNode;\n    id: string;\n    label: ReactNode;\n};\nexport type DayCalendarColumn = (DayCalendarColumnHeader & {\n    blocks: readonly DayCalendarBlock[];\n    rangeSelection: DayCalendarRangeSelection;\n    type: \"blocks\";\n}) | (DayCalendarColumnHeader & {\n    action: ReactNode;\n    type: \"locked\";\n});\nexport type DayCalendarSelection = {\n    columnId: string;\n    panel?: {\n        columnId: string;\n        content: ReactNode;\n    };\n    range: DayCalendarRange;\n};\ntype DayCalendarProps = {\n    ariaLabel: string;\n    columns: readonly DayCalendarColumn[];\n    date: string;\n    granularity: DayCalendarGranularity;\n    hours: {\n        endHour: number;\n        startHour: number;\n    };\n    locale: string;\n    nowMs: number;\n    onSelectRange: (columnId: string, range: DayCalendarRange) => void;\n    selection: DayCalendarSelection | null;\n    timeZone: string;\n};\nexport declare const DayCalendar: ({ ariaLabel, columns, date, granularity, hours, locale, nowMs, onSelectRange, selection, timeZone, }: DayCalendarProps) => ReactElement;\nexport {};\n",
     "./src/calendar/primitives.d.ts": "import type * as React from \"react\";\nexport declare const CalendarGrid: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const CalendarHeaderRow: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const CalendarHeaderCell: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const CalendarCell: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const CalendarEntryButton: ({ className, ...props }: React.ComponentProps<\"button\">) => React.JSX.Element;\nexport declare const CalendarEntrySurface: ({ className, ...props }: React.ComponentProps<\"article\">) => React.JSX.Element;\n",
     "./src/calendar/resource-calendar.logic.d.ts": "export type CalendarDateRange = {\n    endDateExclusive: string;\n    startDate: string;\n};\nexport type ResourceCalendarPlacement = {\n    columnStart: number;\n    span: number;\n};\nexport type ResourceCalendarLanePlacement = ResourceCalendarPlacement & {\n    entryId: string;\n    rowStart: number;\n};\nexport type ResourceCalendarLaneLayout = {\n    placements: ResourceCalendarLanePlacement[];\n    rowCount: number;\n};\nexport declare const getResourceCalendarPlacement: ({ entry, visibleRange, }: {\n    entry: CalendarDateRange;\n    visibleRange: CalendarDateRange;\n}) => ResourceCalendarPlacement | null;\nexport declare const assertConsecutiveCalendarDates: (dates: readonly string[]) => void;\nexport declare const nextCalendarDate: (value: string) => string;\nexport declare const layoutResourceCalendarEntries: (entries: readonly (CalendarDateRange & {\n    id: string;\n})[], visibleRange: CalendarDateRange) => ResourceCalendarLaneLayout;\n",
     "./src/calendar/resource-calendar.d.ts": "import type { ReactElement, ReactNode } from \"react\";\nexport type ResourceCalendarColumn = {\n    date: string;\n    label: ReactNode;\n    meta?: ReactNode;\n};\nexport type ResourceCalendarResource = {\n    id: string;\n    label: ReactNode;\n    meta?: ReactNode;\n};\nexport type ResourceCalendarEntryTone = \"accent\" | \"neutral\" | \"warning\" | \"destructive\";\nexport type ResourceCalendarEntry = {\n    accessibleLabel: string;\n    endDateExclusive: string;\n    id: string;\n    label: ReactNode;\n    meta?: ReactNode;\n    resourceId: string;\n    startDate: string;\n    tone?: ResourceCalendarEntryTone;\n};\ntype ResourceCalendarProps = {\n    ariaLabel: string;\n    columns: readonly ResourceCalendarColumn[];\n    empty?: ReactNode;\n    entries: readonly ResourceCalendarEntry[];\n    onSelectEntry?: (entry: ResourceCalendarEntry) => void;\n    resourceHeader: ReactNode;\n    resources: readonly ResourceCalendarResource[];\n};\nexport declare const ResourceCalendar: ({ ariaLabel, columns, empty, entries, onSelectEntry, resourceHeader, resources, }: ResourceCalendarProps) => ReactElement;\nexport {};\n",
@@ -10930,7 +11182,7 @@
     "./src/components/destructive-confirm-dialog.d.ts": "import type * as React from \"react\";\ntype DestructiveConfirmOutcome = \"keep-open\";\ntype DestructiveConfirmDialogProps = {\n    cancelLabel: React.ReactNode;\n    confirmLabel: React.ReactNode;\n    confirmation: string;\n    description: React.ReactNode;\n    inputLabel: React.ReactNode;\n    loading?: boolean | undefined;\n    onConfirm: () => unknown;\n    onOpenChange: (open: boolean) => void;\n    open: boolean;\n    title: React.ReactNode;\n};\ndeclare const DestructiveConfirmDialog: ({ cancelLabel, confirmLabel, confirmation, description, inputLabel, loading, onConfirm, onOpenChange, open, title, }: DestructiveConfirmDialogProps) => React.JSX.Element;\nexport { DestructiveConfirmDialog };\nexport type { DestructiveConfirmDialogProps, DestructiveConfirmOutcome };\n",
     "./src/components/details-grid.d.ts": "import type * as React from \"react\";\ndeclare const DetailsGrid: ({ className, ...props }: React.ComponentProps<\"dl\">) => React.JSX.Element;\ntype DetailsItemProps = React.ComponentProps<\"div\"> & {\n    label: React.ReactNode;\n    span?: \"wide\";\n};\ndeclare const DetailsItem: ({ label, children, span, className, ...props }: DetailsItemProps) => React.JSX.Element;\nexport { DetailsGrid, DetailsItem };\n",
     "./src/components/dialog-form-state.d.ts": "export type DialogFormSource = {\n    dirty: boolean;\n    onDiscard?: (() => void) | undefined;\n};\nexport type DialogFormRegistry = {\n    sources: Map<string, DialogFormSource>;\n    clearConfirmation: () => void;\n};\nexport declare const DialogFormContext: import(\"react\").Context<DialogFormRegistry | null>;\nexport declare const DialogFormState: ({ dirty, onDiscard, }: {\n    dirty: boolean;\n    onDiscard?: (() => void) | undefined;\n}) => null;\n",
-    "./src/components/dialog.d.ts": "import type * as React from \"react\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type OverlayLayer } from \"../lib/overlay-layer\";\ndeclare const DialogCreateHandle: typeof DialogPrimitive.createHandle;\ntype DialogLabels = {\n    close: string;\n    unsavedChanges: string;\n};\ndeclare const DialogProvider: ({ labels, children, }: React.PropsWithChildren<{\n    labels: DialogLabels;\n}>) => React.JSX.Element;\ndeclare const Dialog: <Payload>({ dirty, onOpenChange, onOpenChangeComplete, ...props }: DialogPrimitive.Root.Props<Payload> & {\n    dirty?: boolean;\n}) => React.JSX.Element;\ndeclare const DialogPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function DialogTrigger({ tooltip, ...props }: DialogPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare function DialogClose({ tooltip, ...props }: DialogPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const DialogBackdrop: ({ className, layer, ...props }: DialogPrimitive.Backdrop.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DialogViewport: ({ className, layer, ...props }: DialogPrimitive.Viewport.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DIALOG_MOBILE_LAYOUT: {\n    readonly bottomSheet: \"bottom-sheet\";\n    readonly centered: \"centered\";\n    readonly fullscreen: \"fullscreen\";\n};\ntype DialogMobileLayout = (typeof DIALOG_MOBILE_LAYOUT)[keyof typeof DIALOG_MOBILE_LAYOUT];\ndeclare const DialogPopup: ({ backdropClassName, className, children, showCloseButton, mobileLayout, layer, viewportClassName, ...props }: DialogPrimitive.Popup.Props & {\n    backdropClassName?: string;\n    showCloseButton?: boolean;\n    mobileLayout?: DialogMobileLayout;\n    layer?: OverlayLayer;\n    viewportClassName?: string;\n}) => React.JSX.Element;\ndeclare const DialogHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const DialogFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const DialogTitle: ({ className, ...props }: DialogPrimitive.Title.Props) => React.JSX.Element;\ndeclare const DialogDescription: ({ className, ...props }: DialogPrimitive.Description.Props) => React.JSX.Element;\ndeclare const DialogPanel: ({ className, scrollFade, ...props }: React.ComponentProps<\"div\"> & {\n    scrollFade?: boolean;\n}) => React.JSX.Element;\nexport type { DialogMobileLayout };\nexport { DIALOG_MOBILE_LAYOUT, DialogCreateHandle, DialogProvider, Dialog, DialogTrigger, DialogPortal, DialogClose, DialogBackdrop, DialogBackdrop as DialogOverlay, DialogPopup, DialogPopup as DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogPanel, DialogViewport, };\nexport { DialogFormState } from \"./dialog-form-state\";\n",
+    "./src/components/dialog.d.ts": "import type * as React from \"react\";\nimport { Dialog as DialogPrimitive } from \"@base-ui/react/dialog\";\nimport { type OverlayLayer } from \"../lib/overlay-layer\";\ndeclare const DialogCreateHandle: typeof DialogPrimitive.createHandle;\ntype DialogLabels = {\n    close: string;\n    unsavedChanges: string;\n    unsavedChangesClose: string;\n};\ndeclare const DialogProvider: ({ labels, children, }: React.PropsWithChildren<{\n    labels: DialogLabels;\n}>) => React.JSX.Element;\ndeclare const Dialog: <Payload>({ dirty, onOpenChange, onOpenChangeComplete, ...props }: DialogPrimitive.Root.Props<Payload> & {\n    dirty?: boolean;\n}) => React.JSX.Element;\ndeclare const DialogPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").AlertDialogPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function DialogTrigger({ tooltip, ...props }: DialogPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare function DialogClose({ tooltip, ...props }: DialogPrimitive.Close.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const DialogBackdrop: ({ className, layer, ...props }: DialogPrimitive.Backdrop.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DialogViewport: ({ className, layer, ...props }: DialogPrimitive.Viewport.Props & {\n    layer?: OverlayLayer;\n}) => React.JSX.Element;\ndeclare const DIALOG_MOBILE_LAYOUT: {\n    readonly bottomSheet: \"bottom-sheet\";\n    readonly centered: \"centered\";\n    readonly fullscreen: \"fullscreen\";\n};\ntype DialogMobileLayout = (typeof DIALOG_MOBILE_LAYOUT)[keyof typeof DIALOG_MOBILE_LAYOUT];\ntype DialogSize = \"sm\" | \"default\" | \"lg\" | \"xl\";\ndeclare const DIALOG_SIZE_CLASS_NAMES: {\n    readonly sm: \"max-w-sm\";\n    readonly default: \"max-w-lg\";\n    readonly lg: \"max-w-2xl\";\n    readonly xl: \"max-w-4xl\";\n};\ndeclare const DialogPopup: ({ backdropClassName, className, children, showCloseButton, mobileLayout, layer, size, viewportClassName, ...props }: DialogPrimitive.Popup.Props & {\n    size?: DialogSize | undefined;\n    backdropClassName?: string;\n    showCloseButton?: boolean;\n    mobileLayout?: DialogMobileLayout;\n    layer?: OverlayLayer;\n    viewportClassName?: string;\n}) => React.JSX.Element;\ndeclare const DialogHeader: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const DialogFooter: ({ className, variant, ...props }: React.ComponentProps<\"div\"> & {\n    variant?: \"default\" | \"bare\";\n}) => React.JSX.Element;\ndeclare const DialogTitle: ({ className, ...props }: DialogPrimitive.Title.Props) => React.JSX.Element;\ndeclare const DialogDescription: ({ className, ...props }: DialogPrimitive.Description.Props) => React.JSX.Element;\ndeclare const DialogPanel: ({ className, scrollFade, ...props }: React.ComponentProps<\"div\"> & {\n    scrollFade?: boolean;\n}) => React.JSX.Element;\nexport type { DialogLabels, DialogMobileLayout, DialogSize };\nexport { DIALOG_MOBILE_LAYOUT, DIALOG_SIZE_CLASS_NAMES, DialogCreateHandle, DialogProvider, Dialog, DialogTrigger, DialogPortal, DialogClose, DialogBackdrop, DialogBackdrop as DialogOverlay, DialogPopup, DialogPopup as DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription, DialogPanel, DialogViewport, };\nexport { DialogFormState } from \"./dialog-form-state\";\n",
     "./src/components/directional-icon.d.ts": "import type { LucideIcon } from \"../icons\";\ntype DirectionalIconProps = {\n    icon: LucideIcon;\n    className?: string;\n    flip?: boolean;\n};\nexport declare const DirectionalIcon: ({ icon: Icon, className, flip, }: DirectionalIconProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/document-identity-badge.logic.d.ts": "export declare const COURT_TIER_WEIGHT: {\n    readonly constitutional: \"solid\";\n    readonly supreme: \"tinted\";\n    readonly regional: \"outline\";\n    readonly other: \"dashed\";\n};\nexport type DocumentIdentity = {\n    kind: \"statute\";\n    number: string | null;\n    year: string | null;\n} | {\n    kind: \"decision\";\n    courtAbbreviation: string | null | undefined;\n    courtTier?: keyof typeof COURT_TIER_WEIGHT | undefined;\n} | {\n    kind: \"caseNumber\";\n    caseNumber: string | null | undefined;\n} | {\n    kind: \"unknown\";\n};\nexport type IdentityLabels = {\n    short: string;\n    long: string;\n};\nexport declare const statuteIdentityLabels: ({ number, year, }: Extract<DocumentIdentity, {\n    kind: \"statute\";\n}>) => IdentityLabels | null;\nexport declare const caseNumberIdentityLabels: ({ caseNumber, }: Extract<DocumentIdentity, {\n    kind: \"caseNumber\";\n}>) => IdentityLabels | null;\n",
     "./src/components/document-identity-badge.d.ts": "import type { CourtBadgeSize } from \"./court-badge\";\nimport type { DocumentIdentity } from \"./document-identity-badge.logic\";\nexport declare const DocumentIdentityBadge: ({ identity, size, title, }: DocumentIdentityBadgeProps) => import(\"react\").JSX.Element;\ntype DocumentIdentityBadgeProps = {\n    identity: DocumentIdentity;\n    size?: CourtBadgeSize | undefined;\n    title?: string | undefined;\n};\nexport {};\n",
@@ -10940,6 +11192,7 @@
     "./src/components/frame.d.ts": "import type * as React from \"react\";\ndeclare const Frame: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FramePanel: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\ndeclare const FrameTitle: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameDescription: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const FrameFooter: ({ className, ...props }: React.ComponentProps<\"footer\">) => React.JSX.Element;\nexport { Frame, FramePanel, FrameHeader, FrameTitle, FrameDescription, FrameFooter, };\n",
     "./src/components/hex-color-picker.d.ts": "import type * as React from \"react\";\ntype HexColorPickerProps = {\n    color?: string | undefined;\n    onChange?: (hex: string) => void;\n    className?: string;\n};\ndeclare const HexColorPicker: ({ color, onChange, className, }: HexColorPickerProps) => React.JSX.Element;\nexport { HexColorPicker, type HexColorPickerProps };\n",
     "./src/components/horizontal-scroller.d.ts": "import type { ComponentProps } from \"react\";\ntype ScrollDirection = \"ltr\" | \"rtl\";\ntype HorizontalScrollerProps = ComponentProps<\"div\"> & {\n    nextLabel: string;\n    previousLabel: string;\n    contentClassName?: string;\n    viewportClassName?: string;\n};\ntype ScrollState = {\n    canScrollEnd: boolean;\n    canScrollStart: boolean;\n};\nexport declare const HorizontalScroller: ({ children, className, nextLabel, previousLabel, contentClassName, viewportClassName, ...props }: HorizontalScrollerProps) => import(\"react\").JSX.Element;\nexport declare const scrollState: (scrollLeft: number, scrollWidth: number, clientWidth: number, direction: ScrollDirection) => ScrollState;\nexport declare const wheelDeltaPixels: (event: Pick<WheelEvent, \"deltaMode\" | \"deltaY\">, node: Pick<HTMLElement, \"clientWidth\">) => number;\nexport {};\n",
+    "./src/components/identity-text.d.ts": "type IdentityTextProps = {\n    children: string;\n    className?: string;\n};\nexport declare const IdentityText: ({ children, className }: IdentityTextProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/inline-drop-indicator.d.ts": "import type { InlineDropPosition } from \"../lib/inline-reorder\";\nexport declare const InlineDropIndicator: ({ position, }: {\n    position: InlineDropPosition | null;\n}) => import(\"react\").JSX.Element | null;\n",
     "./src/components/inline-rename.d.ts": "import type { ComponentProps } from \"react\";\ntype InlineRenameInputProps = Omit<ComponentProps<\"input\">, \"value\" | \"onChange\" | \"onKeyDown\" | \"size\"> & {\n    value: string;\n    onValueChange: (value: string) => void;\n    onCommit: () => void;\n    onCancel: () => void;\n    fill?: boolean;\n};\nexport declare const InlineRenameInput: ({ value, onValueChange, onCommit, onCancel, onBlur, className, ref, dir, fill, ...props }: InlineRenameInputProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/input-group.d.ts": "import type * as React from \"react\";\nimport type { VariantProps } from \"class-variance-authority\";\nimport type { InputProps } from \"./input\";\nimport type { TextareaProps } from \"./textarea\";\ndeclare const InputGroup: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\ndeclare const inputGroupAddonVariants: (props?: ({\n    align?: \"inline-end\" | \"inline-start\" | \"block-end\" | \"block-start\" | null | undefined;\n} & import(\"class-variance-authority/types\").ClassProp) | undefined) => string;\ndeclare const InputGroupAddon: ({ className, align, ...props }: React.ComponentProps<\"div\"> & VariantProps<typeof inputGroupAddonVariants>) => React.JSX.Element;\ndeclare const InputGroupText: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\ndeclare const InputGroupInput: ({ className, ...props }: InputProps) => React.JSX.Element;\ndeclare const InputGroupTextarea: ({ className, ...props }: TextareaProps) => React.JSX.Element;\nexport { InputGroup, InputGroupAddon, InputGroupText, InputGroupInput, InputGroupTextarea, };\n",
@@ -10957,7 +11210,7 @@
     "./src/components/matter-icon.shared.d.ts": "export type MatterIconContract = {\n    matter: {\n        id: string;\n        color: string | null;\n    };\n} | {\n    variant: \"none\" | \"all\";\n};\nexport declare const ALL_MATTERS_STACK: readonly [\n    {\n        readonly d: \"M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z\";\n        readonly option: \"red\";\n    },\n    {\n        readonly d: \"M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12\";\n        readonly option: \"blue\";\n    },\n    {\n        readonly d: \"M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17\";\n        readonly option: \"green\";\n    }\n];\n",
     "./src/components/matter-icon.d.ts": "import { type MatterIconContract } from \"./matter-icon.shared\";\ntype MatterIconProps = {\n    className?: string | undefined;\n} & MatterIconContract;\nexport declare const MatterIcon: (props: MatterIconProps) => import(\"react\").JSX.Element;\nexport declare const MattersNavIcon: ({ className, }: {\n    className?: string | undefined;\n}) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/menu-section.d.ts": "import type { PropsWithChildren } from \"react\";\ndeclare const MenuSection: ({ children, title, }: PropsWithChildren<{\n    title: string;\n}>) => import(\"react\").JSX.Element;\nexport { MenuSection };\n",
-    "./src/components/menu.d.ts": "import type * as React from \"react\";\nimport { Menu as MenuPrimitive } from \"@base-ui/react/menu\";\ndeclare const MenuCreateHandle: typeof MenuPrimitive.createHandle;\ndeclare const Menu: typeof MenuPrimitive.Root;\ndeclare const MenuPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").ContextMenuPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function MenuTrigger({ tooltip, ...props }: MenuPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const MenuPopup: ({ children, className, sideOffset, align, alignOffset, side, anchor, collisionAvoidance, header, viewportClassName, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: MenuPrimitive.Positioner.Props[\"side\"];\n    anchor?: MenuPrimitive.Positioner.Props[\"anchor\"];\n    collisionAvoidance?: MenuPrimitive.Positioner.Props[\"collisionAvoidance\"];\n}) => React.JSX.Element;\ndeclare const MenuGroup: (props: MenuPrimitive.Group.Props) => React.JSX.Element;\ndeclare const MenuItem: ({ className, inset, variant, ...props }: MenuPrimitive.Item.Props & {\n    inset?: boolean;\n    variant?: \"default\" | \"destructive\";\n}) => React.JSX.Element;\ndeclare const MenuCheckboxItem: ({ className, children, checked, variant, ...props }: MenuPrimitive.CheckboxItem.Props & {\n    variant?: \"default\" | \"switch\";\n}) => React.JSX.Element;\ndeclare const MenuRadioGroup: (props: MenuPrimitive.RadioGroup.Props) => React.JSX.Element;\ndeclare const MenuRadioItem: ({ className, children, indicator, ...props }: MenuPrimitive.RadioItem.Props & {\n    indicator?: \"check\" | \"none\";\n}) => React.JSX.Element;\ndeclare const MenuGroupLabel: ({ className, inset, ...props }: MenuPrimitive.GroupLabel.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSeparator: ({ className, ...props }: MenuPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const MenuShortcut: ({ className, ...props }: React.ComponentProps<\"kbd\">) => React.JSX.Element;\ndeclare const MenuSub: (props: MenuPrimitive.SubmenuRoot.Props) => React.JSX.Element;\ndeclare const MenuSubTrigger: ({ className, inset, children, ...props }: MenuPrimitive.SubmenuTrigger.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSubPopup: ({ className, sideOffset, alignOffset, align, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n}) => React.JSX.Element;\nexport { MenuCreateHandle, MenuCreateHandle as DropdownMenuCreateHandle, Menu, Menu as DropdownMenu, MenuPortal, MenuPortal as DropdownMenuPortal, MenuTrigger, MenuTrigger as DropdownMenuTrigger, MenuPopup, MenuPopup as DropdownMenuContent, MenuGroup, MenuGroup as DropdownMenuGroup, MenuItem, MenuItem as DropdownMenuItem, MenuCheckboxItem, MenuCheckboxItem as DropdownMenuCheckboxItem, MenuRadioGroup, MenuRadioGroup as DropdownMenuRadioGroup, MenuRadioItem, MenuRadioItem as DropdownMenuRadioItem, MenuGroupLabel, MenuGroupLabel as DropdownMenuLabel, MenuSeparator, MenuSeparator as DropdownMenuSeparator, MenuShortcut, MenuShortcut as DropdownMenuShortcut, MenuSub, MenuSub as DropdownMenuSub, MenuSubTrigger, MenuSubTrigger as DropdownMenuSubTrigger, MenuSubPopup, MenuSubPopup as DropdownMenuSubContent, };\n",
+    "./src/components/menu.d.ts": "import type * as React from \"react\";\nimport { Menu as MenuPrimitive } from \"@base-ui/react/menu\";\ndeclare const MenuCreateHandle: typeof MenuPrimitive.createHandle;\ndeclare const Menu: typeof MenuPrimitive.Root;\ndeclare const MenuPortal: React.ForwardRefExoticComponent<Omit<import(\"@base-ui/react\").ContextMenuPortalProps, \"ref\"> & React.RefAttributes<HTMLDivElement>>;\ndeclare function MenuTrigger({ tooltip, ...props }: MenuPrimitive.Trigger.Props & {\n    tooltip?: React.ReactNode;\n}): React.JSX.Element;\ndeclare const MenuAnchor: () => React.JSX.Element;\ndeclare const MenuPopup: ({ children, className, sideOffset, align, alignOffset, side, anchor, collisionAvoidance, header, viewportClassName, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n    side?: MenuPrimitive.Positioner.Props[\"side\"];\n    anchor?: MenuPrimitive.Positioner.Props[\"anchor\"];\n    collisionAvoidance?: MenuPrimitive.Positioner.Props[\"collisionAvoidance\"];\n}) => React.JSX.Element;\ndeclare const MenuGroup: (props: MenuPrimitive.Group.Props) => React.JSX.Element;\ndeclare const MenuItem: ({ className, inset, variant, ...props }: MenuPrimitive.Item.Props & {\n    inset?: boolean;\n    variant?: \"default\" | \"destructive\";\n}) => React.JSX.Element;\ndeclare const MenuCheckboxItem: ({ className, children, checked, variant, ...props }: MenuPrimitive.CheckboxItem.Props & {\n    variant?: \"default\" | \"switch\";\n}) => React.JSX.Element;\ndeclare const MenuRadioGroup: (props: MenuPrimitive.RadioGroup.Props) => React.JSX.Element;\ndeclare const MenuRadioItem: ({ className, children, indicator, ...props }: MenuPrimitive.RadioItem.Props & {\n    indicator?: \"check\" | \"none\";\n}) => React.JSX.Element;\ndeclare const MenuGroupLabel: ({ className, inset, ...props }: MenuPrimitive.GroupLabel.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSeparator: ({ className, ...props }: MenuPrimitive.Separator.Props) => React.JSX.Element;\ndeclare const MenuShortcut: ({ className, ...props }: React.ComponentProps<\"kbd\">) => React.JSX.Element;\ndeclare const MenuSub: (props: MenuPrimitive.SubmenuRoot.Props) => React.JSX.Element;\ndeclare const MenuSubTrigger: ({ className, inset, children, ...props }: MenuPrimitive.SubmenuTrigger.Props & {\n    inset?: boolean;\n}) => React.JSX.Element;\ndeclare const MenuSubPopup: ({ className, sideOffset, alignOffset, align, ...props }: MenuPrimitive.Popup.Props & {\n    header?: React.ReactNode;\n    viewportClassName?: string;\n    align?: MenuPrimitive.Positioner.Props[\"align\"];\n    sideOffset?: MenuPrimitive.Positioner.Props[\"sideOffset\"];\n    alignOffset?: MenuPrimitive.Positioner.Props[\"alignOffset\"];\n}) => React.JSX.Element;\nexport { MenuAnchor, MenuCreateHandle, MenuCreateHandle as DropdownMenuCreateHandle, Menu, Menu as DropdownMenu, MenuPortal, MenuPortal as DropdownMenuPortal, MenuTrigger, MenuTrigger as DropdownMenuTrigger, MenuPopup, MenuPopup as DropdownMenuContent, MenuGroup, MenuGroup as DropdownMenuGroup, MenuItem, MenuItem as DropdownMenuItem, MenuCheckboxItem, MenuCheckboxItem as DropdownMenuCheckboxItem, MenuRadioGroup, MenuRadioGroup as DropdownMenuRadioGroup, MenuRadioItem, MenuRadioItem as DropdownMenuRadioItem, MenuGroupLabel, MenuGroupLabel as DropdownMenuLabel, MenuSeparator, MenuSeparator as DropdownMenuSeparator, MenuShortcut, MenuShortcut as DropdownMenuShortcut, MenuSub, MenuSub as DropdownMenuSub, MenuSubTrigger, MenuSubTrigger as DropdownMenuSubTrigger, MenuSubPopup, MenuSubPopup as DropdownMenuSubContent, };\n",
     "./src/components/number-input.d.ts": "import { NumberField as NumberFieldPrimitive } from \"@base-ui/react/number-field\";\nimport type { ControlSize } from \"../lib/control-size\";\ntype NumberInputProps = Omit<NumberFieldPrimitive.Root.Props, \"children\" | \"className\" | \"render\"> & {\n    className?: string;\n    inputClassName?: string;\n    inputProps?: Omit<NumberFieldPrimitive.Input.Props, \"className\" | \"defaultValue\" | \"id\" | \"onChange\" | \"type\" | \"value\">;\n    size?: ControlSize;\n};\ndeclare const NumberInput: ({ className, inputClassName, inputProps, dir, size, ...props }: NumberInputProps) => import(\"react\").JSX.Element;\nexport { NumberInput, type NumberInputProps };\n",
     "./src/components/outline-rail.d.ts": "import { type ReactNode, type RefObject } from \"react\";\nexport declare const OUTLINE_EMPHASIS: {\n    readonly primary: \"primary\";\n    readonly secondary: \"secondary\";\n};\nexport type OutlineEmphasis = (typeof OUTLINE_EMPHASIS)[keyof typeof OUTLINE_EMPHASIS];\nexport type OutlineItem = {\n    id: string;\n    label: string;\n    title?: string;\n    level: number;\n    meta?: string;\n    color?: string;\n    emphasis?: OutlineEmphasis;\n};\nexport type OutlineRailProps = {\n    items: OutlineItem[];\n    scrollContainerRef: RefObject<HTMLElement | null>;\n    resolvePct: (id: string, container: HTMLElement) => number | null;\n    onJump: (id: string, container: HTMLElement) => void;\n    activeId?: string | null;\n    header?: ReactNode;\n    formatMetaLabel?: (meta: string) => string;\n    collapsedFromLevel?: number;\n    presentation?: \"panel\" | \"rail\" | \"popover\";\n    bottomInset?: number;\n    topOffset?: number;\n    panelWidth?: number;\n    ariaLabel?: string;\n};\nexport declare const OUTLINE_CONTROL_MIN_SIZE = 32;\nexport declare const outlineEntryText: (item: OutlineItem) => string;\nexport declare const OutlineRail: ({ items: itemsProp, scrollContainerRef, resolvePct, onJump, activeId, header, formatMetaLabel, collapsedFromLevel, presentation, bottomInset, topOffset, panelWidth, ariaLabel, }: OutlineRailProps) => import(\"react\").JSX.Element | null;\n",
     "./src/components/pagination.d.ts": "import type * as React from \"react\";\nimport { useRender } from \"@base-ui/react/use-render\";\nimport type { Button } from \"./button\";\ndeclare const Pagination: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\ndeclare const PaginationContent: ({ className, ...props }: React.ComponentProps<\"ul\">) => React.JSX.Element;\ndeclare const PaginationItem: ({ ...props }: React.ComponentProps<\"li\">) => React.JSX.Element;\ntype PaginationLinkProps = {\n    isActive?: boolean;\n    size?: React.ComponentProps<typeof Button>[\"size\"];\n} & useRender.ComponentProps<\"a\">;\ndeclare function PaginationLink({ className, isActive, size, render, ...props }: PaginationLinkProps): React.ReactElement<unknown, string | React.JSXElementConstructor<any>>;\ndeclare const PaginationPrevious: ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => React.JSX.Element;\ndeclare const PaginationNext: ({ className, ...props }: React.ComponentProps<typeof PaginationLink>) => React.JSX.Element;\ndeclare const PaginationEllipsis: ({ className, ...props }: React.ComponentProps<\"span\">) => React.JSX.Element;\nexport { Pagination, PaginationContent, PaginationLink, PaginationItem, PaginationPrevious, PaginationNext, PaginationEllipsis, };\n",
@@ -10982,6 +11235,7 @@
     "./src/components/skeleton.d.ts": "declare const Skeleton: ({ className, ...props }: React.ComponentProps<\"div\">) => import(\"react\").JSX.Element;\nexport { Skeleton };\n",
     "./src/components/split-button.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nimport { Button, BUTTON_CONTENT } from \"./button\";\nimport { Menu } from \"./menu\";\nimport { Popover } from \"./popover\";\ntype SplitButtonSharedProps = {\n    menuLabel: string;\n    primaryDescriptionId?: string;\n    menuDescriptionId?: string;\n    onPrimaryClick: NonNullable<ComponentProps<typeof Button>[\"onClick\"]>;\n    menu: ReactNode;\n    primaryDisabled?: boolean;\n    menuDisabled?: boolean;\n    size?: \"sm\" | \"md\";\n    className?: string;\n};\ntype SplitButtonPrimary = {\n    children: ReactNode;\n    primaryContent: (typeof BUTTON_CONTENT)[keyof typeof BUTTON_CONTENT];\n    primaryLabel: string;\n} | {\n    children: string;\n    primaryContent?: never;\n    primaryLabel?: never;\n};\ntype SplitButtonProps = SplitButtonSharedProps & SplitButtonPrimary & ({\n    surface?: \"menu\";\n    open?: ComponentProps<typeof Menu>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Menu>[\"onOpenChange\"];\n} | {\n    surface: \"popover\";\n    open?: ComponentProps<typeof Popover>[\"open\"];\n    onOpenChange?: ComponentProps<typeof Popover>[\"onOpenChange\"];\n});\nexport declare const SplitButton: (props: SplitButtonProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/components/status-mark.d.ts": "type StatusMarkStatus = \"pending\" | \"running\" | \"done\" | \"failed\";\ntype StatusMarkProps = {\n    status: StatusMarkStatus;\n    label?: string | undefined;\n    className?: string;\n};\ndeclare const StatusMark: ({ className, label, status }: StatusMarkProps) => import(\"react\").JSX.Element;\nexport { StatusMark };\nexport type { StatusMarkStatus };\n",
+    "./src/components/stella-mark.native.d.ts": "export declare const StellaMark: ({ size }: {\n    size?: number | undefined;\n}) => import(\"react\").JSX.Element;\n",
     "./src/components/stella-mark.d.ts": "import type { SVGProps } from \"react\";\nexport declare const StellaMark: (props: SVGProps<SVGSVGElement>) => import(\"react\").JSX.Element;\n",
     "./src/components/stella-wordmark.native.d.ts": "export declare const StellaWordmarkLatin: ({ height, }: {\n    height?: number | undefined;\n}) => import(\"react\").JSX.Element;\n",
     "./src/components/stella-wordmark.d.ts": "import type { SVGProps } from \"react\";\nexport declare const StellaWordmarkLatin: (props: SVGProps<SVGSVGElement>) => import(\"react\").JSX.Element;\n",
@@ -11013,7 +11267,7 @@
     "./src/hooks/use-mobile.d.ts": "export declare function useIsMobile(): boolean;\n",
     "./src/hooks/use-viewport-width.d.ts": "export declare function useViewportWidth(): number;\n",
     "./src/icons.d.ts": "export { BookOpenIcon as SkillIcon } from \"lucide-react\";\nexport { WandSparklesIcon as AiActionIcon } from \"lucide-react\";\nexport { BookOpenIcon as CaseLawIcon } from \"lucide-react\";\nexport { MessageSquarePlusIcon as NewChatIcon } from \"lucide-react\";\nexport { MessageSquareQuoteIcon as AddCommentIcon } from \"lucide-react\";\nexport { CopyIcon as CopyToClipboardIcon } from \"lucide-react\";\nexport { CopyIcon as CopyFromMenuIcon } from \"lucide-react\";\nexport { CopyIcon as DuplicateIcon } from \"lucide-react\";\nexport type { LucideIcon } from \"lucide-react\";\nexport { ActivityIcon, AlarmClockIcon, AlertCircleIcon, AlertTriangleIcon, AlignJustifyIcon, AlignLeftIcon, ArchiveIcon, ArchiveRestoreIcon, ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpDownIcon, ArrowUpIcon, AtSignIcon, BanIcon, BanknoteIcon, BellIcon, BlocksIcon, BoldIcon, BookOpenCheckIcon, BookTextIcon, BookmarkIcon, BookmarkPlusIcon, BracesIcon, BrainIcon, Building2Icon, BuildingIcon, CableIcon, CalendarClockIcon, CalendarIcon, CheckCheckIcon, CheckCircle2Icon, CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ChevronUpIcon, ChevronsUpDownIcon, CircleAlertIcon, CircleCheckIcon, CircleDashedIcon, CircleDotIcon, CircleHelpIcon, CircleIcon, CircleOffIcon, CircleUserRoundIcon, ClipboardCheckIcon, ClipboardCopyIcon, ClipboardIcon, ClipboardListIcon, Clock3Icon, ClockIcon, CogIcon, Columns2Icon, Columns3Icon, ColumnsIcon, CommandIcon, CompassIcon, CopyPlusIcon, CornerDownLeftIcon, CpuIcon, CropIcon, DatabaseIcon, DollarSignIcon, DownloadIcon, EditIcon, EllipsisIcon, EllipsisVerticalIcon, EqualIcon, ExternalLinkIcon, EyeIcon, EyeOffIcon, FileBadgeIcon, FileCheckIcon, FileCodeIcon, FileDiffIcon, FileDigitIcon, FileDownIcon, FileIcon, FileImageIcon, FileOutputIcon, FilePenLineIcon, FilePlus2Icon, FilePlusIcon, FileQuestionIcon, FileSearchIcon, FileSpreadsheetIcon, FileTextIcon, FileUpIcon, FilterIcon, FilterXIcon, FlagIcon, FlaskConicalIcon, FoldHorizontalIcon, FolderIcon, FolderInputIcon, FolderOpenIcon, FolderPlusIcon, FolderSyncIcon, FolderTreeIcon, FunctionSquareIcon, GanttChartIcon, GaugeIcon, GitBranchIcon, GitCommitHorizontalIcon, GitPullRequestIcon, GlobeIcon, GraduationCapIcon, GripVerticalIcon, HashIcon, Heading1Icon, Heading2Icon, Heading3Icon, HelpCircleIcon, HighlighterIcon, HistoryIcon, ImageIcon, ImageOffIcon, InboxIcon, InfoIcon, ItalicIcon, KanbanIcon, KeyRoundIcon, KeyboardIcon, LandmarkIcon, LanguagesIcon, LaptopIcon, LayersIcon, LayoutDashboardIcon, LayoutGridIcon, LayoutTemplateIcon, LibraryBigIcon, LibraryIcon, Link2Icon, LinkIcon, ListChecksIcon, ListFilterIcon, ListIcon, ListMinusIcon, ListOrderedIcon, ListTodoIcon, ListTreeIcon, ListXIcon, LoaderCircleIcon, LockIcon, LockKeyholeIcon, LockOpenIcon, LogOutIcon, MailIcon, Maximize2Icon, MegaphoneIcon, MessageCircleQuestionIcon, MessageSquareIcon, MessageSquareTextIcon, MessageSquareWarningIcon, MessagesSquareIcon, Minimize2Icon, MinusIcon, MonitorIcon, MoonIcon, MoreHorizontalIcon, PackageIcon, PaletteIcon, PanelLeftIcon, PanelRightIcon, PaperclipIcon, PauseIcon, PenIcon, PenLineIcon, PencilIcon, PencilLineIcon, PhoneIcon, PinIcon, PinOffIcon, PlayIcon, PlugIcon, PlusIcon, PowerIcon, PrinterIcon, QuoteIcon, Redo2Icon, RefreshCcwIcon, RefreshCwIcon, RepeatIcon, RotateCcwIcon, RotateCwIcon, RouteIcon, Rows2Icon, Rows3Icon, SaveIcon, ScanSearchIcon, ScanTextIcon, ScissorsIcon, ScrollTextIcon, SearchIcon, SearchXIcon, SendIcon, ServerIcon, Settings2Icon, ShapesIcon, ShieldAlertIcon, ShieldCheckIcon, ShieldIcon, SigmaIcon, SignatureIcon, SlashIcon, SlidersHorizontalIcon, SparklesIcon, SplitIcon, SquareCheckIcon, SquareIcon, SquareMinusIcon, SquarePenIcon, StarIcon, StarOffIcon, StickyNoteIcon, StrikethroughIcon, SunIcon, TableIcon, TagIcon, TagsIcon, TerminalIcon, TextIcon, TextQuoteIcon, ToggleLeftIcon, Trash2Icon, TrashIcon, TriangleAlertIcon, UnderlineIcon, Undo2Icon, UndoIcon, UnfoldHorizontalIcon, UngroupIcon, UploadIcon, UserCheckIcon, UserIcon, UserPlusIcon, UserRoundIcon, UsersIcon, VideoIcon, WavesIcon, WindIcon, WorkflowIcon, WrapTextIcon, WrenchIcon, XCircleIcon, XIcon, XSquareIcon, ZapIcon, } from \"lucide-react\";\n",
-    "./src/index.d.ts": "export * from \"./components/accordion\";\nexport * from \"./components/application-rail\";\nexport * from \"./components/alert-dialog\";\nexport * from \"./components/workspace-shell\";\nexport * from \"./components/avatar\";\nexport * from \"./components/badge\";\nexport * from \"./components/bidi-text\";\nexport * from \"./components/brand-icons\";\nexport * from \"./components/breadcrumb\";\nexport * from \"./components/button\";\nexport * from \"./components/checkbox\";\nexport * from \"./components/color-picker\";\nexport * from \"./components/combobox\";\nexport * from \"./components/command\";\nexport * from \"./components/copy-button\";\nexport * from \"./calendar\";\nexport * from \"./components/date-picker-popover\";\nexport * from \"./components/details-grid\";\nexport * from \"./components/destructive-action-confirmation\";\nexport * from \"./components/destructive-confirm-dialog\";\nexport * from \"./components/dialog\";\nexport * from \"./components/directional-icon\";\nexport * from \"./components/field\";\nexport * from \"./components/file-input\";\nexport * from \"./components/form\";\nexport * from \"./components/frame\";\nexport * from \"./components/hex-color-picker\";\nexport * from \"./components/input\";\nexport * from \"./components/inline-rename\";\nexport * from \"./components/input-group\";\nexport * from \"./components/list\";\nexport * from \"./components/search-field\";\nexport * from \"./components/input-otp\";\nexport * from \"./components/label\";\nexport * from \"./components/menu\";\nexport * from \"./components/menu-section\";\nexport * from \"./components/outline-rail\";\nexport * from \"./components/pagination\";\nexport * from \"./components/popover\";\nexport * from \"./components/preview-card\";\nexport * from \"./components/preview-pane\";\nexport * from \"./components/prose\";\nexport * from \"./components/scroll-area\";\nexport * from \"./components/scroll-to-top\";\nexport * from \"./components/secret-input\";\nexport * from \"./components/segmented-icon-toggle\";\nexport * from \"./components/select\";\nexport * from \"./components/separator\";\nexport * from \"./components/sheet\";\nexport * from \"./components/sidebar\";\nexport * from \"./components/skeleton\";\nexport * from \"./components/stella-mark\";\nexport * from \"./components/stella-wordmark\";\nexport * from \"./components/table\";\nexport * from \"./components/tabs\";\nexport * from \"./components/textarea\";\nexport * from \"./components/toast\";\nexport * from \"./components/tooltip\";\nexport * from \"./components/truncated-text\";\nexport * from \"./data-table\";\nexport * from \"./hooks/use-contained-handler\";\nexport * from \"./hooks/use-content-dir\";\nexport * from \"./hooks/use-latest\";\nexport * from \"./hooks/use-mobile\";\nexport * from \"./hooks/use-viewport-width\";\nexport * from \"./inspector\";\nexport * from \"./kanban\";\nexport * from \"./lib/control-size\";\nexport * from \"./lib/initials\";\nexport * from \"./lib/option-color\";\nexport * from \"./lib/overlay-layer\";\nexport * from \"./lib/typed-character\";\nexport * from \"./lib/utils\";\nexport * from \"./lib/week\";\nexport * from \"./review/review-author-avatar\";\nexport * from \"./review/review-comment-card\";\nexport * from \"./review/review-decision-actions\";\nexport * from \"./review/review-diff-text\";\nexport * from \"./review/review-out-of-date-notice\";\nexport * from \"./review/review-severity-dot\";\nexport * from \"./review/review-status-badge\";\n",
+    "./src/index.d.ts": "export * from \"./components/accordion\";\nexport * from \"./components/application-rail\";\nexport * from \"./components/alert-dialog\";\nexport * from \"./components/workspace-shell\";\nexport * from \"./components/avatar\";\nexport * from \"./components/badge\";\nexport * from \"./components/bidi-text\";\nexport * from \"./components/brand-icons\";\nexport * from \"./components/breadcrumb\";\nexport * from \"./components/button\";\nexport * from \"./components/checkbox\";\nexport * from \"./components/color-picker\";\nexport * from \"./components/combobox\";\nexport * from \"./components/command\";\nexport * from \"./components/copy-button\";\nexport * from \"./calendar/primitives\";\nexport * from \"./calendar/resource-calendar\";\nexport * from \"./calendar/resource-calendar.logic\";\nexport * from \"./components/date-picker-popover\";\nexport * from \"./components/details-grid\";\nexport * from \"./components/destructive-action-confirmation\";\nexport * from \"./components/destructive-confirm-dialog\";\nexport * from \"./components/dialog\";\nexport * from \"./components/directional-icon\";\nexport * from \"./components/field\";\nexport * from \"./components/file-input\";\nexport * from \"./components/form\";\nexport * from \"./components/frame\";\nexport * from \"./components/hex-color-picker\";\nexport * from \"./components/input\";\nexport * from \"./components/inline-rename\";\nexport * from \"./components/input-group\";\nexport * from \"./components/list\";\nexport * from \"./components/search-field\";\nexport * from \"./components/input-otp\";\nexport * from \"./components/label\";\nexport * from \"./components/menu\";\nexport * from \"./components/menu-section\";\nexport * from \"./components/outline-rail\";\nexport * from \"./components/pagination\";\nexport * from \"./components/popover\";\nexport * from \"./components/preview-card\";\nexport * from \"./components/preview-pane\";\nexport * from \"./components/prose\";\nexport * from \"./components/scroll-area\";\nexport * from \"./components/scroll-to-top\";\nexport * from \"./components/secret-input\";\nexport * from \"./components/segmented-icon-toggle\";\nexport * from \"./components/select\";\nexport * from \"./components/separator\";\nexport * from \"./components/sheet\";\nexport * from \"./components/sidebar\";\nexport * from \"./components/skeleton\";\nexport * from \"./components/stella-mark\";\nexport * from \"./components/stella-wordmark\";\nexport * from \"./components/table\";\nexport * from \"./components/tabs\";\nexport * from \"./components/textarea\";\nexport * from \"./components/toast\";\nexport * from \"./components/tooltip\";\nexport * from \"./components/truncated-text\";\nexport * from \"./data-table\";\nexport * from \"./hooks/use-contained-handler\";\nexport * from \"./hooks/use-content-dir\";\nexport * from \"./hooks/use-latest\";\nexport * from \"./hooks/use-mobile\";\nexport * from \"./hooks/use-viewport-width\";\nexport * from \"./inspector\";\nexport * from \"./kanban\";\nexport * from \"./lib/control-size\";\nexport * from \"./lib/initials\";\nexport * from \"./lib/option-color\";\nexport * from \"./lib/overlay-layer\";\nexport * from \"./lib/typed-character\";\nexport * from \"./lib/utils\";\nexport * from \"./lib/week\";\nexport * from \"./review/review-author-avatar\";\nexport * from \"./review/review-comment-card\";\nexport * from \"./review/review-decision-actions\";\nexport * from \"./review/review-diff-text\";\nexport * from \"./review/review-out-of-date-notice\";\nexport * from \"./review/review-severity-dot\";\nexport * from \"./review/review-status-badge\";\n",
     "./src/inspector/chrome.d.ts": "import type * as React from \"react\";\nexport declare const Inspector: ({ className, ...props }: React.ComponentProps<\"aside\">) => React.JSX.Element;\nexport declare const InspectorRail: ({ className, ...props }: React.ComponentProps<\"nav\">) => React.JSX.Element;\nexport declare const InspectorRailCell: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailFooter: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorRailIconButton: ({ className, ...props }: React.ComponentProps<\"button\">) => React.JSX.Element;\nexport declare const InspectorRailTab: ({ active, className, ...props }: React.ComponentProps<\"button\"> & {\n    active?: boolean;\n}) => React.JSX.Element;\nexport declare const InspectorHeader: ({ className, ...props }: React.ComponentProps<\"header\">) => React.JSX.Element;\nexport declare const InspectorHeaderText: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorTitle: ({ children, className, ...props }: React.ComponentProps<\"h2\">) => React.JSX.Element;\nexport declare const InspectorDescription: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\nexport declare const InspectorActions: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorContent: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorSection: ({ className, ...props }: React.ComponentProps<\"section\">) => React.JSX.Element;\nexport declare const InspectorSectionTitle: ({ children, className, ...props }: React.ComponentProps<\"h3\">) => React.JSX.Element;\nexport declare const InspectorPropertyList: ({ className, ...props }: React.ComponentProps<\"dl\">) => React.JSX.Element;\nexport declare const InspectorProperty: ({ className, ...props }: React.ComponentProps<\"div\">) => React.JSX.Element;\nexport declare const InspectorPropertyLabel: ({ className, ...props }: React.ComponentProps<\"dt\">) => React.JSX.Element;\nexport declare const InspectorPropertyValue: ({ className, ...props }: React.ComponentProps<\"dd\">) => React.JSX.Element;\nexport declare const InspectorEmptyRow: ({ className, ...props }: React.ComponentProps<\"p\">) => React.JSX.Element;\n",
     "./src/inspector/dock.d.ts": "import type { ReactNode } from \"react\";\ntype InspectorResizeHandleProps = {\n    \"aria-orientation\": \"vertical\";\n    \"aria-valuemax\": number;\n    \"aria-valuemin\": number;\n    \"aria-valuenow\": number;\n    onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void;\n    onLostPointerCapture: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerCancel: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerDown: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerMove: (event: React.PointerEvent<HTMLElement>) => void;\n    onPointerUp: (event: React.PointerEvent<HTMLElement>) => void;\n    tabIndex: number;\n};\nexport type InspectorDockMount = \"content\" | \"shell-end\";\ntype InspectorDockProps = {\n    children: ReactNode;\n    className?: string | undefined;\n    mount?: InspectorDockMount | undefined;\n    rail?: ReactNode | undefined;\n    resizeHandleLabel: string;\n    resizeHandleProps: InspectorResizeHandleProps;\n    onResetWidth?: (() => void) | undefined;\n    showPaneContent: boolean;\n    width: number;\n};\nexport declare const InspectorDock: ({ children, className, mount, onResetWidth, rail, resizeHandleLabel, resizeHandleProps, showPaneContent, width, }: InspectorDockProps) => import(\"react\").JSX.Element;\nexport {};\n",
     "./src/inspector/entity-tab.d.ts": "import type { ComponentProps, ReactNode } from \"react\";\nexport declare const InspectorEntityTab: ({ active, label, glyph, icon, inactiveIcon, onClose, onSelect, ...props }: InspectorEntityTabProps) => import(\"react\").JSX.Element;\ntype InspectorEntityTabPassthroughProps = Omit<ComponentProps<\"button\">, \"children\" | \"onAuxClick\" | \"onClick\">;\nexport type InspectorEntityTabInactiveIcon = \"dim\" | \"legible\";\nexport type InspectorEntityTabProps = {\n    active: boolean;\n    label: string;\n    glyph?: string | undefined;\n    icon: ReactNode;\n    inactiveIcon?: InspectorEntityTabInactiveIcon | undefined;\n    onClose?: (() => void) | undefined;\n    onSelect?: (() => void) | undefined;\n} & InspectorEntityTabPassthroughProps;\nexport declare const entityTabGlyph: (name: string, length?: number) => string;\nexport {};\n",

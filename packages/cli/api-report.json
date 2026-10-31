@@ -10,6 +10,10 @@
       "type": "asset",
       "target": "./capabilities/*.json",
       "files": [
+        "./capabilities/account-exports.create.json",
+        "./capabilities/account-exports.download.get.json",
+        "./capabilities/account-exports.get.json",
+        "./capabilities/account-exports.status.get.json",
         "./capabilities/audit-logs.list.json",
         "./capabilities/billing-codes.create.json",
         "./capabilities/billing-codes.delete.json",
