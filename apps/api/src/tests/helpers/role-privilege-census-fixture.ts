@@ -12,7 +12,7 @@ import { withIsolatedPostgresCluster } from "../isolated-postgres-cluster";
 const migrationsFolder = path.resolve(import.meta.dir, "../../../drizzle");
 
 export const withMigratedRolePrivilegeCensus = async (
-  run: (database: SQL, census: Census) => Promise<void>,
+  run: (database: SQL, census: Census) => void | Promise<void>,
 ) => {
   await withIsolatedPostgresCluster(
     {

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
-import { and, count, eq, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
-import { caseLawCompletenessCensus as census } from "@/api/db/schema";
+import { caseLawCompletenessCensus as censusTable } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { censusCapabilityFor } from "@/api/lib/case-law/completeness-census-capabilities";
@@ -107,9 +107,6 @@ export const unmeasuredSourceCensus = (adapterKey: string): SourceCensus => {
   };
 };
 
-const measuredOutcome = inArray(census.outcome, CENSUS_MEASURED_OUTCOMES);
-const short = sql`${measuredOutcome} AND ${census.publisherCount} IS NOT NULL AND (${census.storedCount} < ${census.publisherCount} OR ${census.textCount}::bigint * 1000 < ${census.storedCount}::bigint * 999)`;
-
 type CensusOutcomeSummary = {
   noneExposed: number;
   unproven: number;
@@ -140,17 +137,32 @@ export const readCompletenessCensusQuery = async (
     return new Map();
   }
   const scopes = new Map(sources.map(({ id, scope }) => [String(id), scope]));
-  const where = or(
-    ...sources.map(({ id, scope }) =>
-      scope === null
-        ? eq(census.sourceId, id)
-        : and(
-            eq(census.sourceId, id),
-            gte(census.slice, scope.first),
-            lte(census.slice, scope.last),
-          ),
-    ),
+  const [first, ...remainingSources] = sources.map(({ id, scope }) =>
+    tx
+      .select()
+      .from(censusTable)
+      .where(
+        scope === null
+          ? eq(censusTable.sourceId, id)
+          : and(
+              eq(censusTable.sourceId, id),
+              gte(censusTable.slice, scope.first),
+              lte(censusTable.slice, scope.last),
+            ),
+      ),
   );
+  if (first === undefined) {
+    return panic("A census read requires at least one source");
+  }
+  // Keep each source range independently indexable, including on a fresh census.
+  const scoped = first.$dynamic();
+  for (const branch of remainingSources) {
+    scoped.unionAll(branch);
+  }
+  const census = scoped.as("scoped_census");
+  const measuredOutcome = inArray(census.outcome, CENSUS_MEASURED_OUTCOMES);
+  const short = sql`${measuredOutcome} AND ${census.publisherCount} IS NOT NULL AND (${census.storedCount} < ${census.publisherCount} OR ${census.textCount}::bigint * 1000 < ${census.storedCount}::bigint * 999)`;
+
   const totalsRead = await readBounded(
     tx
       .select({
@@ -171,7 +183,6 @@ export const readCompletenessCensusQuery = async (
         evidenceRef: sql<string>`min(${census.evidenceRef})`,
       })
       .from(census)
-      .where(where)
       .groupBy(census.sourceId),
     CASE_LAW_SOURCE_ROWS_BOUND,
   );
@@ -193,7 +204,6 @@ export const readCompletenessCensusQuery = async (
         withText: sql<number>`sum(${census.textCount})::bigint`.mapWith(Number),
       })
       .from(census)
-      .where(where)
       .groupBy(census.sourceId, census.year)
       .orderBy(census.sourceId, census.year),
     CASE_LAW_SOURCE_ROWS_BOUND * CENSUS_YEAR_SUMMARIES_LIMIT,
@@ -218,7 +228,7 @@ export const readCompletenessCensusQuery = async (
       ),
     })
     .from(census)
-    .where(and(where, sql`(${short} OR NOT (${measuredOutcome}))`))
+    .where(sql`(${short} OR NOT (${measuredOutcome}))`)
     .as("ranked_census");
   const worstRead = await readBounded(
     tx
