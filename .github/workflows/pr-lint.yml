@@ -6,10 +6,10 @@ defaults:
 
 on:
   pull_request_target:
-    # Run once when a PR opens, then only when a maintainer requests a
-    # rerun with "run-pr-lint". This metadata-only workflow reads the
-    # title and body and must never check out or execute PR code, so it is safe
-    # to run for forks without approval.
+    # Run when a PR opens, when its title or body is edited, and when a
+    # maintainer requests a rerun with "run-pr-lint". This metadata-only
+    # workflow reads the title and body and never checks out or executes PR
+    # code, so it is safe to run for forks without approval.
     types: [opened, edited, labeled]
 
 concurrency:
@@ -37,7 +37,7 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Checkout trusted workflow revision
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
