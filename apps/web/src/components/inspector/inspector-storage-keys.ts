@@ -11,6 +11,7 @@ import {
   keepInAnyScope,
   readPersistedState,
 } from "@/lib/persisted-state/registry";
+import { createUuid } from "@/lib/uuid";
 
 /** Whose inspector this is: one user inside one organization. */
 export type InspectorStorageScope = {
@@ -82,9 +83,38 @@ export const inspectorRestorePendingEntry = definePersistedState({
   restoredUi: true,
 });
 
-/** Layout metadata only: the member's tab payloads stay in the lazy frame. */
-export const readPersistedInspectorPaneRequested = (
+// The restore-pending marker records which page load set it. The id lives
+// here, beside the marker, so the loading frame (before the member's inspector
+// code loads) and the restoring store judge the same marker the same way.
+let inspectorPageLoadId: string = createUuid();
+
+/** A new page load: a marker an earlier one left is a stalled restore. */
+export const startInspectorPageLoad = (): string => {
+  inspectorPageLoadId = createUuid();
+  return inspectorPageLoadId;
+};
+
+/** An earlier page load restored tabs and never settled. */
+export const isInspectorRestorePending = (
   scope: InspectorStorageScope,
-) =>
-  (readPersistedState(inspectorStateEntry, scope)?.tabs.length ?? 0) > 0 &&
-  !readPersistedState(inspectorMinimizedEntry, scope);
+): boolean => {
+  const marker = readPersistedState(inspectorRestorePendingEntry, scope);
+  return marker !== "" && marker !== inspectorPageLoadId;
+};
+
+/** Every tab the member left open, before any restore policy filters it. */
+export const countStoredInspectorTabs = (scope: InspectorStorageScope) =>
+  readPersistedState(inspectorStateEntry, scope)?.tabs.length ?? 0;
+
+/**
+ * Whether the next restore opens the pane: tabs to restore, not minimized and
+ * no stalled earlier restore. The one policy for every frame that reserves
+ * the pane; the restoring store passes the tabs it would actually restore.
+ */
+export const isPersistedInspectorPaneOpen = (
+  scope: InspectorStorageScope,
+  countRestorableTabs: (scope: InspectorStorageScope) => number,
+): boolean =>
+  !readPersistedState(inspectorMinimizedEntry, scope) &&
+  !isInspectorRestorePending(scope) &&
+  countRestorableTabs(scope) > 0;

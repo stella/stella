@@ -18,8 +18,8 @@ import { useViewportWidth } from "@stll/ui/use-viewport-width";
 import { cn } from "@stll/ui/utils";
 
 import {
-  inspectorRestorePendingEntry,
-  readPersistedInspectorPaneRequested,
+  countStoredInspectorTabs,
+  isPersistedInspectorPaneOpen,
 } from "@/components/inspector/inspector-storage-keys";
 import type { InspectorStorageScope } from "@/components/inspector/inspector-storage-keys";
 import { readPersistedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
@@ -35,7 +35,6 @@ import {
 import { StellaWordmarkArabic } from "@/components/stella-wordmark";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { readPersistedState } from "@/lib/persisted-state/registry";
 
 // The primary entries every signed-in person sees, from the same list the
 // real sidebar renders. Flag-gated entries (inbox, timesheets, case law) join
@@ -93,10 +92,12 @@ function ProtectedPendingSkeletonContent({
   inspectorScope: InspectorStorageScope | undefined;
 }) {
   const viewportWidth = useViewportWidth();
+  // The restore policy the authenticated frame applies, on the stored tabs:
+  // the member's tab registry loads with that frame, and the store writes
+  // only tabs it would restore.
   const paneRequested =
     inspectorScope !== undefined &&
-    readPersistedInspectorPaneRequested(inspectorScope) &&
-    readPersistedState(inspectorRestorePendingEntry, inspectorScope) === "";
+    isPersistedInspectorPaneOpen(inspectorScope, countStoredInspectorTabs);
   const sidebarOpen =
     (readPersistedSidebarOpen() ?? DEFAULT_SIDEBAR_OPEN) &&
     !shouldForceSidebarCollapsed({
