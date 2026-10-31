@@ -937,6 +937,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
   });
 }
 
+// A citation is pressed on its text, like a reader does: the run hands the
+// press to a button clipped out of the pointer's reach.
+const citedRun = (app: FrameLocator, name: string) =>
+  app.locator('[data-slot="button-text-run"]').filter({ hasText: name });
+
 const loadReferencePages = async (app: FrameLocator) => {
   await app.getByRole("button", { name: "Next", exact: true }).click();
   await app.getByRole("button", { name: "Next", exact: true }).click();
@@ -961,9 +966,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
   }) => {
     const app = await mountReader({ page, host, pages: LINK_PAGES });
     await loadReferencePages(app);
-    await app
-      .getByRole("button", { name: "cited provision", exact: true })
-      .click();
+    await citedRun(app, "cited provision").click();
     await expect(app.locator("aside")).toContainText(
       "Exact cited provision wording.",
     );
@@ -980,9 +983,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect
       .poll(async () => (await history(page)).links)
       .toEqual([provisionUrl]);
-    await app
-      .getByRole("button", { name: "Cited decision", exact: true })
-      .click();
+    await citedRun(app, "Cited decision").click();
     await expect(
       app.getByText(CITED_OPEN.metadata.caseNumber, { exact: true }),
     ).toBeVisible();
@@ -1032,12 +1033,8 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await loadReferencePages(app);
     const pageCalls = (await history(page)).calls;
     expectOnlyReferencePageCalls(pageCalls);
-    await app
-      .getByRole("button", { name: "Cited decision", exact: true })
-      .click();
-    await app
-      .getByRole("button", { name: "cited provision", exact: true })
-      .click();
+    await citedRun(app, "Cited decision").click();
+    await citedRun(app, "cited provision").click();
     await expect
       .poll(async () => (await history(page)).links)
       .toEqual([citedDecisionUrl, provisionUrl]);
@@ -1336,15 +1333,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       "Reader-only paragraph 1.",
     );
     await loadReferencePages(second);
-    await second
-      .getByRole("button", { name: "cited provision", exact: true })
-      .click();
+    await citedRun(second, "cited provision").click();
     await expect(second.locator("aside")).toContainText(
       "Exact cited provision wording.",
     );
-    await second
-      .getByRole("button", { name: "Cited decision", exact: true })
-      .click();
+    await citedRun(second, "Cited decision").click();
     await expect(second.locator("#para90")).toContainText(
       "Reader-only paragraph 90.",
     );

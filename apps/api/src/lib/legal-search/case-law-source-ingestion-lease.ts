@@ -153,3 +153,64 @@ export const acquireCaseLawSourceIngestionLease = async ({
     source,
   };
 };
+
+/**
+ * Run one bounded source operation while owning its ingestion lease.
+ *
+ * A held lease remains a typed `null` outcome. Once acquisition succeeds,
+ * this owner is the only code responsible for releasing it.
+ */
+export const withCaseLawSourceIngestionLease = async <T>(
+  options: AcquireCaseLawSourceIngestionLeaseOptions,
+  work: (lease: CaseLawSourceIngestionLease) => Promise<T>,
+): Promise<T | null> => {
+  const lease = await acquireCaseLawSourceIngestionLease(options);
+  if (lease === null) {
+    return null;
+  }
+  try {
+    return await work(lease);
+  } finally {
+    await lease.release();
+  }
+};
+
+export type HeldCaseLawSourceIngestionLease = {
+  lease: CaseLawSourceIngestionLease;
+  release: () => Promise<void>;
+};
+
+/**
+ * The owner's form for work that cannot be one callback (a per-document tick,
+ * a script whose work spans top-level statements). The lease still runs inside
+ * withCaseLawSourceIngestionLease, so its release stays in the owner's
+ * `finally`; `release` only ends that work and waits for it.
+ */
+export const holdCaseLawSourceIngestionLease = async (
+  options: AcquireCaseLawSourceIngestionLeaseOptions,
+  runWithLease: typeof withCaseLawSourceIngestionLease = withCaseLawSourceIngestionLease,
+): Promise<HeldCaseLawSourceIngestionLease | null> => {
+  let markStarted!: (lease: CaseLawSourceIngestionLease) => void;
+  const started = new Promise<CaseLawSourceIngestionLease>((resolve) => {
+    markStarted = resolve;
+  });
+  let finish!: () => void;
+  const finished = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const run = runWithLease(options, async (lease) => {
+    markStarted(lease);
+    await finished;
+  });
+  const lease = await Promise.race([run.then(() => null), started]);
+  if (lease === null) {
+    return null;
+  }
+  return {
+    lease,
+    release: async () => {
+      finish();
+      await run;
+    },
+  };
+};

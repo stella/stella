@@ -10,7 +10,7 @@ import { DecisionIdentity } from "@stll/decision-reader/decision-identity";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronLeftIcon } from "@stll/ui/icons";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
@@ -66,9 +66,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
@@ -77,7 +75,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -90,9 +88,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
@@ -101,7 +97,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }

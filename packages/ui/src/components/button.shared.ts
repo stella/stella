@@ -39,6 +39,12 @@ export const BUTTON_VARIANT_TOKENS = {
   link: { surface: "border-transparent", label: "" },
   // Quiet action: muted until hovered or pressed.
   muted: { surface: "border-transparent", label: "text-muted-foreground" },
+  // Quiet until hovered or pressed, then destructive: a delete beside quiet
+  // actions.
+  "muted-destructive": {
+    surface: "border-transparent",
+    label: "text-muted-foreground",
+  },
   outline: { surface: "border-input bg-popover", label: "text-foreground" },
   secondary: {
     surface: "border-transparent bg-secondary",
@@ -46,7 +52,19 @@ export const BUTTON_VARIANT_TOKENS = {
   },
 } as const satisfies Record<string, { surface: string; label: string }>;
 
-export type ButtonVariant = keyof typeof BUTTON_VARIANT_TOKENS;
+/** A variant painted from its shared tokens above. */
+export type ButtonTokenVariant = keyof typeof BUTTON_VARIANT_TOKENS;
+
+/**
+ * `plain`: a click target whose look is its content (a card, a thumbnail, a
+ * cell, a passage). It has no tokens: neither renderer paints a box, border,
+ * type or press motion for it, and each keeps everything else its button
+ * owns (the disabled disposition, and on the web the tooltip and the focus
+ * ring). A `size` does not apply to it.
+ */
+export const BUTTON_PLAIN_VARIANT = "plain";
+
+export type ButtonVariant = ButtonTokenVariant | typeof BUTTON_PLAIN_VARIANT;
 
 /** Every size a button comes in, on every platform. */
 export const BUTTON_SIZES = [
@@ -56,7 +74,10 @@ export const BUTTON_SIZES = [
   "icon-lg",
   "icon-sm",
   "icon-xl",
+  "icon-2xs",
   "icon-xs",
+  // An action inside a line of text: no box of its own.
+  "inline",
   "lg",
   "row",
   "sm",
@@ -80,5 +101,13 @@ export type ButtonContract = {
   disabled?: boolean;
   /** A glyph before the label. */
   icon?: ReactNode;
+  /**
+   * The current choice in a set (a picked option, the active filter tab, the
+   * open item of a list): shows the variant's selected treatment, which is
+   * distinct from its hover or press. The accessibility state stays the
+   * caller's, because which one is right depends on the widget the button is
+   * part of.
+   */
+  selected?: boolean | undefined;
   children?: ReactNode;
 };
