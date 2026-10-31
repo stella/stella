@@ -720,13 +720,14 @@ const measureRouteTarget = async ({
   });
   const detachPage = browserErrors.trackPage(page);
   const network = createNetworkCollector();
-  const detachNetwork = network.trackPage(page);
+  let detachNetwork: (() => Promise<void>) | undefined;
 
   const renders = countRenders
     ? createRenderRecorder(async () => await readRenderCensus(page))
     : null;
 
   try {
+    detachNetwork = await network.trackPage(page);
     if (renders !== null) {
       // Installed before the first document script so React registers with it.
       await page.addInitScript(installRenderCommitHook, RENDER_CENSUS_GLOBAL);
@@ -762,9 +763,12 @@ const measureRouteTarget = async ({
       renders: renderMetrics,
     };
   } finally {
-    detachNetwork();
-    detachPage();
-    await context.close();
+    try {
+      await detachNetwork?.();
+    } finally {
+      detachPage();
+      await context.close();
+    }
   }
 };
 

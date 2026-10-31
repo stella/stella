@@ -19,6 +19,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   explainRoot,
+  indexedAccessPaths,
   scanOccurrences,
 } from "@/api/tests/query-plans/plan-walker";
 import { vacuumUntilAllVisible } from "@/api/tests/query-plans/visibility";
@@ -148,14 +149,26 @@ describe.skipIf(!enabled)("published court walks (postgres)", () => {
               vocabulary.params,
             ),
           );
-          const vocabularyScans = scanOccurrences(vocabularyPlan).filter(
-            ({ relation }) => relation === "case_law_decisions",
+          // Every scan of the table, of any kind, must be one of the two
+          // covering probes: a covering-index proof paired with the
+          // heap-fetch check below.
+          expect(
+            scanOccurrences(vocabularyPlan).filter(
+              ({ relation }) => relation === "case_law_decisions",
+            ),
+          ).toHaveLength(2);
+          const vocabularyScans = indexedAccessPaths(
+            vocabularyPlan,
+            "case_law_decisions",
+            { accessKind: "index-only" },
           );
           expect(vocabularyScans).toHaveLength(2);
           for (const scan of vocabularyScans) {
-            expect(scan.index).toBe(PUBLISHED_INDEX);
-            expect(scan.nodeType).toBe("Index Only Scan");
-            expect(scan.filter).toBeNull();
+            expect(scan.branches.map(({ indexName }) => indexName)).toEqual([
+              PUBLISHED_INDEX,
+            ]);
+            // A residual filter would walk index entries the bound skips.
+            expect(scan.node["Filter"]).toBeUndefined();
           }
           for (const scan of indexScans(vocabularyPlan)) {
             expect(scan["Actual Rows"]).toBeLessThanOrEqual(1);

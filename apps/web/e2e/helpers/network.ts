@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
+import { panic, Result } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -47,8 +48,17 @@ const WRITE_HINT =
   "declare an intentional increase in apps/web/e2e/network-budgets/<change>.json; main records the shared baseline";
 
 const NETWORK_ROUND_POLL_MS = 10;
+const NETWORK_BODY_COMPLETION_TIMEOUT_MS = 10_000;
 
 // --- collector -------------------------------------------------------------
+
+export type ResponseSizeOutcome =
+  | { status: "measured"; bytes: number }
+  | { status: "streamed" }
+  | { status: "failed"; error: string; canceled: boolean }
+  | { status: "unreadable"; error: string };
+
+type ResponseSizeFailure = Extract<ResponseSizeOutcome, { error: string }>;
 
 export type NetworkCapture = {
   requests: {
@@ -58,13 +68,7 @@ export type NetworkCapture = {
     dbQueryHeaderMissing: boolean;
     transactions: number | null;
     transactionHeaderMissing: boolean;
-    // Response body size in bytes; null for a streamed response (excluded by
-    // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
-    // Playwright never resolved (see responseBytesUnavailable).
-    responseBytes: number | null;
-    // True only when Playwright saw a non-streamed response and reading its
-    // body failed (e.g. aborted/redirected mid-navigation).
-    responseBytesUnavailable: boolean;
+    responseSize: ResponseSizeOutcome;
   }[];
   // Scheduled release rounds; only measurement navigations install the barrier.
   depthChain: string[][];
@@ -73,15 +77,14 @@ export type NetworkCapture = {
 };
 
 export type NetworkCollector = {
-  trackPage: (page: Page) => () => void;
+  trackPage: (page: Page) => Promise<() => Promise<void>>;
   measureRounds: (page: Page, options?: MeasureRoundsOptions) => Promise<void>;
   finishRounds: () => void;
   // Waits until tracked API activity has been quiet for the requested window.
   // Long-lived SSE streams do not block this: only their request/response
   // events count as activity, not the open connection itself.
   waitForQuiet: (options: NetworkQuietOptions) => Promise<"idle" | "timeout">;
-  // Async: waits for in-flight response-body reads so response sizes are
-  // populated before the caller summarizes the capture.
+  // Waits for budgeted non-streamed bodies, with a bounded unreadable outcome.
   capture: () => Promise<NetworkCapture>;
 };
 
@@ -135,6 +138,8 @@ export const waitForQuietPeriod = async ({
 
 type NetworkCollectorOptions = {
   apiOrigin?: string;
+  bodyCompletionTimeoutMs?: number;
+  responseSizeBudgetKeys?: ReadonlySet<string>;
 };
 
 type NetworkRecord = {
@@ -145,15 +150,12 @@ type NetworkRecord = {
   // From the API's dev/test-only `x-db-queries` response header (the
   // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
-  // True only when Playwright saw a response and that response did not expose
+  // True only when CDP saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
   transactions: number | null;
   transactionHeaderMissing: boolean;
-  // Response body length in bytes; null until the async body read resolves,
-  // and permanently null for a streamed (SSE) response.
-  responseBytes: number | null;
-  responseBytesUnavailable: boolean;
+  responseSize: ReturnType<typeof createResponseSizeSample>;
 };
 
 const BACKGROUND_POLL_PATHS = new Set(["/health"]);
@@ -175,32 +177,127 @@ const requestDetails = (request: Request): WaterfallRequest => ({
   resourceType: request.resourceType(),
 });
 
-const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
-  if (!TRACKED_RESOURCE_TYPES.has(request.resourceType())) {
-    return false;
-  }
-  return new URL(request.url()).origin === apiOrigin;
+export const isTrackedProtocolRequest = (
+  { type, url }: { type: string | undefined; url: string },
+  apiOrigin: string,
+): boolean =>
+  (type === undefined || TRACKED_RESOURCE_TYPES.has(type.toLowerCase())) &&
+  new URL(url).origin === apiOrigin;
+
+const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean =>
+  isTrackedProtocolRequest(
+    { type: request.resourceType(), url: request.url() },
+    apiOrigin,
+  );
+
+/** Accumulate decoded bytes without retrieving or retaining the response body. */
+export const createResponseSizeSample = (
+  incompleteReason = "CDP loadingFinished was not observed",
+) => {
+  let decodedBytes = 0;
+  const completion = Promise.withResolvers<undefined>();
+  let outcome: ResponseSizeOutcome = {
+    status: "unreadable",
+    error: incompleteReason,
+  };
+  return {
+    completion: completion.promise,
+    markIncomplete: (timeoutMs: number) => {
+      if (outcome.status === "unreadable") {
+        outcome = {
+          status: "unreadable",
+          error: `body incomplete after ${timeoutMs}ms`,
+        };
+      }
+    },
+    receive: (dataLength: number) => {
+      if (outcome.status !== "streamed") {
+        decodedBytes += dataLength;
+      }
+    },
+    complete: () => {
+      if (outcome.status !== "streamed" && outcome.status !== "failed") {
+        outcome = { status: "measured", bytes: decodedBytes };
+      }
+      completion.resolve(undefined);
+    },
+    fail: ({
+      errorText,
+      canceled = false,
+    }: {
+      errorText: string;
+      canceled?: boolean;
+    }) => {
+      outcome = { status: "failed", error: errorText, canceled };
+      completion.resolve(undefined);
+    },
+    stream: () => {
+      outcome = { status: "streamed" };
+      completion.resolve(undefined);
+    },
+    get outcome(): ResponseSizeOutcome {
+      return outcome;
+    },
+  };
 };
 
-const isStreamedResponse = (response: Response): boolean =>
-  (response.headers()["content-type"] ?? "")
-    .toLowerCase()
-    .includes(STREAMED_RESPONSE_CONTENT_TYPE);
-
-// Playwright's body() rejects for a response that never finishes (aborted or
-// redirected mid-navigation); that is a legitimate outcome here, not a bug in
-// the collector, so it is caught and recorded rather than left to reject the
-// whole route walk.
-const readResponseBytes = async (
-  response: Response,
+const recordQueryCount = (
   record: NetworkRecord,
-): Promise<void> => {
-  try {
-    const body = await response.body();
-    record.responseBytes = body.length;
-  } catch {
-    record.responseBytesUnavailable = true;
+  headers: Readonly<Record<string, unknown>>,
+) => {
+  const header = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === DB_QUERIES_HEADER,
+  )?.[1];
+  record.dbQueryHeaderMissing = header === undefined;
+  record.dbQueries = header === undefined ? null : Number(header);
+  const transactionHeader = Object.entries(headers).find(
+    ([name]) => name.toLowerCase() === DB_TRANSACTIONS_HEADER,
+  )?.[1];
+  record.transactions =
+    transactionHeader === undefined ? null : Number(transactionHeader);
+  record.transactionHeaderMissing = transactionHeader === undefined;
+};
+
+type ReconcileNetworkRecordsOptions = {
+  records: readonly NetworkRecord[];
+  requests: Iterable<Request>;
+};
+
+const reconcileNetworkRecords = ({
+  records,
+  requests,
+}: ReconcileNetworkRecordsOptions) => {
+  // Page request events include OOPIF traffic that the page's CDP target
+  // may not emit. Reconcile occurrence counts so repeated URLs remain
+  // distinct, and expose every unmeasured body to the existing size guard.
+  const remaining = new Map<string, number>();
+  for (const { method, url } of records) {
+    const key = JSON.stringify([method, url]);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
   }
+  const capturedRecords = [...records];
+  for (const request of requests) {
+    const key = JSON.stringify([request.method(), request.url()]);
+    const count = remaining.get(key) ?? 0;
+    if (count > 0) {
+      remaining.set(key, count - 1);
+      continue;
+    }
+    capturedRecords.push({
+      method: request.method(),
+      pathname: new URL(request.url()).pathname,
+      url: request.url(),
+      startedAt: request.timing().startTime,
+      dbQueries: null,
+      dbQueryHeaderMissing: false,
+      transactions: null,
+      transactionHeaderMissing: false,
+      responseSize: createResponseSizeSample(
+        "CDP Network events were not observed; the request may belong to an out-of-process iframe",
+      ),
+    });
+  }
+  return capturedRecords;
 };
 
 export const createNetworkCollector = (
@@ -208,11 +305,19 @@ export const createNetworkCollector = (
 ): NetworkCollector => {
   const apiOrigin =
     collectorOptions.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
+  const bodyCompletionTimeoutMs =
+    collectorOptions.bodyCompletionTimeoutMs ??
+    NETWORK_BODY_COMPLETION_TIMEOUT_MS;
+  const responseSizeBudgetKeys =
+    collectorOptions.responseSizeBudgetKeys ??
+    new Set(
+      Object.values(readNetworkBaseline() ?? {}).flatMap((entry) =>
+        Object.keys(entry.responseSizes ?? {}),
+      ),
+    );
   const records: NetworkRecord[] = [];
-  const byRequest = new Map<Request, NetworkRecord>();
-  // Body reads are async (Playwright must finish downloading the response),
-  // so capture() awaits these before reading responseBytes off the records.
-  const pendingBodyReads: Promise<void>[] = [];
+  const flushSessions = new Set<() => Promise<void>>();
+  const observedRequests = new Set<Request>();
   let lastActivityAt = Date.now();
   const rounds = createNetworkRoundController<Request>();
   const released = new Set<Request>();
@@ -296,78 +401,166 @@ export const createNetworkCollector = (
         });
       }
     },
-    trackPage: (page) => {
-      const onRequest = (request: Request) => {
-        if (!isTrackedApiRequest(request, apiOrigin)) {
+    trackPage: async (page) => {
+      const session = await page.context().newCDPSession(page);
+      const byRequestId = new Map<string, NetworkRecord>();
+      session.on(
+        "Network.requestWillBeSent",
+        ({ requestId, request, type, wallTime, redirectResponse }) => {
+          if (redirectResponse !== undefined) {
+            const previous = byRequestId.get(requestId);
+            if (previous !== undefined) {
+              recordQueryCount(previous, redirectResponse.headers);
+              previous.responseSize.complete();
+            }
+            byRequestId.delete(requestId);
+          }
+          if (
+            !isTrackedProtocolRequest({ type, url: request.url }, apiOrigin)
+          ) {
+            return;
+          }
+          const record: NetworkRecord = {
+            method: request.method,
+            pathname: new URL(request.url).pathname,
+            url: request.url,
+            startedAt: wallTime * 1000,
+            dbQueries: null,
+            dbQueryHeaderMissing: false,
+            transactions: null,
+            transactionHeaderMissing: false,
+            responseSize: createResponseSizeSample(),
+          };
+          if (type === "EventSource" || request.method === "HEAD") {
+            record.responseSize.stream();
+          }
+          records.push(record);
+          byRequestId.set(requestId, record);
+          markActivity();
+        },
+      );
+      session.on(
+        "Network.responseReceived",
+        ({ requestId, response, type }) => {
+          const record = byRequestId.get(requestId);
+          if (record === undefined) {
+            return;
+          }
+          recordQueryCount(record, response.headers);
+          if (
+            type === "EventSource" ||
+            type === "WebSocket" ||
+            response.status === 204 ||
+            response.status === 205 ||
+            response.status === 304 ||
+            response.mimeType
+              .toLowerCase()
+              .includes(STREAMED_RESPONSE_CONTENT_TYPE) ||
+            Object.entries(response.headers).some(
+              ([name, value]) =>
+                name.toLowerCase() === "content-type" &&
+                value.toLowerCase().includes(STREAMED_RESPONSE_CONTENT_TYPE),
+            )
+          ) {
+            record.responseSize.stream();
+          }
+          markActivity();
+        },
+      );
+      session.on("Network.eventSourceMessageReceived", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
+      });
+      session.on("Network.webSocketCreated", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.stream();
+      });
+      session.on("Network.dataReceived", ({ requestId, dataLength }) => {
+        const record = byRequestId.get(requestId);
+        if (
+          record === undefined ||
+          record.responseSize.outcome.status === "streamed"
+        ) {
           return;
         }
-        const record: NetworkRecord = {
-          method: request.method(),
-          pathname: new URL(request.url()).pathname,
-          url: request.url(),
-          startedAt: Date.now(),
-          dbQueries: null,
-          dbQueryHeaderMissing: false,
-          transactions: null,
-          transactionHeaderMissing: false,
-          responseBytes: null,
-          responseBytesUnavailable: false,
-        };
-        records.push(record);
-        byRequest.set(request, record);
+        record.responseSize.receive(dataLength);
         markActivity();
+      });
+      session.on("Network.loadingFinished", ({ requestId }) => {
+        byRequestId.get(requestId)?.responseSize.complete();
+        if (byRequestId.has(requestId)) {
+          markActivity();
+        }
+      });
+      session.on(
+        "Network.loadingFailed",
+        ({ requestId, errorText, canceled }) => {
+          byRequestId.get(requestId)?.responseSize.fail({
+            errorText,
+            ...(canceled === undefined ? {} : { canceled }),
+          });
+          if (byRequestId.has(requestId)) {
+            markActivity();
+          }
+        },
+      );
+      const enabled = await Result.tryPromise(
+        async () => await session.send("Network.enable"),
+      );
+      if (enabled.isErr()) {
+        const detached = await Result.tryPromise(
+          async () => await session.detach(),
+        );
+        if (detached.isErr()) {
+          throw new AggregateError(
+            [enabled.error.cause, detached.error.cause],
+            "Network collection setup and CDP detach failed",
+          );
+        }
+        throw enabled.error.cause;
+      }
+      const flush = async () => {
+        await session.send("Runtime.evaluate", { expression: "void 0" });
       };
+      flushSessions.add(flush);
 
+      // Playwright request tokens still own the existing release barrier.
+      const onRequest = (request: Request) => {
+        if (isTrackedApiRequest(request, apiOrigin)) {
+          observedRequests.add(request);
+          markActivity();
+        }
+      };
       const onSettled = (request: Request) => {
         if (countsTowardsWaterfall(requestDetails(request))) {
           rounds.complete(request, Date.now());
         }
-        const record = byRequest.get(request);
-        if (record) {
+        if (isTrackedApiRequest(request, apiOrigin)) {
           markActivity();
         }
       };
-
       const onResponse = (response: Response) => {
-        const record = byRequest.get(response.request());
-        if (!record) {
-          return;
+        if (
+          isTrackedApiRequest(response.request(), apiOrigin) &&
+          (response.headers()["content-type"] ?? "")
+            .toLowerCase()
+            .includes(STREAMED_RESPONSE_CONTENT_TYPE) &&
+          countsTowardsWaterfall(requestDetails(response.request()))
+        ) {
+          rounds.complete(response.request(), Date.now());
         }
-        markActivity();
-        const header = response.headers()[DB_QUERIES_HEADER];
-        if (header !== undefined) {
-          record.dbQueries = Number(header);
-        } else {
-          record.dbQueryHeaderMissing = true;
-        }
-
-        const transactionHeader = response.headers()[DB_TRANSACTIONS_HEADER];
-        record.transactions =
-          transactionHeader === undefined ? null : Number(transactionHeader);
-        record.transactionHeaderMissing = transactionHeader === undefined;
-
-        if (isStreamedResponse(response)) {
-          // Streams never finish; headers establish that the channel opened.
-          if (countsTowardsWaterfall(requestDetails(response.request()))) {
-            rounds.complete(response.request(), Date.now());
-          }
-          return;
-        }
-        pendingBodyReads.push(readResponseBytes(response, record));
       };
-
       page.on("request", onRequest);
       page.on("response", onResponse);
       page.on("requestfinished", onSettled);
       page.on("requestfailed", onSettled);
-
-      return () => {
+      return async () => {
         rounds.finish();
         released.clear();
         page.off("request", onRequest);
         page.off("response", onResponse);
         page.off("requestfinished", onSettled);
         page.off("requestfailed", onSettled);
+        flushSessions.delete(flush);
+        await session.detach();
       };
     },
 
@@ -378,32 +571,66 @@ export const createNetworkCollector = (
       }),
 
     capture: async () => {
-      await Promise.all(pendingBodyReads);
+      let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<"timeout">((resolve) => {
+        timeoutId = setTimeout(
+          () => resolve("timeout"),
+          bodyCompletionTimeoutMs,
+        );
+      });
+      try {
+        let observedCount = -1;
+        while (true) {
+          const flushed = await Promise.race([
+            Promise.all(
+              [...flushSessions].map(async (flush) => await flush()),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (flushed === "timeout" || observedCount === records.length) {
+            break;
+          }
+          observedCount = records.length;
+          const result = await Promise.race([
+            Promise.all(
+              records
+                .filter((record) =>
+                  responseSizeBudgetKeys.has(requestKey(record)),
+                )
+                .map(async ({ responseSize }) => await responseSize.completion),
+            ).then(() => "complete" as const),
+            timeout,
+          ]);
+          if (result === "timeout") {
+            break;
+          }
+          // Flush again: completion can start another request before the snapshot.
+        }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      for (const record of records) {
+        if (responseSizeBudgetKeys.has(requestKey(record))) {
+          record.responseSize.markIncomplete(bodyCompletionTimeoutMs);
+        }
+      }
+      const capturedRecords = reconcileNetworkRecords({
+        records,
+        requests: observedRequests,
+      });
       return {
         depthChain: rounds.rounds,
-        duplicateGetCounts: countDuplicateGets(records),
-        requests: records.map(
-          ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            transactions,
-            transactionHeaderMissing,
-            responseBytes,
-            responseBytesUnavailable,
-          }) => ({
-            method,
-            pathname,
-            dbQueries,
-            dbQueryHeaderMissing,
-            transactions,
-            transactionHeaderMissing:
-              transactionHeaderMissing || transactions === null,
-            responseBytes,
-            responseBytesUnavailable,
-          }),
-        ),
+        duplicateGetCounts: countDuplicateGets(capturedRecords),
+        requests: capturedRecords.map((record) => ({
+          method: record.method,
+          pathname: record.pathname,
+          dbQueries: record.dbQueries,
+          dbQueryHeaderMissing: record.dbQueryHeaderMissing,
+          transactions: record.transactions,
+          transactionHeaderMissing:
+            record.transactionHeaderMissing || record.transactions === null,
+          responseSize: record.responseSize.outcome,
+        })),
       };
     },
   };
@@ -493,10 +720,10 @@ export type RouteNetworkMetrics = {
   transactions: Record<string, number>;
   missingTransactionCounts: Record<string, number>;
   // Per request key, the max response body size (bytes) observed this run.
-  // Streamed (SSE) responses and keys whose body never resolved are absent.
+  // Streams and keys without a completed size measurement are absent.
   responseSizes: Record<string, number>;
-  // Per request key, how many non-streamed responses failed to yield a body.
-  missingResponseSizeCounts: Record<string, number>;
+  // Protocol and request failures retain their reasons for route diagnostics.
+  responseSizeFailures: Record<string, ResponseSizeFailure[]>;
 };
 
 export const NETWORK_DEPTH_METHOD = "round-barrier-v1";
@@ -525,7 +752,7 @@ export const summarizeCapture = (
   const missingTransactionCounts: Record<string, number> = {};
   const missingDbQueryCounts: Record<string, number> = {};
   const responseSizes: Record<string, number> = {};
-  const missingResponseSizeCounts: Record<string, number> = {};
+  const responseSizeFailures: Record<string, ResponseSizeFailure[]> = {};
   const requestCounts: Record<string, number> = {};
   const requestCosts: RouteNetworkMetrics["requestCosts"] = {};
   const depthChain = capture.depthChain;
@@ -535,7 +762,10 @@ export const summarizeCapture = (
     (requestCosts[key] ??= []).push({
       dbQueries: request.dbQueries,
       transactions: request.transactions,
-      responseBytes: request.responseBytes,
+      responseBytes:
+        request.responseSize.status === "measured"
+          ? request.responseSize.bytes
+          : null,
     });
     if (request.dbQueryHeaderMissing) {
       missingDbQueryCounts[key] = (missingDbQueryCounts[key] ?? 0) + 1;
@@ -555,18 +785,20 @@ export const summarizeCapture = (
         request.transactions,
       );
     }
-    if (request.responseBytesUnavailable) {
-      missingResponseSizeCounts[key] =
-        (missingResponseSizeCounts[key] ?? 0) + 1;
-    }
-    if (
-      request.responseBytes !== null &&
-      !Number.isNaN(request.responseBytes)
-    ) {
-      responseSizes[key] = Math.max(
-        responseSizes[key] ?? 0,
-        request.responseBytes,
-      );
+    const outcome = request.responseSize;
+    switch (outcome.status) {
+      case "measured":
+        responseSizes[key] = Math.max(responseSizes[key] ?? 0, outcome.bytes);
+        break;
+      case "streamed":
+        break;
+      case "failed":
+      case "unreadable":
+        (responseSizeFailures[key] ??= []).push(outcome);
+        break;
+      default:
+        outcome satisfies never;
+        panic("Unhandled response-size outcome");
     }
   }
   return {
@@ -591,8 +823,8 @@ export const summarizeCapture = (
     responseSizes: Object.fromEntries(
       Object.entries(responseSizes).toSorted(([a], [b]) => a.localeCompare(b)),
     ),
-    missingResponseSizeCounts: Object.fromEntries(
-      Object.entries(missingResponseSizeCounts).toSorted(([a], [b]) =>
+    responseSizeFailures: Object.fromEntries(
+      Object.entries(responseSizeFailures).toSorted(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
@@ -749,15 +981,21 @@ const pushResponseSizeProblems = ({
 }) => {
   const baselineSizes = entry.responseSizes ?? {};
   for (const key of Object.keys(baselineSizes)) {
-    if (metrics.missingResponseSizeCounts[key] === undefined) {
+    if (metrics.requestCounts[key] === undefined) {
       continue;
     }
+    const failures = metrics.responseSizeFailures[key] ?? [];
+    const hasFailure = failures.length > 0;
+    if (metrics.responseSizes[key] !== undefined && !hasFailure) {
+      continue;
+    }
+    const details = failures.map(
+      ({ status, error }) => `  ${status}: ${error}`,
+    );
     problems.push(
       `Response size missing on ${route}: ${key}\n` +
-        `  This request has a committed response-size budget, but Playwright\n` +
-        `  could not read the response body (aborted or redirected mid-\n` +
-        `  navigation is the usual cause). Re-run the suite; if it persists,\n` +
-        `  investigate before trusting this route's payload-size budget.`,
+        `  This request has a committed response-size budget, but no readable\n` +
+        `  sample was measured or a request/size measurement failed.\n${details.join("\n")}`,
     );
   }
   for (const [key, observed] of Object.entries(metrics.responseSizes)) {
