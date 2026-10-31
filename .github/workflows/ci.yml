@@ -4948,6 +4948,8 @@ jobs:
           --file apps/web/Dockerfile
           --build-arg PUBLIC_API_URL=https://api.smoke.invalid
           --build-arg PUBLIC_APP_URL=https://app.smoke.invalid
+          --build-arg S3_BUCKET=documents
+          --build-arg S3_ENDPOINT=https://objects.smoke.invalid
           --tag stella-web-runner:ci
           .
 

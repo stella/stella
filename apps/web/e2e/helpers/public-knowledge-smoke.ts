@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { loadCatalogue } from "@stll/catalogue";
 
 import { getStagingReporterEnvironment } from "../staging/env";
+import { installContentSecurityPolicyCollector } from "./content-security-policy";
 import { createNetworkCollector } from "./network";
 import {
   classifyPublicKnowledgeWebProbe,
@@ -116,6 +117,7 @@ export const declarePublicKnowledgeSmoke = ({
 
     const declareRoute = (def: VisitorRoute) => {
       test(def.template, async ({ page }, testInfo) => {
+        const policy = await installContentSecurityPolicyCollector(page);
         const current = catalogue;
         if (current.status !== "ready") {
           panic("public route smoke ran without a ready catalogue");
@@ -203,6 +205,7 @@ export const declarePublicKnowledgeSmoke = ({
             .toBe(0);
           expect(forbidden, "member-only requests").toEqual([]);
           expect(unauthorized, "unauthorized responses").toEqual([]);
+          await policy.assertClean();
         } finally {
           try {
             await detach?.();

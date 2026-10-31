@@ -29,61 +29,61 @@ export type SeedColleague = {
   hourlyRate: number;
 };
 
+// Illustrated avatars ship with the web app (apps/web/public/seed-avatars), so
+// the content security policy's `img-src 'self'` allows them and the stored
+// path stays short in every response that lists members.
+const SEED_AVATAR_COUNT = 8;
+const seedAvatar = (index: number): string =>
+  `/seed-avatars/${String((index % SEED_AVATAR_COUNT) + 1)}.svg`;
+
 const BASE_SEED_COLLEAGUES: SeedColleague[] = [
   {
     id: "test-user-alice-johnson",
     name: "Alice Johnson",
     email: "alice@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=alice&backgroundColor=b6e3f4",
+    image: seedAvatar(0),
     hourlyRate: 4500,
   },
   {
     id: "test-user-bob-martinez",
     name: "Bob Martinez",
     email: "bob@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=bob&backgroundColor=d1d4f9",
+    image: seedAvatar(1),
     hourlyRate: 2500,
   },
   {
     id: "test-user-clara-novak",
     name: "Clara Novak",
     email: "clara@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=clara&backgroundColor=ffd5dc",
+    image: seedAvatar(2),
     hourlyRate: 4500,
   },
   {
     id: "test-user-david-kim",
     name: "David Kim",
     email: "david@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=david&backgroundColor=c0aede",
+    image: seedAvatar(3),
     hourlyRate: 6500,
   },
   {
     id: "test-user-eva-schmidt",
     name: "Eva Schmidt",
     email: "eva@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=eva&backgroundColor=b6e3f4",
+    image: seedAvatar(4),
     hourlyRate: 3500,
   },
   {
     id: "test-user-frank-horvat",
     name: "Frank Horvát",
     email: "frank@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=frank&backgroundColor=d1d4f9",
+    image: seedAvatar(5),
     hourlyRate: 2500,
   },
   {
     id: "test-user-greta-jones",
     name: "Greta Jones",
     email: "greta@stella.dev",
-    image:
-      "https://api.dicebear.com/9.x/avataaars/svg?seed=greta&backgroundColor=ffd5dc",
+    image: seedAvatar(6),
     hourlyRate: 5500,
   },
 ];
@@ -145,7 +145,7 @@ const getGeneratedSeedColleague = (index: number): SeedColleague => {
     id: `test-user-${slug}`,
     name: `${firstName} ${lastName}`,
     email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}.${ordinal}@stella.dev`,
-    image: `https://api.dicebear.com/9.x/avataaars/svg?seed=${slug}&backgroundColor=b6e3f4`,
+    image: seedAvatar(BASE_SEED_COLLEAGUES.length + index),
     hourlyRate:
       GENERATED_HOURLY_RATES[index % GENERATED_HOURLY_RATES.length] ?? 4000,
   };

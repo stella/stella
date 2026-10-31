@@ -304,6 +304,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_API_URL: "http://localhost:3001",
   VITE_BROWSER_API_URL: "http://localhost:3000/api",
   VITE_COLLAB_URL: "ws://localhost:3002",
+  VITE_DOCUMENTS_BUCKET: "stella",
+  VITE_DOCUMENTS_ENDPOINT: "http://localhost:9000",
   VITE_POSTHOG_KEY: "phc_",
   VITE_POSTHOG_HOST: "https://eu.i.posthog.com",
   VITE_POSTHOG_UI_HOST: "https://eu.posthog.com",
@@ -674,6 +676,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   USE_MOCK_AI:
     'Return canned AI responses in local development and tests. An organization\'s own AI key still answers for real; "force" mocks those requests too. Deployed runtimes reject this setting.',
   VITE_API_URL: "API base URL used by the SPA for Eden treaty requests.",
+  VITE_DOCUMENTS_BUCKET: "S3 bucket used for browser document transfers.",
+  VITE_DOCUMENTS_ENDPOINT:
+    "S3 or S3-compatible endpoint used for browser document transfers.",
   VITE_BROWSER_API_URL:
     "Same-origin browser API mount. Must be the exact /api path on VITE_PUBLIC_APP_URL; unset uses VITE_API_URL.",
   VITE_AUTH_GOOGLE:
@@ -1063,6 +1068,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_BROWSER_API_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_COLLAB_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_BRIDGE_PORT: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_BUCKET: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_DOCUMENTS_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
   VITE_DESKTOP_RELEASES_BASE_URL: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
@@ -1128,6 +1135,8 @@ const ACTIVE_EXAMPLE_KEYS = new Set([
   "TRANSACTIONAL_EMAIL_FROM",
   "USE_MOCK_AI",
   "VITE_API_URL",
+  "VITE_DOCUMENTS_BUCKET",
+  "VITE_DOCUMENTS_ENDPOINT",
   "VITE_POSTHOG_KEY",
   "VITE_PUBLIC_APP_URL",
 ]);

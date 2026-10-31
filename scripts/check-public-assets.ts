@@ -114,6 +114,38 @@ const CONSUMER_LOCATION =
 // it; anything else unreferenced is dead weight and fails the check.
 export const PUBLIC_ASSET_EXCEPTIONS: ReadonlyMap<RegExp, string> = new Map([
   [
+    /^apps\/web\/public\/seed-avatars\/1\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/2\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/3\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/4\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/5\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/6\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/7\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
+    /^apps\/web\/public\/seed-avatars\/8\.svg$/u,
+    "seed data avatar URL (apps/api/scripts/seed-utils.ts)",
+  ],
+  [
     /^apps\/landing\/public\/[0-9a-f]{32}\.txt$/u,
     "IndexNow key file, fetched by search engines to verify the site's pings",
   ],

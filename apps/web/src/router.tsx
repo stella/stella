@@ -31,6 +31,7 @@ import { installTableStoreReconcile } from "@/lib/workspaces/table-store";
 import { parseRouteSearch, stringifyRouteSearch } from "@/route-search-params";
 import { WEB_ROUTE_TEMPLATES } from "@/route-templates.gen";
 import { routeTree } from "@/routeTree.gen";
+import { getRequestSsrOptions } from "@/security/ssr-options";
 
 enableMapSet();
 
@@ -105,6 +106,7 @@ export function getRouter() {
     // threshold.
     defaultPendingMs: 500,
     defaultPendingMinMs: 300,
+    ssr: getRequestSsrOptions(),
   });
   getWebHangDetector()?.attach({
     analytics: analyticsValue.analytics,

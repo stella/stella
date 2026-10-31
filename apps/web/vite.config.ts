@@ -490,9 +490,12 @@ export default defineConfig(({ mode, command }) => {
               id.includes("node_modules/@modelcontextprotocol/sdk/")
             ) {
               // This graph is reached only from ChatRichMessagePart's dynamic
-              // import. Keep it out of the eagerly preloaded TanStack vendor
-              // chunk so users without MCP App output never download it.
-              return "mcp-app";
+              // import, so that boundary already splits it off. A named group
+              // here would also capture its shared dependencies (React, zod),
+              // and every route importing those would then evaluate the MCP
+              // client eagerly, including the zod copy it bundles, whose eval
+              // probe the content security policy reports.
+              return undefined;
             }
             if (
               id.includes("node_modules/@tanstack/ai/") ||
