@@ -97,16 +97,27 @@ type GateRoleCensus = readonly {
 
 /** The migration safety review of a regenerated gate routine. */
 export const gateRoutineReview = (census: GateRoleCensus): string => {
-  const gateRole = census.find(({ role }) => role === "stella_entity_gate");
+  const gateRoles = census.filter(({ role }) => role === "stella_entity_gate");
+  const gateRole = gateRoles.at(0);
   if (gateRole === undefined) {
     return panic(
       "Role stella_entity_gate is missing from the privilege census.",
     );
   }
-  for (const attribute of ["SUPERUSER:false", "BYPASSRLS:false"]) {
-    if (!gateRole.attributes.includes(attribute)) {
+  if (gateRoles.length > 1) {
+    return panic(
+      "Role stella_entity_gate appears more than once in the privilege census.",
+    );
+  }
+  for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
+    if (gateRole.attributes.includes(`${attribute}:true`)) {
       return panic(
-        `Role stella_entity_gate is missing required attribute ${attribute}.`,
+        `Role stella_entity_gate lists conflicting attribute ${attribute}:true.`,
+      );
+    }
+    if (!gateRole.attributes.includes(`${attribute}:false`)) {
+      return panic(
+        `Role stella_entity_gate is missing required attribute ${attribute}:false.`,
       );
     }
   }

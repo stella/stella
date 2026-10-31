@@ -41,10 +41,37 @@ for (const attribute of ["SUPERUSER", "BYPASSRLS"]) {
         : entry,
     );
     expect(() => gateRoutineReview(census)).toThrow(
-      `Role stella_entity_gate is missing required attribute ${attribute}:false.`,
+      `Role stella_entity_gate lists conflicting attribute ${attribute}:true.`,
+    );
+  });
+
+  test(`${attribute}:true beside ${attribute}:false invalidates the gate routine review`, () => {
+    const census = rolePrivilegeCensus.map((entry) =>
+      entry.role === "stella_entity_gate"
+        ? { ...entry, attributes: [...entry.attributes, `${attribute}:true`] }
+        : entry,
+    );
+    expect(() => gateRoutineReview(census)).toThrow(
+      `Role stella_entity_gate lists conflicting attribute ${attribute}:true.`,
     );
   });
 }
+
+test("a second gate role entry invalidates the routine review", () => {
+  const gateRole = rolePrivilegeCensus.find(
+    ({ role }) => role === "stella_entity_gate",
+  );
+  if (gateRole === undefined) {
+    throw new Error("The committed census has no gate role");
+  }
+  const census = [
+    ...rolePrivilegeCensus,
+    { ...gateRole, attributes: ["BYPASSRLS:true", "SUPERUSER:true"] },
+  ];
+  expect(() => gateRoutineReview(census)).toThrow(
+    "Role stella_entity_gate appears more than once in the privilege census.",
+  );
+});
 
 test("a missing gate role attribute invalidates the routine review", () => {
   const census = rolePrivilegeCensus.map((entry) =>
