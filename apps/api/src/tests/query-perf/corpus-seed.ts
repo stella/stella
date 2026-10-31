@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { caseLawSitemapChanges, corpusIndexGenerations } from "@/api/db/schema";
+import {
+  caseLawSitemapChanges,
+  corpusIndexGenerations,
+  onlineWorkState,
+} from "@/api/db/schema";
 import type { TransactionOf } from "@/api/db/scoped";
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import {
@@ -21,6 +25,7 @@ import type {
   GatedTestDb,
 } from "@/api/tests/gated-test-database";
 
+import { ONLINE_WORK_NAMES } from "../../db/online-migrations";
 import { coverageIndexBuildSql } from "./coverage-indexes";
 import { withSeededTableMaintenance } from "./seeded-tables";
 
@@ -420,6 +425,13 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
 
 export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
   await withSeededTableMaintenance(database, async () => {
+    // Measure the converged tick without starting a detached fixture build.
+    await database.insert(onlineWorkState).values(
+      ONLINE_WORK_NAMES.map((name) => ({
+        name,
+        state: "finalized" as const,
+      })),
+    );
     await database.insert(corpusIndexGenerations).values([
       ...SCENARIO_GENERATIONS.map(({ generation }) => ({
         family: "case_law" as const,

@@ -14,16 +14,19 @@ import { Temporal } from "@stll/time";
 import { readOnlineIndexConfig } from "../env-online-index";
 import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import { withGatedTestClients } from "../tests/gated-test-database";
+import { allFinalizedOnlineWork } from "../tests/helpers/online-work-lifecycle";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
-import type { OnlineMigrationConnection } from "./online-migration-connection";
+import type { OnlineBuildConnection } from "./online-migration-connection";
 import {
+  FINALIZED_SCOPE,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   type OnlineRepairOptions,
   reportOnlineMigrations as reportOnlineMigrationsWithOwnership,
   runOnlineMigrations,
 } from "./online-migrations";
+import { FINALIZED, PENDING } from "./online-work-lifecycle";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
   caseLawCitations,
@@ -60,7 +63,7 @@ const readyIndexes = [
 const repairConnection = (
   connection: ReservedSQL,
   newestAppliedMigration = "99999999999999_later_release",
-): OnlineMigrationConnection => ({
+): OnlineBuildConnection => ({
   execute: async (statement, parameters = []) => {
     await connection.unsafe(statement, [...parameters]);
   },
@@ -277,7 +280,7 @@ describe.skipIf(!enabled)(
             const statements: string[] = [];
             // Only unrelated catalog prerequisites are faked. The staged build,
             // cancellation, final index, and both sessions use real PostgreSQL.
-            const connection: OnlineMigrationConnection = {
+            const connection: OnlineBuildConnection = {
               execute: async (statement, parameters = []) => {
                 statements.push(statement);
                 await builder.unsafe(statement, [...parameters]);
@@ -317,6 +320,11 @@ describe.skipIf(!enabled)(
             const outcome = await runOnlineMigrations(
               { reserve: async () => connection },
               {
+                scope: FINALIZED_SCOPE,
+                lifecycle: {
+                  ...allFinalizedOnlineWork(),
+                  "later-repair": FINALIZED,
+                },
                 indexGate: {
                   config,
                   clock: () => now,
@@ -463,6 +471,7 @@ describe.skipIf(!enabled)(
               repairConnection(await client.reserve(), repair.introducedBy),
           };
           const runnerOptions = {
+            scope: FINALIZED_SCOPE,
             repairs: [repair],
             // The adapter reports every index ready, so only the repair's
             // constraint validation opens the gate, on a session of its own.
@@ -517,12 +526,20 @@ describe.skipIf(!enabled)(
             ).at(0)?.count;
             expect(cursorCount).toBe(fixture.firstBatch);
           }
-          const startup = await reportOnlineMigrations(pool, runnerOptions);
+          const startup = await reportOnlineMigrations(pool, {
+            ...runnerOptions,
+            lifecycle: {
+              ...allFinalizedOnlineWork(),
+              [repair.name]: PENDING,
+            },
+          });
           expect(startup.pending).toEqual([
             {
               kind: "repair",
               name: repair.name,
               introducedBy: repair.introducedBy,
+              lifecycle: "pending",
+              age: "newest",
             },
           ]);
           expect(events).toHaveLength(1);

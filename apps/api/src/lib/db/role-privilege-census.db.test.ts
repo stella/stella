@@ -8,6 +8,7 @@ import { getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
+import { MIGRATE_ONLINE_WORK_MODE } from "../../db/migrate-online-work-mode";
 import { runMigrations } from "../../db/migration-runner";
 import {
   assertCompleteCensus,
@@ -36,6 +37,7 @@ const withMigratedDatabase = async (
         const connection = await database.reserve();
         try {
           await runMigrations({
+            onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
             connection,
             databaseUrl: scratchUrl,
             migrationsFolder,

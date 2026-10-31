@@ -7,6 +7,7 @@ import rolePrivilegeCensus from "@/api/lib/db/role-privilege-census.json";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
 
+import { MIGRATE_ONLINE_WORK_MODE } from "./migrate-online-work-mode";
 import { runMigrations } from "./migration-runner";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -30,6 +31,7 @@ describePostgres("database temporary-object privilege", () => {
           const connection = await admin.reserve();
           try {
             await runMigrations({
+              onlineWorkMode: MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED,
               connection,
               migrationsFolder,
               databaseUrl: url,

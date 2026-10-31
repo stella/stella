@@ -56,4 +56,4 @@ export const CHAT_RUN_TEXT_BOUNDARIES = {
         }
       },
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

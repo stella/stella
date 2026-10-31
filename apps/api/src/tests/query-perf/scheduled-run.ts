@@ -13,6 +13,7 @@ import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
 import { createCaseLawCoverageRefreshTask } from "@/api/lib/scheduler/tasks/case-law-coverage-refresh";
+import { createPendingOnlineWorkTask } from "@/api/lib/scheduler/tasks/online-work-runner";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -79,6 +80,7 @@ export const measureScheduledJobRun = async ({
             readVerdict: async () => await Promise.resolve(admission),
           }),
       }),
+      { onlineWork: createPendingOnlineWorkTask() },
     ).get(job.task) ?? panic(`No registered task ${job.task} for ${jobId}`);
   // The search configuration is cached for 60 s, and the scheduled jobs run
   // minutes apart, so a production run reads it cold. Every measured run does

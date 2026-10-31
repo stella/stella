@@ -87,6 +87,12 @@ test("state-column ownership covers every scoped runtime transition", () => {
     scope: ["organizationId", "userId"],
     stateColumn: "status",
   };
+  const onlineWorkLifecycle = {
+    tableName: "onlineWorkState",
+    key: "name",
+    scope: [],
+    stateColumn: "state",
+  };
   // An organization's access state is one row keyed by the organization.
   const organizationAccessState = {
     tableName: "organizationAccessStates",
@@ -99,6 +105,7 @@ test("state-column ownership covers every scoped runtime transition", () => {
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
       SITEMAP_DRAIN_TRANSITION_IDENTITY,
       desktopBatchReceipt,
+      onlineWorkLifecycle,
       {
         tableName: "requestIdempotencyReceipts",
         key: "id",

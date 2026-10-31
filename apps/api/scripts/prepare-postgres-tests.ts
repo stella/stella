@@ -23,6 +23,7 @@ export const preparePostgresTests = async (): Promise<void> => {
       // Postgres test databases are disposable and have no RDS load signal.
       DB_LOAD_GATE_EBS_SIGNAL:
         process.env["DB_LOAD_GATE_EBS_SIGNAL"] ?? "disabled",
+      STELLA_MIGRATE_ONLINE_WORK: "build_finalized",
     },
     stdin: "inherit",
     stdout: "inherit",

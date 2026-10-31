@@ -110,6 +110,7 @@ import {
   mcpOAuthState,
   mcpUserConnections,
 } from "./mcp";
+import { onlineWorkState } from "./online-work-state";
 import {
   documentTypes,
   playbookDefinitions,
@@ -165,6 +166,7 @@ export const relations = defineRelations(
     auditLogs,
     schedulerJobs,
     schedulerJobRuns,
+    onlineWorkState,
     infoSoudTrackedCases,
     properties,
     propertyDependencies,

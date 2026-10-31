@@ -5,10 +5,10 @@ import { withGatedTestClients } from "../tests/gated-test-database";
 import { reportOnlineMigrations } from "./online-migrations";
 
 /**
- * A migrate run holds the online lock for each index build, for longer than
- * the database's statement timeout. Startup validation on another session
- * must return while that lock is held, and hand its pooled session back with
- * the timeout it had.
+ * The online lock's holder (a migrate run or the post-deploy runner) builds
+ * pending work for longer than the database's statement timeout. Startup
+ * validation on another session must return migrator_active while that lock
+ * is held, and hand its pooled session back with the timeout it had.
  */
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -19,7 +19,7 @@ const ONLINE_LOCK_KEY = "hashtext('stella-online-migrations')";
 const RETURN_WITHIN_MS = 2000;
 
 describe.skipIf(!enabled)("startup validation during a migrate run", () => {
-  test("returns at once while another session holds the online lock", async () => {
+  test("returns migrator_active while another session holds the online lock", async () => {
     if (databaseUrl === undefined) {
       panic("DATABASE_URL is required");
     }

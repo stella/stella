@@ -159,6 +159,10 @@ import {
   MEMORY_EXTRACTOR_TASK,
 } from "@/api/lib/scheduler/tasks/memory-extractor";
 import {
+  ONLINE_WORK_RUNNER_TASK,
+  runPendingOnlineWork,
+} from "@/api/lib/scheduler/tasks/online-work-runner";
+import {
   RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK,
   recordMissingOrganizationAccessStatesTask,
 } from "@/api/lib/scheduler/tasks/organization-access-state-reconcile";
@@ -299,6 +303,7 @@ const SCHEDULER_TASKS = {
   [MEMORY_EXTRACTOR_TASK]: extractMemoriesFromCompactions,
   [RECORD_MISSING_ORGANIZATION_ACCESS_STATES_TASK]:
     recordMissingOrganizationAccessStatesTask,
+  [ONLINE_WORK_RUNNER_TASK]: runPendingOnlineWork,
   [RECONCILE_ORGANIZATION_FILE_RESERVATIONS_TASK]:
     reconcileOrganizationFileReservations,
   // Ungated: its time-billing sample data admits itself on the feature.
@@ -322,6 +327,7 @@ const SCHEDULER_TASKS = {
 
 type SchedulerTaskRegistryOptions = {
   resetReviewOrganization?: SchedulerTask;
+  onlineWork?: SchedulerTask;
 };
 
 const schedulerTasks = (
@@ -354,10 +360,11 @@ export const createSchedulerTaskRegistry = (
     Object.entries(
       schedulerTasks(reapOwnerlessChatTurns, refreshCaseLawCoverage),
     ).map(([name, registered]) => {
-      const entry =
-        name === RESET_REVIEW_ORGANIZATION_TASK
-          ? (options.resetReviewOrganization ?? registered)
-          : registered;
+      const overrides: Readonly<Record<string, SchedulerTask | undefined>> = {
+        [RESET_REVIEW_ORGANIZATION_TASK]: options.resetReviewOrganization,
+        [ONLINE_WORK_RUNNER_TASK]: options.onlineWork,
+      };
+      const entry = overrides[name] ?? registered;
       return [
         name,
         async (context: SchedulerTaskContext) =>

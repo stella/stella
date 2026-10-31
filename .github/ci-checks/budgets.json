@@ -1016,6 +1016,10 @@
       "p95Seconds": 45,
       "p99Seconds": 45
     },
+    "Online work lifecycle": {
+      "minutes": 30,
+      "samples": 0
+    },
     "Split-button census": {
       "minutes": 5,
       "samples": 19,

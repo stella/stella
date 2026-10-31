@@ -20,6 +20,7 @@ import type {
 } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
@@ -38,6 +39,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+
+import {
+  isMigrateReady,
+  ONLINE_WORK_LIFECYCLE,
+} from "../../db/online-work-lifecycle";
 
 const TRANSITION_INSERT_BATCH_SIZE = 128;
 
@@ -147,7 +153,7 @@ export const defineScopedTransitions = <
         keyColumns.some((candidate) => candidate?.name === column.name),
       ),
   );
-  const indexIdentityCovered = tableConfig.indexes.some(
+  const identityIndexes = tableConfig.indexes.filter(
     ({ config }) =>
       config.unique &&
       config.where === undefined &&
@@ -158,6 +164,23 @@ export const defineScopedTransitions = <
           keyColumns.some((candidate) => candidate?.name === column.name),
       ),
   );
+  const indexIdentityCovered = identityIndexes.length > 0;
+  // The scoped upsert names this identity as its ON CONFLICT arbiter, so an
+  // index only the post-deploy runner builds cannot be it.
+  const isPendingOnlineWork = (name: string | undefined) =>
+    name !== undefined &&
+    isOwnKey(ONLINE_WORK_LIFECYCLE, name) &&
+    !isMigrateReady(ONLINE_WORK_LIFECYCLE[name]);
+  if (
+    indexIdentityCovered &&
+    identityIndexes.every(({ config }) => isPendingOnlineWork(config.name)) &&
+    !constraintIdentityCovered &&
+    !(scope.length === 0 && (keyColumn.primary || keyColumn.isUnique))
+  ) {
+    panic(
+      `A scoped transition identity rests on pending online work (${identityIndexes.map(({ config }) => config.name).join(", ")}); register it DEPLOY_BLOCKING`,
+    );
+  }
   if (
     new Set(keyNames).size !== keyNames.length ||
     keyColumns.some((column) => column === undefined || !column.notNull) ||
@@ -261,10 +284,53 @@ type ScopedUpsertWriteArgs<
   identityKeys: readonly (TKey | TScope[number])[];
   identityColumns: readonly AnyPgColumn[];
   incomingRows: SQL;
+  onConflict?: "ignore";
   recordTransitionAuditEvent: (
     tx: TTx,
     rows: readonly ScopedChangedRow<TTable, TState>[],
   ) => void | Promise<void>;
+};
+
+type VerifyScopedUpsertTargetsOptions = {
+  tx: TransitionTransaction;
+  table: PgTable;
+  state: AnyPgColumn;
+  insertColumns: readonly AnyPgColumn[];
+  identityColumns: readonly AnyPgColumn[];
+  incomingRows: SQL;
+  expectedCount: number;
+};
+
+const verifyScopedUpsertTargets = async ({
+  tx,
+  table,
+  state,
+  insertColumns,
+  identityColumns,
+  incomingRows,
+  expectedCount,
+}: VerifyScopedUpsertTargetsOptions) => {
+  const verified = await tx.execute(sql`
+    SELECT 1
+    FROM ${table} AS current
+    JOIN (VALUES ${incomingRows}) AS incoming (${sql.join(
+      insertColumns.map((column) => sql.identifier(column.name)),
+      sql`, `,
+    )})
+      ON ${sql.join(
+        identityColumns.map(
+          (column) =>
+            sql`current.${sql.identifier(column.name)} = incoming.${sql.identifier(column.name)}`,
+        ),
+        sql` AND `,
+      )}
+    WHERE current.${sql.identifier(state.name)} = incoming.${sql.identifier(state.name)}
+  `);
+  if (executedRows(verified).length !== expectedCount) {
+    panic(
+      "An upsert target is neither initial nor reachable from its current state",
+    );
+  }
 };
 
 const executeScopedUpsertWrites = async <
@@ -285,6 +351,7 @@ const executeScopedUpsertWrites = async <
   identityKeys,
   identityColumns,
   incomingRows,
+  onConflict,
   recordTransitionAuditEvent,
 }: ScopedUpsertWriteArgs<TTx, TTable, TKey, TScope, TState, TEdges>) => {
   const returning = sql.join(
@@ -362,7 +429,7 @@ const executeScopedUpsertWrites = async <
         : [],
   );
   const transitionRows =
-    priorStates.length === 0
+    onConflict === "ignore" || priorStates.length === 0
       ? []
       : await tx.execute(sql`
           UPDATE ${spec.table} AS current
@@ -397,7 +464,11 @@ const executeScopedUpsertWrites = async <
             )})
           RETURNING ${returningUpdated}
         `);
-  if (spec.sameStateUpsert === "update" && updateColumns.length > 0) {
+  if (
+    onConflict !== "ignore" &&
+    spec.sameStateUpsert === "update" &&
+    updateColumns.length > 0
+  ) {
     await tx.execute(sql`
       UPDATE ${spec.table} AS current
       SET ${sql.join(
@@ -421,26 +492,16 @@ const executeScopedUpsertWrites = async <
         AND current.${sql.identifier(state.name)} = incoming.${sql.identifier(state.name)}
     `);
   }
-  const verified = await tx.execute(sql`
-    SELECT 1
-    FROM ${spec.table} AS current
-    JOIN (VALUES ${incomingRows}) AS incoming (${sql.join(
-      insertColumns.map((column) => sql.identifier(column.name)),
-      sql`, `,
-    )})
-      ON ${sql.join(
-        identityColumns.map(
-          (column) =>
-            sql`current.${sql.identifier(column.name)} = incoming.${sql.identifier(column.name)}`,
-        ),
-        sql` AND `,
-      )}
-    WHERE current.${sql.identifier(state.name)} = incoming.${sql.identifier(state.name)}
-  `);
-  if (executedRows(verified).length !== values.length) {
-    panic(
-      "An upsert target is neither initial nor reachable from its current state",
-    );
+  if (onConflict !== "ignore") {
+    await verifyScopedUpsertTargets({
+      tx,
+      table: spec.table,
+      state,
+      insertColumns,
+      identityColumns,
+      incomingRows,
+      expectedCount: values.length,
+    });
   }
   const changedRows = [
     ...returnedTransitionRows(insertRows),
@@ -456,6 +517,7 @@ const executeScopedUpsertWrites = async <
     };
   });
   if (
+    onConflict !== "ignore" &&
     spec.sameStateUpsert === undefined &&
     changedRows.length !== values.length
   ) {
@@ -691,11 +753,14 @@ export const transitionUpsertBatch = async <
   tx,
   spec,
   values,
+  onConflict,
   recordTransitionAuditEvent,
 }: {
   tx: TTx;
   spec: ScopedTransitionSpec<TTable, TKey, TScope, TState, TEdges>;
   values: readonly ScopedUpsertRow<TTable, TKey, TScope, TState>[];
+  /** Insert initial rows without changing any existing identity. */
+  onConflict?: "ignore";
   recordTransitionAuditEvent: (
     tx: TTx,
     rows: readonly ScopedChangedRow<TTable, TState>[],
@@ -727,6 +792,7 @@ export const transitionUpsertBatch = async <
           tx,
           spec,
           values: itemBatch,
+          ...(onConflict === undefined ? {} : { onConflict }),
           recordTransitionAuditEvent: ignoreTransitionAudit,
         })),
       );
@@ -774,6 +840,12 @@ export const transitionUpsertBatch = async <
     ) {
       panic("An upsert state must belong to the declared lifecycle domain");
     }
+    if (
+      onConflict === "ignore" &&
+      !spec.initial.some((initial) => initial === incomingState)
+    ) {
+      panic("An insert-only transition must start in an initial state");
+    }
   }
   const incomingRows = sql.join(
     values.map(
@@ -803,6 +875,7 @@ export const transitionUpsertBatch = async <
     tx,
     spec,
     values,
+    ...(onConflict === undefined ? {} : { onConflict }),
     state,
     insertColumns,
     identityKeys,

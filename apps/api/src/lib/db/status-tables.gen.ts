@@ -80,6 +80,7 @@ export const STATUS_COLUMNS = {
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
   officeFileEvidence: ["status"],
+  onlineWorkState: ["state"],
   organizationAccessStates: ["state"],
   organizationConfiguredAccess: [
     "configuredAccessStatus",
@@ -208,6 +209,7 @@ export const WRITABLE_STATUS_COLUMNS = {
   mcpOAuthState: ["state"],
   mcpUserConnections: ["status"],
   officeFileEvidence: ["status"],
+  onlineWorkState: ["state"],
   organizationAccessStates: ["state"],
   organizationConfiguredAccess: [
     "configuredAccessStatus",

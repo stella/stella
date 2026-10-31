@@ -28,6 +28,7 @@ const recordingOwner = ({
   let opens = 0;
   let cancellationClients = 0;
   let cancellationQueries = 0;
+  const forcedCloses: (number | undefined)[] = [];
   const failure = new TypeError("Dedicated transport failed");
   const cancellationGate = Promise.withResolvers<undefined>();
   const owner = createDedicatedConnectionOwner({
@@ -73,11 +74,21 @@ const recordingOwner = ({
           state = "closed";
           active -= 1;
         },
+        close: async (closeOptions) => {
+          forcedCloses.push(closeOptions?.timeout);
+          if (kind === "work" && mode === "failWorkClose") {
+            throw failure;
+          }
+          expect(state).toBe("open");
+          state = "closed";
+          active -= 1;
+        },
       };
     },
   });
   return {
     owner,
+    forcedCloses: () => [...forcedCloses],
     stats: () => ({
       active,
       peak,
@@ -132,6 +143,35 @@ describe("dedicated connection lifecycle", () => {
     const next = await nextLane;
     await next.end();
     expect(stats().active).toBe(0);
+  });
+
+  test("terminating a maintenance session force-closes it once and frees its slot", async () => {
+    const { owner, stats, forcedCloses } = recordingOwner({ capacity: 3 });
+    const lane = await owner.openMaintenanceSql("postgres://localhost/test");
+    const nextLane = owner.openMaintenanceSql("postgres://localhost/test");
+    await Promise.all([lane.terminate(), lane.terminate()]);
+    // The caller still releases a terminated session; that close is shared.
+    await lane.end();
+    // A millisecond budget: the close rejects a running statement at once.
+    expect(forcedCloses()).toEqual([0.001]);
+    const next = await nextLane;
+    expect(stats().opens).toBe(2);
+    await next.end();
+    expect(stats().active).toBe(0);
+  });
+
+  test("a failed terminate keeps the maintenance slot while its backend may still be alive", async () => {
+    const { owner, stats, failure } = recordingOwner({
+      capacity: 3,
+      mode: "failWorkClose",
+    });
+    const lane = await owner.openMaintenanceSql("postgres://localhost/test");
+    expect(await rejectionOf(lane.terminate())).toBe(failure);
+    expect(await rejectionOf(lane.end())).toBe(failure);
+    void owner.openMaintenanceSql("postgres://localhost/test");
+    await Promise.resolve();
+    expect(stats().opens).toBe(1);
+    expect(stats().active).toBe(1);
   });
 
   test("a constructor failure returns capacity for the next job", async () => {

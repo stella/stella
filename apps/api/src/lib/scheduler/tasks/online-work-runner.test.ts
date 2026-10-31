@@ -1,0 +1,770 @@
+import { panic, Result } from "better-result";
+import { describe, expect, test } from "bun:test";
+
+import { onlineWorkState } from "@/api/db/schema";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import type { OnlineMigrationOutcome } from "../../../db/online-migration-connection";
+import {
+  ONLINE_WORK_NAMES,
+  type OnlineWorkName,
+  type OnlineWorkUnitClaim,
+} from "../../../db/online-migrations";
+import { PENDING } from "../../../db/online-work-lifecycle";
+import { allFinalizedOnlineWork } from "../../../tests/helpers/online-work-lifecycle";
+import {
+  createOnlineWorkRunner,
+  createPendingOnlineWorkTask,
+  type OnlineWorkCheckpointOutcome,
+  type OnlineWorkStateSnapshot,
+  type OnlineWorkStateStore,
+} from "./online-work-runner";
+
+const nameAt = (offset: number): OnlineWorkName =>
+  ONLINE_WORK_NAMES.at(offset) ??
+  (() => {
+    throw new TypeError(`Expected online work at ${String(offset)}`);
+  })();
+
+const FIRST = nameAt(0);
+const SECOND = nameAt(1);
+const START = new Date("2026-10-23T10:00:00.000Z");
+
+const lifecycleWithPending = (pending: readonly OnlineWorkName[]) => ({
+  ...allFinalizedOnlineWork(),
+  ...Object.fromEntries(pending.map((name) => [name, PENDING])),
+});
+
+type StoredRow = {
+  state: OnlineWorkStateSnapshot["state"];
+  attempts: number;
+  attemptToken: string;
+  lastError: string | null;
+  finishedAt: Date | null;
+};
+
+const createMemoryStore = () => {
+  const rows = new Map<string, StoredRow>();
+  let snapshots = 0;
+  let nextToken = 0;
+  const update = (name: string, change: Partial<StoredRow>) => {
+    const row = rows.get(name);
+    if (row === undefined) {
+      throw new TypeError(`No state row for ${name}`);
+    }
+    rows.set(name, { ...row, ...change });
+  };
+  const finish = ({
+    name,
+    attempt,
+    attemptToken,
+    state,
+    lastError,
+  }: {
+    name: OnlineWorkName;
+    attempt: number;
+    attemptToken: string;
+    state: Extract<StoredRow["state"], "failed" | "finalized">;
+    lastError: string | null;
+  }): OnlineWorkCheckpointOutcome => {
+    const row = rows.get(name);
+    if (row?.state !== "building" || row.attemptToken !== attemptToken) {
+      return { type: "stale-attempt", name, attempt, attemptToken };
+    }
+    update(name, { state, lastError, finishedAt: START });
+    return { type: "updated" };
+  };
+  const store: OnlineWorkStateStore = {
+    readStates: async () => {
+      snapshots += 1;
+      return [...rows].map(
+        ([name, { state, attempts, attemptToken, finishedAt }]) => ({
+          name,
+          state,
+          attempts,
+          attemptToken,
+          finishedAt,
+        }),
+      );
+    },
+    markBuilding: async ({ name, expected }) => {
+      const current = rows.get(name);
+      if (
+        current?.attempts !== expected?.attempts ||
+        current?.attemptToken !== expected?.attemptToken
+      ) {
+        return { type: "ineligible" };
+      }
+      const attempt = (current?.attempts ?? 0) + 1;
+      const attemptToken = `attempt-${String(++nextToken)}`;
+      rows.set(name, {
+        state: "building",
+        attempts: attempt,
+        attemptToken,
+        lastError: null,
+        finishedAt: null,
+      });
+      return { type: "building", attempt, attemptToken };
+    },
+    markFinalized: async ({ name, attempt, attemptToken }) =>
+      finish({
+        name,
+        attempt,
+        attemptToken,
+        state: "finalized",
+        lastError: null,
+      }),
+    markFailed: async ({ name, attempt, attemptToken, error }) =>
+      finish({
+        name,
+        attempt,
+        attemptToken,
+        state: "failed",
+        lastError: error,
+      }),
+  };
+  return { rows, store, snapshots: () => snapshots };
+};
+
+type DetachedOnlineWork = Parameters<
+  Parameters<typeof createOnlineWorkRunner>[0]["detach"]
+>[0];
+
+type HarnessOptions = {
+  pending?: readonly OnlineWorkName[];
+  lockHeld?: boolean;
+};
+
+const createHarness = ({
+  pending = [FIRST, SECOND],
+  lockHeld = false,
+}: HarnessOptions = {}) => {
+  const { rows, store, snapshots } = createMemoryStore();
+  const claims: OnlineWorkName[] = [];
+  const releases: OnlineWorkName[] = [];
+  /** The unit's checkpoint at each release: a finished walk records first. */
+  const statesAtRelease: (StoredRow["state"] | undefined)[] = [];
+  const walks = new Map<
+    OnlineWorkName,
+    PromiseWithResolvers<OnlineMigrationOutcome>
+  >();
+  const detachedWork: DetachedOnlineWork[] = [];
+  const runner = createOnlineWorkRunner({
+    names: ONLINE_WORK_NAMES,
+    lifecycle: lifecycleWithPending(pending),
+    store,
+    claim: async ({ name }): Promise<OnlineWorkUnitClaim> => {
+      if (lockHeld) {
+        return { type: "lock_held" };
+      }
+      claims.push(name);
+      const walk = Promise.withResolvers<OnlineMigrationOutcome>();
+      walks.set(name, walk);
+      let released = false;
+      const release = async () => {
+        if (!released) {
+          released = true;
+          releases.push(name);
+          statesAtRelease.push(rows.get(name)?.state);
+        }
+      };
+      return {
+        type: "claimed",
+        release,
+        run: async (record) => {
+          try {
+            return await record(
+              await Result.tryPromise({
+                try: async () => await walk.promise,
+                catch: (cause: unknown) => cause,
+              }),
+            );
+          } finally {
+            await release();
+          }
+        },
+      };
+    },
+    detach: (work) => {
+      detachedWork.push(work);
+    },
+  });
+  const walkOf = (name: OnlineWorkName) =>
+    walks.get(name) ??
+    (() => {
+      throw new TypeError(`No walk for ${name}`);
+    })();
+  const settle = async () => {
+    const work = detachedWork.splice(0);
+    return await Promise.allSettled(work);
+  };
+  return {
+    rows,
+    snapshots,
+    claims,
+    releases,
+    statesAtRelease,
+    tick: async (now = START) => (await runner(now)).unwrap(),
+    walkOf,
+    settle,
+  };
+};
+
+describe("online work runner", () => {
+  test("a tick claims the first pending unit in registry order and records it building", async () => {
+    const harness = createHarness();
+
+    expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
+    expect(harness.claims).toEqual([FIRST]);
+    expect(harness.snapshots()).toBe(2);
+    expect(harness.rows.get(FIRST)).toMatchObject({
+      state: "building",
+      attempts: 1,
+    });
+    expect(harness.rows.has(SECOND)).toBe(false);
+  });
+
+  test("a tick while this process builds claims nothing more", async () => {
+    const harness = createHarness();
+    await harness.tick();
+
+    expect(await harness.tick()).toEqual({ type: "building", name: FIRST });
+    expect(harness.claims).toEqual([FIRST]);
+  });
+
+  test("a lock held elsewhere skips the tick and records no attempt", async () => {
+    const harness = createHarness({ lockHeld: true });
+
+    expect(await harness.tick()).toEqual({ type: "skipped" });
+    expect(harness.rows.has(FIRST)).toBe(false);
+  });
+
+  test("a finished unit is finalized, released, and the next tick takes the next unit", async () => {
+    const harness = createHarness();
+    await harness.tick();
+
+    harness.walkOf(FIRST).resolve({ type: "complete" });
+    await harness.settle();
+
+    expect(harness.rows.get(FIRST)).toMatchObject({ state: "finalized" });
+    expect(harness.releases).toEqual([FIRST]);
+    // The checkpoint is written while the claim still holds the lock.
+    expect(harness.statesAtRelease).toEqual(["finalized"]);
+    expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
+  });
+
+  test("a runner whose snapshot went stale while another finished the unit leaves it finished", async () => {
+    const { rows, store } = createMemoryStore();
+    const lifecycle = lifecycleWithPending([FIRST]);
+    let holder: "a" | "b" | null = null;
+    const walked: string[] = [];
+    const gaveUp: string[] = [];
+    const claimAs =
+      (runnerId: "a" | "b") => async (): Promise<OnlineWorkUnitClaim> => {
+        if (holder !== null) {
+          return { type: "lock_held" };
+        }
+        holder = runnerId;
+        const release = async () => {
+          holder = null;
+        };
+        return {
+          type: "claimed",
+          release: async () => {
+            gaveUp.push(runnerId);
+            await release();
+          },
+          run: async (record) => {
+            walked.push(runnerId);
+            try {
+              return await record(Result.ok({ type: "complete" }));
+            } finally {
+              await release();
+            }
+          },
+        };
+      };
+    // Runner b chose its unit from this snapshot, taken before a finished it.
+    const stale = await store.readStates();
+    let staleReads = 1;
+    const work: Promise<unknown>[] = [];
+    const a = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle,
+      store,
+      claim: claimAs("a"),
+      detach: (finished) => {
+        work.push(finished);
+      },
+    });
+    const b = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle,
+      store: {
+        ...store,
+        readStates: async () => {
+          if (staleReads > 0) {
+            staleReads -= 1;
+            return stale;
+          }
+          return await store.readStates();
+        },
+      },
+      claim: claimAs("b"),
+      detach: () => panic("Runner b must not walk a finished unit"),
+    });
+
+    expect((await a(START)).unwrap()).toEqual({ type: "started", name: FIRST });
+    await Promise.all(work);
+
+    expect((await b(START)).unwrap()).toEqual({ type: "idle" });
+    expect(walked).toEqual(["a"]);
+    expect(gaveUp).toEqual(["b"]);
+    expect(holder).toBeNull();
+    expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 1 });
+  });
+
+  test("a failure recorded between the snapshot and claim waits for its fresh retry delay", async () => {
+    const { rows, store } = createMemoryStore();
+    rows.set(FIRST, {
+      state: "building",
+      attempts: 2,
+      attemptToken: "existing-attempt",
+      lastError: null,
+      finishedAt: null,
+    });
+    const claims: OnlineWorkName[] = [];
+    const releases: OnlineWorkName[] = [];
+    const walked: OnlineWorkName[] = [];
+    const work: Promise<unknown>[] = [];
+    const runner = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle: lifecycleWithPending([FIRST]),
+      store,
+      claim: async ({ name }) => {
+        claims.push(name);
+        if (claims.length === 1) {
+          await store.markFailed({
+            name,
+            attempt: 2,
+            attemptToken: "existing-attempt",
+            error: "another process failed",
+          });
+        }
+        const release = async () => {
+          releases.push(name);
+        };
+        return {
+          type: "claimed",
+          release,
+          run: async (record) => {
+            walked.push(name);
+            try {
+              return await record(Result.ok({ type: "complete" }));
+            } finally {
+              await release();
+            }
+          },
+        };
+      },
+      detach: (finished) => {
+        work.push(finished);
+      },
+    });
+
+    expect((await runner(START)).unwrap()).toEqual({ type: "idle" });
+    expect(walked).toEqual([]);
+    expect(work).toEqual([]);
+    expect(releases).toEqual([FIRST]);
+    expect(rows.get(FIRST)).toMatchObject({ state: "failed", attempts: 2 });
+
+    expect(
+      (await runner(new Date(START.getTime() + 119_999))).unwrap(),
+    ).toEqual({
+      type: "idle",
+    });
+    expect(claims).toEqual([FIRST]);
+    expect(walked).toEqual([]);
+
+    expect(
+      (await runner(new Date(START.getTime() + 120_000))).unwrap(),
+    ).toEqual({
+      type: "started",
+      name: FIRST,
+    });
+    expect(claims).toEqual([FIRST, FIRST]);
+    expect(walked).toEqual([FIRST]);
+    await Promise.all(work);
+    expect(rows.get(FIRST)).toMatchObject({ state: "finalized", attempts: 3 });
+    expect(releases).toEqual([FIRST, FIRST]);
+  });
+
+  test.each(["absent", "existing"] as const)(
+    "a successor claim wins after the %s second snapshot when the first session dies",
+    async (initial) => {
+      const { rows, store } = createMemoryStore();
+      if (initial === "existing") {
+        rows.set(FIRST, {
+          state: "building",
+          attempts: 1,
+          attemptToken: "prior-attempt",
+          lastError: null,
+          finishedAt: null,
+        });
+      }
+      const beforeWrite = Promise.withResolvers<undefined>();
+      const resumeWrite = Promise.withResolvers<undefined>();
+      const successorWalk = Promise.withResolvers<OnlineMigrationOutcome>();
+      const work: DetachedOnlineWork[] = [];
+      const walked: string[] = [];
+      const released: string[] = [];
+      let holder: string | undefined;
+      const currentHolder = () => holder;
+      const claimAs =
+        (session: string) => async (): Promise<OnlineWorkUnitClaim> => {
+          if (holder !== undefined) {
+            return { type: "lock_held" };
+          }
+          holder = session;
+          const release = async () => {
+            released.push(session);
+            if (holder === session) {
+              holder = undefined;
+            }
+          };
+          return {
+            type: "claimed",
+            release,
+            run: async (record) => {
+              walked.push(session);
+              try {
+                return await record(Result.ok(await successorWalk.promise));
+              } finally {
+                await release();
+              }
+            },
+          };
+        };
+      const oldRunner = createOnlineWorkRunner({
+        names: ONLINE_WORK_NAMES,
+        lifecycle: lifecycleWithPending([FIRST]),
+        store: {
+          ...store,
+          markBuilding: async (options) => {
+            beforeWrite.resolve(undefined);
+            await resumeWrite.promise;
+            return await store.markBuilding(options);
+          },
+        },
+        claim: claimAs("old"),
+        detach: () => panic("The stale claimant must not start its walk"),
+      });
+      const successor = createOnlineWorkRunner({
+        names: ONLINE_WORK_NAMES,
+        lifecycle: lifecycleWithPending([FIRST]),
+        store,
+        claim: claimAs("successor"),
+        detach: (unit) => {
+          work.push(unit);
+        },
+      });
+
+      const staleTick = oldRunner(START);
+      await beforeWrite.promise;
+      // Losing the session releases the advisory lock before its write resumes.
+      holder = undefined;
+      expect((await successor(START)).unwrap()).toEqual({
+        type: "started",
+        name: FIRST,
+      });
+      const successorState = rows.get(FIRST);
+      resumeWrite.resolve(undefined);
+      expect((await staleTick).unwrap()).toEqual({ type: "idle" });
+      expect(rows.get(FIRST)).toEqual(successorState);
+      expect(walked).toEqual(["successor"]);
+      expect(released).toEqual(["old"]);
+      expect(currentHolder()).toBe("successor");
+
+      successorWalk.resolve({ type: "complete" });
+      expect(await Promise.all(work)).toEqual([Result.ok(undefined)]);
+    },
+  );
+
+  test.each([
+    ["failed", "retained"],
+    ["complete", "retained"],
+    ["failed", "recreated"],
+    ["complete", "recreated"],
+  ] as const)(
+    "a superseded attempt delivering %s cannot checkpoint its %s successor",
+    async (outcome, history) => {
+      const { rows, store } = createMemoryStore();
+      let holder: "old" | "new" | null = null;
+      const currentHolder = () => holder;
+      const createProcess = (session: "old" | "new") => {
+        const walk = Promise.withResolvers<OnlineMigrationOutcome>();
+        const work: DetachedOnlineWork[] = [];
+        const runner = createOnlineWorkRunner({
+          names: ONLINE_WORK_NAMES,
+          lifecycle: lifecycleWithPending([FIRST]),
+          store,
+          claim: async (): Promise<OnlineWorkUnitClaim> => {
+            if (holder !== null) {
+              return { type: "lock_held" };
+            }
+            holder = session;
+            const release = async () => {
+              if (holder === session) {
+                holder = null;
+              }
+            };
+            return {
+              type: "claimed",
+              release,
+              run: async (record) => {
+                try {
+                  return await record(
+                    await Result.tryPromise({
+                      try: async () => await walk.promise,
+                      catch: (cause: unknown) => cause,
+                    }),
+                  );
+                } finally {
+                  await release();
+                }
+              },
+            };
+          },
+          detach: (unit) => {
+            work.push(unit);
+          },
+        });
+        return { runner, walk, work };
+      };
+      const oldProcess = createProcess("old");
+      const newProcess = createProcess("new");
+
+      expect((await oldProcess.runner(START)).unwrap()).toEqual({
+        type: "started",
+        name: FIRST,
+      });
+      expect(rows.get(FIRST)).toMatchObject({ state: "building", attempts: 1 });
+      // Session termination drops the lock before its delayed checkpoint arrives.
+      holder = null;
+      if (history === "recreated") {
+        rows.delete(FIRST);
+      }
+      const successorAttempt = history === "recreated" ? 1 : 2;
+      expect((await newProcess.runner(START)).unwrap()).toEqual({
+        type: "started",
+        name: FIRST,
+      });
+      expect(rows.get(FIRST)).toMatchObject({
+        state: "building",
+        attempts: successorAttempt,
+        attemptToken: "attempt-2",
+      });
+
+      switch (outcome) {
+        case "failed":
+          oldProcess.walk.reject(new Error("terminated session"));
+          break;
+        case "complete":
+          oldProcess.walk.resolve({ type: "complete" });
+          break;
+        default:
+          outcome satisfies never;
+          panic("Unknown old attempt outcome");
+      }
+      expect(await Promise.all(oldProcess.work)).toEqual([
+        Result.ok({
+          type: "stale-attempt",
+          name: FIRST,
+          attempt: 1,
+          attemptToken: "attempt-1",
+        }),
+      ]);
+      expect(rows.get(FIRST)).toMatchObject({
+        state: "building",
+        attempts: successorAttempt,
+        lastError: null,
+        finishedAt: null,
+      });
+      expect(currentHolder()).toBe("new");
+
+      newProcess.walk.resolve({ type: "complete" });
+      expect(await Promise.all(newProcess.work)).toEqual([
+        Result.ok(undefined),
+      ]);
+      expect(rows.get(FIRST)).toMatchObject({
+        state: "finalized",
+        attempts: successorAttempt,
+      });
+      expect(currentHolder()).toBeNull();
+    },
+  );
+
+  test("a failed unit waits for its retry delay, then is claimed again", async () => {
+    const harness = createHarness({ pending: [FIRST] });
+    await harness.tick();
+
+    harness
+      .walkOf(FIRST)
+      .reject(
+        new Error(
+          `connect postgres://owner:secret@db.internal:5432/stella failed ${"x".repeat(5000)}`,
+        ),
+      );
+    const [settled] = await harness.settle();
+
+    // Reported as a failure of the detached unit, after its checkpoint.
+    expect(
+      settled?.status === "fulfilled" && Result.isError(settled.value),
+    ).toBe(true);
+    const failed = harness.rows.get(FIRST);
+    expect(failed?.state).toBe("failed");
+    expect(failed?.lastError).not.toContain("secret");
+    expect(failed?.lastError).toContain("[database-url]");
+    expect(failed?.lastError?.length).toBe(2000);
+    expect(harness.releases).toEqual([FIRST]);
+
+    expect(await harness.tick(new Date(START.getTime() + 59_999))).toEqual({
+      type: "idle",
+    });
+    expect(harness.claims).toEqual([FIRST]);
+
+    expect(await harness.tick(new Date(START.getTime() + 60_000))).toEqual({
+      type: "started",
+      name: FIRST,
+    });
+    expect(harness.rows.get(FIRST)).toMatchObject({
+      state: "building",
+      attempts: 2,
+      lastError: null,
+    });
+  });
+
+  test("a later pending unit runs while an earlier failed unit waits", async () => {
+    const harness = createHarness();
+    await harness.tick();
+    harness.walkOf(FIRST).reject(new Error("deterministic failure"));
+    await harness.settle();
+
+    expect(await harness.tick(new Date(START.getTime() + 30_000))).toEqual({
+      type: "started",
+      name: SECOND,
+    });
+    expect(harness.claims).toEqual([FIRST, SECOND]);
+  });
+
+  test("a deferred unit stays building and the next tick claims it again", async () => {
+    const harness = createHarness({ pending: [FIRST] });
+    await harness.tick();
+
+    harness
+      .walkOf(FIRST)
+      .resolve({ type: "deferred", step: FIRST, retryAfterMs: 60_000 });
+    await harness.settle();
+
+    expect(harness.rows.get(FIRST)).toMatchObject({ state: "building" });
+    expect(await harness.tick()).toEqual({ type: "started", name: FIRST });
+    expect(harness.claims).toEqual([FIRST, FIRST]);
+  });
+
+  test("a failure to record the claim gives the claim up", async () => {
+    const { store } = createMemoryStore();
+    const releases: string[] = [];
+    const runner = createOnlineWorkRunner({
+      names: ONLINE_WORK_NAMES,
+      lifecycle: lifecycleWithPending([FIRST]),
+      store: {
+        ...store,
+        markBuilding: async () => {
+          throw new Error("write refused");
+        },
+      },
+      claim: async ({ name }) => ({
+        type: "claimed",
+        run: async () =>
+          panic("A claim that was never recorded is never walked"),
+        release: async () => {
+          releases.push(name);
+        },
+      }),
+      detach: () => undefined,
+    });
+
+    const outcome = await runner(START);
+
+    expect(Result.isError(outcome) && outcome.error.cause).toHaveProperty(
+      "message",
+      "write refused",
+    );
+    expect(releases).toEqual([FIRST]);
+  });
+
+  test("no pending work leaves the runner idle without a claim", async () => {
+    const harness = createHarness({ pending: [] });
+
+    expect(await harness.tick()).toEqual({ type: "idle" });
+    expect(harness.claims).toEqual([]);
+  });
+
+  test("finalized work is never claimed", async () => {
+    const harness = createHarness({ pending: [SECOND] });
+
+    expect(await harness.tick()).toEqual({ type: "started", name: SECOND });
+    expect(harness.claims).toEqual([SECOND]);
+  });
+});
+
+test("isolated online work tasks retain their own database across ticks", async () => {
+  const fixture = () => {
+    let reads = 0;
+    const transaction = {
+      execute: async () => [{ statement_timeout: "0" }],
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            orderBy: () => ({ limit: () => ({ as: () => onlineWorkState }) }),
+          }),
+          innerJoinLateral: () => ({
+            where: () => ({
+              limit: async () => {
+                reads += 1;
+                return ONLINE_WORK_NAMES.map((name) => ({
+                  name,
+                  state: "finalized" as const,
+                  attempts: 0,
+                  attemptToken: "finalized-attempt",
+                  finishedAt: START,
+                }));
+              },
+            }),
+          }),
+        }),
+      }),
+    };
+    const context = asTestRaw<SchedulerTaskContext>({
+      dueAt: DueSlot.of({ nextRunAt: START }),
+      db: {
+        transaction: async (
+          run: (tx: typeof transaction) => Promise<unknown>,
+        ) => await run({ ...transaction }),
+      },
+    });
+    return { context, reads: () => reads };
+  };
+  const first = fixture();
+  const second = fixture();
+  const firstTask = createPendingOnlineWorkTask();
+  const secondTask = createPendingOnlineWorkTask();
+
+  await firstTask(first.context);
+  await secondTask(second.context);
+  await firstTask(first.context);
+
+  expect([first.reads(), second.reads()]).toEqual([2, 1]);
+});

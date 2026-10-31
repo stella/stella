@@ -2,6 +2,10 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { GetColumnData, SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
+import {
+  CONTACTS_ORG_EXTERNAL_UIDX,
+  onlineUniqueIndexTarget,
+} from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
@@ -20,13 +24,15 @@ import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-
  * their scoped transaction, where RLS bounds the same rows again.
  *
  * Callers write the INSERT against their concrete table, which keeps the
- * values and the refreshed columns fully typed:
+ * values and the refreshed columns fully typed, and name the arbiter index
+ * through `onlineUniqueIndexTarget`, which admits only an index every migrate
+ * run builds (the `*_org_external_uidx` indexes are deploy-blocking):
  *
  *   const conflict = externalRefConflict(contacts);
  *   tx.insert(contacts)
  *     .values(rows)
  *     .onConflictDoUpdate({
- *       target: conflict.target,
+ *       target: onlineUniqueIndexTarget(CONTACTS_ORG_EXTERNAL_UIDX, contacts),
  *       targetWhere: conflict.targetWhere,
  *       set: { displayName: excluded(contacts.displayName), ... },
  *     })
@@ -41,9 +47,8 @@ type ExternalRefTable = PgTable & {
   externalChangeKey: AnyPgColumn;
 };
 
-/** The arbiter of an external-ref upsert: the partial unique index. */
+/** The partial arbiter predicate and the changed-row guard of an upsert. */
 const externalRefConflict = (table: ExternalRefTable) => ({
-  target: [table.organizationId, table.externalSource, table.externalId],
   targetWhere: isNotNull(table.externalId),
   setWhere: sql`${table.externalChangeKey} IS DISTINCT FROM ${excluded(table.externalChangeKey)}`,
 });
@@ -173,7 +178,10 @@ export const writeImportedContacts = async ({
           .insert(contacts)
           .values(updateRows)
           .onConflictDoUpdate({
-            target: conflict.target,
+            target: onlineUniqueIndexTarget(
+              CONTACTS_ORG_EXTERNAL_UIDX,
+              contacts,
+            ),
             targetWhere: conflict.targetWhere,
             setWhere: conflict.setWhere,
             set: {

@@ -26,4 +26,4 @@ export const USAGE_ACTION_TYPE_CONSTRAINT_VALIDATION = {
       tables,
       constraints: USAGE_ACTION_TYPE_CONSTRAINTS,
     }),
-} satisfies OnlineRepair;
+} as const satisfies OnlineRepair;

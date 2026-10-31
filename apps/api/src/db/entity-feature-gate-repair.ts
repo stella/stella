@@ -239,7 +239,10 @@ const schemaPolicies = (): readonly PolicyDefinition[] =>
 
 export const createEntityFeatureGateRepair = ({
   readPolicies,
-}: EntityFeatureGateRepairOptions): MigrationOwnedOnlineRepair => ({
+}: EntityFeatureGateRepairOptions): MigrationOwnedOnlineRepair & {
+  // The lifecycle map keys on the literal name.
+  readonly name: typeof REPAIR_NAME;
+} => ({
   introducedBy: "20261009112500_entity_feature_row_gates",
   name: REPAIR_NAME,
   readCompletion: async (connection) => {
@@ -330,5 +333,6 @@ export const createEntityFeatureGateRepair = ({
   },
 });
 
-export const ENTITY_FEATURE_GATE_REPAIR: MigrationOwnedOnlineRepair =
-  createEntityFeatureGateRepair({ readPolicies: schemaPolicies });
+export const ENTITY_FEATURE_GATE_REPAIR = createEntityFeatureGateRepair({
+  readPolicies: schemaPolicies,
+});

@@ -335,6 +335,7 @@ docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml pull
 docker compose --env-file deploy/selfhost/.env \
   -f docker-compose.selfhost.yml run --rm --no-deps api \
+  env STELLA_MIGRATE_ONLINE_WORK=build_finalized \
   bun /app/apps/api/src/db/migrate.js
 ```
 
