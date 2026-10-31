@@ -389,31 +389,28 @@ export const ChatThreadCard = ({
     setCollapseCueSeq((seq) => seq + 1);
     pulseCollapseCue();
   });
-  const watchOutsidePresses = useCallback(
-    (card: HTMLDivElement | null) => {
-      if (card === null) {
-        return undefined;
+  const watchOutsidePresses = (card: HTMLDivElement | null) => {
+    if (card === null) {
+      return undefined;
+    }
+    const column =
+      card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        event.button === 0 &&
+        isPressOutsideDockedChat({ column, target: event.target })
+      ) {
+        cueCollapse();
       }
-      const column =
-        card.closest(`[data-slot="${DOCKED_CHAT_COLUMN_SLOT}"]`) ?? card;
-      const onPointerDown = (event: PointerEvent) => {
-        if (
-          event.button === 0 &&
-          isPressOutsideDockedChat({ column, target: event.target })
-        ) {
-          cueCollapse();
-        }
-      };
-      // Capture phase: the reader handles its own presses (selection,
-      // links) and may stop them before they bubble to the document.
-      const owner = card.ownerDocument;
-      owner.addEventListener("pointerdown", onPointerDown, true);
-      return () => {
-        owner.removeEventListener("pointerdown", onPointerDown, true);
-      };
-    },
-    [cueCollapse],
-  );
+    };
+    // Capture phase: the reader handles its own presses (selection,
+    // links) and may stop them before they bubble to the document.
+    const owner = card.ownerDocument;
+    owner.addEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      owner.removeEventListener("pointerdown", onPointerDown, true);
+    };
+  };
   return (
     <DockedChatSurface slot="thread">
       <div

@@ -108,16 +108,16 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = useMemo(
-    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    [activeOrganizationId],
-  );
+  const availabilityOptions = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
   const dataQuery = useChromeQuery(availabilityOptions);
   const dataView = queryView(dataQuery);
   useQueryViewError(dataView, "AIAvailabilityRoot:query");
   const { isFetching } = dataQuery;
   const data = dataView.type === "items" ? dataView.items : undefined;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
   const openAIKeyDialog = useCallback(() => {
     if (
       dataQuery.status === "success" &&
@@ -127,7 +127,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
       setOpen(true);
     }
   }, [data, dataQuery.status]);
-
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
   const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
       .query({
@@ -186,6 +186,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     return false;
   }, [availabilityOptions, dataQuery.status, queryClient, t]);
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- effect and memo dependencies require a stable callback identity
   const openIfAIUnavailable = useCallback(() => {
     if (
       dataQuery.status === "success" &&
@@ -241,6 +242,7 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
     availability = "available";
   }
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const value = useMemo(
     () => ({
       availability,

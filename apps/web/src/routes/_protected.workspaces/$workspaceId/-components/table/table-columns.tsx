@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -67,24 +65,20 @@ export const useWorkspaceTableSchema = ({
 }: UseTableColumnsOptions): WorkspaceTableSchema => {
   const t = useTranslations();
 
-  return useMemo(
-    () =>
-      workspaceTableSchema({
-        properties,
-        view,
-        labels: {
-          name: t("common.name"),
-          itemType: t("common.type"),
-          status: t("tasks.status"),
-          priority: t("tasks.priority"),
-          dueDate: t("tasks.dueDate"),
-          author: t("common.author"),
-          lastUpdated: t("common.lastUpdated"),
-          version: t("common.version"),
-        },
-      }),
-    [properties, t, view],
-  );
+  return workspaceTableSchema({
+    properties,
+    view,
+    labels: {
+      name: t("common.name"),
+      itemType: t("common.type"),
+      status: t("tasks.status"),
+      priority: t("tasks.priority"),
+      dueDate: t("tasks.dueDate"),
+      author: t("common.author"),
+      lastUpdated: t("common.lastUpdated"),
+      version: t("common.version"),
+    },
+  });
 };
 
 type UseTableColumnDefsOptions = UseTableColumnsOptions & {
@@ -106,10 +100,7 @@ export const useTableColumns = ({
   const schema = useWorkspaceTableSchema({ properties, view });
   const toColumnDef = useColumnDefFactory(view, workspaceId);
 
-  return useMemo(
-    () => schema.columns.map(toColumnDef),
-    [schema.columns, toColumnDef],
-  );
+  return schema.columns.map(toColumnDef);
 };
 
 /** The parts of a column definition the schema already decided. */
@@ -147,144 +138,136 @@ const useColumnDefFactory = (
   const t = useTranslations();
   const format = useFormatter();
 
-  return useMemo(
-    () =>
-      (column: WorkspaceColumnDescriptor): TableColumnDef => {
-        const base = columnBase(column);
-        const metadataHeader = (icon: LucideIcon, sortKind: ColumnSortKind) =>
-          createMetadataHeader({ icon, label: column.label, sortKind });
-        const { render } = column;
+  return (column: WorkspaceColumnDescriptor): TableColumnDef => {
+    const base = columnBase(column);
+    const metadataHeader = (icon: LucideIcon, sortKind: ColumnSortKind) =>
+      createMetadataHeader({ icon, label: column.label, sortKind });
+    const { render } = column;
 
-        switch (render.type) {
-          case "select":
-            return { ...base, accessorKey: column.id, header: renderNothing };
-          case "add-property":
-            return {
-              ...base,
-              accessorKey: column.id,
-              header: renderNothing,
-              cell: renderNothing,
-            };
-          case "name":
-            return {
-              ...base,
-              accessorFn: (row) => row.name,
-              header: metadataHeader(TextIcon, "text"),
-              cell: ({ row }) => (
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="truncate font-medium" dir="auto">
-                    <HighlightedText text={row.original.name ?? ""} />
-                  </span>
-                  {row.original.kind === "document" ? (
-                    <DocumentExtractionStatus
-                      processingStatus={readDocumentProcessingStatus(
-                        row.original,
-                      )}
-                    />
-                  ) : null}
-                </div>
-              ),
-            };
-          case "list-item-type":
-            return {
-              ...base,
-              accessorFn: (row) => row.listItemType,
-              header: metadataHeader(ShapesIcon, "text"),
-              cell: ({ row }) => {
-                const itemType = isListItemType(row.original.listItemType)
-                  ? row.original.listItemType
-                  : "task";
-                return t(ITEM_TYPE_TRANSLATION_KEYS[itemType]);
-              },
-            };
-          case "task-status":
-            return {
-              ...base,
-              accessorFn: (row) => row.status,
-              header: metadataHeader(CircleDotIcon, "text"),
-              cell: ({ row }) =>
-                isTaskStatus(row.original.status)
-                  ? t(`tasks.statusValues.${row.original.status}`)
-                  : null,
-            };
-          case "task-priority":
-            return {
-              ...base,
-              accessorFn: (row) => row.priority,
-              header: metadataHeader(FlagIcon, "text"),
-              cell: ({ row }) =>
-                isTaskPriority(row.original.priority)
-                  ? t(`tasks.priorityValues.${row.original.priority}`)
-                  : null,
-            };
-          case "task-due-date":
-            return {
-              ...base,
-              accessorFn: (row) => row.dueDate,
-              header: metadataHeader(CalendarIcon, "date"),
-              cell: ({ row }) => {
-                if (!row.original.dueDate) {
-                  return null;
-                }
-                return format.dateTime(
-                  Temporal.PlainDate.from(row.original.dueDate).toZonedDateTime(
-                    {
-                      plainTime: Temporal.PlainTime.from("00:00"),
-                      timeZone: "UTC",
-                    },
-                  ).epochMilliseconds,
-                  {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    timeZone: "UTC",
-                  },
-                );
-              },
-            };
-          case "created-by":
-            return {
-              ...base,
-              accessorKey: column.id,
-              header: metadataHeader(UserIcon, "text"),
-              cell: renderAuthorCell,
-            };
-          case "updated-at":
-            return {
-              ...base,
-              accessorKey: column.id,
-              header: metadataHeader(ClockIcon, "date"),
-              cell: renderLastUpdatedCell,
-            };
-          case "version":
-            return {
-              ...base,
-              accessorKey: column.id,
-              header: metadataHeader(HashIcon, "number"),
-              cell: ({ row }) => (
-                <VersionHistoryCell
-                  entity={row.original}
-                  workspaceId={workspaceId}
+    switch (render.type) {
+      case "select":
+        return { ...base, accessorKey: column.id, header: renderNothing };
+      case "add-property":
+        return {
+          ...base,
+          accessorKey: column.id,
+          header: renderNothing,
+          cell: renderNothing,
+        };
+      case "name":
+        return {
+          ...base,
+          accessorFn: (row) => row.name,
+          header: metadataHeader(TextIcon, "text"),
+          cell: ({ row }) => (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-medium" dir="auto">
+                <HighlightedText text={row.original.name ?? ""} />
+              </span>
+              {row.original.kind === "document" ? (
+                <DocumentExtractionStatus
+                  processingStatus={readDocumentProcessingStatus(row.original)}
                 />
-              ),
-            };
-          case "property":
-            return {
-              ...base,
-              ...getPropertyColumnRender({
-                filters: view.layout.filters,
-                property: render.property,
-                verdictProperty: render.verdictProperty,
-              }),
-            };
-          default: {
-            render satisfies never;
-            return panic(`Unhandled render: ${String(render)}`);
-          }
-        }
-      },
-    [format, t, view.layout.filters, workspaceId],
-  );
+              ) : null}
+            </div>
+          ),
+        };
+      case "list-item-type":
+        return {
+          ...base,
+          accessorFn: (row) => row.listItemType,
+          header: metadataHeader(ShapesIcon, "text"),
+          cell: ({ row }) => {
+            const itemType = isListItemType(row.original.listItemType)
+              ? row.original.listItemType
+              : "task";
+            return t(ITEM_TYPE_TRANSLATION_KEYS[itemType]);
+          },
+        };
+      case "task-status":
+        return {
+          ...base,
+          accessorFn: (row) => row.status,
+          header: metadataHeader(CircleDotIcon, "text"),
+          cell: ({ row }) =>
+            isTaskStatus(row.original.status)
+              ? t(`tasks.statusValues.${row.original.status}`)
+              : null,
+        };
+      case "task-priority":
+        return {
+          ...base,
+          accessorFn: (row) => row.priority,
+          header: metadataHeader(FlagIcon, "text"),
+          cell: ({ row }) =>
+            isTaskPriority(row.original.priority)
+              ? t(`tasks.priorityValues.${row.original.priority}`)
+              : null,
+        };
+      case "task-due-date":
+        return {
+          ...base,
+          accessorFn: (row) => row.dueDate,
+          header: metadataHeader(CalendarIcon, "date"),
+          cell: ({ row }) => {
+            if (!row.original.dueDate) {
+              return null;
+            }
+            return format.dateTime(
+              Temporal.PlainDate.from(row.original.dueDate).toZonedDateTime({
+                plainTime: Temporal.PlainTime.from("00:00"),
+                timeZone: "UTC",
+              }).epochMilliseconds,
+              {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                timeZone: "UTC",
+              },
+            );
+          },
+        };
+      case "created-by":
+        return {
+          ...base,
+          accessorKey: column.id,
+          header: metadataHeader(UserIcon, "text"),
+          cell: renderAuthorCell,
+        };
+      case "updated-at":
+        return {
+          ...base,
+          accessorKey: column.id,
+          header: metadataHeader(ClockIcon, "date"),
+          cell: renderLastUpdatedCell,
+        };
+      case "version":
+        return {
+          ...base,
+          accessorKey: column.id,
+          header: metadataHeader(HashIcon, "number"),
+          cell: ({ row }) => (
+            <VersionHistoryCell
+              entity={row.original}
+              workspaceId={workspaceId}
+            />
+          ),
+        };
+      case "property":
+        return {
+          ...base,
+          ...getPropertyColumnRender({
+            filters: view.layout.filters,
+            property: render.property,
+            verdictProperty: render.verdictProperty,
+          }),
+        };
+      default: {
+        render satisfies never;
+        return panic(`Unhandled render: ${String(render)}`);
+      }
+    }
+  };
 };
 
 type MetadataHeaderOptions = {

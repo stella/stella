@@ -38,16 +38,13 @@ export const LegalReaderBreadcrumb = ({
   analysis,
   viewport,
 }: LegalReaderBreadcrumbProps) => {
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const headings = useMemo(() => readerBreadcrumbPaths(blocks), [blocks]);
-  const contents = useMemo(
-    () =>
-      readerContents({
-        anchorOrder: blocks.map(({ anchorId }) => anchorId),
-        headings,
-        analysis,
-      }),
-    [blocks, headings, analysis],
-  );
+  const contents = readerContents({
+    anchorOrder: blocks.map(({ anchorId }) => anchorId),
+    headings,
+    analysis,
+  });
   const [position, setPosition] = useState<ReaderPosition | null>(null);
   useExternalSyncEffect(() => {
     if (content === null || viewport === null) {

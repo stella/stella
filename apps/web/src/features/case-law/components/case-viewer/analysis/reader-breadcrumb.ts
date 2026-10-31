@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
 import type { ReaderBreadcrumbModel } from "@/components/legal-reader/reader-breadcrumb-paths";
@@ -40,16 +38,12 @@ export const analysisReaderBreadcrumbPaths = (
 
 // Both reader surfaces retain the same outline while the tree is unchanged;
 // a streamed tree only grows, so its rows only join.
-export const useAnalysisReaderOutline = (
+export const analysisReaderOutline = (
   tree: readonly AnalysisHeading[] | null,
-) =>
-  useMemo(
-    (): ReaderAnalysisOutline | undefined =>
-      tree === null
-        ? undefined
-        : {
-            disclosure: "caseLaw",
-            sections: analysisReaderBreadcrumbPaths(tree),
-          },
-    [tree],
-  );
+): ReaderAnalysisOutline | undefined =>
+  tree === null
+    ? undefined
+    : {
+        disclosure: "caseLaw",
+        sections: analysisReaderBreadcrumbPaths(tree),
+      };

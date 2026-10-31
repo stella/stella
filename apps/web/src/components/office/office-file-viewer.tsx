@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type {
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
@@ -93,86 +93,69 @@ export const OfficeFileViewer = ({
   const requestDesktopOpenAttention = useInspectorCommandStore(
     (state) => state.requestDesktopOpenAttention,
   );
-  const handleStatusChange = useCallback((status: OfficeViewerStatus) => {
+  const handleStatusChange = (status: OfficeViewerStatus) => {
     setViewerStatus(status);
-  }, []);
-  const handleViewerError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "OfficeFileViewer:failure",
-        scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
-      });
-    },
-    [analytics],
-  );
-  const handleNavigationError = useCallback(
-    (error: Error) => {
-      analytics.captureError(error, {
-        fingerprintKey: "OfficeFileViewer:failure-2",
-        scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
-      });
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    [analytics, t],
-  );
-  const handleNavigationApplied = useCallback((sequence: number) => {
+  };
+  const handleViewerError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure" },
+    });
+  };
+  const handleNavigationError = (error: Error) => {
+    analytics.captureError(error, {
+      fingerprintKey: "OfficeFileViewer:failure-2",
+      scope: { type: "handler", handlerId: "OfficeFileViewer:failure-2" },
+    });
+    notifyUserError(error, t("errors.actionFailed"));
+  };
+  const handleNavigationApplied = (sequence: number) => {
     setNavigationRequest((current) =>
       current?.sequence === sequence ? null : current,
     );
-  }, []);
-  const handleEditIntentKeyDown = useCallback(
-    (event: ReactKeyboardEvent<HTMLDivElement>) => {
-      if (
-        desktopCapability.type !== "available" ||
-        desktopEditTarget === null ||
-        viewerStatus.type !== "ready" ||
-        !isOfficeEditIntentKey(event.nativeEvent)
-      ) {
-        return;
-      }
+  };
+  const handleEditIntentKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (
+      desktopCapability.type !== "available" ||
+      desktopEditTarget === null ||
+      viewerStatus.type !== "ready" ||
+      !isOfficeEditIntentKey(event.nativeEvent)
+    ) {
+      return;
+    }
 
-      const result = registerOfficeEditIntentKeystroke({
-        state: editIntentStateRef.current,
-        timestamp: event.timeStamp,
-      });
-      editIntentStateRef.current = result.state;
-      if (!result.shouldPrompt) {
-        return;
-      }
+    const result = registerOfficeEditIntentKeystroke({
+      state: editIntentStateRef.current,
+      timestamp: event.timeStamp,
+    });
+    editIntentStateRef.current = result.state;
+    if (!result.shouldPrompt) {
+      return;
+    }
 
-      requestDesktopOpenAttention(fieldId);
-      stellaToast.add({
-        action: {
-          label: desktopGate.label,
-          onClick: () => {
-            desktopGate.run(() => {
-              detached(openInDesktop(), "office-file-viewer.open-in-desktop");
-            });
-          },
+    requestDesktopOpenAttention(fieldId);
+    stellaToast.add({
+      action: {
+        label: desktopGate.label,
+        onClick: () => {
+          desktopGate.run(() => {
+            detached(openInDesktop(), "office-file-viewer.open-in-desktop");
+          });
         },
-        description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
-        timeout: 10_000,
-        title: t("workspaces.files.desktopEdit.action"),
-        type: "info",
-      });
-    },
-    [
-      desktopEditTarget,
-      desktopCapability.type,
-      desktopGate,
-      fieldId,
-      openInDesktop,
-      requestDesktopOpenAttention,
-      t,
-      viewerStatus.type,
-    ],
-  );
-  const handleViewerPointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLDivElement>) => {
-      event.currentTarget.focus({ preventScroll: true });
-    },
-    [],
-  );
+      },
+      description: t("workspaces.files.desktopEdit.editLocallyPrompt"),
+      timeout: 10_000,
+      title: t("workspaces.files.desktopEdit.action"),
+      type: "info",
+    });
+  };
+  const handleViewerPointerDown = (
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) => {
+    event.currentTarget.focus({ preventScroll: true });
+  };
 
   useExternalSyncEffect(
     () =>

@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import {
   useMutation,
@@ -209,47 +209,40 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
           .length
       : 0;
-  const findViewByType = useCallback(
-    (type: string) => views?.find((v) => v.layout.type === type),
-    [views],
-  );
+  const findViewByType = (type: string) =>
+    views?.find((v) => v.layout.type === type);
 
   const createTaskOnce = useSingleFlight();
-  const handleCreateTask = useCallback(
-    async () =>
-      await createTaskOnce.run(async () => {
-        const { data: taskData, error: taskError } = await idempotentSubmit.run(
-          {
-            operation: JSON.stringify([
-              "api.tasks({workspaceId})",
-              { workspaceId },
-            ]),
-            body: { name: t("tasks.untitled") },
-            send: async (creationPayload) =>
-              api.tasks({ workspaceId }).put(creationPayload),
-          },
+  const handleCreateTask = async () =>
+    await createTaskOnce.run(async () => {
+      const { data: taskData, error: taskError } = await idempotentSubmit.run({
+        operation: JSON.stringify([
+          "api.tasks({workspaceId})",
+          { workspaceId },
+        ]),
+        body: { name: t("tasks.untitled") },
+        send: async (creationPayload) =>
+          api.tasks({ workspaceId }).put(creationPayload),
+      });
+      const entityId = taskData?.entityId;
+      if (taskError || !entityId) {
+        notifyUserError(
+          taskError ? toAPIError(taskError) : undefined,
+          t("errors.actionFailed"),
         );
-        const entityId = taskData?.entityId;
-        if (taskError || !entityId) {
-          notifyUserError(
-            taskError ? toAPIError(taskError) : undefined,
-            t("errors.actionFailed"),
-          );
-          return;
-        }
-        stellaToast.add({ title: t("success.taskCreated"), type: "success" });
-        detached(
-          queryClient.invalidateQueries({
-            queryKey: workspacesKeys.overview(workspaceId),
-          }),
-          "overview-view.invalidate",
-        );
-        useInspectorTabsStore
-          .getState()
-          .openTask({ taskId: entityId, workspaceId, isNew: true });
-      }),
-    [workspaceId, t, queryClient, idempotentSubmit, createTaskOnce],
-  );
+        return;
+      }
+      stellaToast.add({ title: t("success.taskCreated"), type: "success" });
+      detached(
+        queryClient.invalidateQueries({
+          queryKey: workspacesKeys.overview(workspaceId),
+        }),
+        "overview-view.invalidate",
+      );
+      useInspectorTabsStore
+        .getState()
+        .openTask({ taskId: entityId, workspaceId, isNew: true });
+    });
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({
@@ -285,7 +278,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     },
   });
 
-  const handleTaskContextMenu = useCallback(
+  const handleTaskContextMenu =
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -297,9 +290,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         opener: e.currentTarget instanceof HTMLElement ? e.currentTarget : null,
         task,
       });
-    },
-    [],
-  );
+    };
 
   const menuTaskStatus = upcomingMenu.task?.status ?? null;
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
@@ -313,10 +304,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     cancelled: t("tasks.statusValues.cancelled"),
   };
 
-  const recentEntities = useMemo(
-    () => data.recentEntities.filter((e) => e.kind !== "folder"),
-    [data.recentEntities],
-  );
+  const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
   const hasActivity = recentEntities.length > 0;
 
   // Re-compute the current date when the user returns to the
@@ -346,10 +334,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
-  const weekStart = useMemo(
-    () => getWeekStart(locale, Temporal.PlainDate.from(today)),
-    [today, locale],
-  );
+  const weekStart = getWeekStart(locale, Temporal.PlainDate.from(today));
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const weekEnd = useMemo(() => weekStart.add({ days: 6 }), [weekStart]);
 
   const timeSummaryView = queryView(
@@ -381,14 +367,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const prevWeekStart = useMemo(
     () => weekStart.subtract({ days: 7 }),
     [weekStart],
   );
-  const prevWeekEnd = useMemo(
-    () => weekStart.subtract({ days: 1 }),
-    [weekStart],
-  );
+  const prevWeekEnd = weekStart.subtract({ days: 1 });
 
   const previousTimeSummaryView = queryView(
     useQuery({
@@ -418,6 +402,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           : currentTimeView.items.totalMinutes) / 60
       : null;
 
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const teamHeatmap = useMemo(() => {
     if (!teamTimeSummary) {
       return [];

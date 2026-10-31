@@ -43,16 +43,14 @@ export const SearchDocumentPreview = ({
     usePdfTabZoom();
   const scaleOffset = scaleOffsets.get(target.fieldId) ?? 0;
   const { viewId } = useWorkspaceViewParams(target.workspaceId);
-  const handleSearchMatchSummaryChange = useCallback(
-    (summary: SearchMatchSummary) => {
-      setSearchMatchSummary(summary);
-      setNativeSearchStatus(summary.count > 0 ? "matched" : "unmatched");
-      setActiveSearchMatchIndex((current) =>
-        summary.count === 0 ? 0 : Math.min(current, summary.count - 1),
-      );
-    },
-    [],
-  );
+  const handleSearchMatchSummaryChange = (summary: SearchMatchSummary) => {
+    setSearchMatchSummary(summary);
+    setNativeSearchStatus(summary.count > 0 ? "matched" : "unmatched");
+    setActiveSearchMatchIndex((current) =>
+      summary.count === 0 ? 0 : Math.min(current, summary.count - 1),
+    );
+  };
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const navigateSearchMatches = useCallback(
     (direction: "next" | "previous") => {
       setActiveSearchMatchIndex((current) =>
@@ -65,11 +63,11 @@ export const SearchDocumentPreview = ({
     },
     [searchMatchSummary.count],
   );
-  const handlePreviewError = useCallback(() => {
+  const handlePreviewError = () => {
     setActiveSearchMatchIndex(0);
     setSearchMatchSummary({ count: 0, truncated: false });
     setNativeSearchStatus("unmatched");
-  }, []);
+  };
   const viewer = (
     <PeekPdfViewer
       pdfPageSource="portfolio"

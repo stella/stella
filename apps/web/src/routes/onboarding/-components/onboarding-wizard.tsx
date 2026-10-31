@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
@@ -150,6 +150,7 @@ export const OnboardingWizard = () => {
   const [previewAiProviders, setPreviewAiProviders] = useState<
     readonly ProviderPreview[]
   >([]);
+  // oxlint-disable-next-line no-manual-memo/no-manual-memo -- load-bearing: removing this boundary reduces the React Compiler cache slots in this component
   const unavailableNativeToolBackendSlugs = useMemo<
     ReadonlySet<string> | undefined
   >(() => {
@@ -160,14 +161,10 @@ export const OnboardingWizard = () => {
       nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
     );
   }, [nativeToolDeployAvailability]);
-  const onboardingCatalogueEntries = useMemo(
-    () =>
-      loadCatalogue().filter((entry) =>
-        isCatalogueEntryAvailableDuringOnboarding(entry, {
-          unavailableNativeToolBackendSlugs,
-        }),
-      ),
-    [unavailableNativeToolBackendSlugs],
+  const onboardingCatalogueEntries = loadCatalogue().filter((entry) =>
+    isCatalogueEntryAvailableDuringOnboarding(entry, {
+      unavailableNativeToolBackendSlugs,
+    }),
   );
   useLayoutEffect(() => {
     if (step !== "catalogue") {
@@ -270,205 +267,192 @@ export const OnboardingWizard = () => {
     });
   };
 
-  const executeSetup = useCallback(
-    async (finalData: WizardData) => {
-      setIsCreating(true);
+  const executeSetup = async (finalData: WizardData) => {
+    setIsCreating(true);
 
-      const { data: orgData, error: createOrgError } =
-        await authClient.organization.create({
-          name: finalData.orgName,
-          slug: finalData.orgSlug,
+    const { data: orgData, error: createOrgError } =
+      await authClient.organization.create({
+        name: finalData.orgName,
+        slug: finalData.orgSlug,
+      });
+
+    if (createOrgError) {
+      analytics.captureError(toAuthClientError(createOrgError), {
+        fingerprintKey: "OnboardingWizard:failure",
+        scope: { type: "handler", handlerId: "OnboardingWizard:failure" },
+      });
+      notifyAuthClientError(createOrgError, t("errors.actionFailed"));
+      setIsCreating(false);
+      return;
+    }
+
+    const { error: setActiveError } = await authClient.organization.setActive({
+      organizationId: orgData.id,
+    });
+
+    if (setActiveError) {
+      analytics.captureError(toAuthClientError(setActiveError), {
+        fingerprintKey: "OnboardingWizard:failure-2",
+        scope: { type: "handler", handlerId: "OnboardingWizard:failure-2" },
+      });
+      notifyAuthClientError(setActiveError, t("errors.actionFailed"));
+      setIsCreating(false);
+      return;
+    }
+
+    // From here the org already exists; if anything fails
+    // the safest recovery is to continue on to the apps step.
+    try {
+      // Refresh the session/role query cache so the rest of setup (and
+      // the apps step after it) sees the new active org. This
+      // deliberately refetches the queries directly instead of going
+      // through `useInvalidateSession`, which also calls
+      // `router.invalidate()`: that re-runs this route's `beforeLoad`
+      // immediately, and since the session now has an
+      // `activeOrganizationId`, the guard would redirect away from
+      // /onboarding before the wizard ever reaches the apps step.
+      await refreshAuthQueries(queryClient);
+
+      if (finalData.practiceJurisdictions.length > 0) {
+        const { error: jurisdictionError } = await api["organization-settings"][
+          "practice-jurisdictions"
+        ].post({
+          practiceJurisdictions: finalData.practiceJurisdictions,
         });
 
-      if (createOrgError) {
-        analytics.captureError(toAuthClientError(createOrgError), {
-          fingerprintKey: "OnboardingWizard:failure",
-          scope: { type: "handler", handlerId: "OnboardingWizard:failure" },
-        });
-        notifyAuthClientError(createOrgError, t("errors.actionFailed"));
-        setIsCreating(false);
-        return;
+        if (jurisdictionError) {
+          analytics.captureError(toAPIError(jurisdictionError), {
+            fingerprintKey: "OnboardingWizard:failure-3",
+            scope: {
+              type: "handler",
+              handlerId: "OnboardingWizard:failure-3",
+            },
+          });
+          stellaToast.add({
+            title: t("onboarding.jurisdictionSaveFailed"),
+            type: "warning",
+          });
+        }
       }
 
-      const { error: setActiveError } = await authClient.organization.setActive(
-        {
-          organizationId: orgData.id,
+      // Phase 1b: Install selected catalogue entries and persist
+      // explicit opt-outs for omitted default-on native tools. Runs
+      // in parallel; partial failure surfaces as a toast but doesn't
+      // block the rest of setup.
+      const catalogueEntries = loadCatalogue();
+      const catalogueSetupPlan = createCatalogueSetupPlan({
+        entries: catalogueEntries,
+        practiceJurisdictions: finalData.practiceJurisdictions,
+        selectedSlugs: finalData.catalogueSlugs,
+        unavailableNativeToolBackendSlugs,
+      });
+      const installTasks = catalogueSetupPlan.installSlugs.map(async (slug) => {
+        const entry = catalogueEntries.find((e) => e.slug === slug);
+        if (!entry) {
+          return;
+        }
+        await installCatalogueEntry(entry);
+      });
+      const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
+        async (entry) => {
+          const { error } = await api.mcp["native-tools"]({
+            slug: entry.backendSlug,
+          }).patch({ enabled: false });
+          if (error) {
+            throw toAPIError(error);
+          }
         },
       );
-
-      if (setActiveError) {
-        analytics.captureError(toAuthClientError(setActiveError), {
-          fingerprintKey: "OnboardingWizard:failure-2",
-          scope: { type: "handler", handlerId: "OnboardingWizard:failure-2" },
-        });
-        notifyAuthClientError(setActiveError, t("errors.actionFailed"));
-        setIsCreating(false);
-        return;
+      const catalogueTasks = [...installTasks, ...optOutTasks];
+      if (catalogueTasks.length > 0) {
+        const catalogueResults = await Promise.allSettled(catalogueTasks);
+        const installResults = catalogueResults.slice(0, installTasks.length);
+        const failedInstallCount = installResults.filter(
+          (r) => r.status === "rejected",
+        ).length;
+        const failed = catalogueResults.filter(
+          (r) => r.status === "rejected",
+        ).length;
+        if (failed > 0) {
+          stellaToast.add({
+            title: t("onboarding.cataloguePartial", {
+              installed: String(installTasks.length - failedInstallCount),
+              failed: String(failed),
+            }),
+            type: "warning",
+          });
+        }
       }
 
-      // From here the org already exists; if anything fails
-      // the safest recovery is to continue on to the apps step.
-      try {
-        // Refresh the session/role query cache so the rest of setup (and
-        // the apps step after it) sees the new active org. This
-        // deliberately refetches the queries directly instead of going
-        // through `useInvalidateSession`, which also calls
-        // `router.invalidate()`: that re-runs this route's `beforeLoad`
-        // immediately, and since the session now has an
-        // `activeOrganizationId`, the guard would redirect away from
-        // /onboarding before the wizard ever reaches the apps step.
-        await refreshAuthQueries(queryClient);
-
-        if (finalData.practiceJurisdictions.length > 0) {
-          const { error: jurisdictionError } = await api[
-            "organization-settings"
-          ]["practice-jurisdictions"].post({
-            practiceJurisdictions: finalData.practiceJurisdictions,
-          });
-
-          if (jurisdictionError) {
-            analytics.captureError(toAPIError(jurisdictionError), {
-              fingerprintKey: "OnboardingWizard:failure-3",
-              scope: {
-                type: "handler",
-                handlerId: "OnboardingWizard:failure-3",
-              },
-            });
-            stellaToast.add({
-              title: t("onboarding.jurisdictionSaveFailed"),
-              type: "warning",
-            });
-          }
-        }
-
-        // Phase 1b: Install selected catalogue entries and persist
-        // explicit opt-outs for omitted default-on native tools. Runs
-        // in parallel; partial failure surfaces as a toast but doesn't
-        // block the rest of setup.
-        const catalogueEntries = loadCatalogue();
-        const catalogueSetupPlan = createCatalogueSetupPlan({
-          entries: catalogueEntries,
-          practiceJurisdictions: finalData.practiceJurisdictions,
-          selectedSlugs: finalData.catalogueSlugs,
-          unavailableNativeToolBackendSlugs,
+      // Phase 2: Save AI config (BYOK) if user provided one
+      if (hasUsableProviderDrafts(finalData.aiProviders)) {
+        const { error: aiConfigError } = await api["organization-settings"][
+          "ai-config"
+        ].post({
+          providers: serializeProviderDrafts(finalData.aiProviders),
+          overrideModels: null,
         });
-        const installTasks = catalogueSetupPlan.installSlugs.map(
-          async (slug) => {
-            const entry = catalogueEntries.find((e) => e.slug === slug);
-            if (!entry) {
-              return;
-            }
-            await installCatalogueEntry(entry);
-          },
-        );
-        const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
-          async (entry) => {
-            const { error } = await api.mcp["native-tools"]({
-              slug: entry.backendSlug,
-            }).patch({ enabled: false });
-            if (error) {
-              throw toAPIError(error);
-            }
-          },
-        );
-        const catalogueTasks = [...installTasks, ...optOutTasks];
-        if (catalogueTasks.length > 0) {
-          const catalogueResults = await Promise.allSettled(catalogueTasks);
-          const installResults = catalogueResults.slice(0, installTasks.length);
-          const failedInstallCount = installResults.filter(
-            (r) => r.status === "rejected",
-          ).length;
-          const failed = catalogueResults.filter(
-            (r) => r.status === "rejected",
-          ).length;
-          if (failed > 0) {
-            stellaToast.add({
-              title: t("onboarding.cataloguePartial", {
-                installed: String(installTasks.length - failedInstallCount),
-                failed: String(failed),
-              }),
-              type: "warning",
-            });
-          }
-        }
 
-        // Phase 2: Save AI config (BYOK) if user provided one
-        if (hasUsableProviderDrafts(finalData.aiProviders)) {
-          const { error: aiConfigError } = await api["organization-settings"][
-            "ai-config"
-          ].post({
-            providers: serializeProviderDrafts(finalData.aiProviders),
-            overrideModels: null,
+        if (aiConfigError) {
+          analytics.captureError(toAPIError(aiConfigError), {
+            fingerprintKey: "OnboardingWizard:failure-4",
+            scope: {
+              type: "handler",
+              handlerId: "OnboardingWizard:failure-4",
+            },
           });
-
-          if (aiConfigError) {
-            analytics.captureError(toAPIError(aiConfigError), {
-              fingerprintKey: "OnboardingWizard:failure-4",
-              scope: {
-                type: "handler",
-                handlerId: "OnboardingWizard:failure-4",
-              },
-            });
-            stellaToast.add({
-              title: t("onboarding.aiConfigFailed"),
-              type: "warning",
-            });
-          } else {
-            queryClient.setQueryData(
-              aiAvailabilityOptions({ organizationId: orgData.id }).queryKey,
-              (current) =>
-                updateCachedAIAvailability({
-                  current,
-                  orgConfigured: true,
-                }),
-            );
-            await invalidateAIConfigurationCaches(queryClient, orgData.id);
-          }
-        }
-
-        // Phase 3: Send invitations
-        if (finalData.emails.length > 0) {
-          const inviteResults = await Promise.all(
-            finalData.emails.map(
-              async (email) =>
-                await authClient.organization.inviteMember({
-                  email,
-                  role: "member",
-                }),
-            ),
+          stellaToast.add({
+            title: t("onboarding.aiConfigFailed"),
+            type: "warning",
+          });
+        } else {
+          queryClient.setQueryData(
+            aiAvailabilityOptions({ organizationId: orgData.id }).queryKey,
+            (current) =>
+              updateCachedAIAvailability({
+                current,
+                orgConfigured: true,
+              }),
           );
-
-          const failedCount = inviteResults.filter(
-            (r) => r.error !== null,
-          ).length;
-
-          if (failedCount > 0) {
-            stellaToast.add({
-              title: t("onboarding.someInvitesFailed", {
-                count: failedCount,
-              }),
-              type: "warning",
-            });
-          }
+          await invalidateAIConfigurationCaches(queryClient, orgData.id);
         }
-      } catch (error) {
-        analytics.captureError(error, {
-          fingerprintKey: "OnboardingWizard:failure-5",
-          scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
-        });
       }
 
-      setIsCreating(false);
-      setStep("download");
-    },
-    [
-      analytics,
-      queryClient,
-      setIsCreating,
-      t,
-      unavailableNativeToolBackendSlugs,
-    ],
-  );
+      // Phase 3: Send invitations
+      if (finalData.emails.length > 0) {
+        const inviteResults = await Promise.all(
+          finalData.emails.map(
+            async (email) =>
+              await authClient.organization.inviteMember({
+                email,
+                role: "member",
+              }),
+          ),
+        );
+
+        const failedCount = inviteResults.filter(
+          (r) => r.error !== null,
+        ).length;
+
+        if (failedCount > 0) {
+          stellaToast.add({
+            title: t("onboarding.someInvitesFailed", {
+              count: failedCount,
+            }),
+            type: "warning",
+          });
+        }
+      }
+    } catch (error) {
+      analytics.captureError(error, {
+        fingerprintKey: "OnboardingWizard:failure-5",
+        scope: { type: "handler", handlerId: "OnboardingWizard:failure-5" },
+      });
+    }
+
+    setIsCreating(false);
+    setStep("download");
+  };
 
   let preview = (
     <SidebarPreview
