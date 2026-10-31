@@ -1135,6 +1135,10 @@ export const registerMcpToolProjectionDelivery = (
  */
 const MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS = 3;
 const MCP_TOOL_PROJECTION_RETRY_BASE_MS = 250;
+const MCP_TOOL_PROJECTION_PUBLISH_FAILURE_SINK = failureSink({
+  event: "sse.mcp_tool_projection_publish_failed",
+  expected: [],
+});
 
 const publishMcpToolProjectionAttempt = async (
   change: McpToolProjectionChange,
@@ -1151,17 +1155,18 @@ const publishMcpToolProjectionAttempt = async (
   if (!Result.isError(published)) {
     return;
   }
-  if (attempt + 1 >= MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS) {
-    logger.error("sse.mcp_tool_projection_publish_failed", {
-      "error.type": errorTag(published.error),
-      "publish.attempts": MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS,
-    });
+  const exhausted = attempt + 1 >= MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS;
+  observeFailure(published.error, {
+    sink: MCP_TOOL_PROJECTION_PUBLISH_FAILURE_SINK,
+    ctx: {
+      phase: exhausted ? "abandoned" : "retrying",
+      step: `attempt_${attempt + 1}_of_${MCP_TOOL_PROJECTION_PUBLISH_ATTEMPTS}`,
+    },
+  });
+  if (exhausted) {
     return;
   }
-  logger.warn("sse.redis_publish_failed", {
-    "error.type": errorTag(published.error),
-  });
-  await sleep(
+  await activeRetryWait()(
     backoffDelay(attempt, { baseMs: MCP_TOOL_PROJECTION_RETRY_BASE_MS }),
   );
   await publishMcpToolProjectionAttempt(change, attempt + 1);
@@ -1299,9 +1304,13 @@ export type SseConnectionAuthorizers = {
   workspace: WorkspaceConnectionAuthorizer;
 };
 
+/** Waits before a failed cross-replica publish is retried. */
+type SseRetryWait = (delayMs: number) => Promise<void>;
+
 type StartSseDependencies = {
   createClient?: CreateSseRedisClient | undefined;
   publisher?: SseBroadcastPublisher | undefined;
+  retryWait?: SseRetryWait | undefined;
 };
 
 type SseLifecycle = {
@@ -1311,6 +1320,7 @@ type SseLifecycle = {
   keepAliveTimer: ReturnType<typeof setInterval>;
   /** Every scope's cross-instance publish goes through this one publisher. */
   publisher: SseBroadcastPublisher;
+  retryWait: SseRetryWait;
   subscriber: SseRedisClient | null;
   /**
    * Whether `subscriber` currently holds a live SUBSCRIBE on its present
@@ -1348,6 +1358,8 @@ let activeLifecycle: SseLifecycle | null = null;
  */
 const activePublisher = (): SseBroadcastPublisher =>
   activeLifecycle?.publisher ?? defaultSseBroadcastPublisher;
+
+const activeRetryWait = (): SseRetryWait => activeLifecycle?.retryWait ?? sleep;
 
 /**
  * Whether this instance currently has a live, subscribed Redis subscriber. Used
@@ -1618,6 +1630,7 @@ export const startSse = (
     ),
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     publisher: dependencies.publisher ?? defaultSseBroadcastPublisher,
+    retryWait: dependencies.retryWait ?? sleep,
     subscriber: null,
     subscriptionLive: false,
     attachTimer: null,

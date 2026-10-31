@@ -18,6 +18,11 @@ import {
 
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+} from "@/api/lib/observability/logger";
 import type {
   announceMcpToolProjectionChange as AnnounceMcpToolProjectionChange,
   broadcast as Broadcast,
@@ -375,11 +380,13 @@ describe("MCP tool projection changes", () => {
 
   /**
    * Announces one change through a publisher whose first `failures` publishes
-   * fail, recording the backoff each retry asked for.
+   * fail, recording the backoff each retry asked for and each failure the
+   * announcement reported.
    */
   const announceThroughFailingPublisher = async (failures: number) => {
     let failuresRemaining = failures;
     const published: unknown[] = [];
+    const delays: number[] = [];
     const publishMcpToolProjectionChange = mock(async (change: unknown) => {
       if (failuresRemaining > 0) {
         failuresRemaining -= 1;
@@ -397,24 +404,27 @@ describe("MCP tool projection changes", () => {
       {
         createClient: createRedisClientMock,
         publisher: { ...testPublisher, publishMcpToolProjectionChange },
+        retryWait: async (delayMs) => {
+          delays.push(delayMs);
+          await Promise.resolve();
+        },
       },
     );
     await settlePendingWork();
-    // The retry waits fire on the next macrotask; the spy keeps the delay
-    // each one asked for.
-    const realSetTimeout = globalThis.setTimeout;
-    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
-      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
-    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
-      immediateSetTimeout,
-    );
-    let delays: number[] = [];
+    const reported: { phase: unknown; step: unknown }[] = [];
+    setLogSinkForTesting(({ attributes, message }) => {
+      if (message === "sse.mcp_tool_projection_publish_failed") {
+        reported.push({
+          phase: attributes?.["phase"],
+          step: attributes?.["step"],
+        });
+      }
+    });
     try {
       await announceMcpToolProjectionChange({ organizationId, userId });
-      delays = timeoutSpy.mock.calls.map(([, delayMs]) => delayMs ?? 0);
     } finally {
-      timeoutSpy.mockRestore();
+      resetLogSinkForTesting();
+      resetFailureObservationsForTesting();
       stopSse();
       await settlePendingWork();
     }
@@ -422,23 +432,33 @@ describe("MCP tool projection changes", () => {
       attempts: publishMcpToolProjectionChange.mock.calls.length,
       delays,
       published,
+      reported,
     };
   };
 
   test("a failed cross-replica announcement is retried with backoff until it lands", async () => {
-    const { attempts, delays, published } =
+    const { attempts, delays, published, reported } =
       await announceThroughFailingPublisher(2);
     expect(attempts).toBe(3);
     expect(delays).toEqual([250, 500]);
     expect(published).toEqual([{ organizationId, userId }]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+    ]);
   });
 
   test("an announcement that keeps failing stops after its last attempt and never rejects", async () => {
-    const { attempts, delays, published } =
+    const { attempts, delays, published, reported } =
       await announceThroughFailingPublisher(Number.POSITIVE_INFINITY);
     expect(attempts).toBe(3);
     expect(delays).toEqual([250, 500]);
     expect(published).toEqual([]);
+    expect(reported).toEqual([
+      { phase: "retrying", step: "attempt_1_of_3" },
+      { phase: "retrying", step: "attempt_2_of_3" },
+      { phase: "abandoned", step: "attempt_3_of_3" },
+    ]);
   });
 });
 
