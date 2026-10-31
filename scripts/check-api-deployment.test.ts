@@ -1,6 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import {
-  copyFileSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -53,8 +52,8 @@ const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
 };
 
 describe("API deployment health receipt", () => {
-  test("alerts once per continuous outage and resets after recovery", async () => {
-    const workflow = Bun.YAML.parse(
+  const alertWorkflow = async () =>
+    Bun.YAML.parse(
       await Bun.file(
         new URL(
           "../.github/workflows/scheduled-run-alerts.yml",
@@ -62,13 +61,130 @@ describe("API deployment health receipt", () => {
         ),
       ).text(),
     );
-    const script = workflowSteps(workflow, "scheduled-run-alerts.yml").find(
-      ({ run }) => run.includes("scripts/workflow-outage.ts"),
+
+  // GitHub's own record of a concurrency supersession, as CI reads it.
+  const supersession = readFileSync(
+    path.join(
+      import.meta.dir,
+      "__fixtures__/ci-cancellation/supersession.json",
+    ),
+    "utf-8",
+  );
+
+  type OutageRun = {
+    conclusion: string;
+    history: string[];
+    // Unset: the lookup fails.
+    jobs?: unknown;
+    annotations?: string | undefined;
+  };
+
+  /** Runs the outage step against a mocked GitHub API and records each call. */
+  const detectOutage = async ({
+    conclusion,
+    history,
+    jobs,
+    annotations,
+  }: OutageRun) => {
+    const script = workflowSteps(
+      await alertWorkflow(),
+      "scheduled-run-alerts.yml",
+    ).find(({ run }) =>
+      run.includes('previous=$(bash "$GH_RETRY_SCRIPT" api'),
     )?.run;
-    expect(script).toBeDefined();
     if (script === undefined) {
-      return;
+      return expect.unreachable("alerts require an outage step");
     }
+    const workflowRuns = history.map((runConclusion, index) => ({
+      run_number: index + 1,
+      conclusion: runConclusion,
+    }));
+    // A later recovery cannot reset the outage for an older run's alert.
+    workflowRuns.push({ run_number: 999, conclusion: "success" });
+    const outputDir = mkdtempSync(path.join(tmpdir(), "scheduled-alert-test-"));
+    const outputPath = path.join(outputDir, "github-output");
+    const callsPath = path.join(outputDir, "gh-calls");
+    writeFileSync(outputPath, "");
+    writeFileSync(callsPath, "");
+    try {
+      const gh = `gh() {
+  printf '%s\\n' "$*" >> "$TEST_CALLS"
+  case "$*" in
+    *"/actions/workflows/"*"/runs"*) printf '%s' "$TEST_HISTORY" ;;
+    *"/actions/runs/"*"/jobs"*) [[ -n "$TEST_JOBS" ]] || return 1; printf '%s' "$TEST_JOBS" ;;
+    *"/annotations"*) [[ -n "$TEST_ANNOTATIONS" ]] || return 1; printf '%s' "$TEST_ANNOTATIONS" ;;
+    *) return 1 ;;
+  esac
+}; export -f gh`;
+      const result = Bun.spawnSync(["bash", "-c", `${gh}\n${script}`], {
+        env: {
+          ...process.env,
+          GITHUB_OUTPUT: outputPath,
+          GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
+          GITHUB_REPOSITORY: "stella/stella",
+          RUN_ID: "42",
+          RUN_NUMBER: "100",
+          RUN_BRANCH: "main",
+          RUN_EVENT: "schedule",
+          RUN_CONCLUSION: conclusion,
+          WORKFLOW_ID: "1",
+          TEST_CALLS: callsPath,
+          TEST_HISTORY: JSON.stringify({
+            workflow_runs: workflowRuns.toReversed(),
+          }),
+          TEST_JOBS: jobs === undefined ? "" : JSON.stringify(jobs),
+          TEST_ANNOTATIONS: annotations ?? "",
+        },
+      });
+      const calls = (await Bun.file(callsPath).text())
+        .split("\n")
+        .filter((call) => call !== "");
+      const label = `${conclusion} after ${JSON.stringify(history)}`;
+      expect(result.exitCode, `${label}: ${result.stderr.toString()}`).toBe(0);
+      // Only the newest page of this branch and event's completed runs is
+      // read; the step never walks the workflow's history.
+      expect(
+        calls.filter((call) => call.includes("--paginate")),
+        label,
+      ).toEqual([]);
+      for (const call of calls.filter((entry) =>
+        entry.includes("/actions/workflows/"),
+      )) {
+        for (const filter of [
+          "branch=main",
+          "event=schedule",
+          "status=completed",
+          "per_page=100",
+        ]) {
+          expect(call.split(" "), label).toContain(filter);
+        }
+      }
+      const sends = /^send=(true|false)$/mu.exec(
+        await Bun.file(outputPath).text(),
+      );
+      expect(sends, label).not.toBeNull();
+      return {
+        send: sends?.at(1) === "true",
+        calls,
+        readsHistory: calls.some((call) =>
+          call.includes("/actions/workflows/"),
+        ),
+      };
+    } finally {
+      rmSync(outputDir, { recursive: true, force: true });
+    }
+  };
+
+  const checkRun = (id: number, repository = "stella/stella") =>
+    `https://api.github.com/repos/${repository}/check-runs/${id}`;
+  const cancelledJobs = {
+    jobs: [
+      { conclusion: "success", check_run_url: checkRun(1) },
+      { conclusion: "cancelled", check_run_url: checkRun(2) },
+    ],
+  };
+
+  test("alerts once per continuous outage and resets after recovery", async () => {
     const cases = [
       { history: [], send: true },
       { history: ["success"], send: true },
@@ -78,97 +194,113 @@ describe("API deployment health receipt", () => {
       { history: ["failure", "cancelled", "skipped"], send: false },
       { history: ["failure", "success"], send: true },
       { history: ["success", "failure"], send: false },
+      // A cancel, superseded or not, never starts or ends an outage.
+      { history: ["success", "cancelled"], send: true },
     ];
     for (const { history, send } of cases) {
-      const workflowRuns = history.map((conclusion, index) => ({
-        run_number: index + 1,
-        conclusion,
-        event: "schedule",
-        head_branch: "main",
-        display_title: "Nightly Full Test",
-      }));
-      // A later recovery cannot reset the outage for an older run's alert.
-      workflowRuns.push({
-        run_number: 999,
-        conclusion: "success",
-        event: "schedule",
-        head_branch: "main",
-        display_title: "Nightly Full Test",
+      const outage = await detectOutage({ conclusion: "failure", history });
+      expect(outage.send, JSON.stringify(history)).toBe(send);
+      // A failed run never reads a cancellation record.
+      expect(outage.calls.length, JSON.stringify(history)).toBe(1);
+    }
+  });
+
+  test("a superseded release cancel neither alerts nor reads the outage", async () => {
+    for (const history of [[], ["success"], ["failure"]]) {
+      const outage = await detectOutage({
+        conclusion: "cancelled",
+        history,
+        jobs: cancelledJobs,
+        annotations: supersession,
       });
-      const outputDir = mkdtempSync(
-        path.join(tmpdir(), "scheduled-alert-test-"),
-      );
-      const outputPath = path.join(outputDir, "github-output");
-      try {
-        mkdirSync(path.join(outputDir, ".gh-retry/scripts"), {
-          recursive: true,
-        });
-        mkdirSync(path.join(outputDir, ".gh-retry/.github/workflows"), {
-          recursive: true,
-        });
-        for (const file of ["workflow-outage.ts", "github-expression.ts"]) {
-          copyFileSync(
-            path.join(import.meta.dir, file),
-            path.join(outputDir, ".gh-retry/scripts", file),
-          );
-        }
-        copyFileSync(
-          path.resolve(
-            import.meta.dir,
-            "../.github/workflows/nightly-test.yml",
-          ),
-          path.join(outputDir, ".gh-retry/.github/workflows/nightly-test.yml"),
-        );
-        const eventPath = path.join(outputDir, "event.json");
-        writeFileSync(
-          eventPath,
-          JSON.stringify({
-            workflow_run: {
-              run_number: 100,
-              path: ".github/workflows/nightly-test.yml",
-              event: "schedule",
-              head_branch: "main",
-              display_title: "Nightly Full Test",
-              conclusion: "failure",
+      expect(outage.send, JSON.stringify(history)).toBe(false);
+      expect(outage.readsHistory, JSON.stringify(history)).toBe(false);
+      // Only the cancelled job's own check run is read.
+      expect(
+        outage.calls.filter((call) => call.includes("/annotations")),
+      ).toEqual([`api ${checkRun(2)}/annotations?per_page=100`]);
+    }
+  });
+
+  test("a release cancel without a supersession record alerts", async () => {
+    const operationCancelled = JSON.stringify([
+      { message: "The operation was canceled." },
+      { message: "The run was canceled by @someone." },
+    ]);
+    for (const { label, jobs, annotations } of [
+      {
+        label: "other annotations",
+        jobs: cancelledJobs,
+        annotations: operationCancelled,
+      },
+      { label: "no annotation", jobs: cancelledJobs, annotations: "[]" },
+      {
+        label: "annotation lookup fails",
+        jobs: cancelledJobs,
+        annotations: undefined,
+      },
+      { label: "invalid annotations", jobs: cancelledJobs, annotations: "{" },
+      { label: "job lookup fails", jobs: undefined, annotations: supersession },
+      {
+        label: "no cancelled job",
+        jobs: { jobs: cancelledJobs.jobs.slice(0, 1) },
+        annotations: supersession,
+      },
+      {
+        label: "foreign check run",
+        jobs: {
+          jobs: [
+            {
+              conclusion: "cancelled",
+              check_run_url: checkRun(2, "other/repo"),
             },
-          }),
-        );
-        const result = Bun.spawnSync(
-          [
-            "bash",
-            "-c",
-            `gh() { printf '%s' "$TEST_HISTORY"; }; export -f gh\n${script}`,
           ],
-          {
-            cwd: outputDir,
-            env: {
-              ...process.env,
-              GITHUB_OUTPUT: outputPath,
-              GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
-              GITHUB_REPOSITORY: "stella/stella",
-              GITHUB_EVENT_PATH: eventPath,
-              RUN_NUMBER: "100",
-              RUN_BRANCH: "main",
-              RUN_EVENT: "schedule",
-              WORKFLOW_ID: "1",
-              TEST_HISTORY: JSON.stringify([
-                {
-                  workflow_runs: workflowRuns.toReversed(),
-                },
-              ]),
-            },
-          },
+        },
+        annotations: supersession,
+      },
+    ]) {
+      const outage = await detectOutage({
+        conclusion: "cancelled",
+        history: ["success"],
+        jobs,
+        annotations,
+      });
+      expect(outage.send, label).toBe(true);
+      expect(outage.readsHistory, label).toBe(true);
+    }
+    // An unverified cancel during a continuing outage stays suppressed.
+    const continuing = await detectOutage({
+      conclusion: "cancelled",
+      history: ["failure"],
+      jobs: cancelledJobs,
+      annotations: "[]",
+    });
+    expect(continuing.send).toBe(false);
+  });
+
+  test("every variable an alert step reads is bound, manual runs included", async () => {
+    const runnerProvided = new Set([
+      "GITHUB_ENV",
+      "GITHUB_OUTPUT",
+      "GITHUB_REPOSITORY",
+      "GITHUB_WORKSPACE",
+      "RUNNER_TEMP",
+      // Exported by the tooling step, which runs for every event.
+      "GH_RETRY_SCRIPT",
+    ]);
+    const steps = workflowSteps(
+      await alertWorkflow(),
+      "scheduled-run-alerts.yml",
+    ).filter(({ run }) => run !== "");
+    expect(steps.length).toBeGreaterThan(0);
+    for (const { run, env } of steps) {
+      for (const [, name] of run.matchAll(/\$\{?([A-Z][A-Z0-9_]*)/gu)) {
+        if (name === undefined || runnerProvided.has(name)) {
+          continue;
+        }
+        expect(Object.keys(env), `${name}: ${run.slice(0, 60)}`).toContain(
+          name,
         );
-        expect(
-          result.exitCode,
-          `${JSON.stringify(history)}: ${result.stderr.toString()}`,
-        ).toBe(0);
-        expect(
-          await Bun.file(outputPath).text(),
-          JSON.stringify(history),
-        ).toContain(`send=${String(send)}\n`);
-      } finally {
-        rmSync(outputDir, { recursive: true, force: true });
       }
     }
   });
