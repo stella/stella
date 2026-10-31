@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
@@ -9,7 +9,7 @@ import ts from "typescript6";
 import { compareCodeUnit } from "@stll/collation";
 import { repoRelativePath } from "@stll/portable-path";
 
-import { parseChangesetReleases } from "./changeset-entry";
+import { parseChangesetEntry, parseChangesetReleases } from "./changeset-entry";
 import { normalizeCompatibilityDeclarations } from "./package-api-compatibility";
 import { hasRuntimeExport } from "./package-api-export-space";
 import { ALL_PACKAGE_ORDER } from "./publish-packages";
@@ -441,6 +441,12 @@ const incompatibleSymbolSignatures = ({
   return breaks;
 };
 
+type ApiBreak = {
+  type: "removal" | "signature";
+  entrypoint: string;
+  message: string;
+};
+
 // Both declaration trees live in one checker so assignability uses TypeScript's
 // variance rules, overloads and structural types rather than signature strings.
 export const breakingApiChanges = ({
@@ -451,7 +457,7 @@ export const breakingApiChanges = ({
   before: ApiReport;
   after: ApiReport;
   packageDir: string;
-}): string[] => {
+}): ApiBreak[] => {
   if (JSON.stringify(before) === JSON.stringify(after)) {
     return [];
   }
@@ -478,7 +484,7 @@ export const breakingApiChanges = ({
     }
   }
   const checker = program.getTypeChecker();
-  const breaks: string[] = [];
+  const breaks: ApiBreak[] = [];
   for (const [entry, previous] of Object.entries(before.entrypoints)) {
     const current = after.entrypoints[entry];
     if (current === undefined || current.type !== previous.type) {
@@ -486,13 +492,21 @@ export const breakingApiChanges = ({
         previous.type === "module"
           ? previous.exports.map(({ name }) => name).join(", ")
           : "asset";
-      breaks.push(`${entry}: removed entrypoint (${names})`);
+      breaks.push({
+        type: "removal",
+        entrypoint: entry,
+        message: `${entry}: removed entrypoint (${names})`,
+      });
       continue;
     }
     if (previous.type === "asset" && current.type === "asset") {
       for (const file of previous.files) {
         if (!current.files.includes(file)) {
-          breaks.push(`${entry}: removed asset ${file}`);
+          breaks.push({
+            type: "removal",
+            entrypoint: entry,
+            message: `${entry}: removed asset ${file}`,
+          });
         }
       }
       continue;
@@ -518,7 +532,11 @@ export const breakingApiChanges = ({
         const newSymbol = newSymbols.get(oldSymbol.name);
         const label = `${pair.prefix}${oldSymbol.name}`;
         if (newSymbol === undefined) {
-          breaks.push(`${label}: removed export`);
+          breaks.push({
+            type: "removal",
+            entrypoint: entry,
+            message: `${label}: removed export`,
+          });
           continue;
         }
         const oldExport = previous.exports.find(
@@ -528,12 +546,20 @@ export const breakingApiChanges = ({
           ({ name }) => name === newSymbol.name,
         );
         if (oldExport?.space !== "type" && newExport?.space === "type") {
-          breaks.push(`${label}: removed runtime export`);
+          breaks.push({
+            type: "removal",
+            entrypoint: entry,
+            message: `${label}: removed runtime export`,
+          });
         }
         const old = unalias(checker, oldSymbol);
         const next = unalias(checker, newSymbol);
         if (symbolKind(old) !== symbolKind(next)) {
-          breaks.push(`${label}: changed export kind`);
+          breaks.push({
+            type: "signature",
+            entrypoint: entry,
+            message: `${label}: changed export kind`,
+          });
           continue;
         }
         if (hasSymbolFlag(old, ts.SymbolFlags.Module) && !compared.has(old)) {
@@ -545,7 +571,10 @@ export const breakingApiChanges = ({
           });
         }
         breaks.push(
-          ...incompatibleSymbolSignatures({ checker, old, next, label }),
+          ...incompatibleSymbolSignatures({ checker, old, next, label }).map(
+            (message) =>
+              ({ type: "signature", entrypoint: entry, message }) as const,
+          ),
         );
       }
     }
@@ -555,7 +584,7 @@ export const breakingApiChanges = ({
 
 /**
  * What the check reads from its Git base, as scripts/package-api-base.sh
- * materialises it: the merge base's API reports and changesets under `tree/`,
+ * materialises it: the merge base's package manifests, API reports and changesets under `tree/`,
  * and the changesets added or modified since, one per line, in
  * `changed-changesets`. The check itself reads files only.
  */
@@ -579,6 +608,18 @@ const committedReportValue = (file: string): unknown => {
   return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
+const namesEntrypoint = (
+  summary: string,
+  name: string,
+  entrypoint: string,
+): boolean => {
+  const entryPath =
+    entrypoint.split(" [").at(0) ?? fail("Missing entrypoint path");
+  const qualified = entryPath === "." ? name : `${name}${entryPath.slice(1)}`;
+  const names = new Set(summary.match(/[\p{L}\p{N}@_./*-]+/gu));
+  return names.has(qualified) || (entryPath !== "." && names.has(entryPath));
+};
+
 export const checkPackageApi = ({
   root,
   baseDir,
@@ -596,31 +637,75 @@ export const checkPackageApi = ({
   )
     .trim()
     .split("\n");
-  const majors = new Set(
-    changedChangesets
-      .filter(
-        (file) =>
-          /^\.changeset\/[^/]+\.md$/u.test(file) && !file.endsWith("README.md"),
-      )
-      .flatMap((file) => {
-        const baseChangeset = baseText(file);
-        const existing =
-          baseChangeset === undefined
-            ? []
-            : parseChangesetReleases(baseChangeset);
-        return parseChangesetReleases(
-          readFileSync(path.join(root, file), "utf-8"),
-        )
-          .filter(
-            ({ name, type }) =>
-              type === "major" &&
-              !existing.some(
-                (release) => release.name === name && release.type === "major",
-              ),
-          )
-          .map(({ name }) => name);
-      }),
-  );
+  const changesets = changedChangesets
+    .filter(
+      (file) =>
+        /^\.changeset\/[^/]+\.md$/u.test(file) && !file.endsWith("README.md"),
+    )
+    .map((file) => {
+      const current = readFileSync(path.join(root, file), "utf-8");
+      const previous = baseText(file);
+      return {
+        releases: parseChangesetReleases(current),
+        summary: parseChangesetEntry(current).summary,
+        previousReleases:
+          previous === undefined ? [] : parseChangesetReleases(previous),
+        previousSummary:
+          previous === undefined ? "" : parseChangesetEntry(previous).summary,
+      };
+    });
+  const authorized = (
+    name: string,
+    relative: string,
+    change: ApiBreak,
+  ): boolean =>
+    changesets.some(
+      ({ releases, summary, previousReleases, previousSummary }) =>
+        releases.some((release) => {
+          if (release.name !== name || release.type === "patch") {
+            return false;
+          }
+          if (release.type === "minor") {
+            const manifest: unknown = JSON.parse(
+              baseText(`${relative}/package.json`) ??
+                readFileSync(
+                  path.join(root, relative, "package.json"),
+                  "utf-8",
+                ),
+            );
+            if (
+              typeof manifest !== "object" ||
+              manifest === null ||
+              !("version" in manifest) ||
+              typeof manifest.version !== "string"
+            ) {
+              return fail(
+                `${name}: expected a package version for release authorization`,
+              );
+            }
+            if (!manifest.version.startsWith("0.")) {
+              return false;
+            }
+          }
+          const existingRelease = previousReleases.some(
+            (previous) =>
+              previous.name === name && previous.type === release.type,
+          );
+          switch (change.type) {
+            case "signature":
+              return !existingRelease;
+            case "removal":
+              return (
+                namesEntrypoint(summary, name, change.entrypoint) &&
+                (!existingRelease ||
+                  !namesEntrypoint(previousSummary, name, change.entrypoint))
+              );
+            default:
+              change.type satisfies never;
+              return panic("Unsupported API change type");
+          }
+        }),
+    );
   for (const relative of packageDirs) {
     const packageDir = path.join(root, relative);
     const file = `${relative}/${REPORT_FILE}`;
@@ -637,10 +722,14 @@ export const checkPackageApi = ({
       continue;
     }
     const before: ApiReport = JSON.parse(baseReport);
-    const breaks = breakingApiChanges({ before, after: report, packageDir });
-    if (breaks.length > 0 && !majors.has(report.package)) {
+    const breaks = breakingApiChanges({
+      before,
+      after: report,
+      packageDir,
+    }).filter((change) => !authorized(report.package, relative, change));
+    if (breaks.length > 0) {
       errors.push(
-        `${report.package}: published packages have consumers outside this repository. A major changeset and committed regenerated report are required:\n  ${breaks.join("\n  ")}`,
+        `${report.package}: published packages have consumers outside this repository. A breaking-release changeset (minor for 0.x, major otherwise), naming removed entrypoints, and committed regenerated report are required:\n  ${breaks.map(({ message }) => message).join("\n  ")}`,
       );
     }
   }
@@ -655,9 +744,17 @@ export const checkPackageApi = ({
       continue;
     }
     const before: ApiReport = JSON.parse(baseReport);
-    if (!majors.has(before.package)) {
+    if (
+      !Object.keys(before.entrypoints).every((entrypoint) =>
+        authorized(before.package, relative, {
+          type: "removal",
+          entrypoint,
+          message: `${entrypoint}: removed entrypoint`,
+        }),
+      )
+    ) {
       errors.push(
-        `${before.package}: removed published package entrypoints; published packages have consumers outside this repository. A major changeset is required.`,
+        `${before.package}: removed published package entrypoints; published packages have consumers outside this repository. A breaking-release changeset naming every removed entrypoint is required.`,
       );
     }
   }

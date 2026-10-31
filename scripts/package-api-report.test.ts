@@ -32,7 +32,7 @@ const git = (root: string, args: string[]): void => {
   expect(result.exitCode, result.stderr.toString()).toBe(0);
 };
 
-const fixture = async (): Promise<string> => {
+const fixture = async (version = "1.0.0"): Promise<string> => {
   const root = mkdtempSync(path.join(tmpdir(), "package-api-"));
   roots.push(root);
   mkdirSync(path.join(root, "packages/fixture/src"), { recursive: true });
@@ -41,6 +41,7 @@ const fixture = async (): Promise<string> => {
     path.join(root, "packages/fixture/package.json"),
     JSON.stringify({
       name: "@stll/fixture",
+      version,
       private: false,
       publishConfig: { access: "public" },
       exports: {
@@ -169,11 +170,85 @@ test("only a package-specific major changeset introduced by this PR authorizes b
   expect(run(root).join("\n")).toContain("removed export");
   writeFileSync(
     path.join(root, ".changeset/current.md"),
-    '---\n"@stll/fixture": major\n---\nRemove old exports.\n',
+    '---\n"@stll/fixture": major\n---\nRemove exports from `@stll/fixture`.\n',
   );
   expect(run(root)).toEqual([]);
   replace(root, "src/index.ts", "export const extra = 1;\n");
   expect(run(root).join("\n")).toContain("stale");
+});
+
+test.each(["0.57.0", "1.0.0"])(
+  "entrypoint removals require a named declaration and a breaking release type for %s",
+  async (version) => {
+    const root = await fixture(version);
+    replace(
+      root,
+      "package.json",
+      JSON.stringify({
+        name: "@stll/fixture",
+        version,
+        exports: { ".": "./src/index.ts", "./theme.css": "./src/theme.css" },
+      }),
+    );
+    await write(root);
+    for (const type of ["patch", "minor", "major"]) {
+      for (const entrypoint of [
+        "./model",
+        "@stll/fixture/model",
+        "./model-other",
+        "@stll/fixture/model/child",
+        "",
+      ]) {
+        writeFileSync(
+          path.join(root, ".changeset/removal.md"),
+          `---\n"@stll/fixture": ${type}\n---\nRemove the \`${entrypoint}\` entrypoint.\n`,
+        );
+        git(root, ["add", "."]);
+        const authorized =
+          (type === "major" ||
+            (version.startsWith("0.") && type === "minor")) &&
+          (entrypoint === "./model" || entrypoint === "@stll/fixture/model");
+        expect(
+          run(root).some((error) =>
+            error.includes("./model: removed entrypoint"),
+          ),
+        ).toBe(!authorized);
+      }
+    }
+    rmSync(path.join(root, ".changeset/removal.md"));
+    git(root, ["add", "."]);
+    expect(run(root).join("\n")).toContain("./model: removed entrypoint");
+  },
+);
+
+test("an existing declaration cannot authorize a later removal", async () => {
+  const root = await fixture("0.57.0");
+  const file = path.join(root, ".changeset/existing.md");
+  writeFileSync(file, '---\n"@stll/fixture": minor\n---\nRemove `./model`.\n');
+  git(root, ["add", "."]);
+  git(root, ["commit", "-qm", "existing declaration"]);
+  git(root, ["branch", "-f", "baseline"]);
+  replace(
+    root,
+    "package.json",
+    JSON.stringify({
+      name: "@stll/fixture",
+      version: "0.57.0",
+      exports: { ".": "./src/index.ts", "./theme.css": "./src/theme.css" },
+    }),
+  );
+  await write(root);
+  writeFileSync(
+    file,
+    '---\n"@stll/fixture": minor\n---\nRemove `./model`. More detail.\n',
+  );
+  expect(run(root).join("\n")).toContain("./model: removed entrypoint");
+  writeFileSync(
+    path.join(root, ".changeset/new.md"),
+    '---\n"@stll/other": major\n---\nRemove `./model`.\n',
+  );
+  git(root, ["add", "."]);
+  expect(run(root).join("\n")).toContain("./model: removed entrypoint");
 });
 
 test("narrowing a referenced parameter type fails, while widening a parameter passes", async () => {
