@@ -6,7 +6,11 @@ import type React from "react";
  * `data-skip-in-text` keeps it out of the plain-text part.
  */
 export const Preview = ({ children }: Props) => {
-  const text = children.slice(0, PREVIEW_MAX_LENGTH);
+  let text = children.slice(0, PREVIEW_MAX_LENGTH);
+  // A UTF-16 length limit must not leave half a supplementary character.
+  if (/[\uD800-\uDBFF]$/u.test(text)) {
+    text = text.slice(0, -1);
+  }
   return (
     <div style={HIDDEN} data-skip-in-text={true}>
       {text}

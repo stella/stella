@@ -27,6 +27,29 @@ import { renderEmail } from "./render";
 
 const DIVIDER = "-".repeat(40);
 
+test("preview truncation preserves Unicode scalar boundaries", () => {
+  for (let start = 0x1_00_00; start <= 0x10_fc_00; start += 0x4_00) {
+    for (const offset of [0, 0x3_ff]) {
+      const character = String.fromCodePoint(start + offset);
+      for (const prefixLength of [148, 149, 150]) {
+        const prefix = "a".repeat(prefixLength);
+        const { html } = renderEmail(
+          <Html lang="en" dir="ltr">
+            <Body style={{}}>
+              <Preview>{`${prefix}${character}tail`}</Preview>
+            </Body>
+          </Html>,
+        );
+        expect(html.isWellFormed()).toBe(true);
+        expect(html).toContain(
+          prefixLength === 148 ? `${prefix}${character}` : prefix,
+        );
+        expect(html).not.toContain("�");
+      }
+    }
+  }
+});
+
 describe("plain text of the real templates", () => {
   test("OTP email: uppercased heading, blank-line paragraphs, divider, no preview or image", () => {
     const { text } = renderEmail(
