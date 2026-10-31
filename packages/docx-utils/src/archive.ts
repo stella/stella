@@ -120,6 +120,20 @@ const loadDocxResult = async (
   options: ArchiveOptions = {},
 ): Promise<Result<ZipArchive, DocxArchiveError>> => {
   const maxTotalBytes = options.maxTotalBytes ?? DOCX_MAX_TOTAL_BYTES;
+  const maxEntryBytes = options.maxEntryBytes ?? DOCX_MAX_ENTRY_BYTES;
+  const maxEntries = options.maxEntries ?? DOCX_MAX_ENTRIES;
+  if (
+    [maxEntries, maxEntryBytes, maxTotalBytes].some(
+      (limit) => !Number.isSafeInteger(limit) || limit < 0,
+    )
+  ) {
+    return Result.err(
+      new DocxArchiveError({
+        message: "DOCX archive contains invalid entry metadata",
+        reason: "load-failed",
+      }),
+    );
+  }
   if (buffer.byteLength > DOCX_MAX_TOTAL_BYTES) {
     return Result.err(
       new DocxArchiveError({
@@ -131,15 +145,18 @@ const loadDocxResult = async (
   const bytes = buffer instanceof ArrayBuffer ? new Uint8Array(buffer) : buffer;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   // Keep end-record interpretation unambiguous across archive consumers.
-  const end = bytes.findLastIndex(
+  const earliest = Math.max(0, bytes.length - 65_535 - 22);
+  const trailer = bytes.subarray(earliest);
+  const marker = trailer.findLastIndex(
     (byte, index) =>
       byte === 80 &&
-      bytes[index + 1] === 75 &&
-      bytes[index + 2] === 5 &&
-      bytes[index + 3] === 6,
+      trailer[index + 1] === 75 &&
+      trailer[index + 2] === 5 &&
+      trailer[index + 3] === 6,
   );
+  const end = earliest + marker;
   if (
-    end < Math.max(0, bytes.length - 65_535 - 22) ||
+    marker === -1 ||
     end > bytes.length - 22 ||
     end + 22 + view.getUint16(end + 20, true) !== bytes.length
   ) {
@@ -154,8 +171,8 @@ const loadDocxResult = async (
     try: async () => {
       const zip = await ZipArchive.read(buffer, {
         limits: {
-          maxEntries: options.maxEntries ?? DOCX_MAX_ENTRIES,
-          maxEntryBytes: options.maxEntryBytes ?? DOCX_MAX_ENTRY_BYTES,
+          maxEntries,
+          maxEntryBytes,
           maxTotalBytes,
           maxCompressionRatio: MAX_MARKUP_COMPRESSION_RATIO,
           compressionRatioGraceBytes: COMPRESSION_RATIO_GRACE_BYTES,

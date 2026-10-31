@@ -185,3 +185,27 @@ test("bounded reads apply entry limits to replacements", async () => {
     reason: "entry-too-large",
   });
 });
+
+test("archive budgets require nonnegative safe integers", async () => {
+  const buffer = await buildZip([]);
+  for (const limit of [
+    -1,
+    0.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    for (const key of [
+      "maxEntries",
+      "maxEntryBytes",
+      "maxTotalBytes",
+    ] as const) {
+      expect(
+        await rejectionOf(loadDocx(buffer, { [key]: limit })),
+      ).toMatchObject({
+        _tag: "DocxArchiveError",
+        reason: "load-failed",
+      });
+    }
+  }
+});
