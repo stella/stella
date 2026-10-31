@@ -20,7 +20,10 @@ import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { dataExportReadScalingScenarios } from "./data-exports";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
-import { documentAnnotationScalingScenarios } from "./document-annotations";
+import {
+  documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
+} from "./document-annotations";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { exactIconScalingScenario } from "./link-icons";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
@@ -59,6 +62,7 @@ const measuredApiScenarios = [
   suggestionRangeScalingScenario,
   mobileClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
