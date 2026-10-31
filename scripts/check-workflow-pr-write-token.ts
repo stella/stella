@@ -128,9 +128,26 @@ const triggersOf = (on: unknown): string[] => {
   }
   return record(on) ? Object.keys(on) : [];
 };
+// `${{ <expression> }}` wrappers are stripped by string operations: the
+// equivalent regular expressions backtrack super-linearly on long input.
+const stripExpressionWrapper = (wrapped: string): string => {
+  let expression = wrapped.trim();
+  if (expression.startsWith("${{")) {
+    expression = expression.slice(3).trimStart();
+  }
+  if (expression.endsWith("}}")) {
+    expression = expression.slice(0, -2).trimEnd();
+  }
+  return expression;
+};
+
 const checkoutExpressionOf = (value: string): string | undefined => {
-  const match = /^\s*\$\{\{\s*([^{}]+?)\s*\}\}\s*$/u.exec(value);
-  return match?.[1];
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("${{") || !trimmed.endsWith("}}")) {
+    return undefined;
+  }
+  const expression = stripExpressionWrapper(trimmed);
+  return expression === "" || /[{}]/u.test(expression) ? undefined : expression;
 };
 
 const trustedCheckoutValue = (
@@ -167,10 +184,7 @@ type ConditionContext = {
 };
 
 const conditionTokens = (condition: string): string[] | undefined => {
-  let expression = condition
-    .trim()
-    .replace(/^\$\{\{\s*/u, "")
-    .replace(/\s*\}\}$/u, "");
+  let expression = stripExpressionWrapper(condition);
   let previous = "";
   while (previous !== expression) {
     previous = expression;
@@ -179,17 +193,26 @@ const conditionTokens = (condition: string): string[] | undefined => {
       "opaque",
     );
   }
-  const tokens = expression.match(
-    /\s*(?:(&&|\|\||!=|==|!|\(|\))|('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")|([A-Za-z_][A-Za-z0-9_.-]*))/gu,
-  );
-  if (tokens === null) {
-    return expression === "" ? [] : undefined;
+  // Whitespace is skipped by the scanner, not by the pattern, so the sticky
+  // match stays linear.
+  const token =
+    /&&|\|\||!=|==|!|\(|\)|'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|[A-Za-z_][A-Za-z0-9_.-]*/uy;
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < expression.length) {
+    if (/\s/u.test(expression.charAt(index))) {
+      index += 1;
+      continue;
+    }
+    token.lastIndex = index;
+    const match = token.exec(expression);
+    if (match === null) {
+      return undefined;
+    }
+    tokens.push(match[0]);
+    index = token.lastIndex;
   }
-  const normalized = tokens.map((token) => token.trim());
-  if (normalized.join("").length !== expression.replaceAll(/\s/gu, "").length) {
-    return undefined;
-  }
-  return normalized;
+  return tokens;
 };
 
 const negate = (value: Truth): Truth => {
