@@ -248,6 +248,7 @@ describe.skipIf(!enabled)("read budgets on PostgreSQL", () => {
       timeoutMs: CORPUS_PROFILE_TIMEOUT_MS,
       run: async (db, _deadline, openClient) => {
         await seedCorpusReadBudgets(db);
+        await seedProvisionBackfillRows(db, PROVISION_BACKFILL_SIZES.base);
         const before = await provisionBackfillFixtureBytes(db);
         const first = await measureScheduledJobRun({
           database: db,

@@ -354,6 +354,12 @@ export const seedProvisionBackfillRows = async (
   database: GatedTestDb,
   rows: number,
 ) => {
+  await database.execute(sql`INSERT INTO case_law_sources
+      (id, adapter_key, name, descriptor)
+    VALUES (${PROVISION_SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS},
+      'Provision read budget fixture',
+      '{"license":"restricted","allowsDerivedAi":false,"attribution":null,"allowsRedistribution":false}'::jsonb) ON CONFLICT (id) DO NOTHING`);
+
   for (const { first, last } of chunks(rows, PROVISION_SEED_CHUNK_ROWS)) {
     const decisions = Array.from({ length: last - first + 1 }, (_, index) => {
       const n = first + index;
@@ -595,14 +601,8 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
         await seedLegislationChunk(tx, chunk);
       });
     }
-    await database.execute(sql`INSERT INTO case_law_sources
-      (id, adapter_key, name, descriptor)
-    VALUES (${PROVISION_SOURCE_ID}, ${ADAPTER_KEYS.CZ_NS},
-      'Provision read budget fixture',
-      '{"license":"restricted","allowsDerivedAi":false,"attribution":null,"allowsRedistribution":false}'::jsonb)`);
 
     await rebuildIndexes();
-    await seedProvisionBackfillRows(database, PROVISION_BACKFILL_SIZES.base);
     await seedBrowseFacetCounts(database);
     const works = Array.from(
       { length: LEGISLATION_CANDIDATE_COUNT },
