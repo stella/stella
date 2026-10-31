@@ -551,10 +551,41 @@ jobs:
             fi
           done < "$RUNNER_TEMP/autofix-fix-paths"
 
+      # Preflight runs before the workspace install. Build its linter from the
+      # exact npm archives and integrity fields selected by the root lockfile.
+      - name: Prepare lockfile oxlint for preflight
+        id: preflight-oxlint
+        timeout-minutes: 3
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          metadata="$RUNNER_TEMP/autofix-oxlint-metadata"
+          bun --no-install --no-env-file scripts/autofix-oxlint.ts metadata > "$metadata"
+          version="$(sed -n 's/^version=//p' "$metadata")"
+          oxlint_url="$(sed -n 's/^oxlint-url=//p' "$metadata")"
+          binding_url="$(sed -n 's/^binding-url=//p' "$metadata")"
+          [[ -n "$version" && -n "$oxlint_url" && -n "$binding_url" ]]
+
+          tool="$RUNNER_TEMP/autofix-oxlint"
+          mkdir -p "$tool/node_modules/oxlint" "$tool/node_modules/@oxlint/binding-linux-x64-gnu"
+          bash scripts/retry.sh curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+            --output "$tool/oxlint.tgz" "$oxlint_url"
+          bash scripts/retry.sh curl --fail --silent --show-error --connect-timeout 10 --max-time 60 \
+            --output "$tool/binding.tgz" "$binding_url"
+          bun --no-install --no-env-file scripts/autofix-oxlint.ts verify bun.lock "$tool/oxlint.tgz" oxlint
+          bun --no-install --no-env-file scripts/autofix-oxlint.ts verify bun.lock "$tool/binding.tgz" binding
+          tar -xzf "$tool/oxlint.tgz" --strip-components=1 -C "$tool/node_modules/oxlint"
+          tar -xzf "$tool/binding.tgz" --strip-components=1 -C "$tool/node_modules/@oxlint/binding-linux-x64-gnu"
+          actual="$($tool/node_modules/oxlint/bin/oxlint --version)"
+          [[ "$actual" == "oxlint $version" || "$actual" == "$version" ]]
+          echo "bin=$tool/node_modules/oxlint/bin/oxlint" >> "$GITHUB_OUTPUT"
+
       - name: Check whether fixers can change files
         id: preflight
         env:
           GENERATOR_SELECTED: ${{ needs.regenerate-scope.outputs.run }}
+          AUTOFIX_OXLINT_READY: ${{ steps.preflight-oxlint.outcome == 'success' }}
+          AUTOFIX_OXLINT_BIN: ${{ steps.preflight-oxlint.outputs.bin }}
         run: >-
           bun --no-install --no-env-file scripts/autofix-preflight.ts
           "$RUNNER_TEMP/autofix-format-paths"

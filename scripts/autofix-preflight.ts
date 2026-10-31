@@ -9,6 +9,7 @@ type PreflightChecks = {
 
 type PreflightInput = {
   generatorSelected: boolean;
+  toolReady: boolean;
   formatPaths: readonly string[];
   lintPaths: readonly string[];
 };
@@ -17,7 +18,7 @@ export const decideAutofixPreflight = (
   input: PreflightInput,
   checks: PreflightChecks,
 ): "run" | "skip" => {
-  if (input.generatorSelected) {
+  if (input.generatorSelected || !input.toolReady) {
     return "run";
   }
   try {
@@ -40,7 +41,7 @@ const readNullSeparatedPaths = (path: string) =>
     .filter((entry) => entry.length > 0);
 
 const commandSucceeds = (command: readonly string[]) =>
-  Bun.spawnSync([...command], { stdout: "inherit", stderr: "inherit" })
+  Bun.spawnSync([...command], { stdout: "pipe", stderr: "inherit" })
     .exitCode === 0;
 
 if (import.meta.main) {
@@ -49,6 +50,7 @@ if (import.meta.main) {
   const decision = decideAutofixPreflight(
     {
       generatorSelected: process.env["GENERATOR_SELECTED"] === "true",
+      toolReady: process.env["AUTOFIX_OXLINT_READY"] !== "false",
       formatPaths,
       lintPaths,
     },
@@ -64,9 +66,7 @@ if (import.meta.main) {
         ]),
       lintClean: (paths) =>
         commandSucceeds([
-          "bunx",
-          "--bun",
-          "oxlint@1.87.0",
+          process.env["AUTOFIX_OXLINT_BIN"] ?? "./node_modules/.bin/oxlint",
           "-c",
           "oxlint.config.ts",
           "--no-error-on-unmatched-pattern",
