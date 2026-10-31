@@ -1975,7 +1975,7 @@ describe("a failed generation is recorded once per callbacks family", () => {
       generationErrors: events.filter(
         (event) =>
           event.event === SERVER_ANALYTICS_EVENTS.aiGeneration &&
-          event.properties?.["$ai_is_error"] === true,
+          event.properties["$ai_is_error"] === true,
       ).length,
     });
     return { recorded, root };
