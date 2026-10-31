@@ -124,6 +124,7 @@ import type {
 import {
   CLIENT_INVOICE_UNIQUE_INDEXES,
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
+  IMPORT_PROVENANCE_UNIQUE_INDEXES,
   LEGISLATION_UNIQUE_INDEXES,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
@@ -770,66 +771,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_external_uidx" ON public."contacts" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.contacts USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "contacts_org_external_uidx",
-    tableName: "contacts",
-  },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_org_external_uidx" ON public."workspaces" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.workspaces USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "workspaces_org_external_uidx",
-    tableName: "workspaces",
-  },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_org_external_uidx" ON public."time_entries" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.time_entries USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "time_entries_org_external_uidx",
-    tableName: "time_entries",
-  },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "expenses_org_external_uidx" ON public."expenses" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.expenses USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "expenses_org_external_uidx",
-    tableName: "expenses",
-  },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_org_external_uidx" ON public."invoices" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.invoices USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "invoices_org_external_uidx",
-    tableName: "invoices",
-  },
-  {
-    introducedBy: "20261031001825_import_provenance",
-    createSql:
-      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_org_external_uidx" ON public."correspondence" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
-    definitionBody:
-      "ON public.correspondence USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
-    isUnique: true,
-    name: "correspondence_org_external_uidx",
-    tableName: "correspondence",
-  },
+  ...IMPORT_PROVENANCE_UNIQUE_INDEXES,
   {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:
