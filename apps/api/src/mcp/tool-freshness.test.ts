@@ -1,7 +1,14 @@
 import type { Tool } from "@modelcontextprotocol/server";
 import { describe, expect, test } from "bun:test";
 
+import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
+
+import { toMcpTools } from "@/api/mcp/gateway/list-tools";
+import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import { McpToolFreshnessRegistry } from "@/api/mcp/tool-freshness";
+import { withMcpRegistryVersionHeader } from "@/api/mcp/tool-freshness-response";
 import {
   MCP_TOOL_SCHEMA_VERSION_META_KEY,
   mcpRegistryVersion,
@@ -9,7 +16,7 @@ import {
   withMcpToolSchemaVersion,
 } from "@/api/mcp/tool-versions";
 
-const tool = (description: string): Tool => ({
+const tool = (description = "Search admitted law"): Tool => ({
   annotations: { readOnlyHint: true, title: "Search law" },
   description,
   inputSchema: { properties: { query: { type: "string" } }, type: "object" },
@@ -19,29 +26,40 @@ const tool = (description: string): Tool => ({
 });
 
 describe("MCP tool freshness", () => {
-  test("signals only sessions whose visible projection changed", async () => {
+  test("does not notify when nothing visible to a session changed", async () => {
     const registry = new McpToolFreshnessRegistry();
     const notifications: string[] = [];
-    registry.register({
-      id: "changed",
-      notifyToolsChanged: () => {
-        notifications.push("changed");
-      },
-      tools: [tool("Admitted: CZE")],
-    });
     registry.register({
       id: "unchanged",
       notifyToolsChanged: () => {
         notifications.push("unchanged");
       },
-      tools: [tool("Admitted: CZE, SVK")],
+      tools: [tool()],
     });
+    await registry.publish(async () => [tool()]);
+    expect(notifications).toEqual([]);
+  });
 
-    await registry.publish(async () => [tool("Admitted: CZE, SVK")]);
-    expect(notifications).toEqual(["changed"]);
-
-    await registry.publish(async () => [tool("Admitted: CZE, SVK")]);
-    expect(notifications).toEqual(["changed"]);
+  test("notifies only the session whose admission changed its visible tools", async () => {
+    const registry = new McpToolFreshnessRegistry();
+    const notifications: string[] = [];
+    const expanded = [tool(), { ...tool(), name: "search_legislation" }];
+    registry.register({
+      id: "newly-admitted",
+      notifyToolsChanged: () => {
+        notifications.push("newly-admitted");
+      },
+      tools: [tool()],
+    });
+    registry.register({
+      id: "already-admitted",
+      notifyToolsChanged: () => {
+        notifications.push("already-admitted");
+      },
+      tools: expanded,
+    });
+    await registry.publish(async () => expanded);
+    expect(notifications).toEqual(["newly-admitted"]);
   });
 
   test("notification failure never rejects the triggering publication", async () => {
@@ -50,29 +68,86 @@ describe("MCP tool freshness", () => {
       id: "broken",
       notifyToolsChanged: async () =>
         await Promise.reject(new Error("closed stream")),
-      tools: [tool("Admitted: CZE")],
+      tools: [tool()],
     });
-    await registry.publish(async () => [tool("Admitted: CZE, SVK")]);
+    await registry.publish(async () => [tool("Expanded admission")]);
   });
 
-  test("tool and registry versions follow only the advertised contract", () => {
-    const original = tool("Admitted: CZE");
-    const metadataOnly = { ...original, _meta: { private: "ignored" } };
-    const changed = tool("Admitted: CZE, SVK");
-
-    expect(mcpToolSchemaVersion(metadataOnly)).toBe(
-      mcpToolSchemaVersion(original),
-    );
-    expect(mcpToolSchemaVersion(changed)).not.toBe(
-      mcpToolSchemaVersion(original),
-    );
+  test("per-tool versions change for every and only advertised contract field", () => {
+    const original = tool();
+    const version = mcpToolSchemaVersion(original);
+    const contractChanges: Tool[] = [
+      { ...original, name: "search_legislation" },
+      { ...original, title: "Search legislation" },
+      { ...original, description: "Search admitted legislation" },
+      { ...original, inputSchema: { properties: {}, type: "object" } },
+      { ...original, outputSchema: { properties: {}, type: "object" } },
+      { ...original, annotations: { readOnlyHint: false } },
+    ];
+    for (const changed of contractChanges) {
+      expect(mcpToolSchemaVersion(changed)).not.toBe(version);
+    }
+    expect(
+      mcpToolSchemaVersion({ ...original, _meta: { private: true } }),
+    ).toBe(version);
+    expect(version).toMatch(/^[a-f0-9]{16}$/u);
     expect(
       withMcpToolSchemaVersion(original)._meta?.[
         MCP_TOOL_SCHEMA_VERSION_META_KEY
       ],
-    ).toBe(mcpToolSchemaVersion(original));
-    expect(mcpRegistryVersion([original])).not.toBe(
-      mcpRegistryVersion([changed]),
+    ).toBe(version);
+  });
+
+  test("the compact version prefix has no collisions in the registered surface", () => {
+    const tools = toMcpTools(ALL_MCP_TOOL_DEFINITIONS, { mode: "advanced" });
+    const versions = tools.map(mcpToolSchemaVersion);
+    expect(new Set(versions).size).toBe(tools.length);
+  });
+
+  test("the response header equals the returned projection version", () => {
+    const tools = [tool()];
+    const projectionVersion = mcpRegistryVersion(tools);
+    const response = withMcpRegistryVersionHeader(
+      new Response(JSON.stringify({ tools })),
+      projectionVersion,
+    );
+    expect(response.headers.get(MCP_REGISTRY_VERSION_HEADER)).toBe(
+      projectionVersion,
+    );
+  });
+
+  test("jurisdiction descriptions match the registered admissions", () => {
+    const descriptions: string[] = [];
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const child of value) {
+          visit(child);
+        }
+        return;
+      }
+      if (typeof value !== "object" || value === null) {
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (key === "description" && typeof child === "string") {
+          descriptions.push(child);
+        } else {
+          visit(child);
+        }
+      }
+    };
+    for (const definition of ALL_MCP_TOOL_DEFINITIONS) {
+      visit(definition.inputSchema);
+    }
+    const advertised = descriptions
+      .map((description) => /Admitted: ([A-Z, ]+)\./u.exec(description)?.[1])
+      .filter((value) => value !== undefined);
+    expect(advertised.length).toBeGreaterThan(0);
+    expect(new Set(advertised)).toEqual(
+      new Set([
+        PUBLIC_CASE_LAW_COUNTRIES.join(", "),
+        PUBLIC_LEGISLATION_COUNTRIES.join(", "),
+      ]),
     );
   });
 });

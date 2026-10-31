@@ -5,6 +5,7 @@ import { stableStringify } from "@stll/stable-stringify";
 import type { StableStringifyInput } from "@stll/stable-stringify";
 
 export const MCP_TOOL_SCHEMA_VERSION_META_KEY = "schemaVersion";
+const MCP_TOOL_SCHEMA_VERSION_LENGTH = 16;
 
 const versionedShape = (tool: Tool) => ({
   annotations: tool.annotations,
@@ -43,7 +44,10 @@ const canonicalInput = (value: unknown): StableStringifyInput => {
 
 /** Stable content identity of the fields that tell a client how to use a tool. */
 export const mcpToolSchemaVersion = (tool: Tool): string =>
-  sha256Hex(stableStringify(canonicalInput(versionedShape(tool))));
+  sha256Hex(stableStringify(canonicalInput(versionedShape(tool)))).slice(
+    0,
+    MCP_TOOL_SCHEMA_VERSION_LENGTH,
+  );
 
 export const withMcpToolSchemaVersion = (tool: Tool): Tool => ({
   ...tool,

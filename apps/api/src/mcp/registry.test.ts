@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
-
 import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import { compatFetchConsumesServices } from "@/api/mcp/compat-tools";
 import {
@@ -46,38 +43,6 @@ const withoutDescriptions = (value: unknown): unknown => {
 };
 
 describe("MCP tool registry", () => {
-  test("jurisdiction descriptions match the registered admissions", () => {
-    const descriptions: string[] = [];
-    const visit = (value: unknown): void => {
-      if (Array.isArray(value)) {
-        for (const child of value) {
-          visit(child);
-        }
-      } else if (typeof value === "object" && value !== null) {
-        for (const [key, child] of Object.entries(value)) {
-          if (key === "description" && typeof child === "string") {
-            descriptions.push(child);
-          } else {
-            visit(child);
-          }
-        }
-      }
-    };
-    for (const definition of ALL_MCP_TOOL_DEFINITIONS) {
-      visit(definition.inputSchema);
-    }
-    const admittedLists = descriptions
-      .map((description) => /Admitted: ([A-Z, ]+)\./u.exec(description)?.[1])
-      .filter((value) => value !== undefined);
-
-    expect(admittedLists.length).toBeGreaterThan(0);
-    expect(new Set(admittedLists)).toEqual(
-      new Set([
-        PUBLIC_CASE_LAW_COUNTRIES.join(", "),
-        PUBLIC_LEGISLATION_COUNTRIES.join(", "),
-      ]),
-    );
-  });
   test("offers generic capability tools only on the advanced surface", () => {
     const executorNames = CAPABILITY_TOOL_SET.definitions.map(
       ({ name }) => name,

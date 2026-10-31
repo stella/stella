@@ -24,7 +24,6 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
-import { MCP_REGISTRY_VERSION_HEADER } from "@stll/api-contract/mcp-registry";
 import type { HandlerExceptionScope } from "@stll/errors";
 
 import { hasRequestBody, reframeBoundedRequest } from "@/api/http/request-body";
@@ -121,6 +120,7 @@ import {
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
 import { withToolAuthChallenge } from "@/api/mcp/tool-auth-challenge";
+import { withMcpRegistryVersionHeader } from "@/api/mcp/tool-freshness-response";
 import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
   McpReadClass,
@@ -1699,18 +1699,10 @@ export const createMcpHttpRequestHandler = ({
                   ? await dispatch()
                   : await withTenantActionSizePolicy(policy, dispatch);
 
-              const { registryVersion } = requestFactoryState;
-              const versionedResponse =
-                registryVersion === undefined
-                  ? response
-                  : new Response(response.body, {
-                      headers: new Headers({
-                        ...Object.fromEntries(response.headers),
-                        [MCP_REGISTRY_VERSION_HEADER]: registryVersion,
-                      }),
-                      status: response.status,
-                      statusText: response.statusText,
-                    });
+              const versionedResponse = withMcpRegistryVersionHeader(
+                response,
+                requestFactoryState.registryVersion,
+              );
 
               // `createMcpHandler` owns and catches modern exchange failures. Restore
               // the public retry contract the outer catch provides on the legacy leg.
