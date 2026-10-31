@@ -277,6 +277,9 @@ export const DIFF_SCOPED_STEPS = {
   "ci.yml:ci-checks-rest#Failure-as-empty baseline": fullTree(
     "Full census; the base only keeps the ledger from growing.",
   ),
+  "ci.yml:ci-checks-rest#Model task default evidence guard": fullTree(
+    "Checks every model default; the base only keeps the exemption ledger from growing.",
+  ),
   "ci.yml:ci-checks-rest#Queue authority": fullTree(
     "Full census; the base only keeps the ledger from growing.",
   ),
