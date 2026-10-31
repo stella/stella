@@ -38,7 +38,7 @@ export const DateFilterPopover = ({
         return (
           <button
             className={cn(
-              "hover:bg-accent flex items-center justify-between rounded px-2 py-1.5 text-sm",
+              "hover:bg-accent flex items-center justify-between rounded-sm px-2 py-1.5 text-sm",
               active && "text-foreground",
             )}
             key={preset}

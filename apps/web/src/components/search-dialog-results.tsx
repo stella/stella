@@ -97,7 +97,7 @@ export const CommandActionItem = ({
           {/* A shortcut hint means nothing without a keyboard, so a
               touch-first device drops it. */}
           {action.hotkey && (
-            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded border px-1.5 font-medium select-none pointer-coarse:hidden">
+            <kbd className="bg-muted text-muted-foreground text-3xs pointer-events-none inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-medium select-none pointer-coarse:hidden">
               {formatHotkeyForPlatform(action.hotkey, hotkeyPlatform)}
             </kbd>
           )}
@@ -237,7 +237,7 @@ const SummaryBody = ({
           key={`${citation.id}-${start}`}
           render={
             <button
-              className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
+              className="text-foreground hover:bg-muted mx-0.5 rounded-sm px-1 font-medium"
               onClick={(event) => {
                 event.stopPropagation();
                 onCitationClick(citation.id);

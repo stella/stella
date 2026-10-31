@@ -30,7 +30,7 @@ export const MarkdownPreview = ({
       "[&_pre]:bg-muted/40 [&_pre]:rounded-md [&_pre]:border",
       "[&_pre]:p-3 [&_pre]:text-xs [&_pre]:leading-relaxed",
       "[&_code]:font-mono",
-      "[&_:not(pre)>code]:bg-muted [&_:not(pre)>code]:rounded",
+      "[&_:not(pre)>code]:bg-muted [&_:not(pre)>code]:rounded-sm",
       "[&_:not(pre)>code]:px-1 [&_:not(pre)>code]:py-0.5",
       className,
     )}

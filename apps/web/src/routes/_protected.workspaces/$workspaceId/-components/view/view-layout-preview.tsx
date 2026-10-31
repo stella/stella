@@ -254,7 +254,7 @@ const PreviewStatusChip = ({ status }: { status: TaskStatus }) => {
   const Icon = STATUS_ICONS[status];
 
   return (
-    <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5 text-xs leading-none">
+    <span className="bg-muted/60 text-muted-foreground flex max-w-full min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs leading-none">
       <Icon className={cn("size-3 shrink-0", STATUS_COLORS[status])} />
       <span className="truncate">{t(labelKey)}</span>
     </span>

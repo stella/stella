@@ -47,7 +47,7 @@ export const SegmentedIconToggle = <T extends string>({
                 aria-label={option.label}
                 aria-pressed={isActive}
                 className={cn(
-                  "text-muted-foreground h-6 min-h-0 w-7 rounded-[4px] p-0",
+                  "text-muted-foreground h-6 min-h-0 w-7 rounded-sm p-0",
                   size === "touch" &&
                     "[@media(any-pointer:coarse)]:h-11 [@media(any-pointer:coarse)]:min-h-11 [@media(any-pointer:coarse)]:w-11",
                   isActive &&

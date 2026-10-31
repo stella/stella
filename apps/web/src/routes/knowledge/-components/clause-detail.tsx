@@ -1393,7 +1393,7 @@ const VariantRow = ({
         </div>
       </div>
       {body.length > 0 && (
-        <div className="bg-muted/30 mt-2 rounded border p-3">
+        <div className="bg-muted/30 mt-2 rounded-sm border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
@@ -1773,7 +1773,7 @@ const VersionRow = ({
         className={cn(
           "flex flex-1 items-center justify-between",
           "px-2 py-3 text-sm",
-          "hover:bg-muted/50 rounded",
+          "hover:bg-muted/50 rounded-sm",
           isSelected && "bg-muted",
         )}
         onClick={onToggleDiff}

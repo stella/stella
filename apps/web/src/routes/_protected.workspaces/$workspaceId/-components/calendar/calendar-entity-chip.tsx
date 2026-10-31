@@ -104,7 +104,7 @@ export const CalendarEntityChip = ({
     <CalendarEntryButton
       ref={dragRef}
       className={cn(
-        "bg-card w-full rounded border border-s-2 px-1.5 py-0.5",
+        "bg-card w-full rounded-sm border border-s-2 px-1.5 py-0.5",
         "hover:bg-accent text-start text-xs",
         "truncate",
         isEditable && "cursor-grab active:cursor-grabbing",
