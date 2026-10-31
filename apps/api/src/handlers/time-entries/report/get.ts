@@ -163,7 +163,7 @@ const getTimeReport = createSafeRootHandler(
           },
         };
         const group = groups[query.groupBy];
-        const readRows = (children: boolean) =>
+        const readRows = async (children: boolean) =>
           readBounded(
             tx
               .select({
@@ -223,7 +223,10 @@ const getTimeReport = createSafeRootHandler(
           return null;
         }
         return {
-          rows: [...parents.rows, ...(children?.rows ?? [])],
+          rows:
+            children === null
+              ? parents.rows
+              : [...parents.rows, ...children.rows],
           summary: { current: metrics(true), previous: metrics(false) },
         } satisfies TimeEntryReport;
       }),
