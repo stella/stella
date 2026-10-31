@@ -25,12 +25,15 @@ for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
     const resume = Promise.withResolvers<undefined>();
     let stored: StoredSession | null | undefined = SESSION;
     let published: StoredSession | undefined = SESSION;
+    const revoked: StoredSession[] = [];
+    let clearAttempts = 0;
     const store = createSessionStore({
       read: async () => stored,
       write: async (session) => {
         stored = session;
       },
       prepareClear: async () => {
+        clearAttempts++;
         stored = null;
       },
       clear: async () => {
@@ -51,7 +54,8 @@ for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
           await resume.promise;
         }
       },
-      revoke: async () => {
+      revoke: async (session) => {
+        revoked.push(session);
         if (waitingOn === "revocation") {
           reached.resolve(undefined);
           await resume.promise;
@@ -86,6 +90,8 @@ for (const waitingOn of ["cleanup", "revocation", "deletion"] as const) {
       });
     }
     expect(updates).toEqual([]);
+    expect(revoked).toEqual([SESSION]);
+    expect(clearAttempts).toBe(waitingOn === "deletion" ? 1 : 0);
     expect(stored).toEqual(replacement);
     expect(published).toEqual(replacement);
   });

@@ -21,15 +21,13 @@ export const signOutSession = async ({
   const generation = store.generation();
   if (session !== undefined) {
     await beforeEnd(session);
+    await revoke(session);
   }
   // Cleanup uses the current grant; a later sign-in owns any replacement.
   if (!store.isCurrent(generation)) {
     return Result.ok(undefined);
   }
   const transition = store.begin();
-  if (session !== undefined) {
-    await revoke(session);
-  }
   const cleared = await Result.tryPromise({
     try: async () => await transition.clear(),
     catch: (cause) =>
