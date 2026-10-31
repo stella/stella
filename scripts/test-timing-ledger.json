@@ -770,11 +770,6 @@
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
   },
   {
-    "id": "no-real-time-wait::apps/web/src/features/time-timers/global-timer.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
-    "count": 2,
-    "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."
-  },
-  {
     "id": "no-real-time-wait::apps/web/src/hooks/use-latest-callback.dom.test.tsx::<module>::@stll/concurrency/sleep#sleep",
     "count": 1,
     "reason": "Predates the rule: waits on the real clock; await the work's completion signal or drive fake timers."

@@ -206,7 +206,7 @@ test("allows test-kit helpers, production files, and the real-clock owner", asyn
   ).toEqual([]);
   expect(
     await Promise.all(
-      ["x.ts", "packages/test-kit/src/clock.test.ts"].map((sourcePath) =>
+      ["x.ts", "packages/test-kit/src/clock.test.ts"].map(async (sourcePath) =>
         lintSingleRule(rule, "setTimeout(() => {}, 1);", { sourcePath }),
       ),
     ),
