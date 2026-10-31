@@ -314,8 +314,9 @@ mod tests {
   #[tokio::test]
   async fn the_loop_reports_each_wake_it_sees_and_no_steady_tick() {
     let (woke, mut wakes) = tokio::sync::mpsc::unbounded_channel::<u64>();
-    let (ticks, ticked) = tokio::sync::mpsc::unbounded_channel::<u64>();
-    let ticked = std::sync::Arc::new(tokio::sync::Mutex::new(ticked));
+    // Each tick the loop waits for is a oneshot the test answers, in order.
+    let (asks, mut asked) =
+      tokio::sync::mpsc::unbounded_channel::<tokio::sync::oneshot::Sender<u64>>();
     let (reports, mut reported) = tokio::sync::mpsc::unbounded_channel::<()>();
     let now = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(1_000));
     let seen = std::sync::Arc::clone(&now);
@@ -326,10 +327,11 @@ mod tests {
         std::future::ready(())
       },
       move || {
-        let ticked = std::sync::Arc::clone(&ticked);
+        let (answer, answered) = tokio::sync::oneshot::channel();
+        asks.send(answer).unwrap();
         let now = std::sync::Arc::clone(&now);
         async move {
-          let tick = ticked.lock().await.recv().await.unwrap();
+          let tick = answered.await.unwrap();
           now.store(tick, std::sync::atomic::Ordering::SeqCst);
           tick
         }
@@ -342,10 +344,9 @@ mod tests {
     ));
     // The startup report comes first; every report is a point the loop passed.
     reported.recv().await.unwrap();
-    for tick in [1_030, 1_060] {
-      ticks.send(tick).unwrap();
+    for tick in [1_030, 1_060, 1_060 + 121] {
+      asked.recv().await.unwrap().send(tick).unwrap();
     }
-    ticks.send(1_060 + 121).unwrap();
     let wake = tokio::time::timeout(Duration::from_secs(5), wakes.recv())
       .await
       .expect("the wake is reported")
