@@ -262,7 +262,7 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     name: "account_audit_logs_user_event_idx",
-    introducedBy: "20261031080000_organization_created_audit_event",
+    introducedBy: "20261031213547_organization_created_audit_event",
     tableName: "account_audit_logs",
     isUnique: false,
     createSql:
