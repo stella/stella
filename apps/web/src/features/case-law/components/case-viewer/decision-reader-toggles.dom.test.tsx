@@ -93,7 +93,9 @@ const registerScroller = (scroller: HTMLElement) => {
   Object.defineProperty(scroller, "scrollTop", {
     configurable: true,
     get: () => scrollTops.get(scroller) ?? 0,
-    set: (value: number) => setScrollTop(scroller, value),
+    set: (value: number) => {
+      setScrollTop(scroller, value);
+    },
   });
   Object.defineProperty(scroller, "clientHeight", {
     configurable: true,

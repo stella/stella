@@ -94,7 +94,9 @@ test("a long matter list scrolls inside a popup capped to the space around its t
   const row = screen.getByText(`Matter ${MATTER_COUNT - 1}`);
   const viewport = row.closest(".overflow-y-auto");
   if (!(viewport instanceof HTMLElement)) {
-    throw new Error("Expected the rows to sit in the menu's scrolling list");
+    throw new TypeError(
+      "Expected the rows to sit in the menu's scrolling list",
+    );
   }
   // happy-dom has no layout, so the cap is checked where it is declared:
   // the shared composer list height, bounded by the available height.

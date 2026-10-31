@@ -36,7 +36,7 @@ for (const state of composerReferenceStates) {
     const geometry = await editor.evaluate((element, selector) => {
       const pill = element.querySelector(selector);
       if (!(pill instanceof HTMLElement)) {
-        throw new Error("The composer rendered no reference chip.");
+        throw new TypeError("The composer rendered no reference chip.");
       }
       const box = element.getBoundingClientRect();
       const chipBox = pill.getBoundingClientRect();

@@ -408,7 +408,7 @@ const approvalPage = () => (
 const rowOf = (narrative: string) => {
   const row = testing.screen.getByText(narrative).closest(".rounded-md");
   if (!(row instanceof HTMLElement)) {
-    throw new Error(`No row for ${narrative}`);
+    throw new TypeError(`No row for ${narrative}`);
   }
   return row;
 };

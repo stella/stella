@@ -50,7 +50,7 @@ const readGeometry = async (page: Page): Promise<CardGeometry> => {
       const body = document.querySelector(bodySelector);
       const bar = document.querySelector(barSelector);
       if (!(body instanceof HTMLElement) || !(bar instanceof HTMLElement)) {
-        throw new Error("consent card is missing its body or decision bar");
+        throw new TypeError("consent card is missing its body or decision bar");
       }
       const barBox = bar.getBoundingClientRect();
       return {

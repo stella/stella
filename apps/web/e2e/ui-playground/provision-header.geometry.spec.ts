@@ -48,13 +48,15 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
       const part = (section: Element, slot: string): HTMLElement => {
         const element = section.querySelector(`[data-slot="${slot}"]`);
         if (!(element instanceof HTMLElement)) {
-          throw new Error(`provision header bench is missing ${slot}`);
+          throw new TypeError(`provision header bench is missing ${slot}`);
         }
         return element;
       };
       return [...document.querySelectorAll(sectionSelector)].map((section) => {
         if (!(section instanceof HTMLElement)) {
-          throw new Error("provision header bench section is not an element");
+          throw new TypeError(
+            "provision header bench section is not an element",
+          );
         }
         const header = part(section, "provision-card-header");
         const summary = part(section, "provision-card-summary");
@@ -63,7 +65,9 @@ const readGeometry = async (page: Page): Promise<HeaderGeometry[]> => {
         const date = part(section, "provision-card-date");
         const button = header.querySelector("button");
         if (!(button instanceof HTMLElement)) {
-          throw new Error("provision header bench is missing its open button");
+          throw new TypeError(
+            "provision header bench is missing its open button",
+          );
         }
         const card = section.getBoundingClientRect();
         const box = button.getBoundingClientRect();
