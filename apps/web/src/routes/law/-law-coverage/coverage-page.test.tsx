@@ -176,6 +176,44 @@ describe("the coverage page states what it counts", () => {
     expect(markup).not.toMatch(/>100%</u);
   });
 
+  test("a count past the total never reads complete while reconciliation finds decisions missing", () => {
+    const markup = render(
+      <CaseLawCoveragePage
+        coverage={{
+          ...COVERAGE,
+          countries: [
+            {
+              ...CZECHIA,
+              sources: [
+                {
+                  ...NEARLY_COMPLETE,
+                  completeness: {
+                    state: "measured",
+                    stored: 1040,
+                    reported: 1000,
+                    storedAsOf: "2026-09-17T00:00:00.000Z",
+                    reportedAsOf: "2026-09-01T00:00:00.000Z",
+                    reportedBy: "publisher",
+                  },
+                  knownGaps: {
+                    type: "reconciled",
+                    summary: { missing: 30, shortSlices: 1, unlistedSlices: 0 },
+                    years: [
+                      { year: 2013, type: "gaps", missing: 30, shortSlices: 1 },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(markup).toContain('aria-valuetext="97%"');
+    expect(markup).not.toContain('aria-valuetext="100%"');
+  });
+
   test("a source nobody has measured is stated, not folded into the ratio", () => {
     const markup = render(<CaseLawCoveragePage coverage={COVERAGE} />);
 
