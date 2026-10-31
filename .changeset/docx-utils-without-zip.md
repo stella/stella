@@ -2,4 +2,4 @@
 "@stll/docx-utils": minor
 ---
 
-Remove the ZIP helpers (`loadDocx`, `loadDocxArchive`, `extractText`, `extractBinary`, `repackZip`, `writeZipEntry`, `DOCX_COMPRESSION` and the archive limits) and the JSZip dependency. Read and write archives with `ZipArchive` from `@stll/docx-core/zip`.
+Use docx-core ZIP for shared bounded archive loading. Remove the JSZip-specific extraction, repacking and entry-writing helpers.
