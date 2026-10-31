@@ -2,29 +2,6 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-/**
- * What this adapter does with the record its publisher serves.
- *
- * The service publishes its own OpenAPI document, so the field list is not
- * something an implementer infers from a sample: it is declared, and the
- * first suite below diffs the inventory against it. A field the ministry adds
- * to `Rozhodnutie` therefore fails here by name, on the schema, rather than
- * waiting for someone to notice a value arriving on a response the crawl
- * already pays for and going nowhere — which is how `oblast`, `povodnySud`
- * and `povodnaSpisovaZnacka` were fetched and discarded for years.
- *
- * The rest drive a decision the crawl actually stored: the committed page
- * recording holds real records, so the assertions about where a field lands
- * are made against what the publisher sent rather than against a payload
- * written to match the code.
- */
-import {
-  decodeSourceRawEnvelope,
-  decodeSourceRawEnvelopeObjects,
-  encodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { PUBLISHER_BODY_MAX_BYTES } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
 import {
@@ -49,8 +26,29 @@ import {
 } from "@/api/lib/errors/read-outcome";
 import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
 import { readGzipJson } from "@/api/lib/gzip-json";
+/**
+ * What this adapter does with the record its publisher serves.
+ *
+ * The service publishes its own OpenAPI document, so the field list is not
+ * something an implementer infers from a sample: it is declared, and the
+ * first suite below diffs the inventory against it. A field the ministry adds
+ * to `Rozhodnutie` therefore fails here by name, on the schema, rather than
+ * waiting for someone to notice a value arriving on a response the crawl
+ * already pays for and going nowhere — which is how `oblast`, `povodnySud`
+ * and `povodnaSpisovaZnacka` were fetched and discarded for years.
+ *
+ * The rest drive a decision the crawl actually stored: the committed page
+ * recording holds real records, so the assertions about where a field lands
+ * are made against what the publisher sent rather than against a payload
+ * written to match the code.
+ */
 import {
+  decodeSourceRawEnvelope,
+  decodeSourceRawEnvelopeObjects,
+  encodeSourceRawEnvelope,
   type IngestionResult,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  type StoredRawReparseOutcome,
   toPlainTextIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";

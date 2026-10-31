@@ -506,6 +506,10 @@ const CONTRACT_CORPUS = {
         readWorkspaceHandlerMock.mockResolvedValue({
           id: toSafeId<"workspace">(WS),
           organizationId: ORGANIZATION_ID,
+          externalSource: null,
+          externalId: null,
+          externalChangeKey: null,
+          importedAt: null,
           name: "Acme retainer",
           reference: "REF-1",
           clientId: toSafeId<"contact">(uid(61)),
@@ -806,6 +810,9 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: "legacy",
+                externalId: uid(113),
+                externalChangeKey: "sample-change",
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
@@ -814,6 +821,7 @@ const CONTRACT_CORPUS = {
         },
       }),
       expectRefPaths: ["contactId"],
+      expectPayloadContains: [uid(113)],
     },
   ],
   list_documents: [
@@ -1628,6 +1636,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1708,6 +1717,7 @@ const CONTRACT_CORPUS = {
               decisionDate: "2020-05-01",
               decisionId: uid(53),
               decisionType: "judgment",
+              decisionTypeKind: "judgment",
               ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
               identifiers: [
                 {
@@ -1749,6 +1759,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          extractionWarnings: [],
           hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
@@ -1829,6 +1840,7 @@ const CONTRACT_CORPUS = {
           // GUID-bearing publisher URLs; see the statute fixture above.
           sourceUrl: `https://example.test/decision/${uid(93)}`,
           sourceAttributionUrl: `https://example.test/decision/${uid(94)}`,
+          sourceLanguages: null,
           createdAt: new Date("2020-05-01T00:00:00.000Z"),
           updatedAt: new Date("2020-05-01T00:00:00.000Z"),
         } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
@@ -1915,6 +1927,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                extractionWarnings: [],
                 textWithheldReason: null,
                 sectionIndex: 1,
                 doctrine: "unread",
@@ -2595,6 +2608,7 @@ describe("decision text in chat projection", () => {
   test("decision read preserves its text through the chat projection", async () => {
     const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
     readGatedDecisionWithDocumentMock.mockResolvedValue({
+      extractionWarnings: [],
       hasDocument: true,
       documentPending: false,
       documentReadFailed: false,
@@ -2657,6 +2671,7 @@ describe("decision text in chat projection", () => {
       },
       sourceUrl: "https://example.test/decision/source",
       sourceAttributionUrl: "https://example.test/decision/attribution",
+      sourceLanguages: null,
       createdAt: new Date("2020-05-01T00:00:00.000Z"),
       updatedAt: new Date("2020-05-01T00:00:00.000Z"),
     } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);

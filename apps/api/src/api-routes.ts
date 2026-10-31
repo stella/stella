@@ -30,6 +30,7 @@ import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
+import { dictationRoute } from "@/api/handlers/dictation/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -70,6 +71,7 @@ import { notificationsRoute } from "@/api/handlers/notifications/routes";
 import { numberSeriesRoute } from "@/api/handlers/number-series/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
+import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -243,6 +245,7 @@ export const apiRoutes = mount([
       sharepointRoute,
       catalogueRoute,
       organizationSettingsRoute,
+      organizationsRoute,
       apiKeysRoute,
       desktopRegistryRoute,
       aiConfigPublicRoute,
@@ -264,6 +267,7 @@ export const apiRoutes = mount([
       legalReaderRoute,
       legalResolveRoute,
       chatRoute,
+      dictationRoute,
       userFilesRoute,
       skillsRoute,
       usageRoute,

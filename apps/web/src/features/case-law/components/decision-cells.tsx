@@ -11,6 +11,7 @@ import {
   createCaseLawDecisionRouteParams,
   normalizeCaseLawLanguageSegment,
 } from "@stll/api-contract/case-law-decision-route";
+import type { DecisionTypeKind } from "@stll/api-contract/case-law-decision-types";
 import {
   DECISION_HEADNOTE_KEYWORDS,
   type DecisionHeadnotePreview,
@@ -55,8 +56,8 @@ import {
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import type { PublicDecisionLanguageAlternate } from "@/features/case-law/public-decision";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
+import { useCaseLawReadingLanguages } from "@/features/case-law/reading-languages";
 import { useFormatter } from "@/i18n/formatting-context";
-import { useMessageLocale } from "@/i18n/message-locale";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
@@ -94,6 +95,7 @@ export type Decision = {
   identifiers?: readonly { type: string; value: string }[] | undefined;
   decisionDate: string | null;
   decisionType: string | null;
+  decisionTypeKind: DecisionTypeKind | null;
   sourceUrl?: string | null | undefined;
   /** The search snippet, highlighted, when the row came from a search. */
   headline?: string | null;
@@ -143,18 +145,21 @@ export const CaseNumberCell = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  const uiLocale = useMessageLocale();
+  const readingLanguages = useCaseLawReadingLanguages();
   const openDecision = useOpenDecisionTab();
   const { caseNumber, languageAlternates } = decision;
   const target = preferredDecisionTarget(decision, {
     searchQuery: context.searchQuery,
-    uiLocale,
+    readingLanguages,
   });
   const routeParams = createCaseLawDecisionRouteParams(target);
   const displayLanguage = normalizeCaseLawLanguageSegment(
     routeParams.language ?? decision.language,
   );
-  const matchedLanguage = normalizeCaseLawLanguageSegment(decision.language);
+  // A row says which version matched only when a text query matched one: a
+  // browse listing or a filter matched no words, so its row is simply the
+  // version the reader reads first, and there is no match to name.
+  const matchedLanguage = rowMatchedLanguage(decision, context.searchQuery);
   const multilingual = languageAlternates.length > 1;
   const identity = context.identityLineFields
     .map((field) => ({
@@ -229,6 +234,19 @@ export const CaseNumberCell = ({
     </div>
   );
 };
+
+/**
+ * The language of the version a text query matched, or null when nothing was
+ * searched for: a listing's row is the version chosen for the reader, not a
+ * match.
+ */
+export const rowMatchedLanguage = (
+  decision: Pick<Decision, "language">,
+  searchQuery: string | undefined,
+): string | null =>
+  searchQuery === undefined || searchQuery.trim() === ""
+    ? null
+    : normalizeCaseLawLanguageSegment(decision.language);
 
 /** One fact of the identity line, or null when the decision does not carry it. */
 const identityLineValue = (
@@ -683,33 +701,43 @@ type DecisionLinkOptions = {
   onClick?: (event: MouseEvent<HTMLAnchorElement>) => void;
 };
 
-/** The public decision route as a Link element, on whichever of the two routes the params name. */
+/**
+ * The public decision route as a Link element, on whichever of the two routes
+ * the params name.
+ *
+ * Every prop the caller leaves out stays absent rather than `undefined`. A menu
+ * item renders this element through its `render` prop and supplies its own
+ * label as children; Base UI merges the element's own props over the item's,
+ * so an explicit `children: undefined` would replace the label and draw every
+ * item empty.
+ */
 export const decisionLinkElement = ({
   children,
   className,
   hash,
   onClick,
   params,
-}: DecisionLinkOptions) =>
-  params.language === undefined ? (
+}: DecisionLinkOptions) => {
+  const linkProps = {
+    ...(children === undefined ? {} : { children }),
+    ...(hash === undefined ? {} : { hash }),
+    ...(onClick === undefined ? {} : { onClick }),
+  };
+  return params.language === undefined ? (
     <Link
-      className={className}
-      {...(hash === undefined ? {} : { hash })}
-      {...(onClick === undefined ? {} : { onClick })}
+      {...linkProps}
+      className={cn(className)}
       params={{
         country: params.country,
         court: params.court,
         slug: params.slug,
       }}
       to="/law/$country/cases/$court/$slug"
-    >
-      {children}
-    </Link>
+    />
   ) : (
     <Link
-      className={className}
-      {...(hash === undefined ? {} : { hash })}
-      {...(onClick === undefined ? {} : { onClick })}
+      {...linkProps}
+      className={cn(className)}
       params={{
         country: params.country,
         court: params.court,
@@ -717,10 +745,9 @@ export const decisionLinkElement = ({
         slug: params.slug,
       }}
       to="/law/$country/cases/$court/$language/$slug"
-    >
-      {children}
-    </Link>
+    />
   );
+};
 
 const DecisionLink = ({
   children,
@@ -734,7 +761,7 @@ const DecisionLink = ({
   params: CaseLawDecisionRouteParams;
 }) => decisionLinkElement({ children, className, onClick, params });
 
-const DecisionLanguageMenu = ({
+export const DecisionLanguageMenu = ({
   alternates,
   displayLanguage,
   searchQuery,

@@ -1,106 +1,10 @@
 import type { PressableProps } from "react-native";
 import { Pressable } from "react-native";
 
-import {
-  BUTTON_PLAIN_VARIANT,
-  BUTTON_VARIANT_TOKENS,
-  type ButtonContract,
-  type ButtonSize,
-  type ButtonVariant,
-} from "./button.shared";
+import { nativeButtonClassNames } from "./button.native-classes";
+import type { ButtonContract } from "./button.shared";
 import { Loader } from "./loader.native";
 import { Text } from "./text.native";
-
-/** A control's box: centred content inside the variant's border. */
-const CONTROL = "items-center justify-center border";
-
-/**
- * Every shared size in a phone's metrics. A text size grows to the platform's
- * 44-point touch target where the web relies on a coarse-pointer hit area; a
- * smaller control keeps its look and reaches the target through `slop`.
- */
-const SIZES = {
-  chip: {
-    box: `${CONTROL} min-h-7 gap-1.5 rounded-full px-2.5`,
-    label: "text-xs",
-    slop: 8,
-  },
-  default: {
-    box: `${CONTROL} min-h-11 gap-2 rounded-lg px-4`,
-    label: "",
-    slop: 0,
-  },
-  icon: { box: `${CONTROL} size-11 rounded-lg`, label: "", slop: 0 },
-  "icon-lg": { box: `${CONTROL} size-12 rounded-lg`, label: "", slop: 0 },
-  "icon-sm": { box: `${CONTROL} size-8 rounded-lg`, label: "", slop: 6 },
-  "icon-xl": { box: `${CONTROL} size-11 rounded-full`, label: "", slop: 0 },
-  "icon-2xs": { box: `${CONTROL} size-5 rounded-md`, label: "", slop: 12 },
-  "icon-xs": { box: `${CONTROL} size-7 rounded-md`, label: "", slop: 8 },
-  // An action inside a line of text: no height, padding or border of its
-  // own, so it sits at the size of its label; `slop` reaches the target.
-  inline: { box: "items-center gap-1", label: "", slop: 8 },
-  lg: { box: `${CONTROL} min-h-12 gap-2 rounded-lg px-5`, label: "", slop: 0 },
-  // One row of a list: full width, its content leading and top-aligned (a
-  // glyph stays beside a title's first line), as tall as the content plus
-  // the platform's row inset. The list draws the dividers between rows.
-  row: { box: "min-h-11 w-full items-start gap-3 py-3", label: "", slop: 0 },
-  sm: {
-    box: `${CONTROL} min-h-9 gap-1.5 rounded-lg px-3`,
-    label: "text-sm",
-    slop: 0,
-  },
-  xl: {
-    box: `${CONTROL} min-h-14 gap-2 rounded-lg px-6`,
-    label: "text-lg",
-    slop: 0,
-  },
-  xs: {
-    box: `${CONTROL} min-h-7 gap-1 rounded-md px-2`,
-    label: "text-sm",
-    slop: 8,
-  },
-} as const satisfies Record<
-  ButtonSize,
-  { box: string; label: string; slop: number }
->;
-
-/**
- * A phone has no hover: a pressed button answers with the fill the web shows
- * on hover, or dims when it already has one. `selected` is the pressed state
- * held (a row open beside the list, a chosen option).
- */
-const PRESS = {
-  default: { pressed: "active:opacity-80", selected: "" },
-  destructive: { pressed: "active:bg-destructive/18", selected: "" },
-  "destructive-outline": { pressed: "active:bg-destructive/4", selected: "" },
-  "destructive-ghost": {
-    pressed: "active:bg-destructive/10",
-    selected: "bg-destructive/10",
-  },
-  ghost: { pressed: "active:bg-accent", selected: "bg-accent" },
-  link: { pressed: "active:opacity-60", selected: "" },
-  muted: { pressed: "active:bg-accent", selected: "bg-accent" },
-  "muted-destructive": {
-    pressed: "active:bg-destructive/10",
-    selected: "bg-destructive/10",
-  },
-  outline: { pressed: "active:bg-accent", selected: "bg-accent" },
-  secondary: { pressed: "active:bg-secondary/80", selected: "" },
-  // No box to fill: the content dims under the finger.
-  plain: { pressed: "active:opacity-80", selected: "" },
-} as const satisfies Record<
-  ButtonVariant,
-  { pressed: string; selected: string }
->;
-
-/**
- * `plain` has no box, no label colour and no size; like the web's, it does
- * not dim when disabled, because its content says it is unavailable.
- */
-const PLAIN = {
-  shape: { box: "", label: "", slop: 0 },
-  tokens: { surface: "", label: "" },
-} as const;
 
 type ButtonProps = Omit<PressableProps, "children" | "disabled"> &
   ButtonContract & { className?: string | undefined };
@@ -110,8 +14,9 @@ type ButtonProps = Omit<PressableProps, "children" | "disabled"> &
  * read from ./button.shared.ts, on a Pressable. A string child is set as the
  * button's label in its variant's colour; any other child is laid out as
  * given, which is how a row holds a glyph beside two lines of text. A
- * `plain` button paints no box or label colour and ignores `size`: its
- * children are its look, stacked as in a View.
+ * `plain` button paints no fill or label colour and ignores `size`: its
+ * children are its look, stacked as in a View, inside a border that shows
+ * only when it is selected. Its classes come from ./button.native-classes.ts.
  */
 export const Button = ({
   accessibilityState,
@@ -129,23 +34,14 @@ export const Button = ({
   // An inline action with no variant reads as a link in its sentence, as on
   // the web.
   const variant = variantProp ?? (size === "inline" ? "link" : undefined);
-  const plain = variant === BUTTON_PLAIN_VARIANT;
-  const shape = plain ? PLAIN.shape : SIZES[size ?? "default"];
-  const tokens = plain
-    ? PLAIN.tokens
-    : BUTTON_VARIANT_TOKENS[variant ?? "default"];
-  const press = PRESS[variant ?? "default"];
   const inactive = disabled || loading;
-  const dimmed = plain ? "" : "opacity-64";
-  const selected =
-    selectedProp === true || accessibilityState?.selected === true;
-  const label = [
-    tokens.label,
-    variant === "link" ? "text-foreground underline" : "",
-    shape.label,
-  ]
-    .filter((name) => name !== "")
-    .join(" ");
+  const look = nativeButtonClassNames({
+    className,
+    inactive,
+    selected: selectedProp === true || accessibilityState?.selected === true,
+    size,
+    variant,
+  });
   return (
     <Pressable
       accessibilityRole="button"
@@ -154,23 +50,14 @@ export const Button = ({
         busy: loading,
         disabled: inactive,
       }}
-      className={[
-        plain ? "" : "flex-row",
-        tokens.surface,
-        shape.box,
-        inactive ? dimmed : press.pressed,
-        selected ? press.selected : "",
-        className ?? "",
-      ]
-        .filter((name) => name !== "")
-        .join(" ")}
+      className={look.pressable}
       disabled={inactive}
-      hitSlop={hitSlop ?? (shape.slop === 0 ? undefined : shape.slop)}
+      hitSlop={hitSlop ?? (look.slop === 0 ? undefined : look.slop)}
       {...props}
     >
       {loading ? <Loader size="sm" variant="decorative" /> : icon}
       {typeof children === "string" || typeof children === "number" ? (
-        <Text className={label} variant="button">
+        <Text className={look.label} variant="button">
           {children}
         </Text>
       ) : (

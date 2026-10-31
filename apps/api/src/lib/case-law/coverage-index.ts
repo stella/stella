@@ -13,7 +13,7 @@ import { decisionDateNotBeforeFilingYearSql } from "@/api/lib/decision-date-boun
 export const CASE_LAW_FILING_YEAR_FUNCTION_SIGNATURE =
   "public.decision_docket_filing_year(text,text)";
 
-export const CASE_LAW_COVERAGE_INDEX = {
+const CASE_LAW_COVERAGE_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_decision_date_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "decision_date", "id") WHERE ${publishedCaseLawDecisionIndexPredicateSql()}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, decision_date, id) WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`,
   introducedBy: "20261011005000_analysis_provider_diagnostic",
@@ -26,13 +26,27 @@ export const CASE_LAW_COVERAGE_INDEX = {
 };
 
 /** Sources without materialized facets aggregate published courts from this index alone. */
-export const CASE_LAW_COVERAGE_COURT_INDEX = {
+const CASE_LAW_COVERAGE_COURT_INDEX = {
   createSql: `CREATE INDEX CONCURRENTLY "case_law_decisions_source_court_coverage_idx" ON public."case_law_decisions" USING btree ("source_id", "court") WHERE ${publishedCaseLawDecisionIndexPredicateSql()}`,
   definitionBody: `ON public.case_law_decisions USING btree (source_id, court) WHERE ${publishedCaseLawDecisionIndexDefinitionPredicateSql()}`,
   introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },
   isUnique: false,
   name: "case_law_decisions_source_court_coverage_idx",
   tableName: "case_law_decisions",
+} as const satisfies RequiredMigrationIndex & {
+  createSql: string;
+  introducedBy: OnlineStepIntroduction;
+};
+
+const CASE_LAW_COVERAGE_FACET_SOURCE_KIND_INDEX = {
+  createSql:
+    'CREATE INDEX CONCURRENTLY "case_law_browse_facet_counts_source_kind_idx" ON public."case_law_browse_facet_counts" USING btree ("source_id", "kind", "value", "total")',
+  definitionBody:
+    "ON public.case_law_browse_facet_counts USING btree (source_id, kind, value, total)",
+  introducedBy: { type: "code", owner: "src/lib/case-law/coverage-index.ts" },
+  isUnique: false,
+  name: "case_law_browse_facet_counts_source_kind_idx",
+  tableName: "case_law_browse_facet_counts",
 } as const satisfies RequiredMigrationIndex & {
   createSql: string;
   introducedBy: OnlineStepIntroduction;
@@ -63,3 +77,11 @@ export const CASE_LAW_COVERAGE_FILING_DATE_INDEX = {
   createSql: string;
   introducedBy: OnlineStepIntroduction;
 };
+
+/** The coverage indexes in the order the online phase builds them. */
+export const CASE_LAW_COVERAGE_INDEXES = [
+  CASE_LAW_COVERAGE_INDEX,
+  CASE_LAW_COVERAGE_FILING_DATE_INDEX,
+  CASE_LAW_COVERAGE_COURT_INDEX,
+  CASE_LAW_COVERAGE_FACET_SOURCE_KIND_INDEX,
+] as const;
