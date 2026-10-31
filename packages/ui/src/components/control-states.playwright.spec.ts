@@ -12,8 +12,13 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
-const outlineWidth = async (locator: Locator) =>
-  await locator.evaluate((element) => getComputedStyle(element).outlineWidth);
+// An outline is drawn by its style: with `outline-style: none` the browser
+// still reports a width, so the style is what tells drawn from not drawn.
+const outline = async (locator: Locator) =>
+  await locator.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { style: style.outlineStyle, width: style.outlineWidth };
+  });
 
 const height = async (locator: Locator) =>
   await locator.evaluate((element) => element.getBoundingClientRect().height);
@@ -30,8 +35,8 @@ test("a selected plain target is drawn apart from an unselected one", async ({
     exact: true,
   });
 
-  expect(await outlineWidth(unselected)).toBe("0px");
-  expect(await outlineWidth(selected)).toBe("2px");
+  expect((await outline(unselected)).style).toBe("none");
+  expect(await outline(selected)).toEqual({ style: "solid", width: "2px" });
 });
 
 test("a fixed textarea is as tall as its rows, and only a growing one has a floor", async ({
