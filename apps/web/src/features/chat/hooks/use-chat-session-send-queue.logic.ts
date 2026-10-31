@@ -109,11 +109,13 @@ export type SendQueueState = {
   /** `isGenerating` as of the previous turn-boundary check; used to detect the falling edge that ends a turn. */
   readonly wasGenerating: boolean;
   /**
-   * The sent messages whose edit form is open. An edit replaces its message
-   * and every later turn, so while any is open nothing queued is sent: a
-   * prompt sent then would answer a history the edit is about to drop.
+   * The open edit sessions of sent messages, by session id. An edit replaces
+   * its message and every later turn, so while any is open nothing queued
+   * is sent: a prompt sent then would answer a history the edit is about to
+   * drop. Keyed by session, not message, so a closed session's release never
+   * lifts the hold of a newer edit of the same message.
    */
-  readonly editingMessageIds: readonly string[];
+  readonly editSessionIds: readonly string[];
   /** A turn ended ready while an edit held the queue: the drain it would
    *  have started runs once the last edit closes. */
   readonly drainHeld: boolean;
@@ -124,14 +126,14 @@ export const createInitialSendQueueState = (
 ): SendQueueState => ({
   conversationId,
   drainHeld: false,
-  editingMessageIds: [],
+  editSessionIds: [],
   isGenerating: false,
   queue: [],
   wasGenerating: false,
 });
 
 const isHeldForMessageEdit = (state: SendQueueState): boolean =>
-  state.editingMessageIds.length > 0;
+  state.editSessionIds.length > 0;
 
 /**
  * Whether a new prompt may be sent at once rather than queued: no turn runs
@@ -179,9 +181,9 @@ export type SendQueueEvent =
       status: ChatClientState;
     }
   | { type: "conversation-switched"; conversationId: string }
-  | { type: "message-edit-opened"; messageId: string }
-  | { type: "message-edit-closed"; messageId: string }
-  | { type: "message-edit-accepted"; messageId: string };
+  | { type: "message-edit-opened"; sessionId: string }
+  | { type: "message-edit-closed"; sessionId: string }
+  | { type: "message-edit-accepted"; sessionId: string };
 
 const canDrainQueueAfterTurn = (status: ChatClientState): boolean => {
   switch (status) {
@@ -330,26 +332,26 @@ export const reduceSendQueue = (
     }
 
     case "message-edit-opened": {
-      if (state.editingMessageIds.includes(event.messageId)) {
+      if (state.editSessionIds.includes(event.sessionId)) {
         return { state, dispatchedEntry: null };
       }
       return {
         state: {
           ...state,
-          editingMessageIds: [...state.editingMessageIds, event.messageId],
+          editSessionIds: [...state.editSessionIds, event.sessionId],
         },
         dispatchedEntry: null,
       };
     }
 
     case "message-edit-closed": {
-      if (!state.editingMessageIds.includes(event.messageId)) {
+      if (!state.editSessionIds.includes(event.sessionId)) {
         return { state, dispatchedEntry: null };
       }
       const next: SendQueueState = {
         ...state,
-        editingMessageIds: state.editingMessageIds.filter(
-          (messageId) => messageId !== event.messageId,
+        editSessionIds: state.editSessionIds.filter(
+          (sessionId) => sessionId !== event.sessionId,
         ),
       };
       // The last edit closed: the drain a turn's end would have started
@@ -370,8 +372,8 @@ export const reduceSendQueue = (
         state: {
           ...state,
           drainHeld: false,
-          editingMessageIds: state.editingMessageIds.filter(
-            (messageId) => messageId !== event.messageId,
+          editSessionIds: state.editSessionIds.filter(
+            (sessionId) => sessionId !== event.sessionId,
           ),
           isGenerating: true,
         },

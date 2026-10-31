@@ -205,7 +205,7 @@ describe("reduceSendQueue", () => {
     const state: SendQueueState = {
       conversationId: CONVERSATION_ID,
       drainHeld: true,
-      editingMessageIds: ["edited"],
+      editSessionIds: ["edited"],
       isGenerating: true,
       queue: [makeEntry("a"), makeEntry("b")],
       wasGenerating: true,
@@ -219,7 +219,7 @@ describe("reduceSendQueue", () => {
     expect(result.state).toEqual({
       conversationId: "conversation-2",
       drainHeld: false,
-      editingMessageIds: [],
+      editSessionIds: [],
       isGenerating: false,
       queue: [],
       wasGenerating: false,
@@ -383,10 +383,30 @@ describe("queued-message-promoted", () => {
 });
 
 describe("an open message edit holds the queue", () => {
-  const opened = (state: SendQueueState, messageId = "edited") =>
-    reduceSendQueue(state, { type: "message-edit-opened", messageId }).state;
-  const closed = (state: SendQueueState, messageId = "edited") =>
-    reduceSendQueue(state, { type: "message-edit-closed", messageId });
+  test("a closed session's release leaves a newer session of the message holding", () => {
+    const reopened = reduceSendQueue(
+      reduceSendQueue(
+        reduceSendQueue(createInitialSendQueueState(CONVERSATION_ID), {
+          type: "message-edit-opened",
+          sessionId: "first",
+        }).state,
+        { type: "message-edit-closed", sessionId: "first" },
+      ).state,
+      { type: "message-edit-opened", sessionId: "second" },
+    ).state;
+
+    const lateRelease = reduceSendQueue(reopened, {
+      type: "message-edit-closed",
+      sessionId: "first",
+    });
+    expect(lateRelease.state.editSessionIds).toEqual(["second"]);
+    expect(canSendWithoutQueueing(lateRelease.state)).toBe(false);
+  });
+
+  const opened = (state: SendQueueState, sessionId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-opened", sessionId }).state;
+  const closed = (state: SendQueueState, sessionId = "edited") =>
+    reduceSendQueue(state, { type: "message-edit-closed", sessionId });
   const enqueued = (state: SendQueueState, id: string) =>
     reduceSendQueue(state, { type: "message-enqueued", entry: makeEntry(id) })
       .state;
@@ -406,7 +426,7 @@ describe("an open message edit holds the queue", () => {
     const released = closed(ended.state);
     expect(released.dispatchedEntry?.id).toBe("a");
     expect(released.state.queue).toEqual([]);
-    expect(released.state.editingMessageIds).toEqual([]);
+    expect(released.state.editSessionIds).toEqual([]);
   });
 
   test("a prompt sent while an idle queue is held goes once the form closes", () => {
@@ -428,7 +448,7 @@ describe("an open message edit holds the queue", () => {
     );
     const accepted = reduceSendQueue(waiting, {
       type: "message-edit-accepted",
-      messageId: "edited",
+      sessionId: "edited",
     });
     expect(accepted.dispatchedEntry).toBeNull();
     expect(accepted.state.isGenerating).toBe(true);

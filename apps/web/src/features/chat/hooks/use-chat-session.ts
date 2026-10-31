@@ -1155,16 +1155,17 @@ export const useChatSession = ({
 
   /**
    * An open edit form holds the queue: nothing queued is sent while it is
-   * open, since the edit would drop the turn such a prompt starts. The
-   * returned release runs when the form closes; the queue then resumes.
+   * open, since the edit would drop the turn such a prompt starts. The hold
+   * belongs to the edit session that opened it (`sessionId`); its release
+   * runs when that form closes, and lifts only that session's hold.
    */
   const holdQueueForMessageEdit = useCallback(
-    (messageId: string) => {
-      applySendQueueEvent({ type: "message-edit-opened", messageId });
+    (sessionId: string) => {
+      applySendQueueEvent({ type: "message-edit-opened", sessionId });
       return () => {
         const dispatched = applySendQueueEvent({
           type: "message-edit-closed",
-          messageId,
+          sessionId,
         });
         if (dispatched) {
           detached(
@@ -1190,6 +1191,9 @@ export const useChatSession = ({
     async (
       messageId: string,
       edit: UserMessageEdit,
+      /** The edit session that sent it, whose queue hold the accepted
+       *  edit's turn takes over. */
+      sessionId: string,
     ): Promise<UserMessageEditResult> => {
       const replayed = await replayFromTruncation(
         { type: "user-message", messageId },
@@ -1200,7 +1204,7 @@ export const useChatSession = ({
             { ...options, timingSurface },
           );
           if (acceptance.status === "accepted") {
-            applySendQueueEvent({ type: "message-edit-accepted", messageId });
+            applySendQueueEvent({ type: "message-edit-accepted", sessionId });
             return { orphanedEdit: null, outcome: { type: "accepted" } };
           }
           const shown = await showStoredChatThread(chat, rewoundFrom);

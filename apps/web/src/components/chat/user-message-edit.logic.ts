@@ -81,6 +81,56 @@ export type UserMessageEditResult =
   | { orphanedEdit: UserMessageEdit; outcome: UserMessageEditFailure };
 
 /**
+ * One opening of a sent message's edit form. An edit's work goes on after
+ * its form may have closed: the request, the server's answer. Every
+ * continuation that acts on the form, its draft, the composer or the queue
+ * hold goes through `run`, which does nothing once the session is no longer
+ * its message's current one, so a late answer to a cancelled edit never
+ * closes, fills or notifies over a newer edit of the same message. What the
+ * server did, and the thread the page reloads from it, are not
+ * continuations of a session and always apply.
+ */
+export type UserMessageEditSession = {
+  /** Keys the session's queue hold and its form. */
+  readonly id: string;
+  run: (continuation: () => void) => void;
+};
+
+/** A session as its message holds it: `end` retires it (the form closed). */
+export type OpenUserMessageEditSession = UserMessageEditSession & {
+  end: () => void;
+};
+
+/**
+ * The edit sessions of one sent message. Opening one makes it the current
+ * session and so retires the one before; ending it leaves none current.
+ */
+export const createUserMessageEditSessions = (
+  createId: () => string,
+): { open: () => OpenUserMessageEditSession } => {
+  let current: string | null = null;
+  return {
+    open: () => {
+      const id = createId();
+      current = id;
+      return {
+        end: () => {
+          if (current === id) {
+            current = null;
+          }
+        },
+        id,
+        run: (continuation) => {
+          if (current === id) {
+            continuation();
+          }
+        },
+      };
+    },
+  };
+};
+
+/**
  * An orphaned edit, split by what the composer can take back. Its markup and
  * pasted texts go into the composer. Its kept documents and images are files
  * the server already stores, and the composer holds only files picked on this

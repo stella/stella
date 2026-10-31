@@ -14,6 +14,7 @@ import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import { htmlToMarkdown } from "@stll/chat/html-to-markdown";
 
 import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
+import type { UserMessageEdit } from "@/components/chat/user-message-edit.logic";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -61,21 +62,22 @@ const message: EditableUserMessageProps["message"] = {
  *  every edit. */
 const createActions = () => {
   const started: true[] = [];
-  const submitted: Parameters<UserMessageEditActions["onSubmit"]>[] = [];
-  /** The messages whose edit form holds the queue now. */
+  /** Each sent edit: the message it replaces and what it carries. */
+  const submitted: [string, UserMessageEdit][] = [];
+  /** The edit sessions whose form holds the queue now. */
   const holding: string[] = [];
   const actions: UserMessageEditActions = {
-    holdQueue: (messageId) => {
-      holding.push(messageId);
+    holdQueue: (sessionId) => {
+      holding.push(sessionId);
       return () => {
-        holding.splice(holding.indexOf(messageId), 1);
+        holding.splice(holding.indexOf(sessionId), 1);
       };
     },
     onStart: () => {
       started.push(true);
     },
-    onSubmit: async (...call) => {
-      submitted.push(call);
+    onSubmit: async (messageId, edit) => {
+      submitted.push([messageId, edit]);
       await Promise.resolve();
       return { type: "accepted" };
     },
@@ -162,7 +164,7 @@ describe("editing a sent message", () => {
     const view = renderMessage({ actions });
 
     openEditor(view);
-    expect(holding).toEqual([MESSAGE_ID]);
+    expect(holding).toHaveLength(1);
     fireEvent.click(view.getByRole("button", { name: REMOVE_NDA }));
     fireEvent.click(view.getByRole("button", { name: en.chat.sendPrompt }));
 
@@ -235,7 +237,7 @@ describe("editing a sent message", () => {
     const view = renderMessage({ actions });
 
     openEditor(view);
-    expect(holding).toEqual([MESSAGE_ID]);
+    expect(holding).toHaveLength(1);
     fireEvent.click(view.getByRole("button", { name: en.common.cancel }));
     expect(holding).toEqual([]);
   });

@@ -181,13 +181,16 @@ const acceptedTurn = (runId: string): Response => {
 /**
  * The thread's server. `stored` is the thread as the server holds it; a
  * refusal may change it first (`storedAfterRefusal`), as another turn would.
+ * With `answerAfter`, a send is answered only once it settles.
  */
 const createServer = ({
   answer,
+  answerAfter,
   initial = STORED,
   storedAfterRefusal,
 }: {
   answer: SendAnswer;
+  answerAfter?: Promise<unknown> | undefined;
   initial?: readonly StoredMessage[] | undefined;
   storedAfterRefusal?: readonly StoredMessage[] | undefined;
 }) => {
@@ -209,6 +212,7 @@ const createServer = ({
         return panic("Expected a JSON chat request");
       }
       posted.push(Object.fromEntries(Object.entries(body)));
+      await answerAfter;
       switch (answer.type) {
         case "accepted": {
           stored = STORED_AFTER_EDIT;
@@ -568,6 +572,95 @@ describe("an edit whose message the server no longer holds", () => {
       ]);
     });
     expect(composerPastedTexts()).toEqual([LONG_PASTE]);
+  });
+
+  describe("a late answer to a cancelled edit", () => {
+    /** Sends an edit the server answers only on `answered`, cancels it while
+     *  the answer is out, and opens the same message again with a new
+     *  draft. */
+    const cancelAndReopen = async (
+      page: Page,
+      server: ReturnType<typeof createServer>,
+    ) => {
+      await editSecondQuestion(page);
+      sendEdit(page);
+      // The edit is out: the server holds its answer.
+      await testing.waitFor(() => {
+        expect(server.posted).toHaveLength(1);
+      });
+      testing.fireEvent.click(
+        testing
+          .within(page.view.container)
+          .getByRole("button", { name: translations.common.cancel }),
+      );
+      await testing.waitFor(() => {
+        expect(editField(page) === null).toBe(true);
+      });
+      const pencils = await testing
+        .within(page.view.container)
+        .findAllByRole("button", { name: translations.chat.editMessage });
+      testing.fireEvent.click(
+        pencils.at(1) ?? panic("The second question's edit action"),
+      );
+      const field = editField(page) ?? panic("The reopened edit form");
+      testing.fireEvent.paste(field, {
+        clipboardData: {
+          getData: (type: string) => (type === "text/plain" ? " later" : ""),
+          items: [],
+          types: ["text/plain"],
+        },
+      });
+      expect(field.textContent).toBe("Second question again later");
+    };
+
+    test("an accepted answer leaves the newer edit open on its draft", async () => {
+      const answered = Promise.withResolvers<undefined>();
+      const server = createServer({
+        answer: { type: "accepted" },
+        answerAfter: answered.promise,
+      });
+      const page = await openPage(server);
+      await cancelAndReopen(page, server);
+      expect(server.posted).toHaveLength(1);
+
+      answered.resolve(undefined);
+
+      await testing.waitFor(() => {
+        expect(
+          shownMessages(page).some(({ id }) => id === "reply") &&
+            !page.session().isGenerating,
+        ).toBe(true);
+      });
+      expect(editField(page)?.textContent).toBe("Second question again later");
+    });
+
+    test("a target-missing answer hands nothing over and says nothing", async () => {
+      const warning = spyOn(stellaToast, "warning").mockReturnValue("notice");
+      const answered = Promise.withResolvers<undefined>();
+      const server = createServer({
+        answer: {
+          type: "refused",
+          code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+          status: 404,
+        },
+        answerAfter: answered.promise,
+        storedAfterRefusal: STORED_WITHOUT_SECOND,
+      });
+      const page = await openPage(server, (controller) => {
+        composerController = controller;
+      });
+      await cancelAndReopen(page, server);
+
+      answered.resolve(undefined);
+
+      // The thread is still reloaded from the server.
+      await testing.waitFor(() => {
+        expect(shownMessages(page)).toEqual([...STORED_WITHOUT_SECOND]);
+      });
+      expect(warning).not.toHaveBeenCalled();
+      expect(composerEditor().isEmpty).toBe(true);
+      expect(composerPastedTexts()).toEqual([]);
+    });
   });
 });
 

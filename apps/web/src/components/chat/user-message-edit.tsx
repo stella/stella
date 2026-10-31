@@ -30,17 +30,20 @@ import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   createUserMessageEditDraft,
+  createUserMessageEditSessions,
   hasUserMessageEditContent,
   userMessageEditHandoff,
   userMessageEditNoticeKey,
 } from "@/components/chat/user-message-edit.logic";
 import type {
+  OpenUserMessageEditSession,
   UserMessageEdit,
   UserMessageEditAttachment,
   UserMessageEditDraft,
   UserMessageEditFailure,
   UserMessageEditOutcome,
   UserMessageEditResult,
+  UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { useMountEffect } from "@/hooks/use-effect";
@@ -54,14 +57,17 @@ import { createUuid } from "@/lib/uuid";
 export type UserMessageEditActions = {
   /** The editor opened; a running turn is stopped first. */
   onStart: () => void;
-  /** An edit form of `messageId` is open: queued prompts wait. The release
-   *  it returns runs when the form closes, and the queue resumes. */
-  holdQueue: (messageId: string) => () => void;
+  /** The edit session `sessionId` opened its form: queued prompts wait. The
+   *  release it returns runs when that form closes and lifts only that
+   *  session's hold. */
+  holdQueue: (sessionId: string) => () => void;
   /** Replace the message with the edit and run the assistant again; resolves
-   *  with how the server answered. */
+   *  with how the server answered. Whatever it does to the page once the
+   *  server answered runs through `session`. */
   onSubmit: (
     messageId: string,
     edit: UserMessageEdit,
+    session: UserMessageEditSession,
   ) => Promise<UserMessageEditOutcome>;
 };
 
@@ -82,6 +88,7 @@ export const useUserMessageEditActions = ({
   editUserMessage: (
     messageId: string,
     edit: UserMessageEdit,
+    sessionId: string,
   ) => Promise<UserMessageEditResult>;
   ensureAIAvailable: () => Promise<boolean>;
   holdQueueForMessageEdit: UserMessageEditActions["holdQueue"];
@@ -94,34 +101,44 @@ export const useUserMessageEditActions = ({
   const onStart = useLatestCallback(() => {
     startUserMessageEdit();
   });
-  const holdQueue = useLatestCallback((messageId: string) =>
-    holdQueueForMessageEdit(messageId),
+  const holdQueue = useLatestCallback((sessionId: string) =>
+    holdQueueForMessageEdit(sessionId),
   );
   const onSubmit = useLatestCallback(
     async (
       messageId: string,
       edit: UserMessageEdit,
+      session: UserMessageEditSession,
     ): Promise<UserMessageEditOutcome> => {
       if (!(await ensureAIAvailable())) {
         return { type: "ai-unavailable" };
       }
-      const { orphanedEdit, outcome } = await editUserMessage(messageId, edit);
+      const { orphanedEdit, outcome } = await editUserMessage(
+        messageId,
+        edit,
+        session.id,
+      );
       if (orphanedEdit !== null) {
-        const { composer, storedFiles } = userMessageEditHandoff(orphanedEdit);
-        restoreMessageDraftIntoThread(threadRef, composer);
-        // A stored file cannot go back into the composer: the notice names
-        // every one that did not come back, so none is lost unseen.
-        stellaToast.warning(
-          storedFiles.length === 0
-            ? t(userMessageEditNoticeKey(outcome))
-            : t("chat.editMessageRefusedTargetMissingFiles", {
-                files: format.list(
-                  storedFiles.map(
-                    (filename) => filename ?? t("chat.attachment"),
+        // Only the session that sent the edit hands it over: a later edit
+        // of the same message owns the composer's attention by then.
+        session.run(() => {
+          const { composer, storedFiles } =
+            userMessageEditHandoff(orphanedEdit);
+          restoreMessageDraftIntoThread(threadRef, composer);
+          // A stored file cannot go back into the composer: the notice
+          // names every one that did not come back, so none is lost unseen.
+          stellaToast.warning(
+            storedFiles.length === 0
+              ? t(userMessageEditNoticeKey(outcome))
+              : t("chat.editMessageRefusedTargetMissingFiles", {
+                  files: format.list(
+                    storedFiles.map(
+                      (filename) => filename ?? t("chat.attachment"),
+                    ),
                   ),
-                ),
-              }),
-        );
+                }),
+          );
+        });
       }
       return outcome;
     },
@@ -189,6 +206,9 @@ type UserMessageEditFormProps = {
    *  closes. */
   onHold: () => () => void;
   onSubmit: (edit: UserMessageEdit) => Promise<UserMessageEditOutcome>;
+  /** The edit session the form belongs to; the form's reaction to an
+   *  answer runs through it. */
+  session: UserMessageEditSession;
 };
 
 /**
@@ -202,6 +222,7 @@ const UserMessageEditForm = ({
   onCancel,
   onHold,
   onSubmit,
+  session,
 }: UserMessageEditFormProps) => {
   const t = useTranslations();
   const [attachments, setAttachments] = useState(draft.attachments);
@@ -230,9 +251,11 @@ const UserMessageEditForm = ({
       (async () => {
         const outcome = await onSubmit(edit);
         if (outcome.type !== "accepted") {
-          inFlight.current = false;
-          setSending(false);
-          setFailure(outcome);
+          session.run(() => {
+            inFlight.current = false;
+            setSending(false);
+            setFailure(outcome);
+          });
         }
       })(),
       "user-message-edit.submit",
@@ -396,22 +419,33 @@ export const useUserMessageEdit = ({
   editor: ReactElement | null;
 } => {
   const t = useTranslations();
-  const [draft, setDraft] = useState<UserMessageEditDraft | null>(null);
+  // Every opening of the form is its own session: what an answer does to the
+  // page applies only while the session that asked is still the open one.
+  const [sessions] = useState(() => createUserMessageEditSessions(createUuid));
+  const [open, setOpen] = useState<{
+    draft: UserMessageEditDraft;
+    session: OpenUserMessageEditSession;
+  } | null>(null);
 
   if (actions === undefined || message.role !== "user") {
     return { editing: false, editor: null };
   }
 
-  if (draft !== null) {
+  if (open !== null) {
+    const { draft, session } = open;
+    const close = () => {
+      session.end();
+      setOpen(null);
+    };
     const submitEdit = async (
       edit: UserMessageEdit,
     ): Promise<UserMessageEditOutcome> => {
-      const outcome = await actions.onSubmit(message.id, edit);
+      const outcome = await actions.onSubmit(message.id, edit, session);
       // The sent copy takes this message's id and place once the server
       // accepted it; until then, and after any refusal, the form stays open
       // on the draft.
       if (outcome.type === "accepted") {
-        setDraft(null);
+        session.run(close);
       }
       return outcome;
     };
@@ -421,11 +455,11 @@ export const useUserMessageEdit = ({
         <UserMessageEditForm
           draft={draft}
           isGenerating={isGenerating}
-          onCancel={() => {
-            setDraft(null);
-          }}
-          onHold={() => actions.holdQueue(message.id)}
+          key={session.id}
+          onCancel={close}
+          onHold={() => actions.holdQueue(session.id)}
           onSubmit={submitEdit}
+          session={session}
         />
       ),
     };
@@ -442,7 +476,10 @@ export const useUserMessageEdit = ({
           aria-label={t("chat.editMessage")}
           onClick={() => {
             actions.onStart();
-            setDraft(createUserMessageEditDraft(message, createUuid));
+            setOpen({
+              draft: createUserMessageEditDraft(message, createUuid),
+              session: sessions.open(),
+            });
           }}
           size="icon-xs"
           variant="ghost"

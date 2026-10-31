@@ -6,6 +6,7 @@ import { storedUserMessageDocument } from "@/components/chat-editor-markdown.log
 import {
   buildEditedUserMessage,
   createUserMessageEditDraft,
+  createUserMessageEditSessions,
   hasUserMessageEditContent,
 } from "@/components/chat/user-message-edit.logic";
 import type { UserMessageEditAttachmentPart } from "@/components/chat/user-message-edit.logic";
@@ -88,5 +89,36 @@ describe("the edited message", () => {
     expect(hasUserMessageEditContent({ attachments: [pasted], html: "" })).toBe(
       true,
     );
+  });
+});
+
+describe("the edit sessions of a message", () => {
+  test("only the current session's continuations run", () => {
+    const ids = ["first", "second"];
+    const sessions = createUserMessageEditSessions(
+      () => ids.shift() ?? expect.unreachable("Two ids"),
+    );
+    const ran: string[] = [];
+
+    const first = sessions.open();
+    first.end();
+    const second = sessions.open();
+    first.run(() => {
+      ran.push("first");
+    });
+    second.run(() => {
+      ran.push("second");
+    });
+    // A late end of a retired session leaves the current one current.
+    first.end();
+    second.run(() => {
+      ran.push("second again");
+    });
+    second.end();
+    second.run(() => {
+      ran.push("after end");
+    });
+
+    expect(ran).toEqual(["second", "second again"]);
   });
 });
