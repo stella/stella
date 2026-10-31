@@ -74,7 +74,8 @@
       "none": "Be datos",
       "today": "Šiandien",
       "tomorrow": "Rytoj",
-      "nextWeek": "Po savaitės"
+      "nextWeek": "Po savaitės",
+      "pick": "Pasirinkti datą"
     },
     "due": {
       "overdue": "Pavėluotos",
