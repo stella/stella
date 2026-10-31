@@ -1083,11 +1083,18 @@ type OnlineMigrationOptions = {
  */
 type OnlineWorkScope =
   | { type: "finalized" }
+  | { type: "deploy_blocking" }
   | { type: "all" }
   | { type: "unit"; name: OnlineWorkName };
 
+/** Finalized and deploy-blocking work: what a release may depend on. */
 export const FINALIZED_SCOPE = {
   type: "finalized",
+} as const satisfies OnlineWorkScope;
+
+/** Only the work application code depends on from its first release. */
+export const DEPLOY_BLOCKING_SCOPE = {
+  type: "deploy_blocking",
 } as const satisfies OnlineWorkScope;
 
 export const ALL_WORK_SCOPE = {
@@ -1120,7 +1127,19 @@ const onlineWorkInScope =
         switch (entry.state) {
           case "pending":
             return false;
+          case "deploy_blocking":
           case "finalized":
+            return true;
+          default:
+            entry satisfies never;
+            return panic(`Online work ${name} has an invalid lifecycle`);
+        }
+      case "deploy_blocking":
+        switch (entry.state) {
+          case "pending":
+          case "finalized":
+            return false;
+          case "deploy_blocking":
             return true;
           default:
             entry satisfies never;
@@ -1240,10 +1259,21 @@ const reportPendingStep = ({
   step,
   reason,
 }: ReportPendingStepOptions): void => {
-  if (lifecycleOf(lifecycle, step.name).state === "finalized") {
-    panic(
-      `Online ${step.kind} ${step.name} is finalized but not complete: ${reason}`,
-    );
+  const entry = lifecycleOf(lifecycle, step.name);
+  switch (entry.state) {
+    case "pending":
+      break;
+    case "deploy_blocking":
+      return panic(
+        `Online ${step.kind} ${step.name} is deploy-blocking but not complete: ${reason}`,
+      );
+    case "finalized":
+      return panic(
+        `Online ${step.kind} ${step.name} is finalized but not complete: ${reason}`,
+      );
+    default:
+      entry satisfies never;
+      return panic(`Online work ${step.name} has an invalid lifecycle`);
   }
   if (
     !report.pending.some(
@@ -1362,6 +1392,10 @@ export const claimOnlineWorkUnit = async (
   switch (entry.state) {
     case "pending":
       break;
+    case "deploy_blocking":
+      return panic(
+        `Online work ${name} is deploy-blocking; every migrate run owns it`,
+      );
     case "finalized":
       return panic(`Online work ${name} is finalized; releases own it`);
     default:

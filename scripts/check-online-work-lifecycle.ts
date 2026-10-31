@@ -13,12 +13,40 @@ type GitResult = { exitCode: number; stdout: string; stderr: string };
 export type OnlineWorkLifecycleGit = (args: readonly string[]) => GitResult;
 type LifecycleState = OnlineWorkLifecycle["state"];
 
-const ENTRY_LINE = /^"?([A-Za-z0-9_-]+)"?: (PENDING|FINALIZED),$/u;
+const ENTRY_LINE =
+  /^"?([A-Za-z0-9_-]+)"?: (PENDING|DEPLOY_BLOCKING|FINALIZED),$/u;
 const STATE_OF_CONSTANT = {
   PENDING: "pending",
+  DEPLOY_BLOCKING: "deploy_blocking",
   FINALIZED: "finalized",
 } as const satisfies Record<string, LifecycleState>;
+const CONSTANT_OF_STATE = {
+  pending: "PENDING",
+  deploy_blocking: "DEPLOY_BLOCKING",
+  finalized: "FINALIZED",
+} as const satisfies Record<LifecycleState, keyof typeof STATE_OF_CONSTANT>;
 const STABLE_TAG = /^v[0-9]+\.[0-9]+\.[0-9]+$/u;
+
+const isLifecycleConstant = (
+  constant: string | undefined,
+): constant is keyof typeof STATE_OF_CONSTANT =>
+  constant === "PENDING" ||
+  constant === "DEPLOY_BLOCKING" ||
+  constant === "FINALIZED";
+
+/** Only finalizing waits for a stable release; the other states never relax a check. */
+const finalizes = (state: LifecycleState): boolean => {
+  switch (state) {
+    case "pending":
+    case "deploy_blocking":
+      return false;
+    case "finalized":
+      return true;
+    default:
+      state satisfies never;
+      return panic("Unknown online work lifecycle state");
+  }
+};
 
 export const parseOnlineWorkLifecycle = (
   source: string,
@@ -30,10 +58,7 @@ export const parseOnlineWorkLifecycle = (
       continue;
     }
     const [, name, constant] = match;
-    if (
-      name === undefined ||
-      (constant !== "PENDING" && constant !== "FINALIZED")
-    ) {
+    if (name === undefined || !isLifecycleConstant(constant)) {
       return panic("Online work lifecycle entry pattern lost a group");
     }
     entries.set(name, STATE_OF_CONSTANT[constant]);
@@ -89,7 +114,7 @@ export const checkOnlineWorkLifecycle = ({
   for (const [name, { state }] of Object.entries(lifecycle)) {
     if (parsed.get(name) !== state) {
       problems.push(
-        `${name}: write its entry as one \`${name}: PENDING,\` or \`${name}: FINALIZED,\` line`,
+        `${name}: write its entry as one \`${name}: ${CONSTANT_OF_STATE[state]},\` line`,
       );
     }
   }
@@ -105,12 +130,12 @@ export const checkOnlineWorkLifecycle = ({
   const baseEntries = parseOnlineWorkLifecycle(baseSource.stdout);
   for (const [name, { state }] of Object.entries(lifecycle)) {
     const previous = baseEntries.get(name);
-    if (previous === "finalized" || state === "pending") {
+    if (previous === "finalized" || !finalizes(state)) {
       continue;
     }
     if (previous === undefined) {
       problems.push(
-        `${name}: register new work as PENDING; finalize it in a later PR once a stable release contains it`,
+        `${name}: register new work as PENDING or DEPLOY_BLOCKING; finalize it in a later PR once a stable release contains it`,
       );
       continue;
     }

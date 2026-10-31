@@ -37,6 +37,7 @@ import type {
 } from "./online-migration-connection";
 import {
   claimOnlineWorkUnit,
+  DEPLOY_BLOCKING_SCOPE,
   ensureOnlineIndexValid,
   FINALIZED_SCOPE,
   ONLINE_CONSTRAINT_VALIDATIONS,
@@ -54,7 +55,7 @@ import {
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
-import { FINALIZED, PENDING } from "./online-work-lifecycle";
+import { DEPLOY_BLOCKING, FINALIZED, PENDING } from "./online-work-lifecycle";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -995,6 +996,98 @@ describe("online migrations", () => {
         `Online work ${index.name} is finalized; releases own it`,
       );
       expect(harness.statements).toEqual([]);
+    });
+
+    test("refuses deploy-blocking work, which every migrate run owns", async () => {
+      const index = buildable();
+      const harness = createHarness();
+
+      const rejection = await rejectionOf(
+        claimOnlineWorkUnit(harness.pool, {
+          ...claimOptions,
+          name: index.name,
+          lifecycle: {
+            ...allFinalizedOnlineWork(),
+            [index.name]: DEPLOY_BLOCKING,
+          },
+        }),
+      );
+
+      expect(rejection).toHaveProperty(
+        "message",
+        `Online work ${index.name} is deploy-blocking; every migrate run owns it`,
+      );
+      expect(harness.statements).toEqual([]);
+    });
+  });
+
+  describe("deploy-blocking work", () => {
+    type RegisteredIndex = (typeof ONLINE_MIGRATION_INDEXES)[number];
+    const buildableIndexes = ONLINE_MIGRATION_INDEXES.filter(
+      (index): index is RegisteredIndex & { createSql: string } =>
+        declaresOnlineBuild(index),
+    );
+    const pair = () => {
+      const [blocking, other] = buildableIndexes;
+      if (blocking === undefined || other === undefined) {
+        throw new TypeError("Expected two buildable online indexes");
+      }
+      return { blocking, other };
+    };
+
+    test("the deploy-blocking scope builds it and nothing else", async () => {
+      const { blocking, other } = pair();
+      const harness = createHarness({
+        missingIndexes: [blocking.name, other.name],
+      });
+
+      expect(
+        await runOnlineMigrations(harness.pool, {
+          repairs: [],
+          scope: DEPLOY_BLOCKING_SCOPE,
+          lifecycle: { [blocking.name]: DEPLOY_BLOCKING },
+        }),
+      ).toEqual({ type: "complete" });
+      expect(harness.statements).toContain(blocking.createSql);
+      expect(harness.statements).not.toContain(other.createSql);
+    });
+
+    test("the finalized scope builds it alongside finalized work, never pending work", async () => {
+      const { blocking, other } = pair();
+      const harness = createHarness({
+        missingIndexes: [blocking.name, other.name],
+      });
+
+      expect(
+        await runOnlineMigrations(harness.pool, {
+          repairs: [],
+          scope: FINALIZED_SCOPE,
+          lifecycle: {
+            [blocking.name]: DEPLOY_BLOCKING,
+            [other.name]: PENDING,
+          },
+        }),
+      ).toEqual({ type: "complete" });
+      expect(harness.statements).toContain(blocking.createSql);
+      expect(harness.statements).not.toContain(other.createSql);
+    });
+
+    test("validation fails while it is incomplete, at any migration age", async () => {
+      const { blocking } = pair();
+      const harness = createHarness({ missingIndexes: [blocking.name] });
+
+      expect(
+        await rejectionOf(
+          reportOnlineMigrations(harness.pool, {
+            repairs: [],
+            lifecycle: { [blocking.name]: DEPLOY_BLOCKING },
+          }),
+        ),
+      ).toMatchObject({
+        message: expect.stringContaining(
+          `Online index ${blocking.name} is deploy-blocking but not complete`,
+        ),
+      });
     });
   });
 

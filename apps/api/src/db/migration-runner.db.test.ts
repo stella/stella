@@ -42,7 +42,7 @@ import type {
 } from "./migration-timing";
 import type { OnlineMigrationOutcome } from "./online-migration-connection";
 import { ONLINE_MIGRATION_INDEXES } from "./online-migrations";
-import { ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
+import { isMigrateReady, ONLINE_WORK_LIFECYCLE } from "./online-work-lifecycle";
 
 const databaseUrl = process.env["DATABASE_URL"];
 // Scratch databases are not RDS; the migrator requires an explicit choice.
@@ -930,15 +930,15 @@ if (!runPostgresTests || databaseUrl === undefined) {
         // before DDL, so this fixture needs the real ledger and health probes.
         const migrations = readMigrationFiles({ migrationsFolder: CORPUS_DIR });
         expect(migrations.length).toBeGreaterThan(0);
-        // build_finalized walks finalized work only, so a pending entry at the
-        // head of the list is not the first step.
+        // build_finalized walks finalized and deploy-blocking work only, so a
+        // pending entry at the head of the list is not the first step.
         const lifecycle = new Map(Object.entries(ONLINE_WORK_LIFECYCLE));
         const firstIndex = ONLINE_MIGRATION_INDEXES.find(({ name }) => {
           const state = lifecycle.get(name);
           if (state === undefined) {
             panic(`Online work ${name} has no lifecycle`);
           }
-          return state.state === "finalized";
+          return isMigrateReady(state);
         });
         if (firstIndex === undefined) {
           throw new TypeError("Expected a finalized online index");

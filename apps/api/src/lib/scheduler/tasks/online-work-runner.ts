@@ -183,6 +183,8 @@ export const createOnlineWorkRunner = ({
     switch (entry.state) {
       case "pending":
         return true;
+      // Every migrate run builds deploy-blocking work before the release.
+      case "deploy_blocking":
       case "finalized":
         return false;
       default:

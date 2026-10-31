@@ -12,9 +12,15 @@ import {
 } from "./check-online-work-lifecycle";
 import { parseWorkflowYaml } from "./check-workflow-yaml";
 
-type States = Readonly<Record<string, "pending" | "finalized">>;
+type States = Readonly<
+  Record<string, "pending" | "deploy_blocking" | "finalized">
+>;
 
-const CONSTANT = { pending: "PENDING", finalized: "FINALIZED" } as const;
+const CONSTANT = {
+  pending: "PENDING",
+  deploy_blocking: "DEPLOY_BLOCKING",
+  finalized: "FINALIZED",
+} as const;
 
 const source = (entries: States) =>
   `export const ONLINE_WORK_LIFECYCLE = {\n${Object.entries(entries)
@@ -92,9 +98,46 @@ describe("online work lifecycle release check", () => {
     ]);
   });
 
-  test("new work must start pending", () => {
-    expect(check({ work_idx: "finalized" }, { base: {} })).toHaveLength(1);
+  test("new work must start pending or deploy-blocking", () => {
+    expect(check({ work_idx: "finalized" }, { base: {} })).toEqual([
+      "work_idx: register new work as PENDING or DEPLOY_BLOCKING; finalize it in a later PR once a stable release contains it",
+    ]);
     expect(check({ work_idx: "pending" }, { base: {} })).toEqual([]);
+    expect(check({ work_idx: "deploy_blocking" }, { base: {} })).toEqual([]);
+  });
+
+  test("deploy-blocking work finalizes only after a stable release", () => {
+    expect(
+      check(
+        { work_idx: "finalized" },
+        { base: { work_idx: "deploy_blocking" }, tags: ["v1.2.3-rc.1"] },
+      ),
+    ).toEqual([
+      `work_idx: finalize it in a PR after a stable release contains ${"a".repeat(7)}`,
+    ]);
+    expect(
+      check(
+        { work_idx: "finalized" },
+        { base: { work_idx: "deploy_blocking" }, tags: ["v1.2.3"] },
+      ),
+    ).toEqual([]);
+    expect(
+      check({ work_idx: "deploy_blocking" }, { base: { work_idx: "pending" } }),
+    ).toEqual([]);
+  });
+
+  test("each state reads back from its one-line spelling", () => {
+    expect(
+      parseOnlineWorkLifecycle(
+        source({ a: "pending", b: "deploy_blocking", c: "finalized" }),
+      ),
+    ).toEqual(
+      new Map([
+        ["a", "pending"],
+        ["b", "deploy_blocking"],
+        ["c", "finalized"],
+      ]),
+    );
   });
 
   test("unchanged and already finalized work passes without a lookup", () => {
@@ -123,7 +166,7 @@ describe("online work lifecycle release check", () => {
         source: wrapped,
       }),
     ).toEqual([
-      "long_work_idx: write its entry as one `long_work_idx: PENDING,` or `long_work_idx: FINALIZED,` line",
+      "long_work_idx: write its entry as one `long_work_idx: FINALIZED,` line",
     ]);
   });
 });

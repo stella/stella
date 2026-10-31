@@ -1,7 +1,21 @@
-export type OnlineWorkLifecycle = { state: "pending" } | { state: "finalized" };
+import { panic } from "better-result";
+
+/**
+ * - `pending`: the post-deploy runner builds it, one unit at a time, after
+ *   the release is live. Nothing in the application may depend on it yet.
+ * - `deploy_blocking`: application code depends on it from the release that
+ *   registers it (an `ON CONFLICT` arbiter, for one). Every migrate run
+ *   builds and verifies it, and the deploy fails while it is incomplete.
+ * - `finalized`: a stable release already contains it; migrate verifies it.
+ */
+export type OnlineWorkLifecycle =
+  { state: "pending" } | { state: "deploy_blocking" } | { state: "finalized" };
 
 export const PENDING = {
   state: "pending",
+} as const satisfies OnlineWorkLifecycle;
+export const DEPLOY_BLOCKING = {
+  state: "deploy_blocking",
 } as const satisfies OnlineWorkLifecycle;
 export const FINALIZED = {
   state: "finalized",
@@ -9,8 +23,8 @@ export const FINALIZED = {
 
 // Work is finalized only by a later PR, once a stable release tag contains
 // the commit that registered it (`scripts/check-online-work-lifecycle.ts`).
-// One `name: PENDING` or `name: FINALIZED` line per entry: that check reads
-// this file's history line by line.
+// One `name: PENDING`, `name: DEPLOY_BLOCKING` or `name: FINALIZED` line per
+// entry: that check reads this file's history line by line.
 export const ONLINE_WORK_LIFECYCLE = {
   case_law_browse_facet_counts_source_kind_idx: PENDING,
   "legal-list-source-decisions": PENDING,
@@ -182,12 +196,12 @@ export const ONLINE_WORK_LIFECYCLE = {
   "document-review-finding-decisions": PENDING,
   case_law_provision_citations_work_citing_idx: PENDING,
   case_law_provision_citations_eli_citing_idx: PENDING,
-  contacts_org_external_uidx: PENDING,
-  workspaces_org_external_uidx: PENDING,
-  time_entries_org_external_uidx: PENDING,
-  expenses_org_external_uidx: PENDING,
-  invoices_org_external_uidx: PENDING,
-  correspondence_org_external_uidx: PENDING,
+  contacts_org_external_uidx: DEPLOY_BLOCKING,
+  workspaces_org_external_uidx: DEPLOY_BLOCKING,
+  time_entries_org_external_uidx: DEPLOY_BLOCKING,
+  expenses_org_external_uidx: DEPLOY_BLOCKING,
+  invoices_org_external_uidx: DEPLOY_BLOCKING,
+  correspondence_org_external_uidx: DEPLOY_BLOCKING,
   contacts_external_ref_check: PENDING,
   workspaces_external_ref_check: PENDING,
   time_entries_external_ref_check: PENDING,
@@ -214,3 +228,30 @@ export type FinalizedWork<N extends FinalizedWorkName> = N & {
 export const finalizedWork = <N extends FinalizedWorkName>(
   name: N,
 ): FinalizedWork<N> => name;
+
+/**
+ * Work every migrate run guarantees before a release serves traffic, which
+ * is all that application code may depend on (an `ON CONFLICT` arbiter).
+ */
+export type MigrateReadyWorkName = {
+  [
+    Name in keyof typeof ONLINE_WORK_LIFECYCLE
+  ]: (typeof ONLINE_WORK_LIFECYCLE)[Name]["state"] extends
+    "deploy_blocking" | "finalized"
+    ? Name
+    : never;
+}[keyof typeof ONLINE_WORK_LIFECYCLE];
+
+/** Whether every migrate run builds or verifies this work. */
+export const isMigrateReady = (entry: OnlineWorkLifecycle): boolean => {
+  switch (entry.state) {
+    case "pending":
+      return false;
+    case "deploy_blocking":
+    case "finalized":
+      return true;
+    default:
+      entry satisfies never;
+      return panic("Unknown online work lifecycle");
+  }
+};

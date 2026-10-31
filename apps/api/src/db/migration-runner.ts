@@ -55,6 +55,7 @@ import type {
 } from "./online-migration-connection";
 import {
   ALL_WORK_SCOPE,
+  DEPLOY_BLOCKING_SCOPE,
   FINALIZED_SCOPE,
   ONLINE_MIGRATION_REPAIRS,
   reportOnlineMigrations,
@@ -814,7 +815,10 @@ const emitFailedPhase = (
   }
 };
 
-/** What each building mode walks; `verify_finalized` builds nothing. */
+/**
+ * What each building mode walks; `verify_finalized` builds only
+ * deploy-blocking work and verifies the rest.
+ */
 const BUILD_SCOPE = {
   [MIGRATE_ONLINE_WORK_MODE.BUILD_FINALIZED]: FINALIZED_SCOPE,
   [MIGRATE_ONLINE_WORK_MODE.BUILD_ALL]: ALL_WORK_SCOPE,
@@ -864,6 +868,16 @@ const runOnlinePhase = async ({
     case MIGRATE_ONLINE_WORK_MODE.BUILD_ALL:
       return await runOnline(pool, { ...build, scope: BUILD_SCOPE[mode] });
     case MIGRATE_ONLINE_WORK_MODE.VERIFY_FINALIZED: {
+      // Application code of this release depends on deploy-blocking work,
+      // so the release builds it here; validation then fails the deploy
+      // while it, or any finalized work, is incomplete.
+      const built = await runOnline(pool, {
+        ...build,
+        scope: DEPLOY_BLOCKING_SCOPE,
+      });
+      if (built.type !== "complete") {
+        return built;
+      }
       const outcome = await validateOnline(pool, { repairs: build.repairs });
       switch (outcome.type) {
         case "validated":

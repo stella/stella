@@ -5,9 +5,12 @@ import {
   ONLINE_WORK_NAMES,
 } from "./online-migrations";
 import {
+  DEPLOY_BLOCKING,
   FINALIZED,
   finalizedWork,
   type FinalizedWorkName,
+  isMigrateReady,
+  type MigrateReadyWorkName,
   ONLINE_WORK_LIFECYCLE,
   type OnlineWorkLifecycle,
   PENDING,
@@ -43,6 +46,23 @@ test("a finalized handle admits finalized work only", () => {
   expectTypeOf(
     finalizedWork("case_law_citations_doctrine_cited_idx"),
   ).toExtend<FinalizedWorkName>();
+});
+
+test("migrate-ready work is deploy-blocking or finalized, never pending", () => {
+  expect([PENDING, DEPLOY_BLOCKING, FINALIZED].map(isMigrateReady)).toEqual([
+    false,
+    true,
+    true,
+  ]);
+  expectTypeOf<
+    Admits<"contacts_org_external_uidx", MigrateReadyWorkName>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    Admits<"case_law_citations_doctrine_cited_idx", MigrateReadyWorkName>
+  >().toEqualTypeOf<true>();
+  expectTypeOf<
+    Admits<"contacts_external_ref_check", MigrateReadyWorkName>
+  >().toEqualTypeOf<false>();
 });
 
 test("every registered work name needs a lifecycle entry", () => {
