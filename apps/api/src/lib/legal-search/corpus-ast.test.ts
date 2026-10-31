@@ -154,6 +154,32 @@ describe("corpus reader schema at persistence boundaries", () => {
     }
   });
 
+  test("stores late head matter unchanged, so its extra fields survive", () => {
+    const report = spyOn(logger, "warn");
+    try {
+      const ast = decisionAst();
+      const late = ast.blocks.at(1) ?? expect.unreachable();
+      const stored = {
+        ...ast,
+        parserExtra: { kept: true },
+        blocks: [
+          ast.blocks.at(0) ?? expect.unreachable(),
+          { ...late, role: "apparatus" },
+        ],
+      };
+      const keysBefore = JSON.stringify(stored);
+      const prepared = prepareCorpusAst({
+        ast: stored,
+        fallbackText: "Decision text.",
+        source: "synthetic",
+      }).unwrap();
+      expect(prepared.ast).toBe(stored);
+      expect(JSON.stringify(prepared.ast)).toBe(keysBefore);
+    } finally {
+      report.mockRestore();
+    }
+  });
+
   test("reports validator kinds without rejected document values", () => {
     const report = spyOn(logger, "error");
     try {

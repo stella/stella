@@ -1220,14 +1220,15 @@ const headMatterOrderCheck = v.check(
   HEAD_MATTER_ORDER_MESSAGE,
 );
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+/** The writer contract without the head-matter order rule, which rows written
+ * before that rule existed may break while every other rule still holds. */
+const documentAstAnyOrderSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
     source: documentAstSourceSchema,
     metadata: documentAstMetadataSchema,
     blocks: v.array(blockSchema),
   }),
-  headMatterOrderCheck,
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
@@ -1236,6 +1237,11 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     ({ blocks }) => hasUniqueBlockIdentities(blocks),
     "Block ids and anchorIds must be unique",
   ),
+);
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  documentAstAnyOrderSchema,
+  headMatterOrderCheck,
 );
 
 const emptyDocumentAstSource = () =>
@@ -1305,6 +1311,11 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
 
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
   v.is(documentAstSchema, val);
+
+/** A writer-valid AST whose head matter may follow the body. */
+export const isDocumentAstInAnyBlockOrder = (
+  val: unknown,
+): val is DocumentAst => v.is(documentAstAnyOrderSchema, val);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

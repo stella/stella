@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import {
   headMatterOrderDegradations,
-  isDocumentAst,
+  isDocumentAstInAnyBlockOrder,
   persistedDocumentAstSchema,
 } from "@stll/legal-ast/document-ast";
 
@@ -53,8 +53,9 @@ export const prepareCorpusAst = ({
     // rebuilt object (schema key order, undeclared fields dropped), and the
     // content hash is order-sensitive JSON, so writing it would change every
     // unchanged decision's hash and lose fields the schema does not name.
-    // Only a legacy-shaped AST is written in its normalized form.
-    const stored = isDocumentAst(ast) ? ast : parsed.output;
+    // Late head matter is reported, not normalized. Only a legacy-shaped AST
+    // is written in its normalized form.
+    const stored = isDocumentAstInAnyBlockOrder(ast) ? ast : parsed.output;
     if (parsed.output !== null && "blocks" in parsed.output) {
       const degradations = headMatterOrderDegradations(parsed.output.blocks);
       if (degradations.length > 0) {
