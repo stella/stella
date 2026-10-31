@@ -15,10 +15,22 @@ describe("readerRuns", () => {
         { type: "italic", children: [{ type: "bold", children: [text("!")] }] },
       ]),
     ).toEqual([
-      { id: "0", text: "The court ", strong: false, emphasis: false },
-      { id: "1", text: "annuls", strong: true, emphasis: false },
-      { id: "2", text: " the judgment", strong: false, emphasis: false },
-      { id: "3", text: "!", strong: true, emphasis: true },
+      {
+        id: "0",
+        text: "The court ",
+        strong: false,
+        emphasis: false,
+        href: null,
+      },
+      { id: "1", text: "annuls", strong: true, emphasis: false, href: null },
+      {
+        id: "2",
+        text: " the judgment",
+        strong: false,
+        emphasis: false,
+        href: null,
+      },
+      { id: "3", text: "!", strong: true, emphasis: true, href: null },
     ]);
   });
 
@@ -29,7 +41,63 @@ describe("readerRuns", () => {
         { type: "page-anchor", label: "495" },
         { type: "line-break" },
       ]),
-    ).toEqual([{ id: "0", text: "22 Cdo\n", strong: false, emphasis: false }]);
+    ).toEqual([
+      { id: "0", text: "22 Cdo\n", strong: false, emphasis: false, href: null },
+    ]);
+  });
+
+  test("keeps a link's address on the publisher's site alone", () => {
+    expect(
+      readerRuns(
+        [
+          {
+            type: "link",
+            href: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=1",
+            children: [text("I. ÚS 1/20")],
+          },
+          text(", "),
+          {
+            type: "citation",
+            cite: "§ 2 OZ",
+            href: "https://www.example-database.cz/zakon/89-2012#p2",
+            children: [text("§ 2")],
+          },
+          text(", "),
+          {
+            type: "link",
+            href: "https://user@usoud.cz/",
+            children: [text("odkaz")],
+          },
+          { type: "link", href: "ftp://usoud.cz/", children: [text(".")] },
+        ],
+        "usoud.cz",
+      ),
+    ).toEqual([
+      {
+        id: "0",
+        text: "I. ÚS 1/20",
+        strong: false,
+        emphasis: false,
+        href: "https://nalus.usoud.cz/Search/ResultDetail.aspx?id=1",
+      },
+      {
+        id: "1",
+        text: ", § 2, odkaz.",
+        strong: false,
+        emphasis: false,
+        href: null,
+      },
+    ]);
+  });
+
+  test("keeps no address without a publisher", () => {
+    expect(
+      readerRuns([
+        { type: "link", href: "https://usoud.cz/", children: [text("Soud")] },
+      ]),
+    ).toEqual([
+      { id: "0", text: "Soud", strong: false, emphasis: false, href: null },
+    ]);
   });
 
   test("is empty for whitespace alone", () => {
@@ -63,7 +131,15 @@ describe("readerBlocks", () => {
         kind: "heading",
         id: "h",
         level: 1,
-        runs: [{ id: "0", text: "Nález", strong: false, emphasis: false }],
+        runs: [
+          {
+            id: "0",
+            text: "Nález",
+            strong: false,
+            emphasis: false,
+            href: null,
+          },
+        ],
       },
       {
         kind: "paragraph",
@@ -71,7 +147,9 @@ describe("readerBlocks", () => {
         number: 4,
         depth: 1,
         quote: true,
-        runs: [{ id: "0", text: "Text", strong: false, emphasis: false }],
+        runs: [
+          { id: "0", text: "Text", strong: false, emphasis: false, href: null },
+        ],
       },
       {
         kind: "table",
@@ -87,6 +165,28 @@ describe("readerBlocks", () => {
         ],
       },
     ]);
+  });
+
+  test("takes the publisher from the decision's source address", () => {
+    const [block] = readerBlocks(
+      [
+        {
+          id: "p",
+          type: "paragraph",
+          inlines: [
+            {
+              type: "link",
+              href: "http://www.nsoud.cz/x",
+              children: [text("rozsudek")],
+            },
+          ],
+        },
+      ],
+      "https://NSOUD.cz:443/Judikatura/judikatura_ns.nsf",
+    );
+    expect(block?.kind === "paragraph" ? block.runs[0]?.href : null).toBe(
+      "http://www.nsoud.cz/x",
+    );
   });
 });
 
