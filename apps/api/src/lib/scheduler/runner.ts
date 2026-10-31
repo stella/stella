@@ -723,14 +723,14 @@ const startTaskTableLeaseLifetime = ({
       await releaseJobTableLeases(db, holderId);
     }
   };
-  const runTask = <T>(work: () => T) => {
+  const runTask = async <T>(work: () => Promise<T>): Promise<T> => {
     const promise = Promise.resolve()
       .then(work)
       .finally(() => {
         taskState = { type: "settled" };
       });
     taskState = { type: "running", promise };
-    return promise;
+    return await promise;
   };
   return {
     runTask,
@@ -766,7 +766,7 @@ const startTaskTableLeaseLifetime = ({
           return;
         default:
           taskState satisfies never;
-          return panic("Unknown task table lease lifetime state");
+          panic("Unknown task table lease lifetime state");
       }
     },
   };
@@ -948,19 +948,20 @@ export const runJob = async ({
           });
 
           const outcome = await Promise.race([
-            tableLifetime.runTask(() =>
-              task({
-                db,
-                dueAt: DueSlot.of(job),
-                job,
-                logger,
-                payload: job.payload,
-                runId,
-                scheduleContinuation: (nextRunAt) => {
-                  continuationAt = nextRunAt;
-                },
-                signal: controller.signal,
-              }),
+            tableLifetime.runTask(
+              async () =>
+                await task({
+                  db,
+                  dueAt: DueSlot.of(job),
+                  job,
+                  logger,
+                  payload: job.payload,
+                  runId,
+                  scheduleContinuation: (nextRunAt) => {
+                    continuationAt = nextRunAt;
+                  },
+                  signal: controller.signal,
+                }),
             ),
             timeout,
           ]);

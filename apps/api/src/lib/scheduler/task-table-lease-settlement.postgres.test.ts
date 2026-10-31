@@ -75,7 +75,9 @@ describe.skipIf(!enabled)(
           execute: async (query, parameters = []) => {
             await migration.unsafe(query, [...parameters]);
           },
-          release: () => migration.release(),
+          release: async () => {
+            await migration.release();
+          },
         };
         let running: ReturnType<typeof runSchedulerOnce> | undefined;
         let held:

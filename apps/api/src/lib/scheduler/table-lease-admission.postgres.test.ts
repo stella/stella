@@ -79,7 +79,9 @@ describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
         execute: async (query, params = []) => {
           await migration.unsafe(query, [...params]);
         },
-        release: () => migration.release(),
+        release: async () => {
+          await migration.release();
+        },
       };
       let running: ReturnType<typeof runSchedulerOnce> | undefined;
       let waiting: ReturnType<typeof acquireMigrationTableLeases> | undefined;
@@ -248,7 +250,9 @@ describe.skipIf(!enabled)("scheduler table lease admission (postgres)", () => {
           execute: async (query, params = []) => {
             await migration.unsafe(query, [...params]);
           },
-          release: () => migration.release(),
+          release: async () => {
+            await migration.release();
+          },
         };
         let running: ReturnType<typeof runSchedulerOnce> | undefined;
         let waiting: ReturnType<typeof acquireMigrationTableLeases> | undefined;

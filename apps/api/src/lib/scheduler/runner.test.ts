@@ -409,7 +409,7 @@ test.each([{ taskTables: [] }, { taskTables: [getTableName(schedulerJobs)] }])(
         runnerId: "infrastructure-reservation",
         tablesForTask: () => taskTables,
       })) ?? panic("Expected a scheduler claim");
-    const holderId = `${id}:${job.lockedBy}`;
+    const holderId = `${id}:${job.lockedBy ?? panic("Expected a claim holder")}`;
     try {
       const leases = await testDb
         .select({ tableName: schedulerTableLeases.tableName })

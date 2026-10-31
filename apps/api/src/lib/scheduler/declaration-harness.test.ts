@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -12,7 +13,7 @@ const repoRoot = fileURLToPath(new URL("../../../../../", import.meta.url));
 
 const exclusionsInSource = (source: string) =>
   [...source.matchAll(/"([^"]+)":\s*\{\s*status: "excluded"/gu)]
-    .map((match) => match[1])
+    .map((match) => match[1] ?? panic("Expected an excluded task name"))
     .toSorted();
 
 const currentExclusions = () =>

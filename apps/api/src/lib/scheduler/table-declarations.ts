@@ -22,11 +22,7 @@ export const assertSchedulerTableDeclarations = (
 ): void => {
   const names = SCHEMA_TABLE_NAMES;
   for (const { id, tables } of jobs) {
-    if (
-      tables === undefined ||
-      tables.reads === undefined ||
-      tables.writes === undefined
-    ) {
+    if (tables?.reads === undefined || tables.writes === undefined) {
       panic(`Scheduler job ${id} has no table declaration`);
     }
     for (const name of [...tables.reads, ...tables.writes]) {
