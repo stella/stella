@@ -382,7 +382,7 @@ export const ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS: readonly (Omit<
 // Keep conflict targets attached to the same definition used by online validation.
 export const onlineUniqueIndexDefinition = (
   name: ExecutableOnlineUniqueIndexName,
-): ExecutableOnlineUniqueIndex => {
+) => {
   const index = EXECUTABLE_ONLINE_UNIQUE_INDEXES.find(
     (candidate) => candidate.name === name,
   );

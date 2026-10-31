@@ -1,5 +1,3 @@
-import type { OnlineWorkName } from "./online-migrations";
-
 export type OnlineWorkLifecycle = { state: "pending" } | { state: "finalized" };
 
 export const PENDING = {
@@ -184,7 +182,7 @@ export const ONLINE_WORK_LIFECYCLE = {
   "document-review-finding-decisions": PENDING,
   case_law_provision_citations_work_citing_idx: PENDING,
   case_law_provision_citations_eli_citing_idx: PENDING,
-} as const satisfies Record<OnlineWorkName, OnlineWorkLifecycle>;
+} as const satisfies Record<string, OnlineWorkLifecycle>;
 
 declare const finalizedWorkBrand: unique symbol;
 

@@ -2,8 +2,10 @@ import { panic } from "better-result";
 import { existsSync, readdirSync } from "node:fs";
 import nodePath from "node:path";
 
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
+import { ONLINE_WORK_LIFECYCLE } from "../../db/online-work-lifecycle";
 import migrationAliasInventory from "./migration-alias-inventory.json" with { type: "json" };
 
 // Migrations intentionally rewritten after they shipped in a release. A
@@ -83,17 +85,31 @@ export const deriveMigrationAliasHistory = (
   return { histories, indexes: [...indexesByName.values()] };
 };
 
+export const readRegisteredMigrationAliasHistory = (
+  inventory: readonly MigrationAliasEntry[],
+) => {
+  const { histories, indexes } = deriveMigrationAliasHistory(inventory);
+  return {
+    histories,
+    indexes: indexes.map(({ name, ...index }) => {
+      if (!isOwnKey(ONLINE_WORK_LIFECYCLE, name)) {
+        return panic(`Unregistered migration alias index ${name}`);
+      }
+      return { ...index, name };
+    }),
+  };
+};
+
 const {
   histories: rewrittenMigrationHistories,
   indexes: rewrittenMigrationIndexes,
-} = deriveMigrationAliasHistory(migrationAliasInventory);
+} = readRegisteredMigrationAliasHistory(migrationAliasInventory);
 
 export const REWRITTEN_MIGRATION_HISTORIES: Readonly<
   Record<string, RewrittenMigrationHistory>
 > = rewrittenMigrationHistories;
 
-export const REWRITTEN_MIGRATION_INDEXES: readonly IntroducedMigrationIndex[] =
-  [...rewrittenMigrationIndexes];
+export const REWRITTEN_MIGRATION_INDEXES = [...rewrittenMigrationIndexes];
 
 export type LocalMigration = { name: string; hash: string };
 export type AppliedMigration = { name: string | null; hash: string };

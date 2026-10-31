@@ -982,11 +982,7 @@ export const ONLINE_MIGRATION_REPAIRS = [
   CASE_LAW_SITEMAP_PACKING_ENROLLMENT,
 ] as const satisfies readonly OnlineRepair[];
 
-export type OnlineWorkName =
-  | (typeof ONLINE_MIGRATION_INDEXES)[number]["name"]
-  | (typeof ONLINE_MIGRATION_INDEX_CUTOVERS)[number]["final"]["name"]
-  | (typeof ONLINE_INDEX_REPLACEMENTS)[number]["legacyName"]
-  | (typeof ONLINE_MIGRATION_REPAIRS)[number]["name"];
+export type OnlineWorkName = keyof typeof ONLINE_WORK_LIFECYCLE;
 
 /** Every registered unit, in the order a walk visits them. */
 export const ONLINE_WORK_NAMES = [
@@ -994,7 +990,7 @@ export const ONLINE_WORK_NAMES = [
   ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ final }) => final.name),
   ...ONLINE_INDEX_REPLACEMENTS.map(({ legacyName }) => legacyName),
   ...ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
-];
+] satisfies readonly OnlineWorkName[];
 
 /**
  * Every constraint a registered repair validates through the table gate. The

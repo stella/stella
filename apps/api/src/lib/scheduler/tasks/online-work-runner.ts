@@ -170,8 +170,7 @@ export const createOnlineWorkRunner = ({
 }: OnlineWorkRunnerDependencies) => {
   let build: BuildState = IDLE_BUILD;
   const pending = names.filter((name) => {
-    const entry =
-      lifecycle[name] ?? panic(`Online work ${name} has no lifecycle`);
+    const entry = lifecycle[name];
     switch (entry.state) {
       case "pending":
         return true;
