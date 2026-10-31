@@ -238,16 +238,13 @@ const ThreadMessages = ({
               {t("greetingSubtitle")}
             </Text>
           </View>
-          {turn.sendFailed ? (
-            <Text style={[styles.notice, { color: colors.muted }]}>
-              {t("sendFailed")}
-            </Text>
-          ) : null}
+          {/* The composer says why a send was refused, as in a thread. */}
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
             onStop={turn.stop}
+            sendError={turn.sendError}
           />
         </View>
       </View>
