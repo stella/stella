@@ -1448,6 +1448,14 @@
     "attachedImage": "Csatolt kép",
     "attachment": "Melléklet",
     "audioContent": "Generált hang",
+    "browserExtension": {
+      "connect": "Bővítmény csatlakoztatása",
+      "connectDescription": "Ezen a lapon kattintson a stella bővítmény ikonjára a böngésző eszköztárán. Ha a rendszer kéri, engedélyezze a webhelyekhez való hozzáférést, majd csatlakoztassa ezt a lapot.",
+      "connected": "Bővítmény csatlakoztatva",
+      "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
+      "install": "Bővítmény telepítése",
+      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti."
+    },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI-csevegésbe",

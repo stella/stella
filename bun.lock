@@ -387,6 +387,7 @@
         "@formatjs/intl-pluralrules": "6.3.15",
         "@stll/agent-input": "workspace:*",
         "@stll/api-contract": "workspace:*",
+        "@stll/chat-limits": "workspace:*",
         "@stll/folio-fonts": "catalog:",
         "@stll/folio-react": "catalog:",
         "@stll/locales": "workspace:*",
@@ -397,6 +398,7 @@
         "expo-constants": "~58.0.13",
         "expo-crypto": "~58.0.7",
         "expo-dev-client": "~58.0.14",
+        "expo-document-picker": "~58.0.4",
         "expo-font": "~58.0.9",
         "expo-linking": "~58.0.14",
         "expo-notifications": "~58.1.6",
@@ -868,7 +870,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.2.15",
+      "version": "0.2.16",
       "dependencies": {
         "@ag-ui/core": "1.0.3",
         "@stll/ai-catalog": "workspace:^",
@@ -916,7 +918,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "6.2.1",
+      "version": "6.2.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1578,7 +1580,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.58.0",
+      "version": "0.59.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1673,7 +1675,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.15.0",
+      "version": "0.15.1",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -4459,6 +4461,8 @@
     "expo-dev-menu-interface": ["expo-dev-menu-interface@58.0.1", "", { "peerDependencies": { "expo": "*" } }, "sha512-XdjO3ZZhEq1dXm15GVtzQ0SXxSTPguJIDZib3Z8tAf2jLxfPUlQObgO/0hdnw7ssEBhTT2jQo2HAfnOSGUfj8w=="],
 
     "expo-doctor": ["expo-doctor@1.21.5", "", { "bin": { "expo-doctor": "./bin/expo-doctor.js" } }, "sha512-VH/G2zHnc0kNrvfx/kYOD1QaCr2DC3cLaAPw7MzySypPhAb6nsIKJurNDyasbhU3KknK931Kedc2zRLkfdMisA=="],
+
+    "expo-document-picker": ["expo-document-picker@58.0.4", "", { "peerDependencies": { "expo": "*" } }, "sha512-rxs+9RrpI55/BEGNB/3sXjoBG6yZDLyn6Z7KzjbbBLdX8bE2cZT4IozQ3Q5wufaEEeaHQn48EgPiuMoTsAidpg=="],
 
     "expo-eas-client": ["expo-eas-client@58.0.2", "", {}, "sha512-mhRYnE35MzGxR1Xnl9FAg7/yHaocy4xoVzgsDmS9cbK+1wM6l74/I/73/E4Kr6wChdVZfeS6S+Tv4I1qYbGY2g=="],
 
