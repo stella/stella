@@ -78,6 +78,8 @@ CREATE TABLE public.matter_stewardship_locks (
 --> statement-breakpoint
 ALTER TABLE public.matter_stewardship_locks ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
+ALTER TABLE public.matter_stewardship_locks FORCE ROW LEVEL SECURITY;
+--> statement-breakpoint
 CREATE POLICY matter_stewardship_lock_owner_access ON public.matter_stewardship_locks
 FOR ALL TO public
 USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.matter_stewardship_locks'::regclass))
