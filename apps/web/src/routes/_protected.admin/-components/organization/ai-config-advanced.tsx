@@ -64,7 +64,9 @@ export const AIConfigAdvanced = ({
   const common = useTranslations("common");
   const providerValues = providers;
   return (
-    <Accordion>
+    // The panel holds the role and decision model pickers; they mount only
+    // when Advanced is opened, not while it rests closed.
+    <Accordion hiddenUntilFound={false}>
       <AccordionItem value="advanced">
         <AccordionTrigger>
           <span>{common("advanced")}</span>
