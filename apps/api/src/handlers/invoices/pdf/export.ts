@@ -8,7 +8,7 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import {
-  invoicePaymentAmounts,
+  invoiceAmountDue,
   paidAmountOf,
 } from "@/api/lib/billing/invoice-payments";
 import {
@@ -86,10 +86,11 @@ export const createInvoicePdfExport = (
       const body = yield* Result.await(
         renderInvoiceDocumentPdf({
           loaded,
-          paymentAmountMinor: invoicePaymentAmounts({
+          paymentAmountMinor: invoiceAmountDue({
             totalAmount: loaded.invoice.totalAmount,
             paidAmount: paidAmountOf(loaded.invoice.payments),
-          }).outstandingAmount,
+            creditedAmount: loaded.invoice.creditedAmount,
+          }),
           renderInvoice,
         }),
       );

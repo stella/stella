@@ -53,7 +53,7 @@ export const prepareLinkedInvoiceFile = async ({
   if (file === "pdf") {
     const pdf = await renderInvoiceDocumentPdf({
       loaded: document,
-      paymentAmountMinor: linked.outstandingAmount,
+      paymentAmountMinor: linked.amountDue,
       renderInvoice,
     });
     return pdf.map((body) => ({

@@ -15,6 +15,7 @@ import type { InvoiceLinkCaller } from "@/api/handlers/invoice-links/link-access
 import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { isInvoiceLinkTokenShape } from "@/api/lib/billing/invoice-links";
+import { amountDueCents } from "@/api/lib/billing/invoice-payments";
 import {
   invoiceDocumentError,
   invoiceDocumentRenderOptions,
@@ -117,7 +118,7 @@ const openLinkedInvoice = async (
     return Result.err(unavailable);
   }
   const data = buildInvoiceTemplateData(
-    invoiceDocumentRenderOptions(document, linked.outstandingAmount),
+    invoiceDocumentRenderOptions(document, linked.amountDue),
   );
   if (data.isErr()) {
     return Result.err(
@@ -131,7 +132,7 @@ const openLinkedInvoice = async (
     paid ||
     !requestsPayment({
       documentType: invoice.documentType,
-      amountMinor: linked.outstandingAmount,
+      amountMinor: linked.amountDue,
     })
       ? null
       : data.value.payment;
@@ -146,7 +147,9 @@ const openLinkedInvoice = async (
       documentType: invoice.documentType,
       title: data.value.title,
       paid,
-      outstandingAmount: linked.outstandingAmount,
+      // Credited in full rather than paid: the page states there is nothing due.
+      credited: !paid && linked.fullyCredited,
+      outstandingAmount: amountDueCents(linked.amountDue),
       seller: data.value.seller?.name ?? null,
       buyer: data.value.buyer.name,
       meta: data.value.meta,

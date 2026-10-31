@@ -50,24 +50,86 @@ import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
  */
 const payableAmount = (totalAmount: number) => Math.abs(totalAmount);
 
-type PaymentAmounts = {
-  paidAmount: CentsAmount;
-  outstandingAmount: CentsAmount;
-};
+declare const amountDueBrand: unique symbol;
 
-/** The paid and outstanding amounts an invoice read exposes. */
-export const invoicePaymentAmounts = ({
-  totalAmount,
-  paidAmount,
-}: {
+/**
+ * What a client may still pay on a document: its payable total less the
+ * credit notes issued against it and the payments recorded on it. Only
+ * `invoiceAmountDue` makes one, so every client-facing payment request (the
+ * PDF payment block, the link page with its QR code, the email) states the
+ * amount `invoicePaymentAmounts` reports as outstanding, never the total.
+ */
+export type AmountDue = CentsAmount & { readonly [amountDueBrand]: true };
+
+const isAmountDue = (_amount: CentsAmount): _amount is AmountDue => true;
+
+type InvoiceBalanceInput = {
   totalAmount: number;
   paidAmount: number;
-}): PaymentAmounts => ({
-  paidAmount: cents(paidAmount),
-  outstandingAmount: cents(
-    Math.max(0, payableAmount(totalAmount) - paidAmount),
-  ),
+  /**
+   * What issued credit notes take off the original
+   * (`invoiceCreditedAmountSql`); a credit note is never credited itself.
+   */
+  creditedAmount: number;
+};
+
+const outstandingOf = ({
+  totalAmount,
+  paidAmount,
+  creditedAmount,
+}: InvoiceBalanceInput) =>
+  cents(Math.max(0, payableAmount(totalAmount) - creditedAmount - paidAmount));
+
+/** The amount a client may still pay, for documents and messages sent to them. */
+export const invoiceAmountDue = (balance: InvoiceBalanceInput): AmountDue => {
+  const outstanding = outstandingOf(balance);
+  return isAmountDue(outstanding)
+    ? outstanding
+    : panic("Outstanding amounts are amounts due");
+};
+
+/** The plain minor-unit amount of an amount due, for API responses. */
+export const amountDueCents = (amount: AmountDue): CentsAmount => amount;
+
+/** The paid and outstanding amounts an invoice read exposes. */
+export const invoicePaymentAmounts = (balance: InvoiceBalanceInput) => ({
+  paidAmount: cents(balance.paidAmount),
+  outstandingAmount: outstandingOf(balance),
 });
+
+/** Credit note statuses that count against their original: issued, not draft or void. */
+const ISSUED_CREDIT_NOTE_STATUSES = [
+  INVOICE_STATUS.FINALIZED,
+  INVOICE_STATUS.SENT,
+  INVOICE_STATUS.PAID,
+] as const satisfies readonly InvoiceStatus[];
+
+const creditedAmountSql = (invoiceId: SQLWrapper, organizationId: SQLWrapper) =>
+  sql<number>`(SELECT COALESCE(SUM(ABS(credit_note.total_amount)), 0) FROM public.invoices credit_note WHERE credit_note.original_invoice_id = ${invoiceId} AND credit_note.organization_id = ${organizationId} AND credit_note.document_type = 'credit_note' AND credit_note.status IN (${sql.join(
+    ISSUED_CREDIT_NOTE_STATUSES.map((status) => sql`${status}`),
+    sql`, `,
+  )}))::bigint`.mapWith(Number);
+
+/**
+ * What the issued credit notes of the outer invoice row take off it. Credit
+ * notes are read through their own row security, which shows every credit
+ * note of an original the caller can see: a credit note bills only matters
+ * its original bills.
+ */
+export const invoiceCreditedAmountSql = (table: {
+  id: SQLWrapper;
+  organizationId: SQLWrapper;
+}) =>
+  creditedAmountSql(
+    outerColumnReference(table.id),
+    outerColumnReference(table.organizationId),
+  );
+
+/** The same amount as a relational-query extra, whose table is already aliased. */
+export const INVOICE_CREDITED_AMOUNT_EXTRA = {
+  creditedAmount: (table: { id: SQLWrapper; organizationId: SQLWrapper }) =>
+    creditedAmountSql(table.id, table.organizationId),
+} as const;
 
 /** The sum of the non-voided payments among an invoice's loaded payments. */
 export const paidAmountOf = (
@@ -174,13 +236,23 @@ export const readInvoicePayments = async (
   return read.rows;
 };
 
-const readPaidAmount = async (
+type SettlementAmounts = { paidAmount: number; creditedAmount: number };
+
+/** The paid sum and the issued credit of one invoice, in one statement. */
+const readSettlementAmounts = async (
   tx: Transaction,
-  invoiceId: SafeId<"invoice">,
-) => {
+  {
+    invoiceId,
+    organizationId,
+  }: {
+    invoiceId: SafeId<"invoice">;
+    organizationId: SafeId<"organization">;
+  },
+): Promise<SettlementAmounts> => {
   const rows = await tx
     .select({
       paid: sql<string>`coalesce(sum(${invoicePayments.amount}), 0)`,
+      credited: creditedAmountSql(sql`${invoiceId}`, sql`${organizationId}`),
     })
     .from(invoicePayments)
     .where(
@@ -189,9 +261,14 @@ const readPaidAmount = async (
         isNull(invoicePayments.voidedAt),
       ),
     );
-  return parseIntegerToken(rows.at(0)?.paid, { sign: "unsigned" }).unwrap(
-    "Invoice payment sum must be a safe nonnegative integer",
-  );
+  const row =
+    rows.at(0) ?? panic("Invoice settlement aggregate returned no row");
+  return {
+    paidAmount: parseIntegerToken(row.paid, { sign: "unsigned" }).unwrap(
+      "Invoice payment sum must be a safe nonnegative integer",
+    ),
+    creditedAmount: row.credited,
+  };
 };
 
 /** Whether an invoice still carries a payment that has not been voided. */
@@ -276,18 +353,26 @@ type LockedInvoice = {
 
 /**
  * The status an invoice's paid sum decides, from the status it holds: paid
- * once settled, and back to the issued status it had (sent if it was ever
- * marked sent, else finalized) once no longer settled.
+ * once payments cover what issued credit notes leave of it, and back to the
+ * issued status it had (sent if it was ever marked sent, else finalized) once
+ * no longer covered. Credit alone never marks an invoice paid: a fully
+ * credited invoice without payments keeps its issued status, with nothing due.
  */
 const settledStatus = (
   invoice: LockedInvoice,
-  paidAmount: number,
+  { paidAmount, creditedAmount }: SettlementAmounts,
 ): InvoiceStatus => {
+  const { outstandingAmount } = invoicePaymentAmounts({
+    totalAmount: invoice.totalAmount,
+    paidAmount,
+    creditedAmount,
+  });
   const settled =
-    paidAmount >= payableAmount(invoice.totalAmount) &&
-    (invoice.totalAmount !== 0 ||
-      invoice.status === INVOICE_STATUS.SENT ||
-      invoice.status === INVOICE_STATUS.PAID);
+    outstandingAmount === 0 &&
+    (paidAmount > 0 ||
+      (invoice.totalAmount === 0 &&
+        (invoice.status === INVOICE_STATUS.SENT ||
+          invoice.status === INVOICE_STATUS.PAID)));
   const issued =
     invoice.status === INVOICE_STATUS.FINALIZED ||
     invoice.status === INVOICE_STATUS.SENT;
@@ -403,15 +488,15 @@ const settleStatus = async (
   {
     scope,
     invoice,
-    paidAmount,
+    amounts,
   }: {
     scope: InvoiceSettlementScope;
     invoice: LockedInvoice;
-    paidAmount: number;
+    amounts: SettlementAmounts;
   },
 ): Promise<Result<InvoiceStatus, HandlerError>> => {
   const { status } = invoice;
-  const next = settledStatus(invoice, paidAmount);
+  const next = settledStatus(invoice, amounts);
   if (next === status) {
     return Result.ok(status);
   }
@@ -445,7 +530,7 @@ export const settleSentInvoice = async (
       sentAt: scope.now,
       totalAmount: invoice.totalAmount,
     },
-    paidAmount: await readPaidAmount(tx, scope.invoiceId),
+    amounts: await readSettlementAmounts(tx, scope),
   });
 
 /**
@@ -500,10 +585,12 @@ export const recordInvoicePayment = async (
       }),
     );
   }
-  const paidBefore = await readPaidAmount(tx, scope.invoiceId);
+  const { paidAmount: paidBefore, creditedAmount } =
+    await readSettlementAmounts(tx, scope);
   const { outstandingAmount } = invoicePaymentAmounts({
     totalAmount: invoice.totalAmount,
     paidAmount: paidBefore,
+    creditedAmount,
   });
   if (outstandingAmount === 0) {
     return Result.err(
@@ -553,7 +640,7 @@ export const recordInvoicePayment = async (
   const settled = await settleStatus(tx, {
     scope,
     invoice,
-    paidAmount: paidAfter,
+    amounts: { paidAmount: paidAfter, creditedAmount },
   });
   return settled.isErr() ? Result.err(settled.error) : Result.ok(payment);
 };
@@ -576,7 +663,8 @@ export const voidInvoicePayment = async (
   if (!invoice) {
     return Result.err(invoiceNotFound());
   }
-  const paidBefore = await readPaidAmount(tx, scope.invoiceId);
+  const { paidAmount: paidBefore, creditedAmount } =
+    await readSettlementAmounts(tx, scope);
   const [payment] = await tx
     .update(invoicePayments)
     .set({ voidedAt: scope.now, voidedBy: scope.userId })
@@ -609,7 +697,7 @@ export const voidInvoicePayment = async (
   const settled = await settleStatus(tx, {
     scope,
     invoice,
-    paidAmount: paidAfter,
+    amounts: { paidAmount: paidAfter, creditedAmount },
   });
   return settled.isErr() ? Result.err(settled.error) : Result.ok(payment);
 };

@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { invoicePayments } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import {
+  INVOICE_CREDITED_AMOUNT_EXTRA,
   invoicePaymentAmounts,
   invoicePaymentView,
   paidAmountOf,
@@ -71,6 +72,7 @@ const listInvoicePayments = createSafeHandler(
             RAW: (table) => invoiceInMatter(table, workspaceId),
           },
           columns: { totalAmount: true, currency: true },
+          extras: INVOICE_CREDITED_AMOUNT_EXTRA,
         });
         return invoice === undefined
           ? undefined
@@ -90,6 +92,7 @@ const listInvoicePayments = createSafeHandler(
       ...invoicePaymentAmounts({
         totalAmount: read.invoice.totalAmount,
         paidAmount: paidAmountOf(read.payments),
+        creditedAmount: read.invoice.creditedAmount,
       }),
       items: read.payments.map(invoicePaymentView),
     });

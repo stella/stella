@@ -27,7 +27,7 @@ import {
 } from "@/api/lib/billing/invoice-detail";
 import type { INVOICE_LINE_COLUMNS } from "@/api/lib/billing/invoice-lines";
 import { readInvoiceLinkScope } from "@/api/lib/billing/invoice-links";
-import { invoicePaymentAmounts } from "@/api/lib/billing/invoice-payments";
+import { invoiceAmountDue } from "@/api/lib/billing/invoice-payments";
 import { invoiceSettledOn } from "@/api/lib/billing/invoice-settlement-date";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,6 +42,21 @@ export const INVOICE_LINK_DOCUMENT_PROJECTION = Object.fromEntries(
     ([key, column]) => [key, functionColumn(column)] as const,
   ),
 );
+
+/**
+ * What the link holder may still pay, and whether issued credit notes cover
+ * the whole document: then nothing is due because it was credited, not paid.
+ */
+const linkedBalance = (
+  totalAmount: number,
+  {
+    paidAmount,
+    creditedAmount,
+  }: { paidAmount: number; creditedAmount: number },
+) => ({
+  amountDue: invoiceAmountDue({ totalAmount, paidAmount, creditedAmount }),
+  fullyCredited: creditedAmount > 0 && creditedAmount >= Math.abs(totalAmount),
+});
 
 /** Each projection function rechecks the live hash and reads only its invoice's document fields. */
 export const loadLinkedInvoiceData = async (
@@ -207,10 +222,7 @@ export const loadLinkedInvoiceData = async (
   };
   const timeZone = await readOrganizationTimeZone(tx, caller.organizationId);
   return {
-    outstandingAmount: invoicePaymentAmounts({
-      totalAmount: invoice.totalAmount,
-      paidAmount: settlement.paidAmount,
-    }).outstandingAmount,
+    ...linkedBalance(invoice.totalAmount, settlement),
     send,
     document: {
       invoice: linkedInvoice,

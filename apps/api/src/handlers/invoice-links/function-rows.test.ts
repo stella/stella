@@ -150,7 +150,11 @@ const originalRow = {
   invoiceDate,
 };
 
-const settlementRow = { latestPaidOn: invoiceDate, paidAmount: 12_345 };
+const settlementRow = {
+  latestPaidOn: invoiceDate,
+  paidAmount: 12_345,
+  creditedAmount: 2000,
+};
 
 const parsedRows: {
   name: string;
