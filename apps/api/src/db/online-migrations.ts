@@ -794,7 +794,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.file_comparison_uploads USING btree (organization_id, user_id)",
     isUnique: false,
-    introducedBy: "20261030180234_file_comparison_claims",
+    introducedBy: "20261031151034_file_comparison_claims",
     name: "file_comparison_uploads_org_user_idx",
     tableName: "file_comparison_uploads",
   },
@@ -805,7 +805,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.style_sets USING btree (deletion_cleanup_attempt_count, deleted_at, id) WHERE (deleted_at IS NOT NULL)",
     isUnique: false,
-    introducedBy: "20261030180134_style_set_deletion_cleanup",
+    introducedBy: "20261031150934_style_set_deletion_cleanup",
     name: "style_sets_deletion_cleanup_idx",
     tableName: "style_sets",
   },
@@ -817,7 +817,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.organization_file_objects USING btree (reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
     isUnique: false,
-    introducedBy: "20261030180334_file_reservation_reconciliation_state",
+    introducedBy: "20261031151134_file_reservation_reconciliation_state",
     name: "organization_file_objects_active_reconcile_idx",
     tableName: "organization_file_objects",
   },
@@ -827,7 +827,7 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     definitionBody:
       "ON public.organization_file_objects USING btree (organization_id, reconcile_after, object_key) WHERE ((write_id IS NOT NULL) AND (reconciliation_state = 'active'::text))",
     isUnique: false,
-    introducedBy: "20261030180334_file_reservation_reconciliation_state",
+    introducedBy: "20261031151134_file_reservation_reconciliation_state",
     name: "organization_file_objects_org_active_reconcile_idx",
     tableName: "organization_file_objects",
   },
@@ -983,12 +983,12 @@ export const ONLINE_INDEX_REPLACEMENTS: readonly OnlineIndexReplacement[] = [
   // The reconciliation sweep orders write rows by their scheduled retry, not
   // by their last write, and skips quarantined rows.
   {
-    introducedBy: "20261030180334_file_reservation_reconciliation_state",
+    introducedBy: "20261031151134_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_active_reconcile_idx"],
   },
   {
-    introducedBy: "20261030180334_file_reservation_reconciliation_state",
+    introducedBy: "20261031151134_file_reservation_reconciliation_state",
     legacyName: "organization_file_objects_org_pending_reconcile_idx",
     replacementNames: ["organization_file_objects_org_active_reconcile_idx"],
   },
