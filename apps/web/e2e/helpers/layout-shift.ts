@@ -49,7 +49,7 @@ export const observeLayoutShift = async (page: Page) => {
     });
     const collect = (entries: PerformanceEntry[]) => {
       for (const entry of entries) {
-        if (isLayoutShift(entry) && entry.hadRecentInput === false) {
+        if (isLayoutShift(entry) && !entry.hadRecentInput) {
           values.push(entry.value);
           shifts.push({
             value: entry.value,
