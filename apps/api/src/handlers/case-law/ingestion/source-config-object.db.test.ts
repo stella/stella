@@ -44,18 +44,22 @@ describe("case_law_sources.config", () => {
     });
   });
 
-  test("accepts an object and records per-source state into it", async () => {
+  test("accepts an object, and the ingestion role records per-source state into it", async () => {
     const id = createSafeId<"caseLawSource">();
     await db.insert(caseLawSources).values({
       id,
       adapterKey: `config-shape-${id}`,
       name: "config shape fixture",
     });
-    const rows = await db.execute<{ streaks: unknown }>(sql`
-      UPDATE case_law_sources
-        SET config = jsonb_set(coalesce(config, '{}'::jsonb), '{unavailableItems}', '{"item":1}'::jsonb)
-        WHERE id = ${id}
-        RETURNING config -> 'unavailableItems' AS streaks`);
+    // Under the deployment role, so a missing column grant fails here too.
+    const rows = await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      return await tx.execute<{ streaks: unknown }>(sql`
+        UPDATE case_law_sources
+          SET config = jsonb_set(coalesce(config, '{}'::jsonb), '{unavailableItems}', '{"item":1}'::jsonb)
+          WHERE id = ${id}
+          RETURNING config -> 'unavailableItems' AS streaks`);
+    });
     expect(rows.rows).toEqual([{ streaks: { item: 1 } }]);
   });
 });

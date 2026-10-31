@@ -9,128 +9,111 @@ import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR as REPAIR } from "./case-law-sourc
 import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
-test("repairs legacy string configs, validates the constraint, and converges", async () => {
-  const client = await createTestPglite();
-  const connection = {
+type PgliteClient = Awaited<ReturnType<typeof createTestPglite>>;
+
+const connectionOver = (client: PgliteClient) =>
+  ({
     execute: async (statement, params = []) => {
       await client.query(statement, [...params]);
     },
     query: async (statement, params = []) =>
       (await client.query(statement, [...params])).rows,
     release: () => {},
-  } satisfies OnlineMigrationConnection;
+  }) satisfies OnlineMigrationConnection;
 
-  try {
-    await client.exec(`ALTER TABLE public.case_law_sources
-      DROP CONSTRAINT case_law_sources_config_object`);
+/**
+ * The state the migration leaves: the given configs stored as they are, then
+ * the constraint added NOT VALID, so it has not checked them.
+ */
+const seedUnderNotValid = async (
+  client: PgliteClient,
+  configs: readonly string[],
+) => {
+  await client.exec(`ALTER TABLE public.case_law_sources
+    DROP CONSTRAINT case_law_sources_config_object`);
+  const ids: string[] = [];
+  for (const config of configs) {
     const id = createSafeId<"caseLawSource">();
     await client.query(
       `INSERT INTO public.case_law_sources (id, adapter_key, name, config)
-       VALUES ($1, $2, 'Legacy config fixture', '"{}"'::jsonb)`,
-      [id, `config-repair-${id}`],
+       VALUES ($1, $2, 'Config fixture', $3::text::jsonb)`,
+      [id, `config-repair-${id}`, config],
     );
-    // NOT VALID permits existing bad rows but still checks every new write.
-    await client.exec(`ALTER TABLE public.case_law_sources
-      ADD CONSTRAINT case_law_sources_config_object
-      CHECK (jsonb_typeof(config) = 'object') NOT VALID`);
+    ids.push(id);
+  }
+  await client.exec(`ALTER TABLE public.case_law_sources
+    ADD CONSTRAINT case_law_sources_config_object
+    CHECK (jsonb_typeof(config) = 'object') NOT VALID`);
+  return ids;
+};
 
-    const readRow = async () =>
-      (
-        await client.query(
-          `SELECT config, jsonb_typeof(config) AS kind, xmin::text AS version
-         FROM public.case_law_sources WHERE id = $1`,
-          [id],
-        )
-      ).rows;
-    const readValidation = async () =>
-      (
-        await client.query(
-          `SELECT convalidated FROM pg_catalog.pg_constraint
-         WHERE conrelid = 'public.case_law_sources'::regclass
-           AND conname = 'case_law_sources_config_object'`,
-        )
-      ).rows;
+const readRows = async (client: PgliteClient, ids: readonly string[]) =>
+  (
+    await client.query(
+      `SELECT id, config, xmin::text AS version
+       FROM public.case_law_sources WHERE id = ANY($1) ORDER BY id`,
+      [ids],
+    )
+  ).rows;
 
-    expect(await readRow()).toEqual([
-      { config: "{}", kind: "string", version: expect.any(String) },
+const readValidation = async (client: PgliteClient) =>
+  (
+    await client.query(
+      `SELECT convalidated FROM pg_catalog.pg_constraint
+       WHERE conrelid = 'public.case_law_sources'::regclass
+         AND conname = 'case_law_sources_config_object'`,
+    )
+  ).rows;
+
+// timeout: without a CI snapshot, createTestPglite pushes the full schema first.
+test("validates the constraint over object configs without rewriting a row, and converges", async () => {
+  const client = await createTestPglite();
+  const connection = connectionOver(client);
+  try {
+    const ids = await seedUnderNotValid(client, [
+      "{}",
+      '{"unavailableItems":{"item":2}}',
     ]);
-    expect(await readValidation()).toEqual([{ convalidated: false }]);
+    const before = await readRows(client, ids);
+    expect(await readValidation(client)).toEqual([{ convalidated: false }]);
     expect((await REPAIR.readCompletion(connection)).type).toBe("incomplete");
 
     const tables = createUngatedTableGateForTests(connection);
     expect(await REPAIR.repair(connection, tables)).toEqual({
       type: "complete",
     });
-    const repaired = await readRow();
-    expect(repaired).toEqual([
-      { config: {}, kind: "object", version: expect.any(String) },
-    ]);
-    expect(await readValidation()).toEqual([{ convalidated: true }]);
+    expect(await readValidation(client)).toEqual([{ convalidated: true }]);
     expect(await REPAIR.readCompletion(connection)).toEqual({
       type: "complete",
     });
+    // xmin also detects a rewrite: validation only reads the rows.
+    expect(await readRows(client, ids)).toEqual(before);
 
     expect(await REPAIR.repair(connection, tables)).toEqual({
       type: "complete",
     });
-    // xmin also detects an unnecessary rewrite of an already repaired row.
-    expect(await readRow()).toEqual(repaired);
-    expect(await readValidation()).toEqual([{ convalidated: true }]);
+    expect(await readRows(client, ids)).toEqual(before);
   } finally {
     await client.close();
   }
-});
+}, 120_000);
 
-test("leaves any other scalar config in place, so validation surfaces it", async () => {
+// timeout: without a CI snapshot, createTestPglite pushes the full schema first.
+test("leaves a non-object config in place, so validation surfaces it", async () => {
   const client = await createTestPglite();
-  const connection = {
-    execute: async (statement, params = []) => {
-      await client.query(statement, [...params]);
-    },
-    query: async (statement, params = []) =>
-      (await client.query(statement, [...params])).rows,
-    release: () => {},
-  } satisfies OnlineMigrationConnection;
-
+  const connection = connectionOver(client);
   try {
-    await client.exec(`ALTER TABLE public.case_law_sources
-      DROP CONSTRAINT case_law_sources_config_object`);
-    const legacy = createSafeId<"caseLawSource">();
-    const unknown = createSafeId<"caseLawSource">();
-    await client.query(
-      `INSERT INTO public.case_law_sources (id, adapter_key, name, config)
-       VALUES ($1, $2, 'Legacy config fixture', '"{}"'::jsonb),
-              ($3, $4, 'Unknown config fixture', '"paused"'::jsonb)`,
-      [legacy, `config-repair-${legacy}`, unknown, `config-repair-${unknown}`],
-    );
-    await client.exec(`ALTER TABLE public.case_law_sources
-      ADD CONSTRAINT case_law_sources_config_object
-      CHECK (jsonb_typeof(config) = 'object') NOT VALID`);
+    const ids = await seedUnderNotValid(client, ["{}", '"{}"', '"paused"']);
+    const before = await readRows(client, ids);
 
     const tables = createUngatedTableGateForTests(connection);
     expect(await rejectionOf(REPAIR.repair(connection, tables))).toMatchObject({
       message: expect.stringContaining("case_law_sources_config_object"),
     });
-    const configOf = async (id: string) =>
-      (
-        await client.query(
-          `SELECT config FROM public.case_law_sources WHERE id = $1`,
-          [id],
-        )
-      ).rows;
-    expect(await configOf(legacy)).toEqual([{ config: {} }]);
-    expect(await configOf(unknown)).toEqual([{ config: "paused" }]);
-    expect(
-      (
-        await client.query(
-          `SELECT convalidated FROM pg_catalog.pg_constraint
-           WHERE conrelid = 'public.case_law_sources'::regclass
-             AND conname = 'case_law_sources_config_object'`,
-        )
-      ).rows,
-    ).toEqual([{ convalidated: false }]);
+    expect(await readRows(client, ids)).toEqual(before);
+    expect(await readValidation(client)).toEqual([{ convalidated: false }]);
     expect((await REPAIR.readCompletion(connection)).type).toBe("incomplete");
   } finally {
     await client.close();
   }
-});
+}, 120_000);

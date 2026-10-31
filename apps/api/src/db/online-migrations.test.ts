@@ -2425,10 +2425,6 @@ const createHarness = ({
           ) {
             return [];
           }
-          // The source config repair's rewrite: no string rows left.
-          if (query.startsWith("UPDATE public.case_law_sources SET config")) {
-            return [];
-          }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
             if (timeoutRepairBatch) {
