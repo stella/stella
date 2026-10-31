@@ -5,7 +5,6 @@ import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
 
@@ -64,6 +63,9 @@ import type {
   RouteNode,
   ToolAnnotation,
 } from "../../../../packages/cli/src/route-types";
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 // The role matrix for write tools. A write tool's expected outcome for a role
 // is not written down here: it is read from the REST endpoints that perform
@@ -206,7 +208,7 @@ const catalogEntrySchema = v.object({
 });
 const rawCatalog = v.parse(
   v.array(catalogEntrySchema),
-  readCapabilityCatalog(),
+  repositoryCapabilityCatalog,
 );
 
 /** Catalog endpoints the catalog attributes to a curated tool, by tool name. */
@@ -752,7 +754,7 @@ const bakedListings: readonly RegistryToolListing[] = registrySnapshot.map(
     inputSchema: entry.inputSchema,
   }),
 );
-const cliCatalogEntries = parseCapabilityCatalog(readCapabilityCatalog());
+const cliCatalogEntries = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (cliCatalogEntries === null) {
   throw new TypeError("Invalid capability catalog");
 }

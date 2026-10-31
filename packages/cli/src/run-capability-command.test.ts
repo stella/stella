@@ -14,6 +14,8 @@ import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
 
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
 type RecordedCall = { name: string; args: Record<string, unknown> };
 
 type ServerResponse =
@@ -783,7 +785,7 @@ describe("runCapabilityCommand: reserved flag values", () => {
 
 describe("runCapabilityCommand: output contract", () => {
   test("personal export commands dispatch every generated capability and preserve declared response shapes", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     if (catalog === null) {
       panic("Expected the committed capability catalog");
     }
@@ -861,7 +863,7 @@ describe("runCapabilityCommand: output contract", () => {
   });
 
   test("personal export commands cannot choose another account and preserve ownership refusals", async () => {
-    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
     const entry = catalog?.find(
       ({ id }) => id === "account-exports.status.get",
     );

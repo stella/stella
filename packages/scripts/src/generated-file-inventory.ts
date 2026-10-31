@@ -1,4 +1,5 @@
-import { existsSync, readdirSync } from "node:fs";
+import { panic } from "better-result";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -7,17 +8,29 @@ import {
   MCP_APP_GENERATED_OUTPUTS,
 } from "./generated-files";
 
-// Discover outputs from committed inputs so clean checkouts have the same inventory.
-export const ciGeneratedFiles = (root: string) => {
-  const catalog = path.join(root, "packages/cli/capabilities");
+type GeneratedInventoryOptions = { generatedRoot?: string };
+
+// The dispatch aggregator names its complete module set. Restores read it from
+// the artifact before any output exists in the destination checkout.
+export const ciGeneratedFiles = (
+  root: string,
+  { generatedRoot = root }: GeneratedInventoryOptions = {},
+) => {
+  const aggregator = path.join(
+    generatedRoot,
+    "apps/api/src/mcp/generated/capability-dispatch.ts",
+  );
   const apps = path.join(root, "packages/mcp-apps/src");
-  const dispatch = existsSync(catalog)
-    ? readdirSync(catalog)
-        .filter((file) => file.endsWith(".json"))
-        .map(
-          (file) =>
-            `apps/api/src/mcp/generated/capability-dispatch/${file.slice(0, -5)}.ts`,
-        )
+  const dispatch = existsSync(aggregator)
+    ? [
+        ...readFileSync(aggregator, "utf-8").matchAll(
+          /from "\.\/capability-dispatch\/([a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+)"/gu,
+        ),
+      ].map((match) => {
+        const id =
+          match[1] ?? panic("Dispatch import is missing its capability id");
+        return `apps/api/src/mcp/generated/capability-dispatch/${id}.ts`;
+      })
     : [];
   const bundles = existsSync(apps)
     ? readdirSync(apps, { withFileTypes: true })

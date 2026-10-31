@@ -122,6 +122,7 @@
         "!$TURBO_ROOT$/apps/**/.turbo/**",
         "!$TURBO_ROOT$/apps/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
         "!$TURBO_ROOT$/packages/**/.env*",
@@ -333,12 +334,12 @@
     // script runs. scripts/landing-deploy-scope.ts reads these inputs to decide
     // whether a push can change the site, so a new outside read belongs here.
     "@stll/landing#build": {
-      "dependsOn": ["^build", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["^build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         ".env*",
         "$TURBO_ROOT$/docs/changelog/**",
-        "$TURBO_ROOT$/packages/cli/**",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/scripts/product-media.ts"
       ],
       "outputs": ["dist/**"]
@@ -440,10 +441,11 @@
     // lint would type-check a program without the generated declarations.
     "@stll/landing#typecheck": {
       "cache": true,
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"],
+      "dependsOn": ["transit"],
       // `astro check` generates the `astro:content` types.
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/package.json",
@@ -545,12 +547,11 @@
       ]
     },
     "@stll/landing#dev": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
       "persistent": true,
       "cache": false
     },
     "@stll/landing#lint:fix": {
-      "dependsOn": ["transit", "@stll/cli#codegen:runtime"]
+      "dependsOn": ["transit"]
     },
     "@stll/landing#lint": {
       // Astro check generates the content types consumed by type-aware Oxlint.
@@ -558,6 +559,7 @@
       "dependsOn": ["typecheck"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/cli/src/generated/tool-reference.json",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
         "$TURBO_ROOT$/oxlint.config.ts",
@@ -767,10 +769,13 @@
       "inputs": ["$TURBO_DEFAULT$"]
     },
     "@stll/cli#codegen:runtime": {
+      "dependsOn": ["generate:capabilities"],
       "inputs": [
         "package.json",
-        "capabilities/**",
-        "src/codegen.ts",
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/**",
+        "$TURBO_ROOT$/packages/**/src/**",
+        "scripts/codegen.ts",
         "src/capability-catalog-data.ts",
         "src/write-generated-file.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
@@ -797,6 +802,18 @@
         "src/generated/route-map.ts",
         "src/generated/tool-annotations.ts"
       ]
+    },
+    "generate:capabilities": {},
+    "@stll/cli#generate:capabilities": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/src/**",
+        "$TURBO_ROOT$/apps/api/scripts/export-capability-catalog.ts",
+        "$TURBO_ROOT$/apps/api/scripts/lib/**",
+        "$TURBO_ROOT$/packages/**",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!capabilities/**"
+      ],
+      "outputs": ["capabilities/**"]
     },
     "@stll/cli#build": {
       "dependsOn": ["^build", "codegen:runtime"]
@@ -924,6 +941,7 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -969,6 +987,7 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1082,6 +1101,7 @@
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
         "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/cli/capabilities/**",
         "!$TURBO_ROOT$/packages/**/.cache/**",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/dist/**",
@@ -1679,6 +1699,7 @@
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts",
         "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1725,7 +1746,8 @@
         "transit",
         "generate:api-types",
         "generate:route-tree",
-        "generate:messages"
+        "generate:messages",
+        "@stll/cli#generate:capabilities"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",

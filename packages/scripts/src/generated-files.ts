@@ -62,9 +62,9 @@ export const INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS = [
 ] as const;
 
 export const CI_GENERATION_COMMANDS = [
+  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
   ["bun", "scripts/prepare-mcp-apps.ts"],
-  ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
   [
@@ -85,16 +85,18 @@ export const CI_GENERATION_COMMANDS = [
 
 export const CAPABILITY_RUNTIME_INPUTS = [
   "apps/api/scripts/generate-capability-runtime.ts",
+  "apps/api/scripts/export-capability-catalog.ts",
   "apps/api/scripts/lib/**",
-  "apps/api/src/handlers/**/*.ts",
-  "apps/api/src/lib/capability-transport*",
-  "packages/cli/capabilities/**",
-  "packages/cli/src/capability-catalog-data.ts",
-  "packages/scripts/src/*.ts",
-  "packages/api-contract/src/**",
-  "packages/collation/src/**",
-  "packages/sha256/src/**",
-  "packages/runtime-mode/src/**",
+  "apps/api/src/**",
+  "apps/api/package.json",
+  "packages/*/src/**",
+  "packages/*/package.json",
+  "packages/api-contract/assets/**",
+  "packages/skills/blueprints/**",
+  "packages/skills/skills/**",
+  "packages/transactional/emails/**",
+  "packages/transactional/i18n/**",
+  "bunfig.toml",
   "bun.lock",
   "package.json",
   "patches/**",

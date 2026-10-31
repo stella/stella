@@ -3,8 +3,8 @@
 import { panic } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
-import { pathToFileURL } from "node:url";
 
+import { buildCapabilityCatalog } from "../apps/api/scripts/export-capability-catalog";
 import { CLI_DEMO_TOOLS } from "../apps/landing/src/data/cli-demo";
 import {
   productStoryEditorPortraitMedia,
@@ -13,10 +13,8 @@ import {
 } from "../apps/landing/src/data/product-story";
 import { products } from "../apps/landing/src/data/products/registry";
 import { securityControls } from "../apps/landing/src/data/security-controls";
-import { readCapabilityCatalog } from "../packages/cli/src/capability-catalog-data";
 import { readProductMediaManifestSync } from "./product-media";
 
-const CAPABILITY_CATALOG_PATH = "packages/cli/capabilities";
 const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";
@@ -92,25 +90,24 @@ export const findMissingReadmeImages = (
   return missing;
 };
 
-const getCapabilityIds = (rootDir: string): Set<string> => {
-  const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
-  const raw = readCapabilityCatalog(
-    pathToFileURL(`${catalogPath}${nodePath.sep}`),
-  );
+const getCapabilityIds = async (): Promise<Set<string>> => {
+  const raw = await buildCapabilityCatalog();
 
   const ids = new Set<string>();
   for (const capability of raw) {
     if (!isRecord(capability) || typeof capability["id"] !== "string") {
-      panic(`${CAPABILITY_CATALOG_PATH} contains a capability without an id`);
+      panic(`Generated capability catalog contains a capability without an id`);
     }
     ids.add(capability["id"]);
   }
   return ids;
 };
 
-export const checkMarketingContent = (rootDir: string): string[] => {
+export const checkMarketingContent = async (
+  rootDir: string,
+): Promise<string[]> => {
   const errors: string[] = [];
-  const capabilityIds = getCapabilityIds(rootDir);
+  const capabilityIds = await getCapabilityIds();
   const productMediaPaths = new Set(
     readProductMediaManifestSync(rootDir).assets.map(({ path }) => `/${path}`),
   );
@@ -292,7 +289,7 @@ export const checkMarketingContent = (rootDir: string): string[] => {
 };
 
 if (import.meta.main) {
-  const errors = checkMarketingContent(process.cwd());
+  const errors = await checkMarketingContent(process.cwd());
   if (errors.length > 0) {
     process.stderr.write(
       `${errors.map((error) => `marketing-content: ${error}`).join("\n")}\n`,
@@ -303,4 +300,5 @@ if (import.meta.main) {
   process.stdout.write(
     `marketing-content: ${products.length} product pages and ${securityControls.length} security controls verified against source\n`,
   );
+  process.exit(0);
 }

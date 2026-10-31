@@ -3,12 +3,13 @@ import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 import * as v from "valibot";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import { withNullOptionalsOmitted } from "@/api/mcp/input-normalization";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import { parseCapabilityCatalog } from "../../../../packages/cli/src/capability-catalog-load";
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 /**
  * A strict tool-schema client must send every property a tool declares, so it
@@ -69,7 +70,7 @@ const optionalProperties = (schema: unknown): string[] => {
     : [];
 };
 
-const capabilityCatalog = parseCapabilityCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (capabilityCatalog === null) {
   throw new TypeError("Invalid capability catalog");
 }

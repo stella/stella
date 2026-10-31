@@ -21,6 +21,9 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { expandSchemaDefs } from "../../../../packages/cli/src/expand-schema-defs.ts";
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 /**
  * The redline, memory and notification handlers agents reach through the
@@ -34,9 +37,7 @@ const MEMORY_FEATURE_FLAG =
   FEATURE_REGISTRY[AI_MEMORY_FEATURE_ID].deploymentFeature;
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
-const catalog = parseCatalog(readCapabilityCatalog());
+const catalog = parseCatalog(repositoryCapabilityCatalog);
 
 const MATTER = "00000000-0000-4000-8000-0000000000a1";
 const ARCHIVED_MATTER = "00000000-0000-4000-8000-0000000000a2";

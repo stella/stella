@@ -1,18 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
-import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
-
 import { ACCOUNT_ACCESS } from "@/api/lib/api-handlers";
 import { API_OAUTH_ROUTES } from "@/api/lib/auth/api-access-token";
 import { isRecord } from "@/api/lib/type-guards";
 import { apiApp } from "@/api/server";
 
+import { buildCapabilityCatalog } from "../../../scripts/export-capability-catalog";
 import { deriveCapabilityId } from "../../../scripts/lib/capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
 
 const REPO_ROOT = new URL("../../../../../", import.meta.url);
 
 const catalog = new Map(
-  readCapabilityCatalog().flatMap((entry) =>
+  repositoryCapabilityCatalog.flatMap((entry) =>
     isRecord(entry) && typeof entry["id"] === "string"
       ? [[entry["id"], entry] as const]
       : [],

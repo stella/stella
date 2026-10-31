@@ -66,6 +66,10 @@ import {
   toSafeDbMock,
 } from "@/api/tests/scoped-db-mock";
 
+import { buildCapabilityCatalog } from "../../scripts/export-capability-catalog";
+
+const repositoryCapabilityCatalog = await buildCapabilityCatalog();
+
 beforeEach(() => {
   consumeRateLimitMock.mockReset();
   loadOrgSettingsMock.mockClear();
@@ -105,10 +109,8 @@ const { listStaticMcpToolDefinitions } =
   await import("@/api/mcp/static-tool-definitions");
 const { listMcpResources, readMcpResource } =
   await import("@/api/mcp/resources");
-const { readCapabilityCatalog } =
-  await import("@stll/cli/capability-catalog-data");
 const { parseCatalog } = await import("@/api/mcp/capability-tools");
-const capabilityCatalog = parseCatalog(readCapabilityCatalog());
+const capabilityCatalog = parseCatalog(repositoryCapabilityCatalog);
 
 const requiresVerificationGrant = (entry: (typeof capabilityCatalog)[number]) =>
   "featureId" in entry &&

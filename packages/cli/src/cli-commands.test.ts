@@ -9,10 +9,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
-import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
+
+const repositoryCapabilityCatalog = readCapabilityCatalog();
 
 const CLI_ENTRYPOINT = path.join(import.meta.dirname, "cli.ts");
 const FETCH_PRELOAD = path.join(
@@ -27,7 +30,7 @@ const registry = validateFetchedToolsList(
 if (!registry.ok) {
   panic(`Invalid committed command-test registry: ${registry.violation}`);
 }
-const catalog = loadBakedCapabilityCatalog();
+const catalog = parseCapabilityCatalog(repositoryCapabilityCatalog);
 if (catalog === null) {
   panic("Invalid committed command-test capability catalog");
 }

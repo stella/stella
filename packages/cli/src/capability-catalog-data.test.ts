@@ -9,6 +9,8 @@ import {
   readCapabilityCatalog,
 } from "./capability-catalog-data.js";
 
+const repositoryCapabilityCatalog = readCapabilityCatalog();
+
 const withShards = (
   shards: Record<string, string>,
   run: (directory: URL) => void,
@@ -24,7 +26,7 @@ const withShards = (
   }
 };
 
-describe("committed capability shards", () => {
+describe("generated capability shards", () => {
   test("sorts by capability id and preserves the complete raw contract", () => {
     const later = {
       id: "widgets.zebra",
@@ -102,7 +104,7 @@ test("curated capability references fail when the registry snapshot loses their 
 });
 
 test("published capability catalogs exclude API handler metadata", () => {
-  const entries = readCapabilityCatalog();
+  const entries = repositoryCapabilityCatalog;
   expect(entries.length).toBeGreaterThan(0);
   for (const entry of entries) {
     expect(entry).not.toHaveProperty("handler");
