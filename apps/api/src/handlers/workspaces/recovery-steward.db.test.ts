@@ -125,6 +125,34 @@ test("explicit recovery assigns only the named internal steward and preserves pr
   expect(events.at(-1)).toMatchObject({
     changes: { leadUserId: { old: null, new: ids.userA2 } },
   });
+  const repeated = await rejectionOf(
+    testDb.transaction(async (rawTx) => {
+      await recoverOrphanedMatterSteward(asTestRaw<Transaction>(rawTx), {
+        organizationId: ids.orgA,
+        workspaceId,
+        actorUserId: ids.userAdmin,
+        stewardUserId: ids.userA1,
+        recordAuditEvent,
+      });
+    }),
+  );
+  refuseStatus(repeated, 404);
+  expect(
+    await testDb
+      .select({
+        visibility: workspaces.visibility,
+        leadUserId: workspaces.leadUserId,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId)),
+  ).toEqual(matter);
+  expect(
+    await testDb
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId)),
+  ).toEqual(assignments);
+  expect(events).toHaveLength(2);
 });
 
 test("recovery cannot assign its actor to an unreadable matter", async () => {

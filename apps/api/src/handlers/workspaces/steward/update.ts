@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { recoverMatterSteward } from "@/api/db/root";
+import { organizationWorkspaceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -17,6 +18,7 @@ const config = {
     "Recover an assigned-only matter without a usable lead by naming another internal organization member. Owners and admins only. Assigns that member and makes them lead atomically, preserves visibility, and returns no matter metadata. A healthy matter uses the normal lead update instead.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.standard,
+  realtime: organizationWorkspaceRealtimeUpdates,
   mcp: {
     type: "capability",
     reason: "workspace_schema",

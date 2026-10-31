@@ -178,6 +178,7 @@ const REVIEWED_STANDARD_OPERATIONS = [
   "apps/api/src/handlers/workspaces/export-overview-activity.ts",
   "apps/api/src/handlers/workspaces/members/add.ts",
   "apps/api/src/handlers/workspaces/members/remove.ts",
+  "apps/api/src/handlers/workspaces/steward/update.ts",
 ] as const;
 
 // Endpoints the restricted review account is refused as well (a subset of the

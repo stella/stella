@@ -91,3 +91,20 @@ test("recovery preserves an indistinguishable not-found refusal without metadata
     response: { message: "Matter not found" },
   });
 });
+
+test("each recovery call checks current authorization before writing", async () => {
+  let writes = 0;
+  const recovery = createRecoverMatterSteward({
+    recoverInTransaction: async () => {
+      writes++;
+    },
+  });
+  expect(
+    await recovery.handler(context(sessionMemberRole("owner"))),
+  ).toMatchObject({ code: 204 });
+  expect(writes).toBe(1);
+  expect(
+    await recovery.handler(context(sessionMemberRole("member"))),
+  ).toMatchObject({ code: 403 });
+  expect(writes).toBe(1);
+});
