@@ -197,6 +197,8 @@ describe("response size outcomes", () => {
         pathname: "/v1/contacts",
         dbQueries: 1,
         dbQueryHeaderMissing: false,
+        transactions: 0,
+        transactionHeaderMissing: false,
         responseSize,
       })),
       depthChain: [],
@@ -1099,8 +1101,7 @@ describe("per-request scale evidence", () => {
         dbQueryHeaderMissing: false,
         transactions: count - 1,
         transactionHeaderMissing: false,
-        responseBytes: count * 100,
-        responseBytesUnavailable: false,
+        responseSize: { status: "measured" as const, bytes: count * 100 },
       })),
     };
     const result = summarizeCapture(capture);
@@ -1127,8 +1128,7 @@ describe("per-request scale evidence", () => {
           dbQueryHeaderMissing: false,
           transactions: null,
           transactionHeaderMissing: true,
-          responseBytes: 2,
-          responseBytesUnavailable: false,
+          responseSize: { status: "measured", bytes: 2 },
         },
       ],
     });

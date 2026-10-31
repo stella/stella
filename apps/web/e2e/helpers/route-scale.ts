@@ -143,13 +143,17 @@ export const compareRouteScale = ({
       for (const [dimension, missing] of [
         ["dbQueries", metrics.missingDbQueryCounts],
         ["transactions", metrics.missingTransactionCounts],
-        ["responseSizes", metrics.missingResponseSizeCounts],
       ] as const) {
         if ((missing[request] ?? 0) > 0) {
           problems.push(
             `${route}: ${world} ${dimension} evidence missing for ${request}`,
           );
         }
+      }
+      if ((metrics.responseSizeFailures[request]?.length ?? 0) > 0) {
+        problems.push(
+          `${route}: ${world} responseSizes evidence missing for ${request}`,
+        );
       }
       for (const dimension of [
         "requestCounts",

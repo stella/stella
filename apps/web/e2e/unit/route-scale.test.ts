@@ -26,7 +26,7 @@ const metrics = (): RouteNetworkMetrics => ({
   transactions: { [request]: 1 },
   missingTransactionCounts: {},
   responseSizes: { [request]: 2048 },
-  missingResponseSizeCounts: {},
+  responseSizeFailures: {},
   requestCosts: {
     [request]: [{ dbQueries: 3, transactions: 1, responseBytes: 2048 }],
   },
@@ -106,7 +106,9 @@ describe("matter scale cost", () => {
     const large = metrics();
     large.missingDbQueryCounts[request] = 1;
     large.missingTransactionCounts[request] = 1;
-    large.missingResponseSizeCounts[request] = 1;
+    large.responseSizeFailures[request] = [
+      { status: "unreadable", error: "body unavailable" },
+    ];
     expect(
       compare(large).filter((problem) => problem.includes("evidence missing")),
     ).toHaveLength(3);
