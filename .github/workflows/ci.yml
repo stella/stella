@@ -2103,7 +2103,7 @@ jobs:
 
       - name: Turbo remote cache
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2430,7 +2430,7 @@ jobs:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Operational checkout, installation, preparation, reporting or cancellation; depends on runner state or workflow execution."
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -2972,7 +2972,7 @@ jobs:
 
       - name: Turbo remote cache
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3463,7 +3463,7 @@ jobs:
 
       - name: Turbo remote cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -3598,7 +3598,7 @@ jobs:
         # code-quality runs cacheable workspace and root checks. Restore the
         # same artifact store as ci-checks instead of rebuilding on every
         # ephemeral runner; the job is restricted to trusted code above.
-        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+        uses: rharkor/caching-for-turbo@760158c05c47e7a764f78e9a22ca3b5a6ed8c52e # v2.5.2
         with:
           server-port: "0"
           provider: github
@@ -6574,7 +6574,7 @@ jobs:
   # check/clippy/doc must run where the desktop crate actually builds
   # so platform-gated macOS and Windows code is covered.
   #
-  # The matrix mirrors the release matrix (macos-14 + windows-latest)
+  # The matrix mirrors the release matrix (macos-15 + windows-latest)
   # rather than Linux: the desktop app ships only those two targets,
   # and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
@@ -6598,7 +6598,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest
@@ -6780,7 +6780,7 @@ jobs:
       matrix:
         include:
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
           - os: windows
             runner: windows-latest

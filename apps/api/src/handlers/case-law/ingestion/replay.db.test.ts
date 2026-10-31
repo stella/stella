@@ -15,11 +15,6 @@ import {
   caseLawSources,
   relations,
 } from "@/api/db/schema";
-import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   CASE_LAW_REPLAY_SCOPE,
   countReplayability,
@@ -45,6 +40,11 @@ import {
   TEXT_ABSENCE_REASON,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { EMPTY_AST } from "@/api/lib/legal-search/ingestion-types";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
