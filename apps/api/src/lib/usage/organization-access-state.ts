@@ -33,6 +33,7 @@ import {
   lockOrganizationSettingsWrites,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { AggregateHolderTransaction } from "@/api/lib/db/aggregate-lock";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
 import {
   transitionScopedBatch,
@@ -393,7 +394,7 @@ const selectKeylessOrganizations = async (
     );
 
 export const moveKeylessOrganizationsToFree = async (
-  db: Transaction,
+  db: AggregateHolderTransaction<"organization", Transaction>,
   { now, actor }: MoveKeylessOrganizationsOptions,
 ): Promise<SafeId<"organization">[]> => {
   const preliminary = await selectKeylessOrganizations(db);

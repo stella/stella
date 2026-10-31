@@ -50,8 +50,9 @@ import { encryptContent } from "@/api/lib/content-encryption";
 import {
   withAggregateEntityBatch,
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import {
@@ -245,10 +246,13 @@ export const storeOcrSearchablePdfDerivative = async ({
 };
 
 type RootTransaction = Parameters<Parameters<typeof rootDb.transaction>[0]>[0];
+// Run and candidate locks fence the organization row, which only the owner
+// connection may lock.
+type OwnerRootTransaction = OwnerTransaction<RootTransaction>;
 
 /** Workspace status fencing precedes every source and claim acquisition. */
 const lockRunWorkspace = async (
-  tx: RootTransaction,
+  tx: OwnerRootTransaction,
   {
     organizationId,
     workspaceId,
@@ -629,7 +633,7 @@ export const persistOcrProjection = async ({
   run: typeof documentProcessingRuns.$inferSelect;
   textLength: number;
 }): Promise<OcrProjectionPersistenceOutcome> =>
-  await withAggregateTransaction(database, async (tx) => {
+  await withOwnerAggregateTransaction(database, async (tx) => {
     const workspace = await lockRunWorkspace(tx, run);
     if (!workspace) {
       return "source_cancelled";
@@ -938,7 +942,7 @@ export const processDocumentProcessingRun = async (
 ): Promise<void> => {
   lifecycleSignal.throwIfAborted();
   const claimToken = Bun.randomUUIDv7();
-  const run = await withAggregateTransaction(database, async (tx) => {
+  const run = await withOwnerAggregateTransaction(database, async (tx) => {
     const runRows = await tx
       .select({
         entityId: documentProcessingRuns.entityId,
@@ -1540,7 +1544,7 @@ const isSameNativeExtractionSource = (
 
 /** Parents first: candidates whose organization or matter is gone drop out. */
 const lockLiveNativeCandidates = async (
-  tx: RootTransaction,
+  tx: OwnerRootTransaction,
   candidates: DocumentProcessingCandidate[],
 ): Promise<DocumentProcessingCandidate[]> => {
   const parents = await lockForWrite(tx, {
@@ -1588,7 +1592,7 @@ export const persistMissingNativeExtractionRuns = async (
     return [];
   }
 
-  return await withAggregateTransaction(database, async (tx) => {
+  return await withOwnerAggregateTransaction(database, async (tx) => {
     const liveCandidates = await lockLiveNativeCandidates(tx, candidates);
     if (liveCandidates.length === 0) {
       return [];

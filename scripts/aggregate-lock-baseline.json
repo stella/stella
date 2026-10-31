@@ -3756,34 +3756,10 @@
     "reason": "for update in apps/api/src/lib/search/index-entity.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/search/index-entity.ts",
-    "fingerprint": "cc21f615762e2aa89bfd14a95d104901d947466bf57ce47bda386106af55065e",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/search/index-entity.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/search/index-global.ts",
-    "fingerprint": "578f93df58b97daeded548149734a1147d0ec03f874105ae67a94996981943c5",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/search/index-global.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/search/index-global.ts",
-    "fingerprint": "6f4c74c710c71a4b91a76519e7e13119c88bfb95d2e34735a68c089f47b3045b",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/search/index-global.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/lib/search/process-extraction.ts",
     "fingerprint": "b28e61552ca0d85d6dfbfcd337d2e95b9a8a2d332ee12016471a6ad50b8bb93d",
     "count": 1,
     "reason": "for update in apps/api/src/lib/search/process-extraction.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/search/process-extraction.ts",
-    "fingerprint": "bafef3180a607f1e28266adf36a58a23fd8466b1f77c8cfeb2cafbd77dc31815",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/search/process-extraction.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/sharepoint-disable-purge.ts",

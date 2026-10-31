@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -12,8 +12,9 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransactionDatabase } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { transition } from "@/api/lib/db/transitions";
 import { isExactOcrProjection } from "@/api/lib/document-processing-automatic-request-state";
@@ -49,7 +50,7 @@ const restorableRunFilter = () =>
   );
 
 type RestoreManualOcrRunOptions = {
-  db: { transaction: ScopedDb };
+  db: OwnerTransactionDatabase<Transaction>;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -69,7 +70,7 @@ export const restoreManualOcrRunAfterProjectionLoss = async ({
   workspaceId,
   db,
 }: RestoreManualOcrRunOptions): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });

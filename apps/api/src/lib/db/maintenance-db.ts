@@ -3,6 +3,8 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 
 /**
  * The door through which an operator script outside the case-law tables
@@ -32,7 +34,7 @@ export const openMaintenanceDb = ({
   readOnly,
 }: {
   readOnly: boolean;
-}): MaintenanceDb => {
+}): MaintenanceDb & OwnerDatabaseMarker => {
   const transaction = async <T>(fn: (tx: Transaction) => Promise<T>) =>
     await rootDb.transaction(async (tx) => {
       if (readOnly) {
@@ -40,14 +42,14 @@ export const openMaintenanceDb = ({
       }
       return await fn(tx);
     });
-  return {
+  return markOwnerDatabase({
     execute: async <
       TRow extends Record<string, unknown> = Record<string, unknown>,
     >(
       query: SQLWrapper | string,
     ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
     transaction,
-  };
+  });
 };
 
 /** Owner transactions for the organization file ledger, whose writes are not

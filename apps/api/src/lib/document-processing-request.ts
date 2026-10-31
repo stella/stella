@@ -14,9 +14,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
   DOCUMENT_PROCESSING_MAX_ATTEMPTS,
@@ -100,7 +101,7 @@ export type PersistedDocumentProcessingRun = {
 
 export type PersistManualOcrRunOptions = {
   /** The owner connection, from the manual OCR request door or a test. */
-  db: Pick<typeof rootDb, "transaction">;
+  db: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   source: ManualOcrSource;
@@ -116,7 +117,7 @@ export const persistManualOcrRun = async ({
   workspaceId,
   db,
 }: PersistManualOcrRunOptions): Promise<PersistedDocumentProcessingRun | null> =>
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
     });

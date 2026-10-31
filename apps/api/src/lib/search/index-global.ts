@@ -24,7 +24,9 @@ import { decisionIdentifierProjection } from "@/api/lib/case-law/decision-identi
 import { readPublicDecisionLanguageAlternatesForGroupKeys } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { publicCaseLawDecisionJoin } from "@/api/lib/case-law/search-sql";
+import { withOwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { escapeLike } from "@/api/lib/escape-like";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
@@ -1770,7 +1772,8 @@ export const searchGlobalFacet = async (
 type SearchDocumentDatabase = Pick<
   typeof rootDb,
   "query" | "select" | "transaction"
->;
+> &
+  OwnerDatabaseMarker;
 
 // Contact and matter projections are rebuilt in batches of at most
 // `REINDEX_BATCH_SIZE` sources. A batch is one read of the sources and their
@@ -1843,7 +1846,7 @@ const writeContactProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withOwnerTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ contact }) => contact.organizationId,
@@ -2020,7 +2023,7 @@ const writeWorkspaceProjections = async (
   });
   const previewGeneration = Bun.randomUUIDv7();
 
-  await database.transaction(async (tx) => {
+  await withOwnerTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: builtProjections.map(
         ({ workspace }) => workspace.organizationId,

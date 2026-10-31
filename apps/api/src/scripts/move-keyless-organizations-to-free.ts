@@ -14,7 +14,7 @@ import { parseArgs } from "node:util";
 
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import {
   applyKeylessOrganizationMoves,
@@ -36,7 +36,7 @@ if (apply !== (actor !== undefined && actor !== "")) {
 
 const db = openMaintenanceDb({ readOnly: !apply });
 await runScriptWithErrorOutput(async () => {
-  const results = await withAggregateTransaction(db, async (tx) =>
+  const results = await withOwnerAggregateTransaction(db, async (tx) =>
     apply
       ? await applyKeylessOrganizationMoves(tx, {
           now: new Date(),

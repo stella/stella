@@ -38,6 +38,7 @@ import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read"
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
+import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import {
   changePartnerOAuthClientInTransaction,
@@ -138,11 +139,13 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = createDatabase({
-  client: rootClient,
-  relations: databaseRelations,
-  logger: queryLogger,
-});
+export const rootDb = markOwnerDatabase(
+  createDatabase({
+    client: rootClient,
+    relations: databaseRelations,
+    logger: queryLogger,
+  }),
+);
 
 const rawRlsDb = createDatabase({
   client: rlsClient,

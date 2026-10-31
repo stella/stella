@@ -11,7 +11,9 @@ import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withOwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { loadCurrentExtractedContentsForSearchIndex } from "@/api/lib/document-content-provenance";
@@ -366,7 +368,7 @@ export const upsertSearchDocument = async (
   const observedSource = doc.extractedContentSource;
   const hasObservedSource = observedSource !== null;
 
-  await database.transaction(async (tx) => {
+  await withOwnerTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [doc.organizationId],
       workspaceIds: [doc.workspaceId],
@@ -503,6 +505,7 @@ export const upsertSearchDocument = async (
 };
 
 export type IndexEntityDependencies = {
-  database?: Pick<typeof rootDb, "query" | "select" | "transaction">;
+  database?: Pick<typeof rootDb, "query" | "select" | "transaction"> &
+    OwnerDatabaseMarker;
   syncActivity?: typeof syncWorkspaceSearchActivity;
 };

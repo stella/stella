@@ -12,9 +12,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateRowQuery,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
@@ -94,7 +95,7 @@ export const requestAutomaticDocumentOcr = async ({
   workspaceId,
 }: {
   /** The extraction pipeline's owner connection. */
-  db: Pick<typeof rootDb, "transaction">;
+  db: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
   entityId: SafeId<"entity">;
   entityVersionId: SafeId<"entityVersion">;
   fieldId: SafeId<"field">;
@@ -104,7 +105,7 @@ export const requestAutomaticDocumentOcr = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await withAggregateTransaction(db, async (tx) => {
+  await withOwnerAggregateTransaction(db, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
       workspaceIds: [workspaceId],

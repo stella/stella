@@ -16,7 +16,9 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { withOwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { lockForWrite } from "@/api/lib/db/lock-for-write";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { requestAutomaticDocumentOcr } from "@/api/lib/document-processing-automatic-request";
 import { DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -177,9 +179,9 @@ export const persistNativeExtractionProjection = async (
     sourceSha256Hex,
     workspaceId,
   }: NativeExtractionProjectionOptions,
-  database: Pick<typeof rootDb, "transaction">,
+  database: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker,
 ): Promise<NativeExtractionProjectionOutcome> =>
-  await database.transaction(async (tx) => {
+  await withOwnerTransaction(database, async (tx) => {
     const parents = await lockForWrite(tx, {
       organizationIds: [organizationId],
       workspaceIds: [workspaceId],
@@ -313,7 +315,8 @@ type NativeExtractionRun = Pick<
 export type NativeExtractionDatabase = Pick<
   typeof rootDb,
   "transaction" | "update"
->;
+> &
+  OwnerDatabaseMarker;
 
 type RecordDocxVersionLanguageOptions = {
   buffer: ArrayBuffer;

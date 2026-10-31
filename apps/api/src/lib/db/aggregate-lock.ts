@@ -55,6 +55,7 @@ import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-ti
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { LIMITS } from "@/api/lib/limits";
@@ -427,6 +428,47 @@ export const createAggregateSavepointDatabase = <Tx extends object>(parent: {
   };
   aggregateSavepointDatabases.add(database);
   return database;
+};
+
+// A transaction opened on an owner connection (see owner-transaction.ts).
+// Owner-held row locks accept only this, so a scoped application-role
+// transaction cannot reach one.
+const OWNER_TRANSACTION: unique symbol = Symbol("stella.ownerTransaction");
+
+export type OwnerTransaction<Tx extends object> = Tx & {
+  readonly [OWNER_TRANSACTION]: true;
+};
+
+export type OwnerTransactionDatabase<Tx extends object> = {
+  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+} & OwnerDatabaseMarker;
+
+/** A transaction on the owner connection, marked for owner-held locks. */
+export const withOwnerTransaction = async <Tx extends object, T>(
+  database: OwnerTransactionDatabase<Tx>,
+  run: (tx: OwnerTransaction<Tx>) => Promise<T>,
+): Promise<T> =>
+  await database.transaction(
+    async (tx) =>
+      await run(Object.assign(tx, { [OWNER_TRANSACTION]: true as const })),
+  );
+
+/** {@link withAggregateTransaction} on the owner connection, for owner-held locks. */
+export const withOwnerAggregateTransaction = async <Tx extends object, T>(
+  database: OwnerTransactionDatabase<Tx>,
+  run: (tx: OwnerTransaction<Tx>) => Promise<T>,
+): Promise<T> => {
+  if ("rollback" in database) {
+    panic("Use the aggregate savepoint owner for nested transactions");
+  }
+  return await withAggregateTransaction<OwnerTransaction<Tx>, T>(
+    {
+      transaction: async <Value>(
+        owned: (tx: OwnerTransaction<Tx>) => Promise<Value>,
+      ) => await withOwnerTransaction(database, owned),
+    },
+    run,
+  );
 };
 
 /** A fresh physical transaction owns a fresh history, including failure/commit cleanup. */
@@ -991,12 +1033,29 @@ const assertBatchIdAlphabet = (id: string): void => {
 };
 
 const parentRowSchema = v.object({ id: v.string() });
-type AggregateParentBatchOptions = {
-  tx: ExecuteTransaction;
-  organizationIds: readonly SafeId<"organization">[];
+/** The transaction a row lock on `Name`'s table accepts, by its registered holder. */
+export type AggregateHolderTransaction<
+  Name extends AggregateName,
+  Tx extends object = ExecuteTransaction,
+> = (typeof AGGREGATE_LOCKS)[Name] extends { holder: "owner" }
+  ? OwnerTransaction<Tx>
+  : Tx;
+type ParentBatchCommon = {
   workspaceIds?: readonly SafeId<"workspace">[];
   mode: RowLockMode;
 };
+// An organization row lock needs the organization aggregate's holder; a
+// workspace-only batch needs only the workspace aggregate's.
+type AggregateParentBatchOptions =
+  | (ParentBatchCommon & {
+      tx: AggregateHolderTransaction<"workspace">;
+      organizationIds: readonly [];
+    })
+  | (ParentBatchCommon & {
+      tx: AggregateHolderTransaction<"organization"> &
+        AggregateHolderTransaction<"workspace">;
+      organizationIds: readonly SafeId<"organization">[];
+    });
 
 /**
  * Parent batches ascend by registered rank, then immutable primary key.
@@ -2903,7 +2962,7 @@ export const lockOrganizationSettingsWrites = async ({
   tx,
   organizationIds,
 }: {
-  tx: Transaction;
+  tx: AggregateHolderTransaction<"organization", Transaction>;
   organizationIds: readonly SafeId<"organization">[];
 }): Promise<void> => {
   if (organizationIds.length === 0) {
