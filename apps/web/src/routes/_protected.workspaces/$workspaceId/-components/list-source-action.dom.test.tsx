@@ -76,6 +76,8 @@ const files = [
   },
 ];
 const settings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true },
   capabilities: {},

@@ -18,6 +18,7 @@ import {
   findDefaultCredential,
   readCredentialFile,
 } from "./credential-store.js";
+import type { writeCredentialFile } from "./credential-store.js";
 import {
   credentialNeedsRefresh,
   ensureFreshCredential,
@@ -32,6 +33,7 @@ export type ResolveAccessTokenOptions = {
   readonly serverUrl: string;
   readonly now?: number;
   readonly env?: { readonly STELLA_API_KEY: string | undefined };
+  readonly persistCredential?: typeof writeCredentialFile;
 };
 
 /**
@@ -61,6 +63,7 @@ export const resolveAccessToken = async ({
   serverUrl,
   now = Temporal.Now.instant().epochMilliseconds,
   env = { STELLA_API_KEY },
+  persistCredential,
 }: ResolveAccessTokenOptions): Promise<ResolveAccessTokenResult> => {
   // Precedence: `STELLA_API_KEY` beats any stored credential, and when it is set
   // there is no fallback to disk — not even if the key turns out to be invalid.
@@ -122,6 +125,7 @@ export const resolveAccessToken = async ({
     credential: freshCredential,
     metadata: metadata.value,
     now,
+    ...(persistCredential === undefined ? {} : { persistCredential }),
   });
   if (Result.isError(fresh)) {
     // `ensureFreshCredential` reports this exact tag when a concurrent

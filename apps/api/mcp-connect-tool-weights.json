@@ -593,9 +593,9 @@
       "name": "update_organization_settings",
       "nameChars": 28,
       "descriptionChars": 163,
-      "inputSchemaChars": 1256,
-      "totalChars": 1447,
-      "estimatedTokens": 587
+      "inputSchemaChars": 1430,
+      "totalChars": 1621,
+      "estimatedTokens": 660
     },
     {
       "name": "update_reader_annotation",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127415,
-    "estimatedTokens": 50516
+    "characters": 127589,
+    "estimatedTokens": 50589
   }
 }

@@ -89,6 +89,7 @@ export const AGGREGATE_LOCKS = {
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
+  organizationSettings: { rank: 90, kind: "row" },
   desktopBatch: { rank: 90, kind: "advisory" },
   chatOwnerStoredContentEgress: { rank: 95, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
@@ -236,6 +237,7 @@ export const AGGREGATE_CHAINS = {
   ],
   organizationObjectIntentWriter: ["organizationObjectIntent", "workspace"],
   professionalUseAcceptance: ["professionalUseAcceptance"],
+  organizationSettings: ["organization", "organizationSettings"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
   desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
@@ -323,6 +325,7 @@ type AggregateIdentities = {
   sampleCase: { workspaceId: SafeId<"workspace"> };
   organizationObjectIntent: SafeId<"organization">;
   organization: SafeId<"organization">;
+  organizationSettings: SafeId<"organization">;
   professionalUseAcceptance: { userId: SafeId<"user"> };
   desktopMembership: {
     organizationId: SafeId<"organization">;
@@ -999,6 +1002,7 @@ type AuxiliaryRowIdentityOptions = Extract<
   {
     aggregate:
       | "accountDeletionRequest"
+      | "organizationSettings"
       | "desktopMembership"
       | "memory"
       | "searchProjectionRepair";
@@ -1017,6 +1021,12 @@ const auxiliaryRowResource = (
         scopeColumns: [],
         scopeValues: [],
       };
+    case "organizationSettings":
+      return byUnscopedKey(
+        "organization_settings",
+        "organization_id",
+        options.id,
+      );
     case "desktopMembership":
       return {
         table: "member",
@@ -1071,6 +1081,7 @@ const rowResource = (options: RowIdentityOptions): RowResource => {
         options.id.userId,
       );
     case "accountDeletionRequest":
+    case "organizationSettings":
     case "desktopMembership":
     case "memory":
     case "searchProjectionRepair":

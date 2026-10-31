@@ -4698,6 +4698,12 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Kasutusel on vaikeseaded"
     },
+    "aiInstructions": {
+      "characterCount": "{count}/{maxLength} märki",
+      "description": "Need juhised kehtivad kõigile teie organisatsiooni AI-vestlustele ja on isiklikest eelistustest tähtsamad. Muudatused jõustuvad alates järgmisest sõnumist. Kasutage neid nõuetele vastavuse, andmetöötluse ja vorminduse reeglite määramiseks.",
+      "title": "Organisatsiooni juhised",
+      "tooLong": "Juhised võivad sisaldada kuni {maxLength} märki."
+    },
     "invitations": {
       "cancelInvitation": "Tühista kutse",
       "emailAddressLabel": "E-posti aadress",

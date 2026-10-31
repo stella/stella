@@ -7,6 +7,7 @@ import {
   DECISION_MODEL_CATALOG,
   DECISION_MODEL_PROVIDERS,
 } from "@stll/ai-catalog";
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 import { sleep } from "@stll/concurrency/sleep";
 
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
@@ -17,8 +18,21 @@ import { unregisterDomEnvironment } from "@/test-dom-environment";
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",
 });
+// happy-dom omits the legacy browser commands the EditContext polyfill wraps.
+Object.assign(document, {
+  execCommand: () => false,
+  queryCommandEnabled: () => false,
+  queryCommandSupported: () => false,
+  queryCommandState: () => false,
+  queryCommandValue: () => "",
+});
 const originalFetch = globalThis.fetch;
-const requests: { method: string; url: string; body: string }[] = [];
+const requests: {
+  method: string;
+  url: string;
+  body: string;
+  headers: Headers;
+}[] = [];
 let settingsFailure: { code: string; message: string } | undefined;
 let reflectProviderOrder = false;
 let previewBarrier: Promise<void> | undefined;
@@ -28,6 +42,8 @@ const ORGANIZATION = "byok-navigation-fixture";
 let sessionOrganization = ORGANIZATION;
 let auxiliaryFailure: { path: string; message: string } | undefined;
 let organizationSettings = {
+  aiInstructions: "",
+  aiInstructionsMaxLength: 3000,
   promptCachingEnabled: false,
   documentProcessingMode: "off",
   memoryExtractionEnabled: false,
@@ -156,12 +172,22 @@ globalThis.fetch = Object.assign(
         })),
       });
     }
-    requests.push({ method, url, body });
+    requests.push({
+      method,
+      url,
+      body,
+      headers: new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+      ),
+    });
     if (pathname.endsWith("/auth/get-session")) {
       return Response.json({
         session: { userId: "user", activeOrganizationId: sessionOrganization },
         user: { id: "user", email: "admin@example.test", name: "Admin" },
       });
+    }
+    if (pathname.endsWith("/auth/organization/get-active-member-role")) {
+      return Response.json({ role: "admin" });
     }
     if (
       auxiliaryFailure &&
@@ -247,7 +273,10 @@ const { act, useState } = await import("react");
 const { cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
-const { QueryClient, QueryClientProvider } =
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
+const { QueryClient, QueryClientProvider, notifyManager } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
 const { AuthenticatedUserProvider } =
@@ -266,6 +295,8 @@ afterEach(() => {
   auxiliaryFailure = undefined;
   sessionOrganization = ORGANIZATION;
   organizationSettings = {
+    aiInstructions: "",
+    aiInstructionsMaxLength: 3000,
     promptCachingEnabled: false,
     documentProcessingMode: "off",
     memoryExtractionEnabled: false,
@@ -356,7 +387,9 @@ const mount = async (
         }}
       >
         <IntlProvider locale="en" messages={messages} timeZone="UTC">
-          <router.RouterProvider router={appRouter} />
+          <FormattingProvider locale="en" timeZone="UTC">
+            <router.RouterProvider router={appRouter} />
+          </FormattingProvider>
         </IntlProvider>
       </AuthenticatedUserProvider>
     </QueryClientProvider>,
@@ -398,6 +431,15 @@ const providerQueries = () => {
   }
   return within(section);
 };
+const unreadableRecoveryQueries = () => {
+  const recovery = screen.getByText(
+    messages.common.somethingWentWrong,
+  ).parentElement;
+  if (recovery === null) {
+    panic("Unreadable AI recovery controls must be present");
+  }
+  return within(recovery);
+};
 const settingsSectionQueries = (title: string) => {
   const heading = screen.getByRole("heading", { name: title });
   const section =
@@ -435,6 +477,138 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(screen.getByText(messages.common.unsavedLeaveConfirm)).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/admin");
+});
+
+test("organization instruction edits block navigation before the editor debounce interval", async () => {
+  const appRouter = await mount();
+  await screen.findByRole("button", { name: messages.common.save });
+  await waitFor(() =>
+    expect(document.querySelector(".md-editor")).not.toBeNull(),
+  );
+  const element = document.querySelector(".md-editor");
+  if (!(element instanceof HTMLElement) || !("editContext" in element)) {
+    panic("Expected the mounted instructions EditContext");
+  }
+  const context = element.editContext;
+  if (
+    !(context instanceof EventTarget) ||
+    !("text" in context) ||
+    typeof context.text !== "string"
+  ) {
+    panic("Expected the instructions source");
+  }
+  const priorLength = context.text.length;
+  const text = "Use numbered paragraphs.";
+  act(() => {
+    context.dispatchEvent(
+      Object.assign(new Event("textupdate"), {
+        text,
+        updateRangeStart: 0,
+        updateRangeEnd: priorLength,
+        selectionStart: text.length,
+        selectionEnd: text.length,
+      }),
+    );
+  });
+  expect(hasUnsavedWork()).toBe(true);
+  await act(async () => {
+    void appRouter.navigate({ to: "/settings" });
+  });
+  expect(await screen.findByRole("alertdialog")).toBeDefined();
+  expect(appRouter.state.location.pathname).toBe("/admin");
+  expect(writes()).toEqual([]);
+});
+
+test("clearing organization instructions declares its settings capability", async () => {
+  organizationSettings = {
+    ...organizationSettings,
+    aiInstructions: "Řiďte se českým právem.",
+  };
+  await mount();
+  const controls = settingsSectionQueries(
+    messages.organization.aiInstructions.title,
+  );
+  fireEvent.click(
+    controls.getByRole("button", { name: messages.common.remove }),
+  );
+  fireEvent.click(controls.getByRole("button", { name: messages.common.save }));
+  await waitFor(() => expect(writes()).toHaveLength(1));
+  const write =
+    writes().at(0) ?? panic("Instruction save did not send a request");
+  expect(JSON.parse(write.body)).toEqual({ aiInstructions: "" });
+  expect(write.headers.get(CAPABILITY_REQUEST_HEADER)).toBe(
+    "organization-settings.update",
+  );
+  await waitFor(() => expect(hasUnsavedWork()).toBe(false));
+});
+
+test("instruction refetches preserve drafts and compare edits with the latest saved instructions", async () => {
+  const original = "Use numbered paragraphs.";
+  const updated = "Use short paragraphs.";
+  const draft = "Use bulleted lists.";
+  organizationSettings = {
+    ...organizationSettings,
+    aiInstructions: original,
+  };
+  await mount();
+  const save = await screen.findByRole("button", {
+    name: messages.common.save,
+  });
+  await waitFor(() =>
+    expect(document.querySelector(".md-editor")).not.toBeNull(),
+  );
+  const element = document.querySelector(".md-editor");
+  if (!(element instanceof HTMLElement) || !("editContext" in element)) {
+    panic("Expected the mounted instructions EditContext");
+  }
+  const context = element.editContext;
+  if (
+    !(context instanceof EventTarget) ||
+    !("text" in context) ||
+    typeof context.text !== "string"
+  ) {
+    panic("Expected the instructions source");
+  }
+  const replace = (text: string) => {
+    act(() => {
+      context.dispatchEvent(
+        Object.assign(new Event("textupdate"), {
+          text,
+          updateRangeStart: 0,
+          updateRangeEnd:
+            typeof context.text === "string"
+              ? context.text.length
+              : panic("Expected the instructions source"),
+          selectionStart: text.length,
+          selectionEnd: text.length,
+        }),
+      );
+    });
+  };
+  expect(context.text).toBe(original);
+  replace(draft);
+  expect(hasUnsavedWork()).toBe(true);
+  organizationSettings = { ...organizationSettings, aiInstructions: updated };
+  const client = clients.at(-1) ?? panic("Expected the mounted query client");
+  await act(async () => {
+    await client.refetchQueries(
+      organizationSettingsOptions({
+        organizationId: ORGANIZATION,
+        userId: "user",
+      }),
+    );
+    await new Promise<void>((resolve) => {
+      notifyManager.schedule(resolve);
+    });
+  });
+  expect(context.text).toBe(draft);
+  replace(original);
+  await waitFor(() => expect(hasUnsavedWork()).toBe(true));
+  expect(save).toHaveProperty("disabled", false);
+  replace(updated);
+  expect(hasUnsavedWork()).toBe(false);
+  expect(save).toHaveProperty("disabled", true);
+  expect(writes()).toEqual([]);
 });
 
 test("leaving clean AI provider settings proceeds without a prompt", async () => {
@@ -1414,8 +1588,8 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   }
   expect(writes()).toEqual([]);
   expect(
-    screen.queryByRole("button", { name: messages.common.save }),
-  ).toBeNull();
+    screen.getByRole("button", { name: messages.common.save }),
+  ).toHaveProperty("disabled", true);
   expect(
     screen.getAllByRole("button", { name: messages.common.saveChanges }),
   ).toHaveLength(1);
@@ -1710,10 +1884,14 @@ test.each([false, true])(
     );
     fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
     fireEvent.click(
-      screen.getByRole("button", { name: messages.common.remove }),
+      unreadableRecoveryQueries().getByRole("button", {
+        name: messages.common.remove,
+      }),
     );
     expect(
-      screen.getByRole("button", { name: messages.common.cancel }),
+      unreadableRecoveryQueries().getByRole("button", {
+        name: messages.common.cancel,
+      }),
     ).toBeDefined();
     expect(writes()).toEqual([]);
     expect(hasUnsavedWork()).toBe(true);
@@ -1744,7 +1922,9 @@ test.each([false, true])(
         "Configuration removal needs correction",
       );
       expect(
-        screen.getByRole("button", { name: messages.common.cancel }),
+        unreadableRecoveryQueries().getByRole("button", {
+          name: messages.common.cancel,
+        }),
       ).toBeDefined();
       settingsFailure = undefined;
       savePage();
@@ -1772,12 +1952,22 @@ test("recovering readable AI settings cancels pending removal and preserves auxi
     messages.translate.settings.apiKeyLabel,
   );
   fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
-  fireEvent.click(screen.getByRole("button", { name: messages.common.remove }));
+  fireEvent.click(
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.remove,
+    }),
+  );
   expect(
-    screen.getByRole("button", { name: messages.common.cancel }),
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.cancel,
+    }),
   ).toBeDefined();
   expect(writes()).toEqual([]);
-  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  fireEvent.click(
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.retry,
+    }),
+  );
   expect(await screen.findByText("AIza****1234")).toBeDefined();
   fireEvent.click(
     screen.getByRole("button", {

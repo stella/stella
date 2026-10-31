@@ -56,6 +56,7 @@ describe("projectOrganizationSettingsRow", () => {
           { countryCode: "SK", isPrimary: false },
         ],
         promptCachingEnabled: true,
+        aiInstructions: "Use Czech legal terminology.",
         managedAIResidency: "us",
         memoryExtractionEnabled: false,
         timeMinimumUnitMinutes: 6,
@@ -73,6 +74,8 @@ describe("projectOrganizationSettingsRow", () => {
     ]);
     expect(result.documentProcessingMode).toBe("searchable-text");
     expect(result.managedAIResidency).toBe("us");
+    expect(result.aiInstructions).toBe("Use Czech legal terminology.");
+    expect(result.aiInstructionsMaxLength).toBe(3000);
   });
 
   test("defaults practiceJurisdictions to an empty array when no row exists", () => {
@@ -99,6 +102,8 @@ describe("projectOrganizationSettingsRow", () => {
       timeLockedThroughMonth: null,
       timeNarrativeRequired: true,
       managedAIResidency: "eu",
+      aiInstructions: "",
+      aiInstructionsMaxLength: 3000,
     });
   });
 });
