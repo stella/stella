@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
 
+import { mapWithConcurrency } from "../packages/concurrency/src/index";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -48,15 +49,16 @@ test("the pattern recognizes every import form", () => {
   }
 });
 
+const IMPORT_CENSUS_CONCURRENCY = 16;
+
 test("no tracked file reaches the compiler API through the typescript package", async () => {
-  const offenders: string[] = [];
-  for (const file of trackedFiles().filter(
-    (name) => SCANNED.test(name) && name !== SELF,
-  )) {
-    const source = await Bun.file(path.join(REPO_ROOT, file)).text();
-    if (CLASSIC_API_IMPORT.test(source)) {
-      offenders.push(file);
-    }
-  }
-  expect(offenders).toEqual([]);
+  const matches = await mapWithConcurrency({
+    items: trackedFiles().filter((name) => SCANNED.test(name) && name !== SELF),
+    limit: IMPORT_CENSUS_CONCURRENCY,
+    operation: async (file) => {
+      const source = await Bun.file(path.join(REPO_ROOT, file)).text();
+      return CLASSIC_API_IMPORT.test(source) ? [file] : [];
+    },
+  });
+  expect(matches.flat()).toEqual([]);
 });
