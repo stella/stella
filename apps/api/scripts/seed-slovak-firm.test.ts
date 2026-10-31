@@ -198,7 +198,7 @@ describe("Slovak firm rehearsal seed", () => {
         buyerCountry: client.billingAddress.country,
         standardRateBps: standardVatRateOn(
           VAT_RATE_PRESETS.SK,
-          invoice.taxableSupplyDate ?? invoice.invoiceDate,
+          invoice.taxableSupplyDate,
         ),
       });
       for (const line of invoiceLines) {
