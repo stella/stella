@@ -78,7 +78,9 @@ jobs:
     # this repository, started by this repository's own events.
     if: >-
       github.event_name == 'workflow_dispatch'
-      || (contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
+      || ((contains(fromJSON('["failure", "startup_failure", "timed_out"]'), github.event.workflow_run.conclusion)
+      || (github.event.workflow_run.conclusion == 'cancelled'
+      && contains(fromJSON('[".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-health.yml", ".github/workflows/release-desktop.yml"]'), github.event.workflow_run.path)))
       && github.event.workflow_run.head_repository.full_name == github.repository
       && contains(fromJSON('[".github/workflows/nightly-test.yml", ".github/workflows/nightly-typecheck.yml", ".github/workflows/nightly-property-test.yml", ".github/workflows/ai-provider-canary.yml", ".github/workflows/mcp-canary.yml", ".github/workflows/agent-sandbox-canary.yml", ".github/workflows/desktop-release-canary.yml", ".github/workflows/landing-canary.yml", ".github/workflows/journey-canary.yml", ".github/workflows/user-journeys.yml", ".github/workflows/model-catalog-check.yml", ".github/workflows/deploy-landing.yml", ".github/workflows/dependency-audit.yml", ".github/workflows/mirror-ci-service-images.yml", ".github/workflows/publish-npm.yml", ".github/workflows/release-tag.yml", ".github/workflows/release.yml", ".github/workflows/release-rehearsal.yml", ".github/workflows/release-health.yml", ".github/workflows/release-desktop.yml", ".github/workflows/deploy-staging.yml", ".github/workflows/api-test-memory.yml", ".github/workflows/audit-branch-protection.yml", ".github/workflows/audit-image.yml", ".github/workflows/auth-md-spec-check.yml", ".github/workflows/autofix-generated-conflicts.yml", ".github/workflows/bundle-size-nightly.yml", ".github/workflows/cancel-stale-merge-groups.yml", ".github/workflows/catalogue-upstream.yml", ".github/workflows/codeql.yml", ".github/workflows/dated-waiver-healing.yml", ".github/workflows/dependency-malware-nightly.yml", ".github/workflows/main-heavy.yml", ".github/workflows/main-pr-depth.yml", ".github/workflows/mobile-release-plan.yml", ".github/workflows/network-baseline-record.yml", ".github/workflows/provenance-nightly.yml", ".github/workflows/provider-request-schemas-check.yml", ".github/workflows/quarantine-prune.yml", ".github/workflows/railway-smoke.yml", ".github/workflows/railway-template-source.yml", ".github/workflows/release-pr.yml", ".github/workflows/safe-chain-cache.yml", ".github/workflows/scorecard.yml", ".github/workflows/security-txt-guard.yml", ".github/workflows/sync-branch-protection.yml", ".github/workflows/typecheck-base.yml", ".github/workflows/flaky-test-quarantine.yml"]'), github.event.workflow_run.path)
       && contains(fromJSON('["push", "schedule", "workflow_dispatch", "workflow_run", "deployment_status", "delete"]'), github.event.workflow_run.event))
@@ -105,6 +107,9 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
+      # GitHub annotates a job it cancelled for a newer waiting run of the
+      # same concurrency group. Such a superseded cancel pages nobody; any
+      # other release cancel pages, also when that record cannot be read.
       # A recovery resets the outage. Cancelled/skipped runs and unfinished
       # newer runs do not reset it, and manual delivery tests always send.
       - name: Detect a continuing outage
@@ -113,11 +118,37 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
           RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
           RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
         run: |
           set -euo pipefail
+          if [[ "$RUN_CONCLUSION" == cancelled ]]; then
+            superseded=false
+            check_runs=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" |
+              jq -r '.jobs[] | select(.conclusion == "cancelled") | .check_run_url // empty') || {
+              echo "::warning::Cancelled run jobs were unavailable; alerting."
+              check_runs=""
+            }
+            while IFS= read -r check_run; do
+              [[ "$check_run" == "https://api.github.com/repos/${GITHUB_REPOSITORY}/check-runs/"* ]] || continue
+              annotations=$(bash "$GH_RETRY_SCRIPT" api "$check_run/annotations?per_page=100") || {
+                echo "::warning::Cancelled job annotations were unavailable; alerting."
+                break
+              }
+              if jq -e 'any(.[]; (.message // "") | test("^Canceling since a higher priority waiting request for .+ exists$"))' <<< "$annotations" > /dev/null; then
+                superseded=true
+                break
+              fi
+            done <<< "$check_runs"
+            if [[ "$superseded" == true ]]; then
+              echo "send=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::A newer run of the same concurrency group superseded this cancelled run."
+              exit 0
+            fi
+          fi
           previous=$(bash "$GH_RETRY_SCRIPT" api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
             -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
             jq -r --argjson number "$RUN_NUMBER" '
@@ -157,7 +188,7 @@ jobs:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}
           WEBHOOK_HEADERS: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_HEADERS }}
-          ALERT_KIND: ${{ github.event_name == 'workflow_dispatch' && 'Alert delivery test' || steps.classification.outputs.kind || 'Failed workflow' }}
+          ALERT_KIND: ${{ github.event_name == 'workflow_dispatch' && 'Alert delivery test' || github.event.workflow_run.conclusion == 'cancelled' && 'Cancelled release run' || steps.classification.outputs.kind || 'Failed workflow' }}
           WORKFLOW_NAME: ${{ github.event.workflow_run.name || github.workflow }}
           RUN_URL: ${{ github.event.workflow_run.html_url || format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
           HEAD_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}

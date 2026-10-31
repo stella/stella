@@ -774,3 +774,37 @@ jobs:
       - name: Promote release to latest
         timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
+
+  release-complete:
+    needs:
+      [
+        resolve,
+        build,
+        verify-production,
+        manifest,
+        promote-latest,
+        carry-forward,
+      ]
+    if: ${{ always() && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require all release jobs to complete
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          failed=0
+          while IFS=$'\t' read -r job result; do
+            echo "::error::Required desktop release job $job ended $result"
+            failed=1
+          done < <(jq -r '
+            .resolve.outputs as $release
+            | to_entries[]
+            | select(.key != "resolve")
+            | select(if $release.should_build == "true" then
+                .key != "carry-forward"
+                and ($release.channel == "prod" or (.key != "verify-production" and .key != "promote-latest"))
+              else .key == "carry-forward" and $release.channel == "prod" end)
+            | select(.value.result != "success")
+            | [.key, .value.result] | @tsv' <<< "$NEEDS")
+          exit "$failed"
