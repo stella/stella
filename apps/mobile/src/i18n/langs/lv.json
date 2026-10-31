@@ -22,7 +22,8 @@
     "toolUsed": "Izmantots: {tool}",
     "threadTitle": "Saruna",
     "threadLoadFailed": "Šo sarunu neizdevās ielādēt.",
-    "threadEmptyDescription": "Šajā sarunā vēl nav ziņu.",
+    "greeting": "Pie kā vēlaties strādāt?",
+    "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "sections": {
       "today": "Šodien",
       "yesterday": "Vakar",
@@ -39,6 +40,19 @@
     "answerNeedsInput": "Šai atbildei nepieciešama jūsu ievade. Turpiniet to stella tīmekļa lietotnē.",
     "answerFailed": "Atbildi neizdevās pabeigt.",
     "composerMenu": "Atvērt pielikumu un rīku izvēlni",
+    "attachFile": "Pievienot failu",
+    "attachment": "Pielikums",
+    "fileTooLarge": "Fails pārsniedz {maxSize} ierobežojumu",
+    "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
+    "unsupportedFileType": "Neatbalstīts faila tips",
+    "uploadFailed": "Neizdevās apstrādāt failu",
+    "scanDocument": "Skenēt dokumentu",
+    "removeAttachment": "Noņemt {name}",
+    "attachmentReading": "Sagatavo…",
+    "attachmentUploading": "Augšupielādē…",
+    "pickFailed": "Neizdevās atvērt failu atlasītāju. Mēģiniet vēlreiz.",
+    "sendFileRefused": "Neizdevās nosūtīt failu, tāpēc ziņa netika nosūtīta. Noņemiet failu un mēģiniet vēlreiz.",
+    "sendFileNotAnonymizable": "Šī saruna ir anonimizēta, un stella nevarēja anonimizēt vienu no failiem, tāpēc nekas netika nosūtīts. Noņemiet failu un mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties sarunu",
     "pickDescription": "Izvēlieties pavedienu no saraksta vai sāciet jaunu ar +."
   },
@@ -75,7 +89,14 @@
     "statusFailed": "Uzdevumu neizdevās mainīt. Mēģiniet vēlreiz.",
     "pickTitle": "Izvēlieties uzdevumu",
     "pickDescription": "Izvēlieties uzdevumu no saraksta, lai to redzētu šeit.",
-    "openMatter": "Atvērt lietu"
+    "openMatter": "Atvērt lietu",
+    "assignedTo": "Piešķirts",
+    "nobody": "Nav piešķirts",
+    "assign": "Piešķirt",
+    "doneAssigning": "Gatavs",
+    "someone": "Kāds",
+    "membersFailed": "Neizdevās ielādēt lietas dalībniekus.",
+    "assignFailed": "Uzdevumu neizdevās piešķirt. Mēģiniet vēlreiz."
   },
   "matters": {
     "emptyTitle": "Lietu vēl nav",
@@ -119,7 +140,9 @@
     },
     "add": "Pievienot",
     "scanDocument": "Skenēt dokumentu",
-    "newTask": "Jauns uzdevums"
+    "newTask": "Jauns uzdevums",
+    "uploadDocument": "Augšupielādēt dokumentu",
+    "uploadFailed": "Dokumentu neizdevās augšupielādēt. Mēģiniet vēlreiz."
   },
   "entity": {
     "type": "Veids",
@@ -183,6 +206,7 @@
     "headnote": "Kopsavilkums",
     "textUnavailable": "Šim nolēmumam teksts nav pieejams",
     "openSource": "Atvērt sākotnējo avotu",
+    "openFailed": "Saiti neizdevās atvērt.",
     "loadFailed": "Tiesu praksi neizdevās ielādēt.",
     "share": "Kopīgot"
   },

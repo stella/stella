@@ -44,6 +44,13 @@
     "subject": "Votre code de vérification stella",
     "twoFactorManage": "Utilisez ce code pour confirmer les modifications apportées aux paramètres de votre authentification à deux facteurs."
   },
+  "pushAlert": {
+    "announcement": "Votre organisation a publié une annonce",
+    "flowRunAwaitingApproval": "Un flux de travail attend votre approbation",
+    "flowRunCompleted": "Un flux de travail est terminé",
+    "flowRunFailed": "Un flux de travail a échoué",
+    "mention": "Vous avez été mentionné dans un commentaire"
+  },
   "reportExportStatus": {
     "action": "Ouvrir stella",
     "completedBody": "L’export de votre rapport est prêt. Ouvrez stella pour le consulter ou le télécharger.",

@@ -1262,7 +1262,17 @@ export const installPgliteCaseLawSitemapChanges = async (
     panic("Expected the three sitemap change functions and five triggers");
   }
   for (const statement of statements) {
-    await db.execute(sql.raw(statement));
+    await db.execute(
+      sql.raw(
+        executableSql(statement).startsWith(
+          'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+        )
+          ? latestMigrationStatementContaining(
+              'CREATE TRIGGER "case_law_decisions_sitemap_update"',
+            )
+          : statement,
+      ),
+    );
   }
 };
 

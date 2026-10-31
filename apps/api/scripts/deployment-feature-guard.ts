@@ -73,6 +73,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "cleanup of live invoice links must work after the firm leaves time billing; invoice:update required",
   ],
   [
+    "/v1/dictation/transcribe",
+    "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
+    "/v1/organizations/slug",
+    "Organization slug settings are available to authorized owners and admins on every deployment",
+  ],
+  [
     "/v1/workspaces/:workspaceId/vocabulary",
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],
@@ -105,12 +113,20 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated chat connector receipts are available on every deployment",
   ],
   [
+    "/v1/me/push-devices",
+    "Mobile push device registration is available on every deployment; alerts are sent only where APNs credentials are configured",
+  ],
+  [
     "/v1/desktop/feature-access",
     "Desktop feature access answers per-caller decisions on every deployment",
   ],
   [
     "/v1/desktop/presence",
     "Desktop account presence supports handoff on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/marked",
+    "A PDF downloads with the reader's highlights on every deployment, as the uploaded bytes do",
   ],
   [
     "/v1/tasks",

@@ -6,6 +6,8 @@ export default {
   owner: [
     "apps/api/src/lib/db/aggregate-lock.ts",
     "apps/api/src/lib/db/aggregate-lock/invoice-transition-source.ts",
+    "apps/api/src/lib/db/aggregate-lock-entries/",
+    "apps/api/src/lib/db/aggregate-chain-entries/",
     "apps/api/src/lib/db/transaction-abort.ts",
   ],
   summary:

@@ -265,6 +265,7 @@ export const rateLimit = ({
   context,
   duration,
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
+  refusalStatus = 429,
   generator,
   max,
   additionalBudgets,
@@ -324,10 +325,11 @@ export const rateLimit = ({
                 ? observeBudget(budget.key)
                 : observeBudget),
               windowMs: budget.duration,
+              status: refusalStatus,
             });
           }
           onLimit?.({ key: budget.key, duration: budget.duration });
-          return toResponse(status(429, errorResponse), ctx.set);
+          return toResponse(status(refusalStatus, errorResponse), ctx.set);
         }
       }
       try {

@@ -86,10 +86,26 @@ export const createTask = async ({
     return Result.ok(entityId);
   });
 
+/** A person by id and, when the server knows it, by name. */
+const personSchema = v.object({
+  id: v.pipe(v.string(), v.minLength(1)),
+  name: v.nullish(v.string()),
+});
+
 const taskDetailSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
   status: v.nullish(v.string()),
   dueDate: v.nullish(v.string()),
+  /** Who works on it; a removed account's row keeps its id. */
+  assignees: v.optional(
+    v.array(
+      v.object({
+        userId: v.pipe(v.string(), v.minLength(1)),
+        user: v.nullish(personSchema),
+      }),
+    ),
+    [],
+  ),
 });
 
 export type TaskDetail = v.InferOutput<typeof taskDetailSchema>;
@@ -111,6 +127,63 @@ export const readTask = async ({
     path: `${MY_TASKS_PATH}/${encodeURIComponent(matterId)}/${encodeURIComponent(taskId)}`,
     schema: taskDetailSchema,
     source,
+  });
+
+const matterMembersSchema = v.array(
+  v.object({
+    userId: v.pipe(v.string(), v.minLength(1)),
+    user: v.nullish(personSchema),
+  }),
+);
+
+export type MatterMember = v.InferOutput<typeof matterMembersSchema>[number];
+
+/** The people a matter's tasks can go to: its members. */
+export const listMatterMembers = async ({
+  fetch,
+  matterId,
+  source,
+}: {
+  readonly fetch: Fetch;
+  readonly matterId: string;
+  readonly source: AccessTokenSource;
+}): Promise<Result<MatterMember[], ApiError>> =>
+  await requestApi({
+    fetch,
+    path: `/v1/workspaces/${encodeURIComponent(matterId)}/members`,
+    schema: matterMembersSchema,
+    source,
+  });
+
+/** Gives a task to one more person, or takes it from them. */
+export const setTaskAssignee = async ({
+  assigned,
+  fetch,
+  matterId,
+  source,
+  taskId,
+  userId,
+}: {
+  readonly assigned: boolean;
+  readonly fetch: Fetch;
+  readonly matterId: string;
+  readonly source: AccessTokenSource;
+  readonly taskId: string;
+  readonly userId: string;
+}): Promise<Result<void, ApiError>> =>
+  await Result.gen(async function* () {
+    yield* Result.await(
+      requestApi({
+        body: { taskId, userId },
+        fetch,
+        method: assigned ? "POST" : "DELETE",
+        path: `${MY_TASKS_PATH}/${encodeURIComponent(matterId)}/assignees`,
+        // Only whether it succeeded matters; the sheet already knows who.
+        schema: v.unknown(),
+        source,
+      }),
+    );
+    return Result.ok(undefined);
   });
 
 /** Moves a task to `status`, such as done, or open again. */

@@ -39,6 +39,8 @@ const principal = { organizationId: "org-fixture", userId: "user-fixture" };
 const workspaceId = "019a0000-0000-7000-8000-000000000001";
 const listId = "019a0000-0000-7000-8000-000000000002";
 const itemEntityId = "019a0000-0000-7000-8000-000000000003";
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const settings = {
   declaredFeatureIds: ["legal-lists", "list-verification"],
   deploymentFeatures: { legalLists: true, invoiceLinks: true },
@@ -55,9 +57,8 @@ const settings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 

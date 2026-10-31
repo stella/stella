@@ -44,6 +44,13 @@
     "subject": "Váš ověřovací kód stella",
     "twoFactorManage": "Použijte tento kód k potvrzení změn nastavení dvoufaktorového ověření."
   },
+  "pushAlert": {
+    "announcement": "Vaše organizace zveřejnila oznámení",
+    "flowRunAwaitingApproval": "Pracovní postup čeká na vaše schválení",
+    "flowRunCompleted": "Pracovní postup byl dokončen",
+    "flowRunFailed": "Pracovní postup selhal",
+    "mention": "Někdo vás zmínil v komentáři"
+  },
   "reportExportStatus": {
     "action": "Otevřít stella",
     "completedBody": "Export vašeho reportu je připraven. Otevřete stella a zobrazte nebo stáhněte jej.",
