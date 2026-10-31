@@ -617,7 +617,8 @@ describe("projection audit transaction", () => {
       .from(systemAuditRuns)
       .where(
         sql`${systemAuditRuns.actor} = 'system:legislation-version-changes'`,
-      );
+      )
+      .orderBy(asc(systemAuditRuns.id));
 
   test.each(["commit", "audit-failure", "later-failure"] as const)(
     "summary and audit rows settle together: %s",
@@ -667,7 +668,9 @@ describe("projection audit transaction", () => {
             ONE_WORD,
             ONE_PROVISION_ADDED,
           ]);
-          expect(after.slice(before.length)).toEqual([
+          expect(
+            after.filter(({ id }) => !before.some((row) => row.id === id)),
+          ).toEqual([
             expect.objectContaining({
               actor: "system:legislation-version-changes",
               counts: { summaries: 3 },
