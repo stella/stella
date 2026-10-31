@@ -586,6 +586,104 @@ const setInlines = (line: MarkupLine, inlines: readonly Inline[]): void => {
   line.text = normalized.plainText;
 };
 
+/**
+ * How the court's file separates two words.
+ *
+ * Some of the court's files set every gap between two words as a no-break
+ * space. A plain space in such a file is not a gap the court set: it is a
+ * seam where the file's text layer joined two runs the page set apart,
+ * inside a word the court spaced for emphasis (`zru šuje`, `prizn áva`,
+ * `Pou čenie:`) or where a line break was lost (`… porušené boli. 2.
+ * Uznesenie …`). The court's other files set plain spaces throughout, so a
+ * plain space in them says nothing.
+ */
+type WordGap = "no-break" | "plain";
+
+/** A gap between two letters, and which space sets it. */
+const LETTER_GAP = /\p{L}\p{M}*(?<gap>[  ])(?=\p{L})/gu;
+
+/**
+ * No-break gaps between letters outnumber plain ones by at least this much
+ * in a file that sets its words apart with no-break spaces. The recorded
+ * files of that kind have one plain gap in 900 and one in 12,000, every
+ * one a seam; files of the other kind have no no-break gap between letters.
+ */
+const NO_BREAK_GAP_DOMINANCE = 50;
+
+const wordGapOf = (lines: readonly MarkupLine[]): WordGap => {
+  let noBreak = 0;
+  let plain = 0;
+  for (const { text } of lines) {
+    for (const match of text.matchAll(LETTER_GAP)) {
+      if (match.groups?.["gap"] === " ") {
+        plain += 1;
+      } else {
+        noBreak += 1;
+      }
+    }
+  }
+  return noBreak > 0 && plain * NO_BREAK_GAP_DOMINANCE <= noBreak
+    ? "no-break"
+    : "plain";
+};
+
+/**
+ * A seam where the file lost a line break: a finished sentence, then the
+ * next numbered paragraph or point (`… porušené boli. 2. Uznesenie …`).
+ */
+const LOST_LINE_BREAK = /(?<=[.!?][“”"»)]*) (?=\d{1,3}\.[  ]+\p{Lu})/gu;
+
+/** A seam inside a word: a letter, then the lowercase rest of the word. */
+const SPACED_WORD_SEAM = /(?<=\p{L}\p{M}*) (?=\p{Ll})/gu;
+
+/** A line split before the given offsets of its text. */
+const splitLineAt = (
+  line: MarkupLine,
+  offsets: readonly number[],
+): MarkupLine[] => {
+  const bounds = [0, ...offsets, line.text.length];
+  return bounds.slice(1).map((end, index) => {
+    const start = bounds[index] ?? 0;
+    const part: MarkupLine = { ...line, inlines: [], text: "" };
+    setInlines(
+      part,
+      stripInlineSuffix(
+        stripInlinePrefix(line.inlines, start),
+        line.text.length - end,
+      ),
+    );
+    return part;
+  });
+};
+
+/**
+ * The court's lines and words where a file that sets its words apart with
+ * no-break spaces joined them at a seam (see {@link WordGap}): a lost line
+ * break opens a new line, and a word split inside is read whole. Read
+ * before the typography, whose rewrites set plain spaces of their own.
+ */
+const readTextLayerSeams = (lines: readonly MarkupLine[]): MarkupLine[] => {
+  if (wordGapOf(lines) === "plain") {
+    return [...lines];
+  }
+  return lines.flatMap((line) => {
+    const offsets = Array.from(
+      line.text.matchAll(LOST_LINE_BREAK),
+      (match) => match.index,
+    );
+    const parts = offsets.length === 0 ? [line] : splitLineAt(line, offsets);
+    for (const part of parts) {
+      setInlines(
+        part,
+        rewriteInlineWhitespace(part.inlines, (text) =>
+          text.replaceAll(SPACED_WORD_SEAM, ""),
+        ),
+      );
+    }
+    return parts;
+  });
+};
+
 /** U+00AD, the soft hyphen, spelled out: a formatter writes the escape as the character. */
 const SOFT_HYPHEN = String.fromCodePoint(0xad);
 
@@ -1292,7 +1390,7 @@ export const parseSkUsDocumentXhtml = ({
 }: ParseSkUsDocumentOptions): ParseSkUsDocumentResult => {
   const $ = cheerio.load(xhtml);
   markHiddenRuns($);
-  const lines = removePageFurniture(readMarkupLines($));
+  const lines = readTextLayerSeams(removePageFurniture(readMarkupLines($)));
   const words = typographyWords(lines);
   for (const line of lines) {
     setInlines(line, readTypography(line.inlines, words));

@@ -236,3 +236,58 @@ describe("PL. ÚS 10/2014", () => {
     ).toEqual([]);
   });
 });
+
+describe("a file that sets its words apart with no-break spaces (II. ÚS 111/2015)", () => {
+  const holdingOf = async () => {
+    const blocks = await parsedFixture(
+      "sk-us-ii-us-111-2015",
+      "II. ÚS 111/2015",
+    );
+    return paragraphs(blocks)
+      .filter((block) => block.role === "holding")
+      .map(textOf);
+  };
+
+  test("each point of the holding is its own paragraph, the one the file runs on after a finished sentence too", async () => {
+    const holding = await holdingOf();
+    expect(holding.map((text) => /^\d+\./u.exec(text)?.[0])).toEqual([
+      "1.",
+      "2.",
+      "3.",
+      "4.",
+      "5.",
+    ]);
+    expect(holding[0]).toEndWith("porušené boli.");
+    expect(holding[1]).toStartWith(
+      "2. Uznesenie Krajského súdu v Trnave sp. zn. 3 Tos 89/2014",
+    );
+  });
+
+  test("a word the file splits with a plain space reads whole", async () => {
+    const holding = (await holdingOf()).join("\n");
+    for (const word of [
+      "porušené",
+      "zrušuje",
+      "priznáva",
+      "povinná",
+      "uhradiť",
+    ]) {
+      expect(holding).toContain(word);
+    }
+    expect(holding).not.toMatch(
+      /zru šuje|prizn áva|povinn á|uhradi ť|poru šen/u,
+    );
+  });
+
+  test("the instruction keeps its heading", async () => {
+    const blocks = await parsedFixture(
+      "sk-us-ii-us-111-2015",
+      "II. ÚS 111/2015",
+    );
+    const text = blocks
+      .map((block) => ("inlines" in block ? textOf(block) : ""))
+      .join("\n");
+    expect(text).toContain("Poučenie:");
+    expect(text).not.toContain("Pou čenie");
+  });
+});
