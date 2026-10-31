@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing matched or shown listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
@@ -1278,6 +1279,7 @@ const listCzNsSlicePage = async ({
       payload: row,
     })),
     totalPages: 1,
+    publisherCount: matched ?? shown,
   };
 };
 

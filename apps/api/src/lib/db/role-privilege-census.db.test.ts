@@ -1,60 +1,24 @@
-import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
-import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { getPgErrorCode } from "@/api/lib/pg-error";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { withIsolatedPostgresCluster } from "@/api/tests/isolated-postgres-cluster";
+import { withMigratedRolePrivilegeCensus } from "@/api/tests/helpers/role-privilege-census-fixture";
 
-import { runMigrations } from "../../db/migration-runner";
 import {
   assertCompleteCensus,
-  type Census,
   readExpectedCensus,
   readRolePrivilegeCensus,
 } from "./role-privilege-census";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const describePostgres = describe.skipIf(!runPostgresTests);
-const migrationsFolder = path.resolve(import.meta.dir, "../../../drizzle");
-
-const withMigratedDatabase = async (
-  run: (database: SQL, census: Census) => Promise<void>,
-) => {
-  await withIsolatedPostgresCluster(
-    {
-      prefix: "role-census",
-      database: "stella",
-      user: "census_admin",
-      password: "fixture",
-    },
-    async (scratchUrl) => {
-      await withGatedTestClients(scratchUrl, async ({ openClient }) => {
-        const database = openClient().sql;
-        const connection = await database.reserve();
-        try {
-          await runMigrations({
-            connection,
-            databaseUrl: scratchUrl,
-            migrationsFolder,
-            ebs: { type: "disabled" },
-          });
-        } finally {
-          await connection.release();
-        }
-        await run(database, await readRolePrivilegeCensus(database));
-      });
-    },
-  );
-};
 
 describePostgres("database role privilege census", () => {
   // timeout: initializing PostgreSQL and applying the complete migration chain is the behavior under test.
   test("matches every migrated role and effective privilege", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, actual) => {
+    await withMigratedRolePrivilegeCensus(async (database, actual) => {
       try {
         assertCompleteCensus(expected, actual);
       } catch (error) {
@@ -81,7 +45,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports disabled row-level security", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(
@@ -102,7 +66,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a sequence UPDATE grant", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
@@ -124,7 +88,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a role granted CREATEDB", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
@@ -142,7 +106,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a role granted REPLICATION", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
@@ -160,7 +124,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a membership changed to WITH ADMIN OPTION", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const parent = `stella_census_parent_${suffix}`;
@@ -194,7 +158,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a column-level grant", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const role = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
@@ -216,7 +180,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports an aggregate EXECUTE grant", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const role = `stella_census_fixture_${suffix}`;
@@ -249,7 +213,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports policies for a column-only grantee", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const suffix = Bun.randomUUIDv7().replaceAll("-", "");
       const role = `stella_census_fixture_${suffix}`;
@@ -280,7 +244,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a new row-level security policy", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       const policy = `stella_census_fixture_${Bun.randomUUIDv7().replaceAll("-", "")}`;
       try {
@@ -302,7 +266,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a changed row-level security USING predicate", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(
@@ -323,7 +287,7 @@ describePostgres("database role privilege census", () => {
   // timeout: the self-test applies the complete migration chain before mutating its census fixture.
   test("reports a changed row-level security WITH CHECK predicate", async () => {
     const expected = readExpectedCensus();
-    await withMigratedDatabase(async (database, baseline) => {
+    await withMigratedRolePrivilegeCensus(async (database, baseline) => {
       assertCompleteCensus(expected, baseline);
       try {
         await database.unsafe(

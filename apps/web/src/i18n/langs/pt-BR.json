@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Todas as fontes estão em dia",
+      "censusComparison": "{stored} armazenadas / {publisher} publicadas · {withText} com texto",
+      "censusComplete": "Completo",
+      "censusIncomplete": "Incompleto",
+      "censusSliceMemberships": "Contagens por segmento; uma decisão pode ser contada mais de uma vez.",
       "completeness": "Completude",
       "completenessHelp": "Decisões armazenadas em relação ao total informado pelo publicador, à sua listagem ou a uma contagem registrada. Decisões listadas pelo publicador que a conciliação apontou como ausentes não são contadas.",
       "countryNavigation": "Ir para um país",

@@ -4,6 +4,26 @@ import type {
   CaseLawCoverageSource,
 } from "./coverage.logic";
 
+const publisherCensus = {
+  type: "unknown",
+  measurement: {
+    aggregateUnit: "slice-memberships",
+    verdict: "unmeasured",
+    scopeStatus: "partial-publisher",
+    outcome: "none-exposed",
+    evidenceRef: "synthetic-fixture",
+    measuredSlices: 0,
+    expectedSlices: null,
+    shortSlices: 0,
+    publisher: null,
+    stored: 0,
+    withText: 0,
+    observedAt: null,
+    years: [],
+    worstSlices: [],
+  },
+} satisfies CaseLawCoverageSource["publisherCensus"];
+
 /** When the publisher's own total was read. */
 const OBSERVED_AT = "2026-09-01T00:00:00.000Z";
 
@@ -23,6 +43,7 @@ export const NEARLY_COMPLETE: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  publisherCensus,
   storedDecisions: 996,
   publishedDecisions: 990,
   courts: [{ court: "Nejvyšší soud", decisions: 990 }],
@@ -47,6 +68,7 @@ export const NEVER_MEASURED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  publisherCensus,
   storedDecisions: 4321,
   publishedDecisions: 4200,
   courts: [{ court: "Ústavní soud", decisions: 4200 }],
@@ -65,6 +87,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
   decisionYearFrom: 1993,
   decisionYearTo: 2026,
   pendingTextCount: 0,
+  publisherCensus,
   storedDecisions: null,
   publishedDecisions: 600,
   courts: [{ court: "Nejvyšší správní soud", decisions: 600 }],
@@ -75,6 +98,7 @@ const NEVER_COUNTED: CaseLawCoverageSource = {
 
 export const CZECHIA = {
   availability: "searchable",
+  censusVerdict: "unmeasured",
   country: "CZE",
   health: "delayed",
   stored: { decisions: 1996, asOf: COUNTED_AT },
@@ -121,6 +145,7 @@ export const COVERAGE: CaseLawCoverage = {
 /** A country the public search cannot reach yet, with nothing counted. */
 export const IN_PREPARATION: CaseLawCoverageCountry = {
   availability: "in-preparation",
+  censusVerdict: "unmeasured",
   country: "SVK",
   health: "current",
   stored: { decisions: 0, asOf: null },

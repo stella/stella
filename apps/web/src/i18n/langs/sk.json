@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Všetky zdroje sú aktuálne",
+      "censusComparison": "{stored} uložených / {publisher} zverejnených · {withText} s textom",
+      "censusComplete": "Úplné",
+      "censusIncomplete": "Neúplné",
+      "censusSliceMemberships": "Súčty za jednotlivé časti; jedno rozhodnutie môže byť započítané viackrát.",
       "completeness": "Úplnosť",
       "completenessHelp": "Počet uložených rozhodnutí voči počtu uvedenému vydavateľom, jeho zoznamu alebo ručne zaznamenanému údaju. Rozhodnutia zo zoznamu vydavateľa, ktorých chýbanie zistilo porovnanie, sa nezapočítavajú.",
       "countryNavigation": "Prejsť na krajinu",

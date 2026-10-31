@@ -344,7 +344,7 @@
       "feature": "FEATURE_PUBLIC_LAW"
     },
     "name": "case_law_coverage",
-    "description": "Report case-law availability per jurisdiction and source: held decision-year ranges, last sync, decisions awaiting text, recorded gaps, court breakdowns. Check before concluding a decision is missing. A listed country not yet admitted, without coverage, returns status unavailable with its reason.",
+    "description": "Check held case-law years, sync, pending text, courts and reconciled knownGaps before claiming missing data. publisherCensus: unknown/none-recorded/known; publisher/stored/text counts (slice memberships may overlap). Unmeasured cannot prove completeness. Unadmitted countries return unavailable.",
     "inputSchema": {
       "type": "object",
       "required": [],

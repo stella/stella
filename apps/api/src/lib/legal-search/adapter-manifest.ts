@@ -1,3 +1,4 @@
+// parser-output-unchanged: Completeness observations replace manifest gap declarations; parsed output is unchanged.
 // parser-output-unchanged: the ÚOHS adapter entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 // parser-output-unchanged: Known-gap declarations serve coverage reads only; manifest parser policies and parsed decision output are unchanged.
 // parser-output-unchanged: known gaps now come from the coverage slice ledger; removing the static declarations changes coverage reads only.

@@ -37,6 +37,10 @@ import type {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CENSUS_VERDICTS,
+  publisherCensusSchema,
+} from "@/api/lib/case-law/completeness-census-contract";
 import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -318,6 +322,7 @@ const countryCoverage = {
   stored,
   addedLastWeek: numberOrNull,
   completeness,
+  censusVerdict: v.picklist(CENSUS_VERDICTS),
   sources: v.pipe(
     v.array(
       v.object({
@@ -329,6 +334,7 @@ const countryCoverage = {
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
         pendingTextCount: v.number(),
+        publisherCensus: publisherCensusSchema,
         storedDecisions: numberOrNull,
         publishedDecisions: v.number(),
         courts: v.pipe(

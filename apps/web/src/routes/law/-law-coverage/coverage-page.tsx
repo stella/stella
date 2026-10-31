@@ -827,6 +827,7 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             <Delta value={source.addedLastWeek} />
           </TableCell>
           <TableCell className={"whitespace-normal"}>
+            <SourcePublisherCensus census={source.publisherCensus} />
             <SourceCompleteness
               completeness={source.completeness}
               knownGaps={source.knownGaps}
@@ -850,6 +851,50 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
         ))}
       </TableBody>
     </>
+  );
+};
+
+const SourcePublisherCensus = ({
+  census: { type, measurement },
+}: {
+  census: CaseLawCoverageSource["publisherCensus"];
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const labels = {
+    unknown: "caseLaw.coverage.notMeasuredYet",
+    "none-recorded": "caseLaw.coverage.censusComplete",
+    known: "caseLaw.coverage.censusIncomplete",
+  } as const;
+  const tones = {
+    unknown: "neutral",
+    "none-recorded": "success",
+    known: "warning",
+  } as const;
+  return (
+    <div className="mb-1 flex flex-col gap-0.5 wrap-anywhere">
+      <ReviewStatusBadge
+        tone={tones[type]}
+        className="max-w-full whitespace-normal"
+      >
+        {t(labels[type])}
+      </ReviewStatusBadge>
+      {measurement.publisher !== null && (
+        <span className="text-muted-foreground text-xs tabular-nums">
+          {t("caseLaw.coverage.censusComparison", {
+            stored: format.number(measurement.stored),
+            publisher: format.number(measurement.publisher),
+            withText: format.number(measurement.withText),
+          })}
+          <span className="block">
+            {t("caseLaw.coverage.censusSliceMemberships")}
+          </span>
+        </span>
+      )}
+      {measurement.observedAt !== null && (
+        <ObservedOn asOf={measurement.observedAt} />
+      )}
+    </div>
   );
 };
 

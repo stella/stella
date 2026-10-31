@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Visi avoti ir aktuāli",
+      "censusComparison": "{stored} saglabāti / {publisher} publicēti · {withText} ar tekstu",
+      "censusComplete": "Pilnīgs",
+      "censusIncomplete": "Nepilnīgs",
+      "censusSliceMemberships": "Skaits summēts pa daļām; viens nolēmums var būt ieskaitīts vairākas reizes.",
       "completeness": "Pilnīgums",
       "completenessHelp": "Saglabāto nolēmumu skaits attiecībā pret izdevēja norādīto kopskaitu, tā sarakstu vai reģistrētu kopskaitu. Izdevēja sarakstā iekļautie nolēmumi, kuru trūkumu atklāja salīdzināšana, netiek ieskaitīti.",
       "countryNavigation": "Pāriet uz valsti",

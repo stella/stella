@@ -155,6 +155,16 @@ const databaseUrlWithName = (source: URL, databaseName: string) => {
   return result.toString();
 };
 
+const dropClone = async (admin: PostgresAdmin, databaseName: string) => {
+  // Only client sessions: an owner role may not terminate autovacuum
+  // workers, and DROP DATABASE already stops those on its own.
+  await admin.query(
+    "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
+    [databaseName],
+  );
+  await admin.query(`DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`);
+};
+
 export const runPostgresWorkers = async ({
   files,
   durations,
@@ -208,10 +218,20 @@ export const runPostgresWorkers = async ({
     [template, applicationName],
   );
   const foreignRows = await admin.query(
-    "SELECT pid, application_name, client_addr::text FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
+    "SELECT pid, application_name, client_addr::text, backend_type FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid() ORDER BY pid",
     [template],
   );
   const foreign = foreignRows.flatMap((row) => {
+    // CREATE DATABASE stops autovacuum itself while acquiring the template;
+    // every client and unknown backend must still pass the connection check.
+    if (
+      typeof row === "object" &&
+      row !== null &&
+      "backend_type" in row &&
+      row.backend_type === "autovacuum worker"
+    ) {
+      return [];
+    }
     if (
       typeof row !== "object" ||
       row === null ||
@@ -265,17 +285,7 @@ export const runPostgresWorkers = async ({
       `CREATE DATABASE ${quoteIdentifier(databaseName)} TEMPLATE ${quoteIdentifier(template)}`,
     );
   };
-  const dropClone = async (databaseName: string) => {
-    // Only client sessions: an owner role may not terminate autovacuum
-    // workers, and DROP DATABASE already stops those on its own.
-    await admin.query(
-      "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND backend_type = 'client backend'",
-      [databaseName],
-    );
-    await admin.query(
-      `DROP DATABASE IF EXISTS ${quoteIdentifier(databaseName)}`,
-    );
-  };
+
   try {
     for (const databaseName of databaseNames) {
       await cloneTemplate(databaseName);
@@ -307,7 +317,7 @@ export const runPostgresWorkers = async ({
             databaseName !== undefined &&
             batch.every((file) => exclusivePaths.has(file))
           ) {
-            await dropClone(databaseName);
+            await dropClone(admin, databaseName);
             await cloneTemplate(databaseName);
           }
           if (signal !== undefined) {
@@ -358,7 +368,7 @@ export const runPostgresWorkers = async ({
   } finally {
     unregister();
     for (const databaseName of databaseNames.toReversed()) {
-      await dropClone(databaseName);
+      await dropClone(admin, databaseName);
     }
     await admin.close();
   }

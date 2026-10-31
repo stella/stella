@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Toutes les sources sont à jour",
+      "censusComparison": "{stored} conservées / {publisher} publiées · {withText} avec texte",
+      "censusComplete": "Complet",
+      "censusIncomplete": "Incomplet",
+      "censusSliceMemberships": "Comptages par tranche ; une décision peut être comptée plusieurs fois.",
       "completeness": "Exhaustivité",
       "completenessHelp": "Décisions conservées par rapport au décompte de l’éditeur, à son répertoire ou à un total relevé. Les décisions répertoriées par l’éditeur que le rapprochement a relevées comme manquantes ne sont pas comptées.",
       "countryNavigation": "Accéder à un pays",

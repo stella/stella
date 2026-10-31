@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing listing total for unfiltered source scopes; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -1432,6 +1433,7 @@ const listReconciliationSlicePage = async (
         payload: item,
       })),
     totalPages,
+    publisherCount: source.excludeForeignCourts ? undefined : listing.total,
   };
 };
 

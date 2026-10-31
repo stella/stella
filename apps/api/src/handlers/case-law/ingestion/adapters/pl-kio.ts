@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: shared warning projection changes error telemetry only; parsed decisions are unchanged.
 import { panic, Result } from "better-result";
@@ -1892,6 +1893,7 @@ const listPlKioSlicePage = async ({
       payload: row,
     })),
     totalPages,
+    publisherCount: listed.value.total,
   };
 };
 

@@ -11,7 +11,7 @@ type RepublishedRulingObservedCourt = {
   courtId: string | SQL | PgColumn | null | undefined;
 };
 
-const courtNameKeySql = (court: SQL | PgColumn): SQL => sql`
+export const rulingCourtNameKeySql = (court: SQL | PgColumn): SQL => sql`
   lower(regexp_replace(normalize(${court}, NFKD), '[[:space:]]+', '', 'g'))
 `;
 
@@ -21,8 +21,8 @@ export const republishedRulingCourtPredicate = (
   columns: RepublishedRulingCourtColumns,
 ): SQL => {
   const nameMatches = eq(
-    courtNameKeySql(columns.court),
-    courtNameKeySql(
+    rulingCourtNameKeySql(columns.court),
+    rulingCourtNameKeySql(
       typeof observed.court === "string"
         ? sql`${observed.court}`
         : (observed.court ?? sql``),

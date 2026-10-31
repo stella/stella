@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Minden forrás naprakész",
+      "censusComparison": "{stored} tárolt / {publisher} közzétett · {withText} szöveggel",
+      "censusComplete": "Teljes",
+      "censusIncomplete": "Hiányos",
+      "censusSliceMemberships": "Az egyes részhalmazok összesített számai; egy határozat többször is szerepelhet.",
       "completeness": "Teljesség",
       "completenessHelp": "A tárolt határozatok száma a kiadó által közölt, a jegyzékében szereplő vagy kézzel rögzített összesítéshez viszonyítva. A kiadó jegyzékében szereplő, az egyeztetés során hiányzónak talált határozatok nem számítanak bele.",
       "countryNavigation": "Ugrás egy országhoz",

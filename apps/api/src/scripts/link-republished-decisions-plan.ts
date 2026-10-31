@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { type SQL, sql } from "drizzle-orm";
 
-import { republishedRulingCourtPredicate } from "@/api/handlers/case-law/ingestion/pipeline/ruling-identity-match";
 import type { SafeId } from "@/api/lib/branded-types";
+import { republishedRulingCourtPredicate } from "@/api/lib/case-law/ruling-identity-match";
 import { lockCaseLawRepublication } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {

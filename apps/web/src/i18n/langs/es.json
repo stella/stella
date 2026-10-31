@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Todas las fuentes están al día",
+      "censusComparison": "{stored} almacenadas / {publisher} publicadas · {withText} con texto",
+      "censusComplete": "Completo",
+      "censusIncomplete": "Incompleto",
+      "censusSliceMemberships": "Recuentos por segmentos; una resolución puede contarse más de una vez.",
       "completeness": "Exhaustividad",
       "completenessHelp": "Resoluciones almacenadas respecto al total del editor, su listado o un recuento registrado. No se cuentan las resoluciones del listado del editor que la conciliación detectó como ausentes.",
       "countryNavigation": "Ir a un país",

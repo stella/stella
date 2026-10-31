@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Visi šaltiniai atnaujinti",
+      "censusComparison": "{stored} išsaugota / {publisher} paskelbta · {withText} su tekstu",
+      "censusComplete": "Visas",
+      "censusIncomplete": "Ne visas",
+      "censusSliceMemberships": "Sumuojami atskirų dalių skaičiai; vienas sprendimas gali būti įskaičiuotas kelis kartus.",
       "completeness": "Išsamumas",
       "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi. Skelbėjo sąraše esantys sprendimai, kurių trūkumą nustatė sutikrinimas, neįskaičiuojami.",
       "countryNavigation": "Pereiti prie šalies",

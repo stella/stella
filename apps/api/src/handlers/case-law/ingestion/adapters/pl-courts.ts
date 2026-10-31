@@ -1,3 +1,4 @@
+// parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only classifies failed listing fetches as source unreachable and does not change parser output.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -49,6 +50,8 @@ import {
   PL_DECISION_MARKUP,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+// parser-output-unchanged: Census court evidence is carried beside listing identity and payload; parsed decisions and persisted reconciliation keys are unchanged.
+import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -1872,6 +1875,7 @@ export type PlCourtsDayPage = {
   records: Record<string, unknown>[];
   /** 0 for a day the publisher lists no judgment for. */
   totalPages: number;
+  publisherCount: number;
 };
 
 /**
@@ -1976,7 +1980,7 @@ export const listPlCourtsDayPage = async ({
     });
   }
 
-  return { records, totalPages };
+  return { records, totalPages, publisherCount: totalResults };
 };
 
 const listPlCourtsSlicePage = async ({
@@ -1984,17 +1988,29 @@ const listPlCourtsSlicePage = async ({
   page,
   signal,
 }: ReconciliationSlicePageOptions): Promise<ReconciliationSlicePage> => {
-  const { records, totalPages } = await listPlCourtsDayPage({
+  const { records, totalPages, publisherCount } = await listPlCourtsDayPage({
     date: slice,
     page,
     ...(signal === undefined ? {} : { signal }),
   });
   return {
-    items: records.map((record) => ({
-      identity: plCourtsListingIdentity(normalizeSaosDumpItem(record)),
-      payload: record,
-    })),
+    items: records.map((record) => {
+      const normalized = normalizeSaosDumpItem(record);
+      const identity = plCourtsListingIdentity(normalized);
+      return {
+        identity,
+        payload: record,
+        ...(identity.type === "case-number"
+          ? {
+              censusCourtEvidence: observedCensusCourt(
+                normalized.division?.court?.name,
+              ),
+            }
+          : {}),
+      };
+    }),
     totalPages,
+    publisherCount,
   };
 };
 

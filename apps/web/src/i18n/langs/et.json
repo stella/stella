@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Kõik allikad on ajakohased",
+      "censusComparison": "{stored} salvestatud / {publisher} avaldatud · {withText} tekstiga",
+      "censusComplete": "Täielik",
+      "censusIncomplete": "Mittetäielik",
+      "censusSliceMemberships": "Arvud on liidetud osade kaupa; üks lahend võib esineda mitu korda.",
       "completeness": "Täielikkus",
       "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga. Avaldaja loendis olevaid lahendeid, mis võrdlemisel puudu leiti, ei arvestata.",
       "countryNavigation": "Vali riik",

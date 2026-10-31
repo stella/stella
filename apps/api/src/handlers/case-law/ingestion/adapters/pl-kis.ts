@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing totalHits count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
 // parser-output-unchanged: Fetched PDF bodies are retained independently of parsing; document parsing and eligibility are unchanged.
@@ -1806,6 +1807,7 @@ const listPlKisSlicePage = async ({
       payload: row,
     })),
     totalPages: Math.ceil(totalHits / RECONCILIATION_PAGE_SIZE),
+    publisherCount: totalHits,
   };
 };
 

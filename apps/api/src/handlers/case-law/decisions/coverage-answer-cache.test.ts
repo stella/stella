@@ -6,6 +6,7 @@ import {
   type CaseLawCoveragePart,
 } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
+import { unmeasuredSourceCensus } from "@/api/lib/case-law/completeness-census";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
 type Assembly = Parameters<typeof assembleCaseLawCoverageAnswer>[0];
@@ -37,6 +38,7 @@ const answeringReaders = (): Assembly => ({
       },
     ],
     readArrivals: async () => new Map(),
+    readCensus: async () => new Map(),
     readYearCompleteness: async () => new Map(),
     readFacets: async (country) =>
       Result.ok({
@@ -56,6 +58,14 @@ const failing = (part: CaseLawCoveragePart): Assembly => {
       return {
         ...readers,
         load: { ...readers.load, readArrivals: async () => null },
+      };
+    case "publisher-census":
+      return {
+        ...readers,
+        load: {
+          ...readers.load,
+          readCensus: async () => await Promise.reject(readFailure),
+        },
       };
     case "slice-completeness":
       return {
@@ -94,6 +104,7 @@ const failing = (part: CaseLawCoveragePart): Assembly => {
 const PARTS = [
   "arrivals",
   "slice-completeness",
+  "publisher-census",
   "facets",
   "courts",
   "provision-processing",
@@ -168,4 +179,67 @@ describe("coverage summary publication eligibility", () => {
     expect(computation.answer).toEqual({ message: "Coverage is unavailable" });
     expect(computation.complete).toBe(false);
   });
+});
+
+describe("publisher census remains independent of the gap ledger", () => {
+  for (const { type, verdict, shortSlices, stored } of [
+    { type: "unknown", verdict: "unmeasured", shortSlices: 0, stored: 0 },
+    { type: "none-recorded", verdict: "complete", shortSlices: 0, stored: 10 },
+    { type: "known", verdict: "incomplete", shortSlices: 1, stored: 8 },
+  ] as const) {
+    test(type, async () => {
+      const readers = answeringReaders();
+      const computation = await assembleCaseLawCoverageAnswer({
+        ...readers,
+        load: {
+          ...readers.load,
+          readYearCompleteness: async (sources) =>
+            new Map(
+              sources.map((source) => [
+                String(source.id),
+                {
+                  type: "reconciled" as const,
+                  summary: { missing: 2, shortSlices: 1, unlistedSlices: 0 },
+                  years: [
+                    {
+                      year: 2024,
+                      type: "gaps" as const,
+                      missing: 2,
+                      shortSlices: 1,
+                    },
+                  ],
+                },
+              ]),
+            ),
+          readCensus: async (sources) =>
+            new Map(
+              sources.map((source) => [
+                String(source.id),
+                {
+                  ...unmeasuredSourceCensus(ADAPTER_KEYS.CZ_NS),
+                  verdict,
+                  shortSlices,
+                  stored,
+                  withText: stored,
+                  publisher: type === "unknown" ? null : 10,
+                },
+              ]),
+            ),
+        },
+      });
+      if ("message" in computation.answer) {
+        panic("Expected a coverage answer");
+      }
+      const coverageSource = computation.answer.countries
+        .flatMap((country) => country.sources)
+        .find((source) => source.adapterKey === ADAPTER_KEYS.CZ_NS);
+      expect(coverageSource?.publisherCensus.type).toBe(type);
+      expect(coverageSource?.knownGaps).toEqual({
+        type: "reconciled",
+        summary: { missing: 2, shortSlices: 1, unlistedSlices: 0 },
+        years: [{ year: 2024, type: "gaps", missing: 2, shortSlices: 1 }],
+      });
+      expect(computation.complete).toBe(true);
+    });
+  }
 });

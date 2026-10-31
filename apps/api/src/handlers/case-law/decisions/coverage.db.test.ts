@@ -362,6 +362,7 @@ const loadCoverage = async (
         async (tx) =>
           await readCaseLawArrivalsQuery(tx, { sourceIds, now: NOW }),
       ),
+    readCensus: async () => new Map(),
     readYearCompleteness: async (sources) =>
       await readAsReader(
         async (tx) => await readCaseLawCoverageYearsQuery(tx, sources),

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing reported listing count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: array partitions use the shared owner with identical items and boundaries; parsed content is unchanged.
 // parser-output-unchanged: Read scope passes through the gate; successful decision text and parsing are unchanged.
@@ -2858,6 +2859,7 @@ const listCzUsSlicePage = async ({
       payload: listed,
     })),
     totalPages: Math.ceil(listing.reported / LISTING_PAGE_SIZE),
+    publisherCount: listing.reported,
   };
 };
 

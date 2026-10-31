@@ -1037,6 +1037,10 @@
     },
     "coverage": {
       "allCurrent": "Alle Quellen sind aktuell",
+      "censusComparison": "{stored} gespeichert / {publisher} veröffentlicht · {withText} mit Text",
+      "censusComplete": "Vollständig",
+      "censusIncomplete": "Unvollständig",
+      "censusSliceMemberships": "Summen über Teilbereiche; eine Entscheidung kann mehrfach gezählt werden.",
       "completeness": "Vollständigkeit",
       "completenessHelp": "Gespeicherte Entscheidungen im Verhältnis zur Gesamtzahl des Herausgebers, dessen Verzeichnis oder einer erfassten Gesamtzahl. Vom Herausgeber gelistete Entscheidungen, die beim Abgleich als fehlend festgestellt wurden, werden nicht mitgezählt.",
       "countryNavigation": "Land auswählen",

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation exposes the existing numFound count for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: Stored-object replay reuses the ingestion XHTML parser; PDF bytes are retained and verified without adding a PDF parser.
 // parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
@@ -2335,6 +2336,7 @@ const listSkUsSlicePage = async ({
       }
     }),
     totalPages: Math.ceil(numFound / LISTING_PAGE_SIZE),
+    publisherCount: numFound,
   };
 };
 
