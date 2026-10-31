@@ -9,6 +9,7 @@ import {
   bufferObjectCleanupIntents,
   desktopEditHandoffs,
   desktopEditSessions,
+  desktopRunners,
   entities,
   entityVersions,
   folioCollabRoomTokens,
@@ -48,6 +49,8 @@ const tables = [
   entityVersions,
   properties,
   bufferObjectCleanupIntents,
+  // The member's desktop keys take their runner sockets with them.
+  desktopRunners,
   workspaces,
   workspaceMembers,
   member,

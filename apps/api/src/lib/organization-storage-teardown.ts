@@ -271,6 +271,9 @@ const WORKSPACE_DERIVED_REFERENCE_DISPOSITION = {
     "delete-derived-row",
   "chat_threads.context_matter_ids": "prune-reference",
   "chat_threads.data_workspace_ids": "delete-derived-thread",
+  // A run's MCP token only narrows the live access set; an id of a deleted
+  // workspace in it grants nothing.
+  "desktop_runner_runs.workspace_ids": "attenuation-only",
   "docx_suggestions.source_data_workspace_ids": "delete-derived-row",
 } as const;
 

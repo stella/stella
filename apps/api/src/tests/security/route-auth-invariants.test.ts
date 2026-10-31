@@ -14,6 +14,7 @@ import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { chatRoute } from "@/api/handlers/chat/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
+import { desktopRunnerRoute } from "@/api/handlers/desktop-runner/routes";
 import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { devPublicRoute } from "@/api/handlers/dev/routes";
 import { pdfSigningSessionsRoute } from "@/api/handlers/entities/pdf-signing-sessions-route";
@@ -125,6 +126,7 @@ const ROOT_ROUTE_TABLES: Readonly<Record<string, readonly RouteEntry[]>> = {
   authUiRoute,
   desktopFeatureAccessRoute,
   desktopPresenceRoute,
+  desktopRunnerRoute,
   desktopTimeEntriesRoute,
   devPublicRoute,
   feedbackPublicRoute,

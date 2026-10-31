@@ -71,6 +71,11 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   // on the credential path, are covered by
   // `tests/security/machine-api-keys.test.ts`.
   "api-keys": WAIVER_REASON.isolatedOutsideRlsHarness,
+  // The runner socket reads and writes through the gateway's root connection;
+  // every row it touches is bound to the account, organization, installation
+  // and device key the upgrade proved. The binding and the refusal of another
+  // device's proof are covered by `lib/desktop-runner/gateway.db.test.ts`.
+  "desktop-runner": WAIVER_REASON.isolatedOutsideRlsHarness,
   "ai-autocomplete": WAIVER_REASON.preExistingGap,
   "ai-config": WAIVER_REASON.preExistingGap,
   "audit-logs": WAIVER_REASON.preExistingGap,

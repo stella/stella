@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "apps/api/src/lib/desktop-runner owns the desktop runner socket gateway, its persistence and the run commands the rest of the API queues"
+}

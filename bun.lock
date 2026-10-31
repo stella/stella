@@ -50,6 +50,7 @@
       "name": "@stll/api",
       "version": "0.0.0",
       "dependencies": {
+        "@ag-ui/core": "1.0.3",
         "@aws-sdk/client-cloudwatch": "^3.1152.0",
         "@aws-sdk/client-lambda": "^3.1152.0",
         "@aws-sdk/client-s3": "^3.1153.0",
@@ -677,6 +678,7 @@
       "name": "@stll/agent-engine",
       "version": "0.0.0",
       "dependencies": {
+        "@stll/api-contract": "workspace:*",
         "@tanstack/ai": "catalog:",
         "@tanstack/ai-codex": "catalog:",
         "@tanstack/ai-persistence": "catalog:",
@@ -782,6 +784,7 @@
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.1",
         "@stll/uuid-codec": "workspace:*",
+        "@tanstack/ai": "catalog:",
         "@valibot/to-json-schema": "^1.8.0",
         "better-result": "catalog:",
         "valibot": "catalog:",
