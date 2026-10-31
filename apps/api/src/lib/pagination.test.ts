@@ -11,6 +11,7 @@ import {
   isUuidPaginationCursorPart,
   iterateCursorPages,
   parseDateTimePaginationCursorPart,
+  parsePreciseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 
 describe("cursor pagination", () => {
@@ -239,4 +240,18 @@ test("cursor iteration stops fetching when its consumer stops", async () => {
   await pages.return(undefined);
 
   expect(requested).toEqual([null]);
+});
+
+test("precise cursor timestamps preserve PostgreSQL microseconds and reject invalid boundaries", () => {
+  const timestamp = "2026-10-30T12:34:56.123456Z";
+  expect(parsePreciseDateTimePaginationCursorPart(timestamp)).toBe(timestamp);
+  for (const invalid of [
+    null,
+    "2026-02-30T12:34:56.123456Z",
+    "2026-10-30T12:34:56.123Z",
+    "2026-10-30T12:34:56.1234567Z",
+    "2026-10-30T13:34:56.123456+01:00",
+  ]) {
+    expect(parsePreciseDateTimePaginationCursorPart(invalid)).toBeNull();
+  }
 });

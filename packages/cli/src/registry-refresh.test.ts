@@ -1,12 +1,13 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
+import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { McpClientError } from "./mcp-client.js";
@@ -17,6 +18,11 @@ import {
   type RegistryCacheFile,
   writeCacheFile,
 } from "./registry-cache.js";
+import {
+  PROJECTION_TTL_MS,
+  projectionCachePath,
+  writeProjectionCache,
+} from "./registry-projection-cache.js";
 import {
   type CurrentRegistry,
   refreshRegistryCache,
@@ -882,4 +888,118 @@ describe("CLI update nudge (spec 051 addendum)", () => {
     });
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: true });
   });
+});
+
+describe("trusted projections survive separate invocations", () => {
+  test("cache hits skip fetch, expiry refetches, corrupt or untrusted data recovers", async () => {
+    const env = await makeCacheEnv();
+    const configDir = env.XDG_CACHE_HOME;
+    const now = 1_800_000_000_000;
+    let fetches = 0;
+    const fetchRaw = async () => {
+      fetches += 1;
+      return await okFetch(toolsBody(["list_matters"]), {
+        featureOmittedTools: ["list_time_entries"],
+      })();
+    };
+    const options = {
+      serverOrigin: ORIGIN,
+      token: "credential-a",
+      configDir,
+      env,
+      now,
+      fetchRaw,
+      bakedListings: [listing("list_matters")],
+    };
+    const first = await refreshRegistryCache(options);
+    const hit = await refreshRegistryCache(options);
+    expect(first.status).toBe("refreshed");
+    expect(hit).toEqual(first);
+    expect(fetches).toBe(1);
+    await refreshRegistryCache({ ...options, now: now + PROJECTION_TTL_MS });
+    expect(fetches).toBe(2);
+    const filePath = projectionCachePath({
+      ...options,
+      currentVersion: CLI_VERSION,
+    });
+    expect((await stat(filePath)).mode % 0o1000).toBe(0o600);
+    expect((await stat(path.dirname(filePath))).mode % 0o1000).toBe(0o700);
+    await writeFile(filePath, "{corrupt");
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(3);
+    const saved: unknown = JSON.parse(await readFile(filePath, "utf-8"));
+    if (typeof saved !== "object" || saved === null || !("raw" in saved)) {
+      panic("Missing projection cache");
+    }
+    await writeFile(
+      filePath,
+      JSON.stringify({
+        ...saved,
+        raw: { rawBody: toolsBody(["bad tool name"]) },
+      }),
+    );
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(4);
+  });
+
+  test("credentials, server URLs and CLI versions never share caller projections", async () => {
+    const env = await makeCacheEnv();
+    let fetches = 0;
+    const options = {
+      serverOrigin: ORIGIN,
+      token: "credential-a",
+      configDir: env.XDG_CACHE_HOME,
+      env,
+      now: 1_800_000_000_000,
+      fetchRaw: async () => {
+        fetches += 1;
+        return await okFetch(toolsBody(["list_matters"]))();
+      },
+      bakedListings: [listing("list_matters")],
+    };
+    await refreshRegistryCache(options);
+    await refreshRegistryCache({ ...options, token: "credential-b" });
+    await refreshRegistryCache({
+      ...options,
+      serverOrigin: "https://other.example",
+    });
+    await refreshRegistryCache({ ...options, currentVersion: "999.0.0" });
+    expect(fetches).toBe(4);
+    await refreshRegistryCache(options);
+    expect(fetches).toBe(4);
+  });
+});
+
+test("cached incompatible API protocol fails closed without fetching another registry", async () => {
+  const env = await makeCacheEnv();
+  const options = {
+    serverOrigin: ORIGIN,
+    token: "cached-protocol-token",
+    configDir: env.XDG_CACHE_HOME,
+    env,
+    now: 1_800_000_000_000,
+    currentVersion: CLI_VERSION,
+  };
+  const written = await writeProjectionCache({
+    filePath: projectionCachePath(options),
+    raw: { rawBody: toolsBody(["list_matters"]), apiProtocol: "999" },
+    now: options.now,
+  });
+  expect(written.isOk()).toBe(true);
+  let fetches = 0;
+  const outcome = await refreshRegistryCache({
+    ...options,
+    fetchRaw: async () => {
+      fetches += 1;
+      return await okFetch(toolsBody(["list_matters"]))();
+    },
+  });
+  expect(outcome).toEqual({
+    status: "incompatible",
+    cause: {
+      type: "protocol-incompatible",
+      message: "Server API protocol 999 is incompatible; this CLI supports 3.",
+    },
+  });
+  expect(fetches).toBe(0);
 });

@@ -9,6 +9,7 @@ import { Result } from "better-result";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import { scopePreflightFailure } from "./auth/command-scopes.js";
 import type { Context } from "./context.js";
 import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
@@ -24,13 +25,13 @@ import {
   renderCommandResult,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
-  scopePreflightFailure,
   setExit,
   setPath,
   streamOrRenderAllPages,
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 type LeafFlags = Record<string, unknown>;
 
@@ -116,16 +117,16 @@ export const runCapabilityCommand = async ({
   // validation for both JSON and flags. Keeping a snapshot validator here would
   // reject lenient spellings before the canonical reader sees them.
 
-  // Client-side scope precheck (spec S3): fail before any server call.
+  // Reuse discovery's grant snapshot; decoding the token here could contradict
+  // authenticated server evidence.
   const scopeFailure = scopePreflightFailure({
     additionalScopes: spec.additionalScopes,
     scope: spec.scope,
-    token,
+    effectiveGrants: context.effectiveGrants,
+    serverUrl,
   });
   if (scopeFailure !== undefined) {
-    writers.stderr(
-      `Missing scope stella:${scopeFailure.missingScope}. Re-run '${scopeFailure.loginCommand}' to grant the complete scope set.\n`,
-    );
+    writers.stderr(`${commandUnavailableMessage(scopeFailure)}\n`);
     setExit(context, EXIT_CODES.auth);
     return;
   }

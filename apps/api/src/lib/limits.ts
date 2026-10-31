@@ -270,6 +270,7 @@ export const LIMITS = {
   oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
+  mcpListPageSizeMin: 1,
   mcpListPageSizeMax: 100,
   /** Default/max page sizes for the MCP search tools. */
   mcpSearchPageSizeDefault: 10,

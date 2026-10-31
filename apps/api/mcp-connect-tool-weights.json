@@ -248,10 +248,10 @@
     {
       "name": "list_templates",
       "nameChars": 14,
-      "descriptionChars": 688,
-      "inputSchemaChars": 354,
-      "totalChars": 1056,
-      "estimatedTokens": 382
+      "descriptionChars": 572,
+      "inputSchemaChars": 505,
+      "totalChars": 1091,
+      "estimatedTokens": 406
     },
     {
       "name": "list_time_entries",
@@ -623,7 +623,7 @@
     }
   ],
   "totals": {
-    "characters": 127340,
-    "estimatedTokens": 50496
+    "characters": 127375,
+    "estimatedTokens": 50520
   }
 }

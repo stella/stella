@@ -15,6 +15,7 @@ import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import type { RegistryDelta } from "./registry-cache.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
 import type { RouteNode } from "./route-types.js";
+import { commandUnavailableMessage } from "./unavailable-command.js";
 
 const VERBOSE_FLAG = `--${RESERVED_FLAG_KEYS.verbose}`;
 
@@ -123,7 +124,9 @@ const nodeAtPath = (
     if (node.kind !== "route") {
       return undefined;
     }
-    const child = node.children[segment];
+    const child = Object.hasOwn(node.children, segment)
+      ? node.children[segment]
+      : undefined;
     if (child === undefined) {
       return undefined;
     }
@@ -174,7 +177,7 @@ export const removedCommandError = ({
   baked: RouteNode;
   delta: RegistryDelta;
 }): string | undefined => {
-  if (delta.removed.length === 0 && delta.changed.length === 0) {
+  if (delta.removed.length === 0) {
     return undefined;
   }
   const segments = commandPathFromArgv(argv);
@@ -182,11 +185,9 @@ export const removedCommandError = ({
     return undefined;
   }
   const toolName = toolNameAt(baked, segments);
-  if (
-    toolName === undefined ||
-    (!delta.removed.includes(toolName) && !delta.changed.includes(toolName))
-  ) {
+  if (toolName === undefined || !delta.removed.includes(toolName)) {
     return undefined;
   }
-  return `this CLI is too old for this server; run npm i -g @stll/cli@latest\n`;
+  const command = segments.join(" ");
+  return `${commandUnavailableMessage({ type: "unknown-to-server", command })}\n`;
 };
