@@ -321,6 +321,7 @@ export const ChatTabPanel = ({
     ensureAIAvailable,
     holdQueueForMessageEdit,
     startUserMessageEdit,
+    threadRef,
   });
   const handlePromptSubmit = useLatestCallback(
     async ({

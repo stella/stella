@@ -14,6 +14,7 @@ import {
 } from "@stll/api-contract/chat";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
+import { stellaToast } from "@stll/ui/toast";
 
 import {
   useCredentialPasteNotice,
@@ -23,12 +24,14 @@ import {
   chatComposerHtml,
   createChatComposerSchemaExtensions,
 } from "@/components/chat-composer-schema";
+import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
   createUserMessageEditDraft,
   hasUserMessageEditContent,
+  userMessageEditHandoff,
   userMessageEditNoticeKey,
 } from "@/components/chat/user-message-edit.logic";
 import type {
@@ -37,10 +40,12 @@ import type {
   UserMessageEditDraft,
   UserMessageEditFailure,
   UserMessageEditOutcome,
+  UserMessageEditResult,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { createUuid } from "@/lib/uuid";
 
@@ -63,18 +68,27 @@ export type UserMessageEditActions = {
  * The edit actions a page hands its transcript, built from its chat session:
  * one stable object, so the transcript's edit actions do not re-render while
  * a turn streams. An edit is a send, so it passes the page's AI check first.
+ * An edit whose message the thread no longer holds goes into the thread's
+ * composer with its notice: its form went with the message, the edit stays.
  */
 export const useUserMessageEditActions = ({
   editUserMessage,
   ensureAIAvailable,
   holdQueueForMessageEdit,
   startUserMessageEdit,
+  threadRef,
 }: {
-  editUserMessage: UserMessageEditActions["onSubmit"];
+  editUserMessage: (
+    messageId: string,
+    edit: UserMessageEdit,
+  ) => Promise<UserMessageEditResult>;
   ensureAIAvailable: () => Promise<boolean>;
   holdQueueForMessageEdit: UserMessageEditActions["holdQueue"];
   startUserMessageEdit: UserMessageEditActions["onStart"];
+  threadRef: ChatThreadRef;
 }): UserMessageEditActions => {
+  const t = useTranslations();
+  const { restoreMessageDraftIntoThread } = useChatEditorManager();
   const onStart = useLatestCallback(() => {
     startUserMessageEdit();
   });
@@ -89,7 +103,15 @@ export const useUserMessageEditActions = ({
       if (!(await ensureAIAvailable())) {
         return { type: "ai-unavailable" };
       }
-      return await editUserMessage(messageId, edit);
+      const { orphanedEdit, outcome } = await editUserMessage(messageId, edit);
+      if (orphanedEdit !== null) {
+        restoreMessageDraftIntoThread(
+          threadRef,
+          userMessageEditHandoff(orphanedEdit),
+        );
+        stellaToast.warning(t(userMessageEditNoticeKey(outcome)));
+      }
+      return outcome;
     },
   );
   const [actions] = useState<UserMessageEditActions>(() => ({

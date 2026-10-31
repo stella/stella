@@ -6,6 +6,8 @@ import {
   beforeAll,
   describe,
   expect,
+  mock,
+  spyOn,
   test,
 } from "bun:test";
 
@@ -16,6 +18,8 @@ import {
 } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatEditorController } from "@/components/chat-editor-provider";
+import { PASTED_TEXT_CHIP_MAX_LINES } from "@/components/chat-pasted-text";
 import translations from "@/i18n/langs/en.json";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -47,6 +51,16 @@ const { openChatThreadDomPage } =
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
+const { getChatThreadKey, toChatThreadId } =
+  await import("@/lib/chat-thread-ref");
+const { useChatDraftStore } = await import("@/lib/chat-draft-store");
+const { useChatEditor } = await import("@/components/chat-editor-provider");
+const { composerText } = await import("@/components/chat-editor-source");
+const { EditorContent } = await import("@tiptap/react");
+const { useExternalSyncEffect } = await import("@/hooks/use-effect");
+const { stellaToast } = await import("@stll/ui/toast");
+const { PASTED_TEXT_ATTACHMENTS_ATTR, readPastedTextAttachments } =
+  await import("@/components/chat-pasted-text-extension");
 
 const actEnvironment: unknown = Reflect.get(
   globalThis,
@@ -221,10 +235,40 @@ const createServer = ({
 
 type Page = Awaited<ReturnType<typeof openChatThreadDomPage>>;
 
-const openPage = async (server: ReturnType<typeof createServer>) => {
+const COMPOSER_THREAD_REF = {
+  scope: "global",
+  threadId: toChatThreadId(THREAD_ID),
+} as const;
+
+/** The thread's main composer, as the page mounts it; `onController` hears
+ *  its controller each time it changes. */
+const Composer = ({
+  onController,
+}: {
+  onController: (controller: ChatEditorController) => void;
+}) => {
+  const controller = useChatEditor({ threadRef: COMPOSER_THREAD_REF });
+  useExternalSyncEffect(() => {
+    onController(controller);
+  }, [controller, onController]);
+  return (
+    <div data-test-composer>
+      <EditorContent editor={controller.editor} />
+    </div>
+  );
+};
+
+const openPage = async (
+  server: ReturnType<typeof createServer>,
+  onComposer?: (controller: ChatEditorController) => void,
+) => {
   routeRequest = server.fetch;
   return await openChatThreadDomPage({
     organizationId: ORGANIZATION_ID,
+    renderComposer:
+      onComposer === undefined
+        ? undefined
+        : () => <Composer onController={onComposer} />,
     threadId: THREAD_ID,
   });
 };
@@ -360,6 +404,107 @@ describe("an edit the server does not accept", () => {
     });
     expect(editField(page)?.textContent).toBe("Second question again");
     expect(server.unexpected).toEqual([]);
+  });
+});
+
+describe("an edit whose message the server no longer holds", () => {
+  // Another edit dropped the second turn: the stored thread ends after the
+  // first, and the refused edit's form goes with its message.
+  const STORED_WITHOUT_SECOND = turnOf(FIRST, "First question");
+  const LONG_PASTE = Array.from(
+    { length: PASTED_TEXT_CHIP_MAX_LINES + 1 },
+    (_, line) => `Clause ${String(line + 1)}`,
+  ).join("\n");
+
+  let composerController: ChatEditorController | undefined;
+  const composer = () =>
+    composerController ?? panic("The thread's composer is not mounted");
+  const composerEditor = () =>
+    composer().editor ?? panic("The composer has no editor");
+  const composerParagraphs = () =>
+    (composerEditor().getJSON().content ?? []).map((node) =>
+      (node.content ?? []).map((inline) => inline.text ?? "").join(""),
+    );
+  const composerPastedTexts = () =>
+    readPastedTextAttachments(
+      composerEditor().state.doc.attrs[PASTED_TEXT_ATTACHMENTS_ATTR],
+    ).map(({ text }) => text);
+
+  /** Opens the second question's edit, adds a word and a long paste that
+   *  becomes a pasted-text chip, and sends it into a target_missing
+   *  refusal; `prepareComposer` runs on the mounted composer first. */
+  const sendOrphanedEdit = async (prepareComposer: () => void) => {
+    const warning = spyOn(stellaToast, "warning").mockReturnValue("notice");
+    const server = createServer({
+      answer: {
+        type: "refused",
+        code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
+        status: 404,
+      },
+      storedAfterRefusal: STORED_WITHOUT_SECOND,
+    });
+    const page = await openPage(server, (controller) => {
+      composerController = controller;
+    });
+    await testing.waitFor(() => {
+      expect(
+        composerController !== undefined && composerController.editor !== null,
+      ).toBe(true);
+    });
+    prepareComposer();
+    await editSecondQuestion(page);
+    const field = editField(page) ?? panic("The edit form");
+    testing.fireEvent.paste(field, {
+      clipboardData: {
+        getData: (type: string) => (type === "text/plain" ? LONG_PASTE : ""),
+        items: [],
+        types: ["text/plain"],
+      },
+    });
+    sendEdit(page);
+    await testing.waitFor(() => {
+      expect(shownMessages(page)).toEqual([...STORED_WITHOUT_SECOND]);
+    });
+    await testing.waitFor(() => {
+      expect(warning).toHaveBeenCalledTimes(1);
+    });
+    expect(warning).toHaveBeenCalledWith(
+      translations.chat.editMessageRefusedTargetMissing,
+    );
+    expect(editField(page) === null).toBe(true);
+  };
+
+  afterEach(() => {
+    composerController = undefined;
+    // The composer's draft outlives the page; each test starts from none.
+    useChatDraftStore
+      .getState()
+      .clearDraft(getChatThreadKey(COMPOSER_THREAD_REF));
+    mock.restore();
+  });
+
+  test("goes into the empty composer with its text and chips, and says why", async () => {
+    await sendOrphanedEdit(() => undefined);
+
+    await testing.waitFor(() => {
+      expect(composerParagraphs()).toEqual(["Second question again"]);
+    });
+    expect(composerPastedTexts()).toEqual([LONG_PASTE]);
+  });
+
+  test("goes ahead of what the composer already holds, a paragraph between", async () => {
+    await sendOrphanedEdit(() => {
+      composer().setContent(composerText("Draft already here"));
+    });
+
+    await testing.waitFor(() => {
+      expect(composerParagraphs()).toEqual([
+        "Second question again",
+        "",
+        "Draft already here",
+      ]);
+    });
+    expect(composerPastedTexts()).toEqual([LONG_PASTE]);
   });
 });
 

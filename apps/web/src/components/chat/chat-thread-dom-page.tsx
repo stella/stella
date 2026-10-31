@@ -137,6 +137,7 @@ const ChatThreadDomPage = ({
     ensureAIAvailable: aiAvailable,
     holdQueueForMessageEdit: session.holdQueueForMessageEdit,
     startUserMessageEdit: session.startUserMessageEdit,
+    threadRef,
   });
   return (
     <ChatMattersContext
@@ -162,38 +163,34 @@ const ChatThreadDomPage = ({
           secretAvailabilityKey: session.secretAvailabilityKey,
         }}
       >
-        {/* The selection bar quotes into the composer through the editor
-            manager, as on the real page. */}
-        <ChatEditorProvider>
-          {renderComposer?.(session)}
-          <ChatThreadMessages
-            activitySession={session.activitySession}
-            approvalPendingMessageId={session.approvalPendingMessageId}
-            error={session.error}
-            hasOlderMessages={session.olderCursor !== null}
-            isGenerating={session.isGenerating}
-            isLoadingOlder={session.isLoadingOlder}
-            loadOlderError={session.loadOlderError}
-            messages={session.messages}
-            onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
-            onAskUserSubmit={session.handleAskUserSubmit}
-            onCreateDocumentResolve={session.handleCreateDocumentResolve}
-            onLoadOlder={session.loadOlder}
-            onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
-            onOpenCreatedDocument={session.handleOpenCreatedDocument}
-            onOpenPlaybook={session.handleOpenPlaybook}
-            onResend={session.resendLatestMessage}
-            queuedMessageActions={{
-              remove: session.removeQueuedMessage,
-              sendNow: session.sendQueuedMessageNow,
-            }}
-            queuedMessages={session.queuedMessages}
-            showThinkingIndicator
-            streamdownComponents={session.streamdownComponents}
-            threadRef={threadRef}
-            userMessageEdit={userMessageEdit}
-          />
-        </ChatEditorProvider>
+        {renderComposer?.(session)}
+        <ChatThreadMessages
+          activitySession={session.activitySession}
+          approvalPendingMessageId={session.approvalPendingMessageId}
+          error={session.error}
+          hasOlderMessages={session.olderCursor !== null}
+          isGenerating={session.isGenerating}
+          isLoadingOlder={session.isLoadingOlder}
+          loadOlderError={session.loadOlderError}
+          messages={session.messages}
+          onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
+          onAskUserSubmit={session.handleAskUserSubmit}
+          onCreateDocumentResolve={session.handleCreateDocumentResolve}
+          onLoadOlder={session.loadOlder}
+          onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
+          onOpenCreatedDocument={session.handleOpenCreatedDocument}
+          onOpenPlaybook={session.handleOpenPlaybook}
+          onResend={session.resendLatestMessage}
+          queuedMessageActions={{
+            remove: session.removeQueuedMessage,
+            sendNow: session.sendQueuedMessageNow,
+          }}
+          queuedMessages={session.queuedMessages}
+          showThinkingIndicator
+          streamdownComponents={session.streamdownComponents}
+          threadRef={threadRef}
+          userMessageEdit={userMessageEdit}
+        />
       </ChatApprovalContext>
     </ChatMattersContext>
   );
@@ -287,14 +284,19 @@ export const openChatThreadDomPage = async ({
                   }}
                 >
                   <Suspense fallback={<p>{SUSPENDED}</p>}>
-                    <ChatThreadDomPage
-                      renderComposer={renderComposer}
-                      onSession={(next) => {
-                        session = next;
-                      }}
-                      organizationId={organizationId}
-                      threadId={threadId}
-                    />
+                    {/* Above the page, as the app mounts it: the selection bar
+                        quotes into the composer, and an edit hands its draft
+                        back to it, through the editor manager. */}
+                    <ChatEditorProvider>
+                      <ChatThreadDomPage
+                        renderComposer={renderComposer}
+                        onSession={(next) => {
+                          session = next;
+                        }}
+                        organizationId={organizationId}
+                        threadId={threadId}
+                      />
+                    </ChatEditorProvider>
                   </Suspense>
                 </AuthenticatedUserProvider>
               </FormattingProvider>

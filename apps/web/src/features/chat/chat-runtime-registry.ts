@@ -265,19 +265,21 @@ const storedThreadReaders = new WeakMap<
  * an unchanged history keeps this runtime, a changed one rebuilds from it.
  * When the stored thread cannot be read (the request failed, or the runtime
  * was built with no thread query to read), the page goes back to
- * `fallback`, the messages it showed before the request.
+ * `fallback`, the messages it showed before the request. Resolves with the
+ * messages the page now shows.
  */
 export const showStoredChatThread = async (
   runtime: ChatRuntime,
   fallback: PersistedChatMessage[],
-): Promise<void> => {
+): Promise<PersistedChatMessage[]> => {
   const read = storedThreadReaders.get(runtime);
   const stored = read === undefined ? undefined : await Result.tryPromise(read);
-  runtime.showStoredMessages(
+  const shown =
     stored === undefined || Result.isError(stored)
       ? fallback
-      : stored.value.messages,
-  );
+      : stored.value.messages;
+  runtime.showStoredMessages(shown);
+  return shown;
 };
 
 const advanceAcknowledgedApprovalSeed = ({

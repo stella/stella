@@ -265,10 +265,21 @@ type RegisteredExtension = {
   token: symbol;
 };
 
+/**
+ * A message the user wrote that has no other place on the page any more,
+ * such as an edit of a message the server dropped: its composer markup, and
+ * the texts it carried as pasted-text attachments.
+ */
+export type ChatMessageDraftHandoff = {
+  html: string;
+  pastedTexts: readonly string[];
+};
+
 type ActiveChatEditorHandle = {
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
   insertPastedText: (attrs: PastedTextAttrs) => void;
+  restoreMessageDraft: (draft: ChatMessageDraftHandoff) => void;
   threadKey: string;
 };
 
@@ -336,6 +347,12 @@ type ChatEditorManagerContextValue = {
     attrs: PastedTextAttrs,
   ) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
+  /** Put `draft` into the thread's live composer, ahead of whatever the
+   *  composer already holds. False when the thread has no live composer. */
+  restoreMessageDraftIntoThread: (
+    threadRef: ChatThreadRef,
+    draft: ChatMessageDraftHandoff,
+  ) => boolean;
   registerExtension: (
     id: string,
     registration: ChatInputExtensionRegistration,
@@ -508,6 +525,21 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const restoreMessageDraftIntoThread = useCallback(
+    (threadRef: ChatThreadRef, draft: ChatMessageDraftHandoff): boolean => {
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        getChatThreadKey(threadRef),
+      );
+      if (activeEditor === null) {
+        return false;
+      }
+      activeEditor.restoreMessageDraft(draft);
+      return true;
+    },
+    [],
+  );
+
   const focusThread = useCallback((threadRef: ChatThreadRef) => {
     mountedEditorFor(
       mountedEditorsRef.current,
@@ -524,6 +556,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
+      restoreMessageDraftIntoThread,
       searchMentionItems,
     }),
     [
@@ -534,6 +567,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
+      restoreMessageDraftIntoThread,
       searchMentionItems,
     ],
   );
@@ -1019,6 +1053,35 @@ export const useChatEditor = ({
     markDraftStarted();
   });
 
+  // A message the user wrote comes back into the composer the way a sent
+  // message is recalled (`userMessageComposerContent`), so its chips and
+  // line breaks survive. What the composer already holds is kept, after it
+  // and a paragraph between them.
+  const restoreMessageDraft = useLatestCallback(
+    ({ html, pastedTexts }: ChatMessageDraftHandoff) => {
+      const targetEditor = editorRef.current;
+      if (!isUsableEditor(targetEditor)) {
+        return;
+      }
+      const content = userMessageComposerContent(html);
+      if (targetEditor.isEmpty) {
+        targetEditor.commands.setContent(content);
+      } else {
+        const sizeBefore = targetEditor.state.doc.content.size;
+        targetEditor.commands.insertContentAt(0, content);
+        const inserted = targetEditor.state.doc.content.size - sizeBefore;
+        targetEditor.commands.insertContentAt(inserted, {
+          type: "paragraph",
+        });
+      }
+      for (const text of pastedTexts) {
+        addPastedTextAttachment(text);
+      }
+      markDraftStarted();
+      targetEditor.commands.focus("end");
+    },
+  );
+
   // Everything passed to `useEditor` below (except event handlers) must keep
   // a stable identity across renders: the react binding shallow-compares the
   // options on every render and re-applies them to the live editor
@@ -1298,9 +1361,17 @@ export const useChatEditor = ({
         focus,
         insertMention,
         insertPastedText,
+        restoreMessageDraft,
         threadKey,
       }),
-    [focus, insertMention, insertPastedText, registerActiveEditor, threadKey],
+    [
+      focus,
+      insertMention,
+      insertPastedText,
+      registerActiveEditor,
+      restoreMessageDraft,
+      threadKey,
+    ],
   );
 
   const updateAttachments = useCallback(

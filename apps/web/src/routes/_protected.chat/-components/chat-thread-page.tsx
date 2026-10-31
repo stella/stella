@@ -311,6 +311,7 @@ export const ChatThreadPage = ({
     ensureAIAvailable,
     holdQueueForMessageEdit,
     startUserMessageEdit,
+    threadRef,
   });
 
   const sentMessageHistory = getUserMessageHistory(messages);

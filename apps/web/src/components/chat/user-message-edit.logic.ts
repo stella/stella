@@ -69,6 +69,28 @@ export type UserMessageEditFailure = Exclude<
   { type: "accepted" }
 >;
 
+/**
+ * What sending an edit came to, as the session hands it to the page. The
+ * session keeps the edit it was sent until the server answers: when the
+ * thread it then shows no longer holds the edited message (the server
+ * dropped it), the edit comes back as `orphanedEdit`, so the page puts it
+ * into the composer instead of losing it with the message's form.
+ */
+export type UserMessageEditResult =
+  | { orphanedEdit: null; outcome: UserMessageEditOutcome }
+  | { orphanedEdit: UserMessageEdit; outcome: UserMessageEditFailure };
+
+/** An orphaned edit as the composer takes it: its markup, and the texts of
+ *  its pasted-text attachments. */
+export const userMessageEditHandoff = (
+  edit: UserMessageEdit,
+): { html: string; pastedTexts: string[] } => ({
+  html: edit.html,
+  pastedTexts: edit.attachments
+    .filter(isChatPastedTextPart)
+    .map(({ content }) => content),
+});
+
 /** The notice for each code the server refuses an edit with. */
 const EDIT_REFUSAL_NOTICE_KEYS = {
   [CHAT_MESSAGE_EDIT_ERROR_CODE.historyChanged]:
