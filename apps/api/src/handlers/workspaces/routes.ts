@@ -43,6 +43,7 @@ import recoverMatterSteward from "@/api/handlers/workspaces/steward/update";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateWorkspace from "@/api/handlers/workspaces/update";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
+import readVocabulary from "@/api/handlers/workspaces/vocabulary/get";
 import readWorkflow from "@/api/handlers/workspaces/workflow/get";
 import workflowStart from "@/api/handlers/workspaces/workflow/start";
 import workflowTargetCount from "@/api/handlers/workspaces/workflow/targets/count";
@@ -149,6 +150,7 @@ export const workspacesRoute = mount(
           POST: updateWorkspace,
           DELETE: deleteWorkspace,
         },
+        "/vocabulary": { GET: readVocabulary },
         "/workflow": { GET: readWorkflow },
         "/workflow/start": { POST: workflowStart },
         "/workflow/target-count": { POST: workflowTargetCount },

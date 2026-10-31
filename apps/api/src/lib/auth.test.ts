@@ -12,6 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import {
@@ -46,13 +47,14 @@ import {
   TWO_FACTOR_SESSION_PATHS,
   withStellaTwoFactorSignInGate,
 } from "@/api/lib/auth";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
+import { SESSION_ABSOLUTE_AGE_MS } from "@/api/lib/auth/session-liveness";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { insertWorkspaceRowsInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -96,6 +98,7 @@ const privateClientWorkspaceId = workspaceId();
 const allMembersWorkspaceId = workspaceId();
 const liveOwnerSessionId = tid();
 const expiredOwnerSessionId = tid();
+const cappedOwnerSessionId = tid();
 const liveMemberSessionId = tid();
 const liveLoneMemberSessionId = tid();
 const liveAssignedMemberSessionId = tid();
@@ -201,6 +204,13 @@ testState.beforeAll(async () => {
       id: liveOwnerSessionId,
       token: tid(),
       userId: ownerInFull,
+      expiresAt: new Date("2100-01-01T00:00:00.000Z"),
+    },
+    {
+      id: cappedOwnerSessionId,
+      token: tid(),
+      userId: ownerInFull,
+      createdAt: new Date(Date.now() - SESSION_ABSOLUTE_AGE_MS - 1),
       expiresAt: new Date("2100-01-01T00:00:00.000Z"),
     },
     {
@@ -554,6 +564,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
     const candidates = [
       liveOwnerSessionId,
       expiredOwnerSessionId,
+      cappedOwnerSessionId,
       liveMemberSessionId,
       liveLoneMemberSessionId,
       liveAssignedMemberSessionId,
@@ -643,7 +654,11 @@ describe("resolveUserRealtimeAuthorization", () => {
     const authorized = await resolveUserRealtimeAuthorization(
       {
         organizationId: orgFull,
-        sessionIds: [liveOwnerSessionId, expiredOwnerSessionId],
+        sessionIds: [
+          liveOwnerSessionId,
+          expiredOwnerSessionId,
+          cappedOwnerSessionId,
+        ],
         userId: ownerInFull,
       },
       testDb,
@@ -1280,12 +1295,17 @@ describe("session freshness", () => {
     expect(getAuth().options.session.freshAge).toBe(0);
   });
 
-  test("the other freshness-gated endpoint (unlink-account) stays disabled", () => {
-    // `freshAge: 0` is only safe because the one other freshness-gated endpoint
-    // Better Auth mounts, `/unlink-account`, is not a Stella feature and is
-    // disabled. If it were re-exposed, relaxing freshAge would let an old
-    // session unlink a provider. Keep these two decisions coupled.
-    expect(getAuth().options.disabledPaths).toContain("/unlink-account");
+  test("account unlinking is available through its confirmation gate", () => {
+    expect(getAuth().options.disabledPaths).not.toContain("/unlink-account");
+  });
+
+  test("sign-in method confirmation requires a signed-in account", async () => {
+    const response = await getAuth().handler(
+      new Request(getAuthEndpointUrl("sign-in-methods/send-otp"), {
+        method: "POST",
+      }),
+    );
+    expect(response.status).toBe(401);
   });
 
   test("session cookie cache stays enabled with its pinned revocation window", () => {

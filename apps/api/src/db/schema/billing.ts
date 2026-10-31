@@ -12,6 +12,7 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   TIME_ENTRY_SUGGESTION_STATUSES,
 } from "@stll/api-contract";
+import { BILLING_CODE_MAX_LENGTH } from "@stll/api-contract/billing";
 import {
   DESKTOP_TIME_ENTRY_BATCH_STATUSES,
   type DesktopTimeEntryBatchResponse,
@@ -191,8 +192,10 @@ export const timeEntries = p.pgTable(
       .text("source", { enum: TIME_ENTRY_SOURCES })
       .notNull()
       .default("manual"),
-    taskCode: p.varchar("task_code", { length: 20 }),
-    activityCode: p.varchar("activity_code", { length: 20 }),
+    taskCode: p.varchar("task_code", { length: BILLING_CODE_MAX_LENGTH }),
+    activityCode: p.varchar("activity_code", {
+      length: BILLING_CODE_MAX_LENGTH,
+    }),
     invoiceId: safeUuid<"invoice">("invoice_id").references(() => invoices.id, {
       onDelete: "set null",
     }),
@@ -623,7 +626,7 @@ export const billingCodes = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     type: p.text("type", { enum: BILLING_CODE_TYPES }).notNull(),
-    code: p.varchar({ length: 20 }).notNull(),
+    code: p.varchar({ length: BILLING_CODE_MAX_LENGTH }).notNull(),
     label: p.varchar({ length: 256 }).notNull(),
     active: p.boolean().notNull().default(true),
     sortOrder: p.integer("sort_order").notNull().default(0),
@@ -879,6 +882,11 @@ export const rateEntries = p.pgTable(
       .text("user_id")
       .references(() => user.id, { onDelete: "cascade" }),
     role: p.text("role", { enum: ORGANIZATION_ROLE_NAMES }),
+    // Optional activity qualifier; user and role targets remain mutually exclusive.
+    activityCodeId: safeUuid<"billingCode">("activity_code_id").references(
+      () => billingCodes.id,
+      { onDelete: "no action" },
+    ),
     hourlyRate: centsColumn("hourly_rate").notNull(),
     effectiveFrom: p.date("effective_from").notNull(),
     effectiveTo: p.date("effective_to"),

@@ -6,6 +6,44 @@ import { PLAN_GUARD_TABLES } from "../../db/plan-guard-tables";
 
 type PlanNode = Record<string, unknown>;
 
+export type IndexedAccessPath = {
+  relation: string;
+  accessKind: "index" | "index-only" | "bitmap";
+  branches: readonly {
+    indexName: string;
+    indexCondition: string | null;
+  }[];
+  combinator: "single" | "and" | "or";
+  recheckCondition: string | null;
+  actualLoops: number | null;
+  actualRows: number | null;
+  /** The scan node that reads the relation, for per-occurrence accounting. */
+  node: PlanNode;
+};
+
+type IndexedAccessPathOptions = {
+  /** Reserve this for covering-index proofs that also verify heap fetches. */
+  accessKind?: IndexedAccessPath["accessKind"];
+};
+
+/** Build synthetic scan inputs without duplicating PostgreSQL node literals. */
+export const indexedScanNodeType = (
+  accessKind: IndexedAccessPath["accessKind"],
+): string => {
+  switch (accessKind) {
+    case "index":
+      return "Index Scan";
+    case "index-only":
+      return "Index Only Scan";
+    case "bitmap":
+      return "Bitmap Heap Scan";
+    default: {
+      const exhaustive: never = accessKind;
+      return exhaustive;
+    }
+  }
+};
+
 export type ScanOccurrence = {
   position: string;
   alias: string | null;
@@ -94,6 +132,90 @@ const attachedDescendants = (node: PlanNode): PlanNode[] => {
   return found;
 };
 
+const numberField = (node: PlanNode, name: string): number | null => {
+  const value = node[name];
+  return typeof value === "number" ? value : null;
+};
+
+/**
+ * Normalize every indexed access to a relation. Bitmap index descendants are
+ * attributed to their heap scan, including descendants of BitmapAnd/BitmapOr.
+ */
+export const indexedAccessPaths = (
+  root: PlanNode,
+  relation: string,
+  options: IndexedAccessPathOptions = {},
+): IndexedAccessPath[] => {
+  const paths: IndexedAccessPath[] = [];
+  const visit = (node: PlanNode) => {
+    const nodeType = field(node, "Node Type");
+    const nodeRelation = field(node, "Relation Name");
+    let path: IndexedAccessPath | null = null;
+    if (
+      nodeRelation === relation &&
+      (nodeType === "Index Scan" || nodeType === "Index Only Scan")
+    ) {
+      path = {
+        relation,
+        accessKind: nodeType === "Index Only Scan" ? "index-only" : "index",
+        branches: [
+          {
+            indexName:
+              field(node, "Index Name") ??
+              panic("Indexed scan is missing its index name"),
+            indexCondition: field(node, "Index Cond"),
+          },
+        ],
+        combinator: "single",
+        recheckCondition: null,
+        actualLoops: numberField(node, "Actual Loops"),
+        actualRows: numberField(node, "Actual Rows"),
+        node,
+      };
+    } else if (nodeRelation === relation && nodeType === "Bitmap Heap Scan") {
+      const indexes = attachedDescendants(node).filter(
+        (candidate) => field(candidate, "Node Type") === "Bitmap Index Scan",
+      );
+      if (indexes.length > 0) {
+        const bitmapNodeTypes = attachedDescendants(node).map((candidate) =>
+          field(candidate, "Node Type"),
+        );
+        let combinator: IndexedAccessPath["combinator"] = "single";
+        if (bitmapNodeTypes.includes("BitmapOr")) {
+          combinator = "or";
+        } else if (bitmapNodeTypes.includes("BitmapAnd")) {
+          combinator = "and";
+        }
+        path = {
+          relation,
+          accessKind: "bitmap",
+          branches: indexes.map((candidate) => ({
+            indexName:
+              field(candidate, "Index Name") ??
+              panic("Bitmap index scan is missing its index name"),
+            indexCondition: field(candidate, "Index Cond"),
+          })),
+          combinator,
+          recheckCondition: field(node, "Recheck Cond"),
+          actualLoops: numberField(node, "Actual Loops"),
+          actualRows: numberField(node, "Actual Rows"),
+          node,
+        };
+      }
+    }
+    if (path !== null && options.accessKind === undefined) {
+      paths.push(path);
+    } else if (path !== null && path.accessKind === options.accessKind) {
+      paths.push(path);
+    }
+    for (const child of childPlans(node)) {
+      visit(child);
+    }
+  };
+  visit(root);
+  return paths;
+};
+
 const subplansOf = (node: PlanNode, position: string) => {
   const found: ScanOccurrence["subplans"][number][] = [];
   const visit = (parent: PlanNode, path: string) => {
@@ -156,6 +278,30 @@ const indexDetails = (node: PlanNode) => {
 };
 
 /** Decode Drizzle/PGlite's single JSON EXPLAIN row; malformed plans fail closed. */
+/**
+ * The text-plan header of a plain index scan in one direction. Ordered page
+ * walks need it: only an index scan returns rows in index order, so a bitmap
+ * path cannot stop after one page.
+ */
+export const orderedIndexScanHeader = (direction: "forward" | "backward") =>
+  direction === "forward" ? "Index Scan" : "Index Scan Backward";
+
+/**
+ * Whether the relation is read through the named index in index order: a
+ * plain or index-only scan. A bitmap path reads the same index but returns
+ * rows in heap order, so it never proves an ordered page walk.
+ */
+export const orderedIndexAccess = (
+  root: PlanNode,
+  relation: string,
+  indexName: string,
+) =>
+  indexedAccessPaths(root, relation).some(
+    ({ accessKind, branches }) =>
+      accessKind !== "bitmap" &&
+      branches.some((branch) => branch.indexName === indexName),
+  );
+
 export const explainRoot = (explained: unknown): PlanNode => {
   const rows = isRecord(explained) ? explained["rows"] : explained;
   if (!isUnknownArray(rows) || rows.length !== 1) {

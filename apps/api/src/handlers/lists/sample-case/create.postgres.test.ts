@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 import { MATTER_VISIBILITY } from "@stll/api-contract/matter-visibility";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -53,7 +54,6 @@ import {
   NO_AUDIT,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import createSampleCase, { loadSampleCase } from "./create";
 import { SAMPLE_FACTS } from "./sample-case.data";

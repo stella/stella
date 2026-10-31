@@ -4,11 +4,10 @@ import { panic, Result, UnhandledException } from "better-result";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapApiResponse } from "@/lib/errors/api";
-import { readQueryResult } from "@/lib/errors/query-result";
+import { captureQueryError, readQueryResult } from "@/lib/errors/query-result";
 import { queryView } from "@/lib/query-view.logic";
 
 export type DesktopPresenceType = DesktopPresence["type"];
@@ -38,7 +37,7 @@ export const desktopPresenceOptions = (key: DesktopPresenceKey) =>
           cause instanceof Error ? cause : new UnhandledException({ cause }),
       });
       if (Result.isError(result) && !signal.aborted) {
-        getAnalytics().captureError(result.error, {
+        captureQueryError(result.error, {
           fingerprintKey: "desktopPresenceOptions.queryFn:failure",
           scope: {
             type: "handler",

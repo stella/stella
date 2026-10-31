@@ -4,6 +4,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { waitForExternalState } from "@stll/property-testing/external-state";
+import { createTestState } from "@stll/test-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -33,7 +34,6 @@ import {
   createTestHandlerContext,
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 import readList from "../get";
 import createColumn from "./create";

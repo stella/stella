@@ -19,6 +19,15 @@ or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
+## account-exports
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `account-exports.create` | write | stella:account_export_write | — | generic invoke → `stella capability account-exports create` |
+| `account-exports.download.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports download-get` |
+| `account-exports.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports get` |
+| `account-exports.status.get` | read | stella:account_export_read | — | generic invoke → `stella capability account-exports status-get` |
+
 ## audit-logs
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -343,6 +352,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `matters.steward.update` | write | stella:matters_write | — | generic invoke → `stella capability matters steward-update` |
 | `matters.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `matters.update` | write | stella:matters_write | — | covered by `save_matter` |
+| `matters.vocabulary.get` | read | stella:read | — | generic invoke → `stella capability matters vocabulary-get` |
 | `matters.workflow.get` | read | stella:read | — | generic invoke → `stella capability matters workflow-get` |
 | `matters.workflow.start` | write | stella:matters_write | — | generic invoke → `stella capability matters workflow-start` |
 | `matters.workflow.targets.count` | read | stella:read | — | generic invoke → `stella capability matters workflow-targets-count` |
@@ -728,8 +738,8 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
-| auth_plumbing | 36 |
-| billing_ui | 1 |
+| auth_plumbing | 33 |
+| billing_ui | 2 |
 | chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
@@ -739,7 +749,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 12 |
 | native_tool_ui | 8 |
 | provider_secret | 34 |
-| public_indexing | 8 |
+| public_indexing | 9 |
 | realtime_stream | 9 |
 | search_ui | 19 |
 | session_token_exchange | 21 |

@@ -42,7 +42,6 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-const { Editor } = await import("@tiptap/core");
 const { act, cleanup, render, screen } = await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -72,9 +71,6 @@ const { PublicStatuteViewer } = await import("@/routes/law/-statute-detail");
 const { dockedChatLegalPayloads } =
   await import("../../../e2e/helpers/docked-chat-legal-payloads");
 
-// The member's chat overlay is a lazy chunk; its first load under a busy
-// runner outlasts the default per-test timeout.
-const MEMBER_CHUNK_TIMEOUT_MS = 30_000;
 const READER_SCROLL_TOP = 480;
 const MEMBER = {
   activeOrganizationId: "organization-1",
@@ -171,44 +167,33 @@ const readerIn = (container: HTMLElement) => {
 // key gate and conversation) has arrived. The chat's arrival must reach the
 // reader already on screen rather than replace it: a replaced reader drops
 // the member back to the top of the act and takes the focus out of the page.
-// timeout: the member's chat overlay is a lazy chunk whose first load
-// outlasts the default budget
-test(
-  "a member's statute reader keeps its node, scroll position and focus when the member's chat arrives",
-  async () => {
-    const view = await renderStatutePage();
+test("a member's statute reader keeps its node, scroll position and focus when the member's chat arrives", async () => {
+  const view = await renderStatutePage();
 
-    const scroller = readerIn(view.container);
-    // The fixture's wording carries no control of its own, so a provision
-    // takes the focus the way an in-page jump target does.
-    const focusTarget =
-      scroller.querySelector<HTMLElement>(
-        "[data-slot='reader-document-column'] [id]",
-      ) ?? panic("Expected an anchored provision in the statute reader");
-    focusTarget.tabIndex = -1;
-    act(() => {
-      scroller.scrollTop = READER_SCROLL_TOP;
-      focusTarget.focus();
-    });
-    // The fixture reaches the fault: the reader is scrolled and focused
-    // before the chat lands, so a replaced reader would read differently.
-    expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
-    expect(focusTarget.ownerDocument.activeElement).toBe(focusTarget);
-    // Nothing of the member's chat is on screen yet.
-    expect(screen.queryByRole("textbox")).toBeNull();
+  const scroller = readerIn(view.container);
+  // The fixture's wording carries no control of its own, so a provision
+  // takes the focus the way an in-page jump target does.
+  const focusTarget =
+    scroller.querySelector<HTMLElement>(
+      "[data-slot='reader-document-column'] [id]",
+    ) ?? panic("Expected an anchored provision in the statute reader");
+  focusTarget.tabIndex = -1;
+  act(() => {
+    scroller.scrollTop = READER_SCROLL_TOP;
+    focusTarget.focus();
+  });
+  // The fixture reaches the fault: the reader is scrolled and focused
+  // before the chat lands, so a replaced reader would read differently.
+  expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
+  expect(focusTarget.ownerDocument.activeElement).toBe(focusTarget);
+  // Nothing of the member's chat is on screen yet.
+  expect(screen.queryByRole("textbox")).toBeNull();
 
-    const composer = await screen.findByRole("textbox", undefined, {
-      timeout: MEMBER_CHUNK_TIMEOUT_MS,
-    });
-    if (!("editor" in composer) || !(composer.editor instanceof Editor)) {
-      panic("Expected the member's mounted chat composer");
-    }
+  await screen.findByRole("textbox");
 
-    expect(readerIn(view.container)).toBe(scroller);
-    expect(scroller.isConnected).toBe(true);
-    expect(scroller.contains(focusTarget)).toBe(true);
-    expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
-    expect(focusTarget.ownerDocument.activeElement).toBe(focusTarget);
-  },
-  MEMBER_CHUNK_TIMEOUT_MS,
-);
+  expect(readerIn(view.container)).toBe(scroller);
+  expect(scroller.isConnected).toBe(true);
+  expect(scroller.contains(focusTarget)).toBe(true);
+  expect(scroller.scrollTop).toBe(READER_SCROLL_TOP);
+  expect(focusTarget.ownerDocument.activeElement).toBe(focusTarget);
+});

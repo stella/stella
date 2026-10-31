@@ -225,6 +225,66 @@ describe("new migration timestamp ordering", () => {
     ).toEqual([]);
   });
 
+  test("rejects the second branch when two branches add the same stamp", () => {
+    const cwd = mkdtempSync(path.join(tmpdir(), "migration-branch-order-"));
+    const runGit = (...arguments_: string[]) => {
+      const result = Bun.spawnSync(["git", ...arguments_], {
+        cwd,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(0);
+    };
+    const stamp = "20260801130000";
+    try {
+      runGit("init", "-b", "main");
+      runGit("config", "user.name", "Test User");
+      runGit("config", "user.email", "test@example.com");
+      runGit("config", "commit.gpgsign", "false");
+      writeFileSync(path.join(cwd, "README.md"), "fixture\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Initial fixture");
+
+      runGit("switch", "-c", "first");
+      const first = migrationDirectory(`${stamp}_first`);
+      mkdirSync(path.join(cwd, first), { recursive: true });
+      writeFileSync(path.join(cwd, first, "migration.sql"), "SELECT 1;\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Add first migration");
+
+      runGit("switch", "main");
+      runGit("switch", "-c", "second");
+      const second = migrationDirectory(`${stamp}_second`);
+      mkdirSync(path.join(cwd, second), { recursive: true });
+      writeFileSync(path.join(cwd, second, "migration.sql"), "SELECT 2;\n");
+      runGit("add", ".");
+      runGit("commit", "-m", "Add second migration");
+
+      runGit("switch", "main");
+      runGit("merge", "--ff-only", "first");
+      runGit("switch", "second");
+      const { changes, baseDirectories: refreshedBaseDirectories } =
+        readMigrationBaseSnapshot({
+          baseRef: "main",
+          cwd,
+        });
+      expect(
+        findMigrationTimestampViolations({
+          addedDirectories: changes.addedDirectories,
+          baseDirectories: refreshedBaseDirectories,
+        }),
+      ).toEqual([
+        {
+          type: "stale-timestamp",
+          directory: second,
+          newestBaseDirectory: first,
+        },
+      ]);
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
   test("names the stale migration among several additions", () => {
     const directory = migrationDirectory("20260801110000_stale");
     expect(
@@ -587,6 +647,7 @@ describe("migration immutability", () => {
 test("the migration CLI rejects bad new dependencies and accepts an aliased base edit", () => {
   const cwd = mkdtempSync(path.join(tmpdir(), "migration-cli-"));
   const scriptPath = path.join(cwd, "scripts/check-migration-order.ts");
+  const stampsPath = path.join(cwd, "scripts/migration-stamps.ts");
   const ledgerPath = path.join(cwd, "apps/api/src/lib/db/migration-ledger.ts");
   const inventoryPath = path.join(
     cwd,
@@ -616,6 +677,7 @@ test("the migration CLI rejects bad new dependencies and accepts an aliased base
       path.join(import.meta.dir, "check-migration-order.ts"),
       scriptPath,
     );
+    copyFileSync(path.join(import.meta.dir, "migration-stamps.ts"), stampsPath);
     copyFileSync(
       path.resolve(
         import.meta.dir,

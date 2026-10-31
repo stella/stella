@@ -113,6 +113,7 @@ beforeAll(async () => {
     rateAtEntry: cents(0),
     currency: "USD",
     narrative: "Test work",
+    activityCode: "A101",
   });
 
   await testDb.insert(timeEntries).values([
@@ -137,6 +138,7 @@ beforeAll(async () => {
       }),
       workspaceId: null,
       activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      activityCode: null,
       currency: UNPRICED_TIME_ENTRY_CURRENCY,
       durationMinutes: 25,
       billedMinutes: 0,
@@ -386,6 +388,9 @@ describe("personal time entries", () => {
     }
 
     expect(result.items).toHaveLength(visibleIds.length);
+    expect(
+      result.items.every(({ activityCode }) => activityCode === "A101"),
+    ).toBe(true);
     expect(result.items.map(({ id }) => id)).toEqual(
       expect.arrayContaining([...visibleIds]),
     );

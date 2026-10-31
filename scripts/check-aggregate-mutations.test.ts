@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 
 import {
   aggregateMutationBaseline,
@@ -13,6 +14,13 @@ const fixture = () =>
     [
       "apps/api/src/lib/db/aggregate-lock.ts",
       "export const AGGREGATE_LOCKS = {workspace: {rank: 1}} as const;",
+    ],
+    [
+      "apps/api/src/lib/api-handlers.ts",
+      readFileSync(
+        new URL("../apps/api/src/lib/api-handlers.ts", import.meta.url),
+        "utf-8",
+      ),
     ],
   ]);
 /** Verifies every declaration site in the fixture; returns how many it found. */
@@ -262,6 +270,34 @@ describe("aggregate declaration sites", () => {
       "Cannot resolve declared aggregate handler implementation",
     );
   });
+
+  test.each([
+    [
+      "createSafeRootHandler",
+      "{}, CALLBACK, { authorize: async () => undefined }",
+    ],
+    ["createSafeHandler", "{}, CALLBACK, { authorize: async () => undefined }"],
+    [
+      "createSafeSessionHandler",
+      "{}, CALLBACK, { checkAccountOperation: async () => undefined }",
+    ],
+    ["createSafeTokenHandler", "{}, async () => ({}), CALLBACK"],
+  ])(
+    "resolves %s implementations from the owning factory contract",
+    (factory, args) => {
+      const sources = fixture();
+      const declaration = `import { ${factory} as create } from "@/api/lib/api-handlers"; ${imports}`;
+      const body =
+        'async () => { await withAggregateLock({aggregate: "workspace", id, tx}); }';
+      const endpoint = (callback: string) => `${declaration}
+      const existing = create(${args.replace("CALLBACK", () => callback)});
+      declareAggregateMutation(existing, {type: "aggregate", aggregates: ["workspace"]});`;
+      sources.set(routes, endpoint(body));
+      expect(verify(sources)).toBe(1);
+      sources.set(routes, endpoint("async () => {}"));
+      expect(() => verify(sources)).toThrow("must await withAggregateLock");
+    },
+  );
 
   test.each([
     {
