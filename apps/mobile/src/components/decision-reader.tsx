@@ -2,7 +2,7 @@ import { use } from "react";
 
 import { panic, Result } from "better-result";
 import { Stack } from "expo-router";
-import { FlatList, Linking, Share, View } from "react-native";
+import { FlatList, Linking, Platform, Share, View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -16,6 +16,7 @@ import type { Load } from "@/state/api-request";
 import type { Decision } from "@/state/case-law";
 import { plainTextBlocks, readerBlocks } from "@/state/decision-document";
 import type { ReaderBlock, ReaderRun } from "@/state/decision-document";
+import { linkShareContent } from "@/state/share-content";
 
 /** Points a list level or a quotation is set in from the margin. */
 const INDENT = 16;
@@ -60,6 +61,7 @@ export const DecisionReader = ({
     <>
       <ShareButton url={`${webOrigin}${decision.webPath}`} />
       <FlatList
+        alwaysBounceVertical={false}
         contentContainerStyle={screenStyles.content}
         data={blocks}
         initialNumToRender={12}
@@ -93,7 +95,7 @@ const ShareButton = ({ url }: { url: string }) => {
     <Stack.Toolbar placement="right">
       <Stack.Toolbar.Button
         onPress={() => {
-          void Share.share({ message: url, url });
+          void Share.share(linkShareContent(url, Platform.OS));
         }}
       >
         {barGlyph("share")}

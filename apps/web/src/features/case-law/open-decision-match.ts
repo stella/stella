@@ -121,8 +121,8 @@ type OpenDecisionMatchOptions = {
   navigate: ReturnType<typeof useNavigate>;
   queryClient: QueryClient;
   search: CaseLawSearchScope;
-  /** The reader's UI language, which picks between language versions. */
-  uiLocale: string;
+  /** The reader's languages, which pick between language versions. */
+  readingLanguages: readonly string[];
 };
 
 /**
@@ -208,7 +208,7 @@ export const openDecisionMatch = async ({
   navigate,
   queryClient,
   search,
-  uiLocale,
+  readingLanguages,
 }: OpenDecisionMatchOptions): Promise<boolean> => {
   const resolution = await readDecisionMatch({ excerpt, queryClient, search });
   const match =
@@ -222,7 +222,7 @@ export const openDecisionMatch = async ({
     : {};
 
   const params = createCaseLawDecisionRouteParams(
-    preferredDecisionTarget(only, { uiLocale }),
+    preferredDecisionTarget(only, { readingLanguages }),
   );
 
   await (params.language === undefined

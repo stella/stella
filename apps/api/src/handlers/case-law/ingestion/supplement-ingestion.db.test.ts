@@ -25,11 +25,6 @@ import {
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
-import type {
-  DecisionSupplement,
-  IngestionResult,
-  StoredRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
   normalizeSaosDumpItem,
@@ -58,6 +53,11 @@ import {
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  DecisionSupplement,
+  IngestionResult,
+  StoredRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,

@@ -85,6 +85,15 @@ const nonAnonymousHandlerFactories = factoriesWhere(
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
   "Public SSR modules must use a hydration-safe adapter with a deterministic server snapshot.";
+const IDLE_SCHEDULER_MESSAGE =
+  "Use scheduleIdle from '@/lib/platform/schedule-idle': Safari does not support requestIdleCallback; the shared scheduler provides a cancellable timeout fallback.";
+const idleCallbackGlobals = ["requestIdleCallback", "cancelIdleCallback"].map(
+  (name) => ({ name, message: IDLE_SCHEDULER_MESSAGE }),
+);
+const idleCallbackProperties = idleCallbackGlobals.map(({ name, message }) => ({
+  property: name,
+  message,
+}));
 const publicSsrBrowserGlobals = [
   "devicePixelRatio",
   "document",
@@ -161,12 +170,16 @@ const publicSsrAmbientProperties = [
 const publicSsrAmbientStateRules = {
   "no-restricted-globals": [
     "error",
-    { globals: publicSsrBrowserGlobals, checkGlobalObject: true },
+    {
+      globals: [...publicSsrBrowserGlobals, ...idleCallbackGlobals],
+      checkGlobalObject: true,
+    },
   ],
   "no-restricted-properties": [
     "error",
     publicSsrDateNowRestriction,
     ...publicSsrAmbientProperties,
+    ...idleCallbackProperties,
   ],
 } satisfies NonNullable<OxlintOverride["rules"]>;
 
@@ -547,6 +560,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-global-testing-library-screen",
     "bun-test-hygiene/no-unmanaged-database-client",
     "bun-test-hygiene/no-forced-database-drop",
+    "bun-test-hygiene/no-wait-for-under-fake-timers",
     "bun-test-hygiene/require-module-mock-reset",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
@@ -1304,6 +1318,7 @@ const config = defineConfig({
     // and scripts/check-oxlint-effective-config.ts fails on that.
     "stella-lowercase/stella-lowercase": "error",
     "no-first-observer-entry/no-first-observer-entry": "error",
+    "no-plan-scan-node-literals/no-plan-scan-node-literals": "error",
     "no-raw-colors/no-raw-colors": "error",
     "no-useless-assignment": "error",
     "promise/no-return-in-finally": "error",
@@ -1839,6 +1854,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-ad-hoc-inline-rename.ts",
     "./.oxlint-plugins/no-first-observer-entry.ts",
+    "./.oxlint-plugins/no-plan-scan-node-literals.ts",
     "./.oxlint-plugins/no-hookless-use-function.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-inline-heavy-host-props.ts",
@@ -2355,6 +2371,17 @@ const config = defineConfig({
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/lib/platform/schedule-idle.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          { globals: idleCallbackGlobals, checkGlobalObject: true },
+        ],
+        "no-restricted-properties": ["error", ...idleCallbackProperties],
+      },
+    },
+    {
       // `apps/web` runs each DOM test file in its own process; the packages
       // run them together, where `screen` reads another file's document.
       files: ["packages/**/*.dom.test.{ts,tsx}"],
@@ -2373,6 +2400,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
         "bun-test-hygiene/no-forced-database-drop": "error",
+        "bun-test-hygiene/no-wait-for-under-fake-timers": "error",
         "bun-test-hygiene/require-module-mock-reset": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },

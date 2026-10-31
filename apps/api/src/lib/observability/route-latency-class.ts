@@ -212,6 +212,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/files/:workspaceId/document-properties/:fieldId": "crud",
   "GET /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId": "crud",
   "GET /v1/files/:workspaceId/email-html/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/marked/:fieldId": "crud",
   "GET /v1/files/:workspaceId/ocr-export/:fieldId": "crud",
   "GET /v1/files/:workspaceId/office-citation/:entityId/:fieldId/:blockId":
     "crud",
@@ -565,6 +566,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/desktop-registry/renew": "crud",
   "POST /v1/desktop-registry/request": "crud",
   "POST /v1/desktop/presence": "crud",
+  "POST /v1/desktop/time-entries/narrative": "ai",
   "POST /v1/dev/clean": "crud",
   "POST /v1/dev/clear-cache": "crud",
   "POST /v1/dev/public-law-connection": "crud",

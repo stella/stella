@@ -220,6 +220,7 @@ const canonicalDecision = {
 const canonicalSearchHit = {
   ...canonicalDecision,
   decisionId: documentId,
+  decisionTypeKind: null,
   identifiers: [{ type: "case-number", value: canonicalDecision.caseNumber }],
   textWithheldReason: null,
   keywords: null,
