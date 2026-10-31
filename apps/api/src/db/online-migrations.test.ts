@@ -18,6 +18,7 @@ import {
   CASE_LAW_IDENTIFIER_RETRY_CONSTRAINTS,
 } from "./case-law-identifier-retry-constraint-validation";
 import { CASE_LAW_SITEMAP_PACKING_ENROLLMENT } from "./case-law-sitemap-packing-enrollment";
+import { CLIENT_INVOICE_TENANT_KEY } from "./client-invoice-backfill";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import {
@@ -52,10 +53,17 @@ import {
 import {
   EXECUTABLE_ONLINE_UNIQUE_INDEX_NAMES,
   type ExecutableOnlineUniqueIndexName,
+  INVOICE_TENANT_UNIQUE_INDEX,
   ONLINE_UNIQUE_INDEX_VALIDATION_DEFINITIONS,
   onlineUniqueIndexDefinition,
 } from "./online-unique-indexes";
-import { DEPLOY_BLOCKING, FINALIZED, PENDING } from "./online-work-lifecycle";
+import {
+  DEPLOY_BLOCKING,
+  FINALIZED,
+  isMigrateReady,
+  ONLINE_WORK_LIFECYCLE,
+  PENDING,
+} from "./online-work-lifecycle";
 import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -1195,6 +1203,37 @@ describe("online migrations", () => {
         ),
     ).toHaveLength(1);
     expect(harness.released()).toBe(true);
+  });
+
+  // A fresh database has none of the online work; build_finalized builds only
+  // what every migrate run owns, and startup must still validate what it left.
+  test("startup validates a fresh database that build_finalized migrated, reporting work that waits on pending work", async () => {
+    const harness = createHarness({
+      emptyRepairTables: true,
+      missingIndexes: ONLINE_MIGRATION_INDEXES.map(({ name }) => name),
+    });
+    expect(
+      await runOnlineMigrations(harness.pool, {
+        repairs: ONLINE_MIGRATION_REPAIRS,
+        scope: FINALIZED_SCOPE,
+        lifecycle: ONLINE_WORK_LIFECYCLE,
+      }),
+    ).toEqual({ type: "complete" });
+
+    const report = await reportOnlineMigrations(harness.pool, {
+      repairs: ONLINE_MIGRATION_REPAIRS,
+      lifecycle: ONLINE_WORK_LIFECYCLE,
+    });
+    const pending = new Set(report.pending.map(({ name }) => name));
+    expect(pending.has(INVOICE_TENANT_UNIQUE_INDEX.name)).toBe(true);
+    expect(pending.has(CLIENT_INVOICE_TENANT_KEY.name)).toBe(true);
+    expect(pending.has("invoices_original_organization_fk")).toBe(true);
+    // Work every migrate run owns is complete, so nothing it owns is pending.
+    expect(
+      Object.entries(ONLINE_WORK_LIFECYCLE).flatMap(([name, entry]) =>
+        pending.has(name) && isMigrateReady(entry) ? [name] : [],
+      ),
+    ).toEqual([]);
   });
 
   test("every validation a registered repair runs is declared, and each runs once", async () => {
@@ -2848,13 +2887,18 @@ const createHarness = ({
             query.includes('AS "uniquePresent"') &&
             query.includes('AS "foreignReady"')
           ) {
+            // The tenant key rests on its unique index; without it nothing of
+            // the installation can exist.
+            const installed = !pendingIndexes.has(
+              INVOICE_TENANT_UNIQUE_INDEX.name,
+            );
             return [
               {
-                indexReady: true,
-                uniquePresent: true,
-                uniqueReady: true,
-                foreignPresent: true,
-                foreignReady: true,
+                indexReady: installed,
+                uniquePresent: installed,
+                uniqueReady: installed,
+                foreignPresent: installed,
+                foreignReady: installed,
               },
             ];
           }

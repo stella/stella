@@ -10,11 +10,13 @@ import {
 } from "./online-ddl";
 import type { OnlineConstraintValidation } from "./online-ddl";
 import type { OnlineRepair } from "./online-migration-connection";
+import type { OnlineWorkLifecycleName } from "./online-work-lifecycle";
 
-/** Indexes are ready before repairs; startup refuses an unfinished installation. */
+/** Its reader and its installation both need the tenant key index built. */
 export const CLIENT_INVOICE_TENANT_KEY = {
   introducedBy: "20261026220000_client_invoices",
   name: "client-invoice-tenant-key",
+  dependsOn: ["invoices_id_org_unique"],
   readCompletion: async (connection) =>
     (await readInvoiceTenantKeyInstalled(connection))
       ? { type: "complete" }
@@ -109,11 +111,24 @@ export const CLIENT_INVOICE_CONSTRAINTS = [
   },
 ] as const satisfies readonly OnlineConstraintValidation[];
 
+/** Constraints an online unit, not a schema migration, installs. */
+const CLIENT_INVOICE_CONSTRAINT_DEPENDENCIES: Partial<
+  Record<
+    (typeof CLIENT_INVOICE_CONSTRAINTS)[number]["constraintName"],
+    readonly OnlineWorkLifecycleName[]
+  >
+> = {
+  invoices_original_organization_fk: [CLIENT_INVOICE_TENANT_KEY.name],
+};
+
 export const CLIENT_INVOICE_CONSTRAINT_VALIDATIONS =
   CLIENT_INVOICE_CONSTRAINTS.map(
     (constraint) =>
       ({
         name: constraint.constraintName,
+        dependsOn:
+          CLIENT_INVOICE_CONSTRAINT_DEPENDENCIES[constraint.constraintName] ??
+          [],
         introducedBy: {
           type: "code",
           owner: "src/db/client-invoice-backfill.ts",

@@ -211,6 +211,9 @@ export const ONLINE_WORK_LIFECYCLE = {
   usage_events_action_type_domain: PENDING,
 } as const satisfies Record<string, OnlineWorkLifecycle>;
 
+/** A registered unit's name; only names the lifecycle holds compile. */
+export type OnlineWorkLifecycleName = keyof typeof ONLINE_WORK_LIFECYCLE;
+
 declare const finalizedWorkBrand: unique symbol;
 
 export type FinalizedWorkName = {

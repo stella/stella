@@ -3,6 +3,7 @@ import { expect, expectTypeOf, test } from "bun:test";
 import {
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEXES,
+  ONLINE_WORK_DEPENDENCIES,
   ONLINE_WORK_NAMES,
 } from "./online-migrations";
 import {
@@ -64,6 +65,26 @@ test("migrate-ready work is deploy-blocking or finalized, never pending", () => 
   expectTypeOf<
     Admits<"contacts_external_ref_check", MigrateReadyWorkName>
   >().toEqualTypeOf<false>();
+});
+
+// The walk, and the runner after it, visit units in ONLINE_WORK_NAMES order,
+// so a prerequisite is reached before the unit that needs it.
+test("every prerequisite precedes its dependent in walk order", () => {
+  const order = new Map<string, number>(
+    ONLINE_WORK_NAMES.map((name, position) => [name, position]),
+  );
+  const late = [...ONLINE_WORK_DEPENDENCIES].flatMap(([name, prerequisites]) =>
+    prerequisites.flatMap((prerequisite) =>
+      (order.get(prerequisite) ?? Number.POSITIVE_INFINITY) >=
+      (order.get(name) ?? Number.NEGATIVE_INFINITY)
+        ? [`${prerequisite} -> ${name}`]
+        : [],
+    ),
+  );
+  expect(late).toEqual([]);
+  expect(ONLINE_WORK_DEPENDENCIES.get("client-invoice-tenant-key")).toEqual([
+    "invoices_id_org_unique",
+  ]);
 });
 
 // Startup reads deploy-blocking work from pg_index when another session holds

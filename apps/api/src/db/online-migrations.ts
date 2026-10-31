@@ -1009,6 +1009,19 @@ export const ONLINE_WORK_NAMES = [
   ...ONLINE_MIGRATION_REPAIRS.map(({ name }) => name),
 ] satisfies readonly OnlineWorkName[];
 
+/** Each unit's declared prerequisites; a unit without any is absent. */
+export const ONLINE_WORK_DEPENDENCIES: ReadonlyMap<
+  OnlineWorkName,
+  readonly OnlineWorkName[]
+> = new Map(
+  ONLINE_MIGRATION_REPAIRS.flatMap(
+    (repair): [OnlineWorkName, readonly OnlineWorkName[]][] =>
+      "dependsOn" in repair && repair.dependsOn.length > 0
+        ? [[repair.name, repair.dependsOn]]
+        : [],
+  ),
+);
+
 /**
  * Every constraint a registered repair validates through the table gate. The
  * entity feature gate's checks are validated on each relation of a graph the
@@ -1722,6 +1735,34 @@ const processOnlineRepairAt = async ({
     });
   }
 
+  // A repair's reader presupposes its dependencies, which the walk reached
+  // first: while one is pending this repair is pending too, and unread.
+  const waitingOn =
+    mode.operation === "validate"
+      ? repair.dependsOn?.find((dependency) =>
+          mode.report.pending.some(({ name }) => name === dependency),
+        )
+      : undefined;
+  if (mode.operation === "validate" && waitingOn !== undefined) {
+    reportPendingStep({
+      report: mode.report,
+      lifecycle: mode.lifecycle,
+      step: {
+        kind: "repair",
+        name: repair.name,
+        introducedBy: repair.introducedBy,
+      },
+      reason: `waits for ${waitingOn}`,
+    });
+    return await processOnlineRepairAt({
+      connection,
+      inScope,
+      mode,
+      repairs,
+      log,
+      offset: offset + 1,
+    });
+  }
   const completion = await repair.readCompletion(connection);
   if (mode.operation === "validate") {
     if (completion.type !== "complete") {

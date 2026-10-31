@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { OnlineTableGate } from "./online-ddl";
+import type { OnlineWorkLifecycleName } from "./online-work-lifecycle";
 
 /**
  * The connection the online phase of a migration runs on, and the shape of a
@@ -123,6 +124,13 @@ export type OnlineStepIntroduction = string | CodeOwnedOnlineStep;
 export type OnlineRepair = {
   introducedBy: OnlineStepIntroduction;
   name: string;
+  /**
+   * Units whose completion `readCompletion` and `repair` presuppose. Each
+   * precedes this repair in the walk; while one is incomplete this repair is
+   * not read and counts as pending, and a migrate-ready repair may depend
+   * only on migrate-ready work (`scripts/check-online-work-lifecycle.ts`).
+   */
+  dependsOn?: readonly OnlineWorkLifecycleName[];
   readCompletion: (
     connection: OnlineMigrationConnection,
   ) => Promise<OnlineRepairCompletion>;
