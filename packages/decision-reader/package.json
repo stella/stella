@@ -50,7 +50,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/decision-reader"
   },
   "dependencies": {
-    "@fontsource-variable/source-serif-4": "^5.3.0",
+    "@fontsource-variable/source-serif-4": "^5.3.1",
     "@stll/api-contract": "workspace:*",
     "@stll/legal-ast": "workspace:*",
     "@stll/legal-atlas": "workspace:*",

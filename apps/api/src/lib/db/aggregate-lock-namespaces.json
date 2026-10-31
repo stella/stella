@@ -1,6 +1,7 @@
 {
   "automatedFlowRunCap": "0x0f10cca9::integer",
   "billingCodeCapacity": "hashtext('billing-code-capacity')",
+  "caseLawSitemapMonth": "0x0f10ccb5::integer",
   "caseLawRepublication": "0x0f10ccae::integer",
   "chatOwnerStoredContentEgress": "0x0f10ccb4::integer",
   "chatStoredContentEgress": "0x0f10ccb3::integer",

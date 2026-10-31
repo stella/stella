@@ -1,0 +1,4 @@
+{
+  "kind": "priority",
+  "qualifier": "Publishes the refreshed API test memory profile as a signed-commit pull request."
+}

@@ -101,10 +101,6 @@ export const DOC_SOURCES = {
     dependencies: ["react", "react-dom", "@types/react", "@types/react-dom"],
     url: "https://react.dev/llms.txt",
   },
-  ReactEmail: {
-    dependencies: ["@react-email/components", "@react-email/render"],
-    url: "https://react.email/docs/llms.txt",
-  },
   BaseUI: {
     dependencies: ["@base-ui/react"],
     url: "https://base-ui.com/llms.txt",
@@ -146,12 +142,19 @@ export const DOC_SOURCES = {
   },
   Expo: {
     dependencies: [
+      "@expo-google-fonts/dm-sans",
       "@expo/fingerprint",
+      "@expo/ui",
+      "@expo/vector-icons",
       "expo",
       "expo-constants",
       "expo-crypto",
       "expo-dev-client",
+      "expo-document-picker",
       "expo-doctor",
+      "expo-font",
+      "expo-glass-effect",
+      "expo-notifications",
       "expo-linking",
       "expo-router",
       "expo-secure-store",
@@ -159,8 +162,10 @@ export const DOC_SOURCES = {
       "expo-system-ui",
       "expo-updates",
       "expo-web-browser",
+      "expo-widgets",
       "react-native-safe-area-context",
       "react-native-screens",
+      "react-native-svg",
     ],
     url: "https://docs.expo.dev/llms.txt",
   },
@@ -182,6 +187,7 @@ export const DOC_SOURCES = {
       "@aws-sdk/client-cloudwatch",
       "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
+      "@aws-sdk/client-ssm",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
       "@aws-sdk/client-sts",
@@ -255,7 +261,7 @@ export const DOC_SOURCES = {
     url: "https://fontsource.org/llms.txt",
   },
   Lucide: {
-    dependencies: ["lucide-react"],
+    dependencies: ["lucide-react", "lucide-react-native", "lucide-static"],
     url: "https://lucide.dev/llms.txt",
   },
   Tsdown: {
@@ -289,6 +295,10 @@ export const DOC_SOURCES = {
   AgentDevice: {
     dependencies: ["agent-device"],
     url: "https://agent-device.dev/llms.txt",
+  },
+  Uniwind: {
+    dependencies: ["uniwind"],
+    url: "https://docs.uniwind.dev/llms.txt",
   },
 } as const satisfies Record<string, DocSource>;
 
@@ -367,6 +377,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
   [
     "@formatjs/icu-messageformat-parser",
     ["https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt"],
+  ],
+  [
+    "@formatjs/intl-pluralrules",
+    [
+      "https://formatjs.github.io/llms.txt",
+      "https://raw.githubusercontent.com/formatjs/formatjs/HEAD/llms.txt",
+    ],
   ],
   [
     "@happy-dom/global-registrator",
@@ -604,6 +621,13 @@ const PROBED_WITHOUT_LLMS_TXT = [
     "scslre",
     ["https://raw.githubusercontent.com/RunDevelopment/scslre/HEAD/llms.txt"],
   ],
+  [
+    "sharp",
+    [
+      "https://sharp.pixelplumbing.com/llms.txt",
+      "https://raw.githubusercontent.com/lovell/sharp/HEAD/llms.txt",
+    ],
+  ],
   ["sherif", ["https://raw.githubusercontent.com/QuiiBz/sherif/HEAD/llms.txt"]],
   [
     "slimdom",
@@ -689,6 +713,17 @@ const noLlmsTxt = ([dependency, urls]: readonly [
 export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
   noLlmsTxt,
 ).concat(
+  ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
+    (dependency) =>
+      ({
+        checkedAt: "2026-10-28T00:00:00.000Z",
+        dependency,
+        explanation:
+          "https://raw.githubusercontent.com/clauderic/dnd-kit/master/llms.txt returns 404; https://dndkit.com/llms.txt and https://docs.dndkit.com/llms.txt reject retrieval with 403. No retrievable index was found. Use the official legacy API reference at https://dndkit.com/legacy/ directly for the retained Kanban consumer contract.",
+        expiresAt: "2026-11-27T00:00:00.000Z",
+        reason: "no-llms-txt",
+      }) satisfies NoLlmsTxtExclusion,
+  ),
   ...[
     "prosemirror-commands",
     "prosemirror-dropcursor",
@@ -718,6 +753,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     explanation:
       "The repository's https://raw.githubusercontent.com/paulmillr/noble-hashes/main/llms.txt returns 404. Use the official README and API declarations at https://github.com/paulmillr/noble-hashes directly; the shared SHA-256 owner uses create(), update() and digest() for bounded browser Blob hashing.",
     expiresAt: "2026-11-23T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
+  {
+    checkedAt: "2026-10-30T00:00:00.000Z",
+    dependency: "whatwg-fetch",
+    explanation:
+      "https://github.github.io/fetch/llms.txt and the repository's llms.txt return 404. Use the README at https://github.com/JakeChampion/fetch directly; the iOS app's request tests use only its Headers, Request and Response classes, which React Native installs as globals.",
+    expiresAt: "2026-11-27T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {
@@ -865,11 +908,11 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     reason: "no-llms-txt",
   },
   {
-    checkedAt: "2026-09-30T00:00:00.000Z",
+    checkedAt: "2026-10-30T00:00:00.000Z",
     dependency: "@standard-schema/spec",
     explanation:
       "https://standardschema.dev/llms.txt returns 404. Use the specification at https://standardschema.dev and the typed interfaces in @standard-schema/spec directly.",
-    expiresAt: "2026-10-30T00:00:00.000Z",
+    expiresAt: "2026-11-29T00:00:00.000Z",
     reason: "no-llms-txt",
   },
   {

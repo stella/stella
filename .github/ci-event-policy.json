@@ -27,6 +27,8 @@
     "release.yml/promote-staging": "main",
     "release.yml/release-health-gate": "main",
     "release.yml/dispatch-release-health": "main",
+    "release-rehearsal.yml/rehearse": "main",
+    "release.yml/publish-chrome-extension": "main",
     "release-health.yml/window": "main",
     "auth-md-spec-check.yml/auth-md-spec-check": "main",
     "marketing-screenshots-update.yml/update": "main",
@@ -70,6 +72,7 @@
     "build-api-image.yml/build": "main",
     "codeql.yml/analyze": "release-pr",
     "pr-lint.yml/pr-lint": "pr-fast",
+    "pr-lint.yml/pr-body-log-lines": "pr-fast",
     "agent-sandbox-canary.yml/real-model-mcp-canary": "main",
     "release-desktop.yml/resolve": "main",
     "release-desktop.yml/build": "main",
@@ -84,6 +87,8 @@
     "mcp-canary.yml/mcp-canary": "main",
     "mcp-canary.yml/desktop-transport-canary": "main",
     "cla.yml/verify-signatures": "pr-fast",
+    "merge-group-hold.yml/merge-group-hold": "pr-fast",
+    "merge-group-hold.yml/dequeue-held-pull-request": "pr-fast",
     "label-sync.yml/label-sync": "main",
     "landing-canary.yml/served": "main",
     "network-baseline-deliver.yml/deliver": "main",
@@ -205,6 +210,7 @@
     "ci.yml/pr-heavy-gate": "pr-fast",
     "ci.yml/ci-result": "pr-fast",
     "security-txt-guard.yml/check": "pr-fast",
+    "api-served-mcp.yml/journeys": "pr-fast",
     "dependency-audit.yml/audit": "main",
     "dependency-audit.yml/remediate": "main",
     "dependency-audit.yml/cargo-advisories": "main",
@@ -274,6 +280,10 @@
     "dependency-audit.yml": {
       "role": "analysis",
       "cancelInProgress": false
+    },
+    "release-rehearsal.yml": {
+      "role": "analysis",
+      "cancelInProgress": true
     }
   },
   "periodicJobs": ["ci.yml/release-typecheck"]

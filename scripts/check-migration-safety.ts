@@ -75,7 +75,7 @@ type GuardedRule = {
 // Never acknowledgeable: the statement has to be rewritten.
 type StatementInvariantRule = {
   id: MigrationSafetyRuleId;
-  description: string;
+  description: string | ((statement: Statement) => string);
   matches: (statement: Statement) => boolean;
   guidance: string;
 };
@@ -876,7 +876,182 @@ const isRefusedPreDeployCommand = (command: string): boolean =>
       isPreDeployValidateConstraint(statement.text),
   );
 
+const ROUTINE_OPTION_KEYWORDS = new Set([
+  "as",
+  "called",
+  "cost",
+  "external",
+  "immutable",
+  "language",
+  "leakproof",
+  "not",
+  "parallel",
+  "returns",
+  "rows",
+  "security",
+  "set",
+  "stable",
+  "strict",
+  "support",
+  "transform",
+  "volatile",
+  "window",
+]);
+
+type SearchPathSetting =
+  | { type: "accepted" }
+  | { type: "missing" }
+  | { type: "repeated" }
+  | { type: "non-canonical" }
+  | { type: "reset" };
+
+const CANONICAL_SEARCH_PATH_PATTERN =
+  /^\s*(?:=|TO)\s*(?:(?!pg_temp)[a-z_][a-z0-9_]*\s*,\s*)*pg_temp\s*$/u;
+
+// Setting names are case-insensitive and may be quoted, so a quoted
+// "search_path" names the same setting as the bare keyword.
+const isSearchPathName = (token: IndexToken | undefined): boolean =>
+  token !== undefined &&
+  token.kind !== "punctuation" &&
+  token.value.toLowerCase() === "search_path";
+
+const readSecurityDefinerSearchPath = (
+  statement: Statement,
+): { functionName: string; setting: SearchPathSetting } | undefined => {
+  const tokens = indexTokens(statement);
+  const functionIndex = tokens.findIndex((token) =>
+    isIndexKeyword(token, "function"),
+  );
+  const isSecurityDefinerFunction = tokens.some(
+    (token, index) =>
+      isIndexKeyword(token, "security") &&
+      isIndexKeyword(tokens[index + 1], "definer"),
+  );
+  if (functionIndex === -1) {
+    return undefined;
+  }
+
+  const nameEnd = tokens.findIndex(
+    (token, index) => index > functionIndex && token.value === "(",
+  );
+  const functionName = tokens
+    .slice(functionIndex + 1, nameEnd === -1 ? functionIndex + 2 : nameEnd)
+    .map(({ value }) => value)
+    .join("");
+  const settingIndexes = tokens.flatMap((token, index) =>
+    isIndexKeyword(token, "set") && isSearchPathName(tokens[index + 1])
+      ? [index]
+      : [],
+  );
+  const resetIndexes = tokens.flatMap((token, index) =>
+    isIndexKeyword(token, "reset") &&
+    (isSearchPathName(tokens[index + 1]) ||
+      isIndexKeyword(tokens[index + 1], "all"))
+      ? [index]
+      : [],
+  );
+  const isCreate = tokens.some((token) => isIndexKeyword(token, "create"));
+  const isAlter = tokens.some((token) => isIndexKeyword(token, "alter"));
+  if (!isCreate && !isAlter) {
+    return undefined;
+  }
+  if (isCreate && !isSecurityDefinerFunction) {
+    return undefined;
+  }
+  if (resetIndexes.length > 0) {
+    return {
+      functionName: functionName || "<unknown>",
+      setting: { type: "reset" },
+    };
+  }
+  if (settingIndexes.length > 1) {
+    return { functionName, setting: { type: "repeated" } };
+  }
+  if (!isSecurityDefinerFunction && settingIndexes.length === 0) {
+    return undefined;
+  }
+
+  const settingIndex = settingIndexes.at(0);
+  if (settingIndex === undefined) {
+    return { functionName, setting: { type: "missing" } };
+  }
+
+  const valueStart = tokens[settingIndex + 1]?.index;
+  if (valueStart === undefined) {
+    return { functionName, setting: { type: "non-canonical" } };
+  }
+  const pathEnd = tokens.find(
+    (token, index) =>
+      index > settingIndex + 1 &&
+      token.kind !== "punctuation" &&
+      ROUTINE_OPTION_KEYWORDS.has(token.value.toLowerCase()),
+  )?.index;
+  const leadingMaskedCharacters = statement.text.length - statement.raw.length;
+  const originalValue = statement.raw.slice(
+    valueStart - leadingMaskedCharacters + "search_path".length,
+    pathEnd === undefined ? undefined : pathEnd - leadingMaskedCharacters,
+  );
+  return {
+    functionName,
+    setting: CANONICAL_SEARCH_PATH_PATTERN.test(originalValue)
+      ? { type: "accepted" }
+      : { type: "non-canonical" },
+  };
+};
+
+const securityDefinerSearchPathEndsWithPgTemp = (
+  statement: Statement,
+): boolean => {
+  const result = readSecurityDefinerSearchPath(statement);
+  if (!result) {
+    return true;
+  }
+  switch (result.setting.type) {
+    case "accepted":
+      return true;
+    case "missing":
+    case "repeated":
+    case "non-canonical":
+    case "reset":
+      return false;
+    default: {
+      result.setting satisfies never;
+      return panic("Unhandled search_path setting");
+    }
+  }
+};
+
 const STATEMENT_INVARIANT_RULES = [
+  {
+    id: "security-definer-search-path",
+    description: (statement) => {
+      const result = readSecurityDefinerSearchPath(statement);
+      if (!result) {
+        return "function <unknown> has an invalid search_path setting";
+      }
+      switch (result.setting.type) {
+        case "repeated":
+          return `function ${result.functionName} has a repeated search_path setting`;
+        case "reset":
+          return `function ${result.functionName} resets search_path`;
+        case "missing":
+          return `function ${result.functionName} is missing a search_path setting`;
+        case "non-canonical":
+          return `function ${result.functionName} has a non-canonical search_path setting`;
+        case "accepted":
+          return panic("Accepted search_path cannot produce a finding");
+        default: {
+          result.setting satisfies never;
+          return panic("Unhandled search_path setting");
+        }
+      }
+    },
+    matches: (statement) =>
+      !statement.deferred &&
+      !securityDefinerSearchPathEndsWithPgTemp(statement),
+    guidance:
+      "Use exactly one SET search_path = <unquoted lowercase identifiers>, pg_temp clause.",
+  },
   {
     id: "pre-deploy-concurrent-index",
     description: "builds an index concurrently during the pre-deploy phase",
@@ -1195,6 +1370,7 @@ const INDEX_BUILD_HINT_PATTERN =
 // cursor loops and batch-looking DML cannot hide a data backfill in a DO block
 // or stored function.
 const ROW_LOOP_PATTERN = /\bLOOP\b/iu;
+const TRIGGER_ROUTINE_PREFIX_PATTERN = /\bRETURNS\s+trigger\b/iu;
 const RELATION_ACCESS_PATTERN =
   /\b(?:FROM|JOIN|UPDATE|INSERT\s+INTO|DELETE\s+FROM|MERGE\s+INTO)\b/iu;
 
@@ -1211,7 +1387,11 @@ const surfaceQuotedBody = ({
   const deferred = !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(prefix);
   const bodyStatements = parseStatements(body);
   const maskedBody = bodyStatements.map(({ text }) => text).join("\n");
+  // A trigger routine cannot be called; it runs only when its trigger fires on
+  // a write, and pre-deploy writes are refused on their own. Its loops are
+  // per-write work, not a migration step over existing rows.
   const rowLoop =
+    !(deferred && TRIGGER_ROUTINE_PREFIX_PATTERN.test(prefix)) &&
     ROW_LOOP_PATTERN.test(maskedBody) &&
     RELATION_ACCESS_PATTERN.test(maskedBody);
   const literalFragments = bodyStatements.flatMap(({ literals }) =>
@@ -2620,7 +2800,10 @@ const checkSource = (
           file,
           line: statement.line,
           ruleId: rule.id,
-          description: rule.description,
+          description:
+            typeof rule.description === "string"
+              ? rule.description
+              : rule.description(statement),
           guidance: rule.guidance,
         });
       }

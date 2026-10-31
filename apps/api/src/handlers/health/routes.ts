@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { STELLA_REST_API_CONTRACT_VERSION } from "@stll/api-contract";
 
+import { DEPLOY_ENV_CONTRACT } from "@/api/deploy-env-contract";
 import { envBase } from "@/api/env-base";
 import type { ResponseSet } from "@/api/http/context";
 import { routes } from "@/api/http/route";
@@ -17,7 +18,6 @@ import {
   createStartupGate,
   STARTUP_STATE,
 } from "@/api/lib/health/startup-gate";
-import { sanctionsStartupWarmup } from "@/api/lib/lists/sanctions/public-read-owner";
 import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
 const BUILD_METADATA = {
@@ -31,7 +31,6 @@ const PROBE_CACHE_TTL_MS = 5000;
 type HealthRouteOptions = {
   readDeployEnvironment?: () => typeof envBase.DEPLOY_ENVIRONMENT;
   probeReadiness?: () => Promise<ReadinessOutcome>;
-  probeSanctionsStartup?: () => "warming" | "terminal";
 };
 
 const readinessOutcome = async (
@@ -63,9 +62,14 @@ const readinessOutcome = async (
 export const createHealthRoute = ({
   readDeployEnvironment = () => envBase.DEPLOY_ENVIRONMENT,
   probeReadiness = probeApiReadiness,
-  probeSanctionsStartup = () => sanctionsStartupWarmup.status().status,
 }: HealthRouteOptions = {}) => {
-  const deployEnvironment = readDeployEnvironment() ?? null;
+  const readinessFields = Object.fromEntries(
+    DEPLOY_ENV_CONTRACT.flatMap(({ readinessField }) =>
+      readinessField === undefined
+        ? []
+        : [[readinessField, readDeployEnvironment() ?? null]],
+    ),
+  );
   const probeCache = createProbeCache(
     async () => await readinessOutcome(probeReadiness),
     { ttlMs: PROBE_CACHE_TTL_MS },
@@ -83,11 +87,11 @@ export const createHealthRoute = ({
       return {
         status: "error",
         message: "Required dependency unavailable",
-        deployEnvironment,
+        ...readinessFields,
         ...BUILD_METADATA,
       };
     }
-    return { status: "ok", deployEnvironment, ...BUILD_METADATA };
+    return { status: "ok", ...readinessFields, ...BUILD_METADATA };
   };
 
   const startedHandler = async ({ set }: { readonly set: ResponseSet }) => {
@@ -95,7 +99,7 @@ export const createHealthRoute = ({
       return { status: STARTUP_STATE.started, ...BUILD_METADATA };
     }
     const outcome = await readinessResponse();
-    if (!outcome.ok || probeSanctionsStartup() !== "terminal") {
+    if (!outcome.ok) {
       set.status = 503;
       return { status: STARTUP_STATE.starting, ...BUILD_METADATA };
     }

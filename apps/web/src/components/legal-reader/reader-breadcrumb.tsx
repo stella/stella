@@ -46,6 +46,8 @@ const middleAfterHover = (state: MiddleState): MiddleState =>
 type ReaderBreadcrumbProps = {
   trail: ReaderTrail;
   rows: readonly ReaderContentsRow[];
+  /** How far each row is indented (`ReaderContents.depths`); flat when absent. */
+  depths?: ReadonlyMap<string, number> | undefined;
   /** The row being read, which Contents marks as the current location. */
   activeAnchorId: string | null;
   onJump: (anchorId: string) => void;
@@ -61,12 +63,31 @@ const revealCurrentRow = (node: HTMLDivElement | null) => {
 
 type ReaderContentsListProps = {
   rows: readonly ReaderContentsRow[];
+  depths: ReadonlyMap<string, number>;
   activeAnchorId: string | null;
   onSelect: (anchorId: string) => void;
 };
 
+const NO_DEPTHS: ReadonlyMap<string, number> = new Map();
+
+/**
+ * The indent of a Contents row, deep enough to tell a subheading from the
+ * heading above it and shallow enough that a deep outline still fits the
+ * popover.
+ */
+const contentsRowIndent = (depth: number): string => {
+  if (depth <= 0) {
+    return "";
+  }
+  if (depth === 1) {
+    return "ps-3";
+  }
+  return depth === 2 ? "ps-6" : "ps-9";
+};
+
 const ReaderContentsList = ({
   rows,
+  depths,
   activeAnchorId,
   onSelect,
 }: ReaderContentsListProps) => {
@@ -83,12 +104,10 @@ const ReaderContentsList = ({
     className?: string;
   }) => (
     <Button
+      layout="wrap"
       aria-current={anchorId === activeAnchorId ? "location" : undefined}
       aria-label={label}
-      className={cn(
-        "min-h-11 min-w-0 flex-1 justify-start text-start whitespace-normal",
-        className,
-      )}
+      className={cn("min-w-0 flex-1", className)}
       data-contents-anchor={anchorId}
       onClick={() => onSelect(anchorId)}
       // The row shows its title; a tooltip of its accessible name would open
@@ -165,7 +184,14 @@ const ReaderContentsList = ({
         {rows.map((entry) => (
           // The AI mark is a control of its own, so it sits beside the jump
           // rather than inside it.
-          <li className="flex items-center gap-1" key={entry.anchorId}>
+          <li
+            className={cn(
+              "flex items-center gap-1",
+              contentsRowIndent(depths.get(entry.anchorId) ?? 0),
+            )}
+            data-contents-depth={depths.get(entry.anchorId) ?? 0}
+            key={entry.anchorId}
+          >
             {row(entry)}
           </li>
         ))}
@@ -174,9 +200,44 @@ const ReaderContentsList = ({
   );
 };
 
+const ReaderHiddenEntries = ({
+  hidden,
+  nameOf,
+  onJump,
+  onClose,
+}: {
+  hidden: ReaderTrail["segments"];
+  nameOf: (title: string) => string;
+  onJump: (anchorId: string) => void;
+  onClose: () => void;
+}) => (
+  <ol>
+    {hidden.map(({ anchorId, title }) => (
+      <li key={anchorId}>
+        <Button
+          layout="wrap"
+          aria-label={nameOf(title)}
+          className="w-full"
+          // As in Contents: the row shows its title, and a tooltip would
+          // take the list's Escape.
+          tooltip={false}
+          onClick={() => {
+            onJump(anchorId);
+            onClose();
+          }}
+          variant="ghost"
+        >
+          <bdi>{title}</bdi>
+        </Button>
+      </li>
+    ))}
+  </ol>
+);
+
 export const ReaderBreadcrumb = ({
   trail,
   rows,
+  depths = NO_DEPTHS,
   activeAnchorId,
   onJump,
 }: ReaderBreadcrumbProps) => {
@@ -255,28 +316,6 @@ export const ReaderBreadcrumb = ({
     update();
     return () => observer.disconnect();
   };
-  const hiddenEntries = (close: () => void) => (
-    <ol>
-      {hidden.map(({ anchorId, title }) => (
-        <li key={anchorId}>
-          <Button
-            aria-label={nameOf(title)}
-            className="min-h-11 w-full justify-start text-start whitespace-normal"
-            // As in Contents: the row shows its title, and a tooltip would
-            // take the list's Escape.
-            tooltip={false}
-            onClick={() => {
-              onJump(anchorId);
-              close();
-            }}
-            variant="ghost"
-          >
-            <bdi>{title}</bdi>
-          </Button>
-        </li>
-      ))}
-    </ol>
-  );
   const contentsControl = ({
     label,
     title,
@@ -319,6 +358,7 @@ export const ReaderBreadcrumb = ({
             onJump(anchorId);
             setContentsOpen(false);
           }}
+          depths={depths}
           rows={rows}
         />
       </PopoverPopup>
@@ -416,7 +456,12 @@ export const ReaderBreadcrumb = ({
                         padding="sm"
                       >
                         <ScrollArea axis="vertical" className="max-h-72">
-                          {hiddenEntries(() => setMiddle(MIDDLE_STATE.closed))}
+                          <ReaderHiddenEntries
+                            hidden={hidden}
+                            nameOf={nameOf}
+                            onJump={onJump}
+                            onClose={() => setMiddle(MIDDLE_STATE.closed)}
+                          />
                         </ScrollArea>
                       </PopoverPopup>
                     </Popover>

@@ -31,6 +31,11 @@ type ContactRow = typeof contacts.$inferSelect;
 const UNPROJECTED_CONTACT_LIST_COLUMNS = [
   // Tenant scope, implied by the caller's active organization.
   "organizationId",
+  // Import provenance belongs to contacts.get.
+  "externalSource",
+  "externalId",
+  "externalChangeKey",
+  "importedAt",
   // Person-only fields the directory summary omits; full detail is on
   // contacts.get.
   "prefix",

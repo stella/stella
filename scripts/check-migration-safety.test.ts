@@ -26,11 +26,10 @@ SET LOCAL statement_timeout = '30s';
 `;
 
 const runCheckerOn = (...args: string[]): CheckerResult => {
-  const result = Bun.spawnSync([
-    "bun",
-    "scripts/check-migration-safety.ts",
-    ...args,
-  ]);
+  const result = Bun.spawnSync(
+    ["bun", path.join(import.meta.dir, "check-migration-safety.ts"), ...args],
+    { cwd: path.resolve(import.meta.dir, "..") },
+  );
 
   return {
     exitCode: result.exitCode,
@@ -144,6 +143,112 @@ describe("check-migration-safety", () => {
   });
 
   describe("statement invariants", () => {
+    const reviewedDefiner = (options: string) => `
+      -- stella-migration-safety: reviewed security-definer - Reviewed fixed helper privileges
+      CREATE FUNCTION probe() RETURNS integer
+      LANGUAGE sql SECURITY DEFINER ${options}
+      AS $$ SELECT 1 $$;
+    `;
+
+    it("requires SECURITY DEFINER search paths to end in pg_temp", () => {
+      for (const options of [
+        "",
+        "SET search_path = ''",
+        "SET search_path FROM CURRENT",
+        "SET search_path = pg_catalog, pg_temp, public",
+      ]) {
+        expectFinding(
+          runChecker(reviewedDefiner(options)),
+          "security-definer-search-path",
+        );
+      }
+    });
+
+    it("accepts a canonical SECURITY DEFINER search path", () => {
+      expectClean(
+        runChecker(
+          reviewedDefiner("SET search_path = pg_catalog, public, pg_temp"),
+        ),
+      );
+    });
+
+    it.each([
+      'SET search_path = pg_catalog, "PG_TEMP"',
+      "SET search_path = 'pg_catalog, public, pg_temp'",
+      "SET search_path = pg_catalog, pg_temp, 'public'",
+      "SET search_path = pg_temp, public, pg_temp",
+      "SET search_path = pg_temp_3, public, pg_temp",
+    ])("rejects non-canonical search path %s", (options) => {
+      expectFinding(
+        runChecker(reviewedDefiner(options)),
+        "security-definer-search-path",
+      );
+    });
+
+    it("rejects repeated SECURITY DEFINER search_path settings", () => {
+      for (const options of [
+        "SET search_path = pg_catalog, pg_temp SET search_path = public",
+        "SET search_path = pg_temp SET search_path = pg_catalog, pg_temp",
+      ]) {
+        const result = runChecker(reviewedDefiner(options));
+
+        expectFinding(result, "security-definer-search-path");
+        expect(result.stderr).toContain(
+          "function probe has a repeated search_path setting",
+        );
+      }
+    });
+
+    it("rejects repeated ALTER FUNCTION search_path settings", () => {
+      const result = runChecker(`
+        ALTER FUNCTION probe()
+        SET search_path = pg_catalog, pg_temp
+        SET search_path = public;
+      `);
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain(
+        "function probe has a repeated search_path setting",
+      );
+    });
+
+    it("rejects a non-canonical ALTER FUNCTION search path", () => {
+      expectFinding(
+        runChecker(`
+          ALTER FUNCTION public.entity_feature_gate_value(text, jsonb)
+          SET search_path = public;
+        `),
+        "security-definer-search-path",
+      );
+    });
+
+    it.each([
+      "ALTER FUNCTION f(int) RESET search_path;",
+      'ALTER FUNCTION f(int) RESET "search_path";',
+      'ALTER FUNCTION f(int) RESET "SEARCH_PATH";',
+      'ALTER FUNCTION f(int) SET "search_path" = public;',
+      'ALTER FUNCTION f(int) SET "search_path" = pg_catalog, pg_temp;',
+    ])("rejects ALTER FUNCTION search path reset or quoted name %s", (sql) => {
+      expectFinding(runChecker(sql), "security-definer-search-path");
+    });
+
+    it("accepts a canonical ALTER FUNCTION search path", () => {
+      expectClean(
+        runChecker(
+          "ALTER FUNCTION f(int) SET search_path = pg_catalog, pg_temp;",
+        ),
+      );
+    });
+
+    it("rejects unparseable SECURITY DEFINER search paths by function name", () => {
+      const result = runChecker(
+        reviewedDefiner("SET search_path = pg_catalog + pg_temp"),
+      );
+
+      expectFinding(result, "security-definer-search-path");
+      expect(result.stderr).toContain("function probe");
+    });
+
     it("rejects column-target ON CONFLICT clauses", () => {
       const result = runChecker(`
         INSERT INTO "mcp_connectors" ("slug")
@@ -542,6 +647,13 @@ describe("check-migration-safety", () => {
           `CREATE FUNCTION copy_documents() RETURNS void LANGUAGE plpgsql AS $$ BEGIN FOR item IN SELECT id FROM documents LOOP INSERT INTO documents_v2 (id) VALUES (item.id); END LOOP; END $$;`,
           "pre-deploy-row-loop",
         ],
+        // A trigger routine is not callable, but a DO block that loops is
+        // refused whatever routine it sits beside.
+        [
+          `CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RETURN NULL; END $$;
+          DO $$ BEGIN FOR item IN SELECT id FROM documents LOOP PERFORM item.id; END LOOP; END $$;`,
+          "pre-deploy-row-loop",
+        ],
       ] as const;
 
       for (const [sql, ruleId] of refused) {
@@ -625,6 +737,22 @@ describe("check-migration-safety", () => {
             FOREIGN KEY ("state_id") REFERENCES "document_states" ("id") NOT VALID;
           CREATE INDEX "document_states_slug_idx" ON "document_states" ("slug");
           INSERT INTO "document_states" ("id", "slug") VALUES (1, 'ready'), (2, 'archived');
+        `),
+      );
+    });
+
+    it("allows a trigger routine that loops over the rows a write touched", () => {
+      expectClean(
+        runChecker(`
+          SET lock_timeout = '1s';
+          SET statement_timeout = '5s';
+          CREATE FUNCTION touch_children() RETURNS trigger LANGUAGE plpgsql AS $$
+          BEGIN
+            FOR child IN SELECT id FROM documents WHERE parent_id = NEW.id LOOP
+              PERFORM child.id;
+            END LOOP;
+            RETURN NULL;
+          END $$;
         `),
       );
     });
@@ -878,7 +1006,7 @@ describe("check-migration-safety", () => {
       "a function header owns its review independently of body layout (%j)",
       (separator) => {
         const sql = `-- stella-migration-safety: reviewed security-definer - Reviewed fixed read-only helper privileges
-CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER AS $$${separator}SELECT 1;${separator}$$;`;
+CREATE FUNCTION probe() RETURNS integer LANGUAGE sql SECURITY DEFINER SET search_path = pg_catalog, pg_temp AS $$${separator}SELECT 1;${separator}$$;`;
         const statements = parseMigrationStatements(sql);
         const header = statements.findIndex(
           (statement) =>

@@ -273,8 +273,6 @@ export const envApiServerSchema = {
       v.maxLength(2),
     ),
   ),
-  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
-  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_MINT_ENABLED: featureFlagSchema,
   MCP_WEB_HANDOFF_TEXT_ENABLED: v.optional(v.picklist(["0", "1"]), "0"),
   MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS: v.optional(
@@ -295,6 +293,16 @@ export const envApiServerSchema = {
   STELLA_COLLAB_SERVICE_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /** Deployment-owned operator credential. Unset disables operator HTTP access. */
   OPERATOR_API_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
+  /**
+   * Apple Push Notification service provider-token credentials: the key id
+   * and team id Apple shows beside the `.p8` signing key, and that key as PEM.
+   * All three or none; unset turns mobile push off.
+   */
+  APNS_KEY_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_TEAM_ID: v.optional(v.pipe(v.string(), v.regex(/^[A-Z0-9]{10}$/u))),
+  APNS_PRIVATE_KEY: v.optional(
+    v.pipe(v.string(), v.includes("-----BEGIN PRIVATE KEY-----")),
+  ),
   /**
    * SHA-256 digest of a deployment-owned decoy machine API key. The
    * plaintext decoy belongs only in a honey resource; presenting it to any
@@ -984,6 +992,9 @@ type EnvApiInvariantInput = InboundMailReceivingInput &
   AppleSignInInput & {
     APP_REVIEW_ACCOUNT_EMAIL?: string | undefined;
     APP_REVIEW_ORGANIZATION_ID?: string | undefined;
+    APNS_KEY_ID?: string | undefined;
+    APNS_TEAM_ID?: string | undefined;
+    APNS_PRIVATE_KEY?: string | undefined;
     AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
     FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
     MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
@@ -1150,6 +1161,24 @@ export const freeTierInvariantViolation = ({
   return null;
 };
 
+type ApnsInvariantInput = Pick<
+  EnvApiInvariantInput,
+  "APNS_KEY_ID" | "APNS_TEAM_ID" | "APNS_PRIVATE_KEY"
+>;
+
+const apnsInvariantViolation = ({
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
+}: ApnsInvariantInput): string | null => {
+  const set = [APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY].filter(
+    (value) => value !== undefined,
+  ).length;
+  return set === 0 || set === 3
+    ? null
+    : "APNS_KEY_ID, APNS_TEAM_ID and APNS_PRIVATE_KEY must be set together.";
+};
+
 type ReviewAccountInvariantInput = Pick<
   EnvApiInvariantInput,
   "APP_REVIEW_ACCOUNT_EMAIL" | "APP_REVIEW_ORGANIZATION_ID"
@@ -1172,11 +1201,16 @@ const delegatedInvariantViolation = (
     FreeTierInvariantInput &
     ReviewAccountInvariantInput &
     AppleSignInInput &
+    ApnsInvariantInput &
     Pick<EnvApiInvariantInput, "runtimeMode">,
 ): string | null => {
   const reviewAccountViolation = reviewAccountInvariantViolation(input);
   if (reviewAccountViolation !== null) {
     return reviewAccountViolation;
+  }
+  const apnsViolation = apnsInvariantViolation(input);
+  if (apnsViolation !== null) {
+    return apnsViolation;
   }
   const managedViolation = managedProviderCheckInvariantViolation(input);
   if (managedViolation !== null) {
@@ -1201,6 +1235,9 @@ const delegatedInvariantViolation = (
 export const envApiInvariantViolation = ({
   APP_REVIEW_ACCOUNT_EMAIL,
   APP_REVIEW_ORGANIZATION_ID,
+  APNS_KEY_ID,
+  APNS_TEAM_ID,
+  APNS_PRIVATE_KEY,
   AI_PROVIDER,
   FEATURE_MANAGED_PROVIDER_CHECKS,
   MANAGED_PROVIDER_CHECK_INTERVAL_MS,
@@ -1266,6 +1303,9 @@ export const envApiInvariantViolation = ({
   const delegatedViolation = delegatedInvariantViolation({
     APP_REVIEW_ACCOUNT_EMAIL,
     APP_REVIEW_ORGANIZATION_ID,
+    APNS_KEY_ID,
+    APNS_TEAM_ID,
+    APNS_PRIVATE_KEY,
     AI_PROVIDER,
     FEATURE_MANAGED_PROVIDER_CHECKS,
     FEATURE_FREE_TIER,
