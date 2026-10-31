@@ -1006,6 +1006,20 @@ const callbackBodyStatement = (node: AstNode, callback: AstNode) => {
   return current;
 };
 
+const containingFunction = (node: AstNode) => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (
+      current.type === "ArrowFunctionExpression" ||
+      current.type === "FunctionExpression"
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
@@ -1026,19 +1040,6 @@ export default eslintCompatPlugin({
         const suiteCallbacks: AstNode[] = [];
         const ownerCallbacks: AstNode[] = [];
 
-        const containingFunction = (node: AstNode) => {
-          let current: unknown = node.parent;
-          while (isAstNode(current)) {
-            if (
-              current.type === "ArrowFunctionExpression" ||
-              current.type === "FunctionExpression"
-            ) {
-              return current;
-            }
-            current = current.parent;
-          }
-          return null;
-        };
         const startsBefore = (candidate: AstNode, node: AstNode) =>
           candidate.range[0] < node.range[0];
         const isInside = (node: AstNode, container: AstNode) =>
@@ -1198,9 +1199,23 @@ export default eslintCompatPlugin({
                 isInside(call, callback),
               );
               const waitStatement = callbackBodyStatement(wait, callback);
-              const restoredBeforeWait = directRestorations(callback).some(
+              const lastRestoration = directRestorations(callback).findLast(
                 (call) => startsBefore(call, waitStatement),
               );
+              const lastDirectInstallation = fakeTimerCalls.findLast(
+                (call) =>
+                  isInside(call, callback) &&
+                  isDirectStatement(call, callback) &&
+                  startsBefore(call, waitStatement),
+              );
+              const hasNestedInstallation = fakeTimerCalls.some(
+                (call) =>
+                  isInside(call, callback) &&
+                  containingFunction(call) !== callback,
+              );
+              const restoredBeforeWait =
+                !hasNestedInstallation &&
+                startsAfter(lastRestoration, lastDirectInstallation);
               const localTimerState =
                 (inheritedFakeTimers || testHasFakeTimers) &&
                 !restoredBeforeWait;

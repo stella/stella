@@ -201,6 +201,45 @@ test("accepts a direct useRealTimers statement before a wait", async () => {
   ).toEqual([]);
 });
 
+test("reports when fake timers are reinstalled after a restoration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useRealTimers();",
+      "  jest.useFakeTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("accepts when restoration is the last timer call before a wait", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("safe", async () => {',
+      "  jest.useFakeTimers();",
+      "  jest.useRealTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([]);
+});
+
+test("reports when a nested helper may reinstall timers after restoration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useRealTimers();",
+      "  const install = () => jest.useFakeTimers();",
+      "  await waitFor(() => true);",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
 test("treats fake timers in a nested helper as possibly active", async () => {
   expect(
     await lint([
