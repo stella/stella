@@ -1249,10 +1249,16 @@ export const createMcpHttpRequestHandler = ({
     context,
     mode,
     session,
+    toolListChanges,
   }: {
     context: McpRequestResources;
     mode: McpMode;
     session: McpSession;
+    /**
+     * Whether this connection receives `notifications/tools/list_changed`.
+     * Only a connection that does may advertise `tools.listChanged`.
+     */
+    toolListChanges: "signalled" | "not_signalled";
   }) => {
     const serverBuildStartedAt = performance.now();
     // The low-level Server API accepts JSON Schema directly, which keeps the
@@ -1268,7 +1274,7 @@ export const createMcpHttpRequestHandler = ({
         capabilities: {
           prompts: {},
           resources: {},
-          tools: { listChanged: true },
+          tools: toolListChanges === "signalled" ? { listChanged: true } : {},
         },
         instructions: await getMcpInstructions(mode, context),
       },
@@ -1383,8 +1389,16 @@ export const createMcpHttpRequestHandler = ({
       return existing;
     }
 
+    // Modern subscription streams are fed by the SDK's handler-wide event bus,
+    // whose listeners carry no caller identity, so a per-session tool change
+    // has no way onto them and they are not promised one.
     const handler = createMcpHandler(
-      async () => await createMcpServer({ ...readFactoryState(), mode }),
+      async () =>
+        await createMcpServer({
+          ...readFactoryState(),
+          mode,
+          toolListChanges: "not_signalled",
+        }),
       {
         legacy: "reject",
         // The v2 handler converts factory/dispatch exceptions into responses
@@ -1428,7 +1442,12 @@ export const createMcpHttpRequestHandler = ({
     request: Request;
     session: McpSession;
   }): Promise<Response> => {
-    const server = await createMcpServer({ context, mode, session });
+    const server = await createMcpServer({
+      context,
+      mode,
+      session,
+      toolListChanges: "signalled",
+    });
     const transport = new WebStandardStreamableHTTPServerTransport({
       enableJsonResponse: true,
       keepAliveMs: MCP_NOTIFICATION_KEEP_ALIVE_MS,
@@ -1523,8 +1542,13 @@ export const createMcpHttpRequestHandler = ({
         return response;
       }
 
+      const freshness = getMcpToolFreshnessRegistry();
+      const generation = freshness.generation;
       const initialTools = await listMcpTools(context, mode, session.scopes);
-      unregisterFreshness = getMcpToolFreshnessRegistry().register({
+      unregisterFreshness = freshness.register({
+        // Ending the stream makes the host reconnect and list again.
+        close: teardown,
+        generation,
         id: Bun.randomUUIDv7(),
         notifyToolsChanged: async () => await server.sendToolListChanged(),
         organizationId: session.organizationId,
@@ -1804,8 +1828,9 @@ export const createMcpHttpRequestHandler = ({
             }
             // Modern requests are stateless unless they open the SDK's separate
             // subscription transport. Freshness signals therefore reach only the
-            // stateful legacy SSE sessions registered above; do not synthesize a
-            // notification for a request that has no long-lived session.
+            // stateful legacy SSE sessions registered above, and only those
+            // advertise `tools.listChanged`; do not synthesize a notification
+            // for a request that has no long-lived session.
             // No teardown here on purpose. The handler owns instance lifetime and a
             // response body may still be streaming when this returns; closing it here
             // is what truncated the notification stream under the hand-wired transport.

@@ -7,6 +7,7 @@ import type { Tool } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { expect, mock, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import {
   getMcpToolFreshnessRegistry,
@@ -24,7 +25,9 @@ const admittedTool: Tool = {
   name: "search_legislation",
 };
 
-const connectClient = async () => {
+const connectClient = async (
+  options: ConstructorParameters<typeof Client>[1] = {},
+) => {
   let admitted = false;
   const context = { marker: "freshness-context" };
   const resolveContext = mock();
@@ -58,7 +61,10 @@ const connectClient = async () => {
       requestInit: { headers: { authorization: "Bearer token" } },
     },
   );
-  const client = new Client({ name: "freshness-test", version: "1.0.0" });
+  const client = new Client(
+    { name: "freshness-test", version: "1.0.0" },
+    options,
+  );
   const notifications: string[] = [];
   const notificationReceived = Promise.withResolvers<true>();
   client.setNotificationHandler("notifications/tools/list_changed", () => {
@@ -84,8 +90,8 @@ test("a live MCP client receives a tool-list change after its projection changes
     expect(getMcpToolFreshnessRegistry().size).toBe(before + 1);
     connection.admit();
     await publishMcpToolProjectionChange({
-      organizationId: "org_freshness",
-      userId: "user_freshness",
+      organizationId: toSafeId<"organization">("org_freshness"),
+      userId: toSafeId<"user">("user_freshness"),
     });
     await connection.notificationReceived;
     expect(connection.notifications).toEqual(["changed"]);
@@ -102,8 +108,27 @@ test("a disconnected MCP client is removed and receives no notification", async 
   expect(getMcpToolFreshnessRegistry().size).toBe(before);
   connection.admit();
   await publishMcpToolProjectionChange({
-    organizationId: "org_freshness",
-    userId: "user_freshness",
+    organizationId: toSafeId<"organization">("org_freshness"),
+    userId: toSafeId<"user">("user_freshness"),
   });
   expect(connection.notifications).toEqual([]);
+});
+
+test("only a connection that receives tool-list changes advertises them", async () => {
+  const legacy = await connectClient();
+  try {
+    expect(legacy.client.getServerCapabilities()?.tools?.listChanged).toBe(
+      true,
+    );
+  } finally {
+    await legacy.client.close();
+  }
+  const modern = await connectClient({
+    versionNegotiation: { mode: { pin: "2026-07-28" } },
+  });
+  try {
+    expect(modern.client.getServerCapabilities()?.tools).toEqual({});
+  } finally {
+    await modern.client.close();
+  }
 });
