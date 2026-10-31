@@ -91,7 +91,7 @@ test.describe.serial("pages fit a phone", () => {
         throw new Error("phone-layout world was not initialized in beforeAll");
       }
       const network = createNetworkCollector();
-      const detachNetwork = network.trackPage(page);
+      const detachNetwork = await network.trackPage(page);
       try {
         await page.goto(def.path(world), { waitUntil: "domcontentloaded" });
         await expect(page).not.toHaveURL(/\/auth(?:\/|$)/u);
@@ -111,7 +111,7 @@ test.describe.serial("pages fit a phone", () => {
           `${def.template} breaks the phone layout rules`,
         ).toEqual([]);
       } finally {
-        detachNetwork();
+        await detachNetwork();
       }
     });
   };
