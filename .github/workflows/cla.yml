@@ -33,7 +33,6 @@ concurrency:
 
 permissions:
   contents: read
-  checks: write
   issues: write
   pull-requests: read
 
@@ -97,15 +96,17 @@ jobs:
             core.setOutput("pull_requests", JSON.stringify(candidates.map(({ number }) => number)));
             core.setOutput("store_required", String(storeRequired));
 
-      - name: Signature store token
-        id: store-token
-        if: steps.credentials.outputs.store_required == 'true'
+      - name: CLA app token
+        id: cla-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
           app-id: 2871141
           private-key: ${{ secrets.CLA_APP_PRIVATE_KEY }}
           owner: stella
-          repositories: cla
+          repositories: |
+            cla
+            stella
+          permission-checks: write
           permission-contents: write
           permission-members: read
 
@@ -113,7 +114,7 @@ jobs:
         if: ${{ !cancelled() && steps.credentials.outcome == 'success' }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
-          CLA_STORE_TOKEN: ${{ steps.store-token.outputs.token }}
+          CLA_APP_TOKEN: ${{ steps.cla-token.outputs.token }}
           CLA_PULL_REQUESTS: ${{ steps.credentials.outputs.pull_requests }}
         with:
           github-token: ${{ github.token }}
@@ -140,7 +141,8 @@ jobs:
             const MAX_COMMIT_AUTHORS = 1000;
             const { owner, repo } = context.repo;
             const api = github;
-            const store = process.env.CLA_STORE_TOKEN ? new github.constructor({ auth: process.env.CLA_STORE_TOKEN }) : api;
+            const cla = new github.constructor({ auth: process.env.CLA_APP_TOKEN });
+            const store = cla;
             const checks = new Set();
             const fail = (code) => {
               const error = new Error(code);
@@ -231,8 +233,8 @@ jobs:
             };
             const startCheck = async (sha, name = "cla") => {
               if (!validSha(sha)) fail("CLA_INVALID_HEAD");
-              const { data } = await request("POST /repos/{owner}/{repo}/check-runs", {
-                name, head_sha: sha, status: "in_progress",
+              const { data } = await cla.request("POST /repos/{owner}/{repo}/check-runs", {
+                owner, repo, name, head_sha: sha, status: "in_progress",
                 output: { title: "CLA_CHECKING", summary: "Verifying contributor signatures." },
               });
               if (!positiveInteger(data.id)) fail("CLA_INVALID_CHECK_RUN");
@@ -240,8 +242,8 @@ jobs:
               return data.id;
             };
             const completeCheck = async (id, conclusion, title, summary) => {
-              await request("PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}", {
-                check_run_id: id, status: "completed", conclusion, completed_at: new Date().toISOString(),
+              await cla.request("PATCH /repos/{owner}/{repo}/check-runs/{check_run_id}", {
+                owner, repo, check_run_id: id, status: "completed", conclusion, completed_at: new Date().toISOString(),
                 output: { title, summary },
               });
               checks.delete(id);
