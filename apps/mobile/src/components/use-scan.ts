@@ -1,15 +1,18 @@
 import { Result } from "better-result";
+import { randomUUID } from "expo-crypto";
 import { useRouter } from "expo-router";
 import { Alert } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { scanDocument } from "@/native/document-scanner";
+import { scanPages } from "@/native/document-scanner";
+import { encodeScannedPages } from "@/state/scan-pages";
 
 /**
- * Opens the document camera and, once pages are saved, the sheet that
- * uploads them, into `matterId` when the scan began inside a matter. Closing
- * the camera without saving does nothing. `replacing` puts the sheet in
- * place of the screen the scan began on, as the command palette asks.
+ * Opens the document camera and, once pages are saved, the review of them,
+ * which shares them as a PDF or saves them into a matter: `matterId` when
+ * the scan began inside one. Closing the camera without saving does nothing.
+ * `replacing` puts the review in place of the screen the scan began on, as
+ * the command palette asks.
  */
 export const useScan = (
   matterId?: string,
@@ -20,7 +23,9 @@ export const useScan = (
 
   return () => {
     void (async () => {
-      const scanned = await Result.tryPromise(async () => await scanDocument());
+      // The review's files go into a folder of their own.
+      const review = randomUUID();
+      const scanned = await scanPages(review);
       if (Result.isError(scanned)) {
         Alert.alert(t("failedTitle"), t("failed"));
         return;
@@ -28,20 +33,18 @@ export const useScan = (
       if (scanned.value === null) {
         return;
       }
-      const sheet = {
+      const screen = {
         pathname: "/scan",
         params: {
-          pageCount: String(scanned.value.pageCount),
-          sha256Hex: scanned.value.sha256Hex,
-          size: String(scanned.value.size),
-          uri: scanned.value.uri,
+          pages: encodeScannedPages(scanned.value),
+          review,
           ...(matterId === undefined ? {} : { matterId }),
         },
       } as const;
       if (replacing) {
-        router.replace(sheet);
+        router.replace(screen);
       } else {
-        router.push(sheet);
+        router.push(screen);
       }
     })();
   };

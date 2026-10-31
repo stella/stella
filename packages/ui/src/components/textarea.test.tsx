@@ -15,6 +15,7 @@ describe("Textarea sizing", () => {
 
     expect(textareaClass(markup)).toContain("field-sizing-content");
     expect(textareaClass(markup)).not.toContain("resize-none");
+    expect(textareaClass(markup)).toContain("min-h-17.5");
   });
 
   test("a fixed field keeps its rows' height and has no resize grip", () => {
@@ -26,5 +27,6 @@ describe("Textarea sizing", () => {
     expect(textareaClass(markup)).toContain("resize-none");
     expect(textareaClass(markup)).not.toContain("field-sizing-content");
     expect(markup).toContain('rows="2"');
+    expect(textareaClass(markup)).not.toContain("min-h-");
   });
 });

@@ -8,7 +8,7 @@ import { CourtName } from "@stll/decision-reader/court-name";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { TextMark } from "@stll/ui/text-mark";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
+import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionChip } from "@/components/legal-reader/cited-decision-link";
@@ -22,9 +22,12 @@ import type { CitingDecisionRow } from "./provision-citing-decisions";
 export const CitingDecisionItem = ({
   currentVersionValidFrom,
   decision,
+  leading = false,
 }: {
   decision: CitingDecisionRow;
   currentVersionValidFrom: string | null;
+  /** Among the decisions carrying the most authority on the provision. */
+  leading?: boolean;
 }) => {
   const t = useTranslations();
   const snippetId = useId();
@@ -113,6 +116,23 @@ export const CitingDecisionItem = ({
         />
       </div>
       <div className="text-muted-foreground text-2xs flex min-h-5 flex-wrap items-center gap-x-1.5">
+        {leading && (
+          <>
+            <Tooltip>
+              {/* Why it leads, on hover, the way the older-version fact
+                  below explains itself. */}
+              <TooltipFactTrigger>
+                <span className="text-foreground font-medium">
+                  {t("statutes.leadingDecision")}
+                </span>
+              </TooltipFactTrigger>
+              <TooltipPopup>
+                {t("statutes.leadingDecisionsExplanation")}
+              </TooltipPopup>
+            </Tooltip>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
         {decided !== null && (
           <>
             <BidiText>{decided}</BidiText>
@@ -127,23 +147,14 @@ export const CitingDecisionItem = ({
         {citesOlderVersion && (
           <>
             <span aria-hidden="true">·</span>
-            {/* A fact about the citation, read like the facts beside it:
-                inline text whose dotted rule says there is more on hover. A
-                plain button only so a keyboard reaches the tooltip; it does
-                nothing itself, hence the plain cursor. */}
             <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    className="group/plain cursor-default"
-                    variant="plain"
-                  />
-                }
-              >
-                <span className="text-foreground-strong-muted decoration-foreground-placeholder group-hover/plain:decoration-foreground-muted group-data-popup-open/plain:decoration-foreground-muted relative underline decoration-dotted underline-offset-2 pointer-coarse:after:absolute pointer-coarse:after:-inset-3">
+              {/* A fact about the citation, read like the facts beside it:
+                  inline text whose dotted rule says there is more on hover. */}
+              <TooltipFactTrigger>
+                <span className="text-foreground-strong-muted">
                   {t("statutes.citingDecisionOlderVersion")}
                 </span>
-              </TooltipTrigger>
+              </TooltipFactTrigger>
               <TooltipPopup>
                 <div className="flex flex-col gap-1">
                   <ProvisionVersionBasisLabel basis={decision.versionBasis} />

@@ -283,7 +283,7 @@ describe("reading recorded Supreme Court PDFs", () => {
       fulltext.split("\n\n").filter((paragraph) => /^\d+$/u.test(paragraph)),
     ).toEqual([]);
     expect(fulltext).toContain(
-      "służy instytucja tzw. przedsądu, ustanowiona w art. 3989 k.p.c.",
+      "służy instytucja tzw. przedsądu, ustanowiona w art. 398^9 k.p.c.",
     );
   });
 
@@ -293,10 +293,14 @@ describe("reading recorded Supreme Court PDFs", () => {
       "V CSK 98/17",
     );
 
+    expect(paragraphs.join("\n\n")).toContain(
+      "obie podstawy przewidziane w art. 398^3 § 1 k.p.c.",
+    );
+
     expect(
       paragraphs.some((paragraph) =>
         paragraph.startsWith(
-          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 3989 § 1 pkt 2 k.p.c.",
+          "Potrzeba dokonania wykładni przepisów prawnych, przewidziana w art. 398^9 § 1 pkt 2 k.p.c.",
         ),
       ),
     ).toBe(true);

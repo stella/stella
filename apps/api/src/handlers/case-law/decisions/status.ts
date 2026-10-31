@@ -27,6 +27,10 @@ import { readNonRedistributableCaseLawSourceIds } from "@/api/lib/case-law/non-r
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { type BoundedReadResult, readBounded } from "@/api/lib/db/read-bounded";
 import { errorTag } from "@/api/lib/errors/utils";
+import {
+  type AdapterEdition,
+  adapterEditionOf,
+} from "@/api/lib/legal-search/adapter-manifest";
 import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
 import {
@@ -180,7 +184,10 @@ type CorpusStatusLoad = CorpusUpdatedAtRead & {
  * from and a cached snapshot never states a verdict its window has passed.
  */
 export type CaseLawCorpusSnapshot = Omit<CaseLawCorpusStatus, "health"> & {
-  sources: readonly Pick<CaseLawSourceHealthRow, "enabled" | "lastSyncAt">[];
+  sources: readonly (Pick<CaseLawSourceHealthRow, "enabled" | "lastSyncAt"> & {
+    /** What the source's manifest declares it reads. */
+    edition: AdapterEdition;
+  })[];
 };
 
 const corpusStatusError = (fallback: string) => (cause: unknown) =>
@@ -255,13 +262,18 @@ export const loadCaseLawCorpusSnapshot = async ({
   return Result.ok({
     decisions: bucket?.count ?? 0,
     updatedAt: updatedAt.value,
-    sources: sources.value.rows
-      .filter(
-        (source) =>
-          !withheld.has(String(source.id)) &&
-          caseLawSourceJurisdiction(source.adapterKey) === country,
-      )
-      .map(({ enabled, lastSyncAt }) => ({ enabled, lastSyncAt })),
+    sources: sources.value.rows.flatMap(
+      ({ adapterKey, enabled, id, lastSyncAt }) => {
+        // A key no manifest names belongs to no jurisdiction, so the
+        // jurisdiction check already drops it; the edition read states it.
+        const edition = adapterEditionOf(adapterKey);
+        return edition === null ||
+          withheld.has(String(id)) ||
+          caseLawSourceJurisdiction(adapterKey) !== country
+          ? []
+          : [{ edition, enabled, lastSyncAt }];
+      },
+    ),
   });
 };
 
@@ -273,8 +285,8 @@ export const caseLawCorpusStatusAt = (
   decisions,
   updatedAt,
   health: caseLawCountryHealth(
-    sources.map(({ enabled, lastSyncAt }) =>
-      caseLawSourceHealth({ enabled, lastSyncAt, now }),
+    sources.map(({ edition, enabled, lastSyncAt }) =>
+      caseLawSourceHealth({ edition, enabled, lastSyncAt, now }),
     ),
   ),
 });

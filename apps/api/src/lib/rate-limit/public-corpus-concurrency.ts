@@ -96,7 +96,7 @@ export const publicCorpusConcurrencyLimit = ({
       });
       ctx.set.headers["Retry-After"] = "1";
       return toResponse(
-        status(429, DEFAULT_RATE_LIMIT_ERROR_RESPONSE),
+        status(503, DEFAULT_RATE_LIMIT_ERROR_RESPONSE),
         ctx.set,
       );
     }
