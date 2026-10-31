@@ -134,6 +134,7 @@ export const AttachmentChip = ({
               aria-label={action.label}
               className="inline-flex size-4 shrink-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
               onClick={action.onClick}
+              title={action.label}
               variant="plain"
             />
           }

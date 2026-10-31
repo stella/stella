@@ -1164,6 +1164,7 @@
     "apps/desktop/src/clipboard/ClipboardEditor.tsx": 1,
     "apps/desktop/src/registry/RegistrySearch.tsx": 1,
     "apps/landing/src/components/react/DocxEditorTool.tsx": 1,
+    "apps/web/src/components/inline-pill.tsx": 1,
     "apps/web/src/components/templates/template-ai-conditions.tsx": 1,
     "apps/web/src/components/workspaces/table/table-find-bar.tsx": 1,
     "apps/web/src/features/avt/claim-detail-panel.tsx": 2,

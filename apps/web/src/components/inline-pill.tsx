@@ -102,11 +102,6 @@ export const InlinePill = ({
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
-  // A `title` names the pill's full text when the label truncates; it shows
-  // through the shared tooltip rather than the browser's own hover hint. A
-  // title alone does not make the pill a control: it stays a span, so a
-  // reference chip in the composer adds no tab stop and no button role.
-  const hint = tooltip ?? title;
   const chipKind = size === "chip" ? "reference" : undefined;
   // A tooltip-bearing pill must be keyboard-focusable so screen-
   // reader users (and tab users) can pop the placeholder content,
@@ -160,6 +155,7 @@ export const InlinePill = ({
       )}
       data-chip-kind={chipKind}
       onClick={onActivate}
+      title={title}
       variant="plain"
       {...dataAttrs}
     >
@@ -174,15 +170,16 @@ export const InlinePill = ({
       data-chip-kind={chipKind}
       role="group"
       style={style}
+      title={title}
       {...dataAttrs}
     >
       {body}
     </span>
   );
 
-  if (hint === undefined || hint === "") {
+  if (tooltip === undefined || tooltip === null || tooltip === "") {
     return element;
   }
 
-  return <Tooltip content={hint} render={element} />;
+  return <Tooltip content={tooltip} render={element} />;
 };
