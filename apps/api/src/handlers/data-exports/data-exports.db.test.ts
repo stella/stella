@@ -31,6 +31,7 @@ import {
   invoicePayments,
   invoices,
   organizationDataExports,
+  requestIdempotencyReceipts,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -67,6 +68,7 @@ import {
   DATA_EXPORT_ORGANIZATION_RECORD_NAMES,
 } from "@/api/lib/data-export/archive-plan";
 import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export/queue";
+import { fingerprintHttpRequest } from "@/api/lib/idempotency/request-receipts";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   createRootMembershipScopedDb,
@@ -500,7 +502,10 @@ describe("data export permissions", () => {
     const context = createTestHandlerContext({
       audit: async () => {},
       safeDb,
-      scopedDb: NO_DB,
+      scopedDb: createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userAdmin },
+        database,
+      ),
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
@@ -848,7 +853,10 @@ describe("data export maintenance", () => {
     const context = createTestHandlerContext({
       audit: async () => {},
       safeDb: createSafeDb(database, [], ids.orgA, ids.userAdmin),
-      scopedDb: NO_DB,
+      scopedDb: createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userAdmin },
+        database,
+      ),
       memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
@@ -1079,6 +1087,220 @@ describe("starting an export", () => {
         ),
       );
   };
+
+  test("create replay retains one job and one queued intent and rechecks current permission", async () => {
+    await finishActive();
+    await setRole(ids.memberB1org, "admin");
+    const key = Bun.randomUUIDv7();
+    const before = await testDb.$count(
+      organizationDataExports,
+      eq(organizationDataExports.organizationId, ids.orgB),
+    );
+    const context = createTestHandlerContext({
+      audit: async () => {},
+      scopedDb,
+      safeDb: createSafeDb(database, [], ids.orgB, ids.userB1),
+      memberRole: sessionMemberRole("admin"),
+      session: { activeOrganizationId: ids.orgB },
+      user: { id: ids.userB1 },
+      route: "/v1/data-exports",
+      set: { status: 200, headers: {} },
+      request: new Request("https://example.test/v1/data-exports", {
+        method: "POST",
+        headers: { "Idempotency-Key": key },
+      }),
+    });
+    try {
+      const first = await invoke(createDataExport, {
+        ...context,
+        body: { versions: "all" },
+      });
+      expect(first).toMatchObject({
+        outcome: "started",
+        export: { status: "queued" },
+      });
+      const replay = await invoke(createDataExport, {
+        ...context,
+        body: { versions: "all" },
+      });
+      expect(replay).toBeInstanceOf(Response);
+      if (!(replay instanceof Response)) {
+        panic("Expected export replay response");
+      }
+      expect(replay.headers.get("Idempotency-Replayed")).toBe("true");
+      expect(await replay.json()).toEqual(first);
+      const queued = await testDb
+        .select({ id: organizationDataExports.id })
+        .from(organizationDataExports)
+        .where(
+          and(
+            eq(organizationDataExports.organizationId, ids.orgB),
+            eq(organizationDataExports.status, "queued"),
+          ),
+        );
+      expect(queued).toHaveLength(1);
+      for (const row of queued) {
+        createdExportIds.push(row.id);
+      }
+      expect(
+        await testDb.$count(
+          organizationDataExports,
+          eq(organizationDataExports.organizationId, ids.orgB),
+        ),
+      ).toBe(before + 1);
+      const receiptsBefore = await testDb.$count(
+        requestIdempotencyReceipts,
+        eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+      );
+      expect(receiptsBefore).toBe(1);
+      await setRole(ids.memberB1org, "member");
+      // The request still carries its earlier admin authority; replay must read the current role.
+      expect(
+        await invoke(createDataExport, {
+          ...context,
+          body: { versions: "all" },
+        }),
+      ).toMatchObject({ code: 403 });
+      expect(
+        await invoke(createDataExport, {
+          ...context,
+          body: { versions: "all" },
+          request: new Request("https://example.test/v1/data-exports", {
+            method: "POST",
+            headers: { "Idempotency-Key": Bun.randomUUIDv7() },
+          }),
+        }),
+      ).toMatchObject({ code: 403 });
+      expect(
+        await testDb.$count(
+          requestIdempotencyReceipts,
+          eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+        ),
+      ).toBe(receiptsBefore);
+      expect(
+        await testDb.$count(
+          organizationDataExports,
+          eq(organizationDataExports.organizationId, ids.orgB),
+        ),
+      ).toBe(before + 1);
+    } finally {
+      await setRole(ids.memberB1org, "member");
+      await testDb
+        .delete(requestIdempotencyReceipts)
+        .where(
+          and(
+            eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+            eq(requestIdempotencyReceipts.idempotencyKey, key),
+          ),
+        );
+      await finishActive();
+    }
+  });
+
+  test("download replay checks current permission before reading a retained grant or writing a new receipt", async () => {
+    await setRole(ids.memberB1org, "admin");
+    const key = Bun.randomUUIDv7();
+    const exportId = await insertExport({
+      organizationId: ids.orgB,
+      requestedBy: ids.userB1,
+      status: "ready",
+      expiresAt: new Date(Date.now() + DATA_EXPORT_RETENTION_MS),
+    });
+    const route = "/v1/data-exports/:exportId/download";
+    const body = { file: { type: "manifest" } };
+    const params = { exportId };
+    const responseBody = {
+      url: "https://example.test/export-part",
+      fileName: "export-manifest.json",
+      sizeBytes: null,
+      sha256: null,
+      urlExpiresAt: "2099-01-01T00:00:00.000Z",
+    };
+    const fingerprint = await fingerprintHttpRequest({
+      method: "POST",
+      route,
+      body,
+      params,
+      query: {},
+    });
+    let audits = 0;
+    try {
+      await scopedDb(
+        async (tx) =>
+          await tx.insert(requestIdempotencyReceipts).values({
+            organizationId: ids.orgB,
+            userId: ids.userB1,
+            idempotencyKey: key,
+            route,
+            requestFingerprint: fingerprint,
+            state: "completed",
+            responseCode: 200,
+            responseBody,
+            completedAt: new Date(),
+          }),
+      );
+      const context = createTestHandlerContext({
+        audit: async () => {
+          audits += 1;
+        },
+        scopedDb,
+        safeDb: NO_DB,
+        memberRole: sessionMemberRole("admin"),
+        session: { activeOrganizationId: ids.orgB },
+        user: { id: ids.userB1 },
+        route,
+        body,
+        params,
+        query: {},
+        set: { status: 200, headers: {} },
+        request: new Request("https://example.test/download", {
+          method: "POST",
+          headers: { "Idempotency-Key": key },
+        }),
+      });
+      const replay = await invoke(downloadDataExport, context);
+      expect(replay).toBeInstanceOf(Response);
+      if (!(replay instanceof Response)) {
+        panic("Expected download replay response");
+      }
+      expect(await replay.json()).toEqual(responseBody);
+      expect(audits).toBe(0);
+      const before = await testDb.$count(
+        requestIdempotencyReceipts,
+        eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+      );
+      await setRole(ids.memberB1org, "member");
+      expect(await invoke(downloadDataExport, context)).toMatchObject({
+        code: 403,
+      });
+      expect(
+        await invoke(downloadDataExport, {
+          ...context,
+          request: new Request("https://example.test/download", {
+            method: "POST",
+            headers: { "Idempotency-Key": Bun.randomUUIDv7() },
+          }),
+        }),
+      ).toMatchObject({ code: 403 });
+      expect(
+        await testDb.$count(
+          requestIdempotencyReceipts,
+          eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+        ),
+      ).toBe(before);
+      expect(audits).toBe(0);
+    } finally {
+      await setRole(ids.memberB1org, "member");
+      await testDb
+        .delete(requestIdempotencyReceipts)
+        .where(
+          and(
+            eq(requestIdempotencyReceipts.organizationId, ids.orgB),
+            eq(requestIdempotencyReceipts.idempotencyKey, key),
+          ),
+        );
+    }
+  });
 
   test("starts one export and returns it while it is active", async () => {
     await finishActive();

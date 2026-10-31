@@ -1,25 +1,16 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import {
-  DATA_EXPORT_START_OUTCOME,
-  startDataExport,
-} from "@/api/handlers/data-exports/start-export";
+import { startDataExport } from "@/api/handlers/data-exports/start-export";
 import { toDataExportSummary } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { enqueueDataExport } from "@/api/lib/data-export/queue";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { authorizeOrganizationPermissionReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
-
-const dataExportEnqueueFailed = failureSink({
-  event: "data_export.enqueue",
-  expected: [],
-});
 
 const config = {
   contract: "patch",
@@ -45,6 +36,7 @@ const config = {
     consumesServices: false,
   },
   access: "write",
+  idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(
     "Exports are not a live resource set: clients follow an export by polling data-exports.get.",
   ),
@@ -63,16 +55,21 @@ const createDataExport = createSafeRootHandler(
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const started = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await startDataExport({
-            tx,
-            organizationId,
-            userId: user.id,
-            versions: body.versions,
-            recordAuditEvent,
-          }),
-      ),
+      safeDb(async (tx) => {
+        await requireCurrentOrganizationMemberPermission({
+          db: tx,
+          organizationId,
+          userId: user.id,
+          permissions: config.permissions,
+        });
+        return await startDataExport({
+          tx,
+          organizationId,
+          userId: user.id,
+          versions: body.versions,
+          recordAuditEvent,
+        });
+      }),
     );
     if (started.row === null) {
       // The active export finished between the insert and the read.
@@ -83,26 +80,16 @@ const createDataExport = createSafeRootHandler(
         }),
       );
     }
-    if (started.outcome === DATA_EXPORT_START_OUTCOME.STARTED) {
-      const exportId = started.row.id;
-      // A failed handoff leaves the row queued; the maintenance sweep hands
-      // it to the queue again, so the request still succeeds.
-      await enqueueDataExport({
-        exportId,
-        organizationId,
-        userId: user.id,
-        attempt: 0,
-      }).catch((error: unknown) => {
-        observeFailure(error, {
-          sink: dataExportEnqueueFailed,
-          ctx: { entityId: exportId, operation: "data_export.enqueue" },
-        });
-      });
-    }
+    // The queued ledger row is the durable work intent. Its dispatcher uses
+    // the deterministic queue identity after this transaction commits.
     return Result.ok({
       outcome: started.outcome,
       export: toDataExportSummary(started.row),
     });
+  },
+  {
+    authorize: async (context) =>
+      await authorizeOrganizationPermissionReplay(context, config.permissions),
   },
 );
 

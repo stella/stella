@@ -16,7 +16,9 @@ import {
   dataExportObjectKey,
 } from "@/api/lib/data-export/queue";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
+import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { authorizeOrganizationPermissionReplay } from "@/api/lib/idempotency/organization-replay-authorization";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -52,6 +54,7 @@ const config = {
     consumesServices: false,
   },
   access: "write",
+  idempotency: { type: "replay" },
   realtime: noResourceSetUpdates(
     "Signing a download link only records an audit event.",
   ),
@@ -78,6 +81,12 @@ const downloadDataExport = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
     const granted = yield* Result.await(
       safeDb(async (tx) => {
+        await requireCurrentOrganizationMemberPermission({
+          db: tx,
+          organizationId,
+          userId: user.id,
+          permissions: config.permissions,
+        });
         const rows = await tx
           .select({
             status: organizationDataExports.status,
@@ -191,6 +200,10 @@ const downloadDataExport = createSafeRootHandler(
         granted satisfies never;
         return panic("Unhandled download grant");
     }
+  },
+  {
+    authorize: async (context) =>
+      await authorizeOrganizationPermissionReplay(context, config.permissions),
   },
 );
 
