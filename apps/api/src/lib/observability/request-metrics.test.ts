@@ -6,6 +6,10 @@ import type { ApiRoutePath } from "@/api/http/api-route-types";
 import "@/api/tests/setup-env";
 
 import { AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  isTranscriptionModelId,
+  TRANSCRIPTION_MODELS,
+} from "@stll/ai-catalog/transcription";
 import { compareCodeUnit } from "@stll/collation";
 
 import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
@@ -26,6 +30,7 @@ import {
   emitPromptCacheMetric,
   emitRawSourceStoredMetric,
   emitReasoningReplayDroppedMetric,
+  emitTranscriptionDurationMismatchMetric,
   emitVerificationRunFailureMetric,
   REQUEST_CLASSES,
   resetMetricLineSinkForTesting,
@@ -342,6 +347,30 @@ test("cost drop metrics count observations rather than failed batches", () => {
     expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
       ActionCostObservationsDropped: 7,
     });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("transcription duration mismatches emit a structured count with catalog metadata only", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    const modelIds = Object.keys(TRANSCRIPTION_MODELS).filter(
+      isTranscriptionModelId,
+    );
+    for (const modelId of modelIds) {
+      emitTranscriptionDurationMismatchMetric(modelId);
+      const record: unknown = JSON.parse(lines.at(-1) ?? "null");
+      expect(record).toEqual({
+        event: "transcription.duration_mismatch",
+        modelId,
+        TranscriptionDurationMismatch: 1,
+      });
+    }
+    expect(lines).toHaveLength(modelIds.length);
   } finally {
     resetMetricLineSinkForTesting();
   }

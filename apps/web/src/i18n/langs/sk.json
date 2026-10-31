@@ -1048,6 +1048,7 @@
       "healthCurrent": "Aktuálne",
       "healthDelayed": "S oneskorením",
       "healthDisabled": "Vypnuté",
+      "healthSnapshot": "Pevný snímok",
       "healthStalled": "Bez postupu",
       "healthUnknown": "Zatiaľ nespustené",
       "inPreparation": "Pripravuje sa",

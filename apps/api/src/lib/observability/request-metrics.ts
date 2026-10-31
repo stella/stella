@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import type { AIProvider, TanStackAIProvider } from "@stll/ai-catalog";
+import type { TranscriptionModelId } from "@stll/ai-catalog/transcription";
 import type { SanctionsSource } from "@stll/sanctions";
 
 import type { RAW_SOURCE_FAMILY } from "@/api/lib/legal-search/raw-source-family";
@@ -692,6 +693,17 @@ export const emitAnonymizationRefusalMetric = (
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+const TRANSCRIPTION_DURATION_MISMATCH_METRIC = "TranscriptionDurationMismatch";
+
+export const emitTranscriptionDurationMismatchMetric = (
+  modelId: TranscriptionModelId,
+): void => {
+  writeMetricLine({
+    event: "transcription.duration_mismatch",
+    modelId,
+    [TRANSCRIPTION_DURATION_MISMATCH_METRIC]: 1,
+  });
+};
 
 type PublicCorpusAdmissionMetric = {
   class: Exclude<PublicCorpusClass, "browse">;

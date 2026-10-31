@@ -893,7 +893,6 @@
     "packages/decision-reader/src/headnote-block.tsx": 2
   },
   "no-native-ui/no-native-button": {
-    "apps/desktop/src/activity/ActivityTimeline.tsx": 1,
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 5,
     "apps/desktop/src/registry/RegistrySearch.tsx": 1,
     "apps/landing/src/components/react/AnonymizeLiveDemo.tsx": 1,
@@ -1186,7 +1185,6 @@
     "apps/web/src/components/inspector/anonymization-context-menu.tsx": 2
   },
   "no-native-ui/no-native-number-input": {
-    "apps/desktop/src/activity/ActivityTimeline.tsx": 2,
     "apps/web/src/components/billing/expense-form.tsx": 1,
     "apps/web/src/components/pdf/page-organizer-crop.tsx": 1,
     "apps/web/src/components/templates/template-form.tsx": 1,
@@ -1325,7 +1323,6 @@
     "apps/api/src/lib/tasks/update-task.ts": 1,
     "apps/api/src/mcp/document-tools.ts": 1,
     "apps/api/src/mcp/template-tools.ts": 1,
-    "apps/api/src/scripts/adapter-health.ts": 1,
     "apps/api/src/scripts/better-auth-microsoft-identity-map.logic.ts": 1,
     "apps/api/src/scripts/better-auth-migration-audit.logic.ts": 1,
     "apps/desktop/src/clipboard/ClipboardApp.tsx": 2,

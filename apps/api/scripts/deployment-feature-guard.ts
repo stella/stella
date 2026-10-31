@@ -73,6 +73,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated account holders can create organizations on every deployment",
   ],
   [
+    "/v1/dictation/transcribe",
+    "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
     "/v1/workspaces/:workspaceId/vocabulary",
     "Matter vocabulary uses the normal matter read permission on every deployment",
   ],

@@ -89,7 +89,14 @@
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
     "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
-    "openMatter": "Ouvrir le dossier"
+    "openMatter": "Ouvrir le dossier",
+    "assignedTo": "Attribuée à",
+    "nobody": "Non attribué",
+    "assign": "Attribuer",
+    "doneAssigning": "Terminé",
+    "someone": "Quelqu’un",
+    "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -197,6 +204,7 @@
     "headnote": "Sommaire",
     "textUnavailable": "Aucun texte n'est disponible pour cette décision",
     "openSource": "Ouvrir la source d’origine",
+    "openFailed": "Le lien n’a pas pu être ouvert.",
     "loadFailed": "Impossible de charger la jurisprudence.",
     "share": "Partager"
   },

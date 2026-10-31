@@ -64,7 +64,10 @@ import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
-import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/lib/legal-search/ingestion-types";
+import {
+  PUBLISHER_REQUEST,
+  SOURCE_DOCUMENT_ID_MAX_LENGTH,
+} from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   approveMetadataUrls,
@@ -328,7 +331,11 @@ const crawlCaller: Caller = {
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
       await Promise.resolve(
-        Result.ok({ decisions: [...decisions], nextCursor }),
+        Result.ok({
+          decisions: [...decisions],
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+          nextCursor,
+        }),
       );
     const run = await Result.tryPromise({
       try: async () =>
@@ -411,7 +418,11 @@ describe("crawl cancellation", () => {
             return await scopedDb(operation);
           };
           czNsAdapter.fetchPage = async () =>
-            Result.ok({ decisions, nextCursor: "next-page" });
+            Result.ok({
+              decisions,
+              nextCursor: "next-page",
+              publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+            });
           const sourceLease = await leaseFor(sourceId);
           try {
             const result = await runIngestionPipeline({
@@ -467,7 +478,11 @@ describe("crawl cancellation", () => {
     const sourceId = await crawlSource();
     const sourceLease = await leaseFor(sourceId);
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(3), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(3),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     let batches = 0;
     try {
       const result = await runIngestionPipeline({
@@ -502,7 +517,11 @@ describe("crawl cancellation", () => {
       return await scopedDb(operation);
     };
     czNsAdapter.fetchPage = async () =>
-      Result.ok({ decisions: records(1), nextCursor: "next-page" });
+      Result.ok({
+        decisions: records(1),
+        nextCursor: "next-page",
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+      });
     try {
       const result = await runIngestionPipeline({
         source: sourceLease.source,
