@@ -24,6 +24,12 @@ export const SAFE_AUTOFIX_RULES = {
   "typescript/prefer-as-const": "Uses an equivalent literal const assertion.",
 } as const;
 
+// These fixers inspect receiver types. Without the installed project type graph,
+// preflight must run the full fixer rather than claim that a lint path is clean.
+export const TYPE_AWARE_SAFE_AUTOFIX_RULES = [
+  "typescript/dot-notation",
+] as const satisfies readonly (keyof typeof SAFE_AUTOFIX_RULES)[];
+
 export const safeAutofixRuleArgs = () => [
   "--allow",
   "all",

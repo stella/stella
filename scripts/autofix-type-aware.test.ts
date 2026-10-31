@@ -130,6 +130,11 @@ test.each(cases)(
           "changed.ts\0generated.html.txt\0apps/landing/changed.js\0changed.json\0",
         );
       }
+      writeFileSync(
+        path.join(root, "autofix-format-paths"),
+        "./changed.ts\0./generated.html.txt\0./apps/landing/changed.js\0./changed.json\0",
+      );
+      writeFileSync(path.join(root, "autofix-lint-paths"), "./changed.ts\0");
       const finding = Bun.spawnSync(
         [
           process.execPath,

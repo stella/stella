@@ -604,6 +604,12 @@ describe("changed-file autofix boundary", () => {
     const fixStep = job.indexOf("- name: Fix changed files");
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const pushStep = job.indexOf("- name: Push autofixes");
+    const selectStep = job.indexOf("- name: Select fix paths");
+    const preflightStep = job.indexOf(
+      "- name: Check whether fixers can change files",
+    );
+    const installStep = job.indexOf("- name: Install dependencies");
+    const selection = job.slice(selectStep, preflightStep);
     const fix = job.slice(fixStep, restrictionStep);
 
     expect(job).toContain("needs: regenerate-scope");
@@ -611,7 +617,7 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
     expect(job).toContain("github.actor != 'autofix-ci[bot]'");
     expect(job.slice(generatorStep, restrictionStep)).toContain(
-      "if: needs.regenerate-scope.outputs.run == 'true'",
+      "needs.regenerate-scope.outputs.run == 'true'",
     );
     expect(job).toContain("scripts/autofix-plan.ts plan");
     expect(job).toContain("scripts/autofix-plan.ts plan --all");
@@ -623,13 +629,26 @@ describe("changed-file autofix boundary", () => {
     expect(generatorStep).toBeGreaterThan(fixStep);
     expect(restrictionStep).toBeGreaterThan(fixStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
+    expect(preflightStep).toBeLessThan(installStep);
+    for (const name of [
+      "Install dependencies",
+      "Prepare environment",
+      "Fix changed files",
+      "Restrict autofix changes",
+      "Push autofixes",
+    ]) {
+      const step = job.indexOf(`- name: ${name}`);
+      expect(job.slice(step, step + 220)).toContain(
+        "if: steps.preflight.outputs.run == 'true'",
+      );
+    }
 
     expect(job).toContain(
       'git diff --name-only -z --diff-filter=ACMR "$BASE_SHA"..."$HEAD_SHA" -- > "$RUNNER_TEMP/autofix-changed-paths"',
     );
-    expect(fix).toContain("while IFS= read -r -d '' path; do");
-    expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
-    expect(fix).toContain(
+    expect(selection).toContain("while IFS= read -r -d '' path; do");
+    expect(selection).toContain('[[ -f "$path" && ! -L "$path" ]]');
+    expect(selection).toContain(
       'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(fix).toContain(
@@ -637,9 +656,11 @@ describe("changed-file autofix boundary", () => {
     );
     expect(fix).toContain("lint_status > 1");
     // The Astro project has no native-compiler type graph to fix against.
-    expect(fix).toContain(
+    expect(selection).toContain(
       `if [[ "$path" =~ \\.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then`,
     );
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-format-paths"');
+    expect(fix).toContain('done < "$RUNNER_TEMP/autofix-lint-paths"');
     const prepare = fix.indexOf("bun scripts/ci-generated-sources.ts prepare");
     const typecheck = fix.indexOf(
       "bun scripts/typecheck-coverage.ts --autofix",
@@ -701,7 +722,7 @@ describe("changed-file autofix boundary", () => {
       "needs.regenerate-scope.outputs.needed != 'false'",
     );
     expect(job.slice(pruneStep, restrictionStep)).toContain(
-      "if: needs.regenerate-scope.outputs.prune != 'false'",
+      "needs.regenerate-scope.outputs.prune != 'false'",
     );
     // Fixers read the push scope; the rewrite boundary stays the whole PR.
     const changed = job.slice(changedStep, tauriStep);
@@ -718,11 +739,11 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(0, derivedJob)).toContain(
       `refix: \${{ steps.scope.outputs.refix }}`,
     );
-    expect(job.slice(tauriStep, fixStep)).toContain(
+    expect(job.slice(changedStep, tauriStep)).toContain(
       'done < "$RUNNER_TEMP/autofix-fix-paths"',
     );
     expect(job.slice(fixStep, pruneStep)).toContain(
-      'done < "$RUNNER_TEMP/autofix-fix-paths"',
+      'done < "$RUNNER_TEMP/autofix-format-paths"',
     );
     expect(job.slice(fixStep, pruneStep)).not.toContain(
       "autofix-changed-paths",

@@ -524,7 +524,44 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
+      # Build these scopes once so preflight and the fixer cannot drift.
+      - name: Select fix paths
+        run: |
+          set -euo pipefail
+          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
+          protected=()
+          while IFS= read -r pattern; do protected+=("$pattern"); done < "$RUNNER_TEMP/autofix-protected-paths"
+          : > "$RUNNER_TEMP/autofix-format-paths"
+          : > "$RUNNER_TEMP/autofix-lint-paths"
+          while IFS= read -r -d '' path; do
+            [[ -f "$path" && ! -L "$path" ]] || continue
+            if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then continue; fi
+            protected_path=false
+            if [[ "$path" != .changeset/README.md ]]; then
+              for pattern in "${protected[@]}"; do
+                # shellcheck disable=SC2254
+                case "$path" in $pattern) protected_path=true; break ;; esac
+              done
+            fi
+            [[ "$protected_path" == false ]] || continue
+            printf './%s\0' "$path" >> "$RUNNER_TEMP/autofix-format-paths"
+            # apps/landing has no native-compiler type graph.
+            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
+              printf './%s\0' "$path" >> "$RUNNER_TEMP/autofix-lint-paths"
+            fi
+          done < "$RUNNER_TEMP/autofix-fix-paths"
+
+      - name: Check whether fixers can change files
+        id: preflight
+        env:
+          GENERATOR_SELECTED: ${{ needs.regenerate-scope.outputs.run }}
+        run: >-
+          bun --no-install --no-env-file scripts/autofix-preflight.ts
+          "$RUNNER_TEMP/autofix-format-paths"
+          "$RUNNER_TEMP/autofix-lint-paths" >> "$GITHUB_OUTPUT"
+
       - name: Align Tauri counterparts
+        if: steps.preflight.outputs.run == 'true'
         id: tauri
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -549,6 +586,7 @@ jobs:
       # Reconcile merged manifest metadata without moving existing package
       # pins. The helper restores bun.lock and fails on any resolution change.
       - name: Refresh merged lockfile
+        if: steps.preflight.outputs.run == 'true'
         timeout-minutes: 5
         env:
           STELLA_LOCAL_AUTOFIX: "true"
@@ -558,6 +596,7 @@ jobs:
           cp -- bun.lock "$RUNNER_TEMP/autofix-frozen-bun.lock"
 
       - name: Install dependencies
+        if: steps.preflight.outputs.run == 'true'
         timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -565,6 +604,7 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Prepare environment
+        if: steps.preflight.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
         run: |
@@ -575,7 +615,7 @@ jobs:
       # Generated exports must exist before the compiler can check source fixes.
       # Regenerate again below because lint may rewrite generator inputs.
       - name: Prepare selected MCP app exports
-        if: needs.regenerate-scope.outputs.run == 'true'
+        if: steps.preflight.outputs.run == 'true' && needs.regenerate-scope.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
@@ -591,49 +631,15 @@ jobs:
           fi
 
       - name: Fix changed files
+        if: steps.preflight.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
         run: |
           set -euo pipefail
-          changed=()
-          while IFS= read -r -d '' path; do
-            changed+=("$path")
-          done < "$RUNNER_TEMP/autofix-fix-paths"
-          bun scripts/autofix-protected-paths.ts > "$RUNNER_TEMP/autofix-protected-paths"
-          protected=()
-          while IFS= read -r pattern; do
-            protected+=("$pattern")
-          done < "$RUNNER_TEMP/autofix-protected-paths"
           format_paths=()
           lint_paths=()
-          for path in "${changed[@]}"; do
-            [[ -f "$path" && ! -L "$path" ]] || continue
-            # The GitHub App cannot update workflow files.
-            if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then
-              continue
-            fi
-            protected_path=false
-            if [[ "$path" != .changeset/README.md ]]; then
-              for pattern in "${protected[@]}"; do
-                # Protected entries are glob patterns, so expansion must stay unquoted.
-                # shellcheck disable=SC2254
-                case "$path" in
-                  $pattern)
-                    protected_path=true
-                    break
-                    ;;
-                esac
-              done
-            fi
-            [[ "$protected_path" == false ]] || continue
-            format_paths+=("./$path")
-            # Astro's checker owns apps/landing types (astro:* modules); the
-            # native compiler cannot build that graph, so it gets no type-aware
-            # fixes. CI's lint job still reports its findings.
-            if [[ "$path" =~ \.([cm]?[jt]s|[jt]sx)$ && "$path" != apps/landing/* ]]; then
-              lint_paths+=("./$path")
-            fi
-          done
+          while IFS= read -r -d '' path; do format_paths+=("$path"); done < "$RUNNER_TEMP/autofix-format-paths"
+          while IFS= read -r -d '' path; do lint_paths+=("$path"); done < "$RUNNER_TEMP/autofix-lint-paths"
 
           if (( ${#lint_paths[@]} > 0 )); then
             # Type-aware fixes need the complete generated type graph. set -e
@@ -691,7 +697,7 @@ jobs:
       # Final outputs must reflect lint and formatting rewrites, including
       # sources prepared earlier for the type-aware fixer.
       - name: Regenerate selected files
-        if: needs.regenerate-scope.outputs.run == 'true'
+        if: steps.preflight.outputs.run == 'true' && needs.regenerate-scope.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
@@ -704,7 +710,7 @@ jobs:
       # no longer match code. The restrict step re-verifies every rewrite
       # against the head commit before anything is pushed.
       - name: Prune stale baseline entries
-        if: needs.regenerate-scope.outputs.prune != 'false'
+        if: steps.preflight.outputs.run == 'true' && needs.regenerate-scope.outputs.prune != 'false'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -714,6 +720,7 @@ jobs:
           fi
 
       - name: Restrict autofix changes
+        if: steps.preflight.outputs.run == 'true'
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -816,6 +823,7 @@ jobs:
           git status --short
 
       - name: Push autofixes
+        if: steps.preflight.outputs.run == 'true'
         uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
         with:
           commit-message: "chore: autofix files"

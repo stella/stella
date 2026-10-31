@@ -18,6 +18,15 @@ const workflow = await Bun.file(
   new URL("../.github/workflows/autofix.yml", import.meta.url),
 ).text();
 const job = workflow.slice(workflow.indexOf("  regenerate-derived-files:"));
+const selection = job.slice(
+  job.indexOf("      - name: Select fix paths"),
+  job.indexOf("      - name: Check whether fixers can change files"),
+);
+const selectCommand = selection
+  .slice(selection.indexOf("        run: |\n") + "        run: |\n".length)
+  .split("\n")
+  .map((line) => line.replace(/^ {10}/u, ""))
+  .join("\n");
 const restriction = job.slice(
   job.indexOf("      - name: Restrict autofix changes"),
   job.indexOf("      - name: Push autofixes"),
@@ -85,10 +94,9 @@ exit 1
 
 describe("ratchet autofix output boundary", () => {
   test("the actual fixer excludes each protected glob with the installed Bash", () => {
-    const step = parseVerifyWorkflow(workflow, "autofix").find(
-      ({ name }) => name === "Fix changed files",
-    );
-    if (!step) {
+    const steps = parseVerifyWorkflow(workflow, "autofix");
+    const fix = steps.find(({ name }) => name === "Fix changed files");
+    if (!fix) {
       panic("Autofix changed-file owner is missing");
     }
     const root = mkdtempSync(path.join(tmpdir(), "autofix-glob-boundary-"));
@@ -124,12 +132,15 @@ printf '%s\\n' "$@" >> "$RUNNER_TEMP/commands"
 `,
         { mode: 0o755 },
       );
-      const result = Bun.spawnSync(["bash", "-c", step.run], {
-        cwd: root,
-        env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: root },
-        stdout: "pipe",
-        stderr: "pipe",
-      });
+      const result = Bun.spawnSync(
+        ["bash", "-c", `${selectCommand}\n${fix.run}`],
+        {
+          cwd: root,
+          env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: root },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const commands = readFileSync(path.join(root, "commands"), "utf-8");
       expect(commands).toContain(`./${unprotected}`);
