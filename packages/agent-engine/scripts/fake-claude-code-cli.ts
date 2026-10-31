@@ -48,31 +48,49 @@ const SUBSCRIPTION = {
   apiProvider: "firstParty",
 };
 
+/** A default model the CLI's own list leaves out. */
+export const FAKE_UNLISTED_DEFAULT = "claude-test-9";
+
+/** The CLI's default row, which names the model it resolves to. */
+const defaultRow = (resolvedModel: string) => ({
+  value: "default",
+  resolvedModel,
+  displayName: "Default (recommended)",
+  description: "",
+  supportsEffort: true,
+  supportedEffortLevels: ["low", "medium", "high"],
+});
+
+const SONNET = {
+  value: "sonnet",
+  resolvedModel: "claude-test-2",
+  displayName: "Sonnet",
+  description: "",
+};
+
 const MODELS = [
+  defaultRow(SONNET.resolvedModel),
   {
-    value: "default",
+    value: "opus",
     resolvedModel: "claude-test-1",
-    displayName: "Default (recommended)",
+    displayName: "Opus",
     description: "",
-    supportsEffort: true,
     supportedEffortLevels: ["low", "medium", "high"],
   },
-  {
-    value: "sonnet",
-    resolvedModel: "claude-test-2",
-    displayName: "Sonnet",
-    description: "",
-  },
+  SONNET,
 ];
 
-const initialize = (account: object = SUBSCRIPTION): FakeStep => ({
+const initialize = (
+  account: object = SUBSCRIPTION,
+  models: readonly object[] = MODELS,
+): FakeStep => ({
   expect: "initialize",
   response: {
     commands: [],
     agents: [],
     output_style: "default",
     available_output_styles: [],
-    models: MODELS,
+    models,
     account,
     claude_code_version: FAKE_CLAUDE_VERSION,
   },
@@ -612,6 +630,18 @@ const FAKE_SCENARIOS = {
   ],
   probe_signed_out: [
     initialize({ tokenSource: "none", apiProvider: "firstParty" }),
+  ],
+  /** The default row resolves to a model the CLI does not list. */
+  probe_default_unlisted: [
+    initialize(SUBSCRIPTION, [defaultRow(FAKE_UNLISTED_DEFAULT), SONNET]),
+    {
+      expect: "get_usage",
+      response: {
+        session: {},
+        rate_limits_available: false,
+        rate_limits: null,
+      },
+    },
   ],
 } as const satisfies Record<string, FakeScenario>;
 

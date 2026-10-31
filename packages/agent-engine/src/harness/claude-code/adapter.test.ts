@@ -22,6 +22,7 @@ import {
   FAKE_MCP_CALL,
   FAKE_PERMISSION_SUGGESTION,
   FAKE_RESUMED_SESSION_ID,
+  FAKE_UNLISTED_DEFAULT,
   type FakeScenarioName,
 } from "../../../scripts/fake-claude-code-cli";
 import type { FakeScenario as FakeCodexScenario } from "../../../scripts/fake-codex-app-server";
@@ -865,18 +866,19 @@ describe("Claude Code adapter over stream-json stdio", () => {
     expect(probed.value).toEqual({
       version: FAKE_CLAUDE_VERSION,
       auth: { type: "signed_in", method: "claude.ai", plan: "max" },
+      // The CLI's default row is not a model; it marks Sonnet as the default.
       models: [
         {
-          id: "default",
-          displayName: "Default (recommended)",
-          isDefault: true,
+          id: "opus",
+          displayName: "Opus",
+          isDefault: false,
           reasoningEfforts: ["low", "medium", "high"],
           inputModalities: ["text"],
         },
         {
           id: "sonnet",
           displayName: "Sonnet",
-          isDefault: false,
+          isDefault: true,
           reasoningEfforts: [],
           inputModalities: ["text"],
         },
@@ -912,6 +914,18 @@ describe("Claude Code adapter over stream-json stdio", () => {
       });
       expect(harness.controlRequests("get_usage")).toEqual([]);
     }
+  });
+
+  test("a default the CLI does not list is reported once, under its own id", async () => {
+    const harness = harnessFor("probe_default_unlisted");
+    const probed = await harness.adapter.probe();
+    expect(
+      Result.isOk(probed) &&
+        probed.value.models.map(({ id, isDefault }) => ({ id, isDefault })),
+    ).toEqual([
+      { id: "sonnet", isDefault: false },
+      { id: FAKE_UNLISTED_DEFAULT, isDefault: true },
+    ]);
   });
 
   test("a probe of a missing executable reports the harness unavailable", async () => {

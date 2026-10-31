@@ -46,6 +46,8 @@ export const InitializeResponseSchema = v.object({
     v.object({
       value: v.string(),
       displayName: v.string(),
+      /** The model id an alias row (`default`, `opus`) stands for. */
+      resolvedModel: v.optional(v.string()),
       supportedEffortLevels: v.optional(v.array(v.string())),
     }),
   ),

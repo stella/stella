@@ -144,8 +144,11 @@ const PROTOCOL_ARGS = [
   "--strict-mcp-config",
 ] as const;
 
-/** The CLI's alias for its recommended model; `--model` is then omitted. */
-const DEFAULT_MODEL = "default";
+/**
+ * The CLI's row for its recommended model. It is not a model: it names,
+ * through `resolvedModel`, which listed model is the default.
+ */
+const DEFAULT_MODEL_ROW = "default";
 /** A name in an allow rule and a tool prefix; kept to plain characters. */
 const MCP_SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
 /** Missing-session refusals, in the CLI's wording. */
@@ -293,14 +296,36 @@ const authOf = ({ account }: Initialized): HarnessAuth => {
 /** The CLI lists no input modalities; stella sends it text only. */
 const TEXT_ONLY = ["text"] as const;
 
-const modelsOf = ({ models }: Initialized): HarnessModel[] =>
-  models.map((model) => ({
+type ListedModel = Initialized["models"][number];
+
+const resolvesTo = (model: ListedModel) => model.resolvedModel ?? model.value;
+
+/**
+ * Each real model once. The default row marks the first listed model it
+ * resolves to; when it resolves to a model the CLI does not list, that model
+ * is reported under its own id.
+ */
+const modelsOf = ({ models }: Initialized): HarnessModel[] => {
+  const marker = models.find(({ value }) => value === DEFAULT_MODEL_ROW);
+  const defaultModel = marker?.resolvedModel ?? null;
+  const listed = models.filter(({ value }) => value !== DEFAULT_MODEL_ROW);
+  const rows =
+    marker === undefined ||
+    defaultModel === null ||
+    listed.some((model) => resolvesTo(model) === defaultModel)
+      ? listed
+      : [...listed, { ...marker, value: defaultModel, displayName: "" }];
+  const defaultIndex = rows.findIndex(
+    (model) => resolvesTo(model) === defaultModel,
+  );
+  return rows.map((model, index) => ({
     id: model.value,
     displayName: model.displayName,
-    isDefault: model.value === DEFAULT_MODEL,
+    isDefault: index === defaultIndex,
     reasoningEfforts: model.supportedEffortLevels ?? [],
     inputModalities: TEXT_ONLY,
   }));
+};
 
 /** `get_usage` is experimental upstream; a failed read reports no limit. */
 const readUsageLimit = async (
@@ -403,7 +428,8 @@ const turnArgs = (input: HarnessTurnInput, target: SessionTarget) => [
   `mcp__${input.mcp.serverName}`,
   target.type === "fresh" ? "--session-id" : "--resume",
   target.sessionId,
-  ...(input.model === DEFAULT_MODEL ? [] : ["--model", input.model]),
+  "--model",
+  input.model,
 ];
 
 type OpenedSession = {
