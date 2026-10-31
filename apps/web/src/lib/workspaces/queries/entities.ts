@@ -85,6 +85,7 @@ type RawWorkspaceEntity = Omit<
     propertyId: string;
     entityId: string;
     content: WorkspaceField["content"];
+    aiSettlement?: WorkspaceField["aiSettlement"];
     ocrExportStatus?: WorkspaceField["ocrExportStatus"];
   }[];
   cellMetadata: {
@@ -105,6 +106,9 @@ export const toWorkspaceEntity = (
       entityId: toSafeId<"entity">(field.entityId),
       propertyId,
       content: field.content,
+      ...(field.aiSettlement === undefined
+        ? {}
+        : { aiSettlement: field.aiSettlement }),
       ocrExportStatus: field.ocrExportStatus ?? "unavailable",
     };
   }

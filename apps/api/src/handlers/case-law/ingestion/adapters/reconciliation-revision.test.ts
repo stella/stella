@@ -62,6 +62,10 @@ const IDENTITY_REVISION_PAYLOADS = {
     { celex: "62026CJ0001", language: "pl" },
   ],
   [ADAPTER_KEYS.HU_BHGY]: [{ IndexId: "1" }, { IndexId: "2" }],
+  [ADAPTER_KEYS.UK_FCL]: ["a", "b"].map((hash) => ({
+    sourceDocumentId: "synthetic-one",
+    feed: `<feed xmlns="http://www.w3.org/2005/Atom" xmlns:tna="https://caselaw.nationalarchives.gov.uk"><entry><tna:uri>synthetic-one</tna:uri><updated>2026-01-01T00:00:00Z</updated><tna:identifier type="ukncn">[2026] UKSC 900001</tna:identifier><tna:contenthash>${hash.repeat(64)}</tna:contenthash></entry></feed>`,
+  })),
   [ADAPTER_KEYS.PL_KIS]: [{ ID_INFORMACJI: "1" }, { ID_INFORMACJI: "2" }],
   [ADAPTER_KEYS.PL_UODO]: [{ refid: "urn:1" }, { refid: "urn:2" }],
   [ADAPTER_KEYS.PL_UOKIK]: [

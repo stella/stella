@@ -54,6 +54,7 @@ import type {
   FolioDocumentOperationResult,
 } from "@stll/folio-core";
 import type {
+  AISuggestionPreset,
   DocxEditorRef,
   FolioAIEditOperation,
   FolioAIEditSeverity,
@@ -149,6 +150,7 @@ import { useChatModelSelection } from "@/components/chat/use-chat-model-selectio
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.logic";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
+import { FILE_CHAT_DRAFT_DELIVERY } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { getLiveEditor } from "@/components/live-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
@@ -194,7 +196,7 @@ import {
   getChatThreadKey,
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { fileOverlaySkillDocument } from "@/lib/prompts/chat-skill-availability.logic";
 import {
   matchReservedChatCommand,
@@ -649,10 +651,7 @@ const persistQueuedSuggestions = async ({
   });
   if (!replayResults.includes("failed")) {
     if (replayResults.includes("pending-limit")) {
-      notifyUserError(
-        undefined,
-        getTranslator()("docxReview.pendingLimitReached"),
-      );
+      notifyUserProblem(getTranslator()("docxReview.pendingLimitReached"));
     }
     return;
   }
@@ -664,7 +663,7 @@ const persistQueuedSuggestions = async ({
       scope: { type: "handler", handlerId: "persistQueuedSuggestions:Error" },
     },
   );
-  notifyUserError(undefined, getTranslator()("docxReview.persistFailed"));
+  notifyUserProblem(getTranslator()("docxReview.persistFailed"));
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -763,6 +762,8 @@ type FileChatOverlayProps = {
    * on screen rather than about whatever the words happen to match.
    */
   activeLegal?: ActiveLegalDocument | undefined;
+  /** Chips over the empty composer, each sent as it is on a click. */
+  presets?: AISuggestionPreset[] | undefined;
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
   docxEditable?: boolean | undefined;
   /**
@@ -841,6 +842,7 @@ export const FileChatOverlay = ({
   onDocxCommentsChange,
   onNewThread,
   onActiveDraftChatBound,
+  presets,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
   if (chatThreadId === undefined) {
@@ -887,6 +889,7 @@ export const FileChatOverlay = ({
         onDocxCommentsChange={onDocxCommentsChange}
         onActiveDraftChatBound={onActiveDraftChatBound}
         onNewThread={onNewThread}
+        presets={presets}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
       />
@@ -1177,6 +1180,7 @@ const FileChatOverlayInner = ({
   onDocxCommentsChange,
   onActiveDraftChatBound,
   onNewThread,
+  presets,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -1560,6 +1564,8 @@ const FileChatOverlayInner = ({
     handleDeny,
     handleRequestSecret,
     continueRequestSecret,
+    handleConnectConnector,
+    continueConnectConnector,
     resolveSecretTarget,
     secretAvailabilityKey,
     handleAskUserSubmit,
@@ -2100,8 +2106,10 @@ const FileChatOverlayInner = ({
     };
   }, [panelOpen]);
   // A draft handed over from another surface (a review finding's "Ask in
-  // chat"): it lands in this file's composer, opens the thread, and is
-  // acknowledged so a later mount does not replay it.
+  // chat", a passage selected in the document): it lands in this file's
+  // composer, opens the thread, and is acknowledged so a later mount does not
+  // replay it. It replaces whatever was unsent there, as every handoff into a
+  // document's chat does.
   const pendingFileChatDraft = useInspectorCommandStore(
     (state) => state.pendingFileChatDraft,
   );
@@ -2114,14 +2122,43 @@ const FileChatOverlayInner = ({
     ) {
       return undefined;
     }
+    // The composer of a chunk that just loaded has no editor yet, and writing
+    // into none drops the draft; the controller changes once it exists.
+    if (getLiveEditor(editorController.editor) === null) {
+      return undefined;
+    }
     editorController.setContent(pendingFileChatDraft.markdown);
-    editorController.focus();
-    setPanelOpen(true);
+    switch (pendingFileChatDraft.delivery) {
+      case FILE_CHAT_DRAFT_DELIVERY.draft: {
+        editorController.focus();
+        setPanelOpen(true);
+        break;
+      }
+      case FILE_CHAT_DRAFT_DELIVERY.send: {
+        detached(
+          editorController.submit(
+            async ({ files, html }) =>
+              await handlePromptSubmit({ files, prompt: html }),
+          ),
+          "file-chat-overlay.handoff-send",
+        );
+        break;
+      }
+      default: {
+        pendingFileChatDraft.delivery satisfies never;
+        panic("Unhandled file chat draft delivery");
+      }
+    }
     useInspectorCommandStore
       .getState()
       .clearFileChatDraft(pendingFileChatDraft.sequence);
     return undefined;
-  }, [activeFileFieldId, editorController, pendingFileChatDraft]);
+  }, [
+    activeFileFieldId,
+    editorController,
+    handlePromptSubmit,
+    pendingFileChatDraft,
+  ]);
   const [newThreadChoice, setNewThreadChoice] = useState<NewThreadChoiceState>({
     status: NEW_THREAD_CHOICE_STATUS.idle,
   });
@@ -2555,6 +2592,8 @@ const FileChatOverlayInner = ({
           handleDeny,
           handleRequestSecret,
           continueRequestSecret,
+          handleConnectConnector,
+          continueConnectConnector,
           resolveSecretTarget,
           secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,
@@ -2725,7 +2764,9 @@ const FileChatOverlayInner = ({
           }}
           onSubmit={handleComposerSubmit}
           pendingCount={0}
+          presets={presets}
           queueWhileGenerating
+          threadHasMessages={hasMessages}
           sendDisabledReason={sendDisabledReason}
           status={isGenerating ? "generating" : "idle"}
           dock={

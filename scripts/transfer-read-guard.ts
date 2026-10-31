@@ -293,6 +293,11 @@ class TransferReadInspector {
     if (value.type !== "ObjectExpression") {
       return [];
     }
+    const hasExplicitPolicy = value.properties.some(
+      (property) =>
+        property.type === "Property" &&
+        this.propertyKey(property) === "timeout",
+    );
     const found: Node[] = [];
     for (const property of value.properties) {
       if (property.type === "SpreadElement") {
@@ -302,7 +307,8 @@ class TransferReadInspector {
           !property.method &&
           property.kind === "init") ||
           property.shorthand) &&
-        this.propertyKey(property) === "timeoutMs"
+        this.propertyKey(property) === "timeoutMs" &&
+        !hasExplicitPolicy
       ) {
         found.push(property);
       }
@@ -378,6 +384,13 @@ class TransferReadInspector {
       // `#field in object` tests a private name, never a constant.
       return (
         value.left.type !== "PrivateIdentifier" &&
+        this.isConstant(value.left, depth + 1) &&
+        this.isConstant(value.right, depth + 1)
+      );
+    }
+    // `??`, `||` and `&&` between constants pick a constant.
+    if (value.type === "LogicalExpression") {
+      return (
         this.isConstant(value.left, depth + 1) &&
         this.isConstant(value.right, depth + 1)
       );

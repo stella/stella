@@ -10,7 +10,7 @@ import {
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-import type { DecisionListFilters } from "./decisions";
+import type { DecisionListFilters, SearchFacets } from "./decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases" });
 const originalFetch = globalThis.fetch;
@@ -20,6 +20,7 @@ const { QueryClient, QueryClientProvider, useQuery } =
 const { decisionsPageOptions, usePrefetchedDecisionPage } =
   await import("./decisions");
 const { shouldRetryAPIRequest } = await import("@/lib/errors/api");
+const { decisionFilterFacets } = await import("../decision-filter-facets");
 
 const PAGE_SIZE = 25;
 const RESULTS = 1000;
@@ -40,7 +41,7 @@ type SearchRequest = { offset: number | undefined; limit: unknown };
  * The search endpoint over a fixed ranking: it answers whatever slice the
  * request's offset and limit name, and records every request it was sent.
  */
-const installSearch = () => {
+const installSearch = (searchFacets: SearchFacets | null = null) => {
   const requests: SearchRequest[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -92,7 +93,7 @@ const installSearch = () => {
           citationCount: 0,
           createdAt: "2026-01-01T00:00:00.000Z",
         })),
-        facets: null,
+        facets: searchFacets,
         nextCursor: start + PAGE_SIZE < RESULTS ? "next" : null,
         total: { type: "estimate", count: RESULTS },
         queryUsed: FILTERS.search,
@@ -154,6 +155,70 @@ const firstRow = (view: ReturnType<typeof render>) =>
   view.getByTestId("rows").firstElementChild?.textContent;
 
 describe("a page of case-law results", () => {
+  test("the filter rail requests and preserves every displayed search facet", async () => {
+    const courts = [{ value: "supreme", label: "Supreme court", count: 3 }];
+    const facets = {
+      court: [
+        {
+          tierLabel: "supreme",
+          courts,
+        },
+      ],
+      courtYear: null,
+      year: [{ value: "2026", label: null, count: 3 }],
+      decisionType: [{ value: "judgment", label: null, count: 3 }],
+      language: [
+        { value: "cs", label: null, count: 2 },
+        { value: "sk", label: null, count: 1 },
+      ],
+      source: [
+        {
+          value: "publisher",
+          label: "Publisher",
+          count: 3,
+          countType: "estimate",
+        },
+      ],
+    } satisfies SearchFacets;
+    installSearch(facets);
+    const searchFetch = globalThis.fetch;
+    const requestedFacets: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const body: unknown =
+          typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        if (typeof body === "object" && body !== null && "facets" in body) {
+          requestedFacets.push(body.facets);
+        }
+        return await searchFetch(input, init);
+      },
+      { preconnect: () => undefined },
+    );
+    const client = makeClient();
+    const firstPage = await client.query(
+      decisionsPageOptions({ filters: FILTERS, page: 1, pageSize: PAGE_SIZE }),
+    );
+    await client.query(
+      decisionsPageOptions({ filters: FILTERS, page: 2, pageSize: PAGE_SIZE }),
+    );
+    expect(requestedFacets).toEqual([
+      ["court", "year", "decisionType", "language", "source"],
+      [],
+    ]);
+    expect(
+      decisionFilterFacets({
+        browse: { country: [], court: [], year: [] },
+        search: firstPage.facets,
+      }),
+    ).toEqual({
+      courtTiers: [{ tier: "supreme", courts }],
+      year: facets.year,
+      decisionType: facets.decisionType,
+      language: facets.language,
+      source: facets.source,
+    });
+  });
+
   test("search pages preserve every match classification for the result rows", async () => {
     installSearch();
     const page = await makeClient().query(

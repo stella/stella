@@ -6,13 +6,14 @@
 
 import { useState } from "react";
 
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { AddCommentIcon } from "@stll/ui/icons";
 
+import { saveCommentEdit } from "@/components/legal-reader/annotations/comment-edit";
 import type {
-  CommentEdit,
   CommentMarginItem,
   ComposerMarginItem,
 } from "@/components/legal-reader/margin-notes";
@@ -47,6 +48,7 @@ export const ClaimComments = ({
   const anchorId = claim.id;
   const commentItems: CommentMarginItem[] = comments.map((comment) => ({
     author: { image: comment.authorImage, name: comment.authorName },
+    createdAt: comment.createdAt,
     id: comment.id,
     kind: "comment",
     mine: comment.mine,
@@ -55,7 +57,19 @@ export const ClaimComments = ({
     },
     onEdit: (edit) => {
       detached(
-        saveClaimCommentEdit({ comment, edit, update }),
+        saveCommentEdit({
+          comment: {
+            body: comment.body ?? "",
+            id: comment.id,
+            visibility: comment.visibility,
+          },
+          edit,
+          // A failed write has already rolled back and told the reviewer why.
+          update: async (change) =>
+            (await Result.tryPromise(async () => update(change))).map(
+              () => undefined,
+            ),
+        }),
         "avt.claim-comment-edit",
       );
     },
@@ -70,7 +84,9 @@ export const ClaimComments = ({
       );
     },
     startAnchorId: anchorId,
+    targetType: "verification-claim",
     text: comment.body ?? "",
+    updatedAt: comment.updatedAt,
     visibility: comment.visibility,
   }));
   const composerItems: ComposerMarginItem[] = composing
@@ -84,6 +100,7 @@ export const ClaimComments = ({
             setComposing(false);
           },
           startAnchorId: anchorId,
+          targetType: "verification-claim",
         },
       ]
     : [];
@@ -116,46 +133,3 @@ export const ClaimComments = ({
     </section>
   );
 };
-
-type SaveClaimCommentEditOptions = {
-  comment: {
-    id: string;
-    body: string | null;
-    visibility: "private" | "shared";
-  };
-  edit: CommentEdit;
-  update: ReturnType<typeof useClaimComments>["update"];
-};
-
-/**
- * Writes an edit in the order that never shows colleagues words meant to stay
- * private: new words before sharing, unsharing before new words. A failed
- * write rejects, so the step after it never runs.
- */
-async function saveClaimCommentEdit({
-  comment,
-  edit,
-  update,
-}: SaveClaimCommentEditOptions): Promise<void> {
-  const writeBody = async () => {
-    if (edit.body !== (comment.body ?? "")) {
-      await update({ change: "body", body: edit.body, id: comment.id });
-    }
-  };
-  const writeVisibility = async () => {
-    if (edit.visibility !== comment.visibility) {
-      await update({
-        change: "visibility",
-        id: comment.id,
-        visibility: edit.visibility,
-      });
-    }
-  };
-  if (edit.visibility === "shared") {
-    await writeBody();
-    await writeVisibility();
-    return;
-  }
-  await writeVisibility();
-  await writeBody();
-}

@@ -93,7 +93,7 @@ test("pull request and merge-group audits are plan-gated in CI", () => {
 test("full audits run on main and every six hours with one stable remediation identity", () => {
   expect(auditWorkflow.on.push?.branches).toEqual(["main"]);
   expect(auditWorkflow.on.schedule).toEqual([{ cron: "0 */6 * * *" }]);
-  const remediation = step(auditWorkflow, "remediate", "Open one remediation");
+  const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
   expect(auditWorkflow.jobs["remediate"]?.if).toBe(
     "always() && github.event_name != 'pull_request' && (needs.audit.outputs.advisory_failure == 'true' || needs.audit.outputs.stale_acceptance == 'true')",
   );
@@ -150,10 +150,51 @@ test("remediation pushes and pull requests authenticate with a repository-scoped
   expect(
     step(auditWorkflow, "remediate", "Checkout").with?.["persist-credentials"],
   ).toBe(false);
-  const remediation = step(auditWorkflow, "remediate", "Open one remediation");
+  const remediation = step(auditWorkflow, "remediate", "Prepare remediation");
   expect(remediation.env?.["GH_TOKEN"]).toBe(
     githubExpression("steps.app-token.outputs.token"),
   );
   expect(remediation.env?.["GITHUB_TOKEN"]).toBeUndefined();
   expect(remediation.run).toBe("bash scripts/remediate-dependency-audit.sh");
+});
+
+test("remediation commits use the shared signed action and app identity", () => {
+  const prepare = step(auditWorkflow, "remediate", "Prepare remediation");
+  const commit = step(auditWorkflow, "remediate", "Open one remediation");
+  const catalogCommit = step(
+    catalogWorkflow,
+    "model-catalog-check",
+    "Open or update the refresh PR",
+  );
+  expect(prepare.id).toBe("remediation");
+  expect(commit.if).toBe("steps.remediation.outputs.changed == 'true'");
+  expect(commit.uses).toBe(catalogCommit.uses);
+  expect(commit.with?.["token"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(commit.with?.["mode"]).toBe("refresh-pr");
+  expect(commit.with?.["branch"]).toBe(prepare.env?.["FIX_BRANCH"]);
+  expect(commit.with?.["base"]).toBe("main");
+  expect(commit.with?.["paths"]).toBe(
+    "bun.lock\nbunfig.toml\nscripts/dependency-audit-baseline.json\n:(glob)**/package.json\n",
+  );
+  expect(commit.id).toBe("signed-commit");
+  expect(commit.with?.["pr-body"]).toContain(
+    "steps.remediation.outputs.quarantined == 'true'",
+  );
+  const hold = step(
+    auditWorkflow,
+    "remediate",
+    "Hold quarantined remediation for publisher review",
+  );
+  expect(hold.if).toBe(
+    "steps.remediation.outputs.changed == 'true' && steps.remediation.outputs.quarantined == 'true'",
+  );
+  expect(hold.env?.["GH_TOKEN"]).toBe(
+    githubExpression("steps.app-token.outputs.token"),
+  );
+  expect(hold.env?.["PR_NUMBER"]).toBe(
+    githubExpression("steps.signed-commit.outputs.pull-request-number"),
+  );
+  expect(hold.run).toBe('gh pr edit "$PR_NUMBER" --add-label hold');
 });

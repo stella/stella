@@ -25,8 +25,17 @@ for (const entry of PARSER_PARITY_MANIFEST) {
       );
     }
     const expected: unknown = await golden.json();
-    const actual: unknown = await parserParityOutput(entry);
-    expect(actual).toEqual(expected);
+    const actual = await parserParityOutput(entry);
+    expect(expected).toEqual(actual);
+    if ("identity" in entry) {
+      expect(actual.documentAst).toMatchObject({
+        metadata: {
+          caseNumber: entry.identity.caseNumber,
+          ecli: entry.identity.ecli,
+          decisionDate: entry.identity.decisionDate,
+        },
+      });
+    }
   });
 }
 

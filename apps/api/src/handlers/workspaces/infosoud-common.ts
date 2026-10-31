@@ -25,13 +25,19 @@ export const toInfoSoudLookupError = (error: unknown): HandlerError => {
     });
   }
 
+  if (error instanceof InfoSoudAPIError && error.status === 400) {
+    return new HandlerError({
+      status: 404,
+      message: "InfoSoud case not found",
+      cause: error,
+    });
+  }
+
   if (error instanceof InfoSoudAPIError) {
     return new HandlerError({
-      status: error.status === 400 ? 404 : 502,
-      message:
-        error.status === 400
-          ? "InfoSoud case not found"
-          : "InfoSoud returned an error",
+      status: 502,
+      code: error.status >= 500 ? "upstream_unavailable" : "internal_error",
+      message: "InfoSoud returned an error",
       cause: error,
     });
   }
@@ -47,6 +53,7 @@ export const toInfoSoudLookupError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudRequestError) {
     return new HandlerError({
       status: 502,
+      code: "upstream_unavailable",
       message: "InfoSoud request failed",
       cause: error,
     });

@@ -1,3 +1,6 @@
+// parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
+// parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
@@ -5,10 +8,14 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import {
+  CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
+  type CaseLawWorkExpression,
+} from "@stll/api-contract/case-law-source-languages";
 import { sanitizeErrorForOutput } from "@stll/errors";
 // parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
 // parser-output-unchanged: imports the document AST from its package owner
-import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -18,37 +25,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
@@ -69,6 +45,7 @@ import {
   parseEcjDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
 import {
+  type EcjFormexBibliography,
   listEcjFormexFields,
   parseFormexBibliography,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
@@ -88,6 +65,7 @@ import type {
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { captureError } from "@/api/lib/analytics/capture";
+import { DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY } from "@/api/lib/case-law/decision-language";
 import {
   absentDecisionTextFields,
   checkedDecisionMetadata,
@@ -102,6 +80,38 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  PUBLISHER_REQUEST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
@@ -235,11 +245,15 @@ type SparqlBinding = {
 };
 
 /**
- * One row of the listing, as the six `SELECT` variables bind it.
+ * One row of the listing, as the `SELECT` variables bind it.
  *
  * Exported because it is the shape of the `listing` envelope part: a caller
  * building a stored row has to state the binding that named it, and a
- * second declaration of these six names could drift from the query.
+ * second declaration of these names could drift from the query.
+ *
+ * `manifestationType` is optional because listings stored before the query
+ * selected it do not state it; every such listing named an XHTML
+ * manifestation, which is what the query was then limited to.
  */
 export type EcjSparqlBinding = {
   ecli: SparqlBinding;
@@ -248,6 +262,7 @@ export type EcjSparqlBinding = {
   type: SparqlBinding;
   language: SparqlBinding;
   manifestation: SparqlBinding;
+  manifestationType?: SparqlBinding;
 };
 
 type SparqlResult = EcjSparqlBinding;
@@ -270,7 +285,9 @@ const isSparqlResult = (value: unknown): value is SparqlResult =>
   isSparqlBinding(value["celex"]) &&
   isSparqlBinding(value["type"]) &&
   isSparqlBinding(value["language"]) &&
-  isSparqlBinding(value["manifestation"]);
+  isSparqlBinding(value["manifestation"]) &&
+  (value["manifestationType"] === undefined ||
+    isSparqlBinding(value["manifestationType"]));
 
 const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   isRecord(value) &&
@@ -368,6 +385,26 @@ const CELEX = /^[0-9A-Z()]+$/u;
 /** Boundary check for callers that accept CELEX numbers as input. */
 export const isValidCelex = (value: string): boolean => CELEX.test(value);
 
+/**
+ * The manifestation types that carry a decision's text as markup this adapter
+ * reads, most preferred first: the Office's converter output, then the
+ * Court's own HTML. Both go through the same parse; the order decides only
+ * which one a variant published in both is read from.
+ */
+const ECJ_DOCUMENT_MANIFESTATION_TYPES = ["xhtml", "html"] as const;
+
+/**
+ * Where a binding's manifestation sits in that preference. A listing stored
+ * before the query selected the type named XHTML, the only type it listed.
+ */
+const MANIFESTATION_RANK: ReadonlyMap<string, number> = new Map(
+  ECJ_DOCUMENT_MANIFESTATION_TYPES.map((type, rank) => [type, rank]),
+);
+
+const manifestationPreference = (binding: EcjSparqlBinding): number =>
+  MANIFESTATION_RANK.get(binding.manifestationType?.value ?? "xhtml") ??
+  ECJ_DOCUMENT_MANIFESTATION_TYPES.length;
+
 const ECJ_SPARQL_PREFIXES = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>`;
 
@@ -377,6 +414,13 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>`;
  * and the stored rows are drawn from one definition. Languages are narrowed
  * after the query by `toEcjLanguage`: a language filter inside the pattern
  * pushes the count query past the endpoint's 60-second limit.
+ *
+ * A variant is holdable in any of `ECJ_DOCUMENT_MANIFESTATION_TYPES`. The
+ * Office publishes a translation first as the Court's own HTML and converts
+ * it to XHTML later, often months afterwards and sometimes never; a pattern
+ * limited to XHTML lists a decision in the few languages already converted
+ * and leaves its other translations invisible to the crawl, to the
+ * reconciliation walk and to the source total alike.
  */
 export const ECJ_DECISION_PATTERN = `
   ?doc cdm:case-law_ecli ?ecli .
@@ -394,7 +438,9 @@ export const ECJ_DECISION_PATTERN = `
     cdm:opinion_advocate_general,
     cdm:opinion_advocate-general
   ))
-  FILTER(STR(?manifestationType) = "xhtml")`;
+  FILTER(STR(?manifestationType) IN (${ECJ_DOCUMENT_MANIFESTATION_TYPES.map(
+    (type) => `"${type}"`,
+  ).join(", ")}))`;
 
 /**
  * The source total per language, counted in the unit a row is stored under:
@@ -475,7 +521,7 @@ export const buildListingQuery = ({
 
   return `
 ${ECJ_SPARQL_PREFIXES}
-SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
+SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation ?manifestationType
 WHERE {${celexClause}
 ${ECJ_DECISION_PATTERN}
   FILTER(STR(?date) >= "${dateFrom}")
@@ -599,6 +645,58 @@ export const celexToCaseNumber = (celex: string): string => {
   const prefix = CELEX_PREFIX[typeStr] ?? "C";
 
   return `${prefix}-${caseNum}/${year}`;
+};
+
+/**
+ * A docket inside the publisher's wording of it: `Case C-128/22`, `Věc
+ * 302/87.`, `Case 8-55.`, `Joined Cases C-6/90 and C-9/90`. The court
+ * letter is optional because the Court of Justice numbered its cases
+ * without one until the Court of First Instance was set up in 1989.
+ */
+const STATED_DOCKET =
+  /(?:(?<letter>[A-Z])\s*[-‑–]\s*)?(?<number>\d{1,4})\s*[/‑–-]\s*(?<year>\d{2})\b/gu;
+
+/** A run of digits as the number it names is written, `0120` as `120`. */
+const withoutLeadingZeros = (digits: string): string =>
+  digits.replace(/^0+(?=\d)/u, "");
+
+/**
+ * The decision's case number, as the publisher states it.
+ *
+ * The CELEX gives the case's ordinal and year but not how it was named:
+ * the `C-` prefix exists only since 1989, and an older case is `120/78`,
+ * never `C-120/78`. So the publisher's own statements of the docket (the
+ * Formex bibliography first, which is language-independent, then the
+ * notice's wording) decide whether the prefix is part of it. A docket
+ * they do not state keeps the CELEX reading.
+ */
+export const ecjCaseNumber = (
+  celex: string,
+  statements: readonly string[],
+): string => {
+  const derived = celexToCaseNumber(celex);
+  const parts = /^[A-Z]-(?<ordinal>\d+)\/(?<year>\d{2})$/u.exec(
+    derived,
+  )?.groups;
+  const ordinal = parts?.["ordinal"];
+  const year = parts?.["year"];
+  if (ordinal === undefined || year === undefined) {
+    return derived;
+  }
+  for (const statement of statements) {
+    for (const stated of statement.matchAll(STATED_DOCKET)) {
+      const { letter, number } = stated.groups ?? {};
+      if (
+        number === undefined ||
+        withoutLeadingZeros(number) !== withoutLeadingZeros(ordinal) ||
+        stated.groups?.["year"] !== year
+      ) {
+        continue;
+      }
+      return letter === undefined ? `${ordinal}/${year}` : derived;
+    }
+  }
+  return derived;
 };
 
 /** One language variant of one decision, as Cellar lists it. */
@@ -1032,6 +1130,36 @@ type ParsedManifestation = {
   keywords: string[];
 };
 
+/**
+ * The decision's sections, with the ruling under its own heading.
+ *
+ * The parser makes the sentence that introduces the operative part ("On
+ * those grounds, the Court hereby rules:") its heading. `sectionsFromAst`
+ * cuts at a level-1 heading and again where the ruling begins, so that
+ * heading would title an empty section ahead of an untitled ruling. An
+ * empty titled section followed by an untitled one gives it its title.
+ */
+const ecjSections = (blocks: readonly Block[]): DecisionSection[] => {
+  const folded: DecisionSection[] = [];
+  for (const section of sectionsFromAst(blocks)) {
+    const previous = folded.at(-1);
+    if (
+      previous?.text === "" &&
+      previous.title !== null &&
+      section.title === null
+    ) {
+      folded[folded.length - 1] = {
+        ...section,
+        index: previous.index,
+        title: previous.title,
+      };
+      continue;
+    }
+    folded.push({ ...section, index: folded.length });
+  }
+  return folded;
+};
+
 const parseManifestation = (
   input: ParseEcjDecisionInput,
 ): ParsedManifestation => {
@@ -1040,11 +1168,22 @@ const parseManifestation = (
     // A parse that lost source text is worse than no parse: the reader
     // renders the AST, so the missing paragraphs would be invisible.
     // Fall through to the stripped-text fallback, which keeps
-    // everything, and let the ERROR the validator already logged say
-    // which decision needs the parser fixed.
+    // everything. The fallback stores no AST, so the pipeline's retention
+    // check never sees this parse; the error below is what says which
+    // decision needs the parser fixed.
     const lostContent = parsed.validationIssues.some(
       (code) => code === "CONTENT_LOSS" || code === "MISSING_WORDS",
     );
+    if (lostContent) {
+      logger.error("case_law.ingestion.parse_lost_content_fallback", {
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        celex: input.celex,
+        caseNumber: input.caseNumber,
+        codes: parsed.validationIssues.join(","),
+        ...(input.language === undefined ? {} : { language: input.language }),
+        ...(input.sourceUrl === undefined ? {} : { url: input.sourceUrl }),
+      });
+    }
     // An unmatched layout is not a page: the whole body is the document
     // and its text is the Court's, so rule 10 keeps it exactly as before.
     // Only a page built out of the publisher's chrome is refused, and
@@ -1056,7 +1195,7 @@ const parseManifestation = (
     ) {
       return {
         documentAst: parsed.documentAst,
-        sections: sectionsFromAst(parsed.documentAst.blocks),
+        sections: ecjSections(parsed.documentAst.blocks),
         fulltext: parsed.fulltext,
         keywords: parsed.keywords,
       };
@@ -1121,11 +1260,25 @@ const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
-const groupEcjVariants = (bindings: readonly SparqlResult[]) =>
-  Map.groupBy(
-    bindings,
-    ({ celex, language }) => `${celex.value}:${language.value}`,
-  ).values();
+/**
+ * The bindings of each (CELEX, language) variant, in the order they are tried:
+ * preferred manifestation type first, then the listing's own order. A variant
+ * whose XHTML is not served still falls back to its HTML.
+ */
+const groupEcjVariants = (
+  bindings: readonly SparqlResult[],
+): SparqlResult[][] =>
+  Array.from(
+    Map.groupBy(
+      bindings,
+      ({ celex, language }) => `${celex.value}:${language.value}`,
+    ).values(),
+    (variant) =>
+      variant.toSorted(
+        (left, right) =>
+          manifestationPreference(left) - manifestationPreference(right),
+      ),
+  );
 
 type BuildPendingVariantOptions = {
   bindings: readonly SparqlResult[];
@@ -1292,6 +1445,40 @@ const ZIP_MEDIA_TYPE = "application/zip";
 const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
   CJ: "Court of Justice",
   GCEU: "General Court",
+  CST: "Civil Service Tribunal",
+};
+
+/**
+ * The same courts by the court code of their ECLI (`ECLI:EU:F:2006:112`),
+ * which every row carries and which is the record's own statement of the
+ * deciding court. The Civil Service Tribunal (2005–2016) is `F`.
+ */
+const COURT_BY_ECLI_CODE: Readonly<Record<string, string>> = {
+  C: "Court of Justice",
+  T: "General Court",
+  F: "Civil Service Tribunal",
+};
+
+/**
+ * Not anchored: whether the value is a well-formed ECLI is the item
+ * validator's call, which reports a malformed one as a typed failure, and
+ * the court it names is read either way.
+ */
+const ECLI_COURT_CODE = /\bECLI:EU:(?<code>[A-Z]+):/u;
+
+const courtFromEcli = (ecli: string): string | undefined => {
+  const code = ECLI_COURT_CODE.exec(ecli)?.groups?.["code"];
+  if (code === undefined) {
+    return undefined;
+  }
+  const court = COURT_BY_ECLI_CODE[code];
+  if (court === undefined) {
+    logger.warn("case_law.ingestion.unmapped_cjeu_ecli_court", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      ecliCourtCode: code,
+    });
+  }
+  return court;
 };
 
 /**
@@ -1301,7 +1488,11 @@ const COURT_BY_CORPORATE_BODY: Readonly<Record<string, string>> = {
 type EcjDecisionIdentity = {
   celex: string;
   ecli: string;
-  court: string;
+  /**
+   * The court a stored row was filed under, read only when neither its ECLI
+   * nor its publisher parts name one. A crawl has no such row.
+   */
+  court: string | undefined;
   decisionDate: string;
   decisionType: string;
   /** Lower-case language tag, as stored on the row. */
@@ -1415,7 +1606,8 @@ const noticeMetadata = (facts: EcjNoticeFacts) => ({
   celexType: facts.celexType,
   recordVersion: facts.recordVersion,
   referringCountry: facts.referringCountry,
-  procedureLanguage: facts.procedureLanguage,
+  // The language of the case, which an exact lookup answers in by default.
+  [DECISION_AUTHENTIC_LANGUAGE_METADATA_KEY]: facts.procedureLanguage,
   procedureType: facts.procedureType,
   observations: facts.observations,
   nationalJudgment: facts.nationalJudgment,
@@ -1437,6 +1629,17 @@ const noticeMetadata = (facts: EcjNoticeFacts) => ({
     ...manifestation,
     uri: toMetadataUrl(manifestation.uri, "decoded"),
   })),
+  [CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY]: facts.workExpressions.map(
+    ({ language, formats }): CaseLawWorkExpression => {
+      const rowLanguage = toEcjLanguage(`${CELLAR_LANGUAGE_PREFIX}${language}`);
+      return {
+        authorityCode: language,
+        language:
+          rowLanguage === undefined ? null : ecjRowLanguage(rowLanguage),
+        formats: [...formats],
+      };
+    },
+  ),
 });
 
 /** Rebuild URL diagnostics from this envelope, without carrying a saved sidecar. */
@@ -1466,7 +1669,13 @@ const ecjPublisherMetadata = (
     isRecord(parsedBinding) && isSparqlBinding(parsedBinding["type"])
       ? parsedBinding["type"]
       : undefined;
+  const manifestationType =
+    isRecord(parsedBinding) &&
+    isSparqlBinding(parsedBinding["manifestationType"])
+      ? parsedBinding["manifestationType"].value
+      : undefined;
   const binding = {
+    ...(manifestationType === undefined ? {} : { manifestationType }),
     ...(manifestation === undefined
       ? {}
       : {
@@ -1497,6 +1706,30 @@ const ecjPublisherMetadata = (
     ),
   };
 };
+
+type EcjStatedCourtOptions = {
+  ecli: string;
+  facts: EcjNoticeFacts | undefined;
+  bibliography: EcjFormexBibliography | undefined;
+  court: string | undefined;
+};
+
+/**
+ * The deciding court: the record's own ECLI first, then the publisher's
+ * corporate-body codes, then what a stored row was filed under.
+ */
+const ecjStatedCourt = ({
+  ecli,
+  facts,
+  bibliography,
+  court,
+}: EcjStatedCourtOptions): string | undefined =>
+  courtFromEcli(ecli) ??
+  courtFromNotice(facts?.courtCode.at(0)) ??
+  bibliography?.author
+    .map(courtFromNotice)
+    .find((name) => name !== undefined) ??
+  court;
 
 /**
  * Build the ingestion result for one stored envelope.
@@ -1529,14 +1762,23 @@ const ecjDecisionFromParts = ({
     formexXml === undefined
       ? undefined
       : parseFormexBibliography(ecjFormexDocuments(formexXml));
-  const statedCourt =
-    courtFromNotice(facts?.courtCode.at(0)) ??
-    bibliography?.author
-      .map(courtFromNotice)
-      .find((name) => name !== undefined) ??
-    court;
+  const statedCourt = ecjStatedCourt({ ecli, facts, bibliography, court });
+  if (statedCourt === undefined) {
+    logger.warn("case_law.ingestion.cjeu_court_unstated", {
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      celex,
+      ecli,
+    });
+    return undefined;
+  }
 
-  const caseNumber = celexToCaseNumber(celex);
+  const celexCaseNumber = celexToCaseNumber(celex);
+  // A manifestation read without its Formex or its notice states nothing
+  // through the part it lacks.
+  const caseNumber = ecjCaseNumber(celex, [
+    ...(bibliography === undefined ? [] : bibliography.caseNumber),
+    ...(facts === undefined ? [] : facts.caseIdentifier),
+  ]);
   const { documentAst, sections, fulltext, keywords } = parseManifestation({
     caseNumber,
     ecli,
@@ -1583,6 +1825,11 @@ const ecjDecisionFromParts = ({
       // docket's other documents find no null-id row and are inserted, which is
       // the collapse being undone.
       ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
+      // Those rows were stored under the CELEX reading of the docket, which
+      // gives a case numbered before 1989 a letter it never had (`C-120/78`).
+      ...(caseNumber === celexCaseNumber
+        ? {}
+        : { legacyCaseNumber: celexCaseNumber }),
       ecli,
       court: statedCourt,
       country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
@@ -1695,6 +1942,13 @@ const ecjStoredRawParts = (
     : { [RAW_PART.DOCUMENT]: raw };
 };
 
+/**
+ * The manifestation an ingestion result's envelope carries, for callers that
+ * record it on its own: the parser fixtures are the XHTML, not the envelope.
+ */
+export const ecjEnvelopeDocument = (sourceRaw: string): string | undefined =>
+  decodeSourceRawEnvelope(sourceRaw)?.[RAW_PART.DOCUMENT];
+
 const nonEmptyString = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
 
@@ -1777,7 +2031,7 @@ const reparseStoredRaw = (
   const result = ecjDecisionFromParts({
     celex,
     ecli,
-    court: stored.court,
+    court: nonEmptyString(stored.court),
     decisionDate,
     decisionType:
       stored.decisionType ??
@@ -2120,8 +2374,6 @@ export const buildDecision = async (
     return undefined;
   }
 
-  const court = ecli.includes(":T:") ? "General Court" : "Court of Justice";
-
   // Fetch the language-specific XHTML stream from Cellar. The
   // human-facing EUR-Lex HTML endpoint is WAF-protected and may return
   // a challenge instead of document content to server-side callers.
@@ -2207,7 +2459,7 @@ export const buildDecision = async (
   return ecjDecisionFromParts({
     celex,
     ecli,
-    court,
+    court: undefined,
     decisionDate: date,
     decisionType,
     language: ecjRowLanguage(lang),
@@ -2362,6 +2614,36 @@ const isEcjCelexVariant = (value: unknown): value is EcjCelexVariant =>
   isValidCelex(value["celex"]) &&
   ECJ_LANGUAGES.some((language) => language === value["language"]);
 
+type ListEcjMonthVariantsOptions = {
+  year: number;
+  /** 1-based calendar month. */
+  month: number;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * The variants the publisher lists for one calendar month: one page of the
+ * reconciliation walk's year slice, so a backfill over history asks exactly
+ * the questions that walk asks and keys the answers the same way.
+ */
+export const listEcjMonthVariants = async ({
+  year,
+  month,
+  signal,
+}: ListEcjMonthVariantsOptions): Promise<EcjCelexVariant[]> => {
+  const page = await listEcjSlicePage({
+    slice: ecjSlice(year),
+    page: month - 1,
+    signal,
+  });
+  return page.items.flatMap(({ payload }) =>
+    isEcjCelexVariant(payload) ? [payload] : [],
+  );
+};
+
+/** The first month the Court sat; where a walk over all history stops. */
+export const ECJ_FIRST_MONTH = `${COURT_EPOCH_YEAR}-01`;
+
 /**
  * Rebuild one listed variant, through the adapter's own query and build path.
  *
@@ -2424,6 +2706,7 @@ const SOURCE_FIELDS = [
   "listing.type",
   "listing.language",
   "listing.manifestation",
+  "listing.manifestationType",
   "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED",
   "notice.WORK/CASE-LAW_COMMENTED_BY_AGENT",
   "notice.WORK/CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU",
@@ -2536,9 +2819,10 @@ const SOURCE_FIELDS = [
  * Three principles run through the exclusions. The repository states the same
  * identifier under a generic name and under a specific one, and only the
  * specific one is read. It states its own record timestamps, which move when
- * the Office re-indexes and say nothing about the decision. And it states,
- * for this work, every other language expression and every cited work, each
- * of which is a row of its own or a document of its own.
+ * the Office re-indexes and say nothing about the decision. And it states
+ * every cited work, each of which is a document of its own. The work's other
+ * language expressions are rows of their own too, but their list is kept: it
+ * is the publisher's statement of which rows the work should have.
  */
 const EU_ECJ_SOURCE_FIELDS = {
   "listing.celex": { disposition: "stored", target: { type: "identity" } },
@@ -2558,6 +2842,10 @@ const EU_ECJ_SOURCE_FIELDS = {
   "listing.manifestation": {
     disposition: "stored",
     target: { type: "result", key: "documentUrl" },
+  },
+  "listing.manifestationType": {
+    disposition: "stored",
+    target: { type: "metadata", key: "manifestationType" },
   },
   "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED": {
     disposition: "stored",
@@ -2713,9 +3001,12 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  "notice.WORK/WORK_HAS_EXPRESSION": excludedSourceField(
-    "the other language expressions of this work, each of which is a row of its own",
-  ),
+  // Each other expression is a row of its own, but the list of them is the
+  // work's language manifest: what makes a missing translation checkable.
+  "notice.WORK/WORK_HAS_EXPRESSION": {
+    disposition: "stored",
+    target: { type: "metadata", key: CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY },
+  },
   "notice.WORK/WORK_HAS_RESOURCE-TYPE": {
     disposition: "stored",
     target: { type: "metadata", key: "form" },
@@ -3224,6 +3515,7 @@ export const euEcjAdapter = defineSourceAdapter({
         if (abortSignal.aborted) {
           return {
             decisions,
+            publisherRequest: PUBLISHER_REQUEST.ANSWERED,
             nextCursor: dateFrom,
             itemBuildFailures: { type: "item_build_failed", count: failed },
           };
@@ -3240,6 +3532,7 @@ export const euEcjAdapter = defineSourceAdapter({
 
         return {
           decisions,
+          publisherRequest: PUBLISHER_REQUEST.ANSWERED,
           nextCursor,
           itemBuildFailures: { type: "item_build_failed", count: failed },
         };

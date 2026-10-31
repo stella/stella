@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { env } from "@/api/env";
 import type { TanStackTextFinishPolicy } from "@/api/lib/tanstack-ai-generate";
 import { SEAM_DRIVERS } from "@/api/tests/helpers/ai-text-call-sites";
@@ -8,7 +10,6 @@ import {
   cassetteKey,
   loadProviderWireCassettes,
 } from "@/api/tests/helpers/provider-wire-cassette";
-import { createTestState } from "@/api/tests/helpers/test-state";
 
 // The text generation seam against every provider wire cassette, under every
 // finish policy: the recorded and synthetic provider answers through the real

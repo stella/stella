@@ -19,6 +19,7 @@ import {
   reportExportsHistoryOptions,
 } from "@/lib/workspaces/queries/report-exports";
 import { resolveReportExportDestinationQuery } from "@/lib/workspaces/resolve-report-export-destination-query";
+import { useWorkspaceViewParams } from "@/lib/workspaces/use-workspace-view-params";
 
 import { downloadReportExport } from "./report-export-actions";
 import type { ReportExportDeliveryMode } from "./report-export-tracking";
@@ -34,6 +35,7 @@ export const ReportExportHistory = ({
   const format = useFormatter();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const viewParams = useWorkspaceViewParams(workspaceId);
   const queryClient = useQueryClient();
   const userId = useAuthenticatedUser().id;
   const [activeActionId, setActiveActionId] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export const ReportExportHistory = ({
       }
       await navigate({
         to: "/workspaces/$workspaceId/$viewId/document",
-        params: { workspaceId, viewId: "all" },
+        params: viewParams,
         search: {
           entity: destination.entityId,
           field: destination.fieldId,

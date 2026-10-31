@@ -69,4 +69,11 @@ describe("citation probe candidates", () => {
     expect(residual("sygn. akt UZP/ZO/0-1234/05/A")).toBe(true);
     expect(residual("sygn. akt V CSK 123/05")).toBe(true);
   });
+
+  test("a prosecutor-office file is benign, a criminal docket is not", () => {
+    expect(residual("sp. zn. VI/2 Pz 123/07 zo dňa")).toBe(false);
+    expect(residual("sp. zn.XV/2 Gn 45/09")).toBe(false);
+    expect(residual("sp. zn. VI/2 Pz 123/07-5")).toBe(true);
+    expect(residual("sp. zn. 2 Tdo 123/2007")).toBe(true);
+  });
 });

@@ -60,9 +60,13 @@ emits JSON `scheduler.job.paused` and `scheduler.job.resumed` events when
 `paused_until` changes, including the job, attribution, reason, and previous
 deadline. Updating a future pause emits a pause event; setting a past deadline
 or clearing an expired deadline emits a resume event. Repeating the same
-deadline produces no duplicate transition event. A runner that encounters an
-active pause during execution emits `scheduler.job.paused_job_ran` at error
-level and prevents execution.
+deadline produces no duplicate transition event. A runner that meets an active
+pause before a leased run starts, or at a heartbeat while it runs, skips or
+stops the run and emits `scheduler.job.pause_honored` at info level with its
+`phase` (`before_start` or `while_running`): the pause worked, so it is
+operator-owned state, not an error. Only a run that completes after its pause
+committed emits `scheduler.job.paused_job_ran` at error level, because that
+work ran under the pause.
 
 The hourly pause audit emits `scheduler.job.pause_overdue` at error level for
 each active pause that began more than 24 hours ago, including active legacy

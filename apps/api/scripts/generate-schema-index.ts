@@ -392,6 +392,71 @@ const describeColumn = (
 const propertyKey = (name: PropertyKey): string | null =>
   name.type === "Identifier" ? name.name : (stringText(name) ?? null);
 
+/** Named and composite constraints declare local columns outside their builder chains. */
+const tableForeignKeyColumns = (call: CallExpression): Set<string> => {
+  const keys = new Set<string>();
+  const config = call.arguments.at(2);
+  if (config === undefined) {
+    return keys;
+  }
+  walk(config, (node) => {
+    if (
+      node.type !== "CallExpression" ||
+      calleeName(node.callee) !== "foreignKey"
+    ) {
+      return;
+    }
+    const definition = node.arguments.at(0);
+    if (definition?.type !== "ObjectExpression") {
+      return;
+    }
+    for (const property of definition.properties) {
+      if (
+        property.type !== "Property" ||
+        property.kind !== "init" ||
+        property.method ||
+        property.shorthand ||
+        property.computed ||
+        propertyKey(property.key) !== "columns" ||
+        property.value.type !== "ArrayExpression"
+      ) {
+        continue;
+      }
+      for (const column of property.value.elements) {
+        const name =
+          column?.type === "MemberExpression" ? calleeName(column) : null;
+        if (name !== null) {
+          keys.add(name);
+        }
+      }
+    }
+  });
+  return keys;
+};
+
+type TableDefinition = {
+  columns: ObjectExpression;
+  foreignKeys: Set<string>;
+};
+
+/** Each exported table's column object and constraint-declared foreign keys. */
+const tableDefinitions = (
+  declarations: readonly { initializer: Expression; name: string }[],
+): Map<string, TableDefinition> => {
+  const definitions = new Map<string, TableDefinition>();
+  for (const declaration of declarations) {
+    const call = findTableCall(declaration.initializer);
+    const columnsArgument = call?.arguments.at(1);
+    if (call !== null && columnsArgument?.type === "ObjectExpression") {
+      definitions.set(declaration.name, {
+        columns: columnsArgument,
+        foreignKeys: tableForeignKeyColumns(call),
+      });
+    }
+  }
+  return definitions;
+};
+
 type IndexSchemaSourceOptions = {
   fileName: string;
   source: string;
@@ -418,14 +483,7 @@ export const indexSchemaSource = ({
         : [],
     );
   });
-  const tableColumns = new Map<string, ObjectExpression>();
-  for (const declaration of declarations) {
-    const call = findTableCall(declaration.initializer);
-    const columnsArgument = call?.arguments.at(1);
-    if (columnsArgument?.type === "ObjectExpression") {
-      tableColumns.set(declaration.name, columnsArgument);
-    }
-  }
+  const tableColumns = tableDefinitions(declarations);
   for (const declaration of declarations) {
     const tableCall = findTableCall(declaration.initializer);
     const viewCall = findViewCall(declaration.initializer);
@@ -434,9 +492,10 @@ export const indexSchemaSource = ({
     const ownColumnsArgument = tableCall?.arguments.at(1);
     const viewSource =
       viewCall === null ? null : findViewSource(declaration.initializer);
-    const columnsArgument =
-      ownColumnsArgument ??
+    const tableDefinition =
+      tableColumns.get(declaration.name) ??
       (viewSource === null ? undefined : tableColumns.get(viewSource));
+    const columnsArgument = ownColumnsArgument ?? tableDefinition?.columns;
     if (
       call === null ||
       sqlName === undefined ||
@@ -469,11 +528,17 @@ export const indexSchemaSource = ({
       if (key === null) {
         continue;
       }
+      const description = describeColumn(key, property.value);
+      const flags = new Set(description.flags);
+      if (tableDefinition?.foreignKeys.has(key)) {
+        flags.add("fk");
+      }
       columns.push({
         key,
         line: lineOf(property),
         summary: leadingSummary(property, parsed),
-        ...describeColumn(key, property.value),
+        ...description,
+        flags: FLAG_ORDER.filter((flag) => flags.has(flag)),
       });
     }
     const { statement } = declaration;

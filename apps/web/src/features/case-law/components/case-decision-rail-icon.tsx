@@ -1,34 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
-
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 
 import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import type { InspectorRailIconProps } from "@/components/inspector/view-registry";
-import { decisionOptions } from "@/features/case-law/queries/decisions";
-import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
- * The court's chip stands for the tab, the way it stands beside the court in
- * the results table: a reader with three decisions open tells them apart by
- * court, not by a document glyph they all share. The chip comes from the
- * decision record the view reads (the same cache entry), so a court nothing
- * abbreviates to a chip, or a record not in yet, falls back to the glyph.
+ * The case number stands for the tab, the way a statute tab shows `165/12`:
+ * a reader with three decisions of one court open tells them apart by number,
+ * which a court chip they all share cannot do. The number travels in the tab
+ * itself, so the label is there before the decision is read.
  */
 export const CaseDecisionRailIcon = ({
   tab,
-}: InspectorRailIconProps<CaseDecisionViewPayload>) => {
-  const decisionQuery = useQuery(decisionOptions(tab.payload.decisionId));
-  const decisionView = useQueryView(decisionQuery);
-  useQueryViewError(decisionView, "CaseDecisionRailIcon:query");
-  const decision =
-    decisionView.type === "items" ? decisionView.items : undefined;
-  return (
-    <DocumentIdentityBadge
-      identity={{
-        kind: "decision",
-        courtAbbreviation: decision?.courtAbbreviation,
-        courtTier: decision?.courtTier,
-      }}
-    />
-  );
-};
+}: InspectorRailIconProps<CaseDecisionViewPayload>) => (
+  <DocumentIdentityBadge
+    identity={{ kind: "caseNumber", caseNumber: tab.payload.caseNumber }}
+  />
+);
