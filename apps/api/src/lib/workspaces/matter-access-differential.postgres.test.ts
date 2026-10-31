@@ -3,10 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 
-import {
-  defaultMatterVisibilityFor,
-  MATTER_VISIBILITY,
-} from "@stll/api-contract";
+import { MATTER_VISIBILITY } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
 
@@ -68,6 +65,7 @@ const worldArbitrary = fc.record({
   matters: fc.array(
     fc.record({
       client: fc.boolean(),
+      visibility: fc.constantFrom(...Object.values(MATTER_VISIBILITY)),
       deleting: fc.boolean(),
     }),
     { minLength: MATTERS, maxLength: MATTERS },
@@ -155,7 +153,7 @@ const seedWorld = async (tx: Transaction, world: World) => {
       id: seeded.matterIds[index] ?? panic("matter id"),
       organizationId: seeded.organizationId,
       clientId: matter.client ? clientId : null,
-      leadUserId: matter.client ? null : seeded.stewardUserId,
+      leadUserId: seeded.stewardUserId,
       name: `Matter ${String(index)}`,
       reference: `DIFF-${String(index)}`,
       status: matter.deleting ? ("deleting" as const) : ("active" as const),
@@ -164,7 +162,7 @@ const seedWorld = async (tx: Transaction, world: World) => {
   // Keep every private matter valid without changing any generated actor's
   // assignments: even all-owner, unassigned worlds need to remain screened.
   const stewardAssignments = world.matters.flatMap((matter, index) =>
-    matter.client
+    matter.visibility !== MATTER_VISIBILITY.assignedOnly
       ? []
       : [
           {
@@ -199,19 +197,16 @@ const seedWorld = async (tx: Transaction, world: World) => {
   if (allAssignments.length > 0) {
     await tx.insert(workspaceMembers).values(allAssignments);
   }
-  if (stewardAssignments.length > 0) {
-    await tx
-      .update(workspaces)
-      .set({
-        visibility: defaultMatterVisibilityFor({ hasClient: false }),
-        leadUserId: seeded.stewardUserId,
-      })
-      .where(
-        inArray(
-          workspaces.id,
-          stewardAssignments.map(({ workspaceId }) => workspaceId),
-        ),
-      );
+  for (const visibility of Object.values(MATTER_VISIBILITY)) {
+    const ids = seeded.matterIds.filter(
+      (_id, index) => world.matters[index]?.visibility === visibility,
+    );
+    if (ids.length > 0) {
+      await tx
+        .update(workspaces)
+        .set({ visibility })
+        .where(inArray(workspaces.id, ids));
+    }
   }
   return seeded;
 };
