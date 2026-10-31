@@ -134,6 +134,9 @@ uuid = { version = "1", features = ["v4"] }
 zeroize = "1"
 zip = { version = "9.0.0", default-features = false }
 
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "=1.1.4", features = ["fs", "process"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus-secret-service-keyring-store = { version = "1", features = [
   "crypto-rust",

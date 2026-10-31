@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Tiene ediciones locales sin guardar. Encuentre su copia en Copias de trabajo temporales.",
     "takenOverBody": "{fileName} — Vuelva a abrir desde stella aquí para recuperar la edición",
     "takenOverLocalError": "La edición de escritorio se movió a otro dispositivo. Esta copia local se mantiene preservada.",
-    "takenOverTitle": "Edición movida a otro dispositivo"
+    "takenOverTitle": "Edición movida a otro dispositivo",
+    "editsSetAsideTitle": "Ediciones apartadas",
+    "editsSetAsideBody": "Se apartaron las ediciones sin guardar. Vuelve a conectar la misma cuenta para abrir la carpeta de recuperación en Configuración."
   },
   "dialog": {
     "accountWindowTitle": "Conectar cuenta",
@@ -232,7 +234,16 @@
     "permissionDenied": "Desactivado en los ajustes del sistema.",
     "permissionManaged": "Gestionado por su organización",
     "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
-    "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso."
+    "errorPermissions": "stella desktop no pudo leer ni cambiar este permiso.",
+    "recoveryTitle": "Ediciones apartadas",
+    "recoveryBody": "Las ediciones sin guardar se conservan aquí para tu cuenta. Abre la carpeta para recuperarlas.",
+    "recoverySignIn": "Las ediciones se apartaron para esa cuenta. Vuelve a conectar esa cuenta para abrir su carpeta.",
+    "recoveryUnassigned": "Algunas ediciones no tienen una cuenta registrada. Abre su carpeta para recuperarlas manualmente.",
+    "recoveryPending": "Algunas ediciones aún se están apartando. Inténtalo de nuevo para terminar.",
+    "recoveryOpenFolder": "Abrir carpeta de recuperación",
+    "recoveryOpenUnassigned": "Abrir ediciones sin asignar",
+    "recoveryFilePending": "Pendiente de apartar",
+    "recoveryError": "No se pudo abrir la carpeta de recuperación. Inténtalo de nuevo."
   },
   "clipboard": {
     "registryUnavailable": "No hay registros habilitados para las jurisdicciones donde ejerces.",

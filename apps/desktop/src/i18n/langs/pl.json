@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Masz niezapisane lokalne edycje. Swoją kopię znajdziesz w Tymczasowych kopiach roboczych.",
     "takenOverBody": "{fileName} — Otwórz ponownie ze stella, aby odzyskać edycję",
     "takenOverLocalError": "Edycja pulpitu przeniesiona na inne urządzenie. Ta lokalna kopia jest zachowana.",
-    "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
+    "takenOverTitle": "Edycja przeniesiona na inne urządzenie",
+    "editsSetAsideTitle": "Zmiany odłożone",
+    "editsSetAsideBody": "Niezapisane zmiany zostały odłożone. Połącz się ponownie z tym samym kontem, aby otworzyć folder odzyskiwania w Ustawieniach."
   },
   "dialog": {
     "accountWindowTitle": "Połącz konto",
@@ -232,7 +234,16 @@
     "permissionDenied": "Wyłączone w ustawieniach systemu.",
     "permissionManaged": "Zarządzane przez Twoją organizację",
     "errorUpdateAutostart": "stella desktop nie mogła zmienić uruchamiania przy logowaniu.",
-    "errorPermissions": "stella desktop nie mógł odczytać ani zmienić tego uprawnienia."
+    "errorPermissions": "stella desktop nie mógł odczytać ani zmienić tego uprawnienia.",
+    "recoveryTitle": "Odłożone zmiany",
+    "recoveryBody": "Niezapisane zmiany są tu przechowywane dla Twojego konta. Otwórz folder, aby je odzyskać.",
+    "recoverySignIn": "Zmiany odłożono dla tego konta. Połącz się ponownie z tym kontem, aby otworzyć jego folder.",
+    "recoveryUnassigned": "Niektóre zmiany nie mają przypisanego konta. Otwórz ich folder, aby ręcznie je odzyskać.",
+    "recoveryPending": "Niektóre zmiany są nadal odkładane. Spróbuj ponownie, aby zakończyć.",
+    "recoveryOpenFolder": "Otwórz folder odzyskiwania",
+    "recoveryOpenUnassigned": "Otwórz nieprzypisane zmiany",
+    "recoveryFilePending": "Oczekiwanie na odłożenie",
+    "recoveryError": "Nie udało się otworzyć folderu odzyskiwania. Spróbuj ponownie."
   },
   "clipboard": {
     "registryUnavailable": "Brak włączonych rejestrów dla jurysdykcji, w których prowadzisz praktykę.",

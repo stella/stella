@@ -58,7 +58,9 @@
     "sessionClosedUnsaved": "{fileName} — Teil on salvestamata kohalikud muudatused. Leidke oma koopia Ajutiste töökoopiate alt.",
     "takenOverBody": "{fileName} — Avage uuesti stella-st, et muutmine tagasi võtta",
     "takenOverLocalError": "Töölaua muutmine teisaldatud teise seadmesse. See kohalik koopia on säilitatud.",
-    "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
+    "takenOverTitle": "Muutmine teisaldatud teise seadmesse",
+    "editsSetAsideTitle": "Muudatused pandi kõrvale",
+    "editsSetAsideBody": "Salvestamata muudatused pandi kõrvale. Taastekausta avamiseks seadetes ühenda uuesti sama konto."
   },
   "dialog": {
     "accountWindowTitle": "Ühenda konto",
@@ -232,7 +234,16 @@
     "permissionDenied": "Süsteemi seadetes välja lülitatud.",
     "permissionManaged": "Haldab teie organisatsioon",
     "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
-    "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta."
+    "errorPermissions": "stella desktop ei saanud seda õigust lugeda ega muuta.",
+    "recoveryTitle": "Kõrvale pandud muudatused",
+    "recoveryBody": "Salvestamata muudatusi hoitakse siin sinu konto jaoks. Nende taastamiseks ava kaust.",
+    "recoverySignIn": "Muudatused pandi kõrvale selle konto jaoks. Selle kausta avamiseks ühenda konto uuesti.",
+    "recoveryUnassigned": "Mõnel muudatusel pole registreeritud kontot. Nende käsitsi taastamiseks ava kaust.",
+    "recoveryPending": "Mõnda muudatust alles pannakse kõrvale. Lõpetamiseks proovi uuesti.",
+    "recoveryOpenFolder": "Ava taastekaust",
+    "recoveryOpenUnassigned": "Ava määramata muudatused",
+    "recoveryFilePending": "Ootab kõrvale panemist",
+    "recoveryError": "Taastekausta avamine ebaõnnestus. Proovi uuesti."
   },
   "clipboard": {
     "registryUnavailable": "Teie tegevusjurisdiktsioonide jaoks pole registreid lubatud.",

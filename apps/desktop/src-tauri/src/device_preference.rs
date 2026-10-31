@@ -63,40 +63,19 @@ fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
   let parent = path
     .parent()
     .ok_or_else(|| "preference path is invalid".to_string())?;
-  fs::create_dir_all(parent)
+  crate::local_store::create_private_dir(parent)
     .map_err(|error| format!("preference directory failed: {error}"))?;
-
-  // Written beside the target and renamed into place, as the clipboard store
-  // does: the rename replaces whatever sits at the path in one step instead
-  // of following a link planted there after the check above.
-  let temp_path = path.with_extension(format!(
-    "{}.{}.tmp",
-    std::process::id(),
-    uuid::Uuid::new_v4()
-  ));
-  if let Err(error) = fs::write(&temp_path, value) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("preference write failed: {error}"));
-  }
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-
-    if let Err(error) =
-      fs::set_permissions(&temp_path, fs::Permissions::from_mode(0o600))
-    {
-      let _ = fs::remove_file(&temp_path);
-      return Err(format!("preference permissions failed: {error}"));
-    }
-  }
-  if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("preference replace failed: {error}"));
-  }
-  Ok(())
+  // The rename replaces whatever sits at the path in one step instead of
+  // following a link planted there after the check above.
+  crate::local_store::write_private_atomic(path, value.as_bytes())
+    .map_err(|error| format!("preference write failed: {error}"))
 }
 
 #[cfg(test)]
+#[allow(
+  clippy::disallowed_methods,
+  reason = "tests construct local file fixtures"
+)]
 mod tests {
   use super::*;
 

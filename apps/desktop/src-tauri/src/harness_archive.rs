@@ -7,7 +7,7 @@
 //! either executable (0755) or not (0644).
 
 use std::{
-  fs::{self, File, OpenOptions},
+  fs::File,
   io::{BufReader, Read, Write},
   path::{Path, PathBuf},
 };
@@ -56,7 +56,8 @@ pub(crate) fn unpack(
     }
     let target = contained_target(destination, &entry.path_bytes())?;
     if kind.is_dir() {
-      fs::create_dir_all(target).map_err(storage("harness directory not created"))?;
+      crate::local_store::create_private_dir(&target)
+        .map_err(storage("harness directory not created"))?;
       continue;
     }
     if !kind.is_file() {
@@ -108,26 +109,24 @@ fn write_file(
   cancel: &watch::Receiver<bool>,
 ) -> Result<u64, UnpackError> {
   if let Some(parent) = target.parent() {
-    fs::create_dir_all(parent).map_err(storage("harness directory not created"))?;
+    crate::local_store::create_private_dir(parent)
+      .map_err(storage("harness directory not created"))?;
   }
-  let mut options = OpenOptions::new();
-  options.write(true).create_new(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(if executable { 0o755 } else { 0o644 });
-  }
-  #[cfg(not(unix))]
-  let _ = executable;
-  let mut file = options.open(target).map_err(|error| {
-    if error.kind() == std::io::ErrorKind::AlreadyExists {
-      tracing::warn!("harness archive repeats a path");
-      UnpackError::Rejected
-    } else {
-      crate::logging::log_cause(&error, "harness file not created");
-      UnpackError::Storage
-    }
-  })?;
+  let mode = if executable {
+    crate::local_store::RuntimeFileMode::Executable
+  } else {
+    crate::local_store::RuntimeFileMode::Data
+  };
+  let mut file =
+    crate::local_store::create_runtime_file(target, mode).map_err(|error| {
+      if error.kind() == std::io::ErrorKind::AlreadyExists {
+        tracing::warn!("harness archive repeats a path");
+        UnpackError::Rejected
+      } else {
+        crate::logging::log_cause(&error, "harness file not created");
+        UnpackError::Storage
+      }
+    })?;
   let mut buffer = vec![0u8; COPY_BUFFER_BYTES];
   let mut written = 0u64;
   loop {
@@ -162,6 +161,7 @@ fn storage<E: std::fmt::Display>(what: &'static str) -> impl FnOnce(E) -> Unpack
 #[cfg(test)]
 pub(crate) mod tests {
   use super::*;
+  use std::fs;
 
   /// A directory under the system temporary directory, removed on drop.
   pub(crate) struct TempDir(PathBuf);
@@ -170,7 +170,7 @@ pub(crate) mod tests {
     pub(crate) fn new() -> Self {
       let path =
         std::env::temp_dir().join(format!("stella-harness-{}", uuid::Uuid::new_v4()));
-      fs::create_dir_all(&path).unwrap();
+      crate::local_store::create_private_dir(&path).unwrap();
       Self(path)
     }
 
@@ -267,9 +267,9 @@ pub(crate) mod tests {
   fn unpack_bytes(bytes: &[u8]) -> (TempDir, Result<(), UnpackError>) {
     let dir = TempDir::new();
     let archive = dir.path().join("archive.tar.gz");
-    fs::write(&archive, bytes).unwrap();
+    crate::local_store::write_private_atomic(&archive, bytes).unwrap();
     let destination = dir.path().join("runtime");
-    fs::create_dir(&destination).unwrap();
+    crate::local_store::create_private_dir_new(&destination).unwrap();
     let (_cancel, receiver) = watch::channel(false);
     let result = unpack(&archive, &destination, &receiver);
     (dir, result)

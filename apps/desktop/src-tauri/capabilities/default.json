@@ -9,6 +9,7 @@
     "allow-get-desktop-language",
     "allow-set-desktop-language",
     "allow-get-state",
+    "allow-open-recovery-folder",
     "allow-open-stella-account",
     "allow-account-record-use",
     "allow-desktop-report-error",

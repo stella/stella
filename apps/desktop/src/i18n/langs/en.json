@@ -58,7 +58,9 @@
     "sessionClosedSaved": "{fileName} — Local copy stays preserved in Temporary working copies",
     "takenOverBody": "{fileName} — Reopen from stella here to take editing back",
     "takenOverTitle": "Editing moved to another device",
-    "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved."
+    "takenOverLocalError": "Desktop editing moved to another device. This local copy is preserved.",
+    "editsSetAsideTitle": "Edits set aside",
+    "editsSetAsideBody": "Unsaved edits were set aside. Reconnect the same account to open the recovery folder in Settings."
   },
   "dialog": {
     "accountWindowTitle": "Connect account",
@@ -232,7 +234,16 @@
     "permissionDenied": "Turned off in system settings.",
     "permissionManaged": "Managed by your organization",
     "errorUpdateAutostart": "stella desktop could not update start-on-login.",
-    "errorPermissions": "stella desktop could not read or change this permission."
+    "errorPermissions": "stella desktop could not read or change this permission.",
+    "recoveryTitle": "Set-aside edits",
+    "recoveryBody": "Unsaved edits are kept here for your account. Open the folder to recover them.",
+    "recoverySignIn": "Edits were set aside for their account. Reconnect that account to open its folder.",
+    "recoveryUnassigned": "Some edits have no recorded account. Open their folder to recover them manually.",
+    "recoveryPending": "Some edits are still being set aside. Try again to finish.",
+    "recoveryOpenFolder": "Open recovery folder",
+    "recoveryOpenUnassigned": "Open unassigned edits",
+    "recoveryFilePending": "Waiting to be set aside",
+    "recoveryError": "The recovery folder did not open. Try again."
   },
   "clipboard": {
     "registryUnavailable": "No registries are enabled for your practice jurisdictions.",
