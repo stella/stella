@@ -48,6 +48,7 @@ import {
   type PublicToolGroup,
   type PublicToolTask,
 } from "@/routes/tools/-components/public-tools-index.logic";
+import { PublicToolsTaskGrid } from "@/routes/tools/-components/public-tools-task-grid";
 import { ToolCatalogueCard } from "@/routes/tools/-components/tool-catalogue-card";
 
 const KIND_LABEL_KEY = {
@@ -652,23 +653,23 @@ function TaskBrowser({
       <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
         {t("publicTools.discovery.tasksTitle")}
       </p>
-      <div className="mt-2 flex flex-nowrap gap-2 overflow-x-auto pb-2 sm:flex-wrap sm:overflow-visible sm:pb-0">
+      <PublicToolsTaskGrid>
         {PUBLIC_TOOL_TASKS.map((task) => {
           const Icon = TASK_ICON[task];
           return (
             <Button
-              className="bg-muted/45 hover:bg-muted/70 min-h-11 shrink-0 justify-start"
+              className="bg-muted/45 hover:bg-muted/70 h-11 min-w-0 justify-start"
               key={task}
               onClick={() => onSelect(task)}
               type="button"
               variant="ghost"
             >
               <Icon className="text-muted-foreground" />
-              {t(TASK_LABEL_KEY[task])}
+              <span className="truncate">{t(TASK_LABEL_KEY[task])}</span>
             </Button>
           );
         })}
-      </div>
+      </PublicToolsTaskGrid>
     </div>
   );
 }

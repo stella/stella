@@ -1,5 +1,8 @@
 import { Skeleton } from "@stll/ui/skeleton";
 
+import { PUBLIC_TOOL_TASKS } from "@/routes/tools/-components/public-tools-index.logic";
+import { PublicToolsTaskGrid } from "@/routes/tools/-components/public-tools-task-grid";
+
 /** Keeps the catalogue's visible first-screen geometry stable while its route
  * chunk loads. The public shell owns the surrounding chrome. */
 export const PublicToolsIndexPending = () => (
@@ -13,13 +16,11 @@ export const PublicToolsIndexPending = () => (
         <Skeleton className="mt-6 h-12 max-w-3xl rounded-md" />
         <div className="mt-5">
           <Skeleton className="h-3 w-32" />
-          <div className="mt-2 flex flex-nowrap gap-2 overflow-hidden sm:flex-wrap">
-            <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-            <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-            <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-            <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-            <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-          </div>
+          <PublicToolsTaskGrid>
+            {PUBLIC_TOOL_TASKS.map((task) => (
+              <Skeleton className="h-11 rounded-md" key={task} />
+            ))}
+          </PublicToolsTaskGrid>
         </div>
       </section>
 
