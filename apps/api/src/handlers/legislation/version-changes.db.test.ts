@@ -957,7 +957,7 @@ test.each(["payload", "withdrawal", "window", "method"] as const)(
     const middleId = ids.at(1);
     const newestId = ids.at(2);
     if (middleId === undefined || newestId === undefined) {
-      return panic("Reader freshness fixture has three versions");
+      panic("Reader freshness fixture has three versions");
     }
     const readPage = async () => {
       const page = await listStatuteVersionsHandler({
@@ -1021,7 +1021,7 @@ test.each(["payload", "withdrawal", "window", "method"] as const)(
         surface: "pages",
       });
       if (!("items" in page)) {
-        return panic("Re-dated reader page was refused");
+        panic("Re-dated reader page was refused");
       }
       expect(page.items.find(({ id }) => id === newestId)?.changes).toBeNull();
     } else {
