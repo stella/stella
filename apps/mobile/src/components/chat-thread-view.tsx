@@ -238,16 +238,13 @@ const ThreadMessages = ({
               {t("greetingSubtitle")}
             </Text>
           </View>
-          {turn.sendFailed ? (
-            <Text style={[styles.notice, { color: colors.muted }]}>
-              {t("sendFailed")}
-            </Text>
-          ) : null}
+          {/* The composer says why a send was refused, as in a thread. */}
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
             onSend={turn.send}
             onStop={turn.stop}
+            sendError={turn.sendError}
           />
         </View>
       </View>
@@ -275,7 +272,9 @@ const ThreadMessages = ({
         }
         // And the header below the newest.
         ListHeaderComponent={
-          live === null ? undefined : <LiveTurnView turn={live} />
+          live === null ? undefined : (
+            <LiveTurnView accepted={turn.canStop} turn={live} />
+          )
         }
         onEndReached={() => {
           void loadOlder();
@@ -290,25 +289,31 @@ const ThreadMessages = ({
         }
         renderItem={({ item }) => <ChatMessage entry={item} />}
       />
-      {turn.sendFailed ? (
-        <Text style={[styles.notice, { color: colors.muted }]}>
-          {t("sendFailed")}
-        </Text>
-      ) : null}
       <View style={screenStyles.readable}>
         <ChatComposer
           busy={turn.busy}
           canStop={turn.canStop}
           onSend={turn.send}
           onStop={turn.stop}
+          sendError={turn.sendError}
         />
       </View>
     </View>
   );
 };
 
-/** The turn answering now: the message sent from here, and the answer as it arrives. */
-const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
+/**
+ * The turn answering now: the message sent from here, and the answer as it
+ * arrives. Until the server has `accepted` the message, its files are still
+ * going up.
+ */
+const LiveTurnView = ({
+  accepted,
+  turn,
+}: {
+  accepted: boolean;
+  turn: LiveTurn;
+}) => {
   const colors = useAppColors();
   const t = useTranslations("chat");
   const answer: ChatEntry = answerEntry(turn.answer, turn.startedAt);
@@ -320,11 +325,15 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
     "needs-input": t("answerNeedsInput"),
     failed: t("answerFailed"),
   }[status];
+  const uploading =
+    !accepted &&
+    status === "streaming" &&
+    (turn.question?.files.length ?? 0) > 0;
 
   return (
     <View style={styles.live}>
       {turn.question === undefined ? null : (
-        <ChatMessage entry={turn.question} />
+        <ChatMessage entry={turn.question} uploading={uploading} />
       )}
       {answer.text === "" && answer.tools.length === 0 ? null : (
         <ChatMessage entry={answer} />
@@ -333,7 +342,7 @@ const LiveTurnView = ({ turn }: { turn: LiveTurn }) => {
         <View style={styles.working}>
           <ActivityIndicator color={colors.muted} size="small" />
           <Text style={[styles.notice, { color: colors.muted }]}>
-            {t("answerWorking")}
+            {uploading ? t("attachmentUploading") : t("answerWorking")}
           </Text>
         </View>
       ) : null}

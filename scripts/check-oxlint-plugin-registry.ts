@@ -228,7 +228,7 @@ export const newGuardRolloutErrors = ({
       return [];
     }
     return [
-      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.ts`,
+      `${rule}: new guards require a registered PR Autofix generator or a dated changed-lines rollout in ${GUARD_ROLLOUT_DIRECTORY}/<id>.json`,
     ];
   });
 

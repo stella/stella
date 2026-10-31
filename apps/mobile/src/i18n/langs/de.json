@@ -40,6 +40,19 @@
     "answerNeedsInput": "Diese Antwort braucht Ihre Eingabe. Setzen Sie sie in stella im Web fort.",
     "answerFailed": "Die Antwort konnte nicht abgeschlossen werden.",
     "composerMenu": "Menü für Anhänge und Werkzeuge öffnen",
+    "attachFile": "Datei anhängen",
+    "attachment": "Anhang",
+    "fileTooLarge": "Datei überschreitet das Limit von {maxSize}",
+    "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
+    "unsupportedFileType": "Nicht unterstützter Dateityp",
+    "uploadFailed": "Datei konnte nicht verarbeitet werden",
+    "scanDocument": "Dokument scannen",
+    "removeAttachment": "{name} entfernen",
+    "attachmentReading": "Wird vorbereitet…",
+    "attachmentUploading": "Wird hochgeladen…",
+    "pickFailed": "Die Dateiauswahl konnte nicht geöffnet werden. Versuchen Sie es erneut.",
+    "sendFileRefused": "Eine Datei konnte nicht gesendet werden, daher wurde die Nachricht nicht gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
+    "sendFileNotAnonymizable": "Diese Unterhaltung ist anonymisiert, und stella konnte eine der Dateien nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei und versuchen Sie es erneut.",
     "pickTitle": "Unterhaltung wählen",
     "pickDescription": "Wählen Sie einen Verlauf aus der Liste oder beginnen Sie mit + einen neuen."
   },
@@ -76,7 +89,14 @@
     "statusFailed": "Die Aufgabe konnte nicht geändert werden. Versuchen Sie es erneut.",
     "pickTitle": "Aufgabe wählen",
     "pickDescription": "Wählen Sie eine Aufgabe aus der Liste, um sie hier zu sehen.",
-    "openMatter": "Akte öffnen"
+    "openMatter": "Akte öffnen",
+    "assignedTo": "Zugewiesen an",
+    "nobody": "Nicht zugewiesen",
+    "assign": "Zuweisen",
+    "doneAssigning": "Fertig",
+    "someone": "Jemand",
+    "membersFailed": "Die Mitglieder der Akte konnten nicht geladen werden.",
+    "assignFailed": "Die Aufgabe konnte nicht zugewiesen werden. Versuchen Sie es erneut."
   },
   "matters": {
     "emptyTitle": "Noch keine Akten",
@@ -184,6 +204,7 @@
     "headnote": "Leitsatz",
     "textUnavailable": "Für diese Entscheidung liegt kein Text vor",
     "openSource": "Originalquelle öffnen",
+    "openFailed": "Der Link konnte nicht geöffnet werden.",
     "loadFailed": "Die Rechtsprechung konnte nicht geladen werden.",
     "share": "Teilen"
   },

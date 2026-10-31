@@ -36,7 +36,7 @@ test("the truncated resource id exposes its full labelled value", () => {
   // tooltip when it overflows.
   const visibleId = view.getByText("resource_1234567890");
   expect(visibleId.getAttribute("aria-hidden")).toBe("true");
-  expect(visibleId.dataset.slot).toBe("truncated-text");
+  expect(visibleId.dataset["slot"]).toBe("truncated-text");
   expect(visibleId.textContent).toBe("resource_1234567890");
   expect(view.getByText(/^retired_record_kind/u)).not.toBeNull();
   expect(
