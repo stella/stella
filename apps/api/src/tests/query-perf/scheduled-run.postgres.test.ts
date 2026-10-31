@@ -25,6 +25,7 @@ import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
 import { seedDataExportScenario } from "./data-export-seed";
 import { withQueryPerfFixture } from "./fixture";
+import { scaleViolations } from "./measurement";
 import { measureScheduledJobRun } from "./scheduled-run";
 import { QUERY_PERF_CONNECTION_SETTINGS } from "./settings";
 
@@ -99,41 +100,50 @@ describe.skipIf(!enabled)("scheduled receipt measurement (postgres)", () => {
 });
 
 describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
-  test("export measurement executes every cohort once without replaying writes", async () => {
-    await withQueryPerfFixture({
-      databaseUrl:
-        process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
-        process.env["DATABASE_URL"] ??
-        panic("Missing PostgreSQL test URL"),
-      profileId: "corpus",
-      run: async (_database, _deadline, openClient) => {
-        const { db } = openClient({
-          max: 1,
-          connection: {
-            ...QUERY_PERF_CONNECTION_SETTINGS,
-            plan_cache_mode: "force_generic_plan",
-          },
-        });
-        expect(
-          executedRows(
-            await db.execute(
-              sql`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user`,
-            ),
-          ).at(0),
-        ).toEqual({ rolsuper: false, rolbypassrls: false });
-        const exportRows = async () =>
-          await db
-            .select({
-              id: organizationDataExports.id,
-              status: organizationDataExports.status,
-              attempt: organizationDataExports.attempt,
-              failures: organizationDataExports.failures,
-            })
-            .from(organizationDataExports)
-            .orderBy(asc(organizationDataExports.id))
-            .limit(12_000);
-        for (const rows of [6000, 12_000]) {
-          for (const cohort of ["quiet", "transitions", "queued"] as const) {
+  test.each([
+    ["auto", "quiet"],
+    ["auto", "transitions"],
+    ["auto", "queued"],
+    ["force_generic_plan", "quiet"],
+    ["force_generic_plan", "transitions"],
+    ["force_generic_plan", "queued"],
+  ] as const)(
+    "export measurement executes %s / %s once without replaying writes",
+    async (planCacheMode, cohort) => {
+      await withQueryPerfFixture({
+        databaseUrl:
+          process.env["STELLA_POSTGRES_TEST_TEMPLATE_URL"] ??
+          process.env["DATABASE_URL"] ??
+          panic("Missing PostgreSQL test URL"),
+        profileId: "corpus",
+        run: async (_database, _deadline, openClient) => {
+          const { db } = openClient({
+            max: 1,
+            connection: {
+              ...QUERY_PERF_CONNECTION_SETTINGS,
+              plan_cache_mode: planCacheMode,
+            },
+          });
+          expect(
+            executedRows(
+              await db.execute(
+                sql`SELECT rolsuper, rolbypassrls FROM pg_catalog.pg_roles WHERE rolname = current_user`,
+              ),
+            ).at(0),
+          ).toEqual({ rolsuper: false, rolbypassrls: false });
+          const exportRows = async () =>
+            await db
+              .select({
+                id: organizationDataExports.id,
+                status: organizationDataExports.status,
+                attempt: organizationDataExports.attempt,
+                failures: organizationDataExports.failures,
+              })
+              .from(organizationDataExports)
+              .orderBy(asc(organizationDataExports.id))
+              .limit(12_000);
+          const measuredPages = new Map<string, number>();
+          for (const rows of [6000, 12_000]) {
             const scenario = {
               type: "data-exports",
               rows,
@@ -180,6 +190,16 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               expect(changed).toEqual(original);
               expect(audits).toBe(0);
             }
+            const smaller = measuredPages.get(cohort);
+            if (smaller !== undefined) {
+              expect(
+                scaleViolations({
+                  size: smaller,
+                  double: measured.metrics.sharedBlocks,
+                }),
+              ).toEqual([]);
+            }
+            measuredPages.set(cohort, measured.metrics.sharedBlocks);
             expect(measured.statements.length).toBeGreaterThan(0);
             expect(
               measured.statements.some(({ statement }) =>
@@ -198,19 +218,19 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
               expect(enqueued).toBeGreaterThan(0);
             }
           }
-        }
-        expect(
-          await rejectionOf(
-            measureScheduledJobRun({
-              database: db,
-              jobId: "dataExports.maintain.fiveMinute",
-              task: "requests.sweepReceipts",
-            }),
-          ),
-        ).toMatchObject({
-          message: expect.stringContaining("dataExports.maintain"),
-        });
-      },
-    });
-  });
+          expect(
+            await rejectionOf(
+              measureScheduledJobRun({
+                database: db,
+                jobId: "dataExports.maintain.fiveMinute",
+                task: "requests.sweepReceipts",
+              }),
+            ),
+          ).toMatchObject({
+            message: expect.stringContaining("dataExports.maintain"),
+          });
+        },
+      });
+    },
+  );
 });

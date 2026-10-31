@@ -379,34 +379,57 @@ const readQueuedPage = async ({
   cursor,
   pageSize,
   requester,
-}: ReadQueuedPageOptions) =>
-  await readCursorPage(
+}: ReadQueuedPageOptions) => {
+  // Fetch keys from the covering queue index before reading row payloads:
+  // owner RLS selectivity can otherwise favor a growing requester scan and sort.
+  const candidates = tx
+    .select({
+      id: organizationDataExports.id,
+      createdAt: organizationDataExports.createdAt,
+    })
+    .from(organizationDataExports)
+    .where(
+      and(
+        settled,
+        requester === "present"
+          ? isNotNull(organizationDataExports.requestedBy)
+          : isNull(organizationDataExports.requestedBy),
+        afterQueued(cursor),
+      ),
+    )
+    .orderBy(
+      asc(organizationDataExports.createdAt),
+      asc(organizationDataExports.id),
+    )
+    .limit(pageSize + 1)
+    .as("queued_export_keys");
+  const detail = tx
+    .select({
+      organizationId: organizationDataExports.organizationId,
+      requestedBy: organizationDataExports.requestedBy,
+      attempt: organizationDataExports.attempt,
+    })
+    .from(organizationDataExports)
+    .where(eq(organizationDataExports.id, candidates.id))
+    .limit(1)
+    .as("queued_export_detail");
+  return await readCursorPage(
     tx
       .select({
-        id: organizationDataExports.id,
-        organizationId: organizationDataExports.organizationId,
-        requestedBy: organizationDataExports.requestedBy,
-        attempt: organizationDataExports.attempt,
-        createdAt: pgTimestampCursorValue(organizationDataExports.createdAt).as(
+        id: candidates.id,
+        organizationId: detail.organizationId,
+        requestedBy: detail.requestedBy,
+        attempt: detail.attempt,
+        createdAt: pgTimestampCursorValue(candidates.createdAt).as(
           "created_at_cursor",
         ),
       })
-      .from(organizationDataExports)
-      .where(
-        and(
-          settled,
-          requester === "present"
-            ? isNotNull(organizationDataExports.requestedBy)
-            : isNull(organizationDataExports.requestedBy),
-          afterQueued(cursor),
-        ),
-      )
-      .orderBy(
-        asc(organizationDataExports.createdAt),
-        asc(organizationDataExports.id),
-      ),
+      .from(candidates)
+      .innerJoinLateral(detail, sql`true`)
+      .orderBy(asc(candidates.createdAt), asc(candidates.id)),
     { limit: pageSize, cursorForItem: (row) => row.id },
   );
+};
 
 const requeueQueued = async (
   { db, deps, summary, now }: StepArgs,
