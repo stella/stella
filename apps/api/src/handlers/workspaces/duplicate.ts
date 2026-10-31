@@ -65,6 +65,10 @@ import {
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 import { requireComputedColumnInputs } from "@/api/lib/properties/computed-column-input";
 import { computedColumnInputHandlerError } from "@/api/lib/properties/computed-column-input-handler-error";
 import {
@@ -482,6 +486,22 @@ type DuplicateSourceWorkspace = Pick<
   typeof workspaces.$inferSelect,
   keyof typeof DUPLICATE_WORKSPACE_COLUMNS
 >;
+
+// Tenant scope comes from the caller; numbering and timestamps belong to the new matter.
+type FreshDuplicateColumns =
+  "organizationId" | "reference" | "createdAt" | "lastActivityAt";
+type MissingDuplicateColumn = UnprojectedColumns<
+  typeof workspaces.$inferSelect,
+  DuplicateSourceWorkspace,
+  FreshDuplicateColumns
+>;
+type UnexpectedDuplicateColumn = UnbackedProjectionKeys<
+  typeof workspaces.$inferSelect,
+  DuplicateSourceWorkspace,
+  FreshDuplicateColumns
+>;
+true satisfies MissingDuplicateColumn extends never ? true : never;
+true satisfies UnexpectedDuplicateColumn extends never ? true : never;
 
 type DuplicateSourceAccessOptions = {
   organizationId: SafeId<"organization">;
