@@ -82,6 +82,26 @@ export const ChatComposerPaste = Extension.create<ChatComposerPasteOptions>({
 });
 
 /**
+ * The warning every chat editor shows before it sends a message whose text
+ * looks like a credential, as a stable callback: the message is held, and
+ * the warning's action sends it anyway through `sendAnyway`.
+ */
+export const useCredentialSendNotice = (): ((
+  sendAnyway: () => void,
+) => void) => {
+  const t = useTranslations();
+  return useLatestCallback((sendAnyway: () => void) => {
+    stellaToast.warning(t("chat.credentialSendTitle"), {
+      description: t("chat.credentialSendDescription"),
+      action: {
+        label: t("chat.credentialSendAction"),
+        onClick: sendAnyway,
+      },
+    });
+  });
+};
+
+/**
  * The warning every chat editor shows for a pasted credential, as a stable
  * callback for `ChatComposerPasteOptions.onCredential`; its action asks for
  * the value privately instead.

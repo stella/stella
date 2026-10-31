@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { Extension } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
@@ -15,11 +15,15 @@ import {
 import { Button } from "@stll/ui/button";
 import { PencilIcon, TextIcon, XIcon } from "@stll/ui/icons";
 
-import { useCredentialPasteNotice } from "@/components/chat-composer-paste";
+import {
+  useCredentialPasteNotice,
+  useCredentialSendNotice,
+} from "@/components/chat-composer-paste";
 import {
   chatComposerHtml,
   createChatComposerSchemaExtensions,
 } from "@/components/chat-composer-schema";
+import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import {
@@ -112,7 +116,7 @@ const UserMessageEditForm = ({
   const t = useTranslations();
   const [attachments, setAttachments] = useState(draft.attachments);
   // The editor outlives a render, so its handlers read the latest props.
-  const submitFrom = useLatestCallback((current: Editor) => {
+  const sendFrom = useLatestCallback((current: Editor) => {
     const edit: UserMessageEdit = {
       attachments: attachments.map(({ part }) => part),
       html: chatComposerHtml(current),
@@ -120,6 +124,18 @@ const UserMessageEditForm = ({
     if (hasUserMessageEditContent(edit) && !isGenerating) {
       onSubmit(edit);
     }
+  });
+  // An edit is a sent message: it is held, as one from the composer is, when
+  // its text looks like a credential.
+  const warnCredentialSend = useCredentialSendNotice();
+  const submitFrom = useLatestCallback((current: Editor) => {
+    if (containsCredentialCandidate(current.getText())) {
+      warnCredentialSend(() => {
+        sendFrom(current);
+      });
+      return;
+    }
+    sendFrom(current);
   });
   const cancel = useLatestCallback(() => {
     onCancel();
@@ -160,13 +176,12 @@ const UserMessageEditForm = ({
   });
   const html = useEditorState({
     editor,
-    selector: ({ editor: current }) =>
-      current === null ? "" : chatComposerHtml(current),
+    selector: ({ editor: current }) => chatComposerHtml(current),
   });
   const canSend =
     hasUserMessageEditContent({
       attachments: attachments.map(({ part }) => part),
-      html: html ?? "",
+      html,
     }) && !isGenerating;
 
   return (
@@ -227,9 +242,7 @@ const UserMessageEditForm = ({
         <Button
           disabled={!canSend}
           onClick={() => {
-            if (editor !== null) {
-              submitFrom(editor);
-            }
+            submitFrom(editor);
           }}
           size="sm"
         >
@@ -258,7 +271,10 @@ export const useUserMessageEdit = ({
   actions,
   isGenerating,
   message,
-}: UserMessageEditOptions): { editing: boolean; editor: ReactNode } => {
+}: UserMessageEditOptions): {
+  editing: boolean;
+  editor: ReactElement | null;
+} => {
   const t = useTranslations();
   const [draft, setDraft] = useState<UserMessageEditDraft | null>(null);
 

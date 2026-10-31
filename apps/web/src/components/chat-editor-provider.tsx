@@ -32,9 +32,11 @@ import {
 import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { ChatComposerLinks } from "@stll/chat/link-editor";
 import { openFilePicker as openBrowserFilePicker } from "@stll/ui/file-picker";
-import { stellaToast } from "@stll/ui/toast";
 
-import { useCredentialPasteNotice } from "@/components/chat-composer-paste";
+import {
+  useCredentialPasteNotice,
+  useCredentialSendNotice,
+} from "@/components/chat-composer-paste";
 import {
   chatComposerHtml,
   createChatComposerSchemaExtensions,
@@ -766,6 +768,7 @@ export const useChatEditor = ({
     setIsEmpty(nextIsEmpty);
   });
   const showCredentialPasteNotice = useCredentialPasteNotice();
+  const warnCredentialSend = useCredentialSendNotice();
   const pastedTextAttachmentsRef = useRef<unknown>(null);
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
@@ -1494,18 +1497,12 @@ export const useChatEditor = ({
         !confirmedCredentialSendRef.current &&
         containsCredentialCandidate(editor.getText())
       ) {
-        stellaToast.warning(t("chat.credentialSendTitle"), {
-          description: t("chat.credentialSendDescription"),
-          action: {
-            label: t("chat.credentialSendAction"),
-            onClick: () => {
-              confirmedCredentialSendRef.current = true;
-              detached(
-                submitHandlerRef.current?.(),
-                "chat-editor-provider.credential-send-anyway",
-              );
-            },
-          },
+        warnCredentialSend(() => {
+          confirmedCredentialSendRef.current = true;
+          detached(
+            submitHandlerRef.current?.(),
+            "chat-editor-provider.credential-send-anyway",
+          );
         });
         return;
       }
@@ -1573,8 +1570,8 @@ export const useChatEditor = ({
       editor,
       queryClient,
       setDraft,
-      t,
       threadKey,
+      warnCredentialSend,
     ],
   );
 
