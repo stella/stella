@@ -15,15 +15,15 @@
 import { sha256Hex } from "@stll/sha256/node";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import {
-  decodeSourceRawEnvelope,
-  encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceRegistrationKey } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { courtListenerConformanceFixture } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "@/api/handlers/case-law/ingestion/adapters/courtlistener/map";
 import { sourceFingerprint } from "@/api/handlers/case-law/ingestion/source-fingerprint";
+import {
+  decodeSourceRawEnvelope,
+  encodeSourceRawEnvelope,
+} from "@/api/lib/legal-search/ingestion-types";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import {
   atFindokFixture,
   atRisFixture,

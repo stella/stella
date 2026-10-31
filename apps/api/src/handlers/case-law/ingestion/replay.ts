@@ -25,18 +25,6 @@ import {
   caseLawReplayBatches,
   caseLawReplayBlocked,
 } from "@/api/db/schema";
-import {
-  STORED_RAW_REPARSE_REJECTION,
-  storedRawResultReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  IngestionResult,
-  SourceAdapter,
-  StoredRawReader,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-  StoredRawReparseRejection,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processStoredDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -67,6 +55,18 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  STORED_RAW_REPARSE_REJECTION,
+  storedRawResultReader,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  IngestionResult,
+  SourceAdapter,
+  StoredRawReader,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+  StoredRawReparseRejection,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   PARSER_REPARSE_FEATURES,
   PARSER_VERSION_SCOPES,
