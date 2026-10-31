@@ -22,6 +22,66 @@ test("reports retrying Testing Library calls after fake timers", async () => {
   ).toEqual([4, 5, 6]);
 });
 
+test("reports a wait nested in an act callback", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useFakeTimers();",
+      "  await act(async () => {",
+      "    await waitFor(() => true);",
+      "  });",
+      "});",
+    ]),
+  ).toEqual([5]);
+});
+
+test("reports a deeply nested wait covered by beforeEach", async () => {
+  expect(
+    await lint([
+      'import { beforeEach, jest, test } from "bun:test";',
+      "beforeEach(() => jest.useFakeTimers());",
+      'test("unsafe", async () => {',
+      "  await act(async () => {",
+      "    await helper(async () => {",
+      "      await waitFor(() => true);",
+      "    });",
+      "  });",
+      "});",
+    ]),
+  ).toEqual([6]);
+});
+
+test("accepts a nested wait after a direct test-body restoration", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("safe", async () => {',
+      "  jest.useFakeTimers();",
+      "  jest.useRealTimers();",
+      "  await act(async () => {",
+      "    await waitFor(() => true);",
+      "  });",
+      "});",
+    ]),
+  ).toEqual([]);
+});
+
+test("ignores a nested restoration before a nested wait", async () => {
+  expect(
+    await lint([
+      'import { jest, test } from "bun:test";',
+      'test("unsafe", async () => {',
+      "  jest.useFakeTimers();",
+      "  await act(async () => {",
+      "    jest.useRealTimers();",
+      "    await waitFor(() => true);",
+      "  });",
+      "});",
+    ]),
+  ).toEqual([6]);
+});
+
 test("reports waits covered by a fake-timer beforeEach", async () => {
   expect(
     await lint([

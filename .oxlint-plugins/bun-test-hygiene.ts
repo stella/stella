@@ -977,6 +977,35 @@ const closesSharedDatabaseClient = (
   );
 };
 
+const callbackArgument = (node: AstNode) => {
+  const args = Array.isArray(node.arguments) ? node.arguments : [];
+  return args.find(
+    (argument): argument is AstNode =>
+      isAstNode(argument) &&
+      (argument.type === "ArrowFunctionExpression" ||
+        argument.type === "FunctionExpression"),
+  );
+};
+
+const nearestCallback = (node: AstNode, callbacks: readonly AstNode[]) => {
+  let current: unknown = node.parent;
+  while (isAstNode(current)) {
+    if (callbacks.includes(current)) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+};
+
+const callbackBodyStatement = (node: AstNode, callback: AstNode) => {
+  let current = node;
+  while (isAstNode(current.parent) && current.parent !== callback.body) {
+    current = current.parent;
+  }
+  return current;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
@@ -995,16 +1024,8 @@ export default eslintCompatPlugin({
         const hooks: { callback: AstNode; kind: "beforeAll" | "beforeEach" }[] =
           [];
         const suiteCallbacks: AstNode[] = [];
+        const ownerCallbacks: AstNode[] = [];
 
-        const callbackOf = (node: AstNode) => {
-          const args = Array.isArray(node.arguments) ? node.arguments : [];
-          return args.find(
-            (argument): argument is AstNode =>
-              isAstNode(argument) &&
-              (argument.type === "ArrowFunctionExpression" ||
-                argument.type === "FunctionExpression"),
-          );
-        };
         const containingFunction = (node: AstNode) => {
           let current: unknown = node.parent;
           while (isAstNode(current)) {
@@ -1023,14 +1044,6 @@ export default eslintCompatPlugin({
         const isInside = (node: AstNode, container: AstNode) =>
           container.range[0] <= node.range[0] &&
           node.range[1] <= container.range[1];
-        const lastBefore = (
-          calls: readonly AstNode[],
-          node: AstNode,
-          container: AstNode,
-        ) =>
-          calls.findLast(
-            (call) => isInside(call, container) && startsBefore(call, node),
-          );
         const isDirectStatement = (call: AstNode, callback: AstNode) => {
           let current = call;
           while (
@@ -1070,6 +1083,7 @@ export default eslintCompatPlugin({
             waits.length = 0;
             hooks.length = 0;
             suiteCallbacks.length = 0;
+            ownerCallbacks.length = 0;
             return /(?:useFakeTimers|waitFor|findBy)/u.test(
               context.sourceCode.text,
             );
@@ -1092,16 +1106,25 @@ export default eslintCompatPlugin({
               return;
             }
             if (calleeName === "beforeEach" || calleeName === "beforeAll") {
-              const callback = callbackOf(node);
+              const callback = callbackArgument(node);
               if (callback !== undefined) {
                 hooks.push({ callback, kind: calleeName });
+                ownerCallbacks.push(callback);
               }
               return;
             }
-            if (testRegistration(context, node)?.kind === TEST_KIND.describe) {
-              const callback = callbackOf(node);
+            const registration = testRegistration(context, node);
+            if (registration?.kind === TEST_KIND.describe) {
+              const callback = callbackArgument(node);
               if (callback !== undefined) {
                 suiteCallbacks.push(callback);
+              }
+              return;
+            }
+            if (registration !== null) {
+              const callback = callbackArgument(node);
+              if (callback !== undefined) {
+                ownerCallbacks.push(callback);
               }
               return;
             }
@@ -1116,7 +1139,7 @@ export default eslintCompatPlugin({
           },
           "Program:exit"() {
             for (const wait of waits) {
-              const callback = containingFunction(wait);
+              const callback = nearestCallback(wait, ownerCallbacks);
               if (callback === null) {
                 continue;
               }
@@ -1171,16 +1194,16 @@ export default eslintCompatPlugin({
                   inheritedFakeTimers = startsAfter(fake, real);
                 }
               }
-              const fake = lastBefore(fakeTimerCalls, wait, callback);
-              const real = lastBefore(
-                directRestorations(callback),
-                wait,
-                callback,
+              const testHasFakeTimers = fakeTimerCalls.some((call) =>
+                isInside(call, callback),
+              );
+              const waitStatement = callbackBodyStatement(wait, callback);
+              const restoredBeforeWait = directRestorations(callback).some(
+                (call) => startsBefore(call, waitStatement),
               );
               const localTimerState =
-                fake === undefined && real === undefined
-                  ? inheritedFakeTimers
-                  : startsAfter(fake, real);
+                (inheritedFakeTimers || testHasFakeTimers) &&
+                !restoredBeforeWait;
               if (localTimerState) {
                 context.report({ node: wait, messageId: "fakeTimerWait" });
               }

@@ -525,6 +525,7 @@ describe("chat history page", () => {
     serve(fullServer());
     const { navigateTo, searchChanges, ui } = await openHistory();
     const field = ui.getByRole("searchbox", { name: messages.common.search });
+    restoreRealTimers();
     await testing.waitFor(() =>
       expect(threadLink(ui, TODAY_GLOBAL.title)).toBeDefined(),
     );

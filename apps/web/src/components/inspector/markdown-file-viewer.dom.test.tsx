@@ -318,7 +318,7 @@ test.each([true, false])(
     fireEvent.keyDown(editor, { key: "e", metaKey: true });
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
-    restoreRealTimersWithPendingRequest();
+    restoreRealTimers({ advanceMs: 1000 });
     if (succeeded) {
       await publish();
       await waitFor(() =>
