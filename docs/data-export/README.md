@@ -53,6 +53,12 @@ namespace across all parts. The stored plan also fixes document versions and fil
 change; files and folders added after planning belong to a later export.
 Extracting all ZIP parts into one directory preserves every planned file.
 
+Paths use at most 4096 UTF-8 bytes in total and 255 UTF-8 bytes per segment.
+Deep folders flatten to the nearest fitting ancestor; parent IDs retain the
+original hierarchy in the manifest. The schema's `x-maxUtf8Bytes` and
+`x-maxSegmentUtf8Bytes` keywords state these byte limits. Importers apply them
+to the UTF-8 encoding, alongside the standard JSON Schema constraints.
+
 ## Rules an importer can rely on
 
 - Identity is the id, never the path. Every matter, folder, document, version

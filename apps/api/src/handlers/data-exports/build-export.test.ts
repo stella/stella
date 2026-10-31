@@ -34,6 +34,12 @@ import {
   partManifestSchema,
 } from "@/api/handlers/data-exports/manifest-schema";
 import type { PartManifest } from "@/api/handlers/data-exports/manifest-schema";
+import {
+  DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+  DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
+  dataExportArchivePathSchema,
+} from "@/api/lib/data-export/manifest-values";
+import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
 
 const CREATED_AT = new Date("2026-10-01T08:00:00.000Z");
 const encoder = new TextEncoder();
@@ -415,12 +421,12 @@ const basicWorld = (): FakeWorld => {
   };
 };
 
-const nestedWorld = (): FakeWorld => {
+const nestedWorld = (letter = "a"): FakeWorld => {
   const world = basicWorld();
   const folders = Array.from({ length: 40 }, (_, index) => ({
     id: `folder-${index}`,
     parentId: index === 0 ? null : `folder-${index - 1}`,
-    name: "a".repeat(220),
+    name: letter.repeat(220),
   }));
   return {
     ...world,
@@ -1086,7 +1092,11 @@ describe("organisation data export builder", () => {
     { name: "ordinary folders", world: basicWorld },
     {
       name: "nested folders exceeding the complete path limit",
-      world: nestedWorld,
+      world: () => nestedWorld(),
+    },
+    {
+      name: "nested Unicode folders exceeding the byte limit",
+      world: () => nestedWorld("Ž"),
     },
   ])(
     "validates $name against the Valibot contract and the committed JSON Schema",
@@ -1105,6 +1115,20 @@ describe("organisation data export builder", () => {
 
       const ajv = new Ajv({ allowUnionTypes: true, strict: true });
       addFormats(ajv);
+      ajv.addKeyword({
+        keyword: "x-maxUtf8Bytes",
+        type: "string",
+        schemaType: "number",
+        validate: (limit: number, value: string) =>
+          utf8ByteLength(value) <= limit,
+      });
+      ajv.addKeyword({
+        keyword: "x-maxSegmentUtf8Bytes",
+        type: "string",
+        schemaType: "number",
+        validate: (limit: number, value: string) =>
+          value.split("/").every((segment) => utf8ByteLength(segment) <= limit),
+      });
       const { $schema: _draft, ...schema } = buildDataExportJsonSchema();
       const validate = ajv.compile(schema);
       const documents: unknown[] = [manifest, ...partManifests];
@@ -1118,6 +1142,17 @@ describe("organisation data export builder", () => {
       expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
       for (const [index, part] of partManifests.entries()) {
         const zip = zips.at(index);
+        for (const path of Object.keys(zip?.files ?? {})) {
+          expect(encoder.encode(path).byteLength).toBeLessThanOrEqual(
+            DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+          );
+          for (const segment of path.split("/")) {
+            expect(encoder.encode(segment).byteLength).toBeLessThanOrEqual(
+              DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
+            );
+            expect(segment.isWellFormed()).toBe(true);
+          }
+        }
         for (const matter of part.matters) {
           for (const document of matter.documents) {
             for (const version of document.versions) {
@@ -1130,6 +1165,23 @@ describe("organisation data export builder", () => {
       }
     },
   );
+
+  test("manifest paths enforce complete and per-segment byte bounds", () => {
+    const longSegment = "Ž".repeat(150);
+    const deep = Array.from({ length: 20 }, () => "Ž".repeat(115)).join("/");
+    expect(utf8ByteLength(longSegment)).toBe(300);
+    expect(deep.length).toBeLessThan(DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES);
+    expect(utf8ByteLength(deep)).toBeGreaterThan(
+      DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+    );
+    expect(v.safeParse(dataExportArchivePathSchema, longSegment).success).toBe(
+      false,
+    );
+    expect(v.safeParse(dataExportArchivePathSchema, deep).success).toBe(false);
+    expect(
+      v.safeParse(dataExportArchivePathSchema, "matters/Žaloba.pdf").success,
+    ).toBe(true);
+  });
 
   test("refuses a part whose manifest violates the published schema", async () => {
     const world = basicWorld();

@@ -79,7 +79,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -87,7 +89,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -109,7 +113,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -117,7 +123,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -139,7 +147,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -147,7 +157,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -169,7 +181,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -177,7 +191,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -199,7 +215,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -207,7 +225,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -229,7 +249,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -237,7 +259,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -259,7 +283,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -267,7 +293,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -289,7 +317,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -297,7 +327,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -319,7 +351,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     },
                     "csv": {
                       "anyOf": [
@@ -327,7 +361,9 @@
                           "type": "string",
                           "minLength": 1,
                           "maxLength": 4096,
-                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                          "x-maxUtf8Bytes": 4096,
+                          "x-maxSegmentUtf8Bytes": 255,
+                          "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                         },
                         {
                           "type": "null"
@@ -377,7 +413,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 4096,
-                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        "x-maxUtf8Bytes": 4096,
+                        "x-maxSegmentUtf8Bytes": 255,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                       }
                     },
                     "required": [
@@ -441,7 +479,9 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 4096,
-                "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                "x-maxUtf8Bytes": 4096,
+                "x-maxSegmentUtf8Bytes": 255,
+                "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
               },
               "records": {
                 "type": "object",
@@ -450,7 +490,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4096,
-                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    "x-maxUtf8Bytes": 4096,
+                    "x-maxSegmentUtf8Bytes": 255,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                   },
                   "tasks": {
                     "type": "object",
@@ -459,7 +501,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 4096,
-                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        "x-maxUtf8Bytes": 4096,
+                        "x-maxSegmentUtf8Bytes": 255,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                       },
                       "csv": {
                         "anyOf": [
@@ -467,7 +511,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 4096,
-                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                            "x-maxUtf8Bytes": 4096,
+                            "x-maxSegmentUtf8Bytes": 255,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                           },
                           {
                             "type": "null"
@@ -489,7 +535,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 4096,
-                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        "x-maxUtf8Bytes": 4096,
+                        "x-maxSegmentUtf8Bytes": 255,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                       },
                       "csv": {
                         "anyOf": [
@@ -497,7 +545,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 4096,
-                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                            "x-maxUtf8Bytes": 4096,
+                            "x-maxSegmentUtf8Bytes": 255,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                           },
                           {
                             "type": "null"
@@ -519,7 +569,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 4096,
-                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        "x-maxUtf8Bytes": 4096,
+                        "x-maxSegmentUtf8Bytes": 255,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                       },
                       "csv": {
                         "anyOf": [
@@ -527,7 +579,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 4096,
-                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                            "x-maxUtf8Bytes": 4096,
+                            "x-maxSegmentUtf8Bytes": 255,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                           },
                           {
                             "type": "null"
@@ -549,7 +603,9 @@
                         "type": "string",
                         "minLength": 1,
                         "maxLength": 4096,
-                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                        "x-maxUtf8Bytes": 4096,
+                        "x-maxSegmentUtf8Bytes": 255,
+                        "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                       },
                       "csv": {
                         "anyOf": [
@@ -557,7 +613,9 @@
                             "type": "string",
                             "minLength": 1,
                             "maxLength": 4096,
-                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                            "x-maxUtf8Bytes": 4096,
+                            "x-maxSegmentUtf8Bytes": 255,
+                            "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                           },
                           {
                             "type": "null"
@@ -611,7 +669,9 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 4096,
-                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                      "x-maxUtf8Bytes": 4096,
+                      "x-maxSegmentUtf8Bytes": 255,
+                      "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                     }
                   },
                   "required": ["id", "parentId", "name", "path"],
@@ -805,7 +865,9 @@
                                   "type": "string",
                                   "minLength": 1,
                                   "maxLength": 4096,
-                                  "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                                  "x-maxUtf8Bytes": 4096,
+                                  "x-maxSegmentUtf8Bytes": 255,
+                                  "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                                 }
                               },
                               "required": [
@@ -905,7 +967,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4096,
-                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    "x-maxUtf8Bytes": 4096,
+                    "x-maxSegmentUtf8Bytes": 255,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                   },
                   "fileId": {
                     "type": "string",
@@ -926,7 +990,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4096,
-                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    "x-maxUtf8Bytes": 4096,
+                    "x-maxSegmentUtf8Bytes": 255,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                   },
                   "fileId": {
                     "type": "string",
@@ -1163,7 +1229,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4096,
-                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    "x-maxUtf8Bytes": 4096,
+                    "x-maxSegmentUtf8Bytes": 255,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                   },
                   "fileId": {
                     "type": "string",
@@ -1184,7 +1252,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 4096,
-                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised."
+                    "x-maxUtf8Bytes": 4096,
+                    "x-maxSegmentUtf8Bytes": 255,
+                    "description": "Path inside the part's ZIP archive, `/`-separated, NFC-normalised; at most 4096 UTF-8 bytes total and 255 UTF-8 bytes per segment."
                   },
                   "fileId": {
                     "type": "string",

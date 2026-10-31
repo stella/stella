@@ -10,8 +10,12 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
-import { DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH } from "@/api/lib/data-export/manifest-values";
+import {
+  DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+  DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES,
+} from "@/api/lib/data-export/manifest-values";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
 
 /** Stable naming order shared by planning and packing. */
 export const compareArchiveNames = (
@@ -30,7 +34,7 @@ const WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/iu;
 const CONTROL_CHARS_RE = /\p{Cc}/gu;
 
 /** File systems cap one name at 255 bytes (ext4, APFS) or UTF-16 units. */
-export const MAX_SEGMENT_BYTES = 255;
+const MAX_SEGMENT_BYTES = DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES;
 /**
  * Bytes a sanitised segment leaves free for suffixes added later: a version
  * marker ` (v12345)` and a collision counter ` (12345)`.
@@ -39,15 +43,12 @@ const SUFFIX_RESERVE_BYTES = 24;
 /** Longer "extensions" are part of the name and may be shortened. */
 const MAX_EXTENSION_BYTES = 32;
 
-const encoder = new TextEncoder();
-const utf8Bytes = (text: string): number => encoder.encode(text).byteLength;
-
 /** The longest prefix of `text`, by whole code points, within `maxBytes`. */
 export const truncateUtf8 = (text: string, maxBytes: number): string => {
   let bytes = 0;
   let end = 0;
   for (const character of text) {
-    const size = utf8Bytes(character);
+    const size = utf8ByteLength(character);
     if (bytes + size > maxBytes) {
       break;
     }
@@ -65,7 +66,7 @@ const splitExtension = (
   // overlong tail is part of the name too, so it may be shortened.
   if (
     dotIndex <= 0 ||
-    utf8Bytes(fileName.slice(dotIndex)) > MAX_EXTENSION_BYTES
+    utf8ByteLength(fileName.slice(dotIndex)) > MAX_EXTENSION_BYTES
   ) {
     return { base: fileName, extension: "" };
   }
@@ -97,7 +98,10 @@ export const withSegmentSuffix = (
 ): string => {
   const { base, extension } = splitExtension(segment);
   const room =
-    MAX_SEGMENT_BYTES - reserve - utf8Bytes(suffix) - utf8Bytes(extension);
+    MAX_SEGMENT_BYTES -
+    reserve -
+    utf8ByteLength(suffix) -
+    utf8ByteLength(extension);
   return `${truncateUtf8(base, room).trimEnd()}${suffix}${extension}`;
 };
 
@@ -109,7 +113,7 @@ export const withSegmentSuffix = (
  * survives shortening.
  */
 export const sanitizeArchiveSegment = (name: string): string => {
-  const normalized = normalizeUnicode(name, "NFC")
+  const normalized = normalizeUnicode(name.toWellFormed(), "NFC")
     .replace(CONTROL_CHARS_RE, "_")
     .trim();
   // The shared sanitiser cuts at 255 UTF-16 units; keeping the extension
@@ -125,7 +129,8 @@ export const sanitizeArchiveSegment = (name: string): string => {
     ? `_${sanitized}`
     : sanitized;
   const { base, extension } = splitExtension(named);
-  const room = MAX_SEGMENT_BYTES - SUFFIX_RESERVE_BYTES - utf8Bytes(extension);
+  const room =
+    MAX_SEGMENT_BYTES - SUFFIX_RESERVE_BYTES - utf8ByteLength(extension);
   return `${truncateUtf8(base, room).trimEnd()}${extension}`;
 };
 
@@ -142,7 +147,12 @@ export class ArchivePathAllocator {
 
   /** Reserve a fixed path (manifest, metadata) that must not be renamed. */
   reserve(path: string): string {
-    if (path.length > DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH) {
+    if (
+      utf8ByteLength(path) > DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES ||
+      path
+        .split("/")
+        .some((segment) => utf8ByteLength(segment) > MAX_SEGMENT_BYTES)
+    ) {
       return panic("Reserved archive path exceeds the manifest limit");
     }
     const key = archivePathKey(path);
@@ -159,12 +169,12 @@ export class ArchivePathAllocator {
     // Flatten deep descendants to the nearest complete ancestor that leaves
     // room for a full segment, including its eventual collision suffix.
     const directoryLimit =
-      DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH - MAX_SEGMENT_BYTES - 1;
-    const ancestorEnd = directory.lastIndexOf("/", directoryLimit);
-    const parent =
-      directory.length <= directoryLimit
-        ? directory
-        : directory.slice(0, Math.max(0, ancestorEnd));
+      DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES - MAX_SEGMENT_BYTES - 1;
+    let parent = directory;
+    while (utf8ByteLength(parent) > directoryLimit) {
+      const separator = parent.lastIndexOf("/");
+      parent = separator === -1 ? "" : parent.slice(0, separator);
+    }
     const prefix = parent.length > 0 ? `${parent}/` : "";
     const first = `${prefix}${segment}`;
     if (!this.#taken.has(archivePathKey(first))) {

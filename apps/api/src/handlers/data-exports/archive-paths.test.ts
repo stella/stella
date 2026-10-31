@@ -8,14 +8,17 @@ import { archivePathKey } from "@/api/handlers/data-exports/archive-path-key";
 import {
   ArchivePathAllocator,
   compressionForMimeType,
-  MAX_SEGMENT_BYTES,
   sanitizeArchiveSegment,
   SEGMENT_SUFFIX_RESERVE,
   truncateUtf8,
   withSegmentSuffix,
 } from "@/api/handlers/data-exports/archive-paths";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
-import { DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH } from "@/api/lib/data-export/manifest-values";
+import {
+  DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
+  DATA_EXPORT_ARCHIVE_SEGMENT_MAX_BYTES as MAX_SEGMENT_BYTES,
+} from "@/api/lib/data-export/manifest-values";
+import { utf8ByteLength } from "@/api/lib/utf8-byte-length";
 
 // ICU collation checks the fixture equivalence independently of the allocation key.
 const filesystemNames = new Intl.Collator("cs", {
@@ -198,8 +201,8 @@ describe("export file-name length", () => {
           expect(paths).toEqual(allocate());
           expect(new Set(paths.map(archivePathKey)).size).toBe(paths.length);
           for (const path of paths) {
-            expect(path.length).toBeLessThanOrEqual(
-              DATA_EXPORT_ARCHIVE_PATH_MAX_LENGTH,
+            expect(bytes(path)).toBeLessThanOrEqual(
+              DATA_EXPORT_ARCHIVE_PATH_MAX_BYTES,
             );
             expect(path).toBe(path.toWellFormed());
             for (const segment of path.split("/")) {
@@ -218,6 +221,15 @@ describe("export file-name length", () => {
     expect(segment.endsWith(".docx")).toBe(true);
     // Never cuts a character in half.
     expect(segment).toBe(segment.toWellFormed());
+  });
+
+  test("shortens a 300-byte Czech segment on a character boundary", () => {
+    const name = "Ž".repeat(150);
+    expect(utf8ByteLength(name)).toBe(300);
+    const segment = sanitizeArchiveSegment(name);
+    expect(utf8ByteLength(segment)).toBeLessThanOrEqual(MAX_SEGMENT_BYTES);
+    expect(segment.isWellFormed()).toBe(true);
+    expect(segment.length).toBeLessThan(name.length);
   });
 
   test("keeps version and collision suffixes inside the limit", () => {

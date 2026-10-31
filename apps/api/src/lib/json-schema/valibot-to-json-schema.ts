@@ -13,7 +13,10 @@ import { ANALYSIS_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
 import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
-import { isUniqueItemsCheck } from "@/api/lib/custom-schema";
+import {
+  isUniqueItemsCheck,
+  readUtf8ByteBounds,
+} from "@/api/lib/custom-schema";
 import { isUnknownArray } from "@/api/lib/type-guards";
 
 /** The `v.metadata` keys that are JSON Schema annotations. */
@@ -105,6 +108,28 @@ const uniqueItemsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
     ? { ...jsonSchema, uniqueItems: true }
     : undefined;
 
+const utf8ByteBoundsAction: NonNullable<ConversionConfig["overrideAction"]> = ({
+  valibotAction,
+  jsonSchema,
+}) => {
+  const bounds = readUtf8ByteBounds(valibotAction);
+  return bounds === undefined
+    ? undefined
+    : {
+        ...jsonSchema,
+        // A byte bound implies this standard character upper bound as well;
+        // x- keywords retain the precise UTF-8 and segment constraints.
+        maxLength:
+          typeof jsonSchema.maxLength === "number"
+            ? Math.min(jsonSchema.maxLength, bounds.maxBytes)
+            : bounds.maxBytes,
+        "x-maxUtf8Bytes": bounds.maxBytes,
+        ...(bounds.maxSegmentBytes === undefined
+          ? {}
+          : { "x-maxSegmentUtf8Bytes": bounds.maxSegmentBytes }),
+      };
+};
+
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
 export type { JsonSchema };
@@ -133,6 +158,7 @@ export const toJsonSchema = (
       stripInternalMetadata(context) ??
       keepUnicodePatternSource(context) ??
       uniqueItemsAction(context) ??
+      utf8ByteBoundsAction(context) ??
       keepRuntimeOnlyAction(context),
   });
 
@@ -282,6 +308,7 @@ export const toRouteJsonSchema = (schema: GenericSchema): JsonSchema =>
         stripRouteInternalMetadata(context) ??
         keepUnicodePatternSource(context) ??
         uniqueItemsAction(context) ??
+        utf8ByteBoundsAction(context) ??
         fileSizeAction(context) ??
         keepRuntimeOnlyAction(context)
       );
