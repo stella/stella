@@ -80,6 +80,10 @@ import {
 import { ENTITY_FEATURE_GATE_REPAIR } from "./entity-feature-gate-repair";
 import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import {
+  IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  IMPORT_PROVENANCE_CONSTRAINTS,
+} from "./import-provenance-constraint-validation";
+import {
   INVOICE_LANGUAGE_CONSTRAINT_VALIDATIONS,
   INVOICE_LANGUAGE_CONSTRAINTS,
 } from "./invoice-language-constraint-validation";
@@ -767,6 +771,66 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     tableName: "sanctions_contact_marks",
   },
   {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_external_uidx" ON public."contacts" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.contacts USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "contacts_org_external_uidx",
+    tableName: "contacts",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_org_external_uidx" ON public."workspaces" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.workspaces USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "workspaces_org_external_uidx",
+    tableName: "workspaces",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_org_external_uidx" ON public."time_entries" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "time_entries_org_external_uidx",
+    tableName: "time_entries",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "expenses_org_external_uidx" ON public."expenses" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.expenses USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "expenses_org_external_uidx",
+    tableName: "expenses",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_org_external_uidx" ON public."invoices" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "invoices_org_external_uidx",
+    tableName: "invoices",
+  },
+  {
+    introducedBy: "20261031001825_import_provenance",
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_org_external_uidx" ON public."correspondence" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.correspondence USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "correspondence_org_external_uidx",
+    tableName: "correspondence",
+  },
+  {
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     createSql:
       'CREATE INDEX CONCURRENTLY "search_history_entries_owner_country_recent_idx" ON public."search_history_entries" USING btree ("organization_id", "user_id", "country", "last_used_at", "id")',
@@ -966,6 +1030,12 @@ export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
   INVOICE_LEGACY_PAYMENT_BACKFILL,
   ENTITY_FEATURE_GATE_REPAIR,
   CORPUS_PROJECTION_CLEANUP_STALL_REPAIR,
+  ...IMPORT_PROVENANCE_CONSTRAINT_VALIDATIONS,
+  // Not behind one migration: the OAuth resource set is derived from the MCP
+  // audiences in application code, so it is the code that moves and the rows
+  // that follow. Its completion is the startup census, so the deploy that
+  // widens the audience set is the one that reconciles them, without an
+  // operator step.
   BETTER_AUTH_OAUTH_RESOURCE_REPAIR,
   DOCUMENT_REVIEW_FINDING_DECISION_BACKFILL,
   LEGAL_LIST_SOURCE_DECISION_BACKFILL,
@@ -998,6 +1068,7 @@ export const ONLINE_CONSTRAINT_VALIDATIONS: readonly OnlineConstraintValidation[
     ...EMAIL_UNDELIVERABLE_CONSTRAINTS,
     ...TIME_ENTRY_SUBMITTED_CONSTRAINTS,
     ...CORPUS_PROJECTION_CLEANUP_STALL_CONSTRAINTS,
+    ...IMPORT_PROVENANCE_CONSTRAINTS,
   ];
 
 type PresentIndexState = {

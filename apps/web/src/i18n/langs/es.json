@@ -2582,6 +2582,7 @@
       "resultsSummary": "{created, plural, one {# creado} other {# creados}}, {skipped, plural, one {# omitido} other {# omitidos}}",
       "rowLabel": "Cliente {index}",
       "skippedDuplicateContactId": "Omitido: ID de contacto duplicado",
+      "skippedDuplicateExternalRef": "Omitido: el mismo origen e ID externo aparecen dos veces",
       "skippedDuplicateTaxId": "Omitido: identificación fiscal duplicada",
       "skippedInFileDuplicate": "Omitido: repite una fila anterior del archivo",
       "skippedInvalidRow": "Omitido: la fila no cumple las reglas de importación",
