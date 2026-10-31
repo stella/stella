@@ -3,11 +3,323 @@ import { describe, expect, test } from "bun:test";
 import { cents } from "./cents";
 import {
   currencyMinorUnitDigits,
+  formatLocaleDecimalInput,
+  formatLocaleMinorUnitsInput,
   formatMoneyCents,
+  type LocaleAmountParseError,
+  parseLocaleDecimal,
+  parseLocaleMinorUnits,
   toMajorUnits,
   toMinorUnits,
   tryToMinorUnits,
 } from "./format";
+
+describe("parseLocaleMinorUnits", () => {
+  const locales = ["sk-SK", "cs-CZ", "en-US", "en-IN", "de-DE", "pl-PL"];
+
+  test("a locale whose decimal mark is neither ASCII mark takes either one", () => {
+    for (const locale of ["ar-u-nu-arab", "ar-EG"]) {
+      for (const amount of ["150.50", "150,50", "١٥٠٫٥٠"]) {
+        expect(
+          parseLocaleMinorUnits({ amount, currency: "EUR", locale }).unwrap(),
+        ).toBe(cents(15_050));
+      }
+      for (const amount of ["1.234", "1,234"]) {
+        const parsed = parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale,
+        });
+        expect(parsed.isErr() && parsed.error.reason).toBe("ambiguous");
+      }
+    }
+  });
+
+  test("round-trips locale-formatted minor-unit amounts", () => {
+    let state = 24_301;
+    for (const locale of locales) {
+      const formatter = new Intl.NumberFormat(locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        useGrouping: true,
+      });
+      for (let index = 0; index < 250; index += 1) {
+        state = (state * 48_271) % 2_147_483_647;
+        const amountCents = (state % 20_000_001) - 10_000_000;
+        const rendered = formatter.format(
+          toMajorUnits({ amountCents, currency: "EUR" }),
+        );
+        expect(
+          parseLocaleMinorUnits({
+            amount: rendered,
+            currency: "EUR",
+            locale,
+          }).unwrap(),
+        ).toBe(cents(amountCents));
+        const parts = formatter.formatToParts(
+          toMajorUnits({ amountCents, currency: "EUR" }),
+        );
+        const decimalPart = parts.find((part) => part.type === "decimal");
+        const fractionLength =
+          parts.find((part) => part.type === "fraction")?.value.length ?? 0;
+        const primaryGroupSize = new Intl.NumberFormat(locale)
+          .formatToParts(1_234_567_890_123)
+          .findLast((part) => part.type === "integer")?.value.length;
+        const swappedDecimal = decimalPart?.value === "," ? "." : ",";
+        const hasCollidingGroup = parts.some(
+          (part) => part.type === "group" && part.value === swappedDecimal,
+        );
+        if (
+          decimalPart !== undefined &&
+          fractionLength !== primaryGroupSize &&
+          !hasCollidingGroup
+        ) {
+          const swapped = rendered.replace(
+            decimalPart.value,
+            () => swappedDecimal,
+          );
+          expect(
+            parseLocaleMinorUnits({
+              amount: swapped,
+              currency: "EUR",
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
+        if (/\s/u.test(rendered)) {
+          for (const separator of [" ", "\u00a0", "\u202f"]) {
+            expect(
+              parseLocaleMinorUnits({
+                amount: rendered.replace(/\s/gu, () => separator),
+                currency: "EUR",
+                locale,
+              }).unwrap(),
+            ).toBe(cents(amountCents));
+          }
+        }
+      }
+    }
+  });
+
+  test.each(["1.234", "1,2,3", "letters", ""])(
+    "refuses invalid or ambiguous Slovak input %p",
+    (amount) => {
+      expect(
+        parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale: "sk-SK",
+        }).isErr(),
+      ).toBe(true);
+    },
+  );
+
+  test("returns a locale error instead of throwing for a malformed tag", () => {
+    const parsed = parseLocaleMinorUnits({
+      amount: "12.50",
+      currency: "EUR",
+      locale: "not_a_locale",
+    });
+    expect(parsed.isErr() && parsed.error.reason).toBe("locale");
+  });
+
+  test("accepts primary and secondary locale grouping sizes", () => {
+    expect(
+      parseLocaleMinorUnits({
+        amount: "12,34,567.89",
+        currency: "USD",
+        locale: "en-IN",
+      }).unwrap(),
+    ).toBe(cents(123_456_789));
+  });
+
+  const parseCases = [
+    ["sk", "150.50", 15_050],
+    ["sk", "150,50", 15_050],
+    ["sk", "1.234", "ambiguous"],
+    ["sk", "1,234", "precision"],
+    ["sk", "1.234,50", 123_450],
+    ["sk", "1,234.50", "syntax"],
+    ["sk", "1.2", 120],
+    ["sk", "0.5", 50],
+    ["sk", ".5", 50],
+    ["sk", "1.234.567", 123_456_700],
+    ["en", "150.50", 15_050],
+    ["en", "150,50", 15_050],
+    ["en", "1.234", "precision"],
+    ["en", "1,234", "ambiguous"],
+    ["en", "1.234,50", "syntax"],
+    ["en", "1,234.50", 123_450],
+    ["en", "1.2", 120],
+    ["en", "0.5", 50],
+    ["en", ".5", 50],
+    ["en", "1.234.567", "syntax"],
+    ["en-IN", "150.50", 15_050],
+    ["en-IN", "150,50", 15_050],
+    ["en-IN", "1.234", "precision"],
+    ["en-IN", "1,234", "ambiguous"],
+    ["en-IN", "1.234,50", "syntax"],
+    ["en-IN", "1,234.50", 123_450],
+    ["en-IN", "1.2", 120],
+    ["en-IN", "0.5", 50],
+    ["en-IN", ".5", 50],
+    ["en-IN", "1.234.567", "syntax"],
+  ] satisfies [string, string, number | LocaleAmountParseError["reason"]][];
+
+  test.each(parseCases)(
+    "parses %s input %s as %s",
+    (locale, amount, expected) => {
+      const parsed = parseLocaleMinorUnits({ amount, currency: "EUR", locale });
+      if (typeof expected === "number") {
+        expect(parsed.unwrap()).toBe(cents(expected));
+        return;
+      }
+      expect(parsed.isErr() && parsed.error.reason).toBe(expected);
+    },
+  );
+
+  test("applies separator ambiguity before currency precision", () => {
+    const precisionCases = [
+      { amount: "150.505", reason: "ambiguous" },
+      { amount: "150.5055", reason: "precision" },
+    ] satisfies { amount: string; reason: LocaleAmountParseError["reason"] }[];
+    for (const { amount, reason } of precisionCases) {
+      const parsed = parseLocaleMinorUnits({
+        amount,
+        currency: "EUR",
+        locale: "sk",
+      });
+      expect(parsed.isErr() && parsed.error.reason).toBe(reason);
+    }
+  });
+
+  test("redisplay text round-trips every currency exponent and locale", () => {
+    let state = 91_337;
+    for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+      for (const currency of ["JPY", "EUR", "KWD"]) {
+        for (let index = 0; index < 250; index += 1) {
+          state = (state * 48_271) % 2_147_483_647;
+          const amountCents = (state % 20_000_001) - 10_000_000;
+          const rendered = formatLocaleMinorUnitsInput({
+            amountCents,
+            currency,
+            locale,
+          });
+          expect(
+            parseLocaleMinorUnits({
+              amount: rendered,
+              currency,
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
+      }
+    }
+
+    for (const amountCents of [
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER - 1,
+      -Number.MAX_SAFE_INTEGER,
+      -Number.MAX_SAFE_INTEGER + 1,
+    ]) {
+      for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+        for (const currency of ["JPY", "EUR", "KWD"]) {
+          const rendered = formatLocaleMinorUnitsInput({
+            amountCents,
+            currency,
+            locale,
+          });
+          expect(
+            parseLocaleMinorUnits({
+              amount: rendered,
+              currency,
+              locale,
+            }).unwrap(),
+          ).toBe(cents(amountCents));
+        }
+      }
+    }
+  });
+
+  test("decimal redisplay round-trips fraction lengths zero through six", () => {
+    for (const locale of ["sk", "cs", "de", "pl", "en", "en-IN"]) {
+      for (let fractionLength = 0; fractionLength <= 6; fractionLength += 1) {
+        for (const sign of ["", "-"]) {
+          const amount = `${sign}1234${
+            fractionLength === 0 ? "" : `.${"123456".slice(0, fractionLength)}`
+          }`;
+          const rendered = formatLocaleDecimalInput({ amount, locale });
+          expect(
+            parseLocaleDecimal({ amount: rendered, locale }).unwrap(),
+          ).toBe(amount);
+        }
+      }
+    }
+  });
+
+  test("accepts locale grouping and decimal separators", () => {
+    for (const amount of [
+      "1234,56",
+      "1 234,56",
+      "1\u00a0234,56",
+      "1\u202f234,56",
+      "1.234,56",
+    ]) {
+      expect(
+        parseLocaleMinorUnits({
+          amount,
+          currency: "EUR",
+          locale: "sk-SK",
+        }).unwrap(),
+      ).toBe(cents(123_456));
+    }
+    expect(
+      parseLocaleMinorUnits({
+        amount: "1,234.56",
+        currency: "USD",
+        locale: "en-US",
+      }).unwrap(),
+    ).toBe(cents(123_456));
+  });
+
+  test("treats every supported whitespace separator as grouping", () => {
+    for (const locale of ["sk-SK", "cs-CZ", "pl-PL", "fr-FR"]) {
+      for (const separator of [" ", "\u00a0", "\u202f"]) {
+        expect(
+          parseLocaleMinorUnits({
+            amount: `1${separator}234`,
+            currency: "EUR",
+            locale,
+          }).unwrap(),
+        ).toBe(cents(123_400));
+      }
+    }
+  });
+
+  test("distinguishes excessive precision from range and ambiguity", () => {
+    const precision = parseLocaleMinorUnits({
+      amount: "12,345",
+      currency: "EUR",
+      locale: "sk-SK",
+    });
+    expect(precision.isErr() && precision.error.reason).toBe("precision");
+    const ambiguous = parseLocaleMinorUnits({
+      amount: "1,234",
+      currency: "EUR",
+      locale: "en-US",
+    });
+    expect(ambiguous.isErr() && ambiguous.error.reason).toBe("ambiguous");
+  });
+
+  test("normalizes non-money decimals with the same separator rules", () => {
+    expect(
+      parseLocaleDecimal({ amount: "1 234,56", locale: "sk-SK" }).unwrap(),
+    ).toBe("1234.56");
+    expect(
+      parseLocaleDecimal({ amount: "1.234", locale: "sk-SK" }).isErr(),
+    ).toBe(true);
+  });
+});
 
 describe("currencyMinorUnitDigits", () => {
   test("asks the currency, not the reader", () => {

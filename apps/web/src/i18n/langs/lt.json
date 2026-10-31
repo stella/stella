@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
+    "invalidNumberFormat": "Patikrinkite skaičiaus formatą",
     "invoiceComposer": {
       "addSellerProfile": "Pridėkite pardavėjo profilį atsiskaitymo nustatymuose",
       "billedHours": "Apmokamos valandos",

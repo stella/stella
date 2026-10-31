@@ -13,6 +13,7 @@ import {
   parseDurationPart,
   splitDurationMinutes,
 } from "@/components/billing/duration-input.logic";
+import { useFormattingLocale } from "@/i18n/formatting-context";
 
 type DurationInputProps = {
   id: string;
@@ -34,10 +35,11 @@ export const DurationInput = ({
   disabled,
 }: DurationInputProps) => {
   const t = useTranslations("billing");
+  const locale = useFormattingLocale();
   const { hours, minutes } = splitDurationMinutes(value);
 
   const updateHours = (rawHours: string) => {
-    const nextHours = parseDurationPart(rawHours);
+    const nextHours = parseDurationPart(rawHours, locale);
     if (nextHours === null) {
       return;
     }
@@ -45,7 +47,7 @@ export const DurationInput = ({
   };
 
   const updateMinutes = (rawMinutes: string) => {
-    const nextMinutes = parseDurationPart(rawMinutes);
+    const nextMinutes = parseDurationPart(rawMinutes, locale);
     if (nextMinutes === null) {
       return;
     }

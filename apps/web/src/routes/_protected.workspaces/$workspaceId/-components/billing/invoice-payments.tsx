@@ -10,7 +10,7 @@ import {
   INVOICE_PAYMENT_METHODS,
   type InvoicePaymentMethod,
 } from "@stll/api-contract";
-import { tryToMinorUnits } from "@stll/money";
+import { localeInputText, parseLocaleMinorUnits } from "@stll/money";
 import { Button } from "@stll/ui/button";
 import { Dialog, DialogPopup } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -34,7 +34,7 @@ import {
   plainDateEpoch,
 } from "@/components/billing/format-plain-date";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { useFormatter } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
@@ -259,6 +259,7 @@ const RecordPaymentForm = ({
   onClose: () => void;
 }) => {
   const t = useTranslations();
+  const locale = useFormattingLocale();
   const invalidate = useInvalidateInvoices();
   const paidOnLabelId = useId();
 
@@ -280,15 +281,20 @@ const RecordPaymentForm = ({
         input: amountInputValue,
         currency,
         outstandingAmount,
+        locale,
       });
       if (check.type !== "ok") {
         addIssue({
-          message:
-            check.type === "more_than_outstanding"
-              ? t("billing.invoices.payments.amountTooHigh", {
-                  amount: formatCurrencyAmount(outstandingAmount, currency),
-                })
-              : t("billing.amountMustBePositive"),
+          message: {
+            invalid_format: t("billing.invalidNumberFormat"),
+            more_than_outstanding: t(
+              "billing.invoices.payments.amountTooHigh",
+              {
+                amount: formatCurrencyAmount(outstandingAmount, currency),
+              },
+            ),
+            not_positive: t("billing.amountMustBePositive"),
+          }[check.type],
           path: [
             {
               type: "object",
@@ -310,7 +316,7 @@ const RecordPaymentForm = ({
       schema,
       submitValues: "schema-output",
       defaultValues: {
-        amountInputValue: majorUnitInput(outstandingAmount, currency),
+        amountInputValue: majorUnitInput(outstandingAmount, currency, locale),
         paidOn: localISODate(),
         method: DEFAULT_PAYMENT_METHOD,
         reference: "",
@@ -379,16 +385,19 @@ const RecordPaymentForm = ({
                   inputMode="decimal"
                   onBlur={() => {
                     field.handleBlur();
-                    const amount = tryToMinorUnits({
+                    const amount = parseLocaleMinorUnits({
                       amount: field.state.value,
                       currency,
+                      locale,
                     });
-                    if (amount !== null && amount > 0) {
-                      field.handleChange(majorUnitInput(amount, currency));
+                    if (amount.isOk() && amount.value > 0) {
+                      field.handleChange(
+                        majorUnitInput(amount.value, currency, locale),
+                      );
                     }
                   }}
                   onChange={(event) =>
-                    field.handleChange(event.currentTarget.value)
+                    field.handleChange(localeInputText(event.currentTarget))
                   }
                   value={field.state.value}
                 />

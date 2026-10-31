@@ -623,6 +623,7 @@
     },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
+    "invalidNumberFormat": "Zkontrolujte formát čísla",
     "invoiceComposer": {
       "addSellerProfile": "Přidejte profil dodavatele v nastavení fakturace",
       "billedHours": "Účtované hodiny",

@@ -1,4 +1,5 @@
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+import { parseLocaleDecimal } from "@stll/money";
 
 export type DurationParts = {
   hours: number;
@@ -15,10 +16,20 @@ export const combineDurationParts = ({
   minutes,
 }: DurationParts): number => hours * 60 + minutes;
 
-export const parseDurationPart = (value: string): number | null => {
+export const parseDurationPart = (
+  value: string,
+  locale = "en",
+): number | null => {
   if (value.length === 0) {
     return 0;
   }
 
-  return parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null);
+  const normalized = parseLocaleDecimal({
+    amount: value,
+    locale,
+    maximumFractionDigits: 0,
+  });
+  return normalized.isErr()
+    ? null
+    : parseIntegerToken(normalized.value, { sign: "unsigned" }).unwrapOr(null);
 };

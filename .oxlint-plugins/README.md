@@ -414,6 +414,7 @@ an autofix entry names an eligible generator in `scripts/generated-files.ts`.
 
 - [`no-discarded-toast-error`](./no-discarded-toast-error.ts) (`no-discarded-toast-error`): preserves original caught errors through shared notification.
 
+- [`no-canonical-money-form-parse`](./no-canonical-money-form-parse.ts) (`no-canonical-money-form-parse`): rejects the canonical dot-only money parser when its argument directly reads a web form value; use the locale-aware money parser. Aliased and computed values are outside this syntactic boundary.
 - [`no-ad-hoc-inline-rename`](./no-ad-hoc-inline-rename.ts) (`no-ad-hoc-inline-rename`): enumerates native and UI input aliases in view/edit owners with blur/keyboard commit handlers and rename bindings or autofocus; requires `@stll/ui/inline-rename`. Permanent, creation, numeric and multiline fields stay outside this detection boundary.
 - [`no-first-observer-entry`](./no-first-observer-entry.ts) (`no-first-observer-entry`): rejects first-record indexing, `at(0)`, and first-element parameter destructuring in IntersectionObserver and ResizeObserver callbacks, including named callbacks. Use the latest record for one target or fold to the last record per target.
 - [`no-plan-scan-node-literals`](./no-plan-scan-node-literals.ts) (`no-plan-scan-node-literals`): requires API plan tests outside the shared query-plan helpers to assert normalized indexed access paths instead of PostgreSQL planner node type literals.
