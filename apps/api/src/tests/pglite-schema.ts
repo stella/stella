@@ -380,6 +380,14 @@ export const installPgliteWorkspaceAccessObjects = async (
   for (const statement of readMatterVisibilityCutoverSql()) {
     await db.execute(sql.raw(statement));
   }
+  await installPgliteMigration({
+    db,
+    migrationPath: nodePath.join(
+      DRIZZLE_DIR,
+      "20261031011600_matter_visibility_creation",
+      "migration.sql",
+    ),
+  });
   // The replay above rewrites every `workspace_*` policy to the plain matter
   // check, so a table whose policies carry a further predicate in the schema
   // needs its own ALTER POLICY statements replayed afterwards. The column

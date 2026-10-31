@@ -94,7 +94,7 @@ REVOKE ALL ON TABLE public.matter_stewardship_locks FROM PUBLIC, stella;
 CREATE FUNCTION public.stella_lock_matter_stewardship(p_requests jsonb, p_mode text)
 RETURNS TABLE (workspace_id uuid)
 LANGUAGE plpgsql SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   targets uuid[];
@@ -229,7 +229,7 @@ GRANT EXECUTE ON FUNCTION public.stella_lock_matter_stewardship(jsonb, text) TO 
 -- writers fail closed instead of waiting in an inverted order.
 CREATE FUNCTION public.stella_has_stewardship_lock(p_kind text, p_id text)
 RETURNS boolean LANGUAGE sql
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
   SELECT COALESCE((SELECT proof->>'mode' = 'update'
     AND proof->p_kind @> jsonb_build_array(p_id)
@@ -247,7 +247,7 @@ CREATE FUNCTION "enforce_member_role_keeps_matter_leads"()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
@@ -311,7 +311,7 @@ CREATE FUNCTION public.enforce_workspace_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   audit_actor text;
@@ -393,7 +393,7 @@ CREATE FUNCTION public.enforce_inserted_workspace_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   matter public.workspaces%ROWTYPE;
@@ -437,7 +437,7 @@ CREATE FUNCTION public.enforce_assignment_keeps_matter_lead()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
@@ -507,7 +507,7 @@ CREATE FUNCTION public.stella_create_workspace(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   v_organization_id text := NULLIF(
@@ -601,7 +601,7 @@ GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text,
 CREATE FUNCTION public.stella_lock_legacy_visibility_batch(p_cursor uuid, p_size integer)
 RETURNS TABLE (id uuid)
 LANGUAGE plpgsql
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   requests jsonb;
@@ -632,7 +632,7 @@ REVOKE ALL ON FUNCTION public.stella_lock_legacy_visibility_batch(uuid, integer)
 CREATE FUNCTION public.stella_repair_legacy_visibility_batch(p_ids uuid[])
 RETURNS void
 LANGUAGE plpgsql SECURITY INVOKER
-SET search_path = pg_catalog, public
+SET search_path = pg_catalog, public, pg_temp
 AS $$
 DECLARE
   requests jsonb;
@@ -679,24 +679,4 @@ END;
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.stella_repair_legacy_visibility_batch(uuid[]) FROM PUBLIC;
---> statement-breakpoint
-
--- The retained seven-argument creation API delegates to the same lock owner.
--- stella-migration-safety: reviewed security-definer - fixed search path and PUBLIC execute revoked; delegates to the tenant-bound creation procedure without adding authority
-CREATE OR REPLACE FUNCTION public.stella_create_workspace(
-  p_workspace_id uuid, p_client_id uuid, p_name text, p_reference text,
-  p_billing_reference text, p_color text, p_lead_user_id text
-) RETURNS void LANGUAGE sql SECURITY DEFINER
-SET search_path = pg_catalog, public
-AS $$
-  SELECT public.stella_create_workspace(
-    p_workspace_id, p_client_id, p_name, p_reference, p_billing_reference, p_color,
-    CASE WHEN p_client_id IS NULL THEN COALESCE(p_lead_user_id, NULLIF(current_setting('app.user_id', true), '')) ELSE p_lead_user_id END,
-    CASE WHEN p_client_id IS NULL THEN 'assigned_only' ELSE 'admins_and_assigned' END
-  );
-$$;
---> statement-breakpoint
-REVOKE ALL ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) FROM PUBLIC;
---> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) TO stella;
 --> statement-breakpoint
