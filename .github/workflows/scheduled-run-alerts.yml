@@ -67,7 +67,8 @@ on:
       - security.txt Expiry Guard
       - Sync Branch Protection
       - Publish typecheck base
-    branches: [main]
+    # Tag pushes run with the tag as their branch (release.yml on.push.tags).
+    branches: [main, "v*"]
     types: [completed]
 
 permissions: {}
@@ -107,14 +108,19 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" "$RUNNER_TEMP/gh-retry.sh"
           echo "GH_RETRY_SCRIPT=$RUNNER_TEMP/gh-retry.sh" >> "$GITHUB_ENV"
 
-      # GitHub annotates a job it cancelled for a newer waiting run of the
-      # same concurrency group. Such a superseded cancel pages nobody; any
-      # other release cancel pages, also when that record cannot be read.
-      # A recovery resets the outage. Cancelled/skipped runs and unfinished
-      # newer runs do not reset it, and manual delivery tests always send.
+      # A cancelled release run pages unless another run fully replaces it:
+      # GitHub superseded it (a job annotated as cancelled for a newer waiting
+      # run of its concurrency group, or a pending run that never started a
+      # job) AND a newer run of the same workflow does the same work (same
+      # commit, event and run title, for a workflow whose run title names its
+      # work). Every unreadable record pages. A recovery resets the outage;
+      # cancelled/skipped runs and unfinished newer runs do not reset it, an
+      # unreadable history counts as no outage, and manual delivery tests
+      # always send. A failure of this step pages as well.
       - name: Detect a continuing outage
         id: outage
         if: github.event_name == 'workflow_run'
+        timeout-minutes: 2
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
@@ -123,39 +129,78 @@ jobs:
           RUN_BRANCH: ${{ github.event.workflow_run.head_branch }}
           RUN_EVENT: ${{ github.event.workflow_run.event }}
           RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          RUN_PATH: ${{ github.event.workflow_run.path }}
+          RUN_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_TITLE: ${{ github.event.workflow_run.display_title }}
         run: |
           set -euo pipefail
-          if [[ "$RUN_CONCLUSION" == cancelled ]]; then
-            superseded=false
-            check_runs=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100" |
-              jq -r '.jobs[] | select(.conclusion == "cancelled") | .check_run_url // empty') || {
+          superseded_by_newer_run() {
+            local jobs check_runs check_run annotations newer superseded=false
+            jobs=$(bash "$GH_RETRY_SCRIPT" api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/jobs?per_page=100") || {
               echo "::warning::Cancelled run jobs were unavailable; alerting."
-              check_runs=""
+              return 1
             }
-            while IFS= read -r check_run; do
-              [[ "$check_run" == "https://api.github.com/repos/${GITHUB_REPOSITORY}/check-runs/"* ]] || continue
-              annotations=$(bash "$GH_RETRY_SCRIPT" api "$check_run/annotations?per_page=100") || {
-                echo "::warning::Cancelled job annotations were unavailable; alerting."
-                break
+            if jq -e '.total_count == 0 and .jobs == []' <<< "$jobs" > /dev/null 2>&1; then
+              # A pending run replaced in its concurrency group starts no job.
+              superseded=true
+            else
+              check_runs=$(jq -r '.jobs[] | select(.conclusion == "cancelled") | .check_run_url // empty' <<< "$jobs") || {
+                echo "::warning::Cancelled run jobs were unreadable; alerting."
+                return 1
               }
-              if jq -e 'any(.[]; (.message // "") | test("^Canceling since a higher priority waiting request for .+ exists$"))' <<< "$annotations" > /dev/null; then
-                superseded=true
-                break
-              fi
-            done <<< "$check_runs"
-            if [[ "$superseded" == true ]]; then
-              echo "send=false" >> "$GITHUB_OUTPUT"
-              echo "::notice::A newer run of the same concurrency group superseded this cancelled run."
-              exit 0
+              while IFS= read -r check_run; do
+                [[ "$check_run" == "https://api.github.com/repos/${GITHUB_REPOSITORY}/check-runs/"* ]] || continue
+                annotations=$(bash "$GH_RETRY_SCRIPT" api "$check_run/annotations?per_page=100") || {
+                  echo "::warning::Cancelled job annotations were unavailable; alerting."
+                  return 1
+                }
+                if jq -e 'any(.[]; (.message // "") | test("^Canceling since a higher priority waiting request for .+ exists$"))' <<< "$annotations" > /dev/null 2>&1; then
+                  superseded=true
+                  break
+                fi
+              done <<< "$check_runs"
             fi
+            [[ "$superseded" == true ]] || return 1
+            # Only these run titles name the release or commit a run works on;
+            # release-tag runs and npm dispatch or follow-up runs share one
+            # title across candidates, so their cancels always page.
+            case "$RUN_PATH:$RUN_EVENT" in
+              .github/workflows/release.yml:* | .github/workflows/release-health.yml:* | .github/workflows/release-desktop.yml:* | .github/workflows/publish-npm.yml:push) ;;
+              *)
+                echo "::warning::Runs of this workflow and event do not name their work; alerting."
+                return 1
+                ;;
+            esac
+            newer=$(bash "$GH_RETRY_SCRIPT" api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
+              -f head_sha="$RUN_HEAD_SHA" -f event="$RUN_EVENT" -f per_page=100 |
+              jq -er --argjson number "$RUN_NUMBER" --arg sha "$RUN_HEAD_SHA" --arg event "$RUN_EVENT" --arg title "$RUN_TITLE" '
+                [.workflow_runs[]
+                  | select(.run_number > $number)
+                  | select(.head_sha == $sha and .event == $event and .display_title == $title)]
+                | length') || {
+              echo "::warning::Newer runs were unavailable; alerting."
+              return 1
+            }
+            [[ "$newer" != 0 ]] || {
+              echo "::warning::No newer run does the same work; alerting."
+              return 1
+            }
+          }
+          if [[ "$RUN_CONCLUSION" == cancelled ]] && superseded_by_newer_run; then
+            echo "send=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer run of the same work superseded this cancelled run."
+            exit 0
           fi
           previous=$(bash "$GH_RETRY_SCRIPT" api --method GET "repos/${GITHUB_REPOSITORY}/actions/workflows/${WORKFLOW_ID}/runs" \
             -f branch="$RUN_BRANCH" -f event="$RUN_EVENT" -f status=completed -f per_page=100 |
-            jq -r --argjson number "$RUN_NUMBER" '
+            jq -er --argjson number "$RUN_NUMBER" '
               [.workflow_runs[]
                 | select(.run_number < $number)
                 | select(.conclusion != "cancelled" and .conclusion != "skipped")]
-              | sort_by(.run_number) | last | .conclusion // "none"')
+              | sort_by(.run_number) | last | .conclusion // "none"') || {
+            echo "::warning::Earlier runs were unavailable; alerting."
+            previous=none
+          }
           case "$previous" in
             failure|startup_failure|timed_out)
               echo "send=false" >> "$GITHUB_OUTPUT"
@@ -183,7 +228,12 @@ jobs:
 
       - name: Send failure alert
         timeout-minutes: 2
-        if: github.event_name == 'workflow_dispatch' || steps.outage.outputs.send == 'true'
+        # A failed decision pages instead of staying silent.
+        if: >-
+          !cancelled()
+          && (github.event_name == 'workflow_dispatch'
+          || steps.outage.outputs.send == 'true'
+          || failure())
         env:
           WEBHOOK_URL: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_URL }}
           WEBHOOK_TOKEN: ${{ secrets.SCHEDULED_ALERTS_WEBHOOK_TOKEN }}

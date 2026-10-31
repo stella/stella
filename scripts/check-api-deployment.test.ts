@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
+import { evaluate } from "./github-expression";
 
 // CI runs this file in "Test release policy scripts" without the dependency
 // install (workflow-only pull requests skip it), so it reads workflow shapes
@@ -71,13 +72,30 @@ describe("API deployment health receipt", () => {
     "utf-8",
   );
 
+  type WorkflowRun = {
+    run_number: number;
+    head_sha: string;
+    event: string;
+    display_title: string;
+  };
+
   type OutageRun = {
     conclusion: string;
-    history: string[];
     // Unset: the lookup fails.
+    history?: string[] | undefined;
     jobs?: unknown;
     annotations?: string | undefined;
+    // Runs the newer-run lookup returns; unset: the lookup fails.
+    newer?: WorkflowRun[] | undefined;
+    workflow?: string;
+    event?: string;
   };
+
+  const RUN_SHA = "a".repeat(40);
+  const RUN_TITLE = "Release Artifacts v1.2.3-rc.1";
+  const RUN_NUMBER = 100;
+  const jobsBody = (jobs: unknown) =>
+    jobs === undefined ? "" : JSON.stringify(jobs);
 
   /** Runs the outage step against a mocked GitHub API and records each call. */
   const detectOutage = async ({
@@ -85,6 +103,9 @@ describe("API deployment health receipt", () => {
     history,
     jobs,
     annotations,
+    newer,
+    workflow = "release.yml",
+    event = "push",
   }: OutageRun) => {
     const script = workflowSteps(
       await alertWorkflow(),
@@ -95,7 +116,7 @@ describe("API deployment health receipt", () => {
     if (script === undefined) {
       return expect.unreachable("alerts require an outage step");
     }
-    const workflowRuns = history.map((runConclusion, index) => ({
+    const workflowRuns = (history ?? []).map((runConclusion, index) => ({
       run_number: index + 1,
       conclusion: runConclusion,
     }));
@@ -110,7 +131,8 @@ describe("API deployment health receipt", () => {
       const gh = `gh() {
   printf '%s\\n' "$*" >> "$TEST_CALLS"
   case "$*" in
-    *"/actions/workflows/"*"/runs"*) printf '%s' "$TEST_HISTORY" ;;
+    *"/actions/workflows/"*"/runs"*"head_sha="*) [[ -n "$TEST_NEWER" ]] || return 1; printf '%s' "$TEST_NEWER" ;;
+    *"/actions/workflows/"*"/runs"*) [[ -n "$TEST_HISTORY" ]] || return 1; printf '%s' "$TEST_HISTORY" ;;
     *"/actions/runs/"*"/jobs"*) [[ -n "$TEST_JOBS" ]] || return 1; printf '%s' "$TEST_JOBS" ;;
     *"/annotations"*) [[ -n "$TEST_ANNOTATIONS" ]] || return 1; printf '%s' "$TEST_ANNOTATIONS" ;;
     *) return 1 ;;
@@ -123,37 +145,60 @@ describe("API deployment health receipt", () => {
           GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
           GITHUB_REPOSITORY: "stella/stella",
           RUN_ID: "42",
-          RUN_NUMBER: "100",
+          RUN_NUMBER: String(RUN_NUMBER),
           RUN_BRANCH: "main",
-          RUN_EVENT: "schedule",
+          RUN_EVENT: event,
           RUN_CONCLUSION: conclusion,
+          RUN_PATH: `.github/workflows/${workflow}`,
+          RUN_HEAD_SHA: RUN_SHA,
+          RUN_TITLE,
           WORKFLOW_ID: "1",
           TEST_CALLS: callsPath,
-          TEST_HISTORY: JSON.stringify({
-            workflow_runs: workflowRuns.toReversed(),
-          }),
-          TEST_JOBS: jobs === undefined ? "" : JSON.stringify(jobs),
+          TEST_HISTORY:
+            history === undefined
+              ? ""
+              : JSON.stringify({ workflow_runs: workflowRuns.toReversed() }),
+          // A string is a raw (possibly malformed) response body.
+          TEST_JOBS: typeof jobs === "string" ? jobs : jobsBody(jobs),
           TEST_ANNOTATIONS: annotations ?? "",
+          TEST_NEWER:
+            newer === undefined
+              ? ""
+              : JSON.stringify({ workflow_runs: newer.toReversed() }),
         },
       });
       const calls = (await Bun.file(callsPath).text())
         .split("\n")
         .filter((call) => call !== "");
-      const label = `${conclusion} after ${JSON.stringify(history)}`;
+      const label = `${conclusion} of ${workflow} (${event}) after ${JSON.stringify(history)}`;
       expect(result.exitCode, `${label}: ${result.stderr.toString()}`).toBe(0);
-      // Only the newest page of this branch and event's completed runs is
-      // read; the step never walks the workflow's history.
+      // Each lookup is one filtered page; the step never walks a history.
       expect(
         calls.filter((call) => call.includes("--paginate")),
         label,
       ).toEqual([]);
-      for (const call of calls.filter((entry) =>
-        entry.includes("/actions/workflows/"),
-      )) {
+      const historyCalls = calls.filter(
+        (call) =>
+          call.includes("/actions/workflows/") && !call.includes("head_sha="),
+      );
+      const newerCalls = calls.filter(
+        (call) =>
+          call.includes("/actions/workflows/") && call.includes("head_sha="),
+      );
+      for (const call of historyCalls) {
         for (const filter of [
           "branch=main",
-          "event=schedule",
+          `event=${event}`,
           "status=completed",
+          "per_page=100",
+        ]) {
+          expect(call.split(" "), label).toContain(filter);
+        }
+      }
+      for (const call of newerCalls) {
+        for (const filter of [
+          `head_sha=${RUN_SHA}`,
+          `event=${event}`,
           "per_page=100",
         ]) {
           expect(call.split(" "), label).toContain(filter);
@@ -166,9 +211,8 @@ describe("API deployment health receipt", () => {
       return {
         send: sends?.at(1) === "true",
         calls,
-        readsHistory: calls.some((call) =>
-          call.includes("/actions/workflows/"),
-        ),
+        readsHistory: historyCalls.length > 0,
+        readsNewer: newerCalls.length > 0,
       };
     } finally {
       rmSync(outputDir, { recursive: true, force: true });
@@ -178,11 +222,21 @@ describe("API deployment health receipt", () => {
   const checkRun = (id: number, repository = "stella/stella") =>
     `https://api.github.com/repos/${repository}/check-runs/${id}`;
   const cancelledJobs = {
+    total_count: 2,
     jobs: [
       { conclusion: "success", check_run_url: checkRun(1) },
       { conclusion: "cancelled", check_run_url: checkRun(2) },
     ],
   };
+  // A pending run its concurrency group replaced never started a job.
+  const noJobs = { total_count: 0, jobs: [] };
+  const sameWork = (overrides: Partial<WorkflowRun> = {}): WorkflowRun => ({
+    run_number: RUN_NUMBER + 1,
+    head_sha: RUN_SHA,
+    event: "push",
+    display_title: RUN_TITLE,
+    ...overrides,
+  });
 
   test("alerts once per continuous outage and resets after recovery", async () => {
     const cases = [
@@ -205,13 +259,27 @@ describe("API deployment health receipt", () => {
     }
   });
 
-  test("a superseded release cancel neither alerts nor reads the outage", async () => {
+  test("an unreadable run history pages", async () => {
+    for (const conclusion of ["failure", "cancelled"]) {
+      const outage = await detectOutage({
+        conclusion,
+        history: undefined,
+        jobs: cancelledJobs,
+        annotations: "[]",
+      });
+      expect(outage.send, conclusion).toBe(true);
+      expect(outage.readsHistory, conclusion).toBe(true);
+    }
+  });
+
+  test("a cancel another run fully replaces neither alerts nor reads the outage", async () => {
     for (const history of [[], ["success"], ["failure"]]) {
       const outage = await detectOutage({
         conclusion: "cancelled",
         history,
         jobs: cancelledJobs,
         annotations: supersession,
+        newer: [sameWork({ run_number: RUN_NUMBER - 1 }), sameWork()],
       });
       expect(outage.send, JSON.stringify(history)).toBe(false);
       expect(outage.readsHistory, JSON.stringify(history)).toBe(false);
@@ -219,6 +287,91 @@ describe("API deployment health receipt", () => {
       expect(
         outage.calls.filter((call) => call.includes("/annotations")),
       ).toEqual([`api ${checkRun(2)}/annotations?per_page=100`]);
+    }
+    // A pending run replaced in its concurrency group has no job to annotate.
+    for (const [workflow, event] of [
+      ["release.yml", "push"],
+      ["release.yml", "workflow_dispatch"],
+      ["release-health.yml", "workflow_dispatch"],
+      ["release-desktop.yml", "workflow_run"],
+      ["release-desktop.yml", "workflow_dispatch"],
+      ["publish-npm.yml", "push"],
+    ] as const) {
+      const pending = await detectOutage({
+        conclusion: "cancelled",
+        history: ["success"],
+        jobs: noJobs,
+        newer: [sameWork({ event })],
+        workflow,
+        event,
+      });
+      expect(pending.send, `${workflow} (${event})`).toBe(false);
+      expect(
+        pending.calls.some((call) => call.includes("/annotations")),
+        `${workflow} (${event})`,
+      ).toBe(false);
+    }
+  });
+
+  test("a superseded cancel pages unless a newer run does the same work", async () => {
+    for (const { label, newer } of [
+      { label: "no newer run", newer: [] },
+      { label: "only older runs", newer: [sameWork({ run_number: 99 })] },
+      {
+        label: "newer run for another candidate",
+        newer: [sameWork({ display_title: "Release Artifacts v1.2.3-rc.2" })],
+      },
+      {
+        label: "newer run for another commit",
+        newer: [sameWork({ head_sha: "b".repeat(40) })],
+      },
+      {
+        label: "newer run from another event",
+        newer: [sameWork({ event: "workflow_dispatch" })],
+      },
+      { label: "newer run lookup fails", newer: undefined },
+    ]) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history: ["success"],
+          jobs,
+          annotations,
+          newer,
+        });
+        expect(outage.send, label).toBe(true);
+        expect(outage.readsNewer, label).toBe(true);
+        expect(outage.readsHistory, label).toBe(true);
+      }
+    }
+  });
+
+  test("a superseded cancel pages for runs whose title does not name their work", async () => {
+    for (const [workflow, event] of [
+      ["release-tag.yml", "workflow_run"],
+      ["release-tag.yml", "workflow_dispatch"],
+      ["publish-npm.yml", "workflow_run"],
+      ["publish-npm.yml", "workflow_dispatch"],
+    ] as const) {
+      for (const [jobs, annotations] of [
+        [cancelledJobs, supersession],
+        [noJobs, undefined],
+      ] as const) {
+        const outage = await detectOutage({
+          conclusion: "cancelled",
+          history: ["success"],
+          jobs,
+          annotations,
+          newer: [sameWork({ event })],
+          workflow,
+          event,
+        });
+        expect(outage.send, `${workflow} (${event})`).toBe(true);
+        expect(outage.readsNewer, `${workflow} (${event})`).toBe(false);
+      }
     }
   });
 
@@ -241,14 +394,16 @@ describe("API deployment health receipt", () => {
       },
       { label: "invalid annotations", jobs: cancelledJobs, annotations: "{" },
       { label: "job lookup fails", jobs: undefined, annotations: supersession },
+      { label: "invalid jobs", jobs: "{", annotations: supersession },
       {
         label: "no cancelled job",
-        jobs: { jobs: cancelledJobs.jobs.slice(0, 1) },
+        jobs: { total_count: 1, jobs: cancelledJobs.jobs.slice(0, 1) },
         annotations: supersession,
       },
       {
         label: "foreign check run",
         jobs: {
+          total_count: 1,
           jobs: [
             {
               conclusion: "cancelled",
@@ -264,8 +419,10 @@ describe("API deployment health receipt", () => {
         history: ["success"],
         jobs,
         annotations,
+        newer: [sameWork()],
       });
       expect(outage.send, label).toBe(true);
+      expect(outage.readsNewer, label).toBe(false);
       expect(outage.readsHistory, label).toBe(true);
     }
     // An unverified cancel during a continuing outage stays suppressed.
@@ -276,6 +433,36 @@ describe("API deployment health receipt", () => {
       annotations: "[]",
     });
     expect(continuing.send).toBe(false);
+  });
+
+  test("a failed decision step still sends", async () => {
+    const workflow: unknown = await alertWorkflow();
+    const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+    const notify = isRecord(jobs) ? jobs["notify"] : undefined;
+    const steps = isRecord(notify) ? notify["steps"] : undefined;
+    const send: unknown = Array.isArray(steps)
+      ? steps.find(
+          (step: unknown) =>
+            isRecord(step) && step["name"] === "Send failure alert",
+        )
+      : undefined;
+    const condition = isRecord(send) ? send["if"] : undefined;
+    if (typeof condition !== "string") {
+      return expect.unreachable("alerts require a send condition");
+    }
+    const sends = (decision: string, failed: boolean) =>
+      evaluate(condition, {
+        values: {
+          "github.event_name": "workflow_run",
+          "steps.outage.outputs.send": decision,
+        },
+        status: { always: true, cancelled: false, failure: failed },
+      });
+    expect(sends("", true)).toBe(true);
+    expect(sends("false", true)).toBe(true);
+    expect(sends("true", false)).toBe(true);
+    expect(sends("false", false)).toBe(false);
+    expect(sends("", false)).toBe(false);
   });
 
   test("every variable an alert step reads is bound, manual runs included", async () => {

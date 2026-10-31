@@ -339,6 +339,59 @@ const workflowOn = (file: string, workflow: unknown) => {
   return workflow["on"];
 };
 
+// GitHub branch filters: `**` also matches `/`, `*` does not. Any other
+// pattern syntax is refused here, so a new kind cannot pass unevaluated.
+const branchFilterMatches = (pattern: string, branch: string) => {
+  if (/[?+[\]!]/u.test(pattern)) {
+    expect.unreachable(`unsupported branch filter pattern: ${pattern}`);
+  }
+  const source = pattern
+    .split("**")
+    .map((part) =>
+      part
+        .split("*")
+        .map((literal) => literal.replaceAll(/[.^${}()|\\]/gu, "\\$&"))
+        .join("[^/]*"),
+    )
+    .join(".*");
+  return new RegExp(`^${source}$`, "u").test(branch);
+};
+
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+// Tags the release chain pushes, in both shapes release.yml publishes.
+const RELEASE_TAG_SAMPLES = ["v1.2.3", "v1.2.3-rc.1"];
+
+/**
+ * The head_branch a run of this trigger reports: the pushed tag for a tag
+ * push, the pushed branch for a branch push, and main for dispatched,
+ * scheduled and workflow_run runs, which start from the default branch.
+ */
+const headBranches = (file: string, on: unknown, event: string): string[] => {
+  const push = isRecord(on) ? on["push"] : undefined;
+  if (event !== "push" || !isRecord(push)) {
+    return ["main"];
+  }
+  const tags = stringList(push["tags"]).flatMap((pattern) => {
+    const samples = RELEASE_TAG_SAMPLES.filter((tag) =>
+      branchFilterMatches(pattern, tag),
+    );
+    expect(samples, `${file}: tag pattern ${pattern}`).not.toEqual([]);
+    return samples;
+  });
+  const branches = stringList(push["branches"]);
+  return [
+    ...(branches.length > 0 || tags.length > 0 ? branches : ["main"]),
+    ...tags,
+  ];
+};
+
+const branchFilterCovers = (filter: unknown, branch: string) =>
+  stringList(filter).some((pattern) => branchFilterMatches(pattern, branch));
+
 const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
   const alerting = workflows.find(
     ({ file }) => file === "scheduled-run-alerts.yml",
@@ -357,6 +410,7 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
     expect.unreachable("scheduled run alerts require a notify job");
   }
   const alertedNames: unknown[] = workflowRun["workflows"];
+  const branchFilter = workflowRun["branches"];
   const condition = conditionOf(jobs["notify"]);
   // GitHub starts the alert run for a listed workflow name; the notify
   // condition must then let a failed run of that file and event through.
@@ -365,15 +419,19 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
     workflow: unknown;
     event: string;
     conclusion?: string;
+    // GitHub starts the alert run only for a head_branch its filter matches.
+    headBranch?: string;
   };
   const alerts = ({
     file,
     workflow,
     event,
     conclusion = "failure",
+    headBranch = "main",
   }: FailedRunAlertOptions) =>
     isRecord(workflow) &&
     alertedNames.includes(workflow["name"]) &&
+    branchFilterCovers(branchFilter, headBranch) &&
     !definitelyFalse(condition, {
       values: {
         "github.event_name": "workflow_run",
@@ -390,7 +448,7 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
         cancelled: false,
       },
     });
-  return { alerts, condition, notify: jobs["notify"] };
+  return { alerts, branchFilter, condition, notify: jobs["notify"] };
 };
 
 const GATE = [
@@ -421,7 +479,7 @@ describe("workflow_run trust", () => {
       return workflow["on"]["workflow_run"];
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
-      branches: ["main"],
+      branches: ["main", "v*"],
       types: ["completed"],
     });
     expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
@@ -440,12 +498,28 @@ describe("workflow_run trust", () => {
     );
 
     for (const { file, workflow } of releaseChain) {
-      for (const event of triggers(workflowOn(file, workflow))) {
-        expect(
-          alerting.alerts({ file, workflow, event }),
-          `${file}: ${event}`,
-        ).toBe(true);
+      const on = workflowOn(file, workflow);
+      for (const event of triggers(on)) {
+        for (const headBranch of headBranches(file, on, event)) {
+          expect(
+            alerting.alerts({ file, workflow, event, headBranch }),
+            `${file}: ${event} on ${headBranch}`,
+          ).toBe(true);
+        }
       }
+    }
+    // A tag-push release run reports its tag as head_branch, so a filter
+    // naming only main never starts an alert run for it.
+    const release = releaseChain.find(({ file }) => file === "release.yml");
+    const tagBranches = headBranches(
+      "release.yml",
+      workflowOn("release.yml", release?.workflow),
+      "push",
+    );
+    expect(tagBranches).toEqual(RELEASE_TAG_SAMPLES);
+    for (const tag of tagBranches) {
+      expect(branchFilterCovers(["main"], tag), tag).toBe(false);
+      expect(branchFilterCovers(alerting.branchFilter, tag), tag).toBe(true);
     }
   });
 
@@ -1320,6 +1394,20 @@ describe("desktop recovery", () => {
           }
         }
       }
+    }
+  });
+
+  test("completion gate fails when it cannot read the job results", () => {
+    for (const needs of ["", "{", "[]", '"success"']) {
+      const run = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          stepRun("release-complete", "Require all release jobs to complete"),
+        ],
+        { env: { ...process.env, NEEDS: needs } },
+      );
+      expect(run.exitCode, JSON.stringify(needs)).not.toBe(0);
     }
   });
 
