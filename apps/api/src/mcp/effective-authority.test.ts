@@ -91,6 +91,7 @@ describe("the context a capability handler receives", () => {
     credentialPermissions: AuthorizedMcpRequestContext["credentialPermissions"],
   ) =>
     await capabilityHandlerContext({
+      idempotency: undefined,
       capabilityId: "views.create",
       context: contextWith(credentialPermissions),
       input: { body: {}, params: {}, query: {} },

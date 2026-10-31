@@ -261,6 +261,16 @@ const PUBLISHED_CASE_LAW_DECISION_INDEX_DEFINITION =
 
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
+    name: "account_audit_logs_user_event_idx",
+    introducedBy: "20261031080000_organization_created_audit_event",
+    tableName: "account_audit_logs",
+    isUnique: false,
+    createSql:
+      'CREATE INDEX CONCURRENTLY "account_audit_logs_user_event_idx" ON public.account_audit_logs (user_id, event_type)',
+    definitionBody:
+      "ON public.account_audit_logs USING btree (user_id, event_type)",
+  },
+  {
     name: "chat_run_log_entries_message_snapshot_idx",
     introducedBy: { type: "code", owner: "src/db/online-migrations.ts" },
     tableName: "chat_run_log_entries",

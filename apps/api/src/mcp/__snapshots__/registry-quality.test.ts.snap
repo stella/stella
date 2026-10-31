@@ -5844,47 +5844,47 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -5898,13 +5898,13 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -5915,11 +5915,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -5953,32 +5953,32 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -5994,7 +5994,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor from list_audit_log"
         }
       }
     }
@@ -6173,6 +6173,50 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             }
           ],
           "description": "IANA zone; null follows the primary practice jurisdiction"
+        }
+      }
+    }
+  },
+  {
+    "name": "create_organization",
+    "scope": "stella:organization_create",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Create organization changes state or starts stateful work.",
+      "destructiveHint": "Create organization is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Create organization is confined to the private workspace or a bounded computation."
+    },
+    "description": "Create an organization you own after human approval (confirm: true). Each account receives at most 3 evaluation periods over its lifetime; deletion does not restore one. organization_evaluation_limit_reached refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.",
+    "annotations": {
+      "title": "Create organization",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 50,
+          "description": "Name of the new organization."
+        },
+        "slug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Optional URL slug. Omit to generate an opaque organization address."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
         }
       }
     }
@@ -12529,47 +12573,47 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -12583,13 +12627,13 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -12600,11 +12644,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }
@@ -12638,32 +12682,32 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "action": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries with this audit action"
+          "description": "Audit action"
         },
         "resource_type": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource type"
+          "description": "Resource type"
         },
         "resource_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries about this resource id; requires resource_type"
+          "description": "Resource id; requires resource_type"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "Only entries whose actor is this user"
+          "description": "Actor user id"
         },
         "from": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or after this ISO date-time, or from the start of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or after this ISO date-time or YYYY-MM-DD start (UTC)"
         },
         "to": {
           "type": "string",
           "maxLength": 40,
-          "description": "Only entries created on or before this ISO date-time, or up to the end of this YYYY-MM-DD date (UTC)"
+          "description": "Created at or before this ISO date-time or YYYY-MM-DD end (UTC)"
         },
         "limit": {
           "type": "integer",
@@ -12679,7 +12723,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 512,
-          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page"
+          "description": "Next-page cursor from list_audit_log"
         }
       }
     }
@@ -16205,47 +16249,47 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Free-text search over consolidated legislation"
+          "description": "Consolidated legislation full-text query"
         },
         "title": {
           "type": "string",
           "minLength": 1,
           "maxLength": 256,
-          "description": "Filter search results by title text"
+          "description": "Title text"
         },
         "department_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by department code"
+          "description": "Department code"
         },
         "legal_range_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by legal-range code (law rank)"
+          "description": "Legal-range code (law rank)"
         },
         "matter_code": {
           "type": "string",
           "minLength": 1,
           "maxLength": 32,
-          "description": "Filter search results by subject-matter code"
+          "description": "Subject-matter code"
         },
         "date_from": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or after this date (YYYYMMDD)"
+          "description": "Published on or after YYYYMMDD"
         },
         "date_to": {
           "type": "string",
           "maxLength": 8,
-          "description": "Only laws published on or before this date (YYYYMMDD)"
+          "description": "Published on or before YYYYMMDD"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
           "maximum": 100,
-          "description": "Max search results to return. Use a JSON number; a value outside the range is clamped to it.",
+          "description": "Result limit. Use a JSON number; a value outside the range is clamped to it.",
           "x-stella-agent-input": {
             "kind": "number",
             "range": "clamp"
@@ -16259,13 +16303,13 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "law_id": {
           "type": "string",
-          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+          "description": "BOE law id (e.g. BOE-A-1889-4763); omit to search"
         },
         "block_id": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "With law_id, return this text block's content instead of the whole law"
+          "description": "With law_id: read this block instead of the law"
         },
         "relation_type": {
           "enum": [
@@ -16276,11 +16320,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "all"
           ],
           "type": "string",
-          "description": "With law_id, list related laws of this relation kind instead of the law body"
+          "description": "With law_id: list this relation kind instead of the law"
         },
         "full_text": {
           "type": "boolean",
-          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+          "description": "With law_id only: include consolidated full text"
         }
       }
     }

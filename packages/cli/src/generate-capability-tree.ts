@@ -68,6 +68,7 @@ export type CapabilityCatalogEntry = {
   destructive: boolean;
   confirmation?: "required";
   scope: string;
+  accountScope?: string;
   additionalScopes?: readonly string[];
   /** API-owned finite transport deadline for this generated capability command. */
   requestTimeoutMs?: number;
