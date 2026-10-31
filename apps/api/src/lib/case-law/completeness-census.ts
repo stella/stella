@@ -139,7 +139,18 @@ export const readCompletenessCensusQuery = async (
   const scopes = new Map(sources.map(({ id, scope }) => [String(id), scope]));
   const [first, ...remainingSources] = sources.map(({ id, scope }) =>
     tx
-      .select()
+      .select({
+        sourceId: censusTable.sourceId,
+        slice: censusTable.slice,
+        year: censusTable.year,
+        outcome: censusTable.outcome,
+        scopeExtent: censusTable.scopeExtent,
+        publisherCount: censusTable.publisherCount,
+        storedCount: censusTable.storedCount,
+        textCount: censusTable.textCount,
+        observedAt: censusTable.observedAt,
+        evidenceRef: censusTable.evidenceRef,
+      })
       .from(censusTable)
       .where(
         scope === null
