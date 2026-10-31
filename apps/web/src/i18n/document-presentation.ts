@@ -53,7 +53,5 @@ export const loadDocumentPresentation = createIsomorphicFn()
   .client(loadClientDocumentPresentation)
   .server(
     async () =>
-      await loadServerDocumentPresentation(
-        await readRequestPresentationPrefs(),
-      ),
+      await loadServerDocumentPresentation(readRequestPresentationPrefs()),
   );
