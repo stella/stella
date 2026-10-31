@@ -162,7 +162,16 @@
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "unrendered": "Šo dokumentu šeit nevar parādīt, taču sistēmas priekšskatījums, iespējams, to atvērs.",
-    "details": "Detalizēta informācija"
+    "details": "Detalizēta informācija",
+    "zoomOut": "Tālināt",
+    "zoomIn": "Tuvināt",
+    "zoomFit": "Pielāgot platumam",
+    "fit": "Platums",
+    "appearance": {
+      "system": "Izskats: automātisks",
+      "light": "Izskats: gaišs",
+      "dark": "Izskats: tumšs"
+    }
   },
   "signIn": {
     "beta": "Beta",

@@ -162,7 +162,16 @@
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
-    "details": "Detalles"
+    "details": "Detalles",
+    "zoomOut": "Alejar",
+    "zoomIn": "Acercar",
+    "zoomFit": "Ajustar al ancho",
+    "fit": "Ancho",
+    "appearance": {
+      "system": "Apariencia: automática",
+      "light": "Apariencia: clara",
+      "dark": "Apariencia: oscura"
+    }
   },
   "signIn": {
     "beta": "Beta",

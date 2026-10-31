@@ -162,7 +162,16 @@
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "unrendered": "Tento dokument zde nelze zobrazit, systémový náhled ho ale možná otevře.",
-    "details": "Podrobnosti"
+    "details": "Podrobnosti",
+    "zoomOut": "Oddálit",
+    "zoomIn": "Přiblížit",
+    "zoomFit": "Přizpůsobit šířce",
+    "fit": "Šířka",
+    "appearance": {
+      "system": "Vzhled: automaticky",
+      "light": "Vzhled: světlý",
+      "dark": "Vzhled: tmavý"
+    }
   },
   "signIn": {
     "beta": "Beta",

@@ -4,7 +4,14 @@
 // needs (`Map.prototype.getOrInsertComputed` and others the modern build
 // assumes).
 import "pdfjs-dist/legacy/build/pdf.worker.mjs";
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { Result } from "better-result";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
@@ -12,6 +19,8 @@ import type {
   PDFDocumentProxy,
   RenderTask,
 } from "pdfjs-dist/legacy/build/pdf.mjs";
+
+import { canvasScale, scaledScroll } from "./zoom";
 
 /** The canvas showing between pages and around them, as on the web. */
 const PAGE_GAP = 12;
@@ -28,16 +37,25 @@ const pageRatio = async (
   return viewport.height / viewport.width;
 };
 
-/** A PDF drawn by pdf.js, each page when it nears the screen. */
+/**
+ * A PDF drawn by pdf.js, each page when it nears the screen, `zoom` times
+ * the screen's width.
+ */
 export const PdfPages = ({
   bytes,
+  clearance,
   invert,
+  zoom,
   onReady,
   onFailed,
 }: {
   bytes: Uint8Array;
+  /** Room under the last page, in CSS pixels, for what the app floats there. */
+  clearance: number;
   /** Draw the pages inverted, as the web does in dark mode. */
   invert: boolean;
+  /** The pages' width as a factor of the screen's (see ./zoom.ts). */
+  zoom: number;
   onReady: () => void;
   onFailed: (message: string) => void;
 }) => {
@@ -134,17 +152,50 @@ export const PdfPages = ({
     };
   }, [pdf]);
 
+  // A new zoom keeps the point at the middle of the screen where it was.
+  const scrolling = useRef<HTMLDivElement | null>(null);
+  const shownZoom = useRef(zoom);
+  useLayoutEffect(() => {
+    const ratio = zoom / shownZoom.current;
+    shownZoom.current = zoom;
+    const box = scrolling.current;
+    if (box === null || ratio === 1) {
+      return;
+    }
+    box.scrollTop = scaledScroll({
+      offset: box.scrollTop,
+      viewport: box.clientHeight,
+      ratio,
+      lead: PAGE_GAP,
+    });
+    box.scrollLeft = scaledScroll({
+      offset: box.scrollLeft,
+      viewport: box.clientWidth,
+      ratio,
+      lead: PAGE_GAP,
+    });
+  }, [zoom]);
+  const holdScroller = useCallback((node: HTMLDivElement | null) => {
+    scrolling.current = node;
+    setScroller(node);
+  }, []);
+
   if (pdf === null || layout === null) {
     return null;
   }
   return (
     <div
-      ref={setScroller}
-      style={{ height: "100%", overflowY: "auto", padding: PAGE_GAP }}
+      ref={holdScroller}
+      style={{
+        height: "100%",
+        overflow: "auto",
+        padding: PAGE_GAP,
+        paddingBottom: PAGE_GAP + clearance,
+      }}
     >
       {layout.ratios.map((ratio, index) => (
         <PdfPage
-          height={ratio * layout.width}
+          height={ratio * layout.width * zoom}
           invert={invert}
           // Pages never reorder; the number is the page's identity.
           key={`page-${String(index + 1)}`}
@@ -153,7 +204,7 @@ export const PdfPages = ({
           onPainted={pagePainted}
           pdf={pdf}
           scroller={scroller}
-          width={layout.width}
+          width={layout.width * zoom}
         />
       ))}
     </div>
@@ -200,7 +251,12 @@ const PdfPage = ({
       }
       const base = page.getViewport({ scale: 1 });
       const viewport = page.getViewport({
-        scale: (width / base.width) * window.devicePixelRatio,
+        scale: canvasScale({
+          cssWidth: width,
+          pageWidth: base.width,
+          pageHeight: base.height,
+          pixelRatio: window.devicePixelRatio,
+        }),
       });
       element.width = Math.floor(viewport.width);
       element.height = Math.floor(viewport.height);
@@ -266,7 +322,8 @@ const PdfPage = ({
         display: "block",
         filter: invert ? DARK_PAGE_FILTER : "none",
         height,
-        marginBottom: PAGE_GAP,
+        // A page narrower than the screen sits in its middle.
+        margin: `0 auto ${String(PAGE_GAP)}px`,
         width,
       }}
     />

@@ -162,7 +162,16 @@
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
-    "details": "Details"
+    "details": "Details",
+    "zoomOut": "Verkleinern",
+    "zoomIn": "Vergrößern",
+    "zoomFit": "An Breite anpassen",
+    "fit": "Breite",
+    "appearance": {
+      "system": "Darstellung: automatisch",
+      "light": "Darstellung: hell",
+      "dark": "Darstellung: dunkel"
+    }
   },
   "signIn": {
     "beta": "Beta",
