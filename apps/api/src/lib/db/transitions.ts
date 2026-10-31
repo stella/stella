@@ -20,6 +20,7 @@ import type {
 } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { isOwnKey } from "@stll/api-contract/own-key";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
@@ -38,6 +39,11 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { AcquiredInvoiceMatterLocks } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
+
+import {
+  isMigrateReady,
+  ONLINE_WORK_LIFECYCLE,
+} from "../../db/online-work-lifecycle";
 
 const TRANSITION_INSERT_BATCH_SIZE = 128;
 
@@ -147,7 +153,7 @@ export const defineScopedTransitions = <
         keyColumns.some((candidate) => candidate?.name === column.name),
       ),
   );
-  const indexIdentityCovered = tableConfig.indexes.some(
+  const identityIndexes = tableConfig.indexes.filter(
     ({ config }) =>
       config.unique &&
       config.where === undefined &&
@@ -158,6 +164,23 @@ export const defineScopedTransitions = <
           keyColumns.some((candidate) => candidate?.name === column.name),
       ),
   );
+  const indexIdentityCovered = identityIndexes.length > 0;
+  // The scoped upsert names this identity as its ON CONFLICT arbiter, so an
+  // index only the post-deploy runner builds cannot be it.
+  const isPendingOnlineWork = (name: string | undefined) =>
+    name !== undefined &&
+    isOwnKey(ONLINE_WORK_LIFECYCLE, name) &&
+    !isMigrateReady(ONLINE_WORK_LIFECYCLE[name]);
+  if (
+    indexIdentityCovered &&
+    identityIndexes.every(({ config }) => isPendingOnlineWork(config.name)) &&
+    !constraintIdentityCovered &&
+    !(scope.length === 0 && (keyColumn.primary || keyColumn.isUnique))
+  ) {
+    panic(
+      `A scoped transition identity rests on pending online work (${identityIndexes.map(({ config }) => config.name).join(", ")}); register it DEPLOY_BLOCKING`,
+    );
+  }
   if (
     new Set(keyNames).size !== keyNames.length ||
     keyColumns.some((column) => column === undefined || !column.notNull) ||
