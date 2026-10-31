@@ -14,12 +14,8 @@ import {
   type StringLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree";
-import {
-  type DatedWaiver,
-  DOC_SOURCE_FILE,
-  type ProbeKind,
-  ZERO_AGE_OVERRIDE,
-} from "./dated-waivers";
+import { DOC_SOURCE_FILE, ZERO_AGE_OVERRIDE } from "./dated-waiver-core";
+import type { DatedWaiver, ProbeKind } from "./dated-waivers";
 import {
   parseRegistry,
   serializeRegistry,
@@ -97,6 +93,7 @@ const unwrap = (node: Expression): Expression => {
 export type DocumentationSite = {
   dependency: string;
   node: Node;
+  declaration: Node;
   checkedAt: StringLiteral | undefined;
   expiresAt: StringLiteral | undefined;
 };
@@ -206,7 +203,12 @@ export const readDocumentationOwner = (source: string): DocumentationOwner => {
       if (!item || name?.type !== "Literal" || typeof name.value !== "string") {
         return panic("Documentation waiver map item has no dependency name");
       }
-      return { dependency: name.value, node: item, ...dateSlots(object) };
+      return {
+        dependency: name.value,
+        node: item,
+        declaration: fn,
+        ...dateSlots(object),
+      };
     });
   };
   const collect = (node: Expression): DocumentationSite[] => {
@@ -220,7 +222,12 @@ export const readDocumentationOwner = (source: string): DocumentationOwner => {
         return panic("Documentation waiver object has no literal dependency");
       }
       return [
-        { dependency: dependency.value, node: value, ...dateSlots(value) },
+        {
+          dependency: dependency.value,
+          node: value,
+          declaration: value,
+          ...dateSlots(value),
+        },
       ];
     }
     if (value.type === "ArrayExpression") {
@@ -291,8 +298,11 @@ const removeDocumentation = (source: string, entry: DatedWaiver): string => {
 const baselineSchema = v.looseObject({
   accepted: v.array(v.looseObject({ id: v.string() })),
 });
+export const readAuditAcceptanceOwner = (source: string) =>
+  v.parse(baselineSchema, JSON.parse(source));
+
 const removeAcceptance = (source: string, entry: DatedWaiver): string => {
-  const baseline = v.parse(baselineSchema, JSON.parse(source));
+  const baseline = readAuditAcceptanceOwner(source);
   if (baseline.accepted.filter(({ id }) => id === entry.id).length !== 1) {
     panic(`Audit acceptance anchor is not unique: ${entry.id}`);
   }
