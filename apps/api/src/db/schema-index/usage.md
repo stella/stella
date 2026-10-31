@@ -4,221 +4,222 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## usage_policies · `usagePolicies` · usage.ts:120 · rls
+## usage_policies · `usagePolicies` · usage.ts:121 · rls
 
 ```text
-usage_policies.id                            pUuid        pk,not null       usage.ts:123
-usage_policies.policy_key                    varchar      not null          usage.ts:124
-usage_policies.display_name                  varchar      not null          usage.ts:125
-usage_policies.description                   text         null              usage.ts:126
-usage_policies.kind                          text         default,not null  usage.ts:127
-usage_policies.monthly_usage_units           integer      not null          usage.ts:131
-usage_policies.hosted_policy_ref             text         null              usage.ts:132
-usage_policies.price_amount_cents            integer      null              usage.ts:135  Catalog display data is deployment-owned (seeded from operator config), so public source carries the mechanism, not a price list.
-usage_policies.price_currency                varchar      null              usage.ts:136
-usage_policies.billing_interval              text         null              usage.ts:137
-usage_policies.price_basis                   text         default,not null  usage.ts:140
-usage_policies.daily_allowance_micro_units   integer      null              usage.ts:147  Per-seat budget sizes in micro-units, operator-seeded like the price fields.
-usage_policies.fallback_weekly_micro_units   integer      null              usage.ts:148
-usage_policies.storage_bytes_per_assignment  bigint       null              usage.ts:149
-usage_policies.max_members                   integer      null              usage.ts:156  Operator-seeded member bound, read through the `organization_member_capacity` database function together with the seat count of a per-seat policy.
-usage_policies.service_actions_per_period    integer      null              usage.ts:157
-usage_policies.visibility                    text         default,not null  usage.ts:160  Hidden by default: a seeded policy only appears in the catalog endpoint once the operator explicitly marks it public.
-usage_policies.sort_order                    integer      default,not null  usage.ts:164
-usage_policies.active                        boolean      default,not null  usage.ts:165
-usage_policies.created_at                    timestamptz  default,not null  usage.ts:166
+usage_policies.id                            pUuid        pk,not null       usage.ts:124
+usage_policies.policy_key                    varchar      not null          usage.ts:125
+usage_policies.display_name                  varchar      not null          usage.ts:126
+usage_policies.description                   text         null              usage.ts:127
+usage_policies.kind                          text         default,not null  usage.ts:128
+usage_policies.monthly_usage_units           integer      not null          usage.ts:132
+usage_policies.hosted_policy_ref             text         null              usage.ts:133
+usage_policies.price_amount_cents            integer      null              usage.ts:136  Catalog display data is deployment-owned (seeded from operator config), so public source carries the mechanism, not a price list.
+usage_policies.price_currency                varchar      null              usage.ts:137
+usage_policies.billing_interval              text         null              usage.ts:138
+usage_policies.price_basis                   text         default,not null  usage.ts:141
+usage_policies.daily_allowance_micro_units   integer      null              usage.ts:148  Per-seat budget sizes in micro-units, operator-seeded like the price fields.
+usage_policies.fallback_weekly_micro_units   integer      null              usage.ts:149
+usage_policies.storage_bytes_per_assignment  bigint       null              usage.ts:150
+usage_policies.max_members                   integer      null              usage.ts:157  Operator-seeded member bound, read through the `organization_member_capacity` database function together with the seat count of a per-seat policy.
+usage_policies.service_actions_per_period    integer      null              usage.ts:158
+usage_policies.visibility                    text         default,not null  usage.ts:161  Hidden by default: a seeded policy only appears in the catalog endpoint once the operator explicitly marks it public.
+usage_policies.sort_order                    integer      default,not null  usage.ts:165
+usage_policies.active                        boolean      default,not null  usage.ts:166
+usage_policies.created_at                    timestamptz  default,not null  usage.ts:167
 ```
 
-## usage_entitlements · `usageEntitlements` · usage.ts:254 · rls
+## usage_entitlements · `usageEntitlements` · usage.ts:255 · rls
 
 ```text
-usage_entitlements.id                              pUuid               pk,not null       usage.ts:257
-usage_entitlements.organization_id                 safeOrganizationId  fk,not null       usage.ts:258
-usage_entitlements.usage_policy_id                 safeUuid            fk,not null       usage.ts:261
-usage_entitlements.status                          text                not null          usage.ts:264
-usage_entitlements.seats                           integer             not null          usage.ts:265
-usage_entitlements.hosted_peak_seats               integer             null              usage.ts:274  Highest seat count applied inside the current period, maintained by the hosted webhook dispatcher and reset on period rollover.
-usage_entitlements.current_period_start            timestamptz         not null          usage.ts:275
-usage_entitlements.current_period_end              timestamptz         not null          usage.ts:276
-usage_entitlements.hosted_account_ref              text                null              usage.ts:277
-usage_entitlements.hosted_entitlement_external_id  text                null              usage.ts:278
-usage_entitlements.hosted_last_event_at            timestamptz         null              usage.ts:287  Provider-reported occurrence time of the last applied lifecycle event.
-usage_entitlements.hosted_entitlement_created_at   timestamptz         null              usage.ts:289  Provider creation time identifies the current external generation.
-usage_entitlements.cancel_at_period_end            boolean             default,not null  usage.ts:296  True when hosted access is scheduled to end but remains usable until `current_period_end`.
-usage_entitlements.source                          text                not null          usage.ts:300
-usage_entitlements.created_at                      timestamptz         default,not null  usage.ts:301
-usage_entitlements.updated_at                      timestamptz         default,not null  usage.ts:302
+usage_entitlements.id                              pUuid               pk,not null       usage.ts:258
+usage_entitlements.organization_id                 safeOrganizationId  fk,not null       usage.ts:259
+usage_entitlements.usage_policy_id                 safeUuid            fk,not null       usage.ts:262
+usage_entitlements.status                          text                not null          usage.ts:265
+usage_entitlements.seats                           integer             not null          usage.ts:266
+usage_entitlements.hosted_peak_seats               integer             null              usage.ts:275  Highest seat count applied inside the current period, maintained by the hosted webhook dispatcher and reset on period rollover.
+usage_entitlements.current_period_start            timestamptz         not null          usage.ts:276
+usage_entitlements.current_period_end              timestamptz         not null          usage.ts:277
+usage_entitlements.hosted_account_ref              text                null              usage.ts:278
+usage_entitlements.hosted_entitlement_external_id  text                null              usage.ts:279
+usage_entitlements.hosted_last_event_at            timestamptz         null              usage.ts:288  Provider-reported occurrence time of the last applied lifecycle event.
+usage_entitlements.hosted_entitlement_created_at   timestamptz         null              usage.ts:290  Provider creation time identifies the current external generation.
+usage_entitlements.cancel_at_period_end            boolean             default,not null  usage.ts:297  True when hosted access is scheduled to end but remains usable until `current_period_end`.
+usage_entitlements.source                          text                not null          usage.ts:301
+usage_entitlements.created_at                      timestamptz         default,not null  usage.ts:302
+usage_entitlements.updated_at                      timestamptz         default,not null  usage.ts:303
 ```
 
-## hosted_checkout_claims · `hostedCheckoutClaims` · usage.ts:374 · rls
+## hosted_checkout_claims · `hostedCheckoutClaims` · usage.ts:375 · rls
 
 The organization's open hosted subscription checkout, at most one.
 
 ```text
-hosted_checkout_claims.organization_id      safeOrganizationId  pk,fk,not null    usage.ts:377
-hosted_checkout_claims.claim_id             safeUuid            not null          usage.ts:381  Identifies one start, so a stale request releases only its own claim.
-hosted_checkout_claims.hosted_session_id    text                null              usage.ts:382
-hosted_checkout_claims.hosted_checkout_url  text                null              usage.ts:388  The provider page for the created session.
-hosted_checkout_claims.usage_policy_id      safeUuid            null              usage.ts:390  The requested policy and seat count; a matching start reuses the session.
-hosted_checkout_claims.seats                integer             null              usage.ts:391
-hosted_checkout_claims.expires_at           timestamptz         not null          usage.ts:392
-hosted_checkout_claims.created_at           timestamptz         default,not null  usage.ts:393
+hosted_checkout_claims.organization_id      safeOrganizationId  pk,fk,not null    usage.ts:378
+hosted_checkout_claims.claim_id             safeUuid            not null          usage.ts:382  Identifies one start, so a stale request releases only its own claim.
+hosted_checkout_claims.hosted_session_id    text                null              usage.ts:383
+hosted_checkout_claims.hosted_checkout_url  text                null              usage.ts:389  The provider page for the created session.
+hosted_checkout_claims.usage_policy_id      safeUuid            null              usage.ts:391  The requested policy and seat count; a matching start reuses the session.
+hosted_checkout_claims.seats                integer             null              usage.ts:392
+hosted_checkout_claims.expires_at           timestamptz         not null          usage.ts:393
+hosted_checkout_claims.created_at           timestamptz         default,not null  usage.ts:394
 ```
 
-## organization_access_states · `organizationAccessStates` · usage.ts:467 · rls
+## organization_access_states · `organizationAccessStates` · usage.ts:468 · rls
 
 ```text
-organization_access_states.organization_id        safeOrganizationId  pk,fk,not null    usage.ts:470
-organization_access_states.state                  text                not null          usage.ts:473
-organization_access_states.origin                 text                default,not null  usage.ts:474
-organization_access_states.evaluation_started_at  timestamptz         null              usage.ts:478
-organization_access_states.evaluation_ends_at     timestamptz         null              usage.ts:479
-organization_access_states.evaluation_ended_at    timestamptz         null              usage.ts:480
-organization_access_states.created_at             timestamptz         default,not null  usage.ts:481
-organization_access_states.updated_at             timestamptz         default,not null  usage.ts:482
+organization_access_states.organization_id        safeOrganizationId  pk,fk,not null    usage.ts:471
+organization_access_states.state                  text                not null          usage.ts:474
+organization_access_states.origin                 text                default,not null  usage.ts:475
+organization_access_states.evaluation_started_at  timestamptz         null              usage.ts:479
+organization_access_states.evaluation_ends_at     timestamptz         null              usage.ts:480
+organization_access_states.evaluation_ended_at    timestamptz         null              usage.ts:481
+organization_access_states.created_at             timestamptz         default,not null  usage.ts:482
+organization_access_states.updated_at             timestamptz         default,not null  usage.ts:483
 ```
 
-## organization_configured_access · `organizationConfiguredAccess` · usage.ts:546 · rls
+## organization_configured_access · `organizationConfiguredAccess` · usage.ts:547 · rls
 
 Separate from the original standing: feature disablement and older builds read organization_access_states without observing or rewriting this overlay.
 
 ```text
-organization_configured_access.organization_id                 safeOrganizationId  pk,fk,not null    usage.ts:549
-organization_configured_access.source_signature                text                not null          usage.ts:550
-organization_configured_access.source_event_at                 timestamptz         null              usage.ts:551
-organization_configured_access.source_entitlement_external_id  text                not null          usage.ts:552
-organization_configured_access.source_entitlement_created_at   timestamptz         null              usage.ts:555
-organization_configured_access.source_entitlement_status       text                not null          usage.ts:556
-organization_configured_access.source_cancel_at_period_end     boolean             not null          usage.ts:559
-organization_configured_access.configured_access_status        text                not null          usage.ts:560
-organization_configured_access.configured_period_ends_at       timestamptz         null              usage.ts:563
-organization_configured_access.payment_retry_ends_at           timestamptz         null              usage.ts:564
-organization_configured_access.service_actions_per_period      integer             null              usage.ts:565
-organization_configured_access.updated_at                      timestamptz         default,not null  usage.ts:566
+organization_configured_access.organization_id                 safeOrganizationId  pk,fk,not null    usage.ts:550
+organization_configured_access.source_signature                text                not null          usage.ts:551
+organization_configured_access.source_event_at                 timestamptz         null              usage.ts:552
+organization_configured_access.source_entitlement_external_id  text                not null          usage.ts:553
+organization_configured_access.source_entitlement_created_at   timestamptz         null              usage.ts:556
+organization_configured_access.source_entitlement_status       text                not null          usage.ts:557
+organization_configured_access.source_cancel_at_period_end     boolean             not null          usage.ts:560
+organization_configured_access.configured_access_status        text                not null          usage.ts:561
+organization_configured_access.configured_period_ends_at       timestamptz         null              usage.ts:564
+organization_configured_access.payment_retry_ends_at           timestamptz         null              usage.ts:565
+organization_configured_access.service_actions_per_period      integer             null              usage.ts:566
+organization_configured_access.updated_at                      timestamptz         default,not null  usage.ts:567
 ```
 
-## usage_allocations · `usageAllocations` · usage.ts:605 · rls
+## usage_allocations · `usageAllocations` · usage.ts:606 · rls
 
 ```text
-usage_allocations.id                    pUuid               pk,not null       usage.ts:608
-usage_allocations.organization_id       safeOrganizationId  fk,not null       usage.ts:609
-usage_allocations.period_start          timestamptz         not null          usage.ts:612
-usage_allocations.period_end            timestamptz         not null          usage.ts:613
-usage_allocations.units                 integer             not null          usage.ts:614
-usage_allocations.reason                text                not null          usage.ts:615
-usage_allocations.source_type           text                not null          usage.ts:616
-usage_allocations.source_ref            text                null              usage.ts:619
-usage_allocations.seat_scope_user_id    text                null              usage.ts:626  For allocations attached to a specific initiating seat, this records that user's id for future per-seat attribution.
-usage_allocations.allocated_by_user_id  text                fk,null           usage.ts:627
-usage_allocations.created_at            timestamptz         default,not null  usage.ts:630
+usage_allocations.id                    pUuid               pk,not null       usage.ts:609
+usage_allocations.organization_id       safeOrganizationId  fk,not null       usage.ts:610
+usage_allocations.period_start          timestamptz         not null          usage.ts:613
+usage_allocations.period_end            timestamptz         not null          usage.ts:614
+usage_allocations.units                 integer             not null          usage.ts:615
+usage_allocations.reason                text                not null          usage.ts:616
+usage_allocations.source_type           text                not null          usage.ts:617
+usage_allocations.source_ref            text                null              usage.ts:620
+usage_allocations.seat_scope_user_id    text                null              usage.ts:627  For allocations attached to a specific initiating seat, this records that user's id for future per-seat attribution.
+usage_allocations.allocated_by_user_id  text                fk,null           usage.ts:628
+usage_allocations.created_at            timestamptz         default,not null  usage.ts:631
 ```
 
-## account_deletion_requests · `accountDeletionRequests` · usage.ts:673 · rls
+## account_deletion_requests · `accountDeletionRequests` · usage.ts:674 · rls
 
 ```text
-account_deletion_requests.id                       pUuid               pk,not null             usage.ts:676
-account_deletion_requests.user_id                  text                fk,not null             usage.ts:677
-account_deletion_requests.organization_ids         safeOrganizationId  array,default,not null  usage.ts:681
-account_deletion_requests.workspace_ids            safeWorkspaceId     array,default,not null  usage.ts:685
-account_deletion_requests.task_reassignment_count  integer             default,not null        usage.ts:689
-account_deletion_requests.status                   varchar             default,not null        usage.ts:693
-account_deletion_requests.storage_cleanup          jsonb               not null                usage.ts:698
-account_deletion_requests.attempt_count            integer             default,not null        usage.ts:701
-account_deletion_requests.error_message            text                null                    usage.ts:702
-account_deletion_requests.created_at               timestamptz         default,not null        usage.ts:703
-account_deletion_requests.updated_at               timestamptz         default,not null        usage.ts:704
-account_deletion_requests.completed_at             timestamptz         null                    usage.ts:708
+account_deletion_requests.id                       pUuid               pk,not null             usage.ts:677
+account_deletion_requests.user_id                  text                fk,not null             usage.ts:678
+account_deletion_requests.organization_ids         safeOrganizationId  array,default,not null  usage.ts:682
+account_deletion_requests.workspace_ids            safeWorkspaceId     array,default,not null  usage.ts:686
+account_deletion_requests.task_reassignment_count  integer             default,not null        usage.ts:690
+account_deletion_requests.status                   varchar             default,not null        usage.ts:694
+account_deletion_requests.erasure_report           jsonb               default,not null        usage.ts:699
+account_deletion_requests.storage_cleanup          jsonb               not null                usage.ts:703
+account_deletion_requests.attempt_count            integer             default,not null        usage.ts:706
+account_deletion_requests.error_message            text                null                    usage.ts:707
+account_deletion_requests.created_at               timestamptz         default,not null        usage.ts:708
+account_deletion_requests.updated_at               timestamptz         default,not null        usage.ts:709
+account_deletion_requests.completed_at             timestamptz         null                    usage.ts:713
 ```
 
-## account_deletion_effect_chunks · `accountDeletionEffectChunks` · usage.ts:727 · rls
+## account_deletion_effect_chunks · `accountDeletionEffectChunks` · usage.ts:732 · rls
 
 Bounded, independently claimable external effects for account erasure.
 
 ```text
-account_deletion_effect_chunks.id                                    pUuid     pk,not null  usage.ts:730
-account_deletion_effect_chunks.request_id                            safeUuid  not null     usage.ts:731
-account_deletion_effect_chunks.{...destructiveEffectChunkColumns()}  spread                 usage.ts:732
+account_deletion_effect_chunks.id                                    pUuid     pk,not null  usage.ts:735
+account_deletion_effect_chunks.request_id                            safeUuid  not null     usage.ts:736
+account_deletion_effect_chunks.{...destructiveEffectChunkColumns()}  spread                 usage.ts:737
 ```
 
-## usage_events · `usageEvents` · usage.ts:742 · rls
+## usage_events · `usageEvents` · usage.ts:747 · rls
 
 ```text
-usage_events.id                     pUuid               pk,not null       usage.ts:745
-usage_events.organization_id        safeOrganizationId  fk,not null       usage.ts:746
-usage_events.workspace_id           safeWorkspaceId     fk,null           usage.ts:749
-usage_events.user_id                text                fk,not null       usage.ts:753
-usage_events.period_start           timestamptz         not null          usage.ts:757
-usage_events.period_end             timestamptz         not null          usage.ts:758
-usage_events.action_type            text                not null          usage.ts:759
-usage_events.model_role             varchar             not null          usage.ts:760
-usage_events.units_consumed         integer             not null          usage.ts:761
-usage_events.raw_usage_micro_units  bigint              null              usage.ts:762
-usage_events.service_tier           text                not null          usage.ts:763
-usage_events.is_byok                boolean             default,not null  usage.ts:766
-usage_events.lane                   text                default,not null  usage.ts:772  Which budget this event settles against.
-usage_events.action_kind            text                null              usage.ts:773
-usage_events.logical_phase_id       text                null              usage.ts:774
-usage_events.trace_id               text                null              usage.ts:775
-usage_events.idempotency_key        text                null              usage.ts:776
-usage_events.created_at             timestamptz         default,not null  usage.ts:777
+usage_events.id                     pUuid               pk,not null       usage.ts:750
+usage_events.organization_id        safeOrganizationId  fk,not null       usage.ts:751
+usage_events.workspace_id           safeWorkspaceId     fk,null           usage.ts:754
+usage_events.user_id                text                fk,not null       usage.ts:758
+usage_events.period_start           timestamptz         not null          usage.ts:762
+usage_events.period_end             timestamptz         not null          usage.ts:763
+usage_events.action_type            text                not null          usage.ts:764
+usage_events.model_role             varchar             not null          usage.ts:765
+usage_events.units_consumed         integer             not null          usage.ts:766
+usage_events.raw_usage_micro_units  bigint              null              usage.ts:767
+usage_events.service_tier           text                not null          usage.ts:768
+usage_events.is_byok                boolean             default,not null  usage.ts:771
+usage_events.lane                   text                default,not null  usage.ts:777  Which budget this event settles against.
+usage_events.action_kind            text                null              usage.ts:778
+usage_events.logical_phase_id       text                null              usage.ts:779
+usage_events.trace_id               text                null              usage.ts:780
+usage_events.idempotency_key        text                null              usage.ts:781
+usage_events.created_at             timestamptz         default,not null  usage.ts:782
 ```
 
-## usage_seat_assignments · `usageSeatAssignments` · usage.ts:853 · rls
+## usage_seat_assignments · `usageSeatAssignments` · usage.ts:858 · rls
 
 Which members occupy the organisation's purchased seats.
 
 ```text
-usage_seat_assignments.id                   pUuid               pk,not null       usage.ts:856
-usage_seat_assignments.organization_id      safeOrganizationId  fk,not null       usage.ts:857
-usage_seat_assignments.user_id              text                fk,not null       usage.ts:860
-usage_seat_assignments.assigned_by_user_id  text                fk,null           usage.ts:861
-usage_seat_assignments.created_at           timestamptz         default,not null  usage.ts:864
+usage_seat_assignments.id                   pUuid               pk,not null       usage.ts:861
+usage_seat_assignments.organization_id      safeOrganizationId  fk,not null       usage.ts:862
+usage_seat_assignments.user_id              text                fk,not null       usage.ts:865
+usage_seat_assignments.assigned_by_user_id  text                fk,null           usage.ts:866
+usage_seat_assignments.created_at           timestamptz         default,not null  usage.ts:869
 ```
 
-## organization_file_usage · `organizationFileUsage` · usage.ts:915 · rls
+## organization_file_usage · `organizationFileUsage` · usage.ts:920 · rls
 
 ```text
-organization_file_usage.organization_id  safeOrganizationId  pk,fk,not null    usage.ts:918
-organization_file_usage.committed_bytes  bigint              default,not null  usage.ts:921
-organization_file_usage.reserved_bytes   bigint              default,not null  usage.ts:925
-organization_file_usage.updated_at       timestamptz         default,not null  usage.ts:929
+organization_file_usage.organization_id  safeOrganizationId  pk,fk,not null    usage.ts:923
+organization_file_usage.committed_bytes  bigint              default,not null  usage.ts:926
+organization_file_usage.reserved_bytes   bigint              default,not null  usage.ts:930
+organization_file_usage.updated_at       timestamptz         default,not null  usage.ts:934
 ```
 
-## organization_file_objects · `organizationFileObjects` · usage.ts:968 · rls
+## organization_file_objects · `organizationFileObjects` · usage.ts:973 · rls
 
 ```text
-organization_file_objects.object_key              text                pk,not null       usage.ts:971
-organization_file_objects.organization_id         safeOrganizationId  fk,not null       usage.ts:972
-organization_file_objects.size_bytes              bigint              not null          usage.ts:975
-organization_file_objects.pending_size_bytes      bigint              null              usage.ts:976
-organization_file_objects.write_id                text                null              usage.ts:977
-organization_file_objects.expected_sha256_hex     text                null              usage.ts:978
-organization_file_objects.reservation_started_at  timestamptz         null              usage.ts:979
-organization_file_objects.status                  text                not null          usage.ts:980
-organization_file_objects.created_at              timestamptz         default,not null  usage.ts:981
-organization_file_objects.updated_at              timestamptz         default,not null  usage.ts:982
+organization_file_objects.object_key              text                pk,not null       usage.ts:976
+organization_file_objects.organization_id         safeOrganizationId  fk,not null       usage.ts:977
+organization_file_objects.size_bytes              bigint              not null          usage.ts:980
+organization_file_objects.pending_size_bytes      bigint              null              usage.ts:981
+organization_file_objects.write_id                text                null              usage.ts:982
+organization_file_objects.expected_sha256_hex     text                null              usage.ts:983
+organization_file_objects.reservation_started_at  timestamptz         null              usage.ts:984
+organization_file_objects.status                  text                not null          usage.ts:985
+organization_file_objects.created_at              timestamptz         default,not null  usage.ts:986
+organization_file_objects.updated_at              timestamptz         default,not null  usage.ts:987
 ```
 
-## usage_lane_counters · `usageLaneCounters` · usage.ts:1045 · rls
+## usage_lane_counters · `usageLaneCounters` · usage.ts:1050 · rls
 
 ```text
-usage_lane_counters.id               pUuid               pk,not null       usage.ts:1048
-usage_lane_counters.organization_id  safeOrganizationId  fk,not null       usage.ts:1049
-usage_lane_counters.user_id          text                fk,not null       usage.ts:1052
-usage_lane_counters.kind             text                not null          usage.ts:1056
-usage_lane_counters.bucket_start     timestamptz         not null          usage.ts:1057
-usage_lane_counters.micro_units      bigint              default,not null  usage.ts:1058
-usage_lane_counters.updated_at       timestamptz         default,not null  usage.ts:1062
+usage_lane_counters.id               pUuid               pk,not null       usage.ts:1053
+usage_lane_counters.organization_id  safeOrganizationId  fk,not null       usage.ts:1054
+usage_lane_counters.user_id          text                fk,not null       usage.ts:1057
+usage_lane_counters.kind             text                not null          usage.ts:1061
+usage_lane_counters.bucket_start     timestamptz         not null          usage.ts:1062
+usage_lane_counters.micro_units      bigint              default,not null  usage.ts:1063
+usage_lane_counters.updated_at       timestamptz         default,not null  usage.ts:1067
 ```
 
-## usage_provider_webhook_events · `hostedUsageWebhookEvents` · usage.ts:1105 · rls
+## usage_provider_webhook_events · `hostedUsageWebhookEvents` · usage.ts:1110 · rls
 
 ```text
-usage_provider_webhook_events.event_id       text         pk,not null       usage.ts:1110  Provider event ID; making it the PK keeps duplicate deliveries structural no-ops via ON CONFLICT DO NOTHING.
-usage_provider_webhook_events.event_type     text         not null          usage.ts:1111
-usage_provider_webhook_events.payload        jsonb        not null          usage.ts:1112
-usage_provider_webhook_events.processed_at   timestamptz  default,not null  usage.ts:1113
-usage_provider_webhook_events.result         text         not null          usage.ts:1114
-usage_provider_webhook_events.error_message  text         null              usage.ts:1115
-usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1117  Ordered replay attempts survive redaction; ignored attempts remain eligible.
+usage_provider_webhook_events.event_id       text         pk,not null       usage.ts:1115  Provider event ID; making it the PK keeps duplicate deliveries structural no-ops via ON CONFLICT DO NOTHING.
+usage_provider_webhook_events.event_type     text         not null          usage.ts:1116
+usage_provider_webhook_events.payload        jsonb        not null          usage.ts:1117
+usage_provider_webhook_events.processed_at   timestamptz  default,not null  usage.ts:1118
+usage_provider_webhook_events.result         text         not null          usage.ts:1119
+usage_provider_webhook_events.error_message  text         null              usage.ts:1120
+usage_provider_webhook_events.replay_audit   jsonb        null              usage.ts:1122  Ordered replay attempts survive redaction; ignored attempts remain eligible.
 ```
