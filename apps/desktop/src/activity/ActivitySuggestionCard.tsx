@@ -16,6 +16,7 @@ import { MatterIcon } from "@stll/ui/matter-icon";
 import { Switch } from "@stll/ui/switch";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 import { Textarea } from "@stll/ui/textarea";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { detectDesktopPlatform, formatShortcut } from "../shared/shortcut-keys";
 import type { ShortcutKeys } from "../shared/shortcut-keys";
@@ -182,7 +183,7 @@ export const ActivitySuggestionCard = ({
             {edit.matter === null ? null : (
               <MatterIcon matter={edit.matter} className="size-4 shrink-0" />
             )}
-            <bdi className="truncate">{title}</bdi>
+            <TruncatedText render={<bdi />}>{title}</TruncatedText>
           </h2>
           <p className="text-muted-foreground text-xs tabular-nums">
             {timeLabel}
@@ -405,7 +406,9 @@ const EvidenceRows = ({ rows }: { rows: readonly EvidenceRow[] }) => {
       {rows.slice(0, EVIDENCE_ROW_LIMIT).map((row) => (
         <li className="flex flex-col gap-1" key={row.id}>
           <div className="flex min-w-0 items-baseline gap-2">
-            <bdi className="min-w-0 flex-1 truncate">{row.label}</bdi>
+            <TruncatedText className="flex-1" render={<bdi />}>
+              {row.label}
+            </TruncatedText>
             <span className="text-muted-foreground shrink-0 tabular-nums">
               {t("durationMinutes", {
                 minutes: Math.max(1, Math.round(row.durationMs / 60_000)),

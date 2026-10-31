@@ -34,6 +34,7 @@ import {
 } from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 
 import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -274,7 +275,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
                     appIdentifier={app.identifier}
                     sourceAppVisuals={settings.sourceAppVisuals}
                   />
-                  <bdi className="truncate">{app.name}</bdi>
+                  <TruncatedText render={<bdi />}>{app.name}</TruncatedText>
                 </span>
                 <AppDetailCaptureButton
                   app={app}
@@ -327,7 +328,7 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
                     appIdentifier={app.identifier}
                     sourceAppVisuals={settings.sourceAppVisuals}
                   />
-                  <bdi className="truncate">{app.name}</bdi>
+                  <TruncatedText render={<bdi />}>{app.name}</TruncatedText>
                 </span>
                 <Button
                   aria-label={t("removeExclusion", { name: app.name })}
@@ -422,7 +423,9 @@ const DayApps = ({
                 appIdentifier={app.identifier}
                 sourceAppVisuals={settings.sourceAppVisuals}
               />
-              <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
+              <TruncatedText className="flex-1 text-sm" render={<bdi />}>
+                {app.name}
+              </TruncatedText>
               <AppDetailCaptureButton
                 app={app}
                 onCommand={onCommand}
