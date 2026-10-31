@@ -63,3 +63,19 @@ test("checks only inside the scope it is given", async ({ page }) => {
   expect(await findEscapedText(page.locator("#clean"))).toEqual([]);
   expect(await findEscapedText(page)).toHaveLength(1);
 });
+
+test("leaves a host's own box to the host", async ({ page }) => {
+  // The scope sits in a short filled host it overflows: the host's box is
+  // not the scope's to keep.
+  await page.setContent(`
+    ${STYLE}
+    <div style="height: 20px; background: #f4f4f5">
+      <section id="tall" style="height: 200px">
+        <p style="margin: 120px 0 0">Below the host</p>
+      </section>
+    </div>
+  `);
+
+  expect(await findEscapedText(page.locator("#tall"))).toEqual([]);
+  expect(await findEscapedText(page)).toHaveLength(1);
+});

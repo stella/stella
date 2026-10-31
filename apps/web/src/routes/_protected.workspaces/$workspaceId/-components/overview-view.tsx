@@ -1072,7 +1072,13 @@ type StatCardProps = {
   onClick?: () => void;
 };
 
-const StatCard = ({ icon, label, value, sublabel, onClick }: StatCardProps) => {
+export const StatCard = ({
+  icon,
+  label,
+  value,
+  sublabel,
+  onClick,
+}: StatCardProps) => {
   const t = useTranslations();
   const content = (
     <>

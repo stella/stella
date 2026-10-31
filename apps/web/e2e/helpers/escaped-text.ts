@@ -67,9 +67,12 @@ const collectEscapedText = (root: Element): string[] => {
     }
     // Up to the first box around the text, which it must stay inside; every
     // clip on the way cuts the painted lines to the clipping element first.
+    // Boxes outside the scope belong to whatever hosts it, not to the scope.
     for (
       let element: Element | null = parent;
-      element !== null && element !== document.documentElement;
+      element !== null &&
+      element !== document.documentElement &&
+      element !== root.parentElement;
       element = element.parentElement
     ) {
       const style = getComputedStyle(element);

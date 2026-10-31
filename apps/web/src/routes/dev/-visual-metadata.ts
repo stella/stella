@@ -37,6 +37,10 @@ export const composerReferenceStates = Object.keys(composerReferenceVariants);
 export const visualRegistry = {
   "mcp-reconnect": { label: "MCP reconnect notice", layout: "plain" },
   "task-metadata": { label: "Task metadata alignment", layout: "plain" },
+  "overview-stat-cards": {
+    label: "Matter overview stat cards",
+    layout: "plain",
+  },
   "column-composer": { label: "Column composer alignment", layout: "plain" },
   "handoff-confirmation": {
     label: "Connector sign-in confirmation",
