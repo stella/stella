@@ -53,6 +53,7 @@ import {
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { PUBLISHER_REQUEST } from "@/api/lib/legal-search/ingestion-types";
 import type {
   DecisionSupplement,
   IngestionResult,
@@ -909,6 +910,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
       Result.ok({
         decisions: [decisionOf(RULING)],
         supplements: [supplementOf(REASONS)],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
         nextCursor: null,
       }),
     );

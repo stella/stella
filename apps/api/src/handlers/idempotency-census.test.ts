@@ -533,6 +533,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/dictation/transcribe": {
+    type: "non-replay",
+    reason: "external-effect",
+  },
   "POST /v1/feedback": {
     type: "non-replay",
     reason: "external-effect",

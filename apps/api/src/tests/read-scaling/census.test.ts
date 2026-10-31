@@ -19,6 +19,7 @@ import { claimCommentScalingScenarios } from "./claim-comments";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
 import { decisionFilterValidationScalingScenario } from "./decision-filter-validation";
 import { decisionSummaryScalingScenario } from "./decision-summary";
+import { dictationScalingScenario } from "./dictation";
 import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
@@ -65,6 +66,7 @@ const measuredApiScenarios = [
   myOpenTasksScalingScenario,
   mobileUpdateScalingScenario,
   ...invoicePaymentScalingScenarios,
+  dictationScalingScenario,
   organizationSlugScalingScenario,
 ];
 const measuredApiReads = apiApp.routes

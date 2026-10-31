@@ -69,6 +69,10 @@ const CATALOG_DIRECTORY = "packages/cli/capabilities";
  */
 const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
+    "/v1/dictation/transcribe",
+    "Authenticated dictation is available on every deployment and enforces its dictation kill switch, provider availability and usage admission",
+  ],
+  [
     "/v1/organizations/slug",
     "Organization slug settings are available to authorized owners and admins on every deployment",
   ],

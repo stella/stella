@@ -89,7 +89,14 @@
     "statusFailed": "A feladatot nem sikerült módosítani. Próbálja újra.",
     "pickTitle": "Válasszon feladatot",
     "pickDescription": "Válasszon feladatot a listából, hogy itt lássa.",
-    "openMatter": "Ügy megnyitása"
+    "openMatter": "Ügy megnyitása",
+    "assignedTo": "Felelős",
+    "nobody": "Nincs hozzárendelve",
+    "assign": "Hozzárendelés",
+    "doneAssigning": "Kész",
+    "someone": "Valaki",
+    "membersFailed": "Az ügy tagjait nem sikerült betölteni.",
+    "assignFailed": "A feladatot nem sikerült kiosztani. Próbálja újra."
   },
   "matters": {
     "emptyTitle": "Még nincsenek ügyek",
