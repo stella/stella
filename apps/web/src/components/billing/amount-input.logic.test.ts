@@ -30,14 +30,25 @@ test("localized decimal normalization preserves every digit and is canonical", (
 test("a rate typed under one currency is scaled by the one submitted", () => {
   // The reported defect: the rate input blurs under USD, the currency beside
   // it is then changed to JPY, and the entry is submitted. 100 is 100 yen.
+  for (const draft of ["100", "100.00"].map(typed)) {
+    expect(
+      submittedRateCents({
+        draft,
+        currency: "JPY",
+        locale: "en-US",
+        resolvedRateCents: 10_000,
+      }),
+    ).toBe(100);
+  }
+  // A digit the currency cannot hold is not rounded away.
   expect(
     submittedRateCents({
-      draft: typed("100"),
+      draft: typed("100.50"),
       currency: "JPY",
       locale: "en-US",
       resolvedRateCents: 10_000,
     }),
-  ).toBe(100);
+  ).toBeNull();
   expect(
     submittedRateCents({
       draft: typed("100.00"),
@@ -67,7 +78,7 @@ test("a rate that is not overridden keeps the one rate resolution supplied", () 
   ).toBe(4500);
 });
 
-test("a draft the currency cannot express falls back rather than storing nothing", () => {
+test("a draft the currency cannot express is no rate, never the carried one", () => {
   for (const draft of ["", "abc", "99999999999999999"].map(typed)) {
     expect(
       submittedRateCents({
@@ -76,7 +87,7 @@ test("a draft the currency cannot express falls back rather than storing nothing
         locale: "en-US",
         resolvedRateCents: 4500,
       }),
-    ).toBe(4500);
+    ).toBeNull();
   }
 });
 
@@ -107,7 +118,7 @@ test("a Slovak rate accepts its decimal mark and rejects an ambiguous dot", () =
       locale: "sk-SK",
       resolvedRateCents: 777,
     }),
-  ).toBe(777);
+  ).toBeNull();
 });
 
 test("the input text shows the places the currency counts", () => {

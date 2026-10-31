@@ -170,6 +170,29 @@ const normalizeInputSeparators = ({
   return { status: "normalized", unsigned, grouping } as const;
 };
 
+/**
+ * The fraction kept at the allowed places, undefined when none is left, or
+ * null when a digit past them is not zero. Trailing zeros carry no value
+ * (100.00 yen is 100 yen); any other extra digit would need rounding.
+ */
+const exactFraction = (
+  fraction: string | undefined,
+  maximumFractionDigits: number | undefined,
+): string | undefined | null => {
+  if (
+    fraction === undefined ||
+    maximumFractionDigits === undefined ||
+    fraction.length <= maximumFractionDigits
+  ) {
+    return fraction;
+  }
+  if (!/^0*$/u.test(fraction.slice(maximumFractionDigits))) {
+    return null;
+  }
+  const kept = fraction.slice(0, maximumFractionDigits);
+  return kept === "" ? undefined : kept;
+};
+
 export type ParseLocaleDecimalParams = {
   amount: string;
   locale: string;
@@ -291,18 +314,15 @@ export const parseLocaleDecimal = ({
       message: "Invalid amount format",
     });
   }
-  if (
-    maximumFractionDigits !== undefined &&
-    fraction !== undefined &&
-    fraction.length > maximumFractionDigits
-  ) {
+  const exact = exactFraction(fraction, maximumFractionDigits);
+  if (exact === null) {
     return Result.err({
       reason: "precision",
       message: "Amount has too many fraction digits",
     });
   }
   return Result.ok(
-    `${sign}${wholeDigits}${fraction === undefined ? "" : `.${fraction}`}`,
+    `${sign}${wholeDigits}${exact === undefined ? "" : `.${exact}`}`,
   );
 };
 

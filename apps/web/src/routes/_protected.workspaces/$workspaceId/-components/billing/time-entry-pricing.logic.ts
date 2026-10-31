@@ -29,7 +29,7 @@ export const deriveTimeEntryPricing = ({
   lookup,
   locale,
 }: DeriveTimeEntryPricingOptions) => {
-  let status: "pending" | "ready" | "error" = "pending";
+  let status: "pending" | "ready" | "error" | "invalid" = "pending";
   if (
     lookup !== undefined &&
     lookup.status !== "pending" &&
@@ -41,17 +41,22 @@ export const deriveTimeEntryPricing = ({
         : "error";
   }
   switch (selection.type) {
-    case "manual":
-      return {
-        status,
-        rateAtEntry: submittedRateCents({
-          draft: selection.draft,
-          currency: selection.currency,
-          resolvedRateCents: 0,
-          locale,
-        }),
+    case "manual": {
+      const rateAtEntry = submittedRateCents({
+        draft: selection.draft,
         currency: selection.currency,
-      };
+        resolvedRateCents: 0,
+        locale,
+      });
+      // An unreadable draft blocks submission instead of saving a zero rate.
+      return rateAtEntry === null
+        ? {
+            status: "invalid" as const,
+            rateAtEntry: 0,
+            currency: selection.currency,
+          }
+        : { status, rateAtEntry, currency: selection.currency };
+    }
     case "automatic": {
       const resolved = lookup?.status === "success" ? lookup.data : undefined;
       if (resolved && resolved.hourlyRate !== null) {

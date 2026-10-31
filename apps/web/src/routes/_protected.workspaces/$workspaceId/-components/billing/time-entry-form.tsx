@@ -8,6 +8,7 @@ import * as v from "valibot";
 import { CURRENCY_CODE_LENGTH } from "@stll/api-contract/currency-code";
 import {
   EMPTY_LOCALE_INPUT_TEXT,
+  formatLocaleMinorUnitsInput,
   type LocaleInputText,
   localeInputText,
   parseLocaleMinorUnits,
@@ -239,6 +240,7 @@ export const TimeEntryForm = ({
         currentRate={currentRate}
         rateOverride={rateOverride}
         rateInputValue={rateInputValue}
+        rateInvalid={pricingStatus === "invalid"}
         onCurrencyChange={setManualCurrency}
         beginOverride={beginOverride}
         setRateInputValue={setRateInputValue}
@@ -330,6 +332,7 @@ const TimeEntryRateInput = ({
   currentRate,
   rateOverride,
   rateInputValue,
+  rateInvalid,
   onCurrencyChange,
   beginOverride,
   setRateInputValue,
@@ -338,6 +341,8 @@ const TimeEntryRateInput = ({
   currentRate: number;
   rateOverride: boolean;
   rateInputValue: LocaleInputText;
+  /** The manual rate cannot be read in the selected currency. */
+  rateInvalid: boolean;
   onCurrencyChange: (value: string) => void;
   beginOverride: () => void;
   setRateInputValue: (value: LocaleInputText) => void;
@@ -359,42 +364,54 @@ const TimeEntryRateInput = ({
         )}
       </div>
       {rateOverride ? (
-        <div className="flex gap-2">
-          <Input
-            className="flex-1"
-            dir="ltr"
-            inputMode="decimal"
-            onBlur={() => {
-              // Display only: tidy the draft to the places the currency
-              // counts. The draft stays in major units, and the scaling
-              // that reaches the API waits for submit.
-              const rate = parseLocaleMinorUnits({
-                amount: rateInputValue,
+        <div className="flex flex-col gap-1">
+          <div className="flex gap-2">
+            <Input
+              aria-invalid={rateInvalid}
+              className="flex-1"
+              dir="ltr"
+              inputMode="decimal"
+              onBlur={() => {
+                // Display only: tidy the draft to the places the currency
+                // counts. The draft stays in major units, and the scaling
+                // that reaches the API waits for submit.
+                const rate = parseLocaleMinorUnits({
+                  amount: rateInputValue,
+                  currency: currentCurrency,
+                  locale,
+                });
+                if (rate.isErr()) {
+                  return;
+                }
+                setRateInputValue(
+                  majorUnitInput(rate.value, currentCurrency, locale),
+                );
+              }}
+              onChange={(e) =>
+                setRateInputValue(localeInputText(e.currentTarget))
+              }
+              placeholder={formatLocaleMinorUnitsInput({
+                amountCents: 35_000,
                 currency: currentCurrency,
                 locale,
-              });
-              if (rate.isErr()) {
-                return;
+              })}
+              value={rateInputValue}
+            />
+            <Input
+              className="w-20"
+              dir="ltr"
+              maxLength={CURRENCY_CODE_LENGTH}
+              onChange={(event) =>
+                onCurrencyChange(event.currentTarget.value.toUpperCase())
               }
-              setRateInputValue(
-                majorUnitInput(rate.value, currentCurrency, locale),
-              );
-            }}
-            onChange={(e) =>
-              setRateInputValue(localeInputText(e.currentTarget))
-            }
-            placeholder="350.00"
-            value={rateInputValue}
-          />
-          <Input
-            className="w-20"
-            dir="ltr"
-            maxLength={CURRENCY_CODE_LENGTH}
-            onChange={(event) =>
-              onCurrencyChange(event.currentTarget.value.toUpperCase())
-            }
-            value={currentCurrency}
-          />
+              value={currentCurrency}
+            />
+          </div>
+          {rateInvalid && (
+            <p className="text-destructive text-xs" role="alert">
+              {t("billing.invalidNumberFormat")}
+            </p>
+          )}
         </div>
       ) : (
         <div className="text-muted-foreground text-sm">

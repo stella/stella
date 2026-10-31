@@ -42,7 +42,16 @@ test("minute caps and percentage thresholds become integer contract values", () 
   });
 });
 
-test.each(["1e2", "1.5", " 60", "+60", "-0", "0", "Infinity", "2147483648"])(
+test.each([" 60", "60 ", "60.0"])(
+  "minute input reads the typed whole number %s",
+  (capMinutes) => {
+    expect(v.parse(schema, { ...input, capMinutes })).toMatchObject({
+      capMinutes: 60,
+    });
+  },
+);
+
+test.each(["1e2", "1.5", "+60", "-0", "0", "Infinity", "2147483648"])(
   "minute input refuses the noncanonical or out-of-range token %s",
   (capMinutes) => {
     expect(v.safeParse(schema, { ...input, capMinutes }).success).toBe(false);

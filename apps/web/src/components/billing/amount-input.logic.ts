@@ -55,17 +55,15 @@ export type SubmittedRateParams = {
  * JPY is 100 yen, not 10 000: a zero-exponent currency counts whole units, and
  * the digits the person entered are the major-unit amount either way.
  *
- * A draft the currency cannot express falls back to the rate already carried,
- * which is what the input last normalized to or what rate resolution supplied.
+ * A draft the currency cannot express is null, never another rate: the form
+ * must block submission rather than save a number the person did not type.
  */
 export const submittedRateCents = ({
   draft,
   currency,
   resolvedRateCents,
   locale,
-}: SubmittedRateParams): number =>
+}: SubmittedRateParams): number | null =>
   draft === null
     ? resolvedRateCents
-    : parseLocaleMinorUnits({ amount: draft, currency, locale }).unwrapOr(
-        resolvedRateCents,
-      );
+    : parseLocaleMinorUnits({ amount: draft, currency, locale }).unwrapOr(null);
