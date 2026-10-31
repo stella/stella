@@ -84,6 +84,21 @@ describe("privileged workflow policy", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - if: false\n        uses: actions/checkout@pin\n        with:\n          ref: main\n      - run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
   });
+  test("treats every spelling of the workspace root and expression paths as the root", () => {
+    for (const checkoutPath of [
+      "./",
+      "untrusted/..",
+      ".//",
+      `\${{ env.TOOLING_DIR }}`,
+    ]) {
+      const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: ${checkoutPath}\n      - run: bash tooling/scripts/x.sh`;
+      expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+    }
+  });
+  test("treats an expression working directory as any checkout", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: \${{ env.DIR }}\n        run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
   test("follows working directories nested inside a head checkout", () => {
     const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: untrusted/subdir\n        run: bash scripts/x.sh`;
     expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);

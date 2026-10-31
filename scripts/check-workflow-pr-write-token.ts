@@ -462,11 +462,18 @@ const excludesEvent = (condition: string, eventName: string): boolean =>
 const excludesActor = (condition: string, actor: string): boolean =>
   conditionTruth(condition, { actor }) === "false";
 
+const isExpression = (value: unknown): boolean =>
+  typeof value === "string" && value.includes("${{");
+
+// Every spelling of the workspace root (omitted, empty, `.`, `./`, `a/..`)
+// is `.`. An expression may name any directory, so it counts as the root,
+// whose checks match every step.
 const checkoutDirectory = (value: unknown): string => {
-  if (typeof value !== "string" || value === "" || value === ".") {
+  if (typeof value !== "string" || isExpression(value)) {
     return ".";
   }
-  return value.replace(/^\.\//u, "").replace(/\/$/u, "");
+  const normalized = path.posix.normalize(value).replace(/\/+$/u, "");
+  return normalized === "" ? "." : normalized;
 };
 
 type StepRunsDirectoryOptions = {
@@ -483,15 +490,16 @@ const stepRunsDirectory = ({
 }: StepRunsDirectoryOptions): boolean => {
   const command = typeof step["run"] === "string" ? step["run"] : "";
   const uses = typeof step["uses"] === "string" ? step["uses"] : "";
-  const workingDirectory = checkoutDirectory(
-    step["working-directory"] ?? inheritedWorkingDirectory,
-  );
+  const rawWorkingDirectory =
+    step["working-directory"] ?? inheritedWorkingDirectory;
+  const workingDirectory = checkoutDirectory(rawWorkingDirectory);
   if (directory === ".") {
     return command !== "" || uses.startsWith("./");
   }
   if (
     command !== "" &&
-    (workingDirectory === directory ||
+    (isExpression(rawWorkingDirectory) ||
+      workingDirectory === directory ||
       workingDirectory.startsWith(`${directory}/`))
   ) {
     return true;
