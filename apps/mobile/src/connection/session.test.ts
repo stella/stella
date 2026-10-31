@@ -16,6 +16,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 /** A token endpoint that rotates refresh tokens, counting what it is asked. */
@@ -179,6 +180,33 @@ describe("access tokens", () => {
     expect(memory.stored()).toEqual(other);
   });
 
+  test("a session kept for another person on the same server is not adopted", async () => {
+    const other: StoredSession = {
+      ...SESSION,
+      userId: "user-2",
+      refreshToken: "other-refresh",
+    };
+    const memory = memoryStore(other);
+    const presented: string[] = [];
+    const source = createAccessTokenSource({
+      fetch: async (_input, init) => {
+        const body = new URLSearchParams(
+          typeof init?.body === "string" ? init.body : "",
+        );
+        presented.push(body.get("refresh_token") ?? "");
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      },
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    expect(await token(source)).toBe("SignedOutError");
+    expect(presented).toEqual(["refresh-1"]);
+    expect(memory.stored()).toEqual(other);
+  });
+
   test("an adopted token refused after another run rotated again keeps the newer one", async () => {
     // This source adopts refresh-2, which the server then refuses because a
     // third run has since rotated it and kept refresh-3.
@@ -265,6 +293,35 @@ describe("access tokens", () => {
     expect(await token(source)).toBe("TokenError");
     expect(memory.stored()).toEqual(SESSION);
     reachable = true;
+    expect(await token(source)).toBe("access-1");
+  });
+
+  test("a refusal that does not end the grant keeps the session for a retry", async () => {
+    const memory = memoryStore(SESSION);
+    let available = false;
+    const endpoint = rotatingTokenEndpoint();
+    const source = createAccessTokenSource({
+      fetch: async (input, init) =>
+        available
+          ? await endpoint.fetch(input, init)
+          : Response.json(
+              { error: "temporarily_unavailable" },
+              { status: 503 },
+            ),
+      initialAccess: undefined,
+      now: () => 0,
+      session: SESSION,
+      store: memory.store,
+    });
+
+    const refused = await source.accessToken();
+    expect(refused.isErr() ? refused.error : undefined).toMatchObject({
+      _tag: "TokenError",
+      oauthError: "temporarily_unavailable",
+      status: 503,
+    });
+    expect(memory.stored()).toEqual(SESSION);
+    available = true;
     expect(await token(source)).toBe("access-1");
   });
 });

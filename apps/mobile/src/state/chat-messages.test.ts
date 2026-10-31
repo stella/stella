@@ -11,6 +11,7 @@ import {
   prependOlderPage,
   readChatThread,
   readOlderChatMessages,
+  sentEntry,
   toChatEntry,
 } from "./chat-messages";
 import type { ChatEntry } from "./chat-messages";
@@ -23,6 +24,7 @@ const SESSION: StoredSession = {
   tokenEndpoint: "https://stella.example.com/api/auth/oauth2/token",
   resource: "https://stella.example.com/v1",
   refreshToken: "refresh-1",
+  userId: "user-1",
 };
 
 const sourceFor = (fetch: Fetch) =>
@@ -61,6 +63,73 @@ describe("what a thread shows of a stored message", () => {
       createdAt: CREATED_AT,
       text: "First.\n\nSecond.",
       tools: ["search_case_law"],
+      files: [{ name: "", mimeType: "" }],
+    });
+  });
+
+  test("names the files the person attached, and shows a message of files alone", () => {
+    expect(
+      toChatEntry({
+        id: "m2",
+        role: "user",
+        createdAt: CREATED_AT,
+        parts: [
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: "userfile://f1",
+              mimeType: "application/pdf",
+            },
+            metadata: { filename: "Lease.pdf" },
+          },
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: "userfile://f2",
+              mimeType: "image/png",
+            },
+            metadata: { filename: "Stamp.png" },
+          },
+        ],
+      }),
+    ).toEqual({
+      id: "m2",
+      role: "user",
+      createdAt: CREATED_AT,
+      text: "",
+      tools: [],
+      files: [
+        { name: "Lease.pdf", mimeType: "application/pdf" },
+        { name: "Stamp.png", mimeType: "image/png" },
+      ],
+    });
+  });
+
+  test("draws a message sent from here with its files' names, not their bytes", () => {
+    expect(
+      sentEntry({
+        createdAt: CREATED_AT,
+        draft: {
+          text: "Summarise this",
+          files: [
+            {
+              name: "Lease.pdf",
+              mimeType: "application/pdf",
+              dataUrl: "data:application/pdf;base64,JVBERg==",
+            },
+          ],
+        },
+        messageId: "m3",
+      }),
+    ).toEqual({
+      id: "m3",
+      role: "user",
+      createdAt: CREATED_AT,
+      text: "Summarise this",
+      tools: [],
+      files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
     });
   });
 
@@ -78,7 +147,7 @@ describe("what a thread shows of a stored message", () => {
         id: "e",
         role: "user",
         createdAt: CREATED_AT,
-        parts: [{ type: "document", source: {} }],
+        parts: [{ type: "thinking", content: "private reasoning" }],
       }),
     ).toBeUndefined();
   });
@@ -171,6 +240,7 @@ describe("reading a thread", () => {
       createdAt: CREATED_AT,
       text: id,
       tools: [],
+      files: [],
     });
     expect(
       prependOlderPage(

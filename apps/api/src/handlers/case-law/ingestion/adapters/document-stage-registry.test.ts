@@ -8,17 +8,18 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  encodeSourceRawEnvelope,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import {
   listAdapters,
   listDocumentStageAdapters,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { plKioAdapter } from "@/api/handlers/case-law/ingestion/adapters/pl-kio";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
+import {
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  encodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
+} from "@/api/lib/legal-search/ingestion-types";
 import { PUBLISHER_FIELD_COVERAGE_EVENT } from "@/api/lib/legal-search/publisher-field-coverage";
 import { exceptionFingerprint } from "@/api/lib/observability/exception-fingerprint";
 import { getExceptionScope } from "@/api/lib/observability/exception-scope";
@@ -150,7 +151,11 @@ describe("registered document stages", () => {
   test("the factory wires its page entrypoint through the registered stage observer", async () => {
     for (const registered of listAdapters()) {
       const observations: DocumentStageObservation[] = [];
-      const page = Result.ok({ decisions: [], nextCursor: null });
+      const page = Result.ok({
+        decisions: [],
+        publisherRequest: PUBLISHER_REQUEST.ANSWERED,
+        nextCursor: null,
+      });
       const adapter = defineSourceAdapter({
         ...registered,
         fetchPage: async () => {

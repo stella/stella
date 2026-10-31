@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 import * as v from "valibot";
 
+import { treeBaseRevision } from "@stll/scripts/src/tree-base-revision";
+
 import type { RouteEntry } from "@/api/http/route";
 import {
   ACCOUNT_ACCESS,
@@ -372,11 +374,7 @@ describe("anonymous response text bounds", () => {
     const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
     const ledger =
       "apps/api/src/tests/security/public-response-text-bounds.allowlist.json";
-    const base = Bun.spawnSync(["git", "merge-base", "HEAD", "origin/main"], {
-      cwd: repoRoot,
-    });
-    expect(base.exitCode).toBe(0);
-    const revision = new TextDecoder().decode(base.stdout).trim();
+    const revision = treeBaseRevision({ repoRoot });
     const present = Bun.spawnSync(
       ["git", "ls-tree", "--name-only", revision, ledger],
       { cwd: repoRoot },

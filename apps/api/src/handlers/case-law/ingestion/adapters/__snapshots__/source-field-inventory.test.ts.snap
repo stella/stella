@@ -760,6 +760,13 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
       "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
     },
     {
+      "field": "pravnivetaan",
+      "justification": "The flag repeats whether the stored legal sentence is present.",
+      "pointer": "textFields.legalSentence",
+      "policy": "justified",
+      "reason": "duplicate_of",
+    },
+    {
       "field": "pravnivetaanv",
       "policy": "legacy",
       "reason": "The ano/ne flag stating whether the court wrote a headnote for this decision. The headnote itself is stored, so the flag only repeats whether that field is there.",
@@ -793,6 +800,20 @@ exports[`every exclusion is visible and legacy exclusions match the migration ce
       "field": "prejudikaturaoznacenivecivcelku",
       "policy": "legacy",
       "reason": "The portal's cross-reference grid naming other decisions, one column per part of each reference. This row's citations are extracted from the decision text; the portal's list is not a field of the row.",
+    },
+    {
+      "field": "registry:Datum rozhodnutí RS",
+      "justification": "The matched original repeats the decision date stored from the detail and listing.",
+      "pointer": "decisionDate",
+      "policy": "justified",
+      "reason": "duplicate_of",
+    },
+    {
+      "field": "registry:Rozhodnutí RS",
+      "justification": "The matched original repeats the complete published reference stored from the listing.",
+      "pointer": "metadata.publishedCaseNumber",
+      "policy": "justified",
+      "reason": "duplicate_of",
     },
     {
       "field": "rozhodnutivevztahukrizeni",

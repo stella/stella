@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -36,6 +37,7 @@ import type {
 } from "@/api/handlers/case-law/decisions/sitemap";
 import type { readCaseLawCorpusStatusHandler } from "@/api/handlers/case-law/decisions/status";
 import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import { CASE_LAW_COVERAGE_FRESHNESS } from "@/api/lib/case-law/coverage-freshness";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { CASE_LAW_SOURCE_ROWS_BOUND } from "@/api/lib/legal-search/ingestion-constants";
@@ -93,6 +95,7 @@ export const listDecisionsResponseSchema = page(
     caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
     courtAbbreviation: nullableBoundedString(512),
     courtTier: v.picklist(COURT_TIER_LABELS),
+    decisionTypeKind: v.union([v.picklist(DECISION_TYPE_KINDS), v.null()]),
     sourceUrl: nullableBoundedString(8192),
     headnote,
     citationCount: v.number(),
@@ -201,7 +204,9 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  // The printing version is internal: it locates a passage, and no response
+  // carries it.
+  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
   v.GenericSchema
 >);
 // A leading citation always names a held decision; only the general list
@@ -320,6 +325,13 @@ const countryCoverage = {
         name: boundedString(2048),
         publicHomeUrl: boundedString(8192),
         health: v.enum(CASE_LAW_COVERAGE_HEALTH),
+        edition: v.variant("type", [
+          v.object({ type: v.literal("live") }),
+          v.object({
+            type: v.literal("snapshot"),
+            snapshotDate: boundedString(10),
+          }),
+        ]),
         lastSyncAt: date,
         decisionYearFrom: numberOrNull,
         decisionYearTo: numberOrNull,
@@ -407,7 +419,7 @@ const provisionProcessingState = v.union([
   }),
 ]);
 
-export const coverageResponseSchema = v.object({
+const coverageSnapshotEntries = {
   generatedAt: boundedString(128),
   provisionProcessing: v.pipe(
     v.array(
@@ -442,6 +454,17 @@ export const coverageResponseSchema = v.object({
     ),
     v.maxLength(CASE_LAW_JURISDICTIONS.length),
   ),
+};
+
+/** The answer the scheduler stores, before a reader states its age. */
+export const coverageSnapshotSchema = v.object(coverageSnapshotEntries);
+
+export const coverageResponseSchema = v.object({
+  ...coverageSnapshotEntries,
+  freshness: v.object({
+    status: v.picklist(Object.values(CASE_LAW_COVERAGE_FRESHNESS)),
+    ageSeconds: v.number(),
+  }),
 } satisfies Record<
   keyof Success<typeof readCaseLawCoverageHandler>,
   v.GenericSchema

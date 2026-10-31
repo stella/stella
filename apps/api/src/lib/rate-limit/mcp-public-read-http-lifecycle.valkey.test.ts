@@ -493,8 +493,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           if (Result.isOk(outcome) || !ActionAdmissionError.is(outcome.error)) {
             panic("Expected typed admission-unavailable cancellation");
           }
-          expect(outcome.error.reason).toBe("unavailable");
-          expect(outcome.error.code).toBe("action_admission_unavailable");
+          expect(outcome.error.reason).toBe("lease_lost");
+          expect(outcome.error.code).toBe("action_admission_lease_lost");
           expect(cleanupAttempts).toBe(1);
           expect(await releaseState.promise).toEqual({
             bodySettled: true,

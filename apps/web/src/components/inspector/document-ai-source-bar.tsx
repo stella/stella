@@ -20,12 +20,12 @@ import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { useSyncJustifications } from "@/components/workspaces/hooks/use-sync-justifications";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
+import { captureQueryError } from "@/lib/errors/query-result";
 import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { queryView } from "@/lib/query-view.logic";
@@ -170,7 +170,7 @@ export const DocumentAiSourceBar = ({
         return response.data;
       });
       if (Result.isError(result)) {
-        getAnalytics().captureError(result.error, {
+        captureQueryError(result.error, {
           fingerprintKey: "DocumentAiSourceBar.queryFn:failure",
           scope: {
             type: "handler",

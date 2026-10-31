@@ -1366,8 +1366,12 @@ describe("dev env factories", () => {
         seeded,
       }).primary.map((step) => step.env?.["LEGAL_SEARCH_PROVIDER"]);
 
-    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts"]);
-    expect(apiProviders(false)).toEqual(["corpus-index", "corpus-index"]);
+    expect(apiProviders(true)).toEqual(["pg-fts", "pg-fts", "pg-fts"]);
+    expect(apiProviders(false)).toEqual([
+      "corpus-index",
+      "corpus-index",
+      "corpus-index",
+    ]);
   });
 
   test("seeded stacks disable scheduled writes while normal dev keeps schedules enabled", () => {
@@ -1390,13 +1394,27 @@ describe("dev env factories", () => {
       primarySteps(seeded).map((step) => step.env?.["SCHEDULED_JOBS_MODE"]);
     // The API process stays scheduler-disabled after seeding, while the
     // separately started queue worker drains uploaded documents.
-    expect(scheduledJobsModes(true)).toEqual(["disabled", "enabled"]);
-    expect(scheduledJobsModes(false)).toEqual(["enabled", "enabled"]);
+    expect(scheduledJobsModes(true)).toEqual([
+      "disabled",
+      "enabled",
+      "enabled",
+    ]);
+    expect(scheduledJobsModes(false)).toEqual([
+      "enabled",
+      "enabled",
+      "enabled",
+    ]);
     expect(primarySteps(true).map((step) => step.label)).toContain(
       "Document processing worker",
     );
     expect(primarySteps(false).map((step) => step.label)).toContain(
       "Document processing worker",
+    );
+    expect(primarySteps(true).map((step) => step.label)).toContain(
+      "File derivative worker",
+    );
+    expect(primarySteps(false).map((step) => step.label)).toContain(
+      "File derivative worker",
     );
   });
 
@@ -1421,6 +1439,9 @@ describe("dev env factories", () => {
     ]);
     expect(primary.map((step) => step.label)).not.toContain(
       "Document processing worker",
+    );
+    expect(primary.map((step) => step.label)).not.toContain(
+      "File derivative worker",
     );
   });
 
@@ -1467,16 +1488,20 @@ describe("dev env factories", () => {
       "API server",
       "Web server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:api").primary.map((step) => step.label)).toEqual([
       "API server",
       "Document processing worker",
+      "File derivative worker",
     ]);
     expect(build("dev:web").primary.map((step) => step.label)).toEqual([
       "Web server",
     ]);
 
-    const worker = build("dev").primary.at(-1);
+    const worker = build("dev").primary.find(
+      (step) => step.label === "Document processing worker",
+    );
     expect(worker?.cmd.slice(1)).toEqual([
       "--no-clear-screen",
       "--no-env-file",
@@ -1490,6 +1515,16 @@ describe("dev env factories", () => {
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
       REDIS_URL: "redis://localhost:6389",
     });
+    const derivativeWorker = build("dev").primary.find(
+      (step) => step.label === "File derivative worker",
+    );
+    expect(derivativeWorker?.cmd.slice(0, -1)).toEqual(
+      worker?.cmd.slice(0, -1),
+    );
+    expect(derivativeWorker?.cmd.at(-1)).toBe(
+      "src/scripts/file-derivative-worker.ts",
+    );
+    expect(derivativeWorker?.env).toEqual(worker?.env);
   });
 
   test("only interactive dev watches files; seeded stacks run without --watch", () => {
@@ -1507,8 +1542,8 @@ describe("dev env factories", () => {
         .primary.filter((step) => step.label !== "Web server")
         .map((step) => step.cmd.includes("--watch"));
 
-    expect(watching(false)).toEqual([true, true]);
-    expect(watching(true)).toEqual([false, false]);
+    expect(watching(false)).toEqual([true, true, true]);
+    expect(watching(true)).toEqual([false, false, false]);
   });
 
   test("only a seeded stack preloads the seeded organization's feature grants", () => {

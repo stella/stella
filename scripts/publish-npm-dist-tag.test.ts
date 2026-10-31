@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { NPM_RELEASE_WORKFLOW } from "./generate-npm-release-jobs";
+
 const source = readFileSync(
   new URL("../.github/workflows/publish-npm.yml", import.meta.url),
   "utf-8",
@@ -18,7 +20,7 @@ const readWorkflow = (text: string) =>
       jobs: v.object({
         "release-trigger": v.object({ steps: v.array(stepSchema) }),
         pack: v.object({ if: v.string(), steps: v.array(stepSchema) }),
-        release: v.object({
+        "release-cli": v.object({
           if: v.string(),
           uses: v.string(),
           with: v.record(v.string(), v.unknown()),
@@ -71,10 +73,10 @@ test("RC runs publish no npm version or dist-tag", () => {
     expect(workflow.jobs.pack.if).toContain(
       "needs.release-trigger.outputs.eligible == 'true'",
     );
-    expect(workflow.jobs.release.if).toContain(
+    expect(workflow.jobs["release-cli"].if).toContain(
       "needs.pack.result == 'success'",
     );
-    expect(workflow.jobs.release.with["dist-tag"]).toBeUndefined();
+    expect(workflow.jobs["release-cli"].with["dist-tag"]).toBeUndefined();
     expect(source).not.toContain("'next'");
   } finally {
     rmSync(work, { recursive: true, force: true });
@@ -82,9 +84,7 @@ test("RC runs publish no npm version or dist-tag", () => {
 });
 
 test("stable npm source must equal the final tag and its RC SHA through the unchanged publisher", () => {
-  expect(workflow.jobs.release.uses).toBe(
-    "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
-  );
+  expect(workflow.jobs["release-cli"].uses).toBe(NPM_RELEASE_WORKFLOW);
   const validation = requiredRun(workflow.jobs.pack.steps, "release-source");
   expect(validation).toContain('if [[ "$source_sha" != "$release_sha" ]]');
   expect(validation).toContain('git tag --points-at "$release_sha"');
@@ -92,7 +92,7 @@ test("stable npm source must equal the final tag and its RC SHA through the unch
     `[[ "$(git rev-parse "refs/tags/\${rc_tag}^{commit}")" == "$source_sha" ]]`,
   );
   expect(validation).not.toContain("merge-base --is-ancestor");
-  expect(workflow.jobs.release.permissions).toEqual({
+  expect(workflow.jobs["release-cli"].permissions).toEqual({
     actions: "read",
     contents: "write",
     "id-token": "write",
