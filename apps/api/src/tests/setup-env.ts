@@ -1,3 +1,5 @@
+import { NODE_ENV, readRuntimeMode } from "@stll/runtime-mode";
+
 import { envApiServerSchema } from "../env-schema";
 import { installHermeticOrganizationFileDeletionDb } from "../lib/files/organization-file-deletion-db";
 import { holdFreeFileDeletionDb } from "./hold-free-file-deletion-db";
@@ -40,8 +42,13 @@ if (
 
 configureTestDatabaseEnvironment();
 // Without a shared pool, file deletions fence on a database where nothing is
-// held; Postgres suites keep the root pool and its real legal holds.
-if (rootPoolConnectionCount() !== null) {
+// held; Postgres suites keep the root pool and its real legal holds. Tooling
+// that loads this environment outside a test process (registry export,
+// benchmarks) deletes no files and keeps the root pool.
+if (
+  readRuntimeMode().nodeEnv === NODE_ENV.test &&
+  rootPoolConnectionCount() !== null
+) {
   installHermeticOrganizationFileDeletionDb(holdFreeFileDeletionDb);
 }
 // The API suites and the tooling that loads the API graph (catalog export,
