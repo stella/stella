@@ -3,8 +3,6 @@ import { describe, expect, test } from "bun:test";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 
-import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/handlers/case-law/ingestion/adapter";
-import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlItem,
   normalizeSaosDumpItem,
@@ -12,6 +10,8 @@ import {
   plCourtsAdapter,
   SAOS_JUDGMENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/ingestion-types";
+import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 
 const CASE_NUMBER = "I ACa 1/24";
 const publisherRow = (judgmentType: string | null | undefined) => ({
