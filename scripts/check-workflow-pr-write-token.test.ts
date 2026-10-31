@@ -80,6 +80,27 @@ describe("privileged workflow policy", () => {
       expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
     }
   });
+  test("a conditional trusted checkout never clears an earlier head checkout", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n      - if: false\n        uses: actions/checkout@pin\n        with:\n          ref: main\n      - run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
+  test("follows working directories nested inside a head checkout", () => {
+    const body = `    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.event.pull_request.head.sha }}\n          path: untrusted\n      - working-directory: untrusted/subdir\n        run: bash scripts/x.sh`;
+    expect(check(workflow("pull_request_target", body))).not.toHaveLength(0);
+  });
+  test("treats secrets mapped into a local reusable workflow as exposed", () => {
+    const source = `
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  example:
+    uses: ./.github/workflows/child.yml
+    secrets:
+      token: \${{ secrets.KEY }}
+`;
+    expect(check(source)).not.toHaveLength(0);
+  });
   test("does not trust the workflow revision on pull_request", () => {
     const body = `    env:\n      KEY: \${{ secrets.KEY }}\n    steps:\n      - uses: actions/checkout@pin\n        with:\n          ref: \${{ github.workflow_sha }}\n      - run: bash scripts/x.sh`;
     expect(

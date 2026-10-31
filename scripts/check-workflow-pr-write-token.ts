@@ -31,6 +31,8 @@ export const WORKFLOW_PRIVILEGE_ALLOWLIST = {
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
   ".github/workflows/ci.yml:ci-result":
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
+  ".github/workflows/ci.yml:marketing-screenshots":
+    "registry pull credentials reach the reusable capture only when the trusted CI plan admits the run",
   ".github/workflows/ci.yml:ci-tests":
     "pull-request credentials are platform-downgraded or admitted by the trusted CI plan",
   ".github/workflows/ci.yml:code-quality-api":
@@ -448,7 +450,11 @@ const stepRunsDirectory = ({
   if (directory === ".") {
     return command !== "" || uses.startsWith("./");
   }
-  if (command !== "" && workingDirectory === directory) {
+  if (
+    command !== "" &&
+    (workingDirectory === directory ||
+      workingDirectory.startsWith(`${directory}/`))
+  ) {
     return true;
   }
   const escaped = directory.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
@@ -571,7 +577,8 @@ export const checkWorkflowPrivilegeSource = (
             hasSecret(step["with"]) ||
             hasSecret(step["run"])),
       ) ||
-      rawJob["secrets"] === "inherit";
+      rawJob["secrets"] === "inherit" ||
+      hasSecret(rawJob["secrets"]);
     const condition = stringField(rawJob["if"]);
     const excludesDependabot = excludesActor(condition, "dependabot[bot]");
     const controlledDirectories = new Map<string, Set<string>>();
@@ -584,10 +591,14 @@ export const checkWorkflowPrivilegeSource = (
       const uses = typeof rawStep["uses"] === "string" ? rawStep["uses"] : "";
       const withValue = record(rawStep["with"]) ? rawStep["with"] : {};
       if (uses.startsWith("actions/checkout@")) {
+        // A later checkout may be skipped by its own condition, so it never
+        // clears triggers an earlier checkout already made untrusted.
+        const directory = checkoutDirectory(withValue["path"]);
         controlledDirectories.set(
-          checkoutDirectory(withValue["path"]),
-          new Set(
-            prTriggers.filter(
+          directory,
+          new Set([
+            ...(controlledDirectories.get(directory) ?? []),
+            ...prTriggers.filter(
               (trigger) =>
                 !trustedCheckoutValue({
                   value: withValue["ref"],
@@ -604,7 +615,7 @@ export const checkWorkflowPrivilegeSource = (
                   controlledDirectories,
                 }),
             ),
-          ),
+          ]),
         );
       }
       const artifact =
