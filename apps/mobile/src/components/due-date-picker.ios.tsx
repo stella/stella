@@ -4,9 +4,6 @@ import { datePickerStyle } from "@expo/ui/swift-ui/modifiers";
 import type { DueDatePickerProps } from "@/components/due-date-picker";
 import { pickedDay, pickerDate, swiftUiClock } from "@/state/picked-day";
 
-/** Whether this platform offers a calendar to pick a due day from. */
-export const CAN_PICK_DUE_DAY = true;
-
 /** The system's own calendar, inline, as Reminders shows it for a date. */
 export const DueDatePicker = ({
   day,

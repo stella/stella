@@ -2,14 +2,20 @@ import { Suspense, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { ActivityIndicator, Pressable, ScrollView, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+} from "react-native";
 import { useFormatter, useTimeZone, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
 import { Text } from "@stll/ui/text";
 
 import { useChanged } from "@/components/changes";
-import { CAN_PICK_DUE_DAY, DueDatePicker } from "@/components/due-date-picker";
+import { DueDatePicker } from "@/components/due-date-picker";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
 import { MemberList } from "@/components/task-assignees";
@@ -183,7 +189,8 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
                 selected={due === choice.key}
               />
             ))}
-            {CAN_PICK_DUE_DAY ? (
+            {/* The web build has no calendar to pick a day from. */}
+            {Platform.OS === "web" ? null : (
               <DueChip
                 label={
                   due === "pick"
@@ -203,7 +210,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
                 }}
                 selected={due === "pick"}
               />
-            ) : null}
+            )}
           </View>
           {due === "pick" ? (
             <DueDatePicker
