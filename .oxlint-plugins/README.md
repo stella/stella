@@ -10,7 +10,12 @@ every exported rule in its intended scope. `bun scripts/check-oxlint-plugin-regi
 keeps the module name, exported rule IDs, production config, fixtures, catalogue, and
 local links in sync. `bash scripts/lint-oxlint-fixtures.sh` proves the positive cases:
 if a detector stops reporting, its intentionally suppressed fixture becomes an unused
-directive and CI fails.
+directive and CI fails. Suppression-free fixtures can instead start with
+`// expect-error-fixture` and export a `String.raw` template containing
+`// expect-error: <rule-id>` and `// expect-clean: <rule-id>` cases. The count
+harness unwraps that template only in its temporary copy and verifies exact
+diagnostic counts; ordinary lint sees the inert template. Existing directive
+fixtures can migrate to this format independently.
 
 Run custom rule tests with `bun scripts/run-custom-lint-tests.ts`, or pass test
 paths to select a subset. This runner applies the shared subprocess timeout to
@@ -169,6 +174,7 @@ runtime validation, or integration tests.
 - [`no-detached-void`](./no-detached-void.ts) (`no-detached-void`): prevents `void promise` from hiding rejection ownership; use `await`, return the promise, or the monitored `detached()` helper.
 - [`no-dialog-trigger-menu-item`](./no-dialog-trigger-menu-item.ts) (`no-dialog-trigger-menu-item`): rejects a dialog trigger mounted inside a menu item, which forces the menu to stay open under the dialog; lift the dialog beside the menu with `open` state instead.
 - [`no-disabled-tooltip-trigger`](./no-disabled-tooltip-trigger.ts) (`no-disabled-tooltip-trigger`): rejects tooltip triggers rendered as disabled buttons that cannot receive hover or focus events.
+- [`no-button-whitespace-normal`](./no-button-whitespace-normal.ts) (`no-button-whitespace-normal`): rejects `whitespace-normal` in Button `className` strings, including class helpers and template chunks; use `layout="wrap"` so wrapped rows size to their content.
 - [`no-duplicate-jsx-sibling-key`](./no-duplicate-jsx-sibling-key.ts) (`no-duplicate-jsx-sibling-key`): rejects equal explicit keys on direct JSX siblings, covering the static-child reconciliation gap left by `react/jsx-key`.
 - [`no-lazy-wrapped-content`](./no-lazy-wrapped-content.ts) (`no-lazy-wrapped-content`): a component declared with `lazy()` mounts beside the content it adds to, never around it. Reports a Suspense fallback that hands a component a data value its lazy content is also handed, and a lazy element wrapping content the same component also renders under another parent (a fallback, another branch or a bare return), because the chunk's arrival would replace that content, DOM node, scroll position and focus included. Literals, calls, functions and spreads are not compared, nor are styling and wiring attributes (`className`, `style`, `key`, `ref`, `role`, `tabIndex`, `aria-*`, `data-*`, event handlers), so placeholders stay allowed; boundaries that suspend on data are out of scope.
 - [`no-inline-endpoint-in-routes`](./no-inline-endpoint-in-routes.ts) (`no-inline-endpoint-in-routes`): requires route code to use owned API clients instead of declaring endpoints inline.
@@ -247,6 +253,7 @@ runtime validation, or integration tests.
 - [`no-raw-file-input`](./no-raw-file-input.ts) (`no-raw-file-input`): rejects a rendered `<input type="file">` in app and design-system source. Its chrome is untranslatable, and a hidden one repeats the ref, `.click()` and value-reset wiring at every site (a missed reset makes re-picking the same file a silent no-op). `openFilePicker` from `@stll/ui/file-picker` opens the chooser from any handler with no input in the tree; `FileInput` is the labelled single-file field.
 - [`no-native-ui`](./no-native-ui.ts) (`no-native-accordion`, `no-native-alert-dialog`, `no-native-button`, `no-native-checkbox`, `no-native-color-picker`, `no-native-combobox`, `no-native-details-grid`, `no-native-dialog`, `no-native-form`, `no-native-input`, `no-native-input-otp`, `no-native-label`, `no-native-menu`, `no-native-number-input`, `no-native-popover`, `no-native-secret-input`, `no-native-select`, `no-native-separator`, `no-native-switch`, `no-native-table`, `no-native-tabs`, `no-native-textarea`, `no-native-tooltip`): one rule per `@stll/ui` component that wraps native markup, generated from [`no-native-ui-registry.ts`](./no-native-ui-registry.ts). Each rejects the native elements, `role` values, `<input>` types, or attributes its component replaces in surfaces that render through `@stll/ui`, and names the import to use. The registry has a row for every module `@stll/ui` exports: a generated rule, the existing rule that already owns the native markup, or the reason the module has no native counterpart; its test fails when an export, a rule, its production scope, or its fixture line is missing.
 - [`no-person-select`](./no-person-select.ts) (`no-person-select`): rejects a `Select` from `@stll/ui/select` that chooses a person: one rendering `UserIdentity`/`UserIdentityAvatar` or offering an item valued by a user id (`member.userId`, `user.id`). `MemberCombobox` from `@/components/member-combobox` searches members by name and email as people type; a Select over a long member list is scrolling only. A person Select whose items use other id names and plain-text labels is outside this syntactic guard.
+- [`searchable-long-select`](./searchable-long-select.ts) (`searchable-long-select`): rejects native or design-system selects with more than 30 explicit options or mapped from a local static array; it resolves literal arrays exported by relative and web `@/` imports and follows local aliases and list-returning helpers. Package imports, re-export chains and dynamic arrays are outside this syntax guard; use a searchable `Combobox` from `@stll/ui/combobox`.
 - [`no-raw-date-parsing`](./no-raw-date-parsing.ts) (`no-raw-date-parsing`): rejects ambiguous date-only parsing and raw day-length arithmetic that fails across timezones or DST.
 - [`calendar-day`](./calendar-day.ts) (`no-utc-user-day`, `no-wall-clock-scheduler-decision`): a user-facing "today" is read through `todayFor(zone)` from `@stll/time` with the user's or organization's zone, so `Temporal.Now.plainDateISO("UTC")`, `todayFor("UTC")`, ISO-string date prefixes and `getUTC*` day getters are rejected in the web app, API handlers and API libraries (ingestion adapters and tests are exempt); scheduler tasks decide on `ctx.dueAt` (the `DueSlot` of the claimed row) instead of `new Date()`, `Date.now()` or `Temporal.Now`. Existing sites are budgeted per file, function and spelling in [the calendar-day ledger](../scripts/calendar-day-ledger.json) with a reason per row; a budget only shrinks (`bun scripts/calendar-day-ledger.ts --write` regenerates it, `--base` checks it in CI).
 - [`prefer-temporal`](./prefer-temporal.ts) (`prefer-temporal`): reserves legacy `Date` construction and serialization for concrete database, protocol, and third-party boundaries; global clock APIs, calendar constructors, and provable Date calendar mutation use explicitly imported Temporal.
@@ -382,7 +389,7 @@ implies a hazard that is gone.
 
 Every new guard or lint ships with an autofix or codemod registered in the PR
 Autofix job, or enforces only lines changed against the merge base for its first
-week. Register the dated scope in `scripts/guard-rollouts/<id>.ts` so the existing
+week. Register the dated scope in `scripts/guard-rollouts/<id>.json` so the existing
 dated-waiver inventory and healing checks enforce its seven-day deadline.
 The plugin registry check rejects newly added rule IDs without a rollout entry;
 an autofix entry names an eligible generator in `scripts/generated-files.ts`.

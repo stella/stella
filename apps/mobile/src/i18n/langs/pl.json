@@ -89,7 +89,14 @@
     "statusFailed": "Nie udało się zmienić zadania. Spróbuj ponownie.",
     "pickTitle": "Wybierz zadanie",
     "pickDescription": "Wybierz zadanie z listy, aby zobaczyć je tutaj.",
-    "openMatter": "Otwórz sprawę"
+    "openMatter": "Otwórz sprawę",
+    "assignedTo": "Przypisano do",
+    "nobody": "Nieprzypisane",
+    "assign": "Przypisz",
+    "doneAssigning": "Gotowe",
+    "someone": "Ktoś",
+    "membersFailed": "Nie udało się wczytać członków sprawy.",
+    "assignFailed": "Nie udało się przypisać zadania. Spróbuj ponownie."
   },
   "matters": {
     "emptyTitle": "Nie ma jeszcze spraw",
@@ -133,7 +140,9 @@
     },
     "add": "Dodaj",
     "scanDocument": "Zeskanuj dokument",
-    "newTask": "Nowe zadanie"
+    "newTask": "Nowe zadanie",
+    "uploadDocument": "Prześlij dokument",
+    "uploadFailed": "Nie udało się przesłać dokumentu. Spróbuj ponownie."
   },
   "entity": {
     "type": "Typ",
