@@ -245,7 +245,7 @@ jobs:
             rust_targets: x86_64-pc-windows-msvc
             install_timeout_minutes: 30
           - os: macos
-            runner: macos-14
+            runner: macos-15
             install_timeout_minutes: 5
             # Tauri builds a universal binary by lipoing the two
             # native-arch outputs together; rustup needs the two real

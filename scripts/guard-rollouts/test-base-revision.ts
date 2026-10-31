@@ -1,0 +1,20 @@
+import type { GuardRollout } from "../guard-rollout-policy.ts";
+
+export default {
+  id: "test-base-revision",
+  rules: ["no-live-test-base/no-live-test-base"],
+  type: "changed-lines",
+  expiresAt: "2026-11-05T00:00:00.000Z",
+  check: [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-live-test-base/no-live-test-base",
+    ".",
+  ],
+} as const satisfies GuardRollout;

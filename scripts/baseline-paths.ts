@@ -82,6 +82,9 @@ export const BASELINE_PATHS = {
   /** apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard.test.ts */
   caseLawReadFault:
     "apps/api/src/handlers/case-law/ingestion/adapters/read-fault-guard-baseline.json",
+  /** apps/api/scripts/update-structure-fidelity-baseline.ts */
+  caseLawStructureFidelity:
+    "apps/api/src/handlers/case-law/ingestion/parsers/structure-fidelity-baseline.json",
   /** apps/api/src/lib/legal-search/parsers/validate-ast-defaults.test.ts */
   validateAstDefaults:
     "apps/api/src/lib/legal-search/parsers/validate-ast-defaults.baseline.json",
