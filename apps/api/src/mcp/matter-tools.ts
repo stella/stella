@@ -295,7 +295,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       client_id: v.optional(
         uuidInputSchema(
-          "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client.",
+          "Client contact ID: creates a client matter, or attaches/replaces an existing matter's client.",
         ),
       ),
       reference: v.optional(
@@ -303,24 +303,20 @@ const saveMatterArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(64),
-          v.description(
-            "Matter reference (file number). Only valid when updating.",
-          ),
+          v.description("File number (update only)."),
         ),
       ),
       billing_reference: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.maxLength(128))),
-          v.description(
-            "Billing reference; pass null to clear. Only valid when updating.",
-          ),
+          v.description("Billing reference (update only); null clears."),
         ),
       ),
       status: v.optional(
         v.pipe(
           v.picklist(MATTER_STATUSES),
           v.description(
-            "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
+            "Update only: 'archived' archives; 'active' unarchives.",
           ),
         ),
       ),
@@ -328,7 +324,7 @@ const saveMatterArgsSchema = nullAsAbsent(
         v.pipe(
           v.picklist(MATTER_VISIBILITIES),
           v.description(
-            "Access: all_members = internal members; admins_and_assigned = owners, admins and assigned members; assigned_only = assigned members. Defaults: with client, admins_and_assigned; otherwise assigned_only. Later client changes preserve visibility. Only the lead, owner or admin may update it.",
+            "all_members: internal members; admins_and_assigned: owners/admins/assignees; assigned_only: assignees. Default with client: admins_and_assigned; otherwise assigned_only. Client changes preserve it. Lead/owner/admin may update.",
           ),
         ),
       ),
@@ -767,9 +763,7 @@ const saveContactArgsSchema = nullAsAbsent(
           v.minLength(1),
           v.maxLength(512),
           v.description(
-            "Display name; when creating it defaults to first + last name " +
-              "(person) or organization name (organization); non-empty when " +
-              "updating",
+            "Non-empty display name; creation defaults to first + last name (person) or organization name.",
           ),
         ),
       ),
@@ -2491,11 +2485,9 @@ export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
-      "create a new matter (name required; pass client_id to attach a client " +
-      "contact). Pass matter_id to update an existing matter: set name, " +
-      "reference, or billing_reference, and/or set status to 'archived' or " +
-      "'active' to archive or unarchive it. Returns the matter ID.",
+      "Create or update a matter; returns its ID. Omit matter_id to create " +
+      "(name required, client_id optional). With matter_id, update name, client, " +
+      "reference, billing_reference, visibility or status ('archived'/'active').",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check", "partial_check"],
