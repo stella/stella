@@ -5,6 +5,7 @@ import type { RouteNetworkMetrics } from "../helpers/network";
 import type { RouteRenderMetrics } from "../helpers/render-census";
 import {
   compareRouteScale as compareMeasuredRouteScale,
+  measureSmokeWorlds,
   parseRouteScaleLedger,
   RENDER_COMMIT_FLOOR,
   renderCommitAllowance,
@@ -404,5 +405,55 @@ describe("matter scale census", () => {
         "\n",
       ),
     ).toContain("/$workspaceId/contacts: renderCommits");
+  });
+});
+
+describe("world measurements", () => {
+  test("all three isolated callers start before the first wait completes", async () => {
+    const release = Promise.withResolvers<null>();
+    const started: string[] = [];
+    const completed: string[] = [];
+    const measure = async (world: string) => {
+      started.push(world);
+      await release.promise;
+      completed.push(world);
+    };
+    const pending = measureSmokeWorlds({
+      baseline: async () => await measure("baseline"),
+      small: async () => await measure("small"),
+      large: async () => await measure("large"),
+    });
+    const beforeRelease = [...started];
+    release.resolve(null);
+    const result = await pending;
+    expect(beforeRelease).toEqual(["baseline", "small", "large"]);
+    expect(completed).toEqual(["baseline", "small", "large"]);
+    expect(result.isOk()).toBe(true);
+  });
+
+  test("a failed caller is reported after every sibling finishes", async () => {
+    const failure = new Error("baseline measurement failed");
+    const release = Promise.withResolvers<null>();
+    const completed: string[] = [];
+    const pending = measureSmokeWorlds({
+      baseline: async () => {
+        throw failure;
+      },
+      small: async () => {
+        await release.promise;
+        completed.push("small");
+      },
+      large: async () => {
+        await release.promise;
+        completed.push("large");
+      },
+    });
+    release.resolve(null);
+    const result = await pending;
+    expect(completed).toEqual(["small", "large"]);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBe(failure);
+    }
   });
 });

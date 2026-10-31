@@ -1,3 +1,5 @@
+import { drainFanOut } from "@stll/concurrency";
+
 import type { RouteNetworkMetrics } from "./network";
 import type { RouteRenderMetrics } from "./render-census";
 import {
@@ -278,4 +280,22 @@ export const routeScaleCensus = ({
       renders: { small: before.renders, large: after.renders },
       ledger,
     });
+  });
+
+type MeasureSmokeWorldsOptions = {
+  baseline: () => Promise<void>;
+  small: () => Promise<void>;
+  large: () => Promise<void>;
+};
+
+/** Independent caller contexts overlap their waits; every context closes before returning. */
+export const measureSmokeWorlds = async ({
+  baseline,
+  small,
+  large,
+}: MeasureSmokeWorldsOptions) =>
+  await drainFanOut({
+    items: [baseline, small, large],
+    signal: new AbortController().signal,
+    operation: async (measure) => await measure(),
   });

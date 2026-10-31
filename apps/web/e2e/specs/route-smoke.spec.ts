@@ -47,6 +47,7 @@ import {
   RENDER_CENSUS_GLOBAL,
 } from "../helpers/render-census-hook";
 import {
+  measureSmokeWorlds,
   parseRouteScaleLedger,
   routeScaleCensus,
   type RouteScaleMeasurement,
@@ -340,29 +341,37 @@ const declareRouteSmokeGroup = ({
     const declareRouteTest = (def: SmokeRouteDef) => {
       const scaleDef = scaleSmokeRouteDef(def);
       test(def.template, async () => {
-        // timeout: three sequential worlds budget the former 60s route allowance for each navigation.
+        // timeout: three isolated worlds each retain the former 60s navigation allowance.
         test.setTimeout(180_000);
         if (world === null) {
           throw new Error("route-smoke baseline world was not initialized");
         }
-        // Preserve the main-owned baseline's fixture cardinality.
-        await smokeRoute({
-          browser: browserForPages,
-          results: networkResults,
-          route: resolveRoute(def, world),
+        const baselineWorld = world;
+        const measured = await measureSmokeWorlds({
+          baseline: async () =>
+            await smokeRoute({
+              browser: browserForPages,
+              results: networkResults,
+              route: resolveRoute(def, baselineWorld),
+            }),
+          small: async () =>
+            await smokeRoute({
+              browser: browserForPages,
+              results: smallScaleResults,
+              renderResults: smallRenderResults,
+              route: resolveRoute(scaleDef, worlds.small),
+            }),
+          large: async () =>
+            await smokeRoute({
+              browser: browserForPages,
+              results: scaleResults,
+              renderResults: largeRenderResults,
+              route: resolveRoute(scaleDef, worlds.large),
+            }),
         });
-        await smokeRoute({
-          browser: browserForPages,
-          results: smallScaleResults,
-          renderResults: smallRenderResults,
-          route: resolveRoute(scaleDef, worlds.small),
-        });
-        await smokeRoute({
-          browser: browserForPages,
-          results: scaleResults,
-          renderResults: largeRenderResults,
-          route: resolveRoute(scaleDef, worlds.large),
-        });
+        if (measured.isErr()) {
+          throw measured.error;
+        }
         const key = networkBaselineKey(scaleDef);
         const small = smallScaleResults.get(key);
         const large = scaleResults.get(key);
