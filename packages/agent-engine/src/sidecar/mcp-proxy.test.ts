@@ -36,7 +36,7 @@ const upstream = () => {
       });
     },
   });
-  listener.origin = `http://127.0.0.1:${server.port}`;
+  listener.origin = server.url.origin;
   return { seen, server, origin: listener.origin };
 };
 
