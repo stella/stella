@@ -67,6 +67,7 @@ import { unwrapApiResponse } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 import { pageTitle } from "@/lib/page-title";
+import { queryView } from "@/lib/query-view.logic";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -88,18 +89,9 @@ import {
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   loader: async ({ context }) => {
-    // Prime both reads in parallel so jurisdiction suggestions do not add a
-    // waterfall after the profile mounts.
-    await Promise.all([
-      ensureRouteQueryData(context.queryClient, sessionOptions),
-      ensureRouteQueryData(
-        context.queryClient,
-        organizationSettingsOptions({
-          organizationId: context.user.activeOrganizationId,
-          userId: context.user.id,
-        }),
-      ),
-    ]);
+    // Prime the session query the page suspends on so the fetch starts during
+    // navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(context.queryClient, sessionOptions);
   },
   staticData: {
     presentation: routePresentation({
@@ -244,11 +236,14 @@ function ProfilePageBody() {
     t("settings.account.deleteAccountConfirmationPhrase"),
   );
   const storedTz = session?.user.timezoneId ?? "UTC";
-  const { data: organizationSettings } = useSuspenseQuery(
-    organizationSettingsOptions({
-      organizationId: authenticatedUser.activeOrganizationId,
-      userId: authenticatedUser.id,
-    }),
+  // Jurisdiction suggestions are optional: the profile renders without them.
+  const organizationSettings = queryView(
+    useQuery(
+      organizationSettingsOptions({
+        organizationId: authenticatedUser.activeOrganizationId,
+        userId: authenticatedUser.id,
+      }),
+    ),
   );
   const [displayName, setDisplayName] = useState(
     () => session?.user.name ?? "",
@@ -531,9 +526,13 @@ function ProfilePageBody() {
               id="timezone-select"
               label={t("settings.account.timezone")}
               disabled={updateTimezone.isPending}
-              jurisdictionCountries={organizationSettings.practiceJurisdictions.map(
-                ({ countryCode }) => countryCode,
-              )}
+              jurisdictionCountries={
+                organizationSettings.type === "items"
+                  ? organizationSettings.items.practiceJurisdictions.map(
+                      ({ countryCode }) => countryCode,
+                    )
+                  : []
+              }
               onValueChange={(tz) => {
                 if (tz !== storedTz) {
                   updateTimezone.mutate(tz);
