@@ -6916,7 +6916,7 @@
         "addAnother": "Dodaj kolejną kolumnę",
         "createFailed": "Nie udało się utworzyć kolumn",
         "createMany": "Utwórz {count} kolumn",
-        "createdMany": "Utworzono {count} kolumn",
+        "createdMany": "{count, plural, one {Utworzono # kolumnę} few {Utworzono # kolumny} many {Utworzono # kolumn} other {Utworzono # kolumny}}",
         "createdOne": "Utworzono kolumnę",
         "promptPlaceholder": "Co ta kolumna ma wyodrębnić? Aby użyć / i @, doprecyzuj ją w oknie dialogowym kolumny.",
         "title": "Dodaj kolumny"

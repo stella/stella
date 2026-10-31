@@ -6916,7 +6916,7 @@
         "addAnother": "Lisa veel veerg",
         "createFailed": "Veergude loomine ebaõnnestus",
         "createMany": "Loo {count} veergu",
-        "createdMany": "Loodi {count} veergu",
+        "createdMany": "{count, plural, one {Loodi # veerg} other {Loodi # veergu}}",
         "createdOne": "Veerg loodud",
         "promptPlaceholder": "Mida see veerg peaks välja võtma? / ja @ kasutamiseks täpsusta seda veeru dialoogis.",
         "title": "Lisa veerud"

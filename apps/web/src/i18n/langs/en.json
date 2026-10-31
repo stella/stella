@@ -6916,7 +6916,7 @@
         "addAnother": "Add another column",
         "createFailed": "Couldn't create columns",
         "createMany": "Create {count} columns",
-        "createdMany": "Created {count} columns",
+        "createdMany": "{count, plural, one {Created # column} other {Created # columns}}",
         "createdOne": "Column created",
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.",
         "title": "Add columns"
