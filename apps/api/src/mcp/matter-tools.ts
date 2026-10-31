@@ -20,6 +20,8 @@ import {
 import { isCountryCode } from "@stll/country-codes";
 
 import { member, user } from "@/api/db/auth-schema";
+import { abortTransaction, safeDbFromScoped } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { LIST_ITEM_TYPES } from "@/api/db/schema";
 import { createContactHandler } from "@/api/handlers/contacts/create";
 import { deleteContactHandler } from "@/api/handlers/contacts/delete";
@@ -2128,23 +2130,21 @@ const SAVE_TASK_CREATE_KEY = "mcp.handleSaveTaskTool.created_error";
 const assignTaskAssignee = async ({
   context,
   recordAuditEvent,
-  selector,
+  assigneeUserId,
+  safeDb = context.safeDb,
   taskId,
   workspaceId,
 }: {
   context: McpRequestResources;
   recordAuditEvent: AuditRecorder;
-  selector: string;
+  assigneeUserId: string;
+  safeDb?: SafeDb;
   taskId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 }): Promise<ReturnType<typeof errorResult> | null> => {
-  const assigneeUserId = await resolveOrganizationMember(context, selector);
-  if (assigneeUserId === null) {
-    return notFoundResult("Organization member not found for assignee");
-  }
   const assigned = await Result.gen(() =>
     addAssigneeHandler({
-      safeDb: context.safeDb,
+      safeDb,
       workspaceId,
       recordAuditEvent,
       body: { taskId, userId: brandPersistedUserId(assigneeUserId) },
@@ -2257,6 +2257,13 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     return active;
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+  const assigneeUserId =
+    input.assignee === undefined
+      ? null
+      : await resolveOrganizationMember(context, input.assignee);
+  if (input.assignee !== undefined && assigneeUserId === null) {
+    return notFoundResult("Organization member not found for assignee");
+  }
   const targetError = await validateSaveTaskTargets({
     context,
     input,
@@ -2267,53 +2274,77 @@ const handleSaveTaskTool: TypedMcpToolHandler<
     return targetError;
   }
 
-  if (
+  const hasTaskUpdate =
     input.name !== undefined ||
     input.status !== undefined ||
     input.priority !== undefined ||
     input.item_type !== undefined ||
     input.due_date !== undefined ||
-    input.workflow_reason !== undefined
-  ) {
-    const updated = await Result.gen(() =>
-      updateTaskHandler({
-        safeDb: context.safeDb,
-        workspaceId,
-        userId: context.userId,
+    input.workflow_reason !== undefined;
+  const saveTaskAndAssignee = async (safeDb: SafeDb) => {
+    if (hasTaskUpdate) {
+      const updated = await Result.gen(() =>
+        updateTaskHandler({
+          safeDb,
+          workspaceId,
+          userId: context.userId,
+          recordAuditEvent,
+          body: {
+            taskId,
+            ...(input.name === undefined ? {} : { name: input.name }),
+            ...(input.status === undefined ? {} : { status: input.status }),
+            ...(input.priority === undefined
+              ? {}
+              : { priority: input.priority }),
+            ...(input.item_type === undefined
+              ? {}
+              : { listItemType: input.item_type }),
+            ...(input.due_date === undefined
+              ? {}
+              : { dueDate: input.due_date }),
+            ...(input.workflow_reason === undefined
+              ? {}
+              : { workflowReason: input.workflow_reason }),
+          },
+        }),
+      );
+      if (Result.isError(updated)) {
+        return internalFailureResult(
+          updated.error,
+          "mcp.handleSaveTaskTool.updated_error",
+        );
+      }
+    }
+    if (assigneeUserId !== null) {
+      return await assignTaskAssignee({
+        context,
         recordAuditEvent,
-        body: {
-          taskId,
-          ...(input.name === undefined ? {} : { name: input.name }),
-          ...(input.status === undefined ? {} : { status: input.status }),
-          ...(input.priority === undefined ? {} : { priority: input.priority }),
-          ...(input.item_type === undefined
-            ? {}
-            : { listItemType: input.item_type }),
-          ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
-          ...(input.workflow_reason === undefined
-            ? {}
-            : { workflowReason: input.workflow_reason }),
-        },
-      }),
-    );
-    if (Result.isError(updated)) {
+        assigneeUserId,
+        safeDb,
+        taskId,
+        workspaceId,
+      });
+    }
+    return null;
+  };
+
+  if (hasTaskUpdate && assigneeUserId !== null) {
+    const saved = await context.safeDb(async (tx) => {
+      const error = await saveTaskAndAssignee(
+        safeDbFromScoped(async (run) => await run(tx)),
+      );
+      return error === null ? null : abortTransaction(error);
+    });
+    if (Result.isError(saved)) {
       return internalFailureResult(
-        updated.error,
-        "mcp.handleSaveTaskTool.updated_error",
+        saved.error,
+        "mcp.handleSaveTaskTool.updated_and_assigned_error",
       );
     }
-  }
-
-  if (input.assignee !== undefined) {
-    const assignmentError = await assignTaskAssignee({
-      context,
-      recordAuditEvent,
-      selector: input.assignee,
-      taskId,
-      workspaceId,
-    });
-    if (assignmentError) {
-      return assignmentError;
+  } else {
+    const error = await saveTaskAndAssignee(context.safeDb);
+    if (error) {
+      return error;
     }
   }
 

@@ -21,7 +21,6 @@ const NON_UUID_ID_INPUTS: Record<string, string> = {
   // columns that hold them are `text`/`varchar`, never `uuid`.
   "list_time_entries.user_id": "better-auth user id (text column)",
   "resolve_rate.user_id": "better-auth user id (text column)",
-  "save_task.add_assignee_user_id": "better-auth user id (text column)",
   "save_task.remove_assignee_user_id": "better-auth user id (text column)",
   "list_audit_log.user_id": "better-auth user id (text column)",
   "add_matter_member.user_id": "better-auth user id (text column)",

@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
+  entities,
   organizationAccessStates,
   taskAssignees,
   workspaceMembers,
@@ -175,24 +176,23 @@ describe.skipIf(!enabled)("save_task assignee updates", () => {
         .where(eq(taskAssignees.entityId, taskEntityId)),
     ).toEqual([{ userId: firstAssigneeId }]);
 
-    const assignByEmail = await handleMcpToolCall({
-      toolName: "save_task",
-      args: { task_id: taskId, assignee: secondAssigneeEmail },
-      context,
-    });
-    expect(assignByEmail.isError).toBeUndefined();
     const persistedBeforeUnknown = await testDb
       .select({ userId: taskAssignees.userId })
       .from(taskAssignees)
       .where(eq(taskAssignees.entityId, taskEntityId))
       .orderBy(taskAssignees.userId);
     expect(new Set(persistedBeforeUnknown.map(({ userId }) => userId))).toEqual(
-      new Set([firstAssigneeId, secondAssigneeId]),
+      new Set([firstAssigneeId]),
     );
 
     const unknown = await handleMcpToolCall({
       toolName: "save_task",
-      args: { task_id: taskId, assignee: "unknown-member@test.local" },
+      args: {
+        task_id: taskId,
+        name: "Must not persist",
+        status: "done",
+        assignee: "unknown-member@test.local",
+      },
       context,
     });
     expect(unknown.isError).toBe(true);
@@ -209,5 +209,38 @@ describe.skipIf(!enabled)("save_task assignee updates", () => {
         .where(eq(taskAssignees.entityId, taskEntityId))
         .orderBy(taskAssignees.userId),
     ).toEqual(persistedBeforeUnknown);
+    expect(
+      await testDb
+        .select({ name: entities.name, status: entities.status })
+        .from(entities)
+        .where(eq(entities.id, taskEntityId)),
+    ).toEqual([{ name: "Assign me", status: "open" }]);
+
+    const assignByEmail = await handleMcpToolCall({
+      toolName: "save_task",
+      args: {
+        task_id: taskId,
+        name: "Assigned and renamed",
+        assignee: secondAssigneeEmail,
+      },
+      context,
+    });
+    expect(assignByEmail.isError).toBeUndefined();
+    expect(
+      await testDb
+        .select({ name: entities.name, status: entities.status })
+        .from(entities)
+        .where(eq(entities.id, taskEntityId)),
+    ).toEqual([{ name: "Assigned and renamed", status: "open" }]);
+    expect(
+      new Set(
+        (
+          await testDb
+            .select({ userId: taskAssignees.userId })
+            .from(taskAssignees)
+            .where(eq(taskAssignees.entityId, taskEntityId))
+        ).map(({ userId }) => userId),
+      ),
+    ).toEqual(new Set([firstAssigneeId, secondAssigneeId]));
   });
 });

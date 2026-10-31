@@ -473,7 +473,7 @@ describe("mixed native task inputs", () => {
       for (const args of [
         { item_type: "fact" },
         { list_id: "list" },
-        { list_description: "Description" },
+        { description: "Description" },
       ]) {
         expect(isMcpFeatureInputEnabled({ context, definition, args })).toBe(
           featureIds.includes(LEGAL_LISTS_FEATURE_ID),

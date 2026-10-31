@@ -1,5 +1,5 @@
 ---
-"@stll/cli": patch
+"@stll/cli": minor
 ---
 
-Expose the complete matter and contact save fields and task descriptions, due dates, and assignees in generated commands.
+Rename the save task inputs to `assignee` and `description`.

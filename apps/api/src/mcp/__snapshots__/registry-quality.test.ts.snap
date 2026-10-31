@@ -4077,7 +4077,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (assignee / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -4149,7 +4149,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -4180,7 +4180,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
           "description": "User ID to assign to the task (must be a matter member)"
@@ -10738,7 +10738,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save task can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save task is confined to the private workspace or a bounded computation."
     },
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (assignee / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
     "annotations": {
       "title": "Save task",
       "destructiveHint": true,
@@ -10810,7 +10810,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "format": "uuid",
           "description": "Section of list_id to create the item under (creating only)"
         },
-        "list_description": {
+        "description": {
           "anyOf": [
             {
               "type": "string",
@@ -10841,7 +10841,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 1000,
           "description": "Reason for a governed status or deadline change"
         },
-        "add_assignee_user_id": {
+        "assignee": {
           "type": "string",
           "minLength": 1,
           "description": "User ID to assign to the task (must be a matter member)"
