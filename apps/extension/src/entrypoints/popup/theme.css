@@ -5,6 +5,9 @@
   --muted-foreground: #525252;
   --primary: #171717;
   --primary-foreground: #fff;
+  --status-idle: #737373;
+  --status-connected: #287a45;
+  --status-access-needed: #a16207;
   --secondary: #e5e5e5;
   --secondary-foreground: #171717;
 }
