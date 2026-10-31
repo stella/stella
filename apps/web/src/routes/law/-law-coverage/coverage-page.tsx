@@ -828,7 +828,10 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
             <Delta value={source.addedLastWeek} />
           </TableCell>
           <TableCell className={"whitespace-normal"}>
-            <SourceCompleteness completeness={source.completeness} />
+            <SourceCompleteness
+              completeness={source.completeness}
+              knownGaps={source.knownGaps}
+            />
           </TableCell>
         </TableRow>
       </TableBody>
@@ -853,8 +856,11 @@ const SourceRows = ({ source }: { source: CaseLawCoverageSource }) => {
 
 const SourceCompleteness = ({
   completeness,
+  knownGaps,
 }: {
   completeness: CaseLawSourceCompleteness;
+  /** The source's own decision-by-decision reconciliation, when it has one. */
+  knownGaps: CaseLawCoverageSource["knownGaps"];
 }) => {
   const t = useTranslations();
 
@@ -873,7 +879,12 @@ const SourceCompleteness = ({
       );
     case "measured":
     case "stale":
-      return <MeasuredCompleteness completeness={completeness} />;
+      return (
+        <MeasuredCompleteness
+          completeness={completeness}
+          knownGaps={knownGaps}
+        />
+      );
     default: {
       completeness satisfies never;
       return panic("Unhandled case-law source completeness state");
@@ -891,14 +902,18 @@ const SourceCompleteness = ({
  */
 const MeasuredCompleteness = ({
   completeness,
+  knownGaps,
 }: {
   completeness: CaseLawMeasuredCompleteness;
+  knownGaps: CaseLawCoverageSource["knownGaps"];
 }) => {
   const t = useTranslations();
   const format = useFormatter();
   const counts = {
     reported: completeness.reported,
     stored: completeness.stored,
+    knownMissing:
+      knownGaps.type === "reconciled" ? knownGaps.summary.missing : null,
   };
   const percent = caseLawCompletenessPercent(counts);
 
