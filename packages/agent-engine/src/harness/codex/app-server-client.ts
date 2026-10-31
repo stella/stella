@@ -12,9 +12,7 @@ import { type CodexRequestId, JsonRpcMessageSchema } from "./protocol";
 /** A line longer than this is refused rather than buffered without bound. */
 const MAX_LINE_BYTES = 16 * 1024 * 1024;
 
-export class AppServerRequestError extends TaggedError(
-  "AppServerRequestError",
-)<{
+class AppServerRequestError extends TaggedError("AppServerRequestError")<{
   reason: "rejected" | "closed";
   code: number | null;
   message: string;

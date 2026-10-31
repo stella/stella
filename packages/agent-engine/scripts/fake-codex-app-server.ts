@@ -142,7 +142,7 @@ const agentMessage = (id: string, text: string, extra: object = {}) => ({
   ...extra,
 });
 
-export const FAKE_SCENARIOS = {
+const FAKE_SCENARIOS = {
   /**
    * The shared stella tool calls through the stella MCP binding, step by
    * step: a step's calls all start, then complete. Then an answer.
