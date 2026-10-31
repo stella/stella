@@ -76,8 +76,10 @@ export const CHAT_TURN_NOT_OWNED_ERROR_CODE = "chat_turn_not_owned" as const;
 
 /**
  * Why the server refused to edit a user message and drop the turns after it.
- * Each is recoverable: the page reloads the thread as stored, and the message
- * can be edited again once nothing runs.
+ * After any of them the page reloads the thread as stored. Only `turnRunning`
+ * and `historyChanged` pass: the same message can be edited again once
+ * nothing runs. `targetMissing` and `targetNotUserMessage` do not change by
+ * waiting.
  * - `targetMissing`: no such message of the requester in this thread and
  *   organization (another user's, another thread's, or one already dropped).
  * - `targetNotUserMessage`: the message is not a user message.
