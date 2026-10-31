@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { createTestState } from "@stll/test-state";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
   agentSkillResources,
   agentSkills,
   billingGuidelineFiles,
+  featureEnrolments,
   organizationSettings,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -24,6 +28,7 @@ import {
 
 import updateBillingDraftConfiguration from "./update";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -42,6 +47,9 @@ if (!databaseUrl || !runPostgres) {
       const userId = mintAuthProviderId<"user">();
       const skillId = createSafeId<"agentSkill">();
       const resourceId = createSafeId<"agentSkillResource">();
+      // Billing administration is admitted by the deployment flag and the
+      // actor's own time-billing enrolment.
+      testState.setConfig("FEATURE_TIME_BILLING", true);
 
       try {
         await db.insert(organization).values({
@@ -62,6 +70,11 @@ if (!databaseUrl || !runPostgres) {
           userId,
           role: "owner",
           createdAt: new Date(),
+        });
+        await db.insert(featureEnrolments).values({
+          organizationId,
+          userId,
+          featureId: "time-billing",
         });
         await db.insert(agentSkills).values({
           id: skillId,
