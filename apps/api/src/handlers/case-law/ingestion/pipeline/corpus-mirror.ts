@@ -8,9 +8,9 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
-import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
+import type { decisionFallbackState } from "@/api/lib/case-law/fallback-decision-identity";
 import {
   pgPayloadCarriesDocumentFor,
   rowHoldsDocumentFor,
@@ -30,8 +30,11 @@ import type {
   CorpusPayload,
   WriteCorpusResult,
 } from "@/api/lib/legal-search/corpus-storage";
-import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
+
+export {
+  caseLawCanonicalPayload,
+  decisionSections,
+} from "@/api/lib/legal-search/decision-payload";
 
 /**
  * Where this decision's canonical payload ends up.
@@ -124,7 +127,19 @@ export const settleCaseLawCorpusMirrorTx = async ({
  * not a decision column fails to typecheck where `storedRowDiffers` reads it
  * off the table.
  */
+const FALLBACK_COMPARED_COLUMN_TYPES = {
+  fallbackIdentityKey: "text",
+  fallbackCohortKey: "text",
+  fallbackContentHash: "text",
+  fallbackPublicationHash: "text",
+  fallbackDocumentHash: "text",
+} as const satisfies Record<
+  keyof ReturnType<typeof decisionFallbackState>["columns"],
+  "text"
+>;
+
 const REFRESH_COMPARED_COLUMN_TYPES = {
+  ...FALLBACK_COMPARED_COLUMN_TYPES,
   caseNumber: "text",
   caseNumberType: "text",
   citationKey: "text",
@@ -294,32 +309,6 @@ export const loadPendingMirrorPayload = async (
  * second derivation elsewhere would hash a different document than the one
  * this pipeline stores.
  */
-export const decisionSections = (result: IngestionResult): DecisionSection[] =>
-  result.sections ?? (result.fulltext ? segmentDecision(result.fulltext) : []);
-
-/**
- * The canonical payload a result stores, in the shape the content hash is
- * taken over. Exported so a caller comparing a re-parse against what is
- * already stored asks the same question the corpus write does.
- */
-export const caseLawCanonicalPayload = (
-  result: IngestionResult,
-): Result<CorpusPayload, StoredCorpusValidationError> => {
-  const sections = decisionSections(result);
-  const prepared = prepareCorpusAst({
-    ast: result.documentAst,
-    fallbackText: result.fulltext,
-    parserVersion: result.parserVersion,
-  });
-  if (prepared.isErr()) {
-    return prepared;
-  }
-  return Result.ok({
-    ast: prepared.value.ast,
-    sections: sections.length > 0 ? sections : null,
-    text: result.fulltext ?? null,
-  });
-};
 
 export const planCorpusWrite = (mode: CorpusStorageMode): CorpusWritePlan => {
   switch (mode) {
