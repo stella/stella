@@ -174,7 +174,7 @@ jobs:
       # computed from current main instead of opening another.
       - name: Open or update the refresh PR
         if: steps.refresh.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@fc5f380b18234429cb60682ccfe1537561311e61
+        uses: stella/.github/.github/actions/signed-commit@042baebaf071329b956555c05caf5736504c278d
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
