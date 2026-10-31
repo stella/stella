@@ -10,7 +10,7 @@ GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { AuditActionSentence, AuditResourceLabel } =
-  await import("./audit-logs");
+  await import("./organization.audit-logs");
 
 afterEach(cleanup);
 afterAll(async () => await unregisterDomEnvironment());

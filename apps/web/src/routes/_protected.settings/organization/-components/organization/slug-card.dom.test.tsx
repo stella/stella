@@ -7,7 +7,9 @@ import arMessages from "@/i18n/langs/ar.json" with { type: "json" };
 import messages from "@/i18n/langs/en.json" with { type: "json" };
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/admin/general" });
+GlobalRegistrator.register({
+  url: "http://localhost:3000/settings/organization/general",
+});
 const originalFetch = globalThis.fetch;
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
