@@ -539,10 +539,14 @@ const runCheck = (root: string, base: string) => {
       githubOutput,
       `privileged_classification_change=${sensitive}\n`,
     );
-    if (result.isErr() && result.error instanceof ReviewRequiredError) {
+    if (
+      result.isErr() &&
+      result.error instanceof ReviewRequiredError &&
+      result.error.refusal
+    ) {
       appendFileSync(
         githubOutput,
-        `classification_refusal=${result.error.refusal ?? ""}\n`,
+        `classification_refusal=${result.error.refusal}\n`,
       );
     }
   }
