@@ -24,7 +24,6 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   createTestHandlerContext,
   NO_AUDIT,
-  NO_DB,
 } from "@/api/tests/helpers/handler-context";
 
 export const seedDataExportReadScaling = async (
@@ -149,6 +148,7 @@ export const seedDataExportReadScaling = async (
       email,
       exportId,
       safeDb,
+      scopedDb,
       recordAuditEvent,
       db,
       cleanup,
@@ -173,7 +173,7 @@ export const dataExportReadScalingScenarios = [
             Parameters<typeof listDataExports.handler>[0]
           >({
             safeDb: fixture.safeDb,
-            scopedDb: NO_DB,
+            scopedDb: fixture.scopedDb,
             audit: NO_AUDIT,
             user: { id: fixture.userId, email: fixture.email },
             session: { activeOrganizationId: fixture.organizationId },
@@ -206,7 +206,7 @@ export const dataExportReadScalingScenarios = [
             Parameters<typeof readDataExport.handler>[0]
           >({
             safeDb: fixture.safeDb,
-            scopedDb: NO_DB,
+            scopedDb: fixture.scopedDb,
             audit: NO_AUDIT,
             user: { id: fixture.userId, email: fixture.email },
             session: { activeOrganizationId: fixture.organizationId },
@@ -247,7 +247,7 @@ export const dataExportReadScalingScenarios = [
             Parameters<typeof downloadDataExport.handler>[0]
           >({
             safeDb: fixture.safeDb,
-            scopedDb: NO_DB,
+            scopedDb: fixture.scopedDb,
             audit: fixture.recordAuditEvent,
             user: { id: fixture.userId, email: fixture.email },
             session,
