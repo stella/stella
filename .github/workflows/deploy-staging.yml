@@ -494,6 +494,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
@@ -685,8 +687,68 @@ jobs:
 
   # The builds run after a skipped wake when staging was already up. A job's
   # default condition skips it when any job it depends on through `needs` was
-  # skipped, which promoted nothing yet ended the run green, so promotion
-  # names the build results it depends on instead.
+  # skipped, so both jobs name the build results that permit promotion.
+  mock-model-journeys:
+    name: Mock-model application journeys
+    needs:
+      [resolve, staging-health, staging-wake, rc-manifest, build-api, build-web]
+    if: >-
+      !cancelled() && github.ref == 'refs/heads/main' &&
+      needs.resolve.result == 'success' &&
+      ((inputs.release_ref != '' && needs.rc-manifest.result == 'success' &&
+      (needs.staging-health.outputs.deploy == 'true' || needs.staging-wake.outputs.deploy == 'true')) ||
+      (needs.build-api.result == 'success' && needs.build-web.result == 'success'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout journey source
+        timeout-minutes: 3
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        timeout-minutes: 3
+        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run mock-model application journeys
+        id: mock-journeys
+        timeout-minutes: 40
+        uses: ./.github/actions/user-journeys
+        with:
+          project: local-stack
+          expected-commit: ${{ needs.resolve.outputs.sha }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          E2E_WEB_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:3001
+          JOURNEY_SIGN_IN: seeded
+
+      - name: Upload failed mock-model journey reports
+        timeout-minutes: 5
+        if: ${{ failure() && steps.mock-journeys.outcome == 'failure' }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: staging-mock-model-journeys-report
+          path: |
+            ${{ steps.mock-journeys.outputs.report-paths }}
+            /tmp/api.log
+            ${{ runner.temp }}/web-user-journeys.log
+          retention-days: 7
+
   promote-staging:
     name: Promote staging images
     needs:
@@ -710,6 +772,7 @@ jobs:
       packages: read
       deployments: write
       statuses: write
+      actions: read
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     env:
@@ -1055,20 +1118,31 @@ jobs:
           JOURNEY_SMOKE_SESSION_URL: https://api-staging.stll.app/smoke/session
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
 
-      - name: Run mock-model application journeys
+      # Keep staging ownership and the readiness monitor until both sets of
+      # journeys finish, without delaying the deploy behind the local stack.
+      - name: Require mock-model journey success
         id: mock-journeys
         if: ${{ !cancelled() && steps.smoke-deps.conclusion == 'success' && steps.proof-readiness.outputs.status == 'ready' }}
-        timeout-minutes: 40
-        uses: ./.github/actions/user-journeys
-        with:
-          project: local-stack
-          expected-commit: ${{ needs.resolve.outputs.sha }}
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+        timeout-minutes: 60
         env:
-          E2E_WEB_URL: http://localhost:3000
-          E2E_API_URL: http://localhost:3001
-          JOURNEY_SIGN_IN: seeded
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for _ in {1..119}; do
+            jobs="$(bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/jobs?per_page=100")"
+            result="$(jq -r '
+              [.[].jobs[] | select(.name == "Mock-model application journeys")] |
+              if length != 1 then error("Expected exactly one mock-model journey job; rerun all jobs to regenerate the proof")
+              elif .[0].status == "completed" then .[0].conclusion
+              else "pending" end' <<< "$jobs")"
+            case "$result" in
+              success) exit 0 ;;
+              pending) sleep 30 ;;
+              *) echo "::error::Mock-model journeys did not succeed: $result"; exit 1 ;;
+            esac
+          done
+          echo "::error::Timed out waiting for mock-model journeys"
+          exit 1
 
       - name: Verify candidate staging commit after smokes
         id: candidate-served-after-smokes
@@ -1089,15 +1163,12 @@ jobs:
 
       - name: Upload failed journey reports
         timeout-minutes: 5
-        if: ${{ failure() && (steps.deployed-journeys.outcome == 'failure' || steps.mock-journeys.outcome == 'failure') }}
+        if: ${{ failure() && steps.deployed-journeys.outcome == 'failure' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: staging-user-journeys-report
           path: |
             ${{ steps.deployed-journeys.outputs.report-paths }}
-            ${{ steps.mock-journeys.outputs.report-paths }}
-            /tmp/api.log
-            ${{ runner.temp }}/web-user-journeys.log
           retention-days: 7
 
       - name: Record staging verification
