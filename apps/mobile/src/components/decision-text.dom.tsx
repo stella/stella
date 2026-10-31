@@ -1,7 +1,7 @@
 "use dom";
 
-import { Fragment, useEffect } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { Fragment, useEffect, useEffectEvent } from "react";
+import type { ReactNode } from "react";
 
 import dmSansRegular from "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf";
 import dmSansMedium from "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf";
@@ -46,23 +46,33 @@ const DecisionText = ({
     document.documentElement.style.fontSize = `${String(16 * textScale)}px`;
   }, [textScale]);
 
-  // One listener for every link, so the page carries data and no handlers.
-  const follow = (event: MouseEvent<HTMLElement>) => {
-    const anchor =
-      event.target instanceof Element ? event.target.closest("a") : null;
-    const href = anchor?.getAttribute("href") ?? null;
-    if (href === null) {
-      return;
-    }
-    event.preventDefault();
+  const follow = useEffectEvent((href: string) => {
     onLink(href);
-  };
+  });
+
+  // One listener for every link, so the page carries data and no handlers,
+  // and a tap never navigates the web view itself.
+  useEffect(() => {
+    const listener = (event: MouseEvent) => {
+      const anchor =
+        event.target instanceof Element ? event.target.closest("a") : null;
+      const href = anchor?.getAttribute("href") ?? null;
+      if (href === null) {
+        return;
+      }
+      event.preventDefault();
+      follow(href);
+    };
+    document.addEventListener("click", listener);
+    return () => {
+      document.removeEventListener("click", listener);
+    };
+  }, []);
 
   return (
     <>
       <style>{STYLES}</style>
-      {/* oxlint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- delegates the links' own activation */}
-      <article className="reader" onClick={follow}>
+      <article className="reader">
         <header className="decision">
           <div className="identity">
             <h1>{page.caseNumber}</h1>
