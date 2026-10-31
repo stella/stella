@@ -366,32 +366,30 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
 };
 
 type ReadQueuedPageOptions = {
-  db: SchedulerDb;
+  tx: Transaction;
   settled: SQL | undefined;
   cursor: QueuedCursor | null;
   pageSize: number;
   requester: "present" | "absent";
 };
 
-// One page of settled queued exports after `cursor`.
 const readQueuedPage = async ({
-  db,
+  tx,
   settled,
   cursor,
   pageSize,
   requester,
 }: ReadQueuedPageOptions) =>
-  await withAggregateTransaction(db, async (tx) => {
-    await setSharedStatementTimeout(
-      tx,
-      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
-    );
-    // Fetch keys from the covering queue index before reading row payloads:
-    // owner RLS selectivity can otherwise favor a growing requester scan and sort.
-    const candidates = tx
+  await readCursorPage(
+    tx
       .select({
         id: organizationDataExports.id,
-        createdAt: organizationDataExports.createdAt,
+        organizationId: organizationDataExports.organizationId,
+        requestedBy: organizationDataExports.requestedBy,
+        attempt: organizationDataExports.attempt,
+        createdAt: pgTimestampCursorValue(organizationDataExports.createdAt).as(
+          "created_at_cursor",
+        ),
       })
       .from(organizationDataExports)
       .where(
@@ -406,36 +404,9 @@ const readQueuedPage = async ({
       .orderBy(
         asc(organizationDataExports.createdAt),
         asc(organizationDataExports.id),
-      )
-      .limit(pageSize + 1)
-      .as("queued_export_keys");
-    const detail = tx
-      .select({
-        organizationId: organizationDataExports.organizationId,
-        requestedBy: organizationDataExports.requestedBy,
-        attempt: organizationDataExports.attempt,
-      })
-      .from(organizationDataExports)
-      .where(eq(organizationDataExports.id, candidates.id))
-      .limit(1)
-      .as("queued_export_detail");
-    return await readCursorPage(
-      tx
-        .select({
-          id: candidates.id,
-          organizationId: detail.organizationId,
-          requestedBy: detail.requestedBy,
-          attempt: detail.attempt,
-          createdAt: pgTimestampCursorValue(candidates.createdAt).as(
-            "created_at_cursor",
-          ),
-        })
-        .from(candidates)
-        .innerJoinLateral(detail, sql`true`)
-        .orderBy(asc(candidates.createdAt), asc(candidates.id)),
-      { limit: pageSize, cursorForItem: (row) => row.id },
-    );
-  });
+      ),
+    { limit: pageSize, cursorForItem: (row) => row.id },
+  );
 
 const requeueQueued = async (
   { db, deps, summary, now }: StepArgs,
@@ -447,12 +418,18 @@ const requeueQueued = async (
     before(organizationDataExports.createdAt, settledBefore),
   );
   // An export whose requester's account was deleted cannot run as anyone.
-  const abandonedPage = await readQueuedPage({
-    db,
-    settled,
-    cursor: null,
-    pageSize: BATCH_SIZE,
-    requester: "absent",
+  const abandonedPage = await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(
+      tx,
+      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+    );
+    return await readQueuedPage({
+      tx,
+      settled,
+      cursor: null,
+      pageSize: BATCH_SIZE,
+      requester: "absent",
+    });
   });
   const abandoned = abandonedPage.items;
   summary.hasMore ||= abandonedPage.nextCursor !== null;
@@ -474,13 +451,42 @@ const requeueQueued = async (
       }),
     summary,
   );
-  // Discover one bounded window, then release the transaction before queue I/O.
-  const queuedPage = await readQueuedPage({
-    db,
-    settled,
-    cursor: initialCursor,
-    pageSize: deps.handoffPageSize * DATA_EXPORT_MAX_HANDOFF_PAGES,
-    requester: "present",
+  // Small seeks remain indexed under FORCE RLS's conservative owner-policy
+  // estimate. One transaction setting bounds every discovery statement; queue I/O
+  // starts only after its snapshot and connection have been released.
+  const queuedPage = await withAggregateTransaction(db, async (tx) => {
+    await setSharedStatementTimeout(
+      tx,
+      DATA_EXPORT_MAINTENANCE_STATEMENT_TIMEOUT_MS,
+    );
+    const pages: Awaited<ReturnType<typeof readQueuedPage>>[] = [];
+    let cursor = initialCursor;
+    for (let page = 0; page < DATA_EXPORT_MAX_HANDOFF_PAGES; page += 1) {
+      // db-await-in-loop: the fixed maximum of keyset pages advances inside one transaction with a statement deadline.
+      const batch = await readQueuedPage({
+        tx,
+        settled,
+        cursor,
+        pageSize: deps.handoffPageSize,
+        requester: "present",
+      });
+      pages.push(batch);
+      if (batch.nextCursor === null) {
+        break;
+      }
+      const last =
+        batch.items.at(-1) ??
+        panic("Queued export page has no continuation row");
+      cursor = {
+        createdAt: databasePrecisionTimestamp(last.createdAt),
+        id: String(last.id),
+      };
+    }
+    const last = pages.at(-1) ?? panic("Queued export discovery has no page");
+    return {
+      items: pages.flatMap((page) => page.items),
+      nextCursor: last.nextCursor,
+    };
   });
   for (const handoffRows of chunk(queuedPage.items, deps.handoffPageSize)) {
     const handoffs = await Promise.all(

@@ -132,68 +132,71 @@ describe.skipIf(!enabled)("scheduled export measurement (postgres)", () => {
             .from(organizationDataExports)
             .orderBy(asc(organizationDataExports.id))
             .limit(12_000);
-        for (const cohort of ["quiet", "transitions", "queued"] as const) {
-          const scenario = {
-            type: "data-exports",
-            rows: 12_000,
-            cohort,
-          } as const;
-          await seedDataExportScenario(db, scenario);
-          const original = await exportRows();
-          let enqueued = 0;
-          const measured = await measureScheduledJobRun({
-            database: db,
-            jobId: "dataExports.maintain.fiveMinute",
-            task: MAINTAIN_DATA_EXPORTS_TASK,
-            now: new Date("2026-01-10T12:00:00Z"),
-            dataExportMaintenance: {
-              handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
-              enqueue: async () => {
-                enqueued += 1;
-                return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+        for (const rows of [6000, 12_000]) {
+          for (const cohort of ["quiet", "transitions", "queued"] as const) {
+            const scenario = {
+              type: "data-exports",
+              rows,
+              cohort,
+            } as const;
+            await seedDataExportScenario(db, scenario);
+            const original = await exportRows();
+            const originalById = new Map(original.map((row) => [row.id, row]));
+            let enqueued = 0;
+            const measured = await measureScheduledJobRun({
+              database: db,
+              jobId: "dataExports.maintain.fiveMinute",
+              task: MAINTAIN_DATA_EXPORTS_TASK,
+              now: new Date("2026-01-10T12:00:00Z"),
+              dataExportMaintenance: {
+                handoffPageSize: DATA_EXPORT_HANDOFF_PAGE_SIZE,
+                enqueue: async () => {
+                  enqueued += 1;
+                  return QUEUE_REQUEUE_OUTCOME.REQUEUED;
+                },
               },
-            },
-          });
-          expect(
-            measured.planViolations.filter(
-              ({ kind }) =>
-                kind === "large-scan" || kind === "deadline-missing",
-            ),
-          ).toEqual([]);
-          expect(await db.$count(systemAuditRuns)).toBe(1);
-          const changed = await exportRows();
-          const audits = await db.$count(auditLogs);
-          if (cohort === "transitions") {
-            expect(changed).not.toEqual(original);
-            expect(audits).toBeGreaterThan(0);
-            for (const row of changed) {
-              const before = original.find(({ id }) => id === row.id);
-              expect(before).toBeDefined();
-              if (before !== undefined) {
-                expect(row.attempt - before.attempt).toBeLessThanOrEqual(1);
-                expect(row.failures - before.failures).toBeLessThanOrEqual(1);
+            });
+            expect(
+              measured.planViolations.filter(
+                ({ kind }) =>
+                  kind === "large-scan" || kind === "deadline-missing",
+              ),
+            ).toEqual([]);
+            expect(await db.$count(systemAuditRuns)).toBe(1);
+            const changed = await exportRows();
+            const audits = await db.$count(auditLogs);
+            if (cohort === "transitions") {
+              expect(changed).not.toEqual(original);
+              expect(audits).toBeGreaterThan(0);
+              for (const row of changed) {
+                const before = originalById.get(row.id);
+                expect(before).toBeDefined();
+                if (before !== undefined) {
+                  expect(row.attempt - before.attempt).toBeLessThanOrEqual(1);
+                  expect(row.failures - before.failures).toBeLessThanOrEqual(1);
+                }
               }
+            } else {
+              expect(changed).toEqual(original);
+              expect(audits).toBe(0);
             }
-          } else {
-            expect(changed).toEqual(original);
-            expect(audits).toBe(0);
-          }
-          expect(measured.statements.length).toBeGreaterThan(0);
-          expect(
-            measured.statements.some(({ statement }) =>
-              /^\s*explain\b/iu.test(statement),
-            ),
-          ).toBe(false);
-          if (cohort === "queued") {
-            expect(enqueued).toBe(
-              DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES,
-            );
-          }
-          if (cohort === "quiet") {
-            expect(enqueued).toBe(0);
-          }
-          if (cohort === "transitions") {
-            expect(enqueued).toBeGreaterThan(0);
+            expect(measured.statements.length).toBeGreaterThan(0);
+            expect(
+              measured.statements.some(({ statement }) =>
+                /^\s*explain\b/iu.test(statement),
+              ),
+            ).toBe(false);
+            if (cohort === "queued") {
+              expect(enqueued).toBe(
+                DATA_EXPORT_HANDOFF_PAGE_SIZE * DATA_EXPORT_MAX_HANDOFF_PAGES,
+              );
+            }
+            if (cohort === "quiet") {
+              expect(enqueued).toBe(0);
+            }
+            if (cohort === "transitions") {
+              expect(enqueued).toBeGreaterThan(0);
+            }
           }
         }
         expect(
