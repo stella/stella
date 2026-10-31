@@ -86,6 +86,11 @@ const walk = async (fetch: SoftLawFetch, start: string | null = null) => {
   } while (cursor !== null);
   return { entries, cursors };
 };
+const indexDigest = async (fetch: SoftLawFetch) =>
+  (await uoouSkAdapter.discover({ cursor: null, signal: signal(), fetch }))
+    .unwrap()
+    .nextCursor?.split(":")
+    .at(1) ?? panic("Missing ÚOOÚ SR index digest");
 
 test("ÚOOÚ SR fixtures preserve publisher response bytes and capture provenance", async () => {
   for (const name of [
@@ -171,7 +176,14 @@ test("ÚOOÚ SR refuses a changed index shell, pagination, ambiguous rows and fo
 test("ÚOOÚ SR discovery pages the index in bounded batches and admits only annual reports", async () => {
   const { fetch, calls } = await publisher();
   const { entries, cursors } = await walk(fetch);
-  expect(cursors).toEqual(["5", "10", "15", null]);
+  const digest = cursors.at(0)?.split(":").at(1) ?? panic("Missing digest");
+  expect(digest).toMatch(/^[0-9a-f]{64}$/u);
+  expect(cursors).toEqual([
+    `5:${digest}`,
+    `10:${digest}`,
+    `15:${digest}`,
+    null,
+  ]);
   expect(calls).toEqual(Array.from({ length: 4 }, () => INDEX));
   expect(entries).toHaveLength(REPORT_COUNT);
   const first = entries.at(0) ?? panic("Missing first ÚOOÚ SR report");
@@ -210,18 +222,48 @@ test("ÚOOÚ SR discovery pages the index in bounded batches and admits only ann
 test("a walk resumed from any checkpoint visits each remaining report exactly once", async () => {
   const { fetch } = await publisher();
   const reports = parseUoouSkListing(await listingHtml()).unwrap().reports;
-  // Every offset the index can hold, plus checkpoints left by a longer index.
-  for (let offset = 0; offset <= REPORT_COUNT + 3; offset++) {
-    const { entries } = await walk(fetch, String(offset));
+  const digest = await indexDigest(fetch);
+  for (let offset = 0; offset <= REPORT_COUNT; offset++) {
+    const { entries } = await walk(fetch, `${offset}:${digest}`);
     expect(entries.map((entry) => entry.url)).toEqual(
       reports.slice(offset).map((report) => report.url),
     );
   }
 });
 
+test("a checkpoint taken on a changed index restarts the walk instead of skipping shifted reports", async () => {
+  const html = await listingHtml();
+  const $ = load(html);
+  $("main article table.tabulkaStandard tbody tr").first().remove();
+  const shortened = new TextEncoder().encode($.html());
+  let served = 0;
+  const { fetch } = transport((url) => {
+    if (url !== INDEX) {
+      return undefined;
+    }
+    served += 1;
+    return {
+      bytes: served === 1 ? new TextEncoder().encode(html) : shortened,
+      contentType: "text/html;charset=utf-8",
+    };
+  });
+  const remaining = parseUoouSkListing($.html()).unwrap().reports;
+  const { entries } = await walk(fetch);
+  // The first batch came from the original index; the rest restart on the new one.
+  expect(entries.slice(5).map((entry) => entry.url)).toEqual(
+    remaining.map((report) => report.url),
+  );
+});
+
 test("ÚOOÚ SR discovery refuses a malformed cursor before any request", async () => {
   const { fetch, calls } = await publisher();
-  for (const cursor of ["-1", "01", "x", "1.5"]) {
+  const digest = "0".repeat(64);
+  for (const cursor of [
+    "5",
+    "5:x",
+    `5:${digest}:0`,
+    ...["-1", "01", "x", "1.5"].map((offset) => `${offset}:${digest}`),
+  ]) {
     const result = await uoouSkAdapter.discover({
       cursor,
       signal: signal(),
