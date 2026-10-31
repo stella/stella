@@ -288,6 +288,8 @@
     "scripts/typecheck-cache.test.ts",
     "scripts/typecheck-coverage.ts",
     "scripts/unsignalled-skip.test.ts",
+    "scripts/upload-release-assets.sh",
+    "scripts/upload-release-assets.test.ts",
     "scripts/validate-main-heavy-sha.test.ts",
     "scripts/verify-step.test.sh",
     "scripts/verify-workflow.test.ts",

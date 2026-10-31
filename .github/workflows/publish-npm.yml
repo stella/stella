@@ -946,6 +946,7 @@ jobs:
           persist-credentials: false
           sparse-checkout: |
             scripts/gh-retry.sh
+            scripts/upload-release-assets.sh
             scripts/download-run-artifact.sh
             .github/actions/provenance
           sparse-checkout-cone-mode: false
@@ -979,8 +980,7 @@ jobs:
           CLI_RELEASE_REF: ${{ needs.pack.outputs.cli_release_ref }}
           GH_RETRY_SCRIPT: ${{ github.workspace }}/scripts/gh-retry.sh
         run: |
-          bash "$GH_RETRY_SCRIPT" release upload "$CLI_RELEASE_REF" --clobber \
-            --repo "$GITHUB_REPOSITORY" native-cli/*
+          bash scripts/upload-release-assets.sh "$GITHUB_REPOSITORY" "$CLI_RELEASE_REF" native-cli/*
 
   # npm-release-jobs:start
 

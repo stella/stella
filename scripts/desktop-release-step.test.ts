@@ -782,7 +782,9 @@ test("native release provenance covers final binaries and checksums before publi
     (step) =>
       record(step) &&
       typeof step["run"] === "string" &&
-      step["run"].includes('release upload "$CLI_RELEASE_REF"'),
+      step["run"].includes(
+        'bash scripts/upload-release-assets.sh "$GITHUB_REPOSITORY" "$CLI_RELEASE_REF" native-cli/*',
+      ),
   );
   expect(hashIndex).toBeGreaterThanOrEqual(0);
   expect(attestIndex).toBeGreaterThan(hashIndex);
