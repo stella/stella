@@ -37,6 +37,12 @@ type KillSwitchDefinition = {
  * removing its switch here.
  */
 export const KILL_SWITCHES = {
+  dictation: {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/dictation",
+    offHint:
+      "Dictation is turned off. Do not retry until it is turned back on.",
+  },
   chat: {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/chat",
@@ -132,6 +138,12 @@ export const KILL_SWITCHES = {
     offHint:
       "Time narrative polishing is turned off. Do not retry until it is turned back on.",
   },
+  "desktop-time-narratives": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/handlers/desktop-time-entries",
+    offHint:
+      "Desktop time narrative generation is turned off. Do not retry until it is turned back on.",
+  },
   "placement-suggestions": {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/entities/placements",
@@ -172,6 +184,7 @@ export type KillSwitchId = keyof typeof KILL_SWITCHES;
  * model dispatch carries an admitted action kind.
  */
 export const ACTION_KIND_KILL_SWITCH = {
+  "dictation.transcribe": "dictation",
   "chat.send": "chat",
   "chat.generate-thread-title": "chat",
   "chat.improve-prompt": "chat",
@@ -195,6 +208,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "skills.generate-draft": "skills",
   "skills.propose-from-comments": "skills",
   "time-entries.polish-narrative": "time-narratives",
+  "desktop-time-entries.narrative": "desktop-time-narratives",
   "entities.suggest-placements": "placement-suggestions",
   "versions.summarize": "version-summaries",
   "properties.suggest-prompt": "workflows",
