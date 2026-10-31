@@ -32,6 +32,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { Skeleton } from "@stll/ui/skeleton";
 
 import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
@@ -800,6 +801,14 @@ const ConfirmDialog = ({
  * deletion and recovery. It reads `activity_get_settings`, never the day
  * timeline, and reads again on every activity change.
  */
+/** Holds the Activity tab's shape while its access or settings load. */
+export const ActivitySettingsSkeleton = () => (
+  <div aria-busy="true" className="space-y-4">
+    <Skeleton className="h-32 rounded-xl" />
+    <Skeleton className="h-20 rounded-xl" />
+  </div>
+);
+
 export const ActivitySettingsPane = () => {
   const t = useTranslations("activity");
   const [date, setDate] = useState<string | null>(null);
@@ -888,7 +897,7 @@ export const ActivitySettingsPane = () => {
 
   switch (view.type) {
     case "loading":
-      return null;
+      return <ActivitySettingsSkeleton />;
     case "failed":
       return <ErrorLine message={t("errorRead")} />;
     case "ready":
@@ -901,7 +910,7 @@ export const ActivitySettingsPane = () => {
   const { settings } = view;
   if (settings.persistence === "initializing") {
     // The store announces itself with a change event once it is open.
-    return null;
+    return <ActivitySettingsSkeleton />;
   }
   const deletionDisabled = settings.deletionStatus !== "available";
   const otherAccountHistory = (
