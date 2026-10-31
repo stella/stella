@@ -27,7 +27,7 @@ const MAX_REPORT_DAYS = 366;
 export const REPORT_GRID_CELL_LIMIT = 20_000;
 
 /** Both ends of a custom range, in order and within the report's bound. */
-export const customReportRange = (
+const customReportRange = (
   from: string | undefined,
   to: string | undefined,
 ): ReportRange | null => {

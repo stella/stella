@@ -49,7 +49,7 @@ describe("report periods", () => {
   });
   test("opens a custom range only when it is complete, ordered and within 366 days", () => {
     const today = "2026-10-31";
-    const week = {
+    const week: ReturnType<typeof resolveReportSearch> = {
       period: "week",
       filter: {
         from: "2026-10-26",
