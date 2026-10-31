@@ -106,6 +106,12 @@ const blankCellPoint = async (cell: Locator) =>
       }
       cellRect = nextRect;
     }
+    // A virtualized row can replace its cell while the frames settle; a
+    // detached or unsized cell has no point to click, so the caller retries
+    // with a freshly resolved cell.
+    if (!element.isConnected || cellRect.width === 0 || cellRect.height === 0) {
+      return null;
+    }
 
     const y = cellRect.top + cellRect.height / 2;
     const linkRects = [...element.querySelectorAll("a")].flatMap((link) =>
@@ -155,6 +161,22 @@ const blankCellPoint = async (cell: Locator) =>
       hitsLink: target?.closest("a") !== null,
     };
   });
+
+const MAX_CELL_RESOLUTIONS = 20;
+
+const renderedBlankCellPoint = async (cell: Locator) => {
+  // real-time: each attempt re-resolves the locator and waits for rendered
+  // frames, so a replaced cell is measured once the new one is laid out.
+  for (let attempt = 0; attempt < MAX_CELL_RESOLUTIONS; attempt += 1) {
+    const point = await blankCellPoint(cell);
+    if (point !== null) {
+      return point;
+    }
+  }
+  throw new Error(
+    `Email cell stayed detached or unsized across ${MAX_CELL_RESOLUTIONS} resolutions`,
+  );
+};
 
 test.describe("focus target detector", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
@@ -298,7 +320,7 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
-      const space = await blankCellPoint(cell);
+      const space = await renderedBlankCellPoint(cell);
       expect(space.hitsLink).toBe(false);
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
