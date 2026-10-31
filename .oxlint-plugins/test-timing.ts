@@ -946,20 +946,21 @@ const returnedExpressions = (fn: AstNode): unknown[] => {
     .map((node) => node.argument);
 };
 
-// The values an expression can evaluate to through `&&`, `||`, `??` and `?:`:
+// The values that can end a wait through `&&`, `||`, `??` and `?:`:
 // `existsSync(a) && existsSync(b)` and `existsSync(p) || undefined` still end
-// the wait on existence alone. A negation (waiting for a file to go away) is
-// its own value.
+// it on existence alone. The left side of `&&` is the result only when it is
+// falsy, which never ends a wait, so `existsSync(p) && contentIsDone(p)` is a
+// guarded content read. A negation (waiting for a file to go away) is its own
+// value.
 const valueBranches = (node: unknown): unknown[] => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
     return [];
   }
   if (expression.type === "LogicalExpression") {
-    return [
-      ...valueBranches(expression.left),
-      ...valueBranches(expression.right),
-    ];
+    return expression.operator === "&&"
+      ? valueBranches(expression.right)
+      : [...valueBranches(expression.left), ...valueBranches(expression.right)];
   }
   if (expression.type === "ConditionalExpression") {
     return [

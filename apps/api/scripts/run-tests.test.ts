@@ -75,7 +75,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
         const ready = await descendant.stdout.getReader().read();
         const leafPid = new TextDecoder().decode(ready.value).trim();
         // The test reads the marker as soon as it exists: publish it whole.
-        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid);
+        await Bun.write(${JSON.stringify(`${marker}.partial`)}, String(process.pid) + " " + String(descendant.pid) + " " + leafPid + "\\n");
         renameSync(${JSON.stringify(`${marker}.partial`)}, ${JSON.stringify(marker)});
         setInterval(() => {}, 1000);
       `,
@@ -106,9 +106,13 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
             "snapshot builder announces itself, its descendant and the leaf",
           path: marker,
           // The builder publishes the marker whole (written aside, then
-          // renamed), so the assertions below judge the first content read
-          // and a malformed announcement fails at once.
-          parse: (content) => content.trim().split(" ").map(Number),
+          // renamed) and ends it with a newline. Content without the newline
+          // is not complete yet, whoever wrote it; complete content goes to
+          // the assertions below, so a malformed announcement fails at once.
+          parse: (content) =>
+            content.endsWith("\n")
+              ? content.trim().split(" ").map(Number)
+              : undefined,
         });
         expect(announced).toHaveLength(3);
         expect(

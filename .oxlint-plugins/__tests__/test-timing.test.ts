@@ -455,6 +455,7 @@ describe("no-file-existence-wait", () => {
           'await waitFor({ description: "f", read: existsSync });',
           'await waitFor({ description: "g", ["read"]: () => existsSync("x") });',
           'await waitFor({ description: "h", read: () => (existsSync("x") ? readFileSync("x", "utf-8") : undefined) });',
+          'await waitFor({ description: "i", read: () => existsSync("x") && readFileSync("x", "utf-8") === "done" });',
         ].join("\n"),
       ),
     ).toEqual([]);
