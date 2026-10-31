@@ -40,6 +40,7 @@ const DialogTranslations = ({ children }: PropsWithChildren) => {
       labels={{
         close: t("common.close"),
         unsavedChanges: t("common.unsavedChangesEscape"),
+        unsavedChangesClose: t("common.unsavedChangesClose"),
       }}
     >
       {children}

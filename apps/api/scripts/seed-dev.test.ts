@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   createMockDocx,
   createSeedEmail,
   SEED_EMAIL_FILE_NAMES,
+  seedRequiredCaseLaw,
   userFileCleanupKeys,
 } from "./seed-dev";
 import {
@@ -116,4 +118,21 @@ describe("chat attachment seed cleanup", () => {
       "user_1/uploader-thumbnail.webp",
     ]);
   });
+});
+
+test("a case-law backfill failure rejects the dev seed phase", async () => {
+  const unitFailure = new Error("Provision backfill unit state-seed failed");
+  let marketingStarted = false;
+
+  const outcome = seedRequiredCaseLaw(
+    async () => {
+      throw unitFailure;
+    },
+    async () => {
+      marketingStarted = true;
+    },
+  );
+
+  expect(await rejectionOf(outcome)).toBe(unitFailure);
+  expect(marketingStarted).toBe(false);
 });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: imports ingestion bindings directly from their existing owner.
 // parser-output-unchanged: the stripped-text fallback triggers on the same verdict; the adapter now logs which decision fell back.
 // parser-output-unchanged: adds stable capture ownership to existing failure reports; manifestation and decision parsing are unchanged.
 // parser-output-unchanged: [eu-ecj] Retry documentation changes only; decision parsing is unchanged.
@@ -5,6 +6,10 @@
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
+import {
+  CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY,
+  type CaseLawWorkExpression,
+} from "@stll/api-contract/case-law-source-languages";
 // parser-output-unchanged: [eu-ecj] the Formex archive reader keeps the same file entries in the same order.
 import { ZipArchive } from "@stll/docx-core/zip";
 import { sanitizeErrorForOutput } from "@stll/errors";
@@ -20,37 +25,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import {
-  backlogSurface,
-  decodeSourceRawEnvelope,
-  defineSourceAdapter,
-  EMPTY_AST,
-  encodeSourceRawEnvelope,
-  excludedSourceField,
-  excludedSourceSurface,
-  isPersistableSourceDocumentId,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  SOURCE_TOTAL_PROBE_FAILURE,
-  sourceTotalProbeFailed,
-  sourceTotalRead,
-  STORED_RAW_REPARSE_REJECTION,
-  storedSourceSurface,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
-  DecisionJudgeInput,
-  EmptyAst,
-  IngestionResult,
-  ListingIdentity,
-  ReconciliationBuildOutcome,
-  ReconciliationSlicePage,
-  ReconciliationSlicePageOptions,
-  SourceFieldDisposition,
-  SourceRawParts,
-  SourceSurfaceCensus,
-  SourceSurfaceDisposition,
-  StoredRawReparseInput,
-  StoredRawReparseOutcome,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import {
@@ -106,6 +80,37 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import {
+  backlogSurface,
+  decodeSourceRawEnvelope,
+  defineSourceAdapter,
+  EMPTY_AST,
+  encodeSourceRawEnvelope,
+  excludedSourceField,
+  excludedSourceSurface,
+  isPersistableSourceDocumentId,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  SOURCE_TOTAL_PROBE_FAILURE,
+  sourceTotalProbeFailed,
+  sourceTotalRead,
+  STORED_RAW_REPARSE_REJECTION,
+  storedSourceSurface,
+} from "@/api/lib/legal-search/ingestion-types";
+import type {
+  DecisionJudgeInput,
+  EmptyAst,
+  IngestionResult,
+  ListingIdentity,
+  ReconciliationBuildOutcome,
+  ReconciliationSlicePage,
+  ReconciliationSlicePageOptions,
+  SourceFieldDisposition,
+  SourceRawParts,
+  SourceSurfaceCensus,
+  SourceSurfaceDisposition,
+  StoredRawReparseInput,
+  StoredRawReparseOutcome,
+} from "@/api/lib/legal-search/ingestion-types";
 import {
   META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
@@ -239,11 +244,15 @@ type SparqlBinding = {
 };
 
 /**
- * One row of the listing, as the six `SELECT` variables bind it.
+ * One row of the listing, as the `SELECT` variables bind it.
  *
  * Exported because it is the shape of the `listing` envelope part: a caller
  * building a stored row has to state the binding that named it, and a
- * second declaration of these six names could drift from the query.
+ * second declaration of these names could drift from the query.
+ *
+ * `manifestationType` is optional because listings stored before the query
+ * selected it do not state it; every such listing named an XHTML
+ * manifestation, which is what the query was then limited to.
  */
 export type EcjSparqlBinding = {
   ecli: SparqlBinding;
@@ -252,6 +261,7 @@ export type EcjSparqlBinding = {
   type: SparqlBinding;
   language: SparqlBinding;
   manifestation: SparqlBinding;
+  manifestationType?: SparqlBinding;
 };
 
 type SparqlResult = EcjSparqlBinding;
@@ -274,7 +284,9 @@ const isSparqlResult = (value: unknown): value is SparqlResult =>
   isSparqlBinding(value["celex"]) &&
   isSparqlBinding(value["type"]) &&
   isSparqlBinding(value["language"]) &&
-  isSparqlBinding(value["manifestation"]);
+  isSparqlBinding(value["manifestation"]) &&
+  (value["manifestationType"] === undefined ||
+    isSparqlBinding(value["manifestationType"]));
 
 const isSparqlResponse = (value: unknown): value is SparqlResponse =>
   isRecord(value) &&
@@ -372,6 +384,26 @@ const CELEX = /^[0-9A-Z()]+$/u;
 /** Boundary check for callers that accept CELEX numbers as input. */
 export const isValidCelex = (value: string): boolean => CELEX.test(value);
 
+/**
+ * The manifestation types that carry a decision's text as markup this adapter
+ * reads, most preferred first: the Office's converter output, then the
+ * Court's own HTML. Both go through the same parse; the order decides only
+ * which one a variant published in both is read from.
+ */
+const ECJ_DOCUMENT_MANIFESTATION_TYPES = ["xhtml", "html"] as const;
+
+/**
+ * Where a binding's manifestation sits in that preference. A listing stored
+ * before the query selected the type named XHTML, the only type it listed.
+ */
+const MANIFESTATION_RANK: ReadonlyMap<string, number> = new Map(
+  ECJ_DOCUMENT_MANIFESTATION_TYPES.map((type, rank) => [type, rank]),
+);
+
+const manifestationPreference = (binding: EcjSparqlBinding): number =>
+  MANIFESTATION_RANK.get(binding.manifestationType?.value ?? "xhtml") ??
+  ECJ_DOCUMENT_MANIFESTATION_TYPES.length;
+
 const ECJ_SPARQL_PREFIXES = `PREFIX cdm: <http://publications.europa.eu/ontology/cdm#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>`;
 
@@ -381,6 +413,13 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>`;
  * and the stored rows are drawn from one definition. Languages are narrowed
  * after the query by `toEcjLanguage`: a language filter inside the pattern
  * pushes the count query past the endpoint's 60-second limit.
+ *
+ * A variant is holdable in any of `ECJ_DOCUMENT_MANIFESTATION_TYPES`. The
+ * Office publishes a translation first as the Court's own HTML and converts
+ * it to XHTML later, often months afterwards and sometimes never; a pattern
+ * limited to XHTML lists a decision in the few languages already converted
+ * and leaves its other translations invisible to the crawl, to the
+ * reconciliation walk and to the source total alike.
  */
 export const ECJ_DECISION_PATTERN = `
   ?doc cdm:case-law_ecli ?ecli .
@@ -398,7 +437,9 @@ export const ECJ_DECISION_PATTERN = `
     cdm:opinion_advocate_general,
     cdm:opinion_advocate-general
   ))
-  FILTER(STR(?manifestationType) = "xhtml")`;
+  FILTER(STR(?manifestationType) IN (${ECJ_DOCUMENT_MANIFESTATION_TYPES.map(
+    (type) => `"${type}"`,
+  ).join(", ")}))`;
 
 /**
  * The source total per language, counted in the unit a row is stored under:
@@ -479,7 +520,7 @@ export const buildListingQuery = ({
 
   return `
 ${ECJ_SPARQL_PREFIXES}
-SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation
+SELECT DISTINCT ?ecli ?date ?celex ?type ?language ?manifestation ?manifestationType
 WHERE {${celexClause}
 ${ECJ_DECISION_PATTERN}
   FILTER(STR(?date) >= "${dateFrom}")
@@ -1218,11 +1259,25 @@ const COURT_EPOCH_YEAR = ADAPTER_MANIFESTS[
 /** First day the Court sat; the widest range a CELEX lookup can need. */
 const COURT_EPOCH = `${COURT_EPOCH_YEAR}-01-01`;
 
-const groupEcjVariants = (bindings: readonly SparqlResult[]) =>
-  Map.groupBy(
-    bindings,
-    ({ celex, language }) => `${celex.value}:${language.value}`,
-  ).values();
+/**
+ * The bindings of each (CELEX, language) variant, in the order they are tried:
+ * preferred manifestation type first, then the listing's own order. A variant
+ * whose XHTML is not served still falls back to its HTML.
+ */
+const groupEcjVariants = (
+  bindings: readonly SparqlResult[],
+): SparqlResult[][] =>
+  Array.from(
+    Map.groupBy(
+      bindings,
+      ({ celex, language }) => `${celex.value}:${language.value}`,
+    ).values(),
+    (variant) =>
+      variant.toSorted(
+        (left, right) =>
+          manifestationPreference(left) - manifestationPreference(right),
+      ),
+  );
 
 type BuildPendingVariantOptions = {
   bindings: readonly SparqlResult[];
@@ -1573,6 +1628,17 @@ const noticeMetadata = (facts: EcjNoticeFacts) => ({
     ...manifestation,
     uri: toMetadataUrl(manifestation.uri, "decoded"),
   })),
+  [CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY]: facts.workExpressions.map(
+    ({ language, formats }): CaseLawWorkExpression => {
+      const rowLanguage = toEcjLanguage(`${CELLAR_LANGUAGE_PREFIX}${language}`);
+      return {
+        authorityCode: language,
+        language:
+          rowLanguage === undefined ? null : ecjRowLanguage(rowLanguage),
+        formats: [...formats],
+      };
+    },
+  ),
 });
 
 /** Rebuild URL diagnostics from this envelope, without carrying a saved sidecar. */
@@ -1602,7 +1668,13 @@ const ecjPublisherMetadata = (
     isRecord(parsedBinding) && isSparqlBinding(parsedBinding["type"])
       ? parsedBinding["type"]
       : undefined;
+  const manifestationType =
+    isRecord(parsedBinding) &&
+    isSparqlBinding(parsedBinding["manifestationType"])
+      ? parsedBinding["manifestationType"].value
+      : undefined;
   const binding = {
+    ...(manifestationType === undefined ? {} : { manifestationType }),
     ...(manifestation === undefined
       ? {}
       : {
@@ -2540,6 +2612,36 @@ const isEcjCelexVariant = (value: unknown): value is EcjCelexVariant =>
   isValidCelex(value["celex"]) &&
   ECJ_LANGUAGES.some((language) => language === value["language"]);
 
+type ListEcjMonthVariantsOptions = {
+  year: number;
+  /** 1-based calendar month. */
+  month: number;
+  signal?: AbortSignal | undefined;
+};
+
+/**
+ * The variants the publisher lists for one calendar month: one page of the
+ * reconciliation walk's year slice, so a backfill over history asks exactly
+ * the questions that walk asks and keys the answers the same way.
+ */
+export const listEcjMonthVariants = async ({
+  year,
+  month,
+  signal,
+}: ListEcjMonthVariantsOptions): Promise<EcjCelexVariant[]> => {
+  const page = await listEcjSlicePage({
+    slice: ecjSlice(year),
+    page: month - 1,
+    signal,
+  });
+  return page.items.flatMap(({ payload }) =>
+    isEcjCelexVariant(payload) ? [payload] : [],
+  );
+};
+
+/** The first month the Court sat; where a walk over all history stops. */
+export const ECJ_FIRST_MONTH = `${COURT_EPOCH_YEAR}-01`;
+
 /**
  * Rebuild one listed variant, through the adapter's own query and build path.
  *
@@ -2602,6 +2704,7 @@ const SOURCE_FIELDS = [
   "listing.type",
   "listing.language",
   "listing.manifestation",
+  "listing.manifestationType",
   "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED",
   "notice.WORK/CASE-LAW_COMMENTED_BY_AGENT",
   "notice.WORK/CASE-LAW_COMMUNICATED_ON_BY_COMMUNICATION_CJEU",
@@ -2714,9 +2817,10 @@ const SOURCE_FIELDS = [
  * Three principles run through the exclusions. The repository states the same
  * identifier under a generic name and under a specific one, and only the
  * specific one is read. It states its own record timestamps, which move when
- * the Office re-indexes and say nothing about the decision. And it states,
- * for this work, every other language expression and every cited work, each
- * of which is a row of its own or a document of its own.
+ * the Office re-indexes and say nothing about the decision. And it states
+ * every cited work, each of which is a document of its own. The work's other
+ * language expressions are rows of their own too, but their list is kept: it
+ * is the publisher's statement of which rows the work should have.
  */
 const EU_ECJ_SOURCE_FIELDS = {
   "listing.celex": { disposition: "stored", target: { type: "identity" } },
@@ -2736,6 +2840,10 @@ const EU_ECJ_SOURCE_FIELDS = {
   "listing.manifestation": {
     disposition: "stored",
     target: { type: "result", key: "documentUrl" },
+  },
+  "listing.manifestationType": {
+    disposition: "stored",
+    target: { type: "metadata", key: "manifestationType" },
   },
   "notice.WORK/CASE-LAW_ARTICLE_JOURNAL_RELATED": {
     disposition: "stored",
@@ -2891,9 +2999,12 @@ const EU_ECJ_SOURCE_FIELDS = {
     disposition: "stored",
     target: { type: "result", key: "decisionDate" },
   },
-  "notice.WORK/WORK_HAS_EXPRESSION": excludedSourceField(
-    "the other language expressions of this work, each of which is a row of its own",
-  ),
+  // Each other expression is a row of its own, but the list of them is the
+  // work's language manifest: what makes a missing translation checkable.
+  "notice.WORK/WORK_HAS_EXPRESSION": {
+    disposition: "stored",
+    target: { type: "metadata", key: CASE_LAW_WORK_EXPRESSIONS_METADATA_KEY },
+  },
   "notice.WORK/WORK_HAS_RESOURCE-TYPE": {
     disposition: "stored",
     target: { type: "metadata", key: "form" },

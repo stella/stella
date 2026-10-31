@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
+import { createTestState } from "@stll/test-state";
 import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
@@ -25,7 +26,6 @@ import {
 } from "@/api/lib/usage/organization-access-state";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 

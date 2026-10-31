@@ -3,6 +3,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { createTestState } from "@stll/test-state";
 
 import { ACCOUNT_EXPORT_PROJECTIONS } from "@/api/account-export-projections";
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -54,7 +55,6 @@ import {
   NO_DB,
 } from "@/api/tests/helpers/handler-context";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
-import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";

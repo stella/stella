@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
+import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DOCTRINAL_TREATMENTS } from "@stll/api-contract/case-law-doctrine";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -94,6 +95,7 @@ export const listDecisionsResponseSchema = page(
     caseNumberType: v.picklist(DECISION_PRIMARY_REFERENCE_TYPES),
     courtAbbreviation: nullableBoundedString(512),
     courtTier: v.picklist(COURT_TIER_LABELS),
+    decisionTypeKind: v.union([v.picklist(DECISION_TYPE_KINDS), v.null()]),
     sourceUrl: nullableBoundedString(8192),
     headnote,
     citationCount: v.number(),
@@ -202,7 +204,9 @@ const citation = v.object({
   ]),
   decision: v.union([relatedDecision, v.null()]),
 } satisfies Record<
-  keyof Omit<DecisionCitationRow, "evidenceQuote">,
+  // The printing version is internal: it locates a passage, and no response
+  // carries it.
+  keyof Omit<DecisionCitationRow, "evidenceQuote" | "printedBy">,
   v.GenericSchema
 >);
 // A leading citation always names a held decision; only the general list
