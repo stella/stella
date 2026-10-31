@@ -28,16 +28,56 @@ type ColumnCasToken<TColumn extends Column> =
 // `timestamptz::text` under the default ISO DateStyle, offset included, so a
 // token read in one session TimeZone still names the same instant in another.
 const TIMESTAMP_CAS_TOKEN_PATTERN =
-  /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,6})?[+-]\d{2}(?::\d{2}){0,2}$/u;
+  /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2}) (?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.\d{1,6})?[+-](?<offsetHour>\d{2})(?::(?<offsetMinute>\d{2}))?(?::(?<offsetSecond>\d{2}))?$/u;
+
+// Postgres rejects a UTC offset of 16 hours or more.
+const MAX_OFFSET_HOURS = 15;
+
+const isLeapYear = (year: number) =>
+  year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+
+const daysInMonth = (year: number, month: number) => {
+  if (month === 2) {
+    return isLeapYear(year) ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+};
 
 /**
  * Recognises a token a client sent back. A value that fails is not a
  * revision this column ever produced, so it can never match; checking it
- * here keeps a malformed value out of the `::timestamptz` cast.
+ * here keeps it out of the `::timestamptz` cast, which would fail the whole
+ * statement on a date or time no calendar has (`2026-02-30`, `25:00`).
  */
 export const isTimestampCasToken = (
   value: string,
-): value is TimestampCasToken => TIMESTAMP_CAS_TOKEN_PATTERN.test(value);
+): value is TimestampCasToken => {
+  const fields = TIMESTAMP_CAS_TOKEN_PATTERN.exec(value)?.groups;
+  if (fields === undefined) {
+    return false;
+  }
+  const field = (name: string) => Number(fields[name] ?? "0");
+  const year = field("year");
+  const month = field("month");
+  const day = field("day");
+  return (
+    year >= 1 &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= daysInMonth(year, month) &&
+    field("hour") <= 23 &&
+    field("minute") <= 59 &&
+    field("second") <= 59 &&
+    field("offsetHour") <= MAX_OFFSET_HOURS &&
+    field("offsetMinute") <= 59 &&
+    field("offsetSecond") <= 59
+  );
+};
+
+/** The token as the opaque text a client carries and sends back. */
+export const timestampCasTokenText = (token: TimestampCasToken): string =>
+  token;
 
 /** Select expression producing the column's exact-precision CAS token. */
 export const timestampCasToken = <TColumn extends Column>(
