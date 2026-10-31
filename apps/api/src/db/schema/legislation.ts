@@ -514,9 +514,7 @@ export const legislationMatterLinks = p.pgTable(
   "legislation_matter_links",
   {
     id: pUuid<"legislationMatterLink">().primaryKey(),
-    documentId: safeUuid<"legislationDocument">("document_id")
-      .notNull()
-      .references(() => legislationDocuments.id, { onDelete: "restrict" }),
+    documentId: safeUuid<"legislationDocument">("document_id").notNull(),
     statuteId: p.varchar("statute_id", { length: 512 }).notNull(),
     provisionId: p.text("provision_id").notNull(),
     appliedVersion: p.date("applied_version").notNull(),
@@ -531,6 +529,13 @@ export const legislationMatterLinks = p.pgTable(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
+    p
+      .foreignKey({
+        name: "legislation_matter_links_document_fk",
+        columns: [t.documentId],
+        foreignColumns: [legislationDocuments.id],
+      })
+      .onDelete("restrict"),
     p
       .uniqueIndex("legislation_matter_links_provision_ws_idx")
       .on(t.documentId, t.provisionId, t.workspaceId),

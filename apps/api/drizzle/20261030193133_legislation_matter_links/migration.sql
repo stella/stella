@@ -13,9 +13,9 @@ CREATE TABLE "legislation_matter_links" (
   "created_at" timestamp with time zone DEFAULT now() NOT NULL
 );--> statement-breakpoint
 ALTER TABLE "legislation_matter_links" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_document_id_legislation_documents_id_fkey" FOREIGN KEY ("document_id") REFERENCES "public"."legislation_documents"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_workspace_id_workspaces_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_linked_by_user_id_fkey" FOREIGN KEY ("linked_by") REFERENCES "public"."user"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_document_fk" FOREIGN KEY ("document_id") REFERENCES "public"."legislation_documents"("id") ON DELETE restrict ON UPDATE no action NOT VALID;--> statement-breakpoint
+ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_workspace_id_workspaces_id_fkey" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action NOT VALID;--> statement-breakpoint
+ALTER TABLE "legislation_matter_links" ADD CONSTRAINT "legislation_matter_links_linked_by_user_id_fkey" FOREIGN KEY ("linked_by") REFERENCES "public"."user"("id") ON DELETE restrict ON UPDATE no action NOT VALID;--> statement-breakpoint
 CREATE UNIQUE INDEX "legislation_matter_links_provision_ws_idx" ON "legislation_matter_links" USING btree ("document_id","provision_id","workspace_id");--> statement-breakpoint
 CREATE INDEX "legislation_matter_links_workspace_idx" ON "legislation_matter_links" USING btree ("workspace_id");--> statement-breakpoint
 CREATE POLICY "workspace_select" ON "legislation_matter_links" AS PERMISSIVE FOR SELECT TO "stella" USING (workspace_id = ANY((SELECT current_setting(
