@@ -12,15 +12,11 @@ import {
 } from "@stll/ui/popover";
 
 import { useBrowserExtensionState } from "@/features/chat/browser-control/browser-extension-bridge";
+import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 
-type BrowserExtensionChipProps = {
-  installUrl?: string;
-};
-
-export const BrowserExtensionChip = ({
-  installUrl,
-}: BrowserExtensionChipProps) => {
+export const BrowserExtensionChip = () => {
   const { status } = useBrowserExtensionState();
+  const storeUrl = useBrowserExtensionStoreUrl();
   const t = useTranslations();
 
   switch (status) {
@@ -65,8 +61,8 @@ export const BrowserExtensionChip = ({
               ? t("chat.browserExtension.installDescription")
               : t("chat.browserExtension.connectDescription")}
           </PopoverDescription>
-          {needsInstall && installUrl && (
-            <ChatLink appearance="tray" href={installUrl}>
+          {needsInstall && storeUrl !== null && (
+            <ChatLink appearance="tray" href={storeUrl}>
               {t("chat.browserExtension.install")}
             </ChatLink>
           )}
