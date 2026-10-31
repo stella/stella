@@ -11,7 +11,13 @@ import {
 import { member, organization, user } from "@/api/db/auth-schema";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreads,
+  chatTurns,
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
   chatMessageFromPersisted,
@@ -113,6 +119,12 @@ const suite = (
       id: organizationId,
       name: "Edit fixture",
       slug: organizationId,
+    });
+    // A later member of an organization is admitted only once its access
+    // state is recorded.
+    await database.insert(organizationAccessStates).values({
+      organizationId,
+      state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
     });
     await database.insert(user).values(
       [ownerId, colleagueId].map((id) => ({
