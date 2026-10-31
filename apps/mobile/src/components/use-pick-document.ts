@@ -4,7 +4,7 @@ import { useRouter } from "expo-router";
 import { Alert } from "react-native";
 import { useTranslations } from "use-intl";
 
-import { UPLOAD_ORIGIN } from "@/state/document-upload";
+import { pickedFileSaveParams } from "@/state/document-upload";
 import { readLocalFile } from "@/state/local-file";
 
 /**
@@ -45,15 +45,7 @@ export const usePickDocument = (matterId?: string): (() => void) => {
       }
       router.push({
         pathname: "/scan/save",
-        params: {
-          mimeType: file.mimeType ?? "application/octet-stream",
-          name: file.name,
-          origin: UPLOAD_ORIGIN.file,
-          sha256Hex: read.value.sha256Hex,
-          size: String(read.value.size),
-          uri: file.uri,
-          ...(matterId === undefined ? {} : { matterId }),
-        },
+        params: pickedFileSaveParams({ file, matterId, ...read.value }),
       });
     })();
   };
