@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import { toAPIError } from "@/lib/errors/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { ReaderAnswerFailure } from "./reader-answers.logic";
 import type { ReaderAnswerFailureNotice } from "./reader-answers.logic";

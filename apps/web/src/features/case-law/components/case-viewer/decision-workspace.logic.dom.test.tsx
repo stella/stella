@@ -15,10 +15,10 @@ import {
 } from "@stll/legal-ast/analysis";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import type { AnalysisQueryResult } from "@/features/case-law/queries/decision-analysis";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 // A DOM for this file only: the notes are rendered for real and the column's
 // click is answered from the elements a reader actually hits.

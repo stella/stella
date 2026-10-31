@@ -3,9 +3,10 @@ import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { resolveSavedPdfSignTarget } from "@/components/inspector/pdf-signing.logic";
 import type { api } from "@/lib/api";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

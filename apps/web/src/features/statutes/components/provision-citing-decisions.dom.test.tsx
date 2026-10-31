@@ -5,13 +5,13 @@ import { PROVISION_CITING_SNAPSHOT_LIMIT } from "@stll/api-contract/provision-ci
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
 import type { UiLocale } from "@stll/locales";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { readProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { ProvisionCitingSearch } from "@/features/statutes/statute-page-search";
 import type { api } from "@/lib/api";
 import type { PublicLawData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CitingDecisionRow } from "./provision-citing-decisions";
 

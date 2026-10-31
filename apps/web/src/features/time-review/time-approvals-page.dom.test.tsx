@@ -3,12 +3,12 @@ import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
 import { cents } from "@stll/money";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
 import type { TimeApprovalItem } from "@/lib/workspaces/queries/time-approvals";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/time/approvals" });
 

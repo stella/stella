@@ -3,13 +3,13 @@ import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import { createTranslator } from "use-intl/core";
 
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
 import arabic from "@/i18n/langs/ar.json";
 import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import { getTranslator, setTranslator } from "@/i18n/translator";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { QueryClient, QueryClientProvider } =

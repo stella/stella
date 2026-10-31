@@ -2,10 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import czechMessages from "@/i18n/langs/cs.json";
 import messages from "@/i18n/langs/en.json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { cleanup, render } = await import("@testing-library/react");

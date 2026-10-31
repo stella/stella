@@ -6233,11 +6233,14 @@ const config = defineConfig({
       },
     },
     {
+      // DOM teardown goes through its one owner, which drains React's
+      // scheduler before removing the happy-dom globals.
       files: [
         "apps/web/**/*.{ts,tsx}",
+        "packages/ui/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-direct-dom-unregister.fixture.ts",
       ],
-      excludeFiles: ["apps/web/src/test-dom-environment.ts"],
+      excludeFiles: ["packages/property-testing/src/dom-environment.ts"],
       rules: {
         "no-direct-dom-unregister/no-direct-dom-unregister": "error",
       },

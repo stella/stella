@@ -2,12 +2,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic, Result } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import type { ScanEngine } from "@stll/scan-engine/types";
 import { ScanEngineError } from "@stll/scan-engine/types";
 
 import { ClientOperationError } from "@/lib/errors/client";
 import type { PageViewport } from "@/lib/pdf/pdfjs-loader";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import { runCleanScan } from "./clean-scan-run";
 import type { CleanScanFailure } from "./clean-scan-run";

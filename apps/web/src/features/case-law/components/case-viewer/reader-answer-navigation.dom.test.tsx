@@ -7,9 +7,9 @@ import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 import { annotationTextAnchors } from "@stll/decision-reader/annotation-anchors";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   attachReaderAnswerMarkers,

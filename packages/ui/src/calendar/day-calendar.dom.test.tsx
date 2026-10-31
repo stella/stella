@@ -5,6 +5,8 @@ import { createRoot } from "react-dom/client";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import { DayCalendar } from "./day-calendar";
 import type { DayCalendarColumn } from "./day-calendar";
 import {
@@ -94,7 +96,7 @@ afterAll(async () => {
   } else {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", previousActEnvironment);
   }
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type CalendarProps = ComponentProps<typeof DayCalendar>;

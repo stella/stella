@@ -7,11 +7,11 @@ import * as v from "valibot";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
 import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin/members",

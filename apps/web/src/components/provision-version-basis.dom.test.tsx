@@ -12,9 +12,9 @@ import { STATED_DATE_RELATIONS } from "@stll/api-contract/provision-applied-vers
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://self-hosted.example.test/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =

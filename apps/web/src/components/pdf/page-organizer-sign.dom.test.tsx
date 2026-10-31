@@ -2,12 +2,12 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DOCUMENT_OCR_AVAILABILITY } from "@stll/api-contract/document-ocr-availability";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type {
   PdfSignTarget,
   usePdfSignFlow,
 } from "@/components/inspector/pdf-sign-action";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 

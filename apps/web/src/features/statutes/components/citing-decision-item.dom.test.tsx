@@ -4,9 +4,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import type { CaseLawDecisionSummary } from "@stll/api-contract/case-law-decision-summary";
 import { DECISION_DATE_VERSION_BASIS } from "@stll/api-contract/provision-version-basis";
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { CitingDecisionRow } from "./provision-citing-decisions";
 

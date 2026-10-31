@@ -15,8 +15,9 @@ import {
   test,
 } from "bun:test";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
+
 import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { OriginalDocxHostProps } from "./original-docx-host";
 import type { ClaimState, VerificationRun } from "./types";

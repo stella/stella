@@ -3,9 +3,9 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/admin",

@@ -4,6 +4,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { Temporal } from "@stll/time";
 
 import type { LawHistoryCountry } from "@/features/law-search-history/law-search-history-query";
@@ -14,7 +15,6 @@ import { browserStateStorage } from "@/lib/account/browser-storage";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson } from "@/lib/stored-json";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, within, waitFor } =

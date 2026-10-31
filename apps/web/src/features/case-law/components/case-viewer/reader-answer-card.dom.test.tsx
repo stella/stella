@@ -8,12 +8,12 @@ import type {
   ReaderAnswerCitation,
 } from "@stll/api-contract/reader-answers";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import type { AnchoredNote } from "@/components/legal-reader/margin-notes.logic";
 import type { DecisionCitationMetadata } from "@/components/references/decision-citation-chip.logic";
 import { toSafeId } from "@/lib/safe-id";
-import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register();
 const { cleanup, render, renderHook, fireEvent, act, waitFor } =
