@@ -42,7 +42,6 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   member,
-  organization as authOrganization,
   session as authSession,
   user as authUser,
 } from "@/api/db/auth-schema";
@@ -168,6 +167,7 @@ import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
 } from "@/api/lib/auth/oauth-registration-policy";
+import { withBatchedOrganizationMemberships } from "@/api/lib/auth/organization-membership-adapter";
 import { resolveEmailAndPasswordOptions } from "@/api/lib/auth/password-sign-in-options";
 import {
   professionalUseColumns,
@@ -1632,7 +1632,7 @@ export const createAuth = (
 
   const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
     const adapter = withAuthRetention({
-      adapter: rawAuthAdapter(options),
+      adapter: withBatchedOrganizationMemberships(rawAuthAdapter(options)),
       ownClientResources: getOwnNativeClientResources,
       admitClient: async () =>
         await admitOpenClient({
@@ -1698,68 +1698,6 @@ export const createAuth = (
     });
     return {
       ...adapter,
-      // Better Auth's fallback join reads each organization separately. Batch
-      // this membership projection at the adapter boundary for every caller.
-      findMany: async <T>(args: Parameters<typeof adapter.findMany>[0]) => {
-        if (args.model !== "member" || !args.join?.["organization"]) {
-          return await adapter.findMany<T>({
-            model: args.model,
-            where: args.where,
-            limit: args.limit,
-            select: args.select,
-            sortBy: args.sortBy,
-            offset: args.offset,
-            join: args.join,
-          });
-        }
-        const remainingJoins = Object.fromEntries(
-          Object.entries(args.join).filter(
-            ([model]) => model !== "organization",
-          ),
-        );
-        const rows = await adapter.findMany<T>({
-          model: args.model,
-          where: args.where,
-          limit: args.limit,
-          select: args.select,
-          sortBy: args.sortBy,
-          offset: args.offset,
-          join:
-            Object.keys(remainingJoins).length === 0
-              ? undefined
-              : remainingJoins,
-        });
-        if (rows.length === 0) {
-          return rows;
-        }
-        const memberships = rows.map((row) => {
-          if (!isRecord(row) || typeof row["organizationId"] !== "string") {
-            return panic(
-              "Organization joins require membership organization IDs",
-            );
-          }
-          return {
-            row,
-            organizationId: brandPersistedOrganizationId(row["organizationId"]),
-          };
-        });
-        const organizations = await rootDb
-          .select()
-          .from(authOrganization)
-          .where(
-            inArray(
-              authOrganization.id,
-              memberships.map((membership) => membership.organizationId),
-            ),
-          );
-        const byId = new Map(organizations.map((org) => [org.id, org]));
-        return memberships.map((membership) => ({
-          ...membership.row,
-          organization:
-            byId.get(membership.organizationId) ??
-            panic("Membership organization is missing"),
-        }));
-      },
       // The hook's preflight cannot hold a lock across this plugin write.
       // Translate the database's final refusal at the adapter boundary.
       update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
