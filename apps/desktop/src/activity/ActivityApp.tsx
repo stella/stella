@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
+import { DayCalendar } from "@stll/ui/day-calendar";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -16,6 +17,7 @@ import {
   Settings2Icon,
   ShieldAlertIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Popover,
   PopoverDescription,
@@ -33,12 +35,7 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import {
-  appTotals,
-  calendarDate,
-  durationParts,
-  shiftDate,
-} from "./activity-logic";
+import { appTotals, calendarDate, shiftDate } from "./activity-logic";
 import type { TimedSegment } from "./activity-logic";
 import { DELETION_ONLY_NOTICE } from "./activity-notices";
 import {
@@ -48,12 +45,16 @@ import {
 import type { ActivityDaySnapshot } from "./activity-types";
 import { CaptureDetailsControl } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
-import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
-import type { ActivityReviewStatus } from "./ActivityDayReview";
+import "./activity-calendar.css";
+import { ActivityDayCalendar } from "./ActivityDayCalendar";
+import type {
+  ActivityCalendarPreferences,
+  ActivityReviewStatus,
+} from "./ActivityDayCalendar";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import "./welcome-preview.css";
-import { ActivityTimeline } from "./ActivityTimeline";
 import previewApps from "./preview-apps.json" with { type: "json" };
+import { useDurationLabel } from "./use-duration-label";
 
 type ActivityView =
   | { type: "loading" }
@@ -101,15 +102,19 @@ const ErrorLine = ({ message }: { message: string }) => (
   </p>
 );
 
+const PREVIEW_DATE = "2026-10-08";
+
 const ActivityWelcomePreview = ({
   snapshot,
 }: {
   snapshot: ActivityDaySnapshot;
 }) => {
   const t = useTranslations("activity");
-  const startMs = Temporal.PlainDate.from("2026-10-08").toZonedDateTime({
+  const locale = useLocale();
+  const timeZone = Temporal.Now.timeZoneId();
+  const startMs = Temporal.PlainDate.from(PREVIEW_DATE).toZonedDateTime({
     plainTime: "09:00",
-    timeZone: Temporal.Now.timeZoneId(),
+    timeZone,
   }).epochMilliseconds;
   const matter = {
     id: "riverside-lease",
@@ -151,22 +156,71 @@ const ActivityWelcomePreview = ({
       className="pointer-events-none w-full p-0 [&>div]:h-auto [&>div]:p-4"
     >
       <div className="flex flex-col gap-4">
-        <ActivityTimeline
-          mode="preview"
-          segments={segments.map((segment) => ({
-            ...segment,
-            type: "active",
-            matter,
-            confidence: "strong",
-            evidence: [],
-            drafted: false,
-          }))}
-          snapshot={{ ...snapshot, date: "2026-10-08", recordingStatus: "off" }}
-          candidates={[]}
-          disabled
-          onAssign={() =>
-            panic("Static activity previews cannot assign matters")
+        <DayCalendar
+          ariaLabel={t("title")}
+          columns={[
+            {
+              blocks: segments.map((segment) => ({
+                accessibleLabel: segment.appName,
+                endMs: segment.endMs,
+                id: segment.appIdentifier,
+                kind: "segment",
+                startMs: segment.startMs,
+                title: (
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <ActivitySourceIcon
+                      appIdentifier={segment.appIdentifier}
+                      sourceAppVisuals={snapshot.sourceAppVisuals}
+                    />
+                    <bdi className="truncate">{segment.appName}</bdi>
+                  </span>
+                ),
+                tone: {
+                  color: matter.color,
+                  matterId: matter.id,
+                  type: "matter",
+                },
+              })),
+              id: "activity",
+              label: t("title"),
+              rangeSelection: { type: "disabled" },
+              type: "blocks",
+            },
+            {
+              blocks: [
+                {
+                  accessibleLabel: matter.name,
+                  endMs: cursor,
+                  id: "entry",
+                  kind: "entry",
+                  startMs,
+                  state: "suggestion",
+                  onActivate: () =>
+                    panic("Static activity previews cannot open suggestions"),
+                  title: matter.name,
+                  tone: {
+                    color: matter.color,
+                    matterId: matter.id,
+                    type: "matter",
+                  },
+                },
+              ],
+              id: "entries",
+              label: t("timeEntries"),
+              rangeSelection: { type: "disabled" },
+              type: "blocks",
+            },
+          ]}
+          date={PREVIEW_DATE}
+          granularity={15}
+          hours={{ endHour: 10, startHour: 9 }}
+          locale={locale}
+          nowMs={startMs - 1}
+          onSelectRange={() =>
+            panic("Static activity previews cannot select ranges")
           }
+          selection={null}
+          timeZone={timeZone}
         />
         <div data-activity-preview-totals="">
           <AppTotals
@@ -182,7 +236,8 @@ const ActivityWelcomePreview = ({
           data-activity-preview-matter=""
           className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
         >
-          <ActivityMatterHeading matter={matter} />
+          <MatterIcon matter={matter} className="size-4 shrink-0" />
+          <bdi>{matter.name}</bdi>
           <span className="text-muted-foreground ms-auto text-sm font-normal tabular-nums">
             <Duration durationMs={cursor - startMs} />
           </span>
@@ -392,6 +447,8 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 
 type DayContentProps = {
   header: React.ReactNode;
+  preferences: ActivityCalendarPreferences;
+  onPreferencesChange: (preferences: ActivityCalendarPreferences) => void;
   onCommand: RunCommand;
   snapshot: ActivityDaySnapshot;
   reviewVisible: boolean;
@@ -400,6 +457,8 @@ type DayContentProps = {
 
 const DayContent = ({
   header,
+  preferences,
+  onPreferencesChange,
   onCommand,
   snapshot,
   reviewVisible,
@@ -423,11 +482,13 @@ const DayContent = ({
     );
   }
   return (
-    <ActivityDayReview
+    <ActivityDayCalendar
       key={snapshot.date}
       onReviewStatusChange={onReviewStatusChange}
       header={header}
       snapshot={snapshot}
+      preferences={preferences}
+      onPreferencesChange={onPreferencesChange}
       onCopy={(text, onSettled) =>
         onCommand(
           "activity_copy_text",
@@ -440,17 +501,8 @@ const DayContent = ({
   );
 };
 
-const Duration = ({ durationMs }: { durationMs: number }) => {
-  const t = useTranslations("activity");
-  const { hours, minutes } = durationParts(durationMs);
-  if (hours > 0) {
-    return t("durationHoursMinutes", { hours, minutes });
-  }
-  if (minutes > 0) {
-    return t("durationMinutes", { minutes });
-  }
-  return t("durationUnderMinute");
-};
+const Duration = ({ durationMs }: { durationMs: number }) =>
+  useDurationLabel()(durationMs);
 
 type AppTotalsProps = {
   sampleDuration?: { identifier: string; durationMs: number };
@@ -580,6 +632,10 @@ const ActivityApp = () => {
   const [reviewStatus, setReviewStatus] =
     useState<ActivityReviewStatus>("editing");
   const view = useActivityDay(date, setError);
+  const [preferences, setPreferences] = useState<ActivityCalendarPreferences>({
+    granularity: 30,
+    narrativeDeclines: 0,
+  });
   const errorRead = t("errorRead");
 
   const runCommand: RunCommand = (command, args, onSuccess, onFailure) => {
@@ -666,6 +722,8 @@ const ActivityApp = () => {
         <ErrorLine message={t("incompatibleActivity")} />
       ) : null}
       <DayContent
+        preferences={preferences}
+        onPreferencesChange={setPreferences}
         reviewVisible={reviewVisible}
         onReviewStatusChange={setReviewStatus}
         header={

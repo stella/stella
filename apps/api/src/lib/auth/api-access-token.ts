@@ -51,6 +51,10 @@ import type { VerifyBearerToken } from "@/api/mcp/auth";
  * phone must not be able to keep itself connected.
  */
 export const API_OAUTH_ROUTES = {
+  "POST /v1/dictation/transcribe": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/transcribe.ts",
+  },
   "GET /v1/workspaces/:workspaceId/vocabulary": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/workspaces/vocabulary/get.ts",
@@ -88,6 +92,19 @@ export const API_OAUTH_ROUTES = {
   "PATCH /v1/tasks/:workspaceId": {
     scope: "stella:matters_write",
     handler: "apps/api/src/handlers/tasks/update.ts",
+  },
+  // Who works on a task: the people it can go to are the matter's members.
+  "GET /v1/workspaces/:workspaceId/members": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/workspaces/members/list.ts",
+  },
+  "POST /v1/tasks/:workspaceId/assignees": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/assignees/add.ts",
+  },
+  "DELETE /v1/tasks/:workspaceId/assignees": {
+    scope: "stella:matters_write",
+    handler: "apps/api/src/handlers/tasks/assignees/remove.ts",
   },
   "GET /v1/entities/:workspaceId/entity/:entityId/versions": {
     scope: "stella:read",
@@ -199,6 +216,19 @@ export const API_OAUTH_ROUTES = {
     scope: "stella:billing_write",
     handler: "apps/api/src/handlers/time-timers/discard.ts",
   },
+  // The device the app runs on, for push alerts. Registering touches only
+  // the person's own device rows and changes nothing they work on, so it
+  // needs no write scope; the handlers are internal to agents.
+  "PUT /v1/me/push-devices": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/push-devices/register.ts",
+    uncataloged: "native_device",
+  },
+  "DELETE /v1/me/push-devices/:token": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/me/push-devices/unregister.ts",
+    uncataloged: "native_device",
+  },
 } as const satisfies Record<
   string,
   {
@@ -207,7 +237,7 @@ export const API_OAUTH_ROUTES = {
     /** The named export serving the route, when it is not the default. */
     exportName?: string;
     /** Why the handler has no capability: its `mcp.internal` reason. */
-    uncataloged?: "realtime_stream" | "upload_mechanics";
+    uncataloged?: "realtime_stream" | "upload_mechanics" | "native_device";
   }
 >;
 

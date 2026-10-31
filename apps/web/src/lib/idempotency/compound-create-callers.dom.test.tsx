@@ -112,6 +112,7 @@ const createClient = () => {
     timeLockedThroughMonth: null,
     timeNarrativeRequired: false,
     timeZone,
+    primaryJurisdictionTimeZone: timeZone,
     timeZoneSource: "organization",
   } satisfies OrganizationSettings;
   client.setQueryData(

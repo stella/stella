@@ -32,6 +32,11 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
 ] as const;
 type ActivityPersistenceStatus = (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
+/** Whether stella AI descriptions ask before sending a suggestion's titles. */
+export const ACTIVITY_NARRATIVE_ASSISTS = ["ask", "always"] as const;
+export type ActivityNarrativeAssist =
+  (typeof ACTIVITY_NARRATIVE_ASSISTS)[number];
+
 export const ACTIVITY_DETAILS_ACCESS = [
   "disabled",
   "ready",
@@ -94,6 +99,7 @@ export type ActivitySettingsSnapshot = ActivityCaptureSettings & {
   retention: ActivityRetention;
   excludedApps: ActivityAppExclusion[];
   detectCalls: boolean;
+  narrativeAssist: ActivityNarrativeAssist;
   otherAccountHistoryDays: number;
   apps: ActivityAppExclusion[];
 };
@@ -118,6 +124,7 @@ export type ActivityDaySnapshot = {
   detailsAccess: ActivityDetailsAccess;
   browserApps: ActivityAppExclusion[];
   browserTitleApps: ActivityAppExclusion[];
+  narrativeAssist: ActivityNarrativeAssist;
   otherAccountHistoryDays: number;
   persistence: ActivityPersistenceStatus;
   recordingStatus: ActivityRecordingStatus;
@@ -319,6 +326,7 @@ const isSettingsState = (value: Record<string, unknown>) => {
     persistence,
     retention,
     excludedApps,
+    narrativeAssist,
   } = value;
   return (
     typeof date === "string" &&
@@ -335,6 +343,7 @@ const isSettingsState = (value: Record<string, unknown>) => {
     otherAccountHistoryDays >= 0 &&
     isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
     isOneOf(ACTIVITY_RETENTIONS, retention) &&
+    isOneOf(ACTIVITY_NARRATIVE_ASSISTS, narrativeAssist) &&
     Array.isArray(excludedApps) &&
     excludedApps.every(isExclusion)
   );

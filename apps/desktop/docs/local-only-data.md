@@ -3,7 +3,9 @@
 Some desktop features keep data on the device: clipboard history and the
 activity timeline. Activity recording never exports data automatically; its
 Copy summary action explicitly publishes the selected summary to the system
-clipboard at the user's request. They share one set of guardrails. A new
+clipboard at the user's request, and a suggestion's window titles leave the
+device only for a stella AI description the user approved (see
+[stella AI descriptions](#stella-ai-descriptions)). They share one set of guardrails. A new
 local-only feature follows every rule below and adds one entry to
 `tests/local-only-features.ts`, which the guard tests iterate.
 
@@ -146,15 +148,19 @@ this warning: private windows may be recorded too, so pause recording or exclude
 the browser while browsing privately. Known private markers suppress details
 before truncation even after browser consent. Browser URLs are never captured.
 
-Titles and document filenames appear only in the activity window; the full
-local path appears on hover. Proposed blocks group segments per matter using a
-manual assignment, an open Stella edit session, or a unique matter reference or
-name in the recorded details. Unmatched time stays in its own group; recorded
-time not yet drafted counts toward its group's duration, and each group is
-rounded up to the next six minutes. Explicit Copy summary may include document filenames. Draft
-narratives are prefilled locally from recorded document names, opted-in window
-titles, or app names; the user can edit them, and they are sent only after
-confirmation.
+Titles and document filenames appear only in the activity window, never full
+local paths. The window is a day calendar: an Activity column shows the
+recorded segments, runs of very short ones merged into one block that lists
+their apps, and a Time entries column shows created drafts and suggestions.
+A suggestion groups segments per matter using a manual assignment, an open
+Stella edit session, or a unique matter reference or name in the recorded
+details; a range selected in the Activity column becomes a suggestion for that
+range. Recorded time not yet drafted counts toward its suggestion's duration,
+rounded up to the next six minutes. Rejecting a suggestion leaves it out of
+that day's view only. Explicit Copy summary may include document filenames.
+Draft narratives are prefilled locally from recorded document names, opted-in
+window titles, or app names; the user can edit them, and they are sent only
+after confirmation.
 Titles, paths and documents never enter telemetry, logs or error reports.
 Platform wrappers are listed with the feature's native modules so the same
 network and fixed-code guards cover them.
@@ -167,10 +173,29 @@ same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
 
+## stella AI descriptions
+
+The titles of a suggestion, meaning its window titles and recorded document
+names exactly as its card's Titles tab lists them, leave the device only when
+the user approves a stella AI description for it, once or always, and they are
+not stored. A
+slim prompt above the narrative asks before anything is sent; No keeps the
+local template and sends nothing, and after three declines in a row the prompt
+folds into a button. Always approve persists `narrativeAssist: "always"` in
+the account's activity settings, which the Settings window's Activity tab can
+switch back to asking. Approval never blocks accepting the template.
+
+`activity_generate_narrative` takes the activity caller proof and the same
+linked-account binding as draft creation. It sends at most 40 titles, each cut
+to the API contract's length, the reader's language and the chosen matter's
+name, nothing else, and reads back one narrative that the user can still edit.
+Titles are never logged; any failure keeps the template with a quiet note.
+
 ## Confirmed draft time entries
 
-The activity window can create a draft time entry only after the user confirms
-a matter, date worked, time zone, duration, narrative, and billable choice. The
+The activity window can create a draft time entry only after the user accepts
+one suggestion with a matter, date worked, time zone, duration, narrative, and
+billable choice; each acceptance is its own confirmed batch of one. The
 narrative is prefilled locally from recorded document names, window titles
 (only when opted in), or app names. It remains editable and is sent only on
 confirmation. `time_entry_commands` holds the activity caller proof

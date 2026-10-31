@@ -8,7 +8,7 @@ const DESKTOP_ROOT = path.join(import.meta.dir, "..");
 const ENTRY_MODULE = "src/mainview/main.tsx";
 const INVOKE_COMMAND_PATTERN = /\binvoke(?:<[^>]+>)?\(\s*"([a-z_]+)"/gu;
 const LOCAL_COMMAND_PREFIXES = LOCAL_ONLY_FEATURES.flatMap((feature) =>
-  feature.commandOwners.map((owner) => owner.prefix),
+  feature.commandOwners.flatMap((owner) => owner.prefixes),
 ).join("|");
 /** Commands a local-only window routes through its own command helper. */
 const ROUTED_COMMAND_PATTERN = new RegExp(
