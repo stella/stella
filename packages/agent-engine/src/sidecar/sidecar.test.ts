@@ -13,9 +13,11 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  FAKE_OUTDATED_VERSION,
   FAKE_THREAD_ID,
   type FakeScenario,
 } from "../../scripts/fake-codex-app-server";
+import { bundledHarnessCompatibility } from "../harness/compatibility";
 import {
   SIDECAR_PROTOCOL,
   type SidecarMessage,
@@ -293,6 +295,29 @@ describe("harness sidecar over stdio", () => {
     expect(sidecar.received().map(({ method }) => method)).not.toContain(
       "turn/start",
     );
+  });
+
+  test("reports a version the compatibility policy refuses as unsupported, with the recommended one", async () => {
+    const sidecar = spawnSidecar();
+    await hello(sidecar);
+    const requestId = crypto.randomUUID();
+    const configDir = path.join(sidecar.root, "codex-home");
+    mkdirSync(configDir);
+    sidecar.send({
+      type: "harness.probe",
+      requestId,
+      harness: "codex",
+      executable: fakeCodex(sidecar.root, "outdated"),
+      configDir,
+    });
+    const policy = bundledHarnessCompatibility().compatibility.find(
+      ({ harness }) => harness === "codex",
+    );
+    expect((await sidecar.waitFor(is("harness.probed"))).outcome).toEqual({
+      type: "unsupported",
+      version: FAKE_OUTDATED_VERSION,
+      recommendedVersion: policy?.recommendedVersion ?? null,
+    });
   });
 
   test("reports a signed-out harness and one without an adapter", async () => {

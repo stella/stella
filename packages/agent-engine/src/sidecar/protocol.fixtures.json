@@ -142,6 +142,16 @@
       {
         "type": "harness.probed",
         "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
+        "harness": "codex",
+        "outcome": {
+          "type": "unsupported",
+          "version": "0.150.0",
+          "recommendedVersion": "0.164.0"
+        }
+      },
+      {
+        "type": "harness.probed",
+        "requestId": "6f1c2d1e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
         "harness": "claude-code",
         "outcome": {
           "type": "failed",

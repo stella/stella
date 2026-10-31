@@ -225,6 +225,13 @@ const probeOutcomeSchema = v.variant("type", [
     ),
   }),
   v.object({ type: v.literal("needs_login"), version: desktopVersionSchema }),
+  /** A version the compatibility policy refuses for this desktop release. */
+  v.object({
+    type: v.literal("unsupported"),
+    version: desktopVersionSchema,
+    /** `null` when no policy covers this desktop release. */
+    recommendedVersion: v.nullable(desktopVersionSchema),
+  }),
   v.object({
     type: v.literal("failed"),
     reason: v.picklist(SIDECAR_PROBE_FAILURES),

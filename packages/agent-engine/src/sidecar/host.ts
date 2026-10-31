@@ -19,6 +19,11 @@ import {
   createCodexHarnessAdapter,
 } from "../harness/codex/adapter";
 import {
+  bundledHarnessCompatibility,
+  HARNESS_COMPATIBILITY_DISPOSITION,
+  resolveHarnessCompatibility,
+} from "../harness/compatibility";
+import {
   HARNESS_FAILURE_OUTCOME,
   type HarnessEvent,
   type HarnessFailure,
@@ -126,12 +131,42 @@ const summaryOf = (reason: string | null, toolName: string) =>
     MAX_SUMMARY_CHARS,
   );
 
-const probeOutcome = (probe: HarnessProbe): SidecarProbeOutcome => {
+type ProbeOutcomeOptions = {
+  harness: AgentHarness;
+  probe: HarnessProbe;
+  /** The desktop release the policy is resolved for. */
+  appVersion: string;
+};
+
+/**
+ * What the runner learns from a probe. A version the bundled compatibility
+ * policy refuses is reported as unsupported before anything else, so the
+ * desktop never launches, and the server never routes to, a harness this
+ * release cannot drive.
+ */
+const probeOutcome = ({
+  harness,
+  probe,
+  appVersion,
+}: ProbeOutcomeOptions): SidecarProbeOutcome => {
   if (!v.is(desktopVersionSchema, probe.version)) {
     return {
       type: "failed",
       reason: "protocol_violation",
       message: "The harness reported a version that is not semantic.",
+    };
+  }
+  const compatibility = resolveHarnessCompatibility({
+    manifest: bundledHarnessCompatibility(),
+    harness,
+    harnessVersion: probe.version,
+    desktopVersion: appVersion,
+  });
+  if (HARNESS_COMPATIBILITY_DISPOSITION[compatibility.status] === "refuse") {
+    return {
+      type: "unsupported",
+      version: probe.version,
+      recommendedVersion: compatibility.recommendedVersion,
     };
   }
   if (probe.auth.type === "signed_out") {
@@ -328,7 +363,11 @@ export class SidecarHost {
       }
       const probed = await adapter.value.probe();
       return Result.isOk(probed)
-        ? probeOutcome(probed.value)
+        ? probeOutcome({
+            harness: message.harness,
+            probe: probed.value,
+            appVersion: config.appVersion,
+          })
         : ({
             type: "failed",
             reason: probed.error.reason,

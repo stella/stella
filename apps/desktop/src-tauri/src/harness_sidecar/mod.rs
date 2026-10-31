@@ -318,6 +318,13 @@ pub(crate) fn harness_report(
         version: version.clone(),
       })
     }
+    // The runner report carries the refused version only.
+    ProbeOutcome::Unsupported { version, .. } => {
+      HarnessReport::Unsupported(UnsupportedHarness {
+        id: harness,
+        version: Some(version.clone()),
+      })
+    }
     ProbeOutcome::Failed { .. } => HarnessReport::Unsupported(UnsupportedHarness {
       id: harness,
       version: None,

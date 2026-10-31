@@ -465,6 +465,19 @@ fn probe_outcomes_become_runner_reports() {
   );
   assert_eq!(
     harness_report(
+      Harness::Codex,
+      &ProbeOutcome::Unsupported {
+        version: "0.150.0".to_owned(),
+        recommended_version: Some("0.164.0".to_owned()),
+      }
+    ),
+    HarnessReport::Unsupported(UnsupportedHarness {
+      id: Harness::Codex,
+      version: Some("0.150.0".to_owned()),
+    })
+  );
+  assert_eq!(
+    harness_report(
       Harness::ClaudeCode,
       &ProbeOutcome::Failed {
         reason: ProbeFailure::Unsupported,
