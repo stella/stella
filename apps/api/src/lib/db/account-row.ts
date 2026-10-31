@@ -6,6 +6,7 @@ import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   ACCOUNT_EMAIL_UNDELIVERABLE_REASONS,
@@ -141,7 +142,7 @@ export const findAccountIdByEmail = async (
 
 /** Locks the account row registered under `email` for this transaction. */
 export const lockAccountRowByEmail = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   email: string,
 ): Promise<void> => {
   await tx
@@ -153,7 +154,7 @@ export const lockAccountRowByEmail = async (
 
 /** Locks the caller's own account row for this transaction. */
 export const lockAccountRow = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   userId: SafeId<"user">,
 ): Promise<void> => {
   // Drain membership-locked writers before erasure without blocking their
@@ -173,7 +174,7 @@ export const lockAccountRow = async (
  * recovery serialize while concurrent issuers do not block each other.
  */
 export const shareAccountRow = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   userId: SafeId<"user">,
 ): Promise<void> => {
   await withAggregateRowQuery({
@@ -187,7 +188,7 @@ export const shareAccountRow = async (
 
 /** Share the erasure lock before starting or completing account-owned work. */
 export const lockActiveAccountRow = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   userId: SafeId<"user">,
 ): Promise<void> => {
   const result = await withAggregateRowQuery({

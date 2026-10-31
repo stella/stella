@@ -926,6 +926,12 @@ const JOINING_RUNNERS = {
       argument: 1,
       suppliesTransaction: true,
     },
+    {
+      module: REGISTRY,
+      exported: "withOwnerAggregateTransaction",
+      argument: 1,
+      suppliesTransaction: true,
+    },
   ],
   /**
    * Followed callees only: `<receiver>.transaction(cb)` where the receiver

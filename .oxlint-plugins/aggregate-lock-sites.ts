@@ -242,6 +242,20 @@ export const aggregateLockSites = (
           offset: node.start,
         });
       }
+      // Owner transactions open only through the owner's aggregate runner;
+      // any other owner-transaction helper is a raw boundary like `.transaction`.
+      if (
+        callee.type === "Identifier" &&
+        /^withOwner\w*Transaction$/u.test(callee.name) &&
+        callee.name !== "withOwnerAggregateTransaction" &&
+        file.startsWith("apps/api/")
+      ) {
+        add({
+          primitive: "transaction-boundary",
+          text: textOf(node),
+          offset: node.start,
+        });
+      }
       if (method === "raw" && receiver === "sql") {
         const argument = node.arguments.at(0);
         const text = argument === undefined ? undefined : staticText(argument);

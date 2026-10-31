@@ -1,0 +1,7 @@
+# Owner connection registration
+
+Generated from `scripts/ownership/owner-database.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                       | Owner                                      | Enforcement                                                                               | Summary                                                                                                                                                                                                                                           |
+| ------------------------------------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `owner-database` — Owner connection registration | `apps/api/src/lib/db/owner-transaction.ts` | import `createOwnerDatabase` from `@/api/lib/db/owner-transaction` (plus 3 allowed files) | A connection that runs as the table owner is registered where it is constructed; owner-held row locks accept only transactions opened on a registered connection. Only the root and maintenance connection modules and test helpers register one. |

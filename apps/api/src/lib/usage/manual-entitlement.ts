@@ -20,6 +20,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import type { OwnerTransaction } from "@/api/lib/db/aggregate-lock";
 import {
   checkMemberCapacityChange,
   memberCapacityOf,
@@ -58,7 +59,7 @@ const auditRecorderOptions = ({
 });
 
 const lockOrganization = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   organizationId: SafeId<"organization">,
 ) => {
   const lock = await withAggregateLock({
@@ -106,7 +107,7 @@ type GrantManualEntitlementOptions = ManualEntitlementActor & {
  * budget, and when the seats would drop below the current members.
  */
 export const grantManualEntitlement = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   {
     organizationId,
     usagePolicyId,
@@ -242,7 +243,7 @@ type EndManualEntitlementOptions = ManualEntitlementActor & {
  * refused.
  */
 export const endManualEntitlement = async (
-  tx: Transaction,
+  tx: OwnerTransaction<Transaction>,
   { organizationId, endsAt, actor, reason }: EndManualEntitlementOptions,
 ) => {
   const locked = await lockOrganization(tx, organizationId);

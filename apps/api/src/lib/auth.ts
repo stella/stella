@@ -266,7 +266,10 @@ import {
   hasAccountForProvider,
   hasCredentialAccount,
 } from "@/api/lib/db/account-row";
-import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import {
+  withAggregateTransaction,
+  withOwnerAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import {
   resolveWorkspaceMemberAccess,
   resolveWorkspaceMemberAuthority,
@@ -1670,7 +1673,7 @@ export const createAuth = (
         if (!clientId && grant === undefined) {
           return await raw.create(args);
         }
-        return await rootDb.transaction(async (tx) => {
+        return await withOwnerAggregateTransaction(rootDb, async (tx) => {
           // The provider writes each token on its own; the fence makes an
           // account reset either delete the token or refuse it.
           if (

@@ -19,6 +19,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { CredentialIssuanceFence } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withOwnerAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   API_KEY_KIND,
@@ -126,7 +128,8 @@ const issuingFence = (fence: CredentialIssuanceFence | null) =>
   fence ?? panic("An issuing key mutation runs only under its fence");
 type MutationOptions = Principal & {
   recordAuditEvent: AuditRecorder;
-  database?: Pick<typeof rootDb, "transaction" | "select">;
+  database?: Pick<typeof rootDb, "transaction" | "select"> &
+    OwnerDatabaseMarker;
 };
 
 // The auth table denies scoped-role access. These owner-level operations always
@@ -142,7 +145,7 @@ const mutatePersonalKeys = async <T>(
 ) =>
   Result.tryPromise({
     try: async () =>
-      (options.database ?? rootDb).transaction(async (tx) => {
+      withOwnerAggregateTransaction(options.database ?? rootDb, async (tx) => {
         // The account fence ranks before the organization row.
         const fence =
           options.authority.type === "issue"

@@ -2094,12 +2094,6 @@
     "reason": "transaction-boundary in apps/api/src/lib/auth.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
-    "file": "apps/api/src/lib/auth.ts",
-    "fingerprint": "d68156f694d31a8cc9e479924e72740eb410534a18d42d4be1b0a662525c9eb8",
-    "count": 1,
-    "reason": "The provider write transaction now also holds the account credential fence before inserting an OAuth token; the authorization-code client lock and the single in-transaction create are unchanged."
-  },
-  {
     "file": "apps/api/src/lib/auth/registration-adapter.ts",
     "fingerprint": "08434dae025fff907cbdd24dee97136749ec91948fa860b35aa7f52cadd86b37",
     "count": 1,
@@ -2314,18 +2308,6 @@
     "fingerprint": "63f7d8169fdeb868caa4b582e5f54c6c35be98b0bfe0ca7c02eae8b5674eab37",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/chat/thread-compaction.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/confirmation-otp.ts",
-    "fingerprint": "177ef5477a5558a6cf4dd43cb9eb8a782df6eee3f46b8f9000215f57f15f90db",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/confirmation-otp.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/confirmation-otp.ts",
-    "fingerprint": "9b33dce73b04603dfab29eb2fa9119276c4c6410a9613e5e9c63fc2135cacc84",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/confirmation-otp.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
   },
   {
     "file": "apps/api/src/lib/db/account-row.ts",
@@ -3406,12 +3388,6 @@
     "fingerprint": "2773fc8f6099e3f0d029306911b48e1bd3b3ca5d73f6dbe198104c04eae8d164",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/machine-api-keys/personal-lifecycle.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",
-    "fingerprint": "a7c827e34f756c889e227513cea958284558b2daddcb017314e6f47731d3222b",
-    "count": 1,
-    "reason": "The key root transaction first holds the live session credential fence for issuance and hands it to the issuer; the transaction boundary, organization lock and owner predicates are unchanged."
   },
   {
     "file": "apps/api/src/lib/machine-api-keys/personal-lifecycle.ts",

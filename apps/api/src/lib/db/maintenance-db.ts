@@ -3,7 +3,7 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
+import { createOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 
 /**
@@ -42,14 +42,14 @@ export const openMaintenanceDb = ({
       }
       return await fn(tx);
     });
-  return markOwnerDatabase({
+  return createOwnerDatabase(() => ({
     execute: async <
       TRow extends Record<string, unknown> = Record<string, unknown>,
     >(
       query: SQLWrapper | string,
     ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
     transaction,
-  });
+  }));
 };
 
 /** Owner transactions for the organization file ledger, whose writes are not

@@ -21,8 +21,9 @@ import {
 } from "@/api/lib/business-registries/desktop/config";
 import {
   withAggregateLock,
-  withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import type { OwnerDatabaseMarker } from "@/api/lib/db/owner-transaction";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
@@ -93,7 +94,7 @@ export type DesktopCredentialIdentity = {
 type IssueDesktopAccountCredentialOptions = {
   identity: DesktopCredentialIdentity;
   recordAuditEvent: AuditRecorder;
-  database?: Pick<typeof rootDb, "transaction">;
+  database?: Pick<typeof rootDb, "transaction"> & OwnerDatabaseMarker;
 };
 
 /**
@@ -109,7 +110,7 @@ export const issueDesktopAccountCredential = async ({
 }: IssueDesktopAccountCredentialOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(database, async (tx) => {
+      await withOwnerAggregateTransaction(database, async (tx) => {
         const fence = await CredentialIssuanceFence.hold(tx, {
           userId: identity.userId,
           sessionId: identity.sessionId,

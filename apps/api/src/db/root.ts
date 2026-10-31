@@ -24,6 +24,7 @@ import {
   lockMemberAccessRow,
   withAggregateLock,
   withAggregateTransaction,
+  withOwnerAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import {
   AUDIT_ACTION,
@@ -38,7 +39,7 @@ import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read"
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
 import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
-import { markOwnerDatabase } from "@/api/lib/db/owner-transaction";
+import { createOwnerDatabase } from "@/api/lib/db/owner-transaction";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import {
   changePartnerOAuthClientInTransaction,
@@ -139,7 +140,7 @@ const rlsClient = runTransactionsInCallerContext(
  * for internal infrastructure such as workspace resolution and
  * Better Auth.
  */
-export const rootDb = markOwnerDatabase(
+export const rootDb = createOwnerDatabase(() =>
   createDatabase({
     client: rootClient,
     relations: databaseRelations,
@@ -167,6 +168,15 @@ export const rlsDb = markRlsDatabase({
     fn: (tx: TransactionOf<typeof rawRlsDb>) => Promise<TResult>,
   ): Promise<TResult> => await rawRlsDb.transaction(fn),
 });
+
+/**
+ * The scoped-transaction pool registered as an owner connection. Its
+ * transactions start on the owner role, before any role switch; account
+ * export takes the owner-held account fence there and then scopes itself.
+ */
+export const rlsOwnerPhaseDb = createOwnerDatabase(() => ({
+  transaction: rlsDb.transaction,
+}));
 
 /**
  * The scoped-transaction connection with `before` run first in each
@@ -332,7 +342,7 @@ export const changeOrganizationSlug = async ({
 }: ChangeOrganizationSlugOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(rootDb, async (tx) => {
+      await withOwnerAggregateTransaction(rootDb, async (tx) => {
         await withAggregateLock({
           tx,
           aggregate: "organization",
