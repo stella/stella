@@ -260,10 +260,13 @@ const identifierWithin = (
     const longest = Math.min(tokens.length, start + EMBEDDED_WINDOW_MAX_TOKENS);
     for (let end = start + 1; end <= longest; end += 1) {
       const window = tokens.slice(start, end).join(" ");
-      // Every docket and every ECLI carries a digit; a window without one is
-      // not worth a grammar's time. A slash is not required: a CNJ number, a
-      // superior-court class number and a neutral citation write none.
-      if (!/\p{Nd}/u.test(window)) {
+      // Try windows carrying a digit (CNJ and superior-court numbers write no
+      // slash), a slash, or an ECLI prefix.
+      if (
+        !/\p{Nd}/u.test(window) &&
+        !window.includes("/") &&
+        !/ecli:|^eu:[ctf]:/iu.test(window)
+      ) {
         continue;
       }
       const reading = readingOfWindow({ end, grammar, start, tokens });
