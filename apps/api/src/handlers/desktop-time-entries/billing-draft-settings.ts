@@ -33,7 +33,10 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { projectionPayload } from "@/api/lib/projection-totality";
 
-import { authorizeDesktopTimeEntries } from "./authorize";
+import {
+  authorizeDesktopCaller,
+  authorizeDesktopTimeEntries,
+} from "./authorize";
 import {
   readEffectiveDraftMode,
   readOrganizationDraftsMode,
@@ -263,9 +266,20 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
         ),
       },
       async function* ({ request, body }) {
+        // A withdrawal needs only the linked account: whoever could consent
+        // can always take it back, also once the feature or its deployment
+        // is off. Every other change needs the feature.
         const account = yield* Result.await(
-          authorizeDesktopTimeEntries(request, authorizeAccount),
+          authorizeDesktopCaller(request, authorizeAccount),
         );
+        if (body.type !== "withdraw_consent" && !account.timeEntriesAvailable) {
+          return Result.err(
+            new HandlerError({
+              status: 403,
+              message: "Draft time entries are unavailable",
+            }),
+          );
+        }
         const recordAuditEvent = createAuditRecorder({
           organizationId: account.organizationId,
           userId: account.userId,
@@ -290,7 +304,7 @@ export const createDesktopBillingDraftSettingsUpdateEndpoint = (
               ...(await readSettingsView({
                 tx,
                 organizationId: account.organizationId,
-                timeEntriesAvailable: true,
+                timeEntriesAvailable: account.timeEntriesAvailable,
                 own,
               })),
             };

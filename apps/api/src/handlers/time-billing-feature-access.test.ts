@@ -158,17 +158,23 @@ const NATIVE_TIME_BILLING_ROUTES = [
     body: undefined,
   },
   {
-    method: "PUT",
-    path: "/v1/desktop/billing-drafts/settings",
-    definition: updateBillingDraftSettings,
-    body: { type: "withdraw_consent" },
-  },
-  {
     method: "POST",
     path: "/v1/desktop/billing-drafts",
     definition: billingDrafts,
     body: createDesktopBillingDraftRequest({ matterId: PATH_ID }),
   },
+] as const;
+
+/** Mounted without the deployment flag, so a consent withdrawal always
+ * reaches the server; every other change still needs the feature. */
+const CONSENT_SETTINGS_ROUTE = {
+  method: "PUT",
+  path: "/v1/desktop/billing-drafts/settings",
+  definition: updateBillingDraftSettings,
+} as const;
+const FEATURE_SETTINGS_CHANGES = [
+  { type: "grant_consent", revision: null },
+  { type: "set_preference", revision: null, preference: "Shorter" },
 ] as const;
 
 /**
@@ -297,6 +303,18 @@ describe("time billing admission census", () => {
         ),
       ).toHaveLength(1);
     }
+    const consentRoutes = desktopTimeEntriesRoute.filter(
+      ({ method, path, definition }) =>
+        method === CONSENT_SETTINGS_ROUTE.method &&
+        path === CONSENT_SETTINGS_ROUTE.path &&
+        definition === CONSENT_SETTINGS_ROUTE.definition,
+    );
+    expect(consentRoutes).toHaveLength(1);
+    expect(
+      consentRoutes.flatMap(({ middleware }) =>
+        middleware.flatMap((stage) => deploymentFeatureGateFlag(stage) ?? []),
+      ),
+    ).toEqual([]);
     for (const entry of organizationSettingsRoute.filter(({ path }) =>
       path.startsWith("/organization-settings/billing-drafts"),
     )) {
@@ -500,6 +518,18 @@ describe("native time billing admission", () => {
             status: enabled ? 401 : 404,
           });
         }
+        // A withdrawal asks for the linked credential whatever the flag says.
+        const withdrawal = await server.fetch(
+          new Request(`http://localhost${CONSENT_SETTINGS_ROUTE.path}`, {
+            method: CONSENT_SETTINGS_ROUTE.method,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ type: "withdraw_consent" }),
+          }),
+        );
+        expect({ enabled, status: withdrawal.status }).toEqual({
+          enabled,
+          status: 401,
+        });
       });
     }
   });
@@ -574,18 +604,28 @@ describe("native time billing admission", () => {
         };
         const endpoints = [
           createDesktopBillingDraftSettingsReadEndpoint(authorizeAccount),
-          createDesktopBillingDraftSettingsUpdateEndpoint(authorizeAccount),
           createDesktopBillingDraftEndpoint({ authorizeAccount }),
         ];
-        for (const [index, entry] of NATIVE_TIME_BILLING_ROUTES.entries()) {
-          const endpoint =
-            endpoints.at(index) ?? panic("Native case lost its endpoint");
+        const cases = [
+          ...NATIVE_TIME_BILLING_ROUTES.map((entry, index) => ({
+            ...entry,
+            endpoint:
+              endpoints.at(index) ?? panic("Native case lost its endpoint"),
+          })),
+          ...FEATURE_SETTINGS_CHANGES.map((body) => ({
+            ...CONSENT_SETTINGS_ROUTE,
+            body,
+            endpoint:
+              createDesktopBillingDraftSettingsUpdateEndpoint(authorizeAccount),
+          })),
+        ];
+        for (const entry of cases) {
           await using server = serveRoutes([
             {
               method: entry.method,
               path: entry.path,
               middleware: [],
-              definition: endpoint,
+              definition: entry.endpoint,
             },
           ]);
           const response = await server.fetch(
@@ -606,7 +646,7 @@ describe("native time billing admission", () => {
             status: response.status,
           }).toEqual({ missing, path: entry.path, status: 403 });
         }
-        expect(authorized).toBe(NATIVE_TIME_BILLING_ROUTES.length);
+        expect(authorized).toBe(cases.length);
         expect(databaseCalls).toBe(0);
       }
     });

@@ -19,15 +19,15 @@ export const desktopTimeEntriesRoute = mount(
   [
     routes(
       {
-        "/billing-drafts/settings": {
-          GET: readBillingDraftSettings,
-          PUT: updateBillingDraftSettings,
-        },
+        "/billing-drafts/settings": { GET: readBillingDraftSettings },
         "/billing-drafts": { POST: billingDrafts },
       },
       { middleware: [deploymentFeatureGate("FEATURE_TIME_BILLING")] },
     ),
     routes({
+      // A consent withdrawal stays reachable whatever the deployment flag
+      // says; the handler refuses every other change without the feature.
+      "/billing-drafts/settings": { PUT: updateBillingDraftSettings },
       "/matter-candidates": { GET: candidates },
       "/time-entries/batch": { PUT: batch },
       "/time-entries/batch/status": { PUT: batchStatus },

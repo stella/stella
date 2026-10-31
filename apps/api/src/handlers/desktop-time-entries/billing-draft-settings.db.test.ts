@@ -7,6 +7,7 @@ import type { DesktopBillingDraftSettingsRequest } from "@stll/api-contract/desk
 import {
   DESKTOP_BILLING_DRAFT_REFUSAL_CODE,
   desktopBillingDraftSettingsResponseSchema,
+  desktopBillingDraftSettingsUpdateResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import { createTestState } from "@stll/test-state";
 
@@ -466,6 +467,42 @@ test("an impossible settings revision answers 409 and changes nothing", async ()
     });
   }
   expect(await rowOf(ids.orgA, ids.userA1)).toEqual(before);
+});
+
+test("a member without the feature can still withdraw consent, and change nothing else", async () => {
+  const granted = await callSettings(A1_IN_A, {
+    type: "grant_consent",
+    revision: null,
+  });
+  expect(granted.status).toBe(200);
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsUpdateResponseSchema,
+    granted.body,
+  );
+  const before = await rowOf(ids.orgA, ids.userA1);
+  expect(before?.consentAt).toBeInstanceOf(Date);
+  const unenrolled = { ...A1_IN_A, enrolled: false };
+  for (const change of [
+    { type: "grant_consent", revision },
+    { type: "set_preference", revision, preference: "Refused" },
+  ] satisfies DesktopBillingDraftSettingsRequest[]) {
+    expect((await callSettings(unenrolled, change)).status).toBe(403);
+  }
+  expect(await rowOf(ids.orgA, ids.userA1)).toEqual(before);
+  expect((await callSettings(unenrolled)).status).toBe(403);
+
+  const withdrawn = await callSettings(unenrolled, {
+    type: "withdraw_consent",
+  });
+
+  expect(withdrawn.status).toBe(200);
+  // Nothing is drafted for a caller without the feature.
+  expect(withdrawn.body).toMatchObject({
+    effectiveMode: "off",
+    consent: "revoked",
+    preference: null,
+  });
+  expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeNull();
 });
 
 test("the effective mode follows the organization's switch and its firm guideline file", async () => {
