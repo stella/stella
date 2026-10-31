@@ -6411,6 +6411,66 @@
   },
   {
     "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_complete_invoice",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "(EXISTS ( SELECT 1\n   FROM invoices i\n  WHERE (i.id = invoice_sends.invoice_id)))",
+    "withCheck": "(EXISTS ( SELECT 1\n   FROM invoices i\n  WHERE (i.id = invoice_sends.invoice_id)))"
+  },
+  {
+    "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_organization_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_organization_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_organization_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_owner_select",
+    "command": "SELECT",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('invoice_sends'::regclass)::oid)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "invoice_sends",
+    "policy": "invoice_sends_owner_viewed",
+    "command": "UPDATE",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('invoice_sends'::regclass)::oid))) AND ((token_hash)::text = NULLIF(current_setting('app.invoice_link_hash'::text, true), ''::text)))",
+    "withCheck": "((CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('invoice_sends'::regclass)::oid))) AND ((token_hash)::text = NULLIF(current_setting('app.invoice_link_hash'::text, true), ''::text)))"
+  },
+  {
+    "schema": "public",
     "table": "invoices",
     "policy": "invoices_workspace_delete",
     "command": "DELETE",
