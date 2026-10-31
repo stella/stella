@@ -214,6 +214,11 @@ export type { McpToolName };
  *   `assistant_chat`.
  * - `notification_inbox`: the caller's own notifications (list, mark one
  *   read). Mark-all and announcements stay `internal` under `native_tool_ui`.
+ * - `cross_matter_search`: the search screen's results across the matters the
+ *   caller can open, by text, result type, editor, file type and date. The
+ *   curated `search` and `search_across_matters` tools are separate, narrower
+ *   knowledge searches; facets, preview and the AI helpers stay `internal`
+ *   under `search_ui`.
  */
 type McpCapabilityReason =
   | "template_authoring_ui"
@@ -235,7 +240,8 @@ type McpCapabilityReason =
   | "personal_history"
   | "assistant_memory"
   | "notification_inbox"
-  | "organization_admin";
+  | "organization_admin"
+  | "cross_matter_search";
 
 /**
  * Approved, permanent reasons an endpoint is intentionally never reachable from

@@ -111,8 +111,10 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
 const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
   mint_web_handoff:
     "no dedicated REST endpoint: app-only link refresh invokes the shared handoff mint service (apps/api/src/mcp/web-handoff-links.ts)",
+  search:
+    "no dedicated endpoint: reads matter knowledge through the search provider (apps/api/src/mcp/compat-tools.ts, getSearchReader); search.results.list is a separate capability",
   search_across_matters:
-    "no dedicated endpoint: same backing as `search` (apps/api/src/handlers/search/results/list.ts POST /search)",
+    "no dedicated endpoint: reads matter knowledge through the search provider (apps/api/src/mcp/stella-tools.ts, getSearchReader)",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   case_law_coverage:
