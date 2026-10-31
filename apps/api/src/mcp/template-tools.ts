@@ -771,16 +771,14 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "List the document templates in this organization (NDAs, powers of " +
-    "attorney, leases), or describe one template's fillable fields. Omit " +
-    "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
-    "whose whenToUse matches the request and skip any whose whenNotToUse " +
-    "applies. Pass template_id to return that template's full field " +
-    "configuration, its named conditions and formula fields. The " +
-    "configuration is in the shape configure_template_fields accepts " +
-    `(see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries that ` +
-    "call to make next. " +
+    "List the organization's document templates (NDAs, powers of attorney, " +
+    "leases), or pass template_id for one template's full field " +
+    "configuration, named conditions and formula fields. Listing returns " +
+    "each template's id, name, field count, tags and usage guidance: use one " +
+    "whose whenToUse matches the request; skip any whose whenNotToUse " +
+    "applies. The configuration is in the shape configure_template_fields " +
+    `accepts (see ${TEMPLATE_FIELD_REFERENCE_URI}), and the response carries ` +
+    "that call to make next. " +
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
