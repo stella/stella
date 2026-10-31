@@ -9,7 +9,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import assert from "node:assert/strict";
 import * as v from "valibot";
 
@@ -31,6 +31,10 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import {
+  BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+  BILLING_GUIDELINE_MAX_FIRM_FILES,
+} from "@/api/lib/billing/billing-guidelines";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -406,30 +410,20 @@ test("revoked personal consent prevents any AI continuation", async () => {
         eq(billingDraftUserSettings.userId, ids.userA1),
       ),
     );
+  // The endpoint test in billing-drafts.db.test.ts proves no model runs.
   const result = await load();
-  let modelCalled = false;
-  result.map(() => {
-    modelCalled = true;
-    return true;
-  });
-  expect(modelCalled).toBe(false);
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
-    expect(result.error.message).toContain(
-      "AI billing drafts require personal consent",
-    );
+    expect(result.error).toMatchObject({
+      status: 403,
+      code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.consentRequired,
+    });
   }
 });
 
 test("an inaccessible selected matter is refused by scoped queries before any AI continuation", async () => {
   for (const matterId of [ids.wsA2, ids.wsB1]) {
     const result = await load(matterId, [ids.wsA1]);
-    let modelCalled = false;
-    result.map(() => {
-      modelCalled = true;
-      return true;
-    });
-    expect(modelCalled).toBe(false);
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error.message).toBe("Selected matter is unavailable");
@@ -622,5 +616,68 @@ test("without a firm guideline file a consenting user gets plain descriptions, a
       .update(timeEntries)
       .set({ taskCode: null, activityCode: null })
       .where(eq(timeEntries.id, historyIds.today));
+  }
+});
+
+test("a selected client with every file its scope allows loads with the firm file, and a second firm file is never bound", async () => {
+  const firm = (
+    await db
+      .select({ skillId: agentSkillResources.skillId })
+      .from(agentSkillResources)
+      .where(eq(agentSkillResources.id, guidelineIds.firm))
+      .limit(1)
+  ).at(0);
+  assert.ok(firm);
+  // The client already has one file; fill its scope to the cap.
+  const extra = Array.from(
+    { length: BILLING_GUIDELINE_MAX_FILES_PER_CLIENT - 1 },
+    (_, index) => ({
+      id: createSafeId<"agentSkillResource">(),
+      organizationId: ids.orgA,
+      skillId: firm.skillId,
+      path: `references/client-${index}.md`,
+      content: `# Client rule ${index}`,
+      sizeBytes: 16,
+    }),
+  );
+  await db.insert(agentSkillResources).values(extra);
+  await db.insert(billingGuidelineFiles).values(
+    extra.map(({ id }) => ({
+      organizationId: ids.orgA,
+      resourceId: id,
+      clientId: ids.contactA,
+    })),
+  );
+  try {
+    const context = (await load()).unwrap();
+    assert.ok(context.mode === "guided");
+    expect(context.guidelines).toHaveLength(
+      BILLING_GUIDELINE_MAX_FIRM_FILES + BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+    );
+    expect(
+      (
+        await Result.tryPromise(
+          async () =>
+            await db.insert(billingGuidelineFiles).values({
+              organizationId: ids.orgA,
+              resourceId: guidelineIds.unselectedClient,
+              clientId: null,
+            }),
+        )
+      ).isErr(),
+    ).toBe(true);
+  } finally {
+    await db.delete(billingGuidelineFiles).where(
+      inArray(
+        billingGuidelineFiles.resourceId,
+        extra.map(({ id }) => id),
+      ),
+    );
+    await db.delete(agentSkillResources).where(
+      inArray(
+        agentSkillResources.id,
+        extra.map(({ id }) => id),
+      ),
+    );
   }
 });

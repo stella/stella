@@ -341,8 +341,13 @@ const billingDraftSettingsRevisionSchema = v.pipe(
 /** A withdrawal carries no revision, so it applies whatever the caller last
  * read. A grant or a preference change applies only to the revision it was
  * made on. */
+/** The one settings change a member can always make. */
+export const desktopBillingDraftWithdrawalSchema = v.strictObject({
+  type: v.literal("withdraw_consent"),
+});
+
 export const desktopBillingDraftSettingsRequestSchema = v.variant("type", [
-  v.strictObject({ type: v.literal("withdraw_consent") }),
+  desktopBillingDraftWithdrawalSchema,
   v.strictObject({
     type: v.literal("grant_consent"),
     revision: v.nullable(billingDraftSettingsRevisionSchema),
@@ -367,6 +372,8 @@ export const desktopBillingDraftEffectiveModeSchema = v.picklist([
 export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
   organizationOff: "billing_drafts_off",
   consentRequired: "billing_draft_consent_required",
+  /** The firm guideline binding changed while the request was prepared. */
+  modeChanged: "billing_draft_mode_changed",
 } as const;
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({

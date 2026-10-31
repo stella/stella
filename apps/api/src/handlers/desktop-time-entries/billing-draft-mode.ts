@@ -37,7 +37,18 @@ export const readOrganizationDraftsMode = async ({
       .limit(1)
   ).at(0)?.mode ?? DEFAULT_AI_BILLING_DRAFTS_MODE;
 
-/** The organization's switch and the caller's own consent, read together. */
+/**
+ * What a consenting member drafts while the organization allows drafting:
+ * guideline checks, billing codes and flags once a firm guideline file is
+ * bound, plain descriptions otherwise. Client files alone never switch
+ * guided drafting on.
+ */
+export const draftingModeFor = (
+  firmGuidelineBound: boolean,
+): DesktopBillingDraftMode => (firmGuidelineBound ? "guided" : "plain");
+
+/** The organization's switch, the caller's own consent and the drafting the
+ * bound guideline files give, read together. */
 export const readBillingDraftGate = async ({
   tx,
   organizationId,
@@ -47,6 +58,9 @@ export const readBillingDraftGate = async ({
     tx,
     organizationId,
   });
+  const draftingMode = draftingModeFor(
+    await readFirmGuidelineBound({ tx, organizationId }),
+  );
   const own = await tx
     .select({
       consentAt: billingDraftUserSettings.consentAt,
@@ -64,6 +78,7 @@ export const readBillingDraftGate = async ({
     organizationMode,
     consentAt: own.at(0)?.consentAt ?? null,
     preference: own.at(0)?.preference ?? null,
+    draftingMode,
   };
 };
 
@@ -75,16 +90,6 @@ const isSwitchedOff = ({
   organizationMode,
 }: Pick<BillingDraftGate, "organizationMode">) =>
   organizationMode !== AI_BILLING_DRAFTS_MODE.ENABLED;
-
-/**
- * What a consenting member drafts while the organization allows drafting:
- * guideline checks, billing codes and flags once a firm guideline file is
- * bound, plain descriptions otherwise. Client files alone never switch
- * guided drafting on.
- */
-export const draftingModeFor = (
-  firmGuidelineBound: boolean,
-): DesktopBillingDraftMode => (firmGuidelineBound ? "guided" : "plain");
 
 type LoadBillingDraftGateOptions = Omit<BillingDraftGateOptions, "tx"> & {
   safeDb: SafeDb;
@@ -124,6 +129,24 @@ export const billingDraftGateRefusal = (
   }
   return undefined;
 };
+
+/**
+ * The refusal read right before a model request: the gate's, or a 409 when
+ * the firm guideline binding changed since the context the request carries
+ * was loaded for `expectedMode`.
+ */
+export const billingDraftDispatchRefusal = (
+  gate: BillingDraftGate,
+  expectedMode: DesktopBillingDraftMode | undefined,
+) =>
+  billingDraftGateRefusal(gate) ??
+  (expectedMode === undefined || gate.draftingMode === expectedMode
+    ? undefined
+    : new HandlerError({
+        status: 409,
+        code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.modeChanged,
+        message: "Billing draft mode changed; draft again",
+      }));
 
 type ReadEffectiveDraftModeOptions = Pick<
   BillingDraftGateOptions,

@@ -114,6 +114,7 @@ export const STRUCTURED_OUTPUT_ENTRY_POINTS = [
   "streamTanStackObjectForTask",
   "generateTanStackChatObject",
   "createVerificationCall",
+  "generateAdmittedObject",
 ] as const;
 
 /**

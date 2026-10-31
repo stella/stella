@@ -16,6 +16,8 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 import { authorizeDesktopTimeEntries } from "./authorize";
+import type { loadBillingDraftGate } from "./billing-draft-mode";
+import { DraftingAdmission } from "./drafting-model";
 import {
   type DesktopTimeEntryNarrativeRun,
   runDesktopTimeEntryNarrative,
@@ -23,11 +25,13 @@ import {
 
 type DesktopTimeEntryNarrativeDependencies = {
   authorizeAccount?: typeof authorizeDesktopAccount;
+  loadGate?: typeof loadBillingDraftGate;
   narrate?: DesktopTimeEntryNarrativeRun;
 };
 
 export const createDesktopTimeEntryNarrativeEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
+  loadGate,
   narrate = runDesktopTimeEntryNarrative,
 }: DesktopTimeEntryNarrativeDependencies = {}) =>
   createSafeBoundedPublicHandler(
@@ -53,8 +57,14 @@ export const createDesktopTimeEntryNarrativeEndpoint = ({
           }),
         );
       }
+      // Window titles are privileged activity: the organization's switch and
+      // the member's consent stop the request here, and the model call reads
+      // them again before every provider request.
+      const drafting = yield* Result.await(
+        DraftingAdmission.admit({ ...account, loadGate }),
+      );
       const narrative = yield* Result.await(
-        narrate({ account, request: body, signal: request.signal }),
+        narrate({ account, drafting, request: body, signal: request.signal }),
       );
       return Result.ok({ narrative });
     },

@@ -36,6 +36,7 @@ import {
   claimFixtureDeviceProof,
   createDesktopDeviceSigner,
 } from "@/api/tests/helpers/desktop-device-proof";
+import { runDispatchCheck } from "@/api/tests/helpers/dispatch-check";
 import { serveForTest, type TestServer } from "@/api/tests/helpers/test-server";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -192,9 +193,12 @@ type ExerciseOptions = {
   output?: DesktopBillingDraftResponse;
   draftContext?: typeof context | typeof plainContext;
   /** What each successive gate read answers; the last one repeats. */
-  gates?: readonly BillingDraftGate[];
+  gates?: readonly GateRead[];
+  /** The drafting mode the firm binding gives; the context's by default. */
+  bindingMode?: BillingDraftGate["draftingMode"];
 };
-const consenting: BillingDraftGate = {
+type GateRead = Omit<BillingDraftGate, "draftingMode">;
+const consenting: GateRead = {
   organizationMode: "enabled",
   consentAt: new Date("2026-10-01T12:00:00Z"),
   preference: context.preference,
@@ -209,6 +213,7 @@ const exercise = async ({
   output = fixture,
   draftContext = context,
   gates = [consenting],
+  bindingMode = draftContext.mode,
 }: ExerciseOptions = {}) => {
   const calls: {
     prompt: string;
@@ -237,6 +242,8 @@ const exercise = async ({
   );
   const generate = mock(
     async (options: Parameters<typeof generateTanStackObjectForTask>[0]) => {
+      // As the real generation does, before the request leaves.
+      await runDispatchCheck(options.beforeEachDispatch);
       calls.push({
         prompt: options.prompt ?? "",
         system: options.system ?? "",
@@ -338,7 +345,7 @@ const exercise = async ({
     loadGate: async () => {
       const gate = gates.at(Math.min(gateReads, gates.length - 1));
       gateReads += 1;
-      return Result.ok(gate ?? consenting);
+      return Result.ok({ ...(gate ?? consenting), draftingMode: bindingMode });
     },
     loadContext: asTestRaw<typeof loadBillingDraftContext>(
       async ({
@@ -526,6 +533,19 @@ test("a consenting request reads the gate again right before the model call", as
   expect(response.status).toBe(200);
   expect(gateReads()).toBe(2);
   expect(calls).toHaveLength(1);
+});
+
+test("a firm guideline file bound after the context loaded refuses the request with 409", async () => {
+  const { response, calls } = await exercise({
+    draftContext: plainContext,
+    output: plainFixture,
+    bindingMode: "guided",
+  });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.modeChanged,
+  });
+  expect(calls).toHaveLength(0);
 });
 
 test("plain mode refuses a model answer that carries billing fields", async () => {
