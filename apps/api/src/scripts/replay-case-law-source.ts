@@ -6,7 +6,6 @@ import { printError } from "@stll/errors";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import { caseLawSources } from "@/api/db/schema";
-import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
  * with each of them, without fetching anything from the publisher.
@@ -62,6 +61,7 @@ import {
 import { parseReplayArguments } from "@/api/handlers/case-law/ingestion/replay-arguments";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import type { StoredRawReader } from "@/api/lib/legal-search/ingestion-types";
 import {
   readS3ObjectIfPresent,
   refreshCorpusS3,

@@ -16,6 +16,26 @@ main {
   padding: 18px;
 }
 
+.status-line {
+  align-items: baseline;
+  display: flex;
+  gap: 8px;
+}
+.status-marker {
+  background: #737373;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  height: 8px;
+  width: 8px;
+}
+.status-line[data-state="connected"] .status-marker,
+.status-line[data-state="tab-handed-to-stella"] .status-marker {
+  background: #287a45;
+}
+.status-line[data-state="website-access-needed"] .status-marker {
+  background: #a16207;
+}
+
 .mark {
   align-items: center;
   background: var(--primary);
@@ -59,9 +79,30 @@ button {
   gap: 8px;
 }
 
+.secondary-actions {
+  display: grid;
+  gap: 10px;
+}
+.secondary-action {
+  display: grid;
+  gap: 3px;
+}
+.secondary-action p {
+  font-size: 12px;
+}
+
 button.secondary {
-  background: var(--secondary);
-  color: var(--secondary-foreground);
+  background: transparent;
+  color: var(--muted-foreground);
+  justify-self: start;
+  padding: 6px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--muted-foreground);
+  outline-offset: 2px;
 }
 
 button:disabled {

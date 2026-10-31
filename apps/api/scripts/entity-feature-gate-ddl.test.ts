@@ -17,6 +17,15 @@ import {
   entityFeatureGateTableSql,
 } from "./entity-feature-gate-ddl";
 
+/** The gate role switch, carrying its migration safety review. */
+const reviewedRoleSwitch = (set: "TRUE" | "FALSE") =>
+  expect.stringMatching(
+    new RegExp(
+      `^-- stella-migration-safety: reviewed grant-privileges - [^\\n]+\\nGRANT stella_entity_gate TO CURRENT_USER WITH SET ${set};$`,
+      "u",
+    ),
+  );
+
 const tables = Object.values(schema).filter((table) => is(table, PgTable));
 const descriptors = entityFeatureGateMetadata(tables);
 
@@ -126,7 +135,7 @@ test("absent: a missing gate-role routine is recreated as its owner", async () =
     expect.arrayContaining([
       "SET LOCAL ROLE stella_entity_gate;",
       expect.stringMatching(
-        /^CREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)/u,
+        /^-- stella-migration-safety: reviewed security-definer - [^\n]+\nCREATE OR REPLACE FUNCTION public\.entity_feature_gate_propagate\(\)/u,
       ),
       "RESET ROLE;",
     ]),
@@ -159,12 +168,12 @@ test("stale: a changed routine is replaced, as its owner when the gate role owns
   expect(propagate?.state).toBe("stale");
   expect(propagate?.repair.slice(0, 3)).toEqual([
     "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    reviewedRoleSwitch("TRUE"),
     "SET LOCAL ROLE stella_entity_gate;",
   ]);
   expect(propagate?.repair.slice(-3)).toEqual([
     "RESET ROLE;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    reviewedRoleSwitch("FALSE"),
     "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
   ]);
 });
@@ -177,11 +186,11 @@ test("over-granted: an unchanged routine PUBLIC may execute again is revoked as 
     entityFeatureGateTableSql(tables, descriptors, { ...effective, revokes }),
   ).toEqual([
     "GRANT CREATE ON SCHEMA public TO stella_entity_gate;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    reviewedRoleSwitch("TRUE"),
     "SET LOCAL ROLE stella_entity_gate;",
     "REVOKE ALL ON FUNCTION public.entity_feature_gate_propagate() FROM PUBLIC;",
     "RESET ROLE;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    reviewedRoleSwitch("FALSE"),
     "REVOKE CREATE ON SCHEMA public FROM stella_entity_gate;",
   ]);
 });
@@ -261,17 +270,17 @@ test("created triggers are wrapped in a temporary EXECUTE grant made as the rout
     statement.startsWith("CREATE TRIGGER entity_feature_gate_write "),
   );
   expect(statements.slice(create - 5, create)).toEqual([
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    reviewedRoleSwitch("TRUE"),
     "SET LOCAL ROLE stella_entity_gate;",
     `GRANT EXECUTE ON FUNCTION ${routines} TO SESSION_USER;`,
     "RESET ROLE;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    reviewedRoleSwitch("FALSE"),
   ]);
   expect(statements.slice(create + 1, create + 6)).toEqual([
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET TRUE;",
+    reviewedRoleSwitch("TRUE"),
     "SET LOCAL ROLE stella_entity_gate;",
     `REVOKE EXECUTE ON FUNCTION ${routines} FROM SESSION_USER;`,
     "RESET ROLE;",
-    "GRANT stella_entity_gate TO CURRENT_USER WITH SET FALSE;",
+    reviewedRoleSwitch("FALSE"),
   ]);
 });
