@@ -419,10 +419,12 @@ impl HarnessInstallation {
   /// An incomplete active release rolls the pointer back to the previous one.
   pub fn acquire(&self, harness: ManagedHarness) -> Result<HarnessLease, HarnessError> {
     let config_dir = self.0.config_root.join(harness.id());
-    create_private_dir(&config_dir).map_err(crate::logging::replaced_logged(
-      "managed harness configuration directory was not created",
-      HarnessError::Storage,
-    ))?;
+    crate::local_store::create_private_dir(&config_dir).map_err(
+      crate::logging::replaced_logged(
+        "managed harness configuration directory was not created",
+        HarnessError::Storage,
+      ),
+    )?;
     let mut slot = self.0.slot(harness);
     if matches!(slot.operation, Operation::Removing) {
       return Err(HarnessError::Busy);
@@ -507,11 +509,9 @@ impl Inner {
     mut cancelled: watch::Receiver<bool>,
   ) -> Result<(), Stop> {
     let dir = self.harness_dir(harness);
-    tokio::fs::create_dir_all(&dir)
-      .await
+    crate::local_store::create_private_dir(&dir)
       .map_err(failed_storage("managed harness directory was not created"))?;
-    tokio::fs::create_dir(staging)
-      .await
+    crate::local_store::create_private_dir_new(staging)
       .map_err(failed_storage("managed harness staging was not created"))?;
     let destination = dir.join(&release.version);
     if tokio::fs::symlink_metadata(&destination).await.is_ok() {
@@ -545,8 +545,7 @@ impl Inner {
       .await?;
     self.verifying(harness, id);
     let runtime = staging.join("runtime");
-    tokio::fs::create_dir(&runtime)
-      .await
+    crate::local_store::create_private_dir_new(&runtime)
       .map_err(failed_storage("managed harness runtime was not created"))?;
     let unpacked = {
       let (archive, runtime, cancelled) =
@@ -629,12 +628,14 @@ impl Inner {
     {
       return Err(Stop::Failed(InstallFailure::Oversize));
     }
-    let mut file = tokio::fs::OpenOptions::new()
-      .write(true)
-      .create_new(true)
-      .open(archive)
-      .await
-      .map_err(failed_storage("managed harness download was not created"))?;
+    let mut file = tokio::fs::File::from_std(
+      crate::local_store::open_private(
+        crate::local_store::OpenMode::CreateNew,
+        archive,
+      )
+      .map_err(failed_storage("managed harness download was not created"))?,
+    );
+
     let mut digest = Digester::new(&asset.digest);
     let mut downloaded = 0u64;
     // The first chunk is always reported, then at most every interval.
@@ -884,14 +885,8 @@ fn read_record<T: DeserializeOwned>(path: &Path) -> Option<T> {
 }
 
 fn write_new_file(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-  let mut options = std::fs::OpenOptions::new();
-  options.write(true).create_new(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt;
-    options.mode(0o600);
-  }
-  let mut file = options.open(path)?;
+  let mut file =
+    crate::local_store::open_private(crate::local_store::OpenMode::CreateNew, path)?;
   file.write_all(contents)?;
   file.sync_all()
 }
@@ -904,23 +899,13 @@ fn write_pointer(dir: &Path, pointer: &ActivePointer) -> std::io::Result<()> {
     uuid::Uuid::new_v4()
   ));
   let contents = serde_json::to_vec(pointer).map_err(std::io::Error::other)?;
-  let written = write_new_file(&staged, &contents)
-    .and_then(|()| std::fs::rename(&staged, dir.join(ACTIVE_POINTER)));
+  let written = write_new_file(&staged, &contents).and_then(|()| {
+    crate::local_store::rename_private(&staged, &dir.join(ACTIVE_POINTER))
+  });
   if written.is_err() {
     let _ = std::fs::remove_file(staged);
   }
   written
-}
-
-fn create_private_dir(path: &Path) -> std::io::Result<()> {
-  let mut builder = std::fs::DirBuilder::new();
-  builder.recursive(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::DirBuilderExt;
-    builder.mode(0o700);
-  }
-  builder.create(path)
 }
 
 fn remove_staging(dir: &Path) {
@@ -964,7 +949,16 @@ async fn remove_tree(path: PathBuf) -> std::io::Result<()> {
 async fn publish(runtime: &Path, destination: &Path) -> std::io::Result<()> {
   let mut attempts = 0;
   loop {
-    match tokio::fs::rename(runtime, destination).await {
+    let published = {
+      let runtime = runtime.to_path_buf();
+      let destination = destination.to_path_buf();
+      tokio::task::spawn_blocking(move || {
+        crate::local_store::publish_harness_directory(&runtime, &destination)
+      })
+      .await
+      .map_err(std::io::Error::other)?
+    };
+    match published {
       Err(_) if cfg!(windows) && attempts < 10 => {
         attempts += 1;
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1031,8 +1025,7 @@ async fn probe(
   cancelled: &mut watch::Receiver<bool>,
 ) -> Result<(), Stop> {
   let home = staging.join("probe-home");
-  tokio::fs::create_dir_all(&home)
-    .await
+  crate::local_store::create_private_dir(&home)
     .map_err(failed_storage("managed harness probe home was not created"))?;
   let mut command = probe_command(harness, executable, &home);
   let output = until_cancelled(
@@ -1676,15 +1669,19 @@ mod tests {
   /// Places a complete release directory, as a finished install leaves it.
   fn stage(dir: &TempDir, version: &str) {
     let release = codex_dir(dir).join(version);
-    std::fs::create_dir_all(release.join("bin")).unwrap();
-    std::fs::write(release.join("bin").join("codex"), b"#!/bin/sh\n").unwrap();
+    crate::local_store::create_private_dir(&release.join("bin")).unwrap();
+    crate::local_store::write_test_fixture(
+      release.join("bin").join("codex"),
+      b"#!/bin/sh\n",
+    )
+    .unwrap();
     let record = InstallRecord {
       version: version.to_string(),
       target: "fixture-target".to_string(),
       digest: ArchiveDigest::Sha256("00".repeat(32)),
       executable: "bin/codex".to_string(),
     };
-    std::fs::write(
+    crate::local_store::write_test_fixture(
       release.join(INSTALL_RECORD),
       serde_json::to_vec(&record).unwrap(),
     )
@@ -1744,7 +1741,7 @@ mod tests {
       assert_eq!(install(&open(&dir, pinned.clone())).await, ready("1.0.0"));
 
       let record = codex_dir(&dir).join("1.0.0").join(INSTALL_RECORD);
-      std::fs::write(record, b"{\"version\":").unwrap();
+      crate::local_store::write_test_fixture(record, b"{\"version\":").unwrap();
       let reopened = open(&dir, pinned.clone());
       let corrupt = failed(InstallFailure::CorruptInstall, None);
       assert_eq!(reopened.state(ManagedHarness::Codex), corrupt);
@@ -1760,7 +1757,11 @@ mod tests {
       );
       assert!(reopened.acquire(ManagedHarness::Codex).is_ok());
 
-      std::fs::write(codex_dir(&dir).join(ACTIVE_POINTER), b"not json").unwrap();
+      crate::local_store::write_test_fixture(
+        codex_dir(&dir).join(ACTIVE_POINTER),
+        b"not json",
+      )
+      .unwrap();
       assert_eq!(open(&dir, pinned).state(ManagedHarness::Codex), corrupt);
     });
   }
@@ -1804,8 +1805,12 @@ mod tests {
   fn leftover_staging_is_removed_when_opened() {
     let dir = TempDir::new();
     let harness = codex_dir(&dir);
-    std::fs::create_dir_all(harness.join(".install-left").join("runtime")).unwrap();
-    std::fs::write(harness.join(".active-left.json"), b"{}").unwrap();
+    crate::local_store::create_private_dir(
+      &harness.join(".install-left").join("runtime"),
+    )
+    .unwrap();
+    crate::local_store::write_test_fixture(harness.join(".active-left.json"), b"{}")
+      .unwrap();
     let installation = HarnessInstallation::open(
       dir.path().join("harness"),
       dir.path().join("harness-home"),
@@ -1837,9 +1842,9 @@ mod tests {
     // Nothing to remove yet.
     installation.remove_sign_in(ManagedHarness::Codex).unwrap();
     let home = dir.path().join("harness-home").join("codex");
-    std::fs::create_dir_all(home.join("sessions")).unwrap();
-    std::fs::write(home.join("auth.json"), b"{}").unwrap();
-    std::fs::write(home.join("config.toml"), b"").unwrap();
+    crate::local_store::create_private_dir(&home.join("sessions")).unwrap();
+    crate::local_store::write_test_fixture(home.join("auth.json"), b"{}").unwrap();
+    crate::local_store::write_test_fixture(home.join("config.toml"), b"").unwrap();
     installation.remove_sign_in(ManagedHarness::Codex).unwrap();
     assert_eq!(entries(&home), ["config.toml", "sessions"]);
   }

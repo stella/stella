@@ -134,8 +134,13 @@ fn record_check(now: u64) {
     tracing::warn!("updater timestamp has no data directory");
     return;
   };
-  let result = std::fs::create_dir_all(path.parent().expect("updater data directory"))
-    .and_then(|()| std::fs::write(path, now.to_string()));
+  let result = crate::local_store::create_private_dir(
+    path.parent().expect("updater data directory"),
+  )
+  .map_err(|error| error.to_string())
+  .and_then(|()| {
+    crate::local_store::write_private_atomic(&path, now.to_string().as_bytes())
+  });
   if let Err(error) = result {
     tracing::warn!(%error, "updater timestamp could not be saved");
   }
@@ -214,12 +219,11 @@ pub async fn run_check(handle: &AppHandle, active_edit_sessions: bool) -> CheckO
     }
   };
 
-  if let Err(err) = update.install(&package) {
+  if let Err(err) = crate::local_store::install_update(&update, &package) {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
-    let msg = err.to_string();
-    notify(handle, "Stella update failed", &msg);
-    return CheckOutcome::Failed(msg);
+    notify(handle, "Stella update failed", &err);
+    return CheckOutcome::Failed(err);
   }
 
   // On Windows the plugin has already handed off to the installer and
