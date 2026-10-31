@@ -279,3 +279,216 @@ for (const root of ["html", "body"]) {
     });
   }
 }
+
+const nestedScrollAxes = [
+  { axis: "x", direction: "ltr", targetOffset: 200 },
+  { axis: "x", direction: "rtl", targetOffset: -140 },
+  { axis: "y", direction: "ltr", targetOffset: 200 },
+];
+
+for (const { axis, direction, targetOffset } of nestedScrollAxes) {
+  for (const { placement, offset, overlap, reachable } of [
+    { placement: "inside", offset: 0, overlap: 100, reachable: true },
+    { placement: "outside", offset: 120, overlap: 0, reachable: false },
+    { placement: "wide overlap", offset: 60, overlap: 40, reachable: true },
+    { placement: "narrow overlap", offset: 80, overlap: 20, reachable: false },
+  ]) {
+    for (const scrolled of [false, true]) {
+      test(`nested ${direction} ${axis} scroller ${placement} a clipping ancestor ${scrolled ? "after scrolling" : "at origin"}`, async ({
+        page,
+      }) => {
+        // safe-html: static nested controls with enumerated geometry fixture values.
+        await page.setContent(`
+          <style>
+            #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: hidden; }
+            #inner { position: absolute; left: ${axis === "x" ? offset : 0}px; top: ${axis === "y" ? offset : 0}px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
+            #extent { position: absolute; left: ${direction === "rtl" ? -200 : 0}px; top: 0; width: ${axis === "x" ? 300 : 1}px; height: ${axis === "y" ? 300 : 1}px; }
+            button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
+          </style>
+          <div id="outer"><div id="inner"><div id="extent"></div><button aria-label="Nested"></button></div></div>
+        `);
+        const inner = await page.locator("#inner").evaluate(
+          (box, fixture) => {
+            if (fixture.scrolled) {
+              box.scrollLeft = fixture.direction === "rtl" ? -50 : 50;
+              box.scrollTop = 50;
+            }
+            const rect = box.getBoundingClientRect();
+            return {
+              range:
+                fixture.axis === "x"
+                  ? box.scrollWidth - box.clientWidth
+                  : box.scrollHeight - box.clientHeight,
+              offset: fixture.axis === "x" ? box.scrollLeft : box.scrollTop,
+              start: fixture.axis === "x" ? rect.left : rect.top,
+              end: fixture.axis === "x" ? rect.right : rect.bottom,
+            };
+          },
+          { axis, direction, scrolled },
+        );
+        const outer = await page
+          .locator("#outer")
+          .evaluate((box, fixtureAxis) => {
+            const rect = box.getBoundingClientRect();
+            return {
+              start: fixtureAxis === "x" ? rect.left : rect.top,
+              end: fixtureAxis === "x" ? rect.right : rect.bottom,
+            };
+          }, axis);
+        expect(inner.range).toBe(200);
+        expect(Math.abs(inner.offset)).toBe(scrolled ? 50 : 0);
+        expect(
+          Math.max(
+            0,
+            Math.min(inner.end, outer.end) - Math.max(inner.start, outer.start),
+          ),
+        ).toBe(overlap);
+        await expect(
+          page.getByRole("button", { name: "Nested" }),
+        ).not.toBeInViewport();
+        const problems = await findPhoneLayoutProblems(page);
+        expect(problems.includes("cut-off controls:")).toBe(!reachable);
+        expect(problems).toHaveLength(reachable ? 0 : 2);
+        if (!reachable) {
+          expect(problems.at(1)).toContain('button "Nested"');
+        }
+      });
+    }
+  }
+}
+
+for (const { axis, direction, targetOffset, root } of [
+  { axis: "x", direction: "ltr", targetOffset: 200, root: "html" },
+  { axis: "x", direction: "rtl", targetOffset: -140, root: "html" },
+  { axis: "y", direction: "ltr", targetOffset: 200, root: "html" },
+  { axis: "y", direction: "ltr", targetOffset: 200, root: "body" },
+]) {
+  for (const overlap of [0, 20, 40]) {
+    for (const scrolled of [false, true]) {
+      test(`nested ${direction} ${axis} scroller has ${overlap}px inside the ${root} viewport ${scrolled ? "after scrolling" : "at origin"}`, async ({
+        page,
+      }) => {
+        // safe-html: static scroll control with enumerated root and geometry fixture values.
+        await page.setContent(`
+          <style>
+            html, body { margin: 0; height: 100%; }
+            ${root} { overflow: hidden; }
+            #inner { position: ${axis === "x" ? "fixed" : "absolute"}; left: ${axis === "x" ? `calc(100vw - ${overlap}px)` : "50px"}; top: ${axis === "y" ? `calc(100vh - ${overlap}px)` : "50px"}; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
+            #extent { position: absolute; left: ${direction === "rtl" ? -200 : 0}px; top: 0; width: ${axis === "x" ? 300 : 1}px; height: ${axis === "y" ? 300 : 1}px; }
+            button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
+          </style>
+          <div id="inner"><div id="extent"></div><button aria-label="Viewport nested"></button></div>
+        `);
+        const metrics = await page.locator("#inner").evaluate(
+          (box, fixture) => {
+            if (fixture.scrolled) {
+              box.scrollLeft = fixture.direction === "rtl" ? -50 : 50;
+              box.scrollTop = 50;
+            }
+            const rect = box.getBoundingClientRect();
+            return {
+              range:
+                fixture.axis === "x"
+                  ? box.scrollWidth - box.clientWidth
+                  : box.scrollHeight - box.clientHeight,
+              offset: fixture.axis === "x" ? box.scrollLeft : box.scrollTop,
+              overlap:
+                fixture.axis === "x"
+                  ? window.innerWidth - rect.left
+                  : window.innerHeight - rect.top,
+            };
+          },
+          { axis, direction, scrolled },
+        );
+        expect(metrics.range).toBe(200);
+        expect(Math.abs(metrics.offset)).toBe(scrolled ? 50 : 0);
+        expect(Math.abs(metrics.overlap - overlap)).toBeLessThanOrEqual(1);
+        await expect(
+          page.getByRole("button", { name: "Viewport nested" }),
+        ).not.toBeInViewport();
+        const problems = await findPhoneLayoutProblems(page);
+        expect(problems.includes("cut-off controls:")).toBe(overlap < 30);
+        if (overlap < 30) {
+          expect(problems).toContainEqual(
+            expect.stringContaining('button "Viewport nested"'),
+          );
+        }
+      });
+    }
+  }
+}
+
+for (const { axis, direction, targetOffset } of nestedScrollAxes) {
+  for (const scrolled of [false, true]) {
+    test(`nested ${direction} ${axis} scrolling can reveal an inner scroller ${scrolled ? "after scrolling" : "at origin"}`, async ({
+      page,
+    }) => {
+      const innerOffset = direction === "rtl" ? -180 : 180;
+      // safe-html: static nested controls with enumerated geometry fixture values.
+      await page.setContent(`
+        <style>
+          #outer { position: absolute; left: 50px; top: 50px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
+          #outer-extent, #inner-extent { position: absolute; left: ${direction === "rtl" ? -200 : 0}px; top: 0; width: ${axis === "x" ? 300 : 1}px; height: ${axis === "y" ? 300 : 1}px; }
+          #inner { position: absolute; left: ${axis === "x" ? innerOffset : 0}px; top: ${axis === "y" ? innerOffset : 0}px; width: 100px; height: 100px; overflow: auto; direction: ${direction}; }
+          button { position: absolute; left: ${axis === "x" ? targetOffset : 20}px; top: ${axis === "y" ? targetOffset : 20}px; width: 30px; height: 30px; }
+        </style>
+        <div id="outer"><div id="outer-extent"></div><div id="inner"><div id="inner-extent"></div><button aria-label="Reachable nested"></button></div></div>
+      `);
+      for (const selector of ["#inner", "#outer"]) {
+        const metrics = await page.locator(selector).evaluate(
+          (box, fixture) => {
+            if (fixture.scrolled) {
+              box.scrollLeft = fixture.direction === "rtl" ? -50 : 50;
+              box.scrollTop = 50;
+            }
+            return {
+              range:
+                fixture.axis === "x"
+                  ? box.scrollWidth - box.clientWidth
+                  : box.scrollHeight - box.clientHeight,
+              offset: fixture.axis === "x" ? box.scrollLeft : box.scrollTop,
+            };
+          },
+          { axis, direction, scrolled },
+        );
+        expect(metrics.range).toBe(200);
+        expect(Math.abs(metrics.offset)).toBe(scrolled ? 50 : 0);
+      }
+      await expect(
+        page.getByRole("button", { name: "Reachable nested" }),
+      ).not.toBeInViewport();
+      expect(await findPhoneLayoutProblems(page)).toEqual([]);
+    });
+  }
+}
+
+for (const scrolled of [false, true]) {
+  test(`normal page scrolling can reveal a below-screen inner scroller ${scrolled ? "after scrolling" : "at origin"}`, async ({
+    page,
+  }) => {
+    // safe-html: static below-screen control in a normal scrolling document.
+    await page.setContent(`
+      <style>
+        html, body { margin: 0; }
+        #inner { position: absolute; left: 50px; top: 120vh; width: 100px; height: 100px; overflow: auto; }
+        #extent { width: 1px; height: 300px; }
+        button { position: absolute; left: 20px; top: 200px; width: 30px; height: 30px; }
+      </style>
+      <div id="inner"><div id="extent"></div><button aria-label="Below page"></button></div>
+    `);
+    const metrics = await page
+      .locator("#inner")
+      .evaluate((box, fixtureScrolled) => {
+        box.scrollTop = fixtureScrolled ? 50 : 0;
+        return {
+          range: box.scrollHeight - box.clientHeight,
+          offset: box.scrollTop,
+          belowScreen: box.getBoundingClientRect().top > window.innerHeight,
+        };
+      }, scrolled);
+    expect(metrics.range).toBe(200);
+    expect(metrics.offset).toBe(scrolled ? 50 : 0);
+    expect(metrics.belowScreen).toBe(true);
+    expect(await findPhoneLayoutProblems(page)).toEqual([]);
+  });
+}

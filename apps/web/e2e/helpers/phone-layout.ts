@@ -64,40 +64,25 @@ const collectPhoneLayoutProblems = (): string[] => {
   };
   const isScrollable = (overflow: string) =>
     overflow === "auto" || overflow === "scroll";
-  type ScrollReachabilityOptions = {
-    box: Element;
-    boxRect: DOMRect;
-    rect: DOMRect;
-    style: CSSStyleDeclaration;
+  type ReachablePositions = { min: number; max: number };
+  type ClipReachabilityOptions = {
+    positions: ReachablePositions;
+    min: number;
+    max: number;
+    scroll: { offset: number; min: number; max: number };
   };
-  const scrollReachability = ({
-    box,
-    boxRect,
-    rect,
-    style,
-  }: ScrollReachabilityOptions) => {
-    const horizontalRange = box.scrollWidth - box.clientWidth;
-    const originX = boxRect.left + box.clientLeft;
-    // scrollLeft is negative in RTL: the reachable origin is the right edge.
-    const left = originX - (style.direction === "rtl" ? horizontalRange : 0);
-    const right =
-      originX +
-      box.clientWidth +
-      (style.direction === "rtl" ? 0 : horizontalRange);
-    const top = boxRect.top + box.clientTop;
-    return {
-      x:
-        isScrollable(style.overflowX) &&
-        horizontalRange > 0 &&
-        rect.left + box.scrollLeft >= left - tolerance &&
-        rect.right + box.scrollLeft <= right + tolerance,
-      y:
-        isScrollable(style.overflowY) &&
-        box.scrollHeight > box.clientHeight &&
-        rect.top + box.scrollTop >= top - tolerance &&
-        rect.bottom + box.scrollTop <= top + box.scrollHeight + tolerance,
-    };
-  };
+  // Track possible control start positions, including movement through inner
+  // scrollers. Every outer clip must still leave room for the whole control.
+  const clipReachability = ({
+    positions,
+    min,
+    max,
+    scroll,
+  }: ClipReachabilityOptions) => ({
+    min: Math.max(positions.min + scroll.offset - scroll.max, min - tolerance),
+    max: Math.min(positions.max + scroll.offset - scroll.min, max + tolerance),
+  });
+  const stationaryScroll = { offset: 0, min: 0, max: 0 };
   // Buttons widen their hit area on touch with an absolutely positioned
   // pseudo-element; the target is whichever is larger.
   const targetSize = (element: Element, rect: DOMRect) => {
@@ -175,8 +160,8 @@ const collectPhoneLayoutProblems = (): string[] => {
     if (opacity === 0 || visibility !== "visible") {
       continue;
     }
-    let reachableX = false;
-    let reachableY = false;
+    let positionsX = { min: rect.left, max: rect.left };
+    let positionsY = { min: rect.top, max: rect.top };
     let fixed = getComputedStyle(element).position === "fixed";
     let problem: string | null = null;
     for (
@@ -189,46 +174,74 @@ const collectPhoneLayoutProblems = (): string[] => {
     ) {
       const style = getComputedStyle(box);
       const boxRect = box.getBoundingClientRect();
-      const reachable = scrollReachability({ box, boxRect, rect, style });
-      if (!reachableX && style.overflowX !== "visible") {
-        const outside =
-          rect.left < boxRect.left - tolerance ||
-          rect.right > boxRect.right + tolerance;
-        if (outside) {
-          if (reachable.x) {
-            reachableX = true;
-          } else {
-            problem = `${describe(element)} is cut off at the side of ${describe(box)}`;
-          }
+      if (style.overflowX !== "visible") {
+        const range = box.scrollWidth - box.clientWidth;
+        const rtl = style.direction === "rtl";
+        const start = boxRect.left + box.clientLeft;
+        positionsX = clipReachability({
+          positions: positionsX,
+          min: start,
+          max: start + box.clientWidth - rect.width,
+          scroll: isScrollable(style.overflowX)
+            ? {
+                offset: box.scrollLeft,
+                min: rtl ? -range : 0,
+                max: rtl ? 0 : range,
+              }
+            : stationaryScroll,
+        });
+        if (positionsX.min > positionsX.max) {
+          problem = `${describe(element)} is cut off at the side of ${describe(box)}`;
         }
       }
-      if (!reachableY && style.overflowY !== "visible" && problem === null) {
-        const outside =
-          rect.top < boxRect.top - tolerance ||
-          rect.bottom > boxRect.bottom + tolerance;
-        if (outside) {
-          if (reachable.y) {
-            reachableY = true;
-          } else {
-            problem = `${describe(element)} is cut off at the top or bottom of ${describe(box)}`;
-          }
+      if (style.overflowY !== "visible" && problem === null) {
+        const start = boxRect.top + box.clientTop;
+        positionsY = clipReachability({
+          positions: positionsY,
+          min: start,
+          max: start + box.clientHeight - rect.height,
+          scroll: isScrollable(style.overflowY)
+            ? {
+                offset: box.scrollTop,
+                min: 0,
+                max: box.scrollHeight - box.clientHeight,
+              }
+            : stationaryScroll,
+        });
+        if (positionsY.min > positionsY.max) {
+          problem = `${describe(element)} is cut off at the top or bottom of ${describe(box)}`;
         }
       }
       fixed ||= style.position === "fixed";
     }
-    if (
-      problem === null &&
-      !reachableX &&
-      (rect.left < -tolerance || rect.right > window.innerWidth + tolerance)
-    ) {
+    positionsX = clipReachability({
+      positions: positionsX,
+      min: 0,
+      max: window.innerWidth - rect.width,
+      scroll: stationaryScroll,
+    });
+    if (problem === null && positionsX.min > positionsX.max) {
       problem = `${describe(element)} runs past the side of the screen`;
     }
-    if (
-      problem === null &&
-      !reachableY &&
-      (fixed || rootClipsY) &&
-      (rect.top < -tolerance || rect.bottom > window.innerHeight + tolerance)
-    ) {
+    positionsY = clipReachability({
+      positions: positionsY,
+      min: 0,
+      max: window.innerHeight - rect.height,
+      scroll:
+        fixed || rootClipsY
+          ? stationaryScroll
+          : {
+              offset: window.scrollY,
+              min: 0,
+              max:
+                Math.max(
+                  document.documentElement.scrollHeight,
+                  document.body.scrollHeight,
+                  window.innerHeight,
+                ) - window.innerHeight,
+            },
+    });
+    if (problem === null && positionsY.min > positionsY.max) {
       problem = fixed
         ? `${describe(element)} sits in a fixed layer past the top or bottom of the screen`
         : `${describe(element)} sits past the top or bottom of a non-scrollable page`;
