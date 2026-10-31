@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
   DesktopTimeEntryBatch,
@@ -492,9 +493,11 @@ export const ActivityDayCalendar = ({
         hours={calendarHours({
           date: snapshot.date,
           timeZone,
+          // Now stretches only today's grid; on another day it would add
+          // empty hours up to the day's edge.
           instants: [
             ...day.segments.flatMap(({ startMs, endMs }) => [startMs, endMs]),
-            nowMs,
+            ...(snapshot.date === snapshot.today ? [nowMs] : []),
           ],
         })}
         locale={locale}
@@ -746,25 +749,31 @@ function useSuggestionNarratives({
   const [edits, setEdits] = useState<Record<string, SuggestionEdit>>({});
   const [statuses, setStatuses] = useState<Record<string, NarrativeStatus>>({});
   // The change event that carries a persisted "always" can arrive after the
-  // next card opens; the choice applies at once.
+  // next card opens, so the choice applies at once; it lasts only until its
+  // request settles, after which the saved setting decides again, so a failed
+  // save or a later "ask" in Settings never leaves a standing approval.
   const [alwaysApproved, setAlwaysApproved] = useState(false);
   const assist = alwaysApproved ? "always" : assistSetting;
 
+  // The template never exceeds what a time entry accepts.
   const template = (suggestion: ActivitySuggestion) => {
     const titles = suggestion.evidence.flatMap(({ details }) =>
       details.slice(0, EVIDENCE_DETAIL_LIMIT).map(({ title }) => title),
     );
-    if (titles.length > 0) {
-      return t("narrativeEvidence", {
-        evidence: format.list([...new Set(titles)], { type: "conjunction" }),
-      });
-    }
-    return t("narrativeApps", {
-      apps: format.list(
-        suggestion.apps.map(({ name }) => name),
-        { type: "conjunction" },
-      ),
-    });
+    const text =
+      titles.length > 0
+        ? t("narrativeEvidence", {
+            evidence: format.list([...new Set(titles)], {
+              type: "conjunction",
+            }),
+          })
+        : t("narrativeApps", {
+            apps: format.list(
+              suggestion.apps.map(({ name }) => name),
+              { type: "conjunction" },
+            ),
+          });
+    return text.slice(0, DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH);
   };
   const editFor = (suggestion: ActivitySuggestion): SuggestionEdit =>
     edits[suggestion.id] ?? {
@@ -802,6 +811,11 @@ function useSuggestionNarratives({
     invoke<string>("activity_generate_narrative", {
       request: { titles, locale, matterName: matter?.name ?? null, approval },
     })
+      .finally(() => {
+        if (approval === "always") {
+          setAlwaysApproved(false);
+        }
+      })
       .then((narrative) => {
         settle(suggestion.id, request, { type: "written" });
         setEdits((current) => {

@@ -149,7 +149,15 @@ export const ActivitySuggestionCard = ({
       const inCard =
         target === document.body ||
         (target instanceof Node && card.current?.contains(target) === true);
-      if (shortcut === null || !inCard) {
+      // In text, ⌘/Ctrl+Backspace deletes words, never the suggestion.
+      const editingText =
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLInputElement;
+      if (
+        shortcut === null ||
+        !inCard ||
+        (editingText && shortcut === "reject")
+      ) {
         return;
       }
       event.preventDefault();

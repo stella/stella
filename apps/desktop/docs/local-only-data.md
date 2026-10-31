@@ -175,8 +175,10 @@ Tray source is covered by the local-only network and fixed-code guards.
 
 ## stella AI descriptions
 
-The window titles of a suggestion leave the device only when the user approves
-a stella AI description for it, once or always, and they are not stored. A
+The titles of a suggestion, meaning its window titles and recorded document
+names exactly as its card's Titles tab lists them, leave the device only when
+the user approves a stella AI description for it, once or always, and they are
+not stored. A
 slim prompt above the narrative asks before anything is sent; No keeps the
 local template and sends nothing, and after three declines in a row the prompt
 folds into a button. Always approve persists `narrativeAssist: "always"` in
