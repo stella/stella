@@ -6,6 +6,7 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   createMigrationLockTelemetry,
+  migrationLockKey,
   migrationQueryFingerprint,
   observeMigrationLockAttempt,
 } from "./migration-lock-observation";
@@ -99,6 +100,7 @@ test("a deferred online attempt and a failed schema attempt each emit one termin
         statement: "ALTER TABLE probe ADD COLUMN n integer",
         pid: 12,
         state: "idle in transaction",
+        applicationName: "citation-reader",
         xactAgeMs: 5000,
         waitEvent: "ClientRead",
         query: "UPDATE probe SET n = 42",
@@ -152,6 +154,7 @@ test("a deferred online attempt and a failed schema attempt each emit one termin
       {
         pid: 12,
         state: "idle in transaction",
+        applicationName: "citation-reader",
         xactAgeMs: 5000,
         waitEvent: "ClientRead",
         queryFingerprint: "update probe set n = ?",
@@ -194,6 +197,9 @@ test("successful work resets the step's retry sequence", async () => {
       outcome: (result) => result,
     });
   }
+  expect(
+    telemetry.lastBlockers.get(migrationLockKey("online", "probe")),
+  ).toEqual([]);
   expect(records.map(({ attempt }) => attempt)).toEqual([1, 2, 1]);
   expect(records.at(-1)).toMatchObject({
     waitMs: 0,
