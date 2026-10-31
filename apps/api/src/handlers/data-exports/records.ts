@@ -104,6 +104,10 @@ export const MATTER_COLUMNS = {
   status: "export",
   lastActivityAt: "export",
   createdAt: "export",
+  externalSource: "export",
+  externalId: "export",
+  externalChangeKey: "omit",
+  importedAt: "export",
 } as const satisfies ColumnMap<typeof workspaces>;
 
 export const MATTER_CONTACT_COLUMNS = {
@@ -162,6 +166,10 @@ export const CONTACT_COLUMNS = {
   createdBy: "export",
   createdAt: "export",
   updatedAt: "export",
+  externalSource: "export",
+  externalId: "export",
+  externalChangeKey: "omit",
+  importedAt: "export",
 } as const satisfies ColumnMap<typeof contacts>;
 
 export const CONTACT_RELATIONSHIP_COLUMNS = {
@@ -267,6 +275,10 @@ export const TIME_ENTRY_COLUMNS = {
   timerStoppedAt: "export",
   createdAt: "export",
   updatedAt: "export",
+  externalSource: "export",
+  externalId: "export",
+  externalChangeKey: "omit",
+  importedAt: "export",
 } as const satisfies ColumnMap<typeof timeEntries>;
 
 export const INVOICE_COLUMNS = {
@@ -310,6 +322,10 @@ export const INVOICE_COLUMNS = {
   sentAt: "export",
   createdAt: "export",
   updatedAt: "export",
+  externalSource: "export",
+  externalId: "export",
+  externalChangeKey: "omit",
+  importedAt: "export",
 } as const satisfies ColumnMap<typeof invoices>;
 
 export const INVOICE_LINE_COLUMNS = {
@@ -377,6 +393,10 @@ export const EXPENSE_COLUMNS = {
   receiptFileId: "export",
   createdAt: "export",
   updatedAt: "export",
+  externalSource: "export",
+  externalId: "export",
+  externalChangeKey: "omit",
+  importedAt: "export",
 } as const satisfies ColumnMap<typeof expenses>;
 
 export const CLAUSE_COLUMNS = {
