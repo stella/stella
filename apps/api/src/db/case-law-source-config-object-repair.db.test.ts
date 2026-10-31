@@ -4,7 +4,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { CASE_LAW_SOURCE_CONFIG_OBJECT_REPAIR as REPAIR } from "./case-law-source-config-object-repair";
-import { createUngatedTableGateForTests } from "./online-ddl";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 type PgliteClient = Awaited<ReturnType<typeof createTestPglite>>;
@@ -61,8 +60,7 @@ test('stores the object a JSON string "{}" meant, leaves every other row unwritt
     const before = await readRows(client, ids);
     expect((await REPAIR.readCompletion(connection)).type).toBe("incomplete");
 
-    const tables = createUngatedTableGateForTests(connection);
-    expect(await REPAIR.repair(connection, tables)).toEqual({
+    expect(await REPAIR.repair(connection)).toEqual({
       type: "complete",
     });
     expect(await REPAIR.readCompletion(connection)).toEqual({
@@ -79,7 +77,7 @@ test('stores the object a JSON string "{}" meant, leaves every other row unwritt
     );
 
     // A retried run finds nothing to rewrite.
-    expect(await REPAIR.repair(connection, tables)).toEqual({
+    expect(await REPAIR.repair(connection)).toEqual({
       type: "complete",
     });
     expect(await readRows(client, ids)).toEqual(after);
