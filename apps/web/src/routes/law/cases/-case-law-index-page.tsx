@@ -40,6 +40,7 @@ import {
 } from "@/components/public-law-table/public-law-route-pagination.logic";
 import type { PublicLawPageSize } from "@/components/public-law-table/public-law-route-pagination.logic";
 import { usePublicLawPageArrival } from "@/components/public-law-table/use-public-law-page-arrival";
+import { selectionShownOnPage } from "@/components/workspaces/ai-column-run.logic";
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { shouldAutoRewrite } from "@/features/case-law/case-law-empty-results.logic";
 import {
@@ -222,6 +223,34 @@ const useCaseLawResultsTiming = ({
     query ?? "",
     page !== undefined && !isPlaceholderData,
   );
+};
+
+/**
+ * The rows picked on this page. Picked rows narrow a run to them; the page
+ * they belong to is the only page they mean anything on, so a step forward
+ * clears them, and a new answer on the same page keeps only the picks it
+ * still shows (see {@link selectionShownOnPage}).
+ */
+const usePageSelection = (
+  currentPage: number,
+  pageDecisionIds: readonly string[],
+) => {
+  const [selectedIds, setSelectedIds] =
+    useState<readonly string[]>(EMPTY_SELECTION);
+  const [selectionPage, setSelectionPage] = useState(currentPage);
+  if (selectionPage !== currentPage) {
+    setSelectionPage(currentPage);
+    setSelectedIds(EMPTY_SELECTION);
+    return [EMPTY_SELECTION, setSelectedIds] as const;
+  }
+  const shown = selectionShownOnPage({
+    pageRowIds: pageDecisionIds,
+    selectedRowIds: selectedIds,
+  });
+  if (shown !== null) {
+    setSelectedIds(shown);
+  }
+  return [selectedIds, setSelectedIds] as const;
 };
 
 type PublicCaseLawIndexProps = {
@@ -479,17 +508,12 @@ export function PublicCaseLawIndex({
     });
   };
 
-  // Picked rows narrow a run to them; the page they belong to is the only
-  // page they mean anything on, so a step forward clears them.
   const openDecision = useOpenDecisionInspector(rowsQuery);
-  const [selectedIds, setSelectedIds] =
-    useState<readonly string[]>(EMPTY_SELECTION);
-  const [selectionPage, setSelectionPage] = useState(pager.currentPage);
-  if (selectionPage !== pager.currentPage) {
-    setSelectionPage(pager.currentPage);
-    setSelectedIds(EMPTY_SELECTION);
-  }
   const pageDecisionIds = decisions.map((decision) => decision.id);
+  const [selectedIds, setSelectedIds] = usePageSelection(
+    pager.currentPage,
+    pageDecisionIds,
+  );
   const questions = useQuestionColumns({
     // The results page is where questions are authored, so the columns are
     // read whether or not this particular search returned anything.

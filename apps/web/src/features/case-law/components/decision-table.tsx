@@ -127,16 +127,19 @@ export const DecisionTable = ({
       })),
     [decisions],
   );
-  const selection = {
-    actions: <QuestionColumnSelectionBar surface={questions} />,
-    clearLabel: t("common.clearSelection"),
-    getRowLabel: (row: DecisionRowData) =>
-      t("common.selectRow", { label: row.decision.caseNumber }),
-    label: t("common.selectedCount", { count: selectedIds.length }),
-    onSelectedIdsChange,
-    selectedIds,
-    selectAllLabel: t("common.selectAllRows"),
-  };
+  const selection = useMemo(
+    () => ({
+      actions: <QuestionColumnSelectionBar surface={questions} />,
+      clearLabel: t("common.clearSelection"),
+      getRowLabel: (row: DecisionRowData) =>
+        t("common.selectRow", { label: row.decision.caseNumber }),
+      label: t("common.selectedCount", { count: selectedIds.length }),
+      onSelectedIdsChange,
+      selectedIds,
+      selectAllLabel: t("common.selectAllRows"),
+    }),
+    [onSelectedIdsChange, questions, selectedIds, t],
+  );
 
   // The rail is a transparent strip pinned over the table's end columns, so it
   // is reserved only where it actually carries a control; otherwise it would

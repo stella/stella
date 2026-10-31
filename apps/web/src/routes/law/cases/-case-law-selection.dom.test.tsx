@@ -176,16 +176,33 @@ test("the selection action receives only selected decision ids and Clear empties
     view.getByRole("checkbox", { name: "Select 18 C 2/2026" }),
   );
   fireEvent.click(checkbox);
+  expect(view.getByText("1 selected")).not.toBeNull();
   fireEvent.click(
     view.getByRole("button", { name: "Run AI columns for 1 row" }),
   );
   expect(onRun).toHaveBeenLastCalledWith(["decision-two"]);
 
   fireEvent.click(view.getByRole("button", { name: en.common.clearSelection }));
+  expect(view.queryByText("1 selected")).toBeNull();
   expect(
     view.queryByRole("button", { name: "Run AI columns for 1 row" }),
   ).toBeNull();
-  expect(onRun.mock.calls.at(-1)?.[0]).toEqual(["decision-two"]);
+  expect(onRun).toHaveBeenCalledTimes(1);
+});
+
+test("the header checkbox selects every decision on the page and the toolbar counts them", async () => {
+  const onRun = mock((_selectedIds: readonly string[]) => undefined);
+  const view = renderFixture({ onRun });
+
+  const selectAll = await waitFor(() =>
+    view.getByRole("checkbox", { name: en.common.selectAllRows }),
+  );
+  fireEvent.click(selectAll);
+  expect(view.getByText("2 selected")).not.toBeNull();
+  fireEvent.click(
+    view.getByRole("button", { name: "Run AI columns for 2 rows" }),
+  );
+  expect(onRun).toHaveBeenLastCalledWith(["decision-one", "decision-two"]);
 });
 
 test.each([
