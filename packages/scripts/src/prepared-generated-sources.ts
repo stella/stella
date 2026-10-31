@@ -23,8 +23,8 @@ const preparedManifestSchema = v.strictObject({
 export const generatedFileHash = (bytes: Uint8Array | string) =>
   hashSha256Hex(bytes);
 
-// The generators build programs with tsrs and read syntax with oxc-parser.
-const GENERATOR_COMPILERS = ["tsrs", "oxc-parser"] as const;
+// Generators use both compiler APIs and the shared syntax parser.
+const GENERATOR_COMPILERS = ["typescript6", "tsrs", "oxc-parser"] as const;
 
 const installedVersion = (root: string, name: string) =>
   v.parse(
