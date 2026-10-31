@@ -1038,11 +1038,11 @@
       "name": "@stll/docx-utils",
       "version": "0.2.0",
       "dependencies": {
+        "@stll/docx-core": "catalog:",
         "better-result": "catalog:",
         "slimdom": "^4.3.5",
       },
       "devDependencies": {
-        "@stll/docx-core": "catalog:",
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
