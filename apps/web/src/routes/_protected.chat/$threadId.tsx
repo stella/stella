@@ -1,4 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { Result } from "better-result";
 
 import { Skeleton } from "@stll/ui/skeleton";
 
@@ -18,7 +19,7 @@ import {
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { routePresentation } from "@/routes/-route-presentation";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
-import { readThreadScopeRedirect } from "@/routes/_protected.chat/-thread-scope-redirect";
+import { redirectThreadScopeError } from "@/routes/_protected.chat/-thread-scope-redirect-boundary";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
   loader: async ({ context, params }) => {
@@ -97,14 +98,12 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     ) {
       return;
     }
-    try {
-      await ensureRouteQueryData(context.queryClient, threadQueryOptions);
-    } catch (error) {
-      const target = readThreadScopeRedirect(error, params.threadId);
-      if (target !== null) {
-        throw redirect(target);
-      }
-      throw error;
+    const threadQuery = await Result.tryPromise(
+      async () =>
+        await ensureRouteQueryData(context.queryClient, threadQueryOptions),
+    );
+    if (Result.isError(threadQuery)) {
+      redirectThreadScopeError(threadQuery.error, params.threadId);
     }
   },
   staticData: {
