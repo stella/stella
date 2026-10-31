@@ -22,6 +22,8 @@ import {
 } from "@stll/api-contract/search";
 import type { BoeSearchResponse, getLawTextBlock } from "@stll/boe";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote";
 import { cents } from "@stll/money";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -246,6 +248,20 @@ const selectQueue = (queue: readonly (readonly unknown[])[]) => {
   };
 };
 
+const ANNOTATION_BLOCKS = [
+  { anchorId: "p-3", text: "The court held" },
+  { anchorId: "p-4", text: "that the claim was time-barred" },
+].map(
+  ({ anchorId, text }) =>
+    ({
+      type: "paragraph",
+      id: anchorId,
+      anchorId,
+      inlines: [{ type: "text", text }],
+      plainText: text,
+    }) satisfies Block,
+);
+
 const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
   const scopedDb = asTestRaw<ScopedDb>(
     async (run: (transaction: unknown) => unknown) => await run(tx),
@@ -294,7 +310,7 @@ const buildContext = (tx: unknown): AuthorizedMcpRequestContext => {
         resolveAnnotationTarget: async () =>
           await Promise.resolve({
             status: "available" as const,
-            readBlocks: async () => await Promise.resolve([]),
+            readBlocks: async () => await Promise.resolve(ANNOTATION_BLOCKS),
           }),
         searchConsolidatedLegislation: searchConsolidatedLegislationMock,
         getLawTextBlock: getLawTextBlockMock,
@@ -2223,20 +2239,21 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ target_type: "decision", target_id: uid(60) }),
       tx: () => ({
         select: selectQueue([
-          [
-            ["p-3", "The court held"],
-            ["p-4", "that the claim was time-barred"],
-          ].map(([blockAnchorId, quote], index) => ({
+          ANNOTATION_BLOCKS.map(({ anchorId, plainText }, index) => ({
             id: uid(61 + index),
             groupId: uid(63),
             kind: "comment",
             visibility: "shared",
             color: null,
             style: null,
-            blockAnchorId,
-            startOffset: 0,
-            endOffset: 10,
-            quote,
+            ...({
+              blockAnchorId: anchorId,
+              startOffset: 0,
+              endOffset: plainText.length,
+              quote: plainText,
+              quotePrefix: "",
+              quoteSuffix: "",
+            } satisfies ReaderTextQuoteSelector),
             body: index === 0 ? "Check the limitation date" : null,
             createdAt: new Date("2026-01-01"),
             updatedAt: new Date("2026-01-01"),

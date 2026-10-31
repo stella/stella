@@ -393,7 +393,8 @@ export const quoteFieldsForProjection = (
 ) => {
   const fields = new Set<string>();
   for (const store of Object.values(WITHDRAWN_COPY_REGISTRY)) {
-    for (const [field, classification] of Object.entries(store.fields)) {
+    const classifications: Readonly<Record<string, CopyField>> = store.fields;
+    for (const [field, classification] of Object.entries(classifications)) {
       if (
         classification.kind === "quote" &&
         classification.projection === projection

@@ -312,7 +312,7 @@ describe("reader marks across a re-parse of their decision", () => {
 
   test("an agent's retry after a whitespace-only re-parse replays its mark", async () => {
     const caller = await createCaller();
-    const call = (blocks: readonly Block[]) =>
+    const call = async (blocks: readonly Block[]) =>
       handleMcpToolCall({
         mode: "advanced",
         toolName: "create_reader_annotation",
