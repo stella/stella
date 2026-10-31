@@ -19,7 +19,11 @@ export const AppNotice = ({ details }: { details: readonly string[] }) => {
       data-app-notice
     >
       <AccordionItem className="border-0" value="notice">
-        <AccordionTrigger aria-label={summary} size="compact">
+        <AccordionTrigger
+          aria-label={summary}
+          className="h-6 items-center py-0"
+          size="compact"
+        >
           <span className="min-w-0 truncate">{summary}</span>
         </AccordionTrigger>
         <AccordionPanel size="compact">
