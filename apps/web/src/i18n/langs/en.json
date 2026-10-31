@@ -1535,6 +1535,7 @@
     "editMessageRefused": "This message could not be edited. The chat now shows what is saved; try again once no reply is running.",
     "editMessageRefusedHistoryChanged": "The chat changed while the edit was being sent. It now shows what is saved; send the edit again.",
     "editMessageRefusedTargetMissing": "This message is no longer in the chat, so it cannot be edited.",
+    "editMessageRefusedTargetMissingFiles": "This message is no longer in the chat, so it cannot be edited. Its text is back in your draft, but these files did not come back: {files}. Attach them again to send them.",
     "editMessageRemoveAttachment": "Remove {name} from this message",
     "editMode": {
       "autoDirect": "Auto · rewrite",

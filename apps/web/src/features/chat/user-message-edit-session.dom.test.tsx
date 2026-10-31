@@ -92,7 +92,16 @@ const SECOND = "00000000-0000-7000-8000-0000000000a2";
 const THIRD = "00000000-0000-7000-8000-0000000000a3";
 const QUEUED = "00000000-0000-7000-8000-0000000000a9";
 
+/** A file a stored message carries, as the server stores it. */
+type StoredFile = {
+  filename: string;
+  id: string;
+  kind: "document" | "image";
+  mimeType: string;
+};
+
 type StoredMessage = {
+  files?: readonly StoredFile[] | undefined;
   id: string;
   role: "assistant" | "user";
   text: string;
@@ -114,10 +123,21 @@ const STORED: readonly StoredMessage[] = [
 ];
 
 const serialize = (messages: readonly StoredMessage[]) =>
-  messages.map(({ id, role, text }, index) => ({
+  messages.map(({ files = [], id, role, text }, index) => ({
     createdAt: new Date(Date.UTC(2026, 9, 1, 12, 0, index)).toISOString(),
     id,
-    parts: [{ content: text, type: "text" }],
+    parts: [
+      { content: text, type: "text" },
+      ...files.map((file) => ({
+        metadata: { filename: file.filename },
+        source: {
+          mimeType: file.mimeType,
+          type: "url",
+          value: `/v1/user-files/${file.id}`,
+        },
+        type: file.kind,
+      })),
+    ],
     role,
   }));
 
@@ -164,12 +184,14 @@ const acceptedTurn = (runId: string): Response => {
  */
 const createServer = ({
   answer,
+  initial = STORED,
   storedAfterRefusal,
 }: {
   answer: SendAnswer;
+  initial?: readonly StoredMessage[] | undefined;
   storedAfterRefusal?: readonly StoredMessage[] | undefined;
 }) => {
-  let stored = STORED;
+  let stored = initial;
   const posted: Record<string, unknown>[] = [];
   const unexpected: string[] = [];
   const fetch = async (
@@ -431,7 +453,10 @@ describe("an edit whose message the server no longer holds", () => {
   /** Opens the second question's edit, adds a word and a long paste that
    *  becomes a pasted-text chip, and sends it into a target_missing
    *  refusal; `prepareComposer` runs on the mounted composer first. */
-  const sendOrphanedEdit = async (prepareComposer: () => void) => {
+  const sendOrphanedEdit = async (
+    prepareComposer: () => void,
+    initial: readonly StoredMessage[] = STORED,
+  ): Promise<unknown> => {
     const warning = spyOn(stellaToast, "warning").mockReturnValue("notice");
     const server = createServer({
       answer: {
@@ -439,6 +464,7 @@ describe("an edit whose message the server no longer holds", () => {
         code: CHAT_MESSAGE_EDIT_ERROR_CODE.targetMissing,
         status: 404,
       },
+      initial,
       storedAfterRefusal: STORED_WITHOUT_SECOND,
     });
     const page = await openPage(server, (controller) => {
@@ -466,10 +492,9 @@ describe("an edit whose message the server no longer holds", () => {
     await testing.waitFor(() => {
       expect(warning).toHaveBeenCalledTimes(1);
     });
-    expect(warning).toHaveBeenCalledWith(
-      translations.chat.editMessageRefusedTargetMissing,
-    );
     expect(editField(page) === null).toBe(true);
+    const [notice] = warning.mock.calls[0] ?? panic("No notice");
+    return notice;
   };
 
   afterEach(() => {
@@ -482,8 +507,48 @@ describe("an edit whose message the server no longer holds", () => {
   });
 
   test("goes into the empty composer with its text and chips, and says why", async () => {
-    await sendOrphanedEdit(() => undefined);
+    const notice = await sendOrphanedEdit(() => undefined);
 
+    expect(notice).toBe(translations.chat.editMessageRefusedTargetMissing);
+    await testing.waitFor(() => {
+      expect(composerParagraphs()).toEqual(["Second question again"]);
+    });
+    expect(composerPastedTexts()).toEqual([LONG_PASTE]);
+  });
+
+  test("names every kept document and image it could not bring back", async () => {
+    // The second question carried a stored document and image, and the
+    // edit kept both. The composer holds only files picked on this device,
+    // so neither can follow the text: the notice names each by file name.
+    const files: readonly StoredFile[] = [
+      {
+        filename: "nda.pdf",
+        id: "00000000-0000-7000-8000-0000000000d1",
+        kind: "document",
+        mimeType: "application/pdf",
+      },
+      {
+        filename: "scan.png",
+        id: "00000000-0000-7000-8000-0000000000d2",
+        kind: "image",
+        mimeType: "image/png",
+      },
+    ];
+    const notice = await sendOrphanedEdit(
+      () => undefined,
+      STORED.map((message) =>
+        message.id === SECOND ? { ...message, files } : message,
+      ),
+    );
+
+    const [before, after] =
+      translations.chat.editMessageRefusedTargetMissingFiles.split("{files}");
+    expect(typeof notice).toBe("string");
+    const text = typeof notice === "string" ? notice : "";
+    expect(text.startsWith(before ?? panic("Notice text"))).toBe(true);
+    expect(text.endsWith(after ?? panic("Notice text"))).toBe(true);
+    expect(text).toContain("nda.pdf");
+    expect(text).toContain("scan.png");
     await testing.waitFor(() => {
       expect(composerParagraphs()).toEqual(["Second question again"]);
     });

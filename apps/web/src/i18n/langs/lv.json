@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Ziņu neizdevās rediģēt. Tērzēšanā tagad redzams saglabātais stāvoklis; mēģiniet vēlreiz, kad neviena atbilde vairs netiek veidota.",
     "editMessageRefusedHistoryChanged": "Tērzēšana mainījās, kamēr labojums tika sūtīts. Tagad tajā redzams saglabātais stāvoklis; nosūtiet labojumu vēlreiz.",
     "editMessageRefusedTargetMissing": "Šīs ziņas tērzēšanā vairs nav, tāpēc to nevar rediģēt.",
+    "editMessageRefusedTargetMissingFiles": "Šīs ziņas tērzēšanā vairs nav, tāpēc to nevar rediģēt. Tās teksts ir atkal melnrakstā, bet šie faili nav: {files}. Lai tos nosūtītu, pievienojiet tos vēlreiz.",
     "editMessageRemoveAttachment": "Noņemt {name} no šīs ziņas",
     "editMode": {
       "autoDirect": "Automātiski · pārrakstīt",

@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Správu sa nepodarilo upraviť. Chat teraz ukazuje uložený stav, skúste to znova, keď nebeží žiadna odpoveď.",
     "editMessageRefusedHistoryChanged": "Chat sa počas odosielania úpravy zmenil. Teraz ukazuje uložený stav, odošlite úpravu znova.",
     "editMessageRefusedTargetMissing": "Táto správa už v chate nie je, preto ju nemožno upraviť.",
+    "editMessageRefusedTargetMissingFiles": "Táto správa už v chate nie je, preto ju nemožno upraviť. Jej text je späť v koncepte, ale tieto súbory sa nevrátili: {files}. Ak ich chcete odoslať, priložte ich znova.",
     "editMessageRemoveAttachment": "Odstrániť {name} z tejto správy",
     "editMode": {
       "autoDirect": "Automaticky · prepísať",

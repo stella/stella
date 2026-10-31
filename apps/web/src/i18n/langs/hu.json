@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Az üzenetet nem sikerült szerkeszteni. A csevegés most a mentett állapotot mutatja; próbálja újra, amikor már nem fut válasz.",
     "editMessageRefusedHistoryChanged": "A csevegés megváltozott a szerkesztés küldése közben. Most a mentett állapotot mutatja; küldje el újra a szerkesztést.",
     "editMessageRefusedTargetMissing": "Ez az üzenet már nincs a csevegésben, ezért nem szerkeszthető.",
+    "editMessageRefusedTargetMissingFiles": "Ez az üzenet már nincs a csevegésben, ezért nem szerkeszthető. A szövege visszakerült a piszkozatba, ezek a fájlok viszont nem: {files}. Csatolja őket újra, ha el szeretné küldeni őket.",
     "editMessageRemoveAttachment": "{name} eltávolítása ebből az üzenetből",
     "editMode": {
       "autoDirect": "Automatikus · átírás",

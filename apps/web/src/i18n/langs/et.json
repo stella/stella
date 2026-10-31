@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Sõnumit ei õnnestunud muuta. Vestlus näitab nüüd salvestatud seisu; proovige uuesti, kui ükski vastus enam ei käi.",
     "editMessageRefusedHistoryChanged": "Vestlus muutus muudatuse saatmise ajal. See näitab nüüd salvestatud seisu; saatke muudatus uuesti.",
     "editMessageRefusedTargetMissing": "Seda sõnumit pole vestluses enam, seega ei saa seda muuta.",
+    "editMessageRefusedTargetMissingFiles": "Seda sõnumit pole vestluses enam, seega ei saa seda muuta. Selle tekst on tagasi mustandis, kuid need failid mitte: {files}. Nende saatmiseks lisage need uuesti.",
     "editMessageRemoveAttachment": "Eemalda {name} sellest sõnumist",
     "editMode": {
       "autoDirect": "Automaatne · kirjuta ümber",

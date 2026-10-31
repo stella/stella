@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Die Nachricht konnte nicht bearbeitet werden. Der Chat zeigt jetzt den gespeicherten Stand. Versuchen Sie es erneut, sobald keine Antwort mehr läuft.",
     "editMessageRefusedHistoryChanged": "Der Chat hat sich geändert, während die Bearbeitung gesendet wurde. Er zeigt jetzt den gespeicherten Stand. Senden Sie die Bearbeitung erneut.",
     "editMessageRefusedTargetMissing": "Diese Nachricht ist nicht mehr im Chat und kann daher nicht bearbeitet werden.",
+    "editMessageRefusedTargetMissingFiles": "Diese Nachricht ist nicht mehr im Chat und kann daher nicht bearbeitet werden. Ihr Text steht wieder in Ihrem Entwurf, diese Dateien aber nicht: {files}. Hängen Sie sie erneut an, um sie zu senden.",
     "editMessageRemoveAttachment": "{name} aus dieser Nachricht entfernen",
     "editMode": {
       "autoDirect": "Automatisch · direkt überschreiben",

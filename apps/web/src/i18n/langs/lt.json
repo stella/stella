@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Žinutės redaguoti nepavyko. Pokalbyje dabar rodoma tai, kas išsaugota; bandykite dar kartą, kai nebebus rengiamas joks atsakymas.",
     "editMessageRefusedHistoryChanged": "Pokalbis pasikeitė, kol buvo siunčiamas pataisymas. Dabar rodoma tai, kas išsaugota; išsiųskite pataisymą dar kartą.",
     "editMessageRefusedTargetMissing": "Šios žinutės pokalbyje nebėra, todėl jos redaguoti negalima.",
+    "editMessageRefusedTargetMissingFiles": "Šios žinutės pokalbyje nebėra, todėl jos redaguoti negalima. Jos tekstas grąžintas į juodraštį, bet šie failai ne: {files}. Norėdami juos išsiųsti, pridėkite juos dar kartą.",
     "editMessageRemoveAttachment": "Pašalinti {name} iš šios žinutės",
     "editMode": {
       "autoDirect": "Automatiškai · perrašyti",

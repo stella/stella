@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Nie udało się edytować wiadomości. Czat pokazuje teraz zapisany stan; spróbuj ponownie, gdy nie będzie trwała żadna odpowiedź.",
     "editMessageRefusedHistoryChanged": "Czat zmienił się podczas wysyłania edycji. Pokazuje teraz zapisany stan; wyślij edycję ponownie.",
     "editMessageRefusedTargetMissing": "Tej wiadomości nie ma już w czacie, więc nie można jej edytować.",
+    "editMessageRefusedTargetMissingFiles": "Tej wiadomości nie ma już w czacie, więc nie można jej edytować. Jej tekst wrócił do wersji roboczej, ale te pliki nie: {files}. Załącz je ponownie, aby je wysłać.",
     "editMessageRemoveAttachment": "Usuń {name} z tej wiadomości",
     "editMode": {
       "autoDirect": "Automatycznie · przepisz",

@@ -1535,6 +1535,7 @@
     "editMessageRefused": "تعذّر تعديل الرسالة. تعرض الدردشة الآن ما هو محفوظ؛ حاول مرة أخرى عندما لا يكون هناك رد قيد الإنشاء.",
     "editMessageRefusedHistoryChanged": "تغيّرت الدردشة أثناء إرسال التعديل. تعرض الآن ما هو محفوظ؛ أرسل التعديل مرة أخرى.",
     "editMessageRefusedTargetMissing": "لم تعد هذه الرسالة في الدردشة، لذا لا يمكن تعديلها.",
+    "editMessageRefusedTargetMissingFiles": "لم تعد هذه الرسالة في الدردشة، لذا لا يمكن تعديلها. عاد نصها إلى المسودة، لكن هذه الملفات لم تعد: {files}. أرفقها مرة أخرى لإرسالها.",
     "editMessageRemoveAttachment": "إزالة {name} من هذه الرسالة",
     "editMode": {
       "autoDirect": "تلقائي · إعادة كتابة",

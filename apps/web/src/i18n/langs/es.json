@@ -1535,6 +1535,7 @@
     "editMessageRefused": "No se pudo editar el mensaje. El chat muestra ahora lo que está guardado; inténtelo de nuevo cuando no haya ninguna respuesta en curso.",
     "editMessageRefusedHistoryChanged": "El chat cambió mientras se enviaba la edición. Ahora muestra lo que está guardado; envíe la edición de nuevo.",
     "editMessageRefusedTargetMissing": "Este mensaje ya no está en el chat, así que no se puede editar.",
+    "editMessageRefusedTargetMissingFiles": "Este mensaje ya no está en el chat, así que no se puede editar. Su texto ha vuelto a su borrador, pero estos archivos no: {files}. Adjúntelos de nuevo para enviarlos.",
     "editMessageRemoveAttachment": "Quitar {name} de este mensaje",
     "editMode": {
       "autoDirect": "Automático · reescribir",

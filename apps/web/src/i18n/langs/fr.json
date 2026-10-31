@@ -1535,6 +1535,7 @@
     "editMessageRefused": "Impossible de modifier ce message. La conversation affiche maintenant ce qui est enregistré ; réessayez lorsqu’aucune réponse n’est en cours.",
     "editMessageRefusedHistoryChanged": "La conversation a changé pendant l’envoi de la modification. Elle affiche maintenant ce qui est enregistré ; renvoyez la modification.",
     "editMessageRefusedTargetMissing": "Ce message ne figure plus dans la conversation et ne peut donc pas être modifié.",
+    "editMessageRefusedTargetMissingFiles": "Ce message ne figure plus dans la conversation et ne peut donc pas être modifié. Son texte est revenu dans votre brouillon, mais pas ces fichiers : {files}. Joignez-les de nouveau pour les envoyer.",
     "editMessageRemoveAttachment": "Retirer {name} de ce message",
     "editMode": {
       "autoDirect": "Automatique · réécrire",

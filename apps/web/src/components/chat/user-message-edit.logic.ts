@@ -80,16 +80,30 @@ export type UserMessageEditResult =
   | { orphanedEdit: null; outcome: UserMessageEditOutcome }
   | { orphanedEdit: UserMessageEdit; outcome: UserMessageEditFailure };
 
-/** An orphaned edit as the composer takes it: its markup, and the texts of
- *  its pasted-text attachments. */
+/**
+ * An orphaned edit, split by what the composer can take back. Its markup and
+ * pasted texts go into the composer. Its kept documents and images are files
+ * the server already stores, and the composer holds only files picked on this
+ * device, so they cannot follow; `storedFiles` lists each by its file name
+ * (undefined when it has none) for the notice to name.
+ */
 export const userMessageEditHandoff = (
   edit: UserMessageEdit,
-): { html: string; pastedTexts: string[] } => ({
-  html: edit.html,
-  pastedTexts: edit.attachments
-    .filter(isChatPastedTextPart)
-    .map(({ content }) => content),
-});
+): {
+  composer: { html: string; pastedTexts: string[] };
+  storedFiles: (string | undefined)[];
+} => {
+  const pastedTexts: string[] = [];
+  const storedFiles: (string | undefined)[] = [];
+  for (const part of edit.attachments) {
+    if (isChatPastedTextPart(part)) {
+      pastedTexts.push(part.content);
+    } else {
+      storedFiles.push(part.metadata?.filename);
+    }
+  }
+  return { composer: { html: edit.html, pastedTexts }, storedFiles };
+};
 
 /** The notice for each code the server refuses an edit with. */
 const EDIT_REFUSAL_NOTICE_KEYS = {

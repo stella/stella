@@ -45,6 +45,7 @@ import type {
 import { DocumentIcon } from "@/components/document-icon";
 import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { createUuid } from "@/lib/uuid";
@@ -88,6 +89,7 @@ export const useUserMessageEditActions = ({
   threadRef: ChatThreadRef;
 }): UserMessageEditActions => {
   const t = useTranslations();
+  const format = useFormatter();
   const { restoreMessageDraftIntoThread } = useChatEditorManager();
   const onStart = useLatestCallback(() => {
     startUserMessageEdit();
@@ -105,11 +107,21 @@ export const useUserMessageEditActions = ({
       }
       const { orphanedEdit, outcome } = await editUserMessage(messageId, edit);
       if (orphanedEdit !== null) {
-        restoreMessageDraftIntoThread(
-          threadRef,
-          userMessageEditHandoff(orphanedEdit),
+        const { composer, storedFiles } = userMessageEditHandoff(orphanedEdit);
+        restoreMessageDraftIntoThread(threadRef, composer);
+        // A stored file cannot go back into the composer: the notice names
+        // every one that did not come back, so none is lost unseen.
+        stellaToast.warning(
+          storedFiles.length === 0
+            ? t(userMessageEditNoticeKey(outcome))
+            : t("chat.editMessageRefusedTargetMissingFiles", {
+                files: format.list(
+                  storedFiles.map(
+                    (filename) => filename ?? t("chat.attachment"),
+                  ),
+                ),
+              }),
         );
-        stellaToast.warning(t(userMessageEditNoticeKey(outcome)));
       }
       return outcome;
     },
