@@ -234,6 +234,35 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
       });
     });
 
+    test("replay receipts remain isolated between authenticated accounts", async () => {
+      const suffix = Bun.randomUUIDv7();
+      const first = await signInHuman(
+        `organization-first-${suffix}@example.test`,
+      );
+      const second = await signInHuman(
+        `organization-second-${suffix}@example.test`,
+      );
+      await using api = serveRoutesForTest(organizationsRoute);
+      const createFor = async (browser: HumanBrowser) => {
+        const response = await api.fetch(
+          createRequest({
+            browser,
+            name: "Same organization request",
+            key: `shared-${suffix}`,
+          }),
+        );
+        expect(response.status, await response.clone().text()).toBe(200);
+        return v.parse(createdSchema, await response.json());
+      };
+      const firstCreated = await createFor(first);
+      const secondCreated = await createFor(second);
+      expect(firstCreated.organizationId).not.toBe(
+        secondCreated.organizationId,
+      );
+      expect(await createFor(first)).toEqual(firstCreated);
+      expect(await createFor(second)).toEqual(secondCreated);
+    });
+
     test("refuses the eleventh creation with the typed rate limit response", async () => {
       const browser = await signInHuman(
         `organization-budget-${Bun.randomUUIDv7()}@example.test`,

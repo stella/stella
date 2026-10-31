@@ -2,13 +2,14 @@ import { Result } from "better-result";
 
 import { ORGANIZATION_CREATE_SCOPE } from "@stll/api-contract/organization-create";
 
+import { createOrganizationForAccount } from "@/api/db/root";
 import { organizationCreateBodySchema } from "@/api/handlers/organizations/schema";
 import {
   ACCOUNT_ACCESS,
   createSafeSessionHandler,
 } from "@/api/lib/api-handlers";
+import { getAuth } from "@/api/lib/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { createOrganizationForAccount } from "@/api/lib/organizations/create";
 import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const createOrganization = createSafeSessionHandler(
@@ -32,12 +33,15 @@ const createOrganization = createSafeSessionHandler(
   },
   async function* ({ user, body: { name, slug }, request }) {
     const organization = yield* Result.await(
-      createOrganizationForAccount({
-        userId: user.id,
-        name,
-        ...(slug === undefined ? {} : { slug }),
-        idempotencyKey: request.headers.get("Idempotency-Key"),
-      }),
+      createOrganizationForAccount(
+        {
+          userId: user.id,
+          name,
+          ...(slug === undefined ? {} : { slug }),
+          idempotencyKey: request.headers.get("Idempotency-Key"),
+        },
+        getAuth().api.createOrganization,
+      ),
     );
     return Result.ok({
       ...organization,

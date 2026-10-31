@@ -4,6 +4,11 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
+import { createOrganizationForAccount as createOrganizationWithDependencies } from "@/api/lib/auth/organization-create";
+import type {
+  CreateOrganizationOptions,
+  OrganizationCreationDependencies,
+} from "@/api/lib/auth/organization-create";
 import {
   instrumentSqlTransactionCounts,
   queryCountLogger,
@@ -245,3 +250,13 @@ export const recordLegalResolveAudit = async (options: LegalResolveAudit) =>
     async (tx) =>
       await recordLegalResolveAuditInTransaction({ ...options, tx }),
   );
+
+/** Account creation returns an audited receipt without exposing the owner connection. */
+export const createOrganizationForAccount = async (
+  options: CreateOrganizationOptions,
+  createOrganization: OrganizationCreationDependencies["createOrganization"],
+) =>
+  await createOrganizationWithDependencies(options, {
+    database: rootDb,
+    createOrganization,
+  });

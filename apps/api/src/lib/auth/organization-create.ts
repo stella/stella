@@ -6,16 +6,17 @@ import {
   createOrganizationSlug,
   ORGANIZATION_SLUG_RANDOM_BYTES,
 } from "@stll/api-contract/organization-create";
+import { classifyFailure } from "@stll/errors";
 
-import { rootDb } from "@/api/db/root";
+import type { RootDatabase } from "@/api/db/root";
 import { organizationCreationRequests as receipts } from "@/api/db/schema";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
-import { getAuth } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { recordOrganizationCreationAudit } from "@/api/lib/db/audit-recording";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
 import { isPgConstraintError } from "@/api/lib/pg-error";
+import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const MAX_SLUG_ATTEMPTS = 20;
 
@@ -34,20 +35,20 @@ const isSlugConflict = (error: unknown) =>
   isPgConstraintError(error, "23505", "organization_slug_key") ||
   isPgConstraintError(error, "23505", "organization_slug_uidx");
 
-type CreateOrganizationOptions = {
+export type CreateOrganizationOptions = {
   userId: SafeId<"user">;
   name: string;
   slug?: string;
   idempotencyKey: string | null;
 };
 
-type OrganizationCreationDependencies = {
+export type OrganizationCreationDependencies = {
   randomBytes?: () => Uint8Array;
-  database?: Pick<
-    typeof rootDb,
+  database: Pick<
+    RootDatabase,
     "insert" | "select" | "delete" | "update" | "transaction"
   >;
-  createOrganization?: (input: {
+  createOrganization: (input: {
     body: {
       name: string;
       slug: string;
@@ -57,15 +58,81 @@ type OrganizationCreationDependencies = {
   }) => Promise<{ id: string; name: string; slug: string }>;
 };
 
+type OrganizationProviderDependencies = Required<
+  Pick<OrganizationCreationDependencies, "createOrganization" | "randomBytes">
+>;
+
+const createWithAvailableSlug = async (
+  {
+    userId,
+    name,
+    slug,
+  }: Pick<CreateOrganizationOptions, "userId" | "name" | "slug">,
+  { createOrganization, randomBytes }: OrganizationProviderDependencies,
+) => {
+  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
+    const candidate = slug ?? createOrganizationSlug(randomBytes());
+    // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before drawing the next random slug.
+    const created = await Result.tryPromise({
+      try: async () =>
+        await createOrganization({
+          body: {
+            name,
+            slug: candidate,
+            userId,
+            keepCurrentActiveOrganization: true,
+          },
+        }),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(created)) {
+      if (isSlugConflict(created.error)) {
+        if (slug === undefined) {
+          continue;
+        }
+        return Result.err(slugConflict());
+      }
+      if (
+        created.error instanceof APIError &&
+        created.error.statusCode === 403
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 403,
+            code: "account_access_unavailable",
+            message: "Organization creation is unavailable for this account.",
+            hint: "Sign in with an unrestricted account.",
+          }),
+        );
+      }
+      // An unknown failure may follow a committed better-auth write. Keep the
+      // claim pending rather than risking a duplicate organization on retry.
+      return Result.err(
+        classifyFailure(
+          new HandlerError({
+            status: 500,
+            code: "internal_error",
+            message: "Organization creation could not be completed.",
+            cause: created.error,
+          }),
+          "tagged_failure",
+        ),
+      );
+    }
+    return created;
+  }
+  return Result.err(slugConflict());
+};
+
 /** Root access is limited to this authenticated account's creation receipts; better-auth owns organization writes. */
 export const createOrganizationForAccount = async (
   { userId, name, slug, idempotencyKey }: CreateOrganizationOptions,
   {
-    database = rootDb,
-    createOrganization = getAuth().api.createOrganization,
+    database,
+    createOrganization,
     randomBytes = () =>
       crypto.getRandomValues(new Uint8Array(ORGANIZATION_SLUG_RANDOM_BYTES)),
-  }: OrganizationCreationDependencies = {},
+  }: OrganizationCreationDependencies,
 ) => {
   const fingerprint = fingerprintRequest({
     method: "POST",
@@ -143,76 +210,36 @@ export const createOrganizationForAccount = async (
     }
     return Result.err(error);
   };
-  for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    const candidate = slug ?? createOrganizationSlug(randomBytes());
-    // no-network-await-in-loop: bounded collision retries must observe the preceding unique-slug refusal before drawing the next random slug.
-    const created = await Result.tryPromise({
-      try: async () =>
-        await createOrganization({
-          body: {
-            name,
-            slug: candidate,
-            userId,
-            keepCurrentActiveOrganization: true,
-          },
-        }),
-      catch: (cause) => cause,
-    });
-    if (Result.isError(created)) {
-      if (isSlugConflict(created.error)) {
-        if (slug === undefined) {
-          continue;
-        }
-        return await reject(slugConflict());
-      }
-      if (
-        created.error instanceof APIError &&
-        created.error.statusCode === 403
-      ) {
-        return await reject(
-          new HandlerError({
-            status: 403,
-            code: "account_access_unavailable",
-            message: "Organization creation is unavailable for this account.",
-            hint: "Sign in with an unrestricted account.",
-          }),
-        );
-      }
-      // An unknown failure may follow a committed better-auth write. Keep the
-      // claim pending rather than risking a duplicate organization on retry.
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: "Organization creation could not be completed.",
-          cause: created.error,
-        }),
-      );
-    }
-    const result = {
-      organizationId: created.value.id,
-      name: created.value.name,
-      slug: created.value.slug,
-      role: "owner" as const,
-    };
-    // db-await-in-loop: executed only once after the bounded slug collision loop succeeds; the function returns immediately.
-    await withAggregateTransaction(database, async (tx) => {
-      await createBackgroundAuditRecorder({ account: { userId } })(tx, {
-        type: "organization.created",
-        resourceId: result.organizationId,
-      });
-      if (key !== null) {
-        // audit: skip - Receipt completion accompanies the account audit event in the same transaction.
-        await tx
-          .update(receipts)
-          .set({
-            organizationId: result.organizationId,
-            name: result.name,
-            slug: result.slug,
-          })
-          .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
-      }
-    });
-    return Result.ok(result);
+  const created = await createWithAvailableSlug(
+    { userId, name, ...(slug === undefined ? {} : { slug }) },
+    { createOrganization, randomBytes },
+  );
+  if (created.isErr()) {
+    // Unknown failures may follow a committed write; retain the claim.
+    return created.error.status >= 500 ? created : await reject(created.error);
   }
-  return await reject(slugConflict());
+  const result = {
+    organizationId: brandPersistedOrganizationId(created.value.id),
+    name: created.value.name,
+    slug: created.value.slug,
+    role: "owner" as const,
+  };
+  await withAggregateTransaction(database, async (tx) => {
+    await recordOrganizationCreationAudit(tx, {
+      userId,
+      organizationId: result.organizationId,
+    });
+    if (key !== null) {
+      // audit: skip - Receipt completion accompanies the account audit event in the same transaction.
+      await tx
+        .update(receipts)
+        .set({
+          organizationId: result.organizationId,
+          name: result.name,
+          slug: result.slug,
+        })
+        .where(and(eq(receipts.userId, userId), eq(receipts.key, key)));
+    }
+  });
+  return Result.ok(result);
 };

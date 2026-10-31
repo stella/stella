@@ -554,3 +554,16 @@ export function createBackgroundAuditRecorder(
   }
   return createOrganizationBackgroundAuditRecorder(bindings);
 }
+
+/** The account receipt owner records creation without binding an HTTP environment. */
+export const recordOrganizationCreationAudit = async (
+  tx: AuditTransaction,
+  {
+    userId,
+    organizationId,
+  }: { userId: SafeId<"user">; organizationId: SafeId<"organization"> },
+) =>
+  await createAccountRecorder({ account: { userId } }, null)(tx, {
+    type: "organization.created",
+    resourceId: organizationId,
+  });

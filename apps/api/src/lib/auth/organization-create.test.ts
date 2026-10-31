@@ -7,9 +7,9 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import type { Transaction } from "@/api/db/root";
 import type { accountAuditLogs } from "@/api/db/schema";
 import { organizationCreationRequests } from "@/api/db/schema";
+import { createOrganizationForAccount } from "@/api/lib/auth/organization-create";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { createOrganizationForAccount } from "@/api/lib/organizations/create";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const USER_ID = toSafeId<"user">("creation-error-user");
