@@ -34,11 +34,6 @@ export const PENDING_CONTRACT_MIGRATIONS = [
     expiresAt: "2026-11-03",
     relations: ["mcp_oauth_state"],
   },
-  {
-    name: "20261015060000_case_law_decisions_base_table_contract",
-    expiresAt: "2026-10-29",
-    relations: ["case_law_decisions"],
-  },
 ] as const satisfies readonly PendingContractMigration[];
 
 export const pendingContractSqlPath = (
