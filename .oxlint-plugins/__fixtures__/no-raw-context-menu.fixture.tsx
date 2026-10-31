@@ -24,7 +24,11 @@ export const _c = { onContextMenu: open };
 host.addEventListener("contextmenu", open);
 
 // --- Accepted: types, destructuring, other events, a custom trigger prop ---
+// expect-clean: no-raw-context-menu/no-raw-context-menu
 type RowProps = { onContextMenu?: () => void };
+// expect-clean: no-raw-context-menu/no-raw-context-menu
 export const _d = ({ onContextMenu }: RowProps) => onContextMenu;
+// expect-clean: no-raw-context-menu/no-raw-context-menu
 host.addEventListener("click", open);
+// expect-clean: no-raw-context-menu/no-raw-context-menu
 export const _e = () => <Picker trigger="contextmenu" />;
