@@ -397,87 +397,110 @@ const finiteUppercaseValues = (
 // immutable module bindings resolve; their entire text still enters the DDL census.
 const uniqueModuleConstant = (name: string, context: SourceContext) => {
   const bindings = context.nodes.filter((node) => {
-    if (!ts.isIdentifier(node) || node.text !== name) {
+    if (node.type !== "Identifier" || node.name !== name) {
       return false;
     }
-    const { parent } = node;
-    return (
-      (ts.isVariableDeclaration(parent) ||
-        ts.isParameter(parent) ||
-        ts.isBindingElement(parent) ||
-        ts.isFunctionDeclaration(parent) ||
-        ts.isFunctionExpression(parent) ||
-        ts.isClassDeclaration(parent) ||
-        ts.isClassExpression(parent) ||
-        ts.isImportClause(parent) ||
-        ts.isImportSpecifier(parent) ||
-        ts.isNamespaceImport(parent) ||
-        ts.isImportEqualsDeclaration(parent) ||
-        ts.isEnumDeclaration(parent) ||
-        ts.isModuleDeclaration(parent)) &&
-      parent.name === node
-    );
+    let binding: Node = node;
+    let parent = context.parents.get(binding);
+    while (
+      parent?.type === "ObjectPattern" ||
+      parent?.type === "ArrayPattern" ||
+      (parent?.type === "Property" && parent.value === binding) ||
+      (parent?.type === "AssignmentPattern" && parent.left === binding) ||
+      (parent?.type === "RestElement" && parent.argument === binding)
+    ) {
+      binding = parent;
+      parent = context.parents.get(binding);
+    }
+    if (parent === undefined) {
+      return false;
+    }
+    switch (parent.type) {
+      case "VariableDeclarator":
+        return parent.id === binding;
+      case "ArrowFunctionExpression":
+        return parent.params.some((parameter) => parameter === binding);
+      case "FunctionDeclaration":
+      case "FunctionExpression":
+        return (
+          parent.params.some((parameter) => parameter === binding) ||
+          parent.id === binding
+        );
+      case "ClassDeclaration":
+      case "ClassExpression":
+        return parent.id === binding;
+      case "ImportSpecifier":
+      case "ImportDefaultSpecifier":
+      case "ImportNamespaceSpecifier": {
+        const { local: importedBinding } = parent;
+        return importedBinding === binding;
+      }
+      case "TSImportEqualsDeclaration":
+      case "TSEnumDeclaration":
+      case "TSModuleDeclaration":
+        return parent.id === binding;
+      default:
+        return false;
+    }
   });
   const binding = bindings.at(0);
+  const declaration = binding && context.parents.get(binding);
+  if (bindings.length !== 1 || declaration?.type !== "VariableDeclarator") {
+    return undefined;
+  }
+  const list = context.parents.get(declaration);
+  const owner = list && context.parents.get(list);
+  const moduleOwner =
+    owner?.type === "ExportNamedDeclaration"
+      ? context.parents.get(owner)
+      : owner;
   if (
-    bindings.length !== 1 ||
-    binding === undefined ||
-    !ts.isVariableDeclaration(binding.parent)
+    list?.type !== "VariableDeclaration" ||
+    list.kind !== "const" ||
+    moduleOwner?.type !== "Program"
   ) {
     return undefined;
   }
-  const declaration = binding.parent;
-  const list = declaration.parent;
-  if (
-    !ts.isVariableDeclarationList(list) ||
-    list.getFirstToken(context.source)?.kind !== ts.SyntaxKind.ConstKeyword ||
-    !ts.isVariableStatement(list.parent) ||
-    !ts.isSourceFile(list.parent.parent)
-  ) {
-    return undefined;
-  }
-  return declaration.initializer;
+  return declaration.init ?? undefined;
 };
 
 const readQueryConstant = (name: string, context: SourceContext) => {
   const value = uniqueModuleConstant(name, context);
-  if (
-    value === undefined ||
-    (!ts.isStringLiteralLike(value) && !ts.isTemplateExpression(value))
-  ) {
+  if (value === undefined) {
     return undefined;
   }
-  const prefix = ts.isTemplateExpression(value) ? value.head.text : value.text;
-  return /^\s*(?:SELECT|WITH)\b/iu.test(prefix) ? value : undefined;
+  const prefix =
+    value.type === "TemplateLiteral"
+      ? value.quasis.at(0)?.value.cooked
+      : stringLiteralText(value);
+  return prefix !== undefined &&
+    prefix !== null &&
+    /^\s*(?:SELECT|WITH)\b/iu.test(prefix)
+    ? value
+    : undefined;
 };
 
 const provesQuotedLiteral = (context: SourceContext): boolean => {
   const helper = uniqueModuleConstant("quoteLiteral", context);
   if (
-    helper === undefined ||
-    !ts.isArrowFunction(helper) ||
-    helper.parameters.length !== 1
+    helper?.type !== "ArrowFunctionExpression" ||
+    helper.params.length !== 1
   ) {
     return false;
   }
-  const parameter = helper.parameters.at(0);
+  const parameter = helper.params.at(0);
   return (
-    parameter !== undefined &&
-    ts.isIdentifier(parameter.name) &&
-    parameter.name.text === "value" &&
+    parameter?.type === "Identifier" &&
+    parameter.name === "value" &&
     sameSyntax(helper.body, `\`'\${value.replaceAll("'", "''")}'\``)
   );
 };
 
-const isQuotedSqlData = (
-  node: ts.Expression,
-  context: SourceContext,
-): boolean => {
-  const call = node.parent;
+const isQuotedSqlData = (node: Node, context: SourceContext): boolean => {
+  const call = context.parents.get(node);
   return (
-    ts.isCallExpression(call) &&
-    ts.isIdentifier(call.expression) &&
-    call.expression.text === "quoteLiteral" &&
+    call !== undefined &&
+    isCallTo(call, ["quoteLiteral"]) &&
     call.arguments.length === 1 &&
     call.arguments.at(0) === node &&
     provesQuotedLiteral(context)
@@ -519,10 +542,10 @@ const expandTemplateInterpolation = (
       return variants;
     }
   }
-  if (ts.isIdentifier(expression) && !visiting.has(expression.text)) {
-    const query = readQueryConstant(expression.text, context);
+  if (expression.type === "Identifier" && !visiting.has(expression.name)) {
+    const query = readQueryConstant(expression.name, context);
     if (query !== undefined) {
-      return expand(query, context, new Set([...visiting, expression.text]));
+      return expand(query, context, new Set([...visiting, expression.name]));
     }
   }
   const finite = finiteUppercaseValues(expression, context);
