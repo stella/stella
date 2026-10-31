@@ -7515,6 +7515,7 @@ type BrowserPlanOptions = {
   queueDepth?: string;
   packageChecksRequired?: string;
   browserScopeRequired?: string;
+  uiBrowserRequired?: string;
   uiPlaygroundSpecs?: string;
 };
 type HeavyGatePlanOptions = {
@@ -7561,6 +7562,7 @@ const browserPlanOutput = ({
   queueDepth = "full",
   packageChecksRequired = "true",
   browserScopeRequired = "true",
+  uiBrowserRequired = "false",
   uiPlaygroundSpecs = "[]",
 }: BrowserPlanOptions) => {
   const { outputs } = v.parse(
@@ -7578,6 +7580,7 @@ const browserPlanOutput = ({
         "steps.changed-files.outputs.desktop_browser_required": desktopRequired,
         "steps.changed-files.outputs.ci_browser_scope_required":
           browserScopeRequired,
+        "steps.changed-files.outputs.ui_browser_required": uiBrowserRequired,
         "steps.changed-files.outputs.package_checks_required":
           packageChecksRequired,
         "steps.depth.outputs.suite_depth": depth,
@@ -7587,6 +7590,59 @@ const browserPlanOutput = ({
     }),
   );
 };
+
+test("UI browser tests follow the affected workspace graph on pull requests and remain selected in merge groups", () => {
+  const uiDependency =
+    [...(readSelectionGraph().packages.get("@stll/ui")?.dependencies ?? [])].at(
+      0,
+    ) ?? panic("@stll/ui must have a workspace dependency");
+  const uiDependencyFile = `${uiDependency}/src/ci-browser-input.ts`;
+  for (const { file, event, expected } of [
+    {
+      file: "packages/ui/src/components/control-states.playwright.spec.ts",
+      event: EVENT.pullRequest,
+      expected: "true",
+    },
+    {
+      file: "apps/api/src/server.ts",
+      event: EVENT.pullRequest,
+      expected: "false",
+    },
+    { file: uiDependencyFile, event: EVENT.pullRequest, expected: "true" },
+    {
+      file: "packages/ui/src/components/control-states.playwright.spec.ts",
+      event: EVENT.mergeGroup,
+      expected: "true",
+    },
+  ] as const) {
+    const uiBrowserRequired =
+      runSelector(
+        [file],
+        ["ui_browser_required"],
+        event === EVENT.mergeGroup ? SUITE_DEPTH.full : SUITE_DEPTH.fast,
+        "false",
+        event,
+      ).at(0) ?? panic("Missing UI browser scope");
+    expect(uiBrowserRequired, file).toBe(expected);
+    expect(
+      browserPlanOutput({
+        event,
+        depth: event === EVENT.mergeGroup ? SUITE_DEPTH.full : SUITE_DEPTH.fast,
+        desktopRequired: "false",
+        uiBrowserRequired,
+      }),
+      file,
+    ).toBe(expected);
+  }
+  const uiTest = jobSteps(ciJobs["ci-browser"]).find(
+    ({ name }) => name === "Test UI browser interactions",
+  );
+  expect(uiTest?.if).not.toContain("github.event_name != 'pull_request'");
+  const matrixPlan = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Plan UI playground geometry specs",
+  );
+  expect(matrixPlan?.env?.["UI_REQUIRED"]).toContain("ui_browser_required");
+});
 
 test("a PR that selects UI playground specs requires the browser job", () => {
   // ci-result requires every job whose scope output is true, so a planned

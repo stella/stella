@@ -36,6 +36,7 @@ test("every-spec fallback yields every merge-group shard with each spec once", (
     allSpecs,
     eventName: "pull_request",
     desktopRequired: false,
+    uiRequired: false,
   });
 
   expect(legs).toHaveLength(UI_PLAYGROUND_SHARD_COUNT);
@@ -52,9 +53,25 @@ test("a two-spec playground selection stays on one leg", () => {
     allSpecs,
     eventName: "pull_request",
     desktopRequired: false,
+    uiRequired: false,
   });
 
   expect(legs).toEqual([{ suite: "playground-1", specs: selectedSpecs }]);
+});
+
+test("an affected UI package adds the UI browser leg on pull requests", () => {
+  expect(
+    planUiPlaygroundMatrix({
+      selectedSpecs: [],
+      allSpecs: playgroundSpecs(13),
+      eventName: "pull_request",
+      desktopRequired: false,
+      uiRequired: true,
+    }),
+  ).toEqual([
+    { suite: "desktop", specs: [] },
+    { suite: "ui", specs: [] },
+  ]);
 });
 
 test("a large playground selection respects the merge-group per-shard budget", () => {
@@ -65,6 +82,7 @@ test("a large playground selection respects the merge-group per-shard budget", (
     allSpecs,
     eventName: "pull_request",
     desktopRequired: false,
+    uiRequired: false,
   });
   const perShardBudget = Math.ceil(allSpecs.length / UI_PLAYGROUND_SHARD_COUNT);
 

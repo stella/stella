@@ -122,6 +122,7 @@ const DEFAULT_CHANGED_FILE_OUTPUTS = {
   api_image_smoke_required: "false",
   changed_files: "",
   ci_browser_scope_required: "false",
+  ui_browser_required: "false",
   collab_redis_required: "false",
   collaboration_suite_required: "false",
   comparison_base: "",

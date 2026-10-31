@@ -14,6 +14,7 @@ type PlanUiPlaygroundMatrixOptions = {
   allSpecs: readonly string[];
   eventName: string;
   desktopRequired: boolean;
+  uiRequired: boolean;
 };
 
 const playgroundLegs = (
@@ -35,6 +36,7 @@ export const planUiPlaygroundMatrix = ({
   allSpecs,
   eventName,
   desktopRequired,
+  uiRequired,
 }: PlanUiPlaygroundMatrixOptions): UiPlaygroundMatrixLeg[] => {
   if (eventName !== "pull_request") {
     return [
@@ -44,10 +46,12 @@ export const planUiPlaygroundMatrix = ({
     ];
   }
 
-  const fixedLegs =
-    desktopRequired || selectedSpecs.length === 0
+  const fixedLegs = [
+    ...(desktopRequired || selectedSpecs.length === 0
       ? [{ suite: "desktop", specs: [] }]
-      : [];
+      : []),
+    ...(uiRequired ? [{ suite: "ui", specs: [] }] : []),
+  ];
   if (selectedSpecs.length === 0) {
     return fixedLegs;
   }
@@ -88,6 +92,7 @@ if (import.meta.main) {
         allSpecs,
         eventName: process.env["EVENT_NAME"] ?? "",
         desktopRequired: process.env["DESKTOP_REQUIRED"] === "true",
+        uiRequired: process.env["UI_REQUIRED"] === "true",
       }),
     ),
   );

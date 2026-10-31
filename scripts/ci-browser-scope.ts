@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { affectedPackages, readSelectionGraph } from "./ci-affected-selection";
 import { requiresDesktopBrowser } from "./ci-package-scope";
 import { lexShell } from "./install-free-ci";
 
@@ -117,6 +118,12 @@ export const requiresCiBrowser = ({
   changed,
   root = ROOT,
 }: ScopeOptions): boolean => ciBrowserScopePredicate({ root })(changed);
+
+export const requiresUiBrowser = ({
+  changed,
+  root = ROOT,
+}: ScopeOptions): boolean =>
+  affectedPackages(changed, readSelectionGraph(root)).has("@stll/ui");
 
 if (import.meta.main) {
   console.log(String(requiresCiBrowser({ changed: process.argv.slice(2) })));

@@ -4,7 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
-import { ciBrowserScopePredicate } from "./ci-browser-scope";
+import { ciBrowserScopePredicate, requiresUiBrowser } from "./ci-browser-scope";
 import { type DependencyScope, dependencyScope } from "./ci-dependency-scope";
 import {
   requiresDesktopBrowser,
@@ -392,6 +392,7 @@ const wideScope = (input: ChangedFileScopeInput): Record<string, string> => {
     desktop_rust_checks_required: TRUE,
     desktop_browser_required: TRUE,
     ci_browser_scope_required: TRUE,
+    ui_browser_required: TRUE,
     e2e_core_required: TRUE,
     e2e_production_required: bool(full),
     e2e_landing_required: TRUE,
@@ -482,6 +483,7 @@ const deriveScopeFacts = (
         desktop_rust_checks_required: FALSE,
         desktop_browser_required: FALSE,
         ci_browser_scope_required: FALSE,
+        ui_browser_required: FALSE,
         e2e_core_required: FALSE,
         e2e_production_required: FALSE,
         e2e_landing_required: FALSE,
@@ -748,6 +750,7 @@ export const OUTPUT_ORDER = [
   "desktop_rust_checks_required",
   "desktop_browser_required",
   "ci_browser_scope_required",
+  "ui_browser_required",
   "e2e_core_required",
   "e2e_production_required",
   "e2e_landing_required",
@@ -882,6 +885,10 @@ export const OUTPUT_RULES = {
   ci_browser_scope_required: (facts) =>
     scopeRule(facts, "ci_browser_scope_required", ({ input, scopeFiles }) =>
       bool(ciBrowserScopePredicate({ root: input.root })(scopeFiles)),
+    ),
+  ui_browser_required: (facts) =>
+    scopeRule(facts, "ui_browser_required", ({ input, scopeFiles }) =>
+      bool(requiresUiBrowser({ changed: scopeFiles, root: input.root })),
     ),
   e2e_core_required: (facts) =>
     scopeRule(facts, "e2e_core_required", ({ e2eCore }) => bool(e2eCore)),
