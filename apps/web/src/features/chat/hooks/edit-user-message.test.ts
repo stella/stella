@@ -76,7 +76,7 @@ describe("truncating the page for an edited user message", () => {
       `answer-${FIRST}`,
     ]);
     expect(plan?.body).toEqual({
-      truncateAfterMessageId: SECOND,
+      truncateAfterMessageId: toSafeId<"chatMessage">(SECOND),
       turnIntent: CHAT_TURN_INTENT.edit,
     });
   });
@@ -134,7 +134,9 @@ describe("truncating the page for an edited user message", () => {
         type: "tool-call",
       },
     ]);
-    expect(plan?.body).toEqual({ truncateAfterMessageId: "asking" });
+    expect(plan?.body).toEqual({
+      truncateAfterMessageId: toSafeId<"chatMessage">("asking"),
+    });
     // The page's own history is never rewritten in place.
     expect(asking.parts).toHaveLength(2);
   });

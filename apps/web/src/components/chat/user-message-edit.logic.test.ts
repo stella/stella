@@ -3,14 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 
 import { storedUserMessageDocument } from "@/components/chat-editor-markdown.logic";
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   buildEditedUserMessage,
   createUserMessageEditDraft,
   hasUserMessageEditContent,
 } from "@/components/chat/user-message-edit.logic";
+import type { UserMessageEditAttachmentPart } from "@/components/chat/user-message-edit.logic";
+import { toSafeId } from "@/lib/safe-id";
 
-const ndaDocument: ChatPart = {
+const ndaDocument: UserMessageEditAttachmentPart = {
   metadata: { filename: "nda.pdf" },
   source: { mimeType: "application/pdf", type: "url", value: "/v1/f/1" },
   type: "document",
@@ -58,7 +59,7 @@ describe("the edited message", () => {
       }),
     ).toEqual({
       content: [{ content: "<p>Review</p>", type: "text" }, ndaDocument],
-      id: "018f0000-0000-7000-8000-0000000000a2",
+      id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-0000000000a2"),
     });
   });
 

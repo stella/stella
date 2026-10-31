@@ -322,11 +322,35 @@ const storedInlineNodes = (
         return [{ type: "hardBreak" }];
       case "link":
         return linkNodes(node.url, markdownText(node.children), bold);
+      // The grammar keeps these constructs off; should one still parse, its
+      // text or its children read as typed text.
+      case "code":
+      case "html":
+      case "inlineCode":
+      case "yaml":
+        return textNodes(node.value, bold);
+      case "blockquote":
+      case "delete":
+      case "emphasis":
+      case "footnoteDefinition":
+      case "heading":
+      case "linkReference":
+      case "list":
+      case "listItem":
+      case "paragraph":
+      case "table":
+      case "tableCell":
+      case "tableRow":
+        return storedInlineNodes(node.children, bold);
+      case "definition":
+      case "footnoteReference":
+      case "image":
+      case "imageReference":
+      case "thematicBreak":
+        return [];
       default:
-        if ("value" in node) {
-          return textNodes(node.value, bold);
-        }
-        return "children" in node ? storedInlineNodes(node.children, bold) : [];
+        node satisfies never;
+        return panic("Unhandled stored Markdown node");
     }
   });
 

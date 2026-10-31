@@ -169,14 +169,14 @@ const isLatestAssistantMessage = ({
   return latest?.role === "assistant" && latest.id === messageId;
 };
 
-const CHAT_MESSAGE_EDIT_REFUSAL_CODES = new Set<string>(
-  Object.values(CHAT_MESSAGE_EDIT_ERROR_CODE),
+const CHAT_MESSAGE_EDIT_REFUSAL_CODES: readonly string[] = Object.values(
+  CHAT_MESSAGE_EDIT_ERROR_CODE,
 );
 
 /** The server refused to edit a message; the page reloads what it stores. */
 export const isChatMessageEditRefusal = (error: Error | undefined): boolean => {
   const code = chatRefusal(error)?.code;
-  return code !== undefined && CHAT_MESSAGE_EDIT_REFUSAL_CODES.has(code);
+  return code !== undefined && CHAT_MESSAGE_EDIT_REFUSAL_CODES.includes(code);
 };
 
 /** Replaying a mismatched continuation cannot repair its server-owned state,
