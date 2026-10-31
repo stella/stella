@@ -54,6 +54,7 @@ export const LOCAL_ONLY_FEATURES = [
     windowModules: {
       "src-tauri/capabilities/activity.json": [
         "src/activity/ActivityApp.tsx",
+        "src/activity/ActivityCaptureDetails.tsx",
         "src/activity/ActivityDayReview.tsx",
         "src/activity/ActivityTimeline.tsx",
         "src/activity/MatterPicker.tsx",
@@ -61,6 +62,24 @@ export const LOCAL_ONLY_FEATURES = [
       ],
     },
     windows: ["activity"],
+  },
+  {
+    // Activity settings and deletion, also offered in the Settings window.
+    // None of these commands returns the timeline.
+    callerType: "ActivitySettingsCaller",
+    commandOwners: [
+      { module: "src/activity_settings.rs", prefix: "activity_" },
+    ],
+    id: "activity_settings",
+    telemetry: "fixedCodes",
+    nativeModules: [],
+    windowModules: {
+      "src-tauri/capabilities/default.json": [
+        "src/activity/ActivitySettings.tsx",
+        "src/activity/ActivityCaptureDetails.tsx",
+      ],
+    },
+    windows: ["activity", "main"],
   },
 ] as const;
 
