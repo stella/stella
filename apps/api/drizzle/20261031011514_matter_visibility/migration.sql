@@ -612,15 +612,29 @@ BEGIN
     RAISE EXCEPTION 'visibility backfill batch must contain between 1 and 100 matters'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
+  IF p_cursor IS NULL THEN
   SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO requests FROM (
     SELECT organization_id, array_agg(batch.id ORDER BY batch.id) AS workspace_ids
     FROM (SELECT w.id, w.organization_id FROM public.workspaces w
-      WHERE p_cursor IS NULL OR w.id > p_cursor ORDER BY w.id LIMIT p_size) batch
+      ORDER BY w.id LIMIT p_size) batch
     GROUP BY organization_id
   ) r;
+  ELSE
+  SELECT COALESCE(jsonb_agg(r), '[]'::jsonb) INTO requests FROM (
+    SELECT organization_id, array_agg(batch.id ORDER BY batch.id) AS workspace_ids
+    FROM (SELECT w.id, w.organization_id FROM public.workspaces w
+      WHERE w.id > p_cursor ORDER BY w.id LIMIT p_size) batch
+    GROUP BY organization_id
+  ) r;
+  END IF;
   PERFORM public.stella_lock_matter_stewardship(requests, 'update');
+  IF p_cursor IS NULL THEN
   RETURN QUERY SELECT w.id FROM public.workspaces w
-    WHERE p_cursor IS NULL OR w.id > p_cursor ORDER BY w.id LIMIT p_size;
+    ORDER BY w.id LIMIT p_size;
+  ELSE
+  RETURN QUERY SELECT w.id FROM public.workspaces w
+    WHERE w.id > p_cursor ORDER BY w.id LIMIT p_size;
+  END IF;
 END;
 $$;
 --> statement-breakpoint
