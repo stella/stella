@@ -11,6 +11,7 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/case-law/polarity/llm-classifier.ts",
   "apps/api/src/handlers/clauses/rewrite.ts",
   "apps/api/src/handlers/contacts/extract-procuracao.ts",
+  "apps/api/src/handlers/desktop-time-entries/narrative-model.ts",
   "apps/api/src/handlers/document-reviews/reference-positions.ts",
   "apps/api/src/handlers/entities/placements/suggest.ts",
   "apps/api/src/handlers/playbooks/derive-ask.ts",

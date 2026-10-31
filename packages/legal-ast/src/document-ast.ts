@@ -1,3 +1,28 @@
+// parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
+// parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
+// parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vfgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-vwgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-lvwg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-asylgh] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-ubas] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-uvs] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-verg] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-umse] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-bks] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-ns] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-nss] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [cz-regional] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-courts] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [sk-us] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [at-findok] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [hu-bhgy] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [uk-fcl] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-kis] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [pl-uokik] registered replay fixture fields are unchanged by numeric index normalization.
+// parser-output-unchanged: [us-courtlistener] registered replay fixture fields are unchanged by numeric index normalization.
 // parser-output-unchanged: Guidance metadata is a new union branch; decision metadata keeps its fields and no parser writes the optional type.
 import { panic } from "better-result";
 /**
@@ -24,6 +49,7 @@ import {
 } from "./document-kind.js";
 import type { DocumentIssuer, GuidanceKind } from "./document-kind.js";
 import {
+  flattenInlineText,
   inlineSchema,
   isKnownInlineType,
   persistedInlineArraySchema,
@@ -411,25 +437,8 @@ export type DecisionDocumentAst = DocumentAst<DecisionMetadata>;
  * character for character. Nothing here may normalize, trim or collapse:
  * one character of drift moves every anchor after it.
  */
-export const plainTextOf = (inlines: readonly Inline[]): string => {
-  let out = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      out += node.text;
-    } else if (node.type === "line-break") {
-      out += "\n";
-    } else if (node.type === "page-anchor") {
-      // Zero characters: a page break is typography, and it may fall
-      // mid-word — the word must stay whole on this axis.
-    } else {
-      // A citation's `cite` is zero characters here for the same reason:
-      // the printed reference is the children, `cite` is metadata beside
-      // them.
-      out += plainTextOf(node.children);
-    }
-  }
-  return out;
-};
+export const plainTextOf = (inlines: readonly Inline[]): string =>
+  flattenInlineText(inlines, "rendered");
 
 /**
  * Trailing spaces and tabs before a line break, which carry no meaning
@@ -441,7 +450,8 @@ const NO_BREAK_SPACE = /\u00a0/gu;
 
 /**
  * `inlines` reduced to the text that feeds search and AI reads: the raw
- * flattening with no-break spaces normalized, spaces before a line break
+ * projection with numeric superscript indices delimited, no-break spaces
+ * normalized, spaces before a line break
  * dropped, the ends trimmed, and letter-spaced runs collapsed so a
  * court's "R O Z S U D E K" is findable as "ROZSUDEK".
  *
@@ -455,7 +465,7 @@ const NO_BREAK_SPACE = /\u00a0/gu;
  */
 export const projectPlainText = (inlines: readonly Inline[]): string =>
   collapseSpacedLetters(
-    plainTextOf(inlines)
+    flattenInlineText(inlines)
       .replace(NO_BREAK_SPACE, " ")
       .replace(SPACE_BEFORE_NEWLINE, "\n")
       .trim(),
@@ -852,10 +862,18 @@ export type PersistedAstDegradation =
       role: string;
     }
   | { kind: "block-type"; blockId: string | null; type: string }
-  | { kind: "inline-type"; blockId: string | null; type: string };
+  | { kind: "inline-type"; blockId: string | null; type: string }
+  /** A block repeating an identity an earlier block holds; re-keyed. */
+  | {
+      kind: "block-identity";
+      blockId: string | null;
+      field: BlockIdentityField;
+      value: string;
+    };
 
 const storedBlockShape = v.object({
   id: v.optional(v.string()),
+  anchorId: v.optional(v.string()),
   type: v.string(),
   role: v.optional(v.string()),
   inlines: v.optional(v.unknown()),
@@ -893,7 +911,8 @@ const blockInlineTypes = (block: {
 /**
  * What a stored AST carries that the persisted reader degrades: a block
  * role it does not declare, a block kind it drops, an inline kind it
- * collapses to text.
+ * collapses to text, a block identity it re-keys because an earlier block
+ * holds it.
  *
  * Reads the raw value, not the parsed AST, because parsing is where the
  * information is lost. A value that is not an AST at all reports nothing:
@@ -911,16 +930,29 @@ export const persistedAstDegradations = (
     return [];
   }
   const degradations: PersistedAstDegradation[] = [];
+  const held = { id: new Set<string>(), anchorId: new Set<string>() };
   for (const candidate of stored.output.blocks) {
     const parsed = v.safeParse(storedBlockShape, candidate);
     if (!parsed.success) {
       continue;
     }
-    const { id, role, type } = parsed.output;
+    const { anchorId, id, role, type } = parsed.output;
     const blockId = id ?? null;
     if (!isBlockType(type)) {
       degradations.push({ kind: "block-type", blockId, type });
       continue;
+    }
+    for (const [field, value] of [
+      ["id", id],
+      ["anchorId", anchorId],
+    ] as const) {
+      if (value === undefined) {
+        continue;
+      }
+      if (held[field].has(value)) {
+        degradations.push({ kind: "block-identity", blockId, field, value });
+      }
+      held[field].add(value);
     }
     if (role !== undefined && !isMemberOf(BLOCK_ROLES[type], role)) {
       degradations.push({ kind: "block-role", blockId, type, role });
@@ -1009,6 +1041,64 @@ export const footnoteGroupsShareLabels = (
     previous = note;
   }
   return true;
+};
+
+/** The two identities a block carries, each unique within its document. */
+type BlockIdentityField = "id" | "anchorId";
+
+type BlockIdentities = { id: string; anchorId: string };
+
+/**
+ * The blocks with every repeated `id` and `anchorId` given one of its own.
+ *
+ * The first block to carry a value keeps it, so a link to that value still
+ * lands where it always did. Each later carrier gets the value with the
+ * lowest `-<n>` suffix (from 2) that no block of the document holds, so a
+ * re-keyed identity can never take one another block already has. Blocks
+ * whose identities are already unique come back as the same objects.
+ *
+ * This is the one rule for both boundaries: a writer re-keys before the
+ * canonical guard checks uniqueness, and the persisted reader re-keys a row
+ * stored before that check existed, so a stored row reads exactly as a
+ * re-parse would now write it.
+ */
+export const withUniqueBlockIdentities = <TBlock extends BlockIdentities>(
+  blocks: readonly TBlock[],
+): TBlock[] => {
+  const held = {
+    id: new Set(blocks.map(({ id }) => id)),
+    anchorId: new Set(blocks.map(({ anchorId }) => anchorId)),
+  } satisfies Record<BlockIdentityField, Set<string>>;
+  const claimed = {
+    id: new Set<string>(),
+    anchorId: new Set<string>(),
+  } satisfies Record<BlockIdentityField, Set<string>>;
+  const nextSuffix = {
+    id: new Map<string, number>(),
+    anchorId: new Map<string, number>(),
+  };
+  const claim = (field: BlockIdentityField, value: string): string => {
+    if (!claimed[field].has(value)) {
+      claimed[field].add(value);
+      return value;
+    }
+    let suffix = nextSuffix[field].get(value) ?? 2;
+    while (held[field].has(`${value}-${String(suffix)}`)) {
+      suffix += 1;
+    }
+    nextSuffix[field].set(value, suffix + 1);
+    const fresh = `${value}-${String(suffix)}`;
+    held[field].add(fresh);
+    claimed[field].add(fresh);
+    return fresh;
+  };
+  return blocks.map((block) => {
+    const id = claim("id", block.id);
+    const anchorId = claim("anchorId", block.anchorId);
+    return id === block.id && anchorId === block.anchorId
+      ? block
+      : { ...block, id, anchorId };
+  });
 };
 
 /** Block and anchor identities address one location each within a document. */
@@ -1162,6 +1252,12 @@ const persistedDocumentAstWireSchema = v.object({
  * here from the fields beside it, so the parsed `DocumentAst` keeps
  * `plainText` required and no consumer of a parsed AST can observe the
  * omission.
+ *
+ * Rows written before block identities were checked can repeat one (a
+ * title set over two lines, each read as the title heading). Failing the
+ * document over that would take its text down with a duplicated link
+ * target, so the reader re-keys the repeats by the rule writers apply
+ * (`withUniqueBlockIdentities`) and reports each one.
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
   v.pipe(
@@ -1170,8 +1266,10 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
       version: 1,
       source: source ?? emptyDocumentAstSource(),
       metadata: metadata ?? emptyDocumentAstMetadata(),
-      blocks: blocks.flatMap((block) =>
-        block === null ? [] : [fillBlockPlainText(block)],
+      blocks: withUniqueBlockIdentities(
+        blocks.flatMap((block) =>
+          block === null ? [] : [fillBlockPlainText(block)],
+        ),
       ),
     })),
     headMatterOrderCheck,

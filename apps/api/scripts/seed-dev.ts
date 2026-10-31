@@ -41,7 +41,7 @@ import type { ConditionNode } from "@stll/conditions";
 import { isCountryCode } from "@stll/country-codes";
 import type { CountryCode } from "@stll/country-codes";
 import { writeZipEntry } from "@stll/docx-utils";
-import { logErrorOutput, printError } from "@stll/errors";
+import { printError } from "@stll/errors";
 import { timeEntryAmount } from "@stll/money";
 import {
   MARKETING_LOCALE_ACCOUNTS,
@@ -166,6 +166,14 @@ import {
   seedFileIdentity,
   seedId,
 } from "./seed-utils";
+
+export const seedRequiredCaseLaw = async (
+  seedCorpus: () => Promise<void>,
+  seedMarketing: () => Promise<void>,
+): Promise<void> => {
+  await seedCorpus();
+  await seedMarketing();
+};
 
 const db = openMaintenanceDb({ readOnly: false });
 
@@ -3917,39 +3925,22 @@ export async function seed(organizationId?: string, userId?: string) {
   );
   await seedPlaybooks(ORG_ID);
 
-  // 16. Global case-law corpus for search and references. This pulls real prod
-  // fixtures and is the most schema-coupled step; a local schema drift here
-  // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
-  // whole seed or dump a giant error toast — warn and continue. The corpus is
-  // shared by every organization, so the per-locale marketing firms, seeded
-  // after the English one (seed-marketing-locales.ts), only add their own
-  // readers and fail loudly when the corpus is missing.
-  let caseLawSeeded = !seedsSharedCorpus(ORG_ID);
-  try {
-    if (seedsSharedCorpus(ORG_ID)) {
-      await seedCaseLaw();
-      caseLawSeeded = true;
-    }
-  } catch (error) {
-    logErrorOutput({
-      level: "warn",
-      values: [
-        "  Case-law seed skipped (non-fatal — likely local schema drift):",
-        error,
-      ],
-    });
-  }
-
-  // The marketing seed needs the corpus rows; skip it when the corpus seed
-  // was skipped, but keep its own failures fatal (the screenshots need them).
-  if (caseLawSeeded) {
-    await seedMarketingCaseLaw({
-      db,
-      locale: SEED_LOCALE,
-      organizationId: ORG_ID,
-      userId: USER_ID,
-    });
-  }
+  // Only the primary locale seeds the shared corpus; every locale requires
+  // its corpus rows before seeding the marketing reader.
+  await seedRequiredCaseLaw(
+    async () => {
+      if (seedsSharedCorpus(ORG_ID)) {
+        await seedCaseLaw();
+      }
+    },
+    async () =>
+      await seedMarketingCaseLaw({
+        db,
+        locale: SEED_LOCALE,
+        organizationId: ORG_ID,
+        userId: USER_ID,
+      }),
+  );
 
   console.log("\nDone. Dev data seeded successfully.");
   return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };

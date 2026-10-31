@@ -8,7 +8,6 @@ import { describe, expect, test } from "bun:test";
 
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlUodoDecision,
   normalizePlUodoRow,
@@ -22,6 +21,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/retention/retention-policy";
 import { plUodoRetention } from "@/api/handlers/case-law/ingestion/retention/sources/pl-uodo";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
 
