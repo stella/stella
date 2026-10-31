@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import {
@@ -192,12 +193,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   description:
-    "Read the organization's audit trail (compliance view). Returns audit " +
-    "entries newest first, each with its action, resource type and id, actor " +
-    "user id, matter, timestamp, and change detail. Filter by matter_id, " +
-    "action, resource_type (with optional resource_id), user_id, and a " +
-    "created-at range (from/to, ISO date-time). Paginate with limit and " +
-    "cursor. Requires organization audit-log access.",
+    "Read organization audits newest first. Filter and paginate with the fields below. Requires audit-log access.",
   inputSchema: listAuditLogArgsSchema,
   jsonSchemaProjectionWaiver: {
     ignoreActions: ["check", "partial_check"],
@@ -734,7 +730,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(LIMITS.matterNumberPatternMinLength),
           v.maxLength(LIMITS.matterNumberPatternMaxLength),
-          v.description("Number pattern; pair with matter_number_padding"),
+          v.description("Pattern; send with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
@@ -747,12 +743,7 @@ const updateOrganizationSettingsArgsSchema = nullAsAbsent(
         ),
       ),
       matter_numbering_enabled: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description(
-            "Show the matter number beside the matter name in titles",
-          ),
-        ),
+        v.pipe(v.boolean(), v.description("Show matter numbers in titles")),
       ),
       prompt_caching_enabled: v.optional(
         v.pipe(v.boolean(), v.description("Toggle AI prompt caching")),
@@ -843,7 +834,7 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "remove_matter_member",
   description:
-    "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
   inputSchema: removeMatterMemberArgsSchema,
   annotations: {
     title: "Remove matter member",
@@ -863,7 +854,10 @@ const REMOVE_MATTER_MEMBER_TOOL_DEFINITION = defineValibotMcpTool({
 const CREATE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
   consumesServices: false,
   name: "create_organization",
-  description: `Create an organization you own after human approval (confirm: true). Each account receives at most ${ORGANIZATION_EVALUATION_LIMIT} evaluation periods over its lifetime; deletion does not restore one. ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE} refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.`,
+  description: `Create an owned organization after human approval (confirm:true). Lifetime cap: ${ORGANIZATION_EVALUATION_LIMIT} evaluations; deletion never resets it. ${ORGANIZATION_EVALUATION_LIMIT_REACHED_CODE}: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.`,
+  inputNormalization: {
+    slug: { kind: AGENT_INPUT_NORMALIZATION_KIND.slug },
+  },
   inputSchema: nullAsAbsent(
     v.strictObject({
       ...organizationCreateBodySchema.entries,

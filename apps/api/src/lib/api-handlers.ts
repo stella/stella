@@ -337,6 +337,8 @@ export type McpExposure =
   | {
       type: "capability";
       reason: McpCapabilityReason;
+      /** Curated wrapper that delegates to this capability. */
+      by?: McpToolName;
       consumesServices: ServiceClassification;
       confirmation?: "required";
       readClass?: McpReadClass;

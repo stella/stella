@@ -30,6 +30,7 @@ const createOrganization = createSafeSessionHandler(
     ),
     mcp: {
       type: "capability",
+      by: "create_organization",
       confirmation: "required",
       reason: "organization_management",
       consumesServices: false,

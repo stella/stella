@@ -5310,7 +5310,7 @@
       "itemsKey": "items"
     },
     "name": "list_audit_log",
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read organization audits newest first. Filter and paginate with the fields below. Requires audit-log access.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -5414,7 +5414,7 @@
       "scope": "admin_write"
     },
     "name": "remove_matter_member",
-    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "description": "Revoke matter access and cancel desktop edits; reassign or unassign work. Requires approval (confirm:true).",
     "inputSchema": {
       "type": "object",
       "required": ["matter_id", "user_id"],
@@ -5465,7 +5465,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Number pattern; pair with matter_number_padding"
+          "description": "Pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
@@ -5475,7 +5475,7 @@
         },
         "matter_numbering_enabled": {
           "type": "boolean",
-          "description": "Show the matter number beside the matter name in titles"
+          "description": "Show matter numbers in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
@@ -5543,7 +5543,7 @@
       "scope": "organization_create"
     },
     "name": "create_organization",
-    "description": "Create an organization you own after human approval (confirm: true). Each account receives at most 3 evaluation periods over its lifetime; deletion does not restore one. organization_evaluation_limit_reached refuses another evaluation. Existing paid organizations keep access. Then run stella auth login and select the new organization.",
+    "description": "Create an owned organization after human approval (confirm:true). Lifetime cap: 3 evaluations; deletion never resets it. organization_evaluation_limit_reached: no evaluations left. Existing paid organizations keep access. Next: stella auth login; select the new organization.",
     "inputSchema": {
       "type": "object",
       "required": ["name"],
@@ -5560,7 +5560,10 @@
           "minLength": 1,
           "maxLength": 100,
           "pattern": "^[a-z0-9-]+$",
-          "description": "Optional URL slug. Omit to generate an opaque organization address."
+          "description": "Optional URL slug. Omit to generate an opaque organization address. Use a-z, 0-9 or hyphens; outer whitespace is trimmed.",
+          "x-stella-agent-input": {
+            "kind": "slug"
+          }
         },
         "confirm": {
           "type": "boolean",
