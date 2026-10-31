@@ -17,7 +17,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { holdFreeFileDeletionDb } from "@/api/tests/helpers/hold-free-file-deletion-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type Row = Record<string, unknown>;
@@ -715,7 +714,6 @@ describe("folio collaboration room snapshot generation", () => {
       authority: { type: "participant", userId: firstUserId },
       expectedGeneration: 3,
       expectedSnapshotRevision: 0,
-      organizationFileUsageDb: holdFreeFileDeletionDb,
       snapshotBytes: new TextEncoder().encode("snapshot"),
       value: authorized.value,
     });
@@ -761,7 +759,6 @@ describe("folio collaboration room snapshot generation", () => {
         authority: { type: "participant", userId: firstUserId },
         expectedGeneration: 3,
         expectedSnapshotRevision: 0,
-        organizationFileUsageDb: holdFreeFileDeletionDb,
         snapshotBytes: new TextEncoder().encode("snapshot"),
         value: authorized.value,
       });
@@ -839,7 +836,6 @@ describe("folio collaboration room stored files", () => {
       authority: { type: "participant", userId: firstUserId },
       expectedGeneration: 3,
       expectedSnapshotRevision: 0,
-      organizationFileUsageDb: holdFreeFileDeletionDb,
       snapshotBytes,
       value: authorized.value,
     });

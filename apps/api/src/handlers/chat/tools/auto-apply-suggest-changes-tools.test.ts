@@ -44,7 +44,6 @@ import { memberDocumentWriteAccess } from "@/api/tests/helpers/document-write-ac
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { holdFreeFileDeletionDb } from "@/api/tests/helpers/hold-free-file-deletion-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createScopedDbMock,
@@ -95,7 +94,6 @@ const createVersionDependencies = {
   computeVersionDiffStats: computeVersionDiffStatsMock,
   createRootScopedDb,
   broadcast: broadcastMock,
-  organizationFileUsageDb: holdFreeFileDeletionDb,
 } satisfies CreateEntityVersionFromBufferDependencies;
 
 const createEntityVersionFromBuffer: typeof createEntityVersionFromBufferWithDependencies =

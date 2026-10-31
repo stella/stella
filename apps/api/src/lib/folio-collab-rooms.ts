@@ -52,7 +52,6 @@ import { createOpaqueToken } from "@/api/lib/entities/opaque-tokens";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
-import type { OrganizationFileDeletionDb } from "@/api/lib/files/delete-organization-file";
 import {
   decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
@@ -1075,15 +1074,12 @@ export const storeFolioCollabSnapshot = async ({
   authority,
   expectedGeneration,
   expectedSnapshotRevision,
-  organizationFileUsageDb,
   snapshotBytes,
   value,
 }: {
   authority: FolioCollabSnapshotStoreAuthority;
   expectedGeneration: number;
   expectedSnapshotRevision: number;
-  /** Owner database for the cleanup's legal-hold fence; defaults to the root pool. */
-  organizationFileUsageDb?: OrganizationFileDeletionDb | undefined;
   snapshotBytes: Uint8Array;
   value: FolioCollabSnapshotTarget;
 }): Promise<
@@ -1137,9 +1133,6 @@ export const storeFolioCollabSnapshot = async ({
           await deleteOrganizationFileWithSignal(
             nextKey,
             AbortSignal.timeout(FOLIO_COLLAB_S3_DELETE_TIMEOUT_MS),
-            organizationFileUsageDb === undefined
-              ? {}
-              : { fileUsageDb: organizationFileUsageDb },
           ),
         catch: (cause) => cause,
       }),

@@ -13,7 +13,6 @@ import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { scanUpload } from "@/api/lib/file-scan/scan-upload";
-import type { OrganizationFileDeletionDb } from "@/api/lib/files/delete-organization-file";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { docxWithMarkers } from "@/api/tests/helpers/docx-with-markers";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -130,9 +129,6 @@ test("a committed template refusal cleans its candidate and keeps the published 
         fileName: "created.docx",
         recordAuditEvent: async () => await Promise.resolve(),
         origin,
-        organizationFileUsageDb: asTestRaw<OrganizationFileDeletionDb>(
-          fixture.testDb,
-        ),
       }),
     );
   try {

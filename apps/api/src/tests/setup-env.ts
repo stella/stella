@@ -1,5 +1,10 @@
 import { envApiServerSchema } from "../env-schema";
-import { configureTestDatabaseEnvironment } from "./test-database-environment";
+import { installHermeticOrganizationFileDeletionDb } from "../lib/files/organization-file-deletion-db";
+import { holdFreeFileDeletionDb } from "./hold-free-file-deletion-db";
+import {
+  configureTestDatabaseEnvironment,
+  rootPoolConnectionCount,
+} from "./test-database-environment";
 
 // Preserve configured providers while preventing inherited credentials from
 // authenticating an unmocked model call. Derive coverage from the env owner.
@@ -34,6 +39,11 @@ if (
 }
 
 configureTestDatabaseEnvironment();
+// Without a shared pool, file deletions fence on a database where nothing is
+// held; Postgres suites keep the root pool and its real legal holds.
+if (rootPoolConnectionCount() !== null) {
+  installHermeticOrganizationFileDeletionDb(holdFreeFileDeletionDb);
+}
 // The API suites and the tooling that loads the API graph (catalog export,
 // route guards) exercise local development capabilities, which require an
 // explicit runtime opt-in. `bun test` already sets NODE_ENV=test. A test of

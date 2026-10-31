@@ -8,15 +8,13 @@ import { organization } from "@/api/db/auth-schema";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
-import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { openOrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
+import type { OrganizationFileDeletionDb } from "@/api/lib/files/organization-file-deletion-db";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { LegalHoldActiveError } from "@/api/lib/legal-holds/errors";
 import { requireNoHold } from "@/api/lib/legal-holds/holds";
 import { deleteS3ObjectWithSignal } from "@/api/lib/s3";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
-
-/** The owner database the deletion's legal-hold fence and usage settle on. */
-export type OrganizationFileDeletionDb = Pick<MaintenanceDb, "transaction">;
 
 type DeleteOrganizationFileOptions = {
   fileUsageDb?: OrganizationFileDeletionDb;
@@ -164,63 +162,59 @@ const deleteUnheldObjectChunk = async ({
   signal,
   fileUsageDb,
 }: DeleteUnheldObjectChunkOptions) => {
-  const { openOrganizationFileUsageDb } =
-    await import("@/api/lib/db/maintenance-db");
+  const fenceDb = fileUsageDb ?? (await openOrganizationFileDeletionDb());
   return await Result.tryPromise({
     try: async () =>
-      await withAggregateTransaction(
-        fileUsageDb ?? openOrganizationFileUsageDb(),
-        async (tx) => {
-          const prefixes = [
-            ...new Set(
-              keys
-                .map((key) => key.split("/").at(0))
-                .filter((prefix) => prefix !== undefined),
-            ),
-          ];
-          const keyOwners = await tx
-            .select({ id: organization.id })
-            .from(organization)
-            .where(
-              sql`${organization.id} = ANY(ARRAY[${sql.join(
-                prefixes.map((prefix) => sql`${prefix}`),
-                sql`, `,
-              )}]::text[])`,
-            );
-          const attachmentOwners = await tx
-            .selectDistinct({ id: chatThreads.organizationId })
-            .from(userFiles)
-            .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
-            .innerJoin(
-              sql`unnest(ARRAY[${sql.join(
-                keys.map((key) => sql`${key}`),
-                sql`, `,
-              )}]::text[]) requested_keys(object_key)`,
-              sql`${userFiles.s3Key} = requested_keys.object_key OR (${userFiles.thumbnailFileId} = split_part(split_part(requested_keys.object_key, '/', 2), '.', 1) AND (split_part(requested_keys.object_key, '/', 1) = ${userFiles.userId} OR split_part(requested_keys.object_key, '/', 1) = ${chatThreads.organizationId}))`,
-            );
-          const organizationIds = [
-            ...new Set([...keyOwners, ...attachmentOwners].map(({ id }) => id)),
-          ].toSorted();
-          for (const organizationId of organizationIds) {
-            const hold = await requireNoHold({
-              tx,
-              organizationId: brandPersistedOrganizationId(organizationId),
-              target: { type: "files", objectKeys: keys },
-            });
-            if (hold.isErr()) {
-              return Result.err(hold.error);
-            }
-          }
-          return Result.ok(
-            await Promise.allSettled(
-              keys.map(async (key) => {
-                await deleteS3ObjectWithSignal(key, signal);
-                return key;
-              }),
-            ),
+      await withAggregateTransaction(fenceDb, async (tx) => {
+        const prefixes = [
+          ...new Set(
+            keys
+              .map((key) => key.split("/").at(0))
+              .filter((prefix) => prefix !== undefined),
+          ),
+        ];
+        const keyOwners = await tx
+          .select({ id: organization.id })
+          .from(organization)
+          .where(
+            sql`${organization.id} = ANY(ARRAY[${sql.join(
+              prefixes.map((prefix) => sql`${prefix}`),
+              sql`, `,
+            )}]::text[])`,
           );
-        },
-      ),
+        const attachmentOwners = await tx
+          .selectDistinct({ id: chatThreads.organizationId })
+          .from(userFiles)
+          .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+          .innerJoin(
+            sql`unnest(ARRAY[${sql.join(
+              keys.map((key) => sql`${key}`),
+              sql`, `,
+            )}]::text[]) requested_keys(object_key)`,
+            sql`${userFiles.s3Key} = requested_keys.object_key OR (${userFiles.thumbnailFileId} = split_part(split_part(requested_keys.object_key, '/', 2), '.', 1) AND (split_part(requested_keys.object_key, '/', 1) = ${userFiles.userId} OR split_part(requested_keys.object_key, '/', 1) = ${chatThreads.organizationId}))`,
+          );
+        const organizationIds = [
+          ...new Set([...keyOwners, ...attachmentOwners].map(({ id }) => id)),
+        ].toSorted();
+        for (const organizationId of organizationIds) {
+          const hold = await requireNoHold({
+            tx,
+            organizationId: brandPersistedOrganizationId(organizationId),
+            target: { type: "files", objectKeys: keys },
+          });
+          if (hold.isErr()) {
+            return Result.err(hold.error);
+          }
+        }
+        return Result.ok(
+          await Promise.allSettled(
+            keys.map(async (key) => {
+              await deleteS3ObjectWithSignal(key, signal);
+              return key;
+            }),
+          ),
+        );
+      }),
     catch: (cause) =>
       new OrganizationFileUsageError({
         message: "Organization files could not be deleted",
