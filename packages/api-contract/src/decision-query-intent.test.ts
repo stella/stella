@@ -123,6 +123,20 @@ describe("reading a case-law box entry", () => {
     });
   });
 
+  test("digit-free slash prose stays text in every jurisdiction", () => {
+    const text = "contract and/or obligations";
+    for (const grammar of [
+      undefined,
+      null,
+      ...Object.values(DECISION_DOCKET_GRAMMARS),
+    ]) {
+      expect(parseDecisionQuery(text, { grammar })).toEqual({
+        type: "text",
+        text,
+      });
+    }
+  });
+
   test("prose is text, verbatim", () => {
     const word = fc.stringMatching(/^[a-záčďéěíňóřšťúůýž]{2,12}$/u);
     fc.assert(
@@ -324,6 +338,35 @@ describe("the hits that are the named decision", () => {
     expect(
       parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),
     ).toEqual({ type: "text", text: "2079" });
+  });
+
+  test("a CNJ number without a slash is read within prose", () => {
+    const text = "consulte 751-20.2099.5.08.0017 neste processo";
+    expect(
+      parseDecisionQuery(text, { grammar: DECISION_DOCKET_GRAMMARS.BRA }),
+    ).toEqual({
+      type: "identifier",
+      kind: "docket",
+      jurisdiction: "BRA",
+      value: "0000751-20.2099.5.08.0017",
+      family: "0000751-20.2099.5.08.0017",
+      selector: { kind: "none" },
+      embeddedIn: text,
+    });
+  });
+
+  test("a Brazilian citation as the citation formatter writes it reads as its docket", () => {
+    const brazil = { grammar: DECISION_DOCKET_GRAMMARS.BRA } as const;
+    for (const entry of [
+      "STF, RE 99234567 AgR, j. 03/02/2020",
+      "TST, RR - 751-20.2099.5.08.0017",
+    ]) {
+      expect(parseDecisionQuery(entry, brazil)).toMatchObject({
+        type: "identifier",
+        kind: "docket",
+        jurisdiction: "BRA",
+      });
+    }
   });
 
   test("unscoped, those forms read as text, as they did before any scope declared them", () => {

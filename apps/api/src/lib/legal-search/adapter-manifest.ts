@@ -136,6 +136,10 @@ const ADAPTER_JURISDICTIONS = {
     country: "AUT",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.AUT,
   },
+  BRA: {
+    country: "BRA",
+    identifierGrammar: DECISION_DOCKET_GRAMMARS.BRA,
+  },
   CZE: {
     country: "CZE",
     identifierGrammar: DECISION_DOCKET_GRAMMARS.CZE,

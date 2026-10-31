@@ -527,6 +527,7 @@ export const wrappedParagraphRuns = (
  */
 const CAPTION_FORMS_BY_JURISDICTION = {
   AUT: null,
+  BRA: null,
   CZE: CZ_CAPTION_FORMS,
   EU: null,
   GBR: null,

@@ -22,6 +22,7 @@ const UNVERIFIED_ANCHORS = flatStatuteLists(
  */
 export const STATUTE_LIST_SCHEMES = {
   AUT: UNVERIFIED_ANCHORS,
+  BRA: UNVERIFIED_ANCHORS,
   CZE: E_SBIRKA_LIST_SCHEME,
   EU: flatStatuteLists("EU acts open at EUR-Lex, not in the statute reader."),
   GBR: UNVERIFIED_ANCHORS,

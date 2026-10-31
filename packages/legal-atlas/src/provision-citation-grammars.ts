@@ -830,6 +830,7 @@ const profileSentence = (
 
 export const PROVISION_CITATION_GRAMMARS = {
   AUT: unsupported("AUT"),
+  BRA: unsupported("BRA"),
   CZE: createProvisionCitationGrammar({
     abbreviations: [
       {

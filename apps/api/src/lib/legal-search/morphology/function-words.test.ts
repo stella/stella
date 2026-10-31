@@ -31,6 +31,7 @@ const POLARITY_WORDS = {
   en: ["no", "not", "never", "neither", "nor", "without", "except"],
   hu: ["nem", "ne", "sem", "nélkül", "kivéve", "soha", "semmilyen"],
   pl: ["nie", "ani", "bez", "oprócz", "żaden"],
+  pt: ["não", "nem", "nunca", "sem", "exceto", "salvo", "nenhum"],
   sk: ["nie", "nie sú", "ani", "bez", "okrem", "nikdy"],
 } as const satisfies Record<FunctionWordLanguage, readonly string[]>;
 
@@ -95,6 +96,17 @@ const CONTENT_WORDS = {
     "mieszkanie",
     "sąd",
     "pozew",
+  ],
+  pt: [
+    "aluguel",
+    "locação",
+    "dívida",
+    "despejo",
+    "contrato",
+    "dano",
+    "imóvel",
+    "tribunal",
+    "ação",
   ],
   sk: [
     "nájom",

@@ -80,6 +80,7 @@ test("every group declared before a group contract keeps its manifest's exact co
   );
   expect(baseGroups.toSorted()).toEqual([
     "aut",
+    "bra",
     "cs_sk",
     "eu",
     "gbr",
@@ -357,6 +358,7 @@ test("a global read names created groups exactly and bridges a later group until
     const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
     expect(bridged.route.indexId.split(",")).toEqual([
       id("aut"),
+      `${id("bra")}*`,
       id("cs_sk"),
       id("eu"),
       `${id("gbr")}*`,
@@ -385,6 +387,7 @@ test("a global read names created groups exactly and bridges a later group until
     });
     expect(pending.route.indexId.split(",")).toEqual([
       id("aut"),
+      `${id("bra")}*`,
       id("cs_sk"),
       id("eu"),
       `${id("gbr")}*`,
@@ -394,11 +397,11 @@ test("a global read names created groups exactly and bridges a later group until
 
     // Attested: HUN by its exact id, and USA once it is attested too.
     const attested = globalTarget(manifest, {
-      attested: ["gbr", "hun", "usa"],
-      enrolled: ["gbr", "hun", "usa"],
+      attested: ["bra", "gbr", "hun", "usa"],
+      enrolled: ["bra", "gbr", "hun", "usa"],
     });
     expect(attested.route.indexId.split(",")).toEqual(
-      ["aut", "cs_sk", "eu", "gbr", "hun", "pol", "usa"].map(id),
+      ["aut", "bra", "cs_sk", "eu", "gbr", "hun", "pol", "usa"].map(id),
     );
     for (const stray of [`${id("hun")}_shadow`, `${id("usa")}_shadow`]) {
       expect(matchesIndexTarget(attested.route.indexId, stray)).toBe(false);
@@ -486,12 +489,14 @@ test("v8 vouches for the groups it was created with, Hungary among them", () => 
     ),
   ).toEqual([
     ["aut", "base"],
+    ["bra", "base"],
     ["gbr", "base"],
     ["usa", "court_partition_v1"],
   ]);
   const bridged = globalTarget(manifest, { attested: [], enrolled: [] });
   expect(bridged.route.indexId.split(",")).toEqual([
     `${id("aut")}*`,
+    `${id("bra")}*`,
     id("cs_sk"),
     id("eu"),
     `${id("gbr")}*`,
@@ -507,6 +512,7 @@ test("the registry records exactly the groups a manifest cannot vouch for", () =
         ({ indexGroup, contractVersion }) => [indexGroup, contractVersion],
       ),
     ).toEqual([
+      ["bra", "base"],
       ["gbr", "base"],
       ["hun", "base"],
       ["usa", "court_partition_v1"],
@@ -554,6 +560,7 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
     ]);
     expect(caseLawIndexGroupNamesAt(order)).toEqual([
       "aut",
+      "bra",
       "cs_sk",
       "eu",
       "gbr",
@@ -567,6 +574,7 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
   expect(caseLawIndexGroupCountriesAt(9, "cze")).toEqual(["CZE"]);
   expect(caseLawIndexGroupNamesAt(9)).toEqual([
     "aut",
+    "bra",
     "cze",
     "eu",
     "gbr",
@@ -575,7 +583,16 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
     "cs_sk",
     "usa",
   ]);
-  for (const country of ["AUT", "EU", "GBR", "HUN", "POL", "SVK", "USA"]) {
+  for (const country of [
+    "AUT",
+    "BRA",
+    "EU",
+    "GBR",
+    "HUN",
+    "POL",
+    "SVK",
+    "USA",
+  ]) {
     expect([country, caseLawIndexGroupAt(9, country)]).toEqual([
       country,
       caseLawIndexGroupAt(8, country),
@@ -590,6 +607,7 @@ test("the group map is per generation: Czech keeps cs_sk until v9 and every othe
   expect(CASE_LAW_INDEX_GROUP_NAMES).toContain("cze");
   expect(CASE_LAW_INDEX_GROUP_CONTRACT_OF).toEqual({
     aut: "base",
+    bra: "base",
     cs_sk: "base",
     cze: "provision_keys_v1",
     eu: "base",

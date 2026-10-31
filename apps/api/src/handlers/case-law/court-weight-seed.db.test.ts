@@ -62,6 +62,7 @@ const FULL_SEED = migrationPath(
   "20260918210100_case_law_court_weight_seed_hun",
 );
 const GBR_SEED = migrationPath("20261024190100_case_law_court_weight_seed_gbr");
+const BRA_SEED = migrationPath("20261030224123_case_law_court_weight_seed_bra");
 const USA_SEED = migrationPath("20260927200200_case_law_court_weight_seed_usa");
 const SVK_SEED = migrationPath("20261003122700_case_law_court_weight_seed_svk");
 
@@ -131,6 +132,7 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   ]);
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, GBR_SEED);
+  await applyMigration(db, BRA_SEED);
   await applyMigration(db, USA_SEED);
   await applyMigration(db, SVK_SEED);
   const first = await db.select().from(caseLawCourtWeights);
@@ -173,6 +175,7 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   expect(logical(first)).toEqual(declared);
   await applyMigration(db, FULL_SEED);
   await applyMigration(db, GBR_SEED);
+  await applyMigration(db, BRA_SEED);
   await applyMigration(db, USA_SEED);
   await applyMigration(db, SVK_SEED);
   const second = await db.select().from(caseLawCourtWeights);
@@ -180,39 +183,49 @@ test("the seed migrations apply, reconcile stale rows, and are idempotent", asyn
   await client.close();
 }, 60_000);
 
-test("the GBR seed preserves existing ranks and replays without changing rows", async () => {
-  const client = await createTestPglite();
-  const db = drizzle({ client });
-  const gbrRows = COURT_WEIGHT_SEED.filter((row) => row.country === "GBR");
-  expect(gbrRows.length).toBeGreaterThan(0);
-  await db.insert(caseLawCourtWeights).values([
-    ...gbrRows.map((row) => ({
-      ...row,
-      id: createSafeId<"caseLawCourtWeight">(),
-      tier: 1,
-      tierLabel: "existing",
-      weight: 1,
-    })),
-    {
-      id: createSafeId<"caseLawCourtWeight">(),
-      country: "EU",
-      courtPattern: "existing court",
-      tier: 2,
-      tierLabel: "existing",
-      weight: 4,
-    },
-  ]);
-  const before = (await db.select().from(caseLawCourtWeights)).toSorted(byKey);
-  await applyMigration(db, GBR_SEED);
-  expect((await db.select().from(caseLawCourtWeights)).toSorted(byKey)).toEqual(
-    before,
-  );
-  await applyMigration(db, GBR_SEED);
-  expect((await db.select().from(caseLawCourtWeights)).toSorted(byKey)).toEqual(
-    before,
-  );
-  await client.close();
-});
+test.each([
+  ["GBR", GBR_SEED],
+  ["BRA", BRA_SEED],
+])(
+  "the %s seed preserves existing ranks and replays without changing rows",
+  async (country, seed) => {
+    const client = await createTestPglite();
+    const db = drizzle({ client });
+    const seededRows = COURT_WEIGHT_SEED.filter(
+      (row) => row.country === country,
+    );
+    expect(seededRows.length).toBeGreaterThan(0);
+    await db.insert(caseLawCourtWeights).values([
+      ...seededRows.map((row) => ({
+        ...row,
+        id: createSafeId<"caseLawCourtWeight">(),
+        tier: 1,
+        tierLabel: "existing",
+        weight: 1,
+      })),
+      {
+        id: createSafeId<"caseLawCourtWeight">(),
+        country: "EU",
+        courtPattern: "existing court",
+        tier: 2,
+        tierLabel: "existing",
+        weight: 4,
+      },
+    ]);
+    const before = (await db.select().from(caseLawCourtWeights)).toSorted(
+      byKey,
+    );
+    await applyMigration(db, seed);
+    expect(
+      (await db.select().from(caseLawCourtWeights)).toSorted(byKey),
+    ).toEqual(before);
+    await applyMigration(db, seed);
+    expect(
+      (await db.select().from(caseLawCourtWeights)).toSorted(byKey),
+    ).toEqual(before);
+    await client.close();
+  },
+);
 
 test.each(["legacy-only", "replacement-preseeded"])(
   "the Slovak seed reconciles %s without changing another jurisdiction",

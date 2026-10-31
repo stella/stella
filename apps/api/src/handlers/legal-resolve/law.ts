@@ -441,6 +441,7 @@ const unavailable: LawResolver = async () =>
 
 const LAW_RESOLVERS = {
   AUT: unavailable,
+  BRA: unavailable,
   CZE: resolveCzechLaw,
   EU: unavailable,
   GBR: unavailable,

@@ -409,6 +409,7 @@ const CoverageHeading = ({ children }: PropsWithChildren) => {
 
 const COLOR_BY_JURISDICTION = {
   AUT: "var(--chart-1)",
+  BRA: "var(--chart-2)",
   CZE: "var(--chart-2)",
   EU: "var(--chart-3)",
   GBR: "var(--chart-4)",

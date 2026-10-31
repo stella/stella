@@ -23,6 +23,7 @@ type GrammarFixture = {
 /** One real sentence per grammar; a jurisdiction without a grammar has none. */
 const FIXTURES = {
   AUT: null,
+  BRA: null,
   CZE: {
     anchors: ["par_46-odst_1-pism_a", "par_60-odst_3", "par_120"],
     gazette: ["https://www.e-sbirka.cz/eli/cz/sb/2005/485"],

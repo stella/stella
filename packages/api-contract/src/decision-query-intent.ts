@@ -260,9 +260,13 @@ const identifierWithin = (
     const longest = Math.min(tokens.length, start + EMBEDDED_WINDOW_MAX_TOKENS);
     for (let end = start + 1; end <= longest; end += 1) {
       const window = tokens.slice(start, end).join(" ");
-      // Every docket grammar the entry can reach writes a slash; an ECLI is a
-      // single word. Anything else is not worth a grammar's time.
-      if (!window.includes("/") && !/ecli:|^eu:[ctf]:/iu.test(window)) {
+      // Try windows carrying a digit (CNJ and superior-court numbers write no
+      // slash), a slash, or an ECLI prefix.
+      if (
+        !/\p{Nd}/u.test(window) &&
+        !window.includes("/") &&
+        !/ecli:|^eu:[ctf]:/iu.test(window)
+      ) {
         continue;
       }
       const reading = readingOfWindow({ end, grammar, start, tokens });

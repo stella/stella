@@ -78,6 +78,7 @@ type CaseLawManifestGeneration = Exclude<
 const EXPECTED_CASE_LAW_ROUTES = {
   case_law_v5: {
     AUT: "aut",
+    BRA: "bra",
     CZE: "cs_sk",
     EU: "eu",
     GBR: "gbr",
@@ -88,6 +89,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
   },
   case_law_v6: {
     AUT: "aut",
+    BRA: "bra",
     CZE: "cs_sk",
     EU: "eu",
     GBR: "gbr",
@@ -98,6 +100,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
   },
   case_law_v7: {
     AUT: "aut",
+    BRA: "bra",
     CZE: "cs_sk",
     EU: "eu",
     GBR: "gbr",
@@ -108,6 +111,7 @@ const EXPECTED_CASE_LAW_ROUTES = {
   },
   case_law_v8: {
     AUT: "aut",
+    BRA: "bra",
     CZE: "cs_sk",
     EU: "eu",
     GBR: "gbr",

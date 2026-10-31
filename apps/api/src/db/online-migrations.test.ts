@@ -1,7 +1,7 @@
 import { SQL } from "bun";
 import { describe, expect, expectTypeOf, test } from "bun:test";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
+import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
@@ -21,6 +21,7 @@ import {
   createDecisionDateCeilingRepair,
   DECISION_DATE_CEILING_REPAIR,
 } from "./decision-date-ceiling-repair";
+import { FUNCTION_DEPENDENT_INDEX_REINDEXES } from "./function-dependent-index-reindex";
 import type { MigrationTimingRecord } from "./migration-timing";
 import type { OnlineIndexDeclaration } from "./online-ddl";
 import { declaresOnlineBuild } from "./online-ddl";
@@ -2172,10 +2173,18 @@ const createHarness = ({
   const droppedLegacyIndexes = new Set(
     retiredIndexes.filter((name) => indexStates[name] === undefined),
   );
-  const backfillStates = new Map<
-    unknown,
-    { cursor: unknown; batch: unknown }
-  >();
+  const backfillStates = new Map<unknown, { cursor: unknown; batch: unknown }>(
+    FUNCTION_DEPENDENT_INDEX_REINDEXES.map(({ name, introducedBy }) => [
+      `${name}:${introducedBy}`,
+      {
+        cursor: null,
+        batch: {
+          ...initialBatchState(),
+          reindex: { indexes: [], status: "complete" },
+        },
+      },
+    ]),
+  );
   const pendingConstraints = new Set(unvalidatedConstraints);
   const indexOffsets = new Map<string, number>();
   const pendingIndexes = new Set(missingIndexes);

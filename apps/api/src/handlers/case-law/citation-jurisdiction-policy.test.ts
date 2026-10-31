@@ -42,7 +42,10 @@ test("every registered source publishes for a declared jurisdiction", () => {
  * the change that registers that adapter. An entry is a named, reviewable
  * exception; its absence is what keeps the assertion below a drift guard.
  */
-const DECLARED_AHEAD_OF_A_SOURCE: readonly CaseLawJurisdiction[] = ["USA"];
+const DECLARED_AHEAD_OF_A_SOURCE: readonly CaseLawJurisdiction[] = [
+  "USA",
+  "BRA",
+];
 
 test("a jurisdiction is only excused a source while it is named here", () => {
   // A stale exception would silently excuse a jurisdiction whose source has
@@ -91,6 +94,7 @@ test("a jurisdiction never declares itself as its own supranational reach", () =
 test("the declared cross-jurisdiction reach is exact", () => {
   expect(CITATION_RESOLUTION_JURISDICTION_POLICY).toEqual({
     AUT: { alsoResolvesTo: ["EU"] },
+    BRA: { alsoResolvesTo: [] },
     CZE: { alsoResolvesTo: ["EU"] },
     EU: { alsoResolvesTo: [] },
     GBR: { alsoResolvesTo: ["EU"] },
