@@ -47,6 +47,8 @@ import {
 import { publicDecisionRowColumns } from "@/api/lib/case-law/decision-row-columns";
 import { readDecisionHeadnote } from "@/api/lib/case-law/decision-text";
 import { decisionTypeFilterSql } from "@/api/lib/case-law/decision-type-filter-sql";
+import { classifiedDecisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
+import { readCaseLawFilterScope } from "@/api/lib/case-law/filter-country-scope";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { loadPublicCourtWeights } from "@/api/lib/case-law/public-case-law-config";
 import {
@@ -402,6 +404,22 @@ export const listDecisionsHandler = async (
     return status(400, { message: "Invalid cursor" });
   }
 
+  const filterScope = await readCaseLawFilterScope({
+    country,
+    filters: {
+      court: query.court,
+      lang: query.language,
+      type: query.decisionType,
+      sourceId: query.sourceId,
+    },
+    caseLawDb,
+  });
+  if (filterScope.removed.length > 0) {
+    return status(400, {
+      message: `Filters do not belong to ${country}: ${filterScope.removed.map((filter) => filter.field).join(", ")}`,
+    });
+  }
+
   // One transaction, so both bands of a page read the same snapshot.
   const decisions = await caseLawDb(
     async (tx) =>
@@ -458,6 +476,7 @@ export const listDecisionsHandler = async (
         ),
         decisionDate: decision.decisionDate,
         decisionType: decision.decisionType,
+        decisionTypeKind: classifiedDecisionTypeKind(decision.decisionType),
         sourceUrl: decision.sourceUrl,
         headnote: readDecisionHeadnote({
           headnote: decision.headnote,

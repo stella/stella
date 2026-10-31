@@ -23,6 +23,7 @@
     "Tauri counterpart autofix tests": ["@stll/desktop", "scripts/**"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "API test timeout guard": [
       "apps/api/**/*.test.ts",
       "scripts/api-test-timeout-guard.ts",
@@ -220,7 +221,8 @@
       "packages/cli/src/capability-catalog-data.ts",
       "scripts/ci-generated-sources.test.ts",
       "scripts/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "@stll/test-state"
     ],
     "Windows dry-run receipt contract": [
       ".github/workflows/ci.yml",
@@ -505,7 +507,8 @@
       "@stll/web",
       "scripts/**",
       "docs/changelog/**",
-      "@stll/sha256"
+      "@stll/sha256",
+      "@stll/test-state"
     ],
     "Test release queue history guard": [
       "scripts/check-release-queue-history*",
@@ -761,6 +764,7 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],
@@ -783,6 +787,7 @@
     "SHA-256 migration ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
+    "Guard rollout scope tests": ["**"],
     "Dated waiver lifecycle guards": ["**"],
     "Documentation source policy rule": ["**"],
     "Instruction references": ["**"],
@@ -801,6 +806,7 @@
   },
   "code-quality-web-rest": {
     "Restore generated sources": ["**"],
+    "Download generated sources": ["**"],
     "Prepare environment": ["**"],
     "Install the docs MCP server": ["**"],
     "Typecheck coverage": ["**"],

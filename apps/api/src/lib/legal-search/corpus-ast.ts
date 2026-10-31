@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { type InferOk, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
@@ -8,6 +8,10 @@ import {
 } from "@stll/legal-ast/document-ast";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import {
+  STORED_CORPUS_VALIDATION_CODE,
+  StoredCorpusValidationError,
+} from "@/api/lib/errors/tagged-errors";
 import {
   EMPTY_AST,
   emptyAstSchema,
@@ -30,6 +34,7 @@ class IngestedAstRejectedError extends TaggedError("IngestedAstRejectedError")<{
 
 type PrepareCorpusAstOptions = {
   ast: unknown;
+  fallbackText: string | null | undefined;
   source?: string;
   parserVersion?: number | undefined;
 };
@@ -37,6 +42,7 @@ type PrepareCorpusAstOptions = {
 /** Keep the text payload when structure cannot be read; never persist that structure. */
 export const prepareCorpusAst = ({
   ast,
+  fallbackText,
   source,
   parserVersion,
 }: PrepareCorpusAstOptions) => {
@@ -48,7 +54,19 @@ export const prepareCorpusAst = ({
     // unchanged decision's hash and lose fields the schema does not name.
     // Only a legacy-shaped AST is written in its normalized form.
     const stored = isDocumentAst(ast) ? ast : parsed.output;
-    return { type: "readable", ast: stored } as const;
+    return Result.ok({ type: "readable", ast: stored } as const);
+  }
+  if (
+    fallbackText === null ||
+    fallbackText === undefined ||
+    fallbackText.trim().length === 0
+  ) {
+    const error = new StoredCorpusValidationError({
+      message: "Stored document AST failed validation without usable text",
+      code: STORED_CORPUS_VALIDATION_CODE,
+      paths: parsed.issues.map((issue) => v.getDotPath(issue) ?? "$"),
+    });
+    return Result.err(error);
   }
   const sourceSystem =
     isRecord(ast) &&
@@ -85,5 +103,7 @@ export const prepareCorpusAst = ({
       checks: checks.join("; "),
     }),
   );
-  return { type: "text-only", ast: EMPTY_AST } as const;
+  return Result.ok({ type: "text-only", ast: EMPTY_AST } as const);
 };
+
+export type PreparedCorpusAst = InferOk<ReturnType<typeof prepareCorpusAst>>;
