@@ -180,6 +180,15 @@ export const scheduledJobBudgetProblems = (
   if (readProblem !== undefined) {
     problems.push(readProblem);
   }
+  if ("combinedPagesPerRun" in budget) {
+    const combined =
+      measured.readMetrics.sharedBlocks + measured.writeMetrics.sharedBlocks;
+    if (combined > budget.combinedPagesPerRun) {
+      problems.push(
+        `${id}: ${String(combined)} combined pages per run > budget ${String(budget.combinedPagesPerRun)}`,
+      );
+    }
+  }
   const writes = "writes" in budget ? budget.writes : undefined;
   if (measured.writeMetrics.sharedBlocks > 0 && writes === undefined) {
     problems.push(`${id}: measured writes but declares no write budget`);

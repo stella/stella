@@ -88,6 +88,12 @@ test("scheduled write budgets fail closed and enforce both write limits", () => 
   ).toContain("20001 write pages per run");
   expect(
     scheduledJobBudgetProblems(
+      "scheduled.requests.sweepReceipts",
+      measured(1000, 20_000),
+    ).join("\n"),
+  ).toContain("20001 combined pages per run");
+  expect(
+    scheduledJobBudgetProblems(
       "scheduled.caseLaw.reportFreshness",
       measured(0, 1),
     ),

@@ -41,6 +41,8 @@ type StatementReadBudget = BudgetMetadata & {
 type ScheduledJobBudget = BudgetMetadata & {
   surface: "scheduled-job";
   reads: { pages: number };
+  /** An existing whole-run envelope retained across read/write classification. */
+  combinedPagesPerRun?: number;
   writes?: {
     pagesPerWrittenRow: number;
     ceilingPagesPerRun: number;
@@ -49,6 +51,9 @@ type ScheduledJobBudget = BudgetMetadata & {
 };
 
 type ReadBudget = StatementReadBudget | ScheduledJobBudget;
+
+const REQUEST_RECEIPT_RUN_PAGES = 20_000;
+const SITEMAP_RUN_PAGES = 18_000;
 
 export const READ_BUDGETS = {
   "scheduled.caseLaw.refreshCoverage": {
@@ -75,10 +80,11 @@ export const READ_BUDGETS = {
   },
   "scheduled.requests.sweepReceipts": {
     surface: "scheduled-job",
-    reads: { pages: 20_000 },
+    reads: { pages: REQUEST_RECEIPT_RUN_PAGES },
+    combinedPagesPerRun: REQUEST_RECEIPT_RUN_PAGES,
     writes: {
       pagesPerWrittenRow: 30,
-      ceilingPagesPerRun: 20_000,
+      ceilingPagesPerRun: REQUEST_RECEIPT_RUN_PAGES,
       reason:
         "Thirty pages per deleted receipt cover indexed deletion and constraints; the run retains the existing 20,000-page envelope.",
     },
@@ -134,10 +140,11 @@ export const READ_BUDGETS = {
   },
   "scheduled.caseLaw.refreshSitemapShards": {
     surface: "scheduled-job",
-    reads: { pages: 18_000 },
+    reads: { pages: SITEMAP_RUN_PAGES },
+    combinedPagesPerRun: SITEMAP_RUN_PAGES,
     writes: {
       pagesPerWrittenRow: 30,
-      ceilingPagesPerRun: 18_000,
+      ceilingPagesPerRun: SITEMAP_RUN_PAGES,
       reason:
         "Thirty pages per changed row cover bounded shard, cursor and retirement writes; the run retains the existing 18,000-page envelope.",
     },
