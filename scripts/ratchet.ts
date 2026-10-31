@@ -3274,6 +3274,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     description:
       "CI steps that read a base revision with a known scope gap (scripts/diff-scoped-steps.ts); fixing one removes its decision",
     include: ["scripts/diff-scoped-steps.ts"],
+    exclude: isExcludedSource,
     count: countDiffScopeGaps,
   },
   {
