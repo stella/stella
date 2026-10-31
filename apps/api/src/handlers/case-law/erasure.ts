@@ -653,7 +653,7 @@ export const redactCaseLawDecision = async ({
     await scopedDb((tx) =>
       // audit: skip - the success record follows own cleanup and holder withdrawal.
       tx.insert(caseLawIndexJobs).values(
-        completedAudits.map((audit) => ({
+        completedAudits.map((audit): typeof caseLawIndexJobs.$inferInsert => ({
           ...audit,
           operation: "redact",
           status: "succeeded",

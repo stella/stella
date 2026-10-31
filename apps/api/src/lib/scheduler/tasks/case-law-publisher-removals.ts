@@ -99,57 +99,61 @@ export const createReconcileClaimedErasuresTask =
     const settled = await Result.tryPromise({
       try: async () => {
         try {
-          return await runtime.step(async ({ tx, size }) => {
-            signal.throwIfAborted();
-            const scopedDb = database ?? getCaseLawIngestionDb();
-            const sources = await selectDueErasureSources({
-              scopedDb,
-              after:
-                cursor === null ? null : brandPersistedCaseLawSourceId(cursor),
-              now: dueAt.claimedAtDate(),
-              limit: size,
-            });
-            const source = sources.at(0);
-            if (source !== undefined) {
-              const result = await reconcile({
+          return await runtime.step<Result<boolean, SchedulerTaskFailure>>(
+            async ({ tx, size }) => {
+              signal.throwIfAborted();
+              const scopedDb = database ?? getCaseLawIngestionDb();
+              const sources = await selectDueErasureSources({
                 scopedDb,
-                sourceId: source.id,
-                signal,
-                mode: "claimed-erasures",
+                after:
+                  cursor === null
+                    ? null
+                    : brandPersistedCaseLawSourceId(cursor),
+                now: dueAt.claimedAtDate(),
+                limit: size,
               });
-              if (result.isErr()) {
-                return {
-                  cursor: null,
-                  done: true,
-                  value: Result.err(
-                    new SchedulerTaskFailure({
-                      message: "Claimed erasure retry did not complete",
-                      cause: result.error,
-                    }),
-                  ),
-                };
+              const source = sources.at(0);
+              if (source !== undefined) {
+                const result = await reconcile({
+                  scopedDb,
+                  sourceId: source.id,
+                  signal,
+                  mode: "claimed-erasures",
+                });
+                if (result.isErr()) {
+                  return {
+                    cursor: null,
+                    done: true,
+                    value: Result.err(
+                      new SchedulerTaskFailure({
+                        message: "Claimed erasure retry did not complete",
+                        cause: result.error,
+                      }),
+                    ),
+                  };
+                }
               }
-            }
-            // audit: skip - lease-fenced scheduler progress, while each erasure has its canonical audit.
-            await tx
-              .update(schedulerJobs)
-              .set({ payload: { cursor: source?.id ?? null } })
-              .where(
-                and(
-                  eq(schedulerJobs.id, job.id),
-                  eq(
-                    schedulerJobs.lockedBy,
-                    job.lockedBy ??
-                      panic("Erasure retry pass requires a scheduler lease"),
+              // audit: skip - lease-fenced scheduler progress, while each erasure has its canonical audit.
+              await tx
+                .update(schedulerJobs)
+                .set({ payload: { cursor: source?.id ?? null } })
+                .where(
+                  and(
+                    eq(schedulerJobs.id, job.id),
+                    eq(
+                      schedulerJobs.lockedBy,
+                      job.lockedBy ??
+                        panic("Erasure retry pass requires a scheduler lease"),
+                    ),
                   ),
-                ),
-              );
-            return {
-              cursor: null,
-              done: true,
-              value: Result.ok(source !== undefined),
-            };
-          });
+                );
+              return {
+                cursor: null,
+                done: true,
+                value: Result.ok(source !== undefined),
+              };
+            },
+          );
         } finally {
           await runtime.close();
         }

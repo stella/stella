@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/legal-search/removal-evidence";
 import {
   isClaimedErasureRetry,
+  pauseRemovalCheckpoint,
   REMOVAL_PENDING_REASON,
   REMOVAL_RETRY_KIND,
   REMOVAL_UNPROBEABLE_REASON,
@@ -721,7 +722,7 @@ const discoverPublisherRemovals = async ({
     // db-await-in-loop: ordered per-item CAS records the disposition and advances atomically.
     const committed = await commit(
       outcome.type === "source-paused"
-        ? { status: "paused", resume: next, resumeAt: outcome.resumeAt }
+        ? pauseRemovalCheckpoint(next, outcome.resumeAt)
         : next,
       [
         {
@@ -759,8 +760,9 @@ const retryPublisherRemovals = async ({
     sourceId,
     now: now(),
     perKindLimit: REMOVAL_RETRY_PER_KIND_BUDGET,
-    kinds:
-      mode === "claimed-erasures" ? [REMOVAL_RETRY_KIND.ERASURE] : undefined,
+    ...(mode === "claimed-erasures"
+      ? { kinds: [REMOVAL_RETRY_KIND.ERASURE] }
+      : {}),
     acceptedOnly: mode === "claimed-erasures",
   });
   let retried = 0;
@@ -824,11 +826,7 @@ const retryPublisherRemovals = async ({
       source,
       next:
         outcome.type === "source-paused"
-          ? {
-              status: "paused",
-              resume: source.removalCheckpoint,
-              resumeAt: outcome.resumeAt,
-            }
+          ? pauseRemovalCheckpoint(source.removalCheckpoint, outcome.resumeAt)
           : source.removalCheckpoint,
       items: [
         {

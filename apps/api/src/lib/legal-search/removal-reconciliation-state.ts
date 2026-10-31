@@ -32,6 +32,19 @@ export const removalCheckpointSchema = v.variant("status", [
 
 export type RemovalCheckpoint = v.InferOutput<typeof removalCheckpointSchema>;
 
+/**
+ * Pause a source's removal walk. A source that is already paused keeps the
+ * walk it was paused from, so a pause never nests inside another.
+ */
+export const pauseRemovalCheckpoint = (
+  current: RemovalCheckpoint | null,
+  resumeAt: string,
+): RemovalCheckpoint => ({
+  status: "paused",
+  resume: current?.status === "paused" ? current.resume : current,
+  resumeAt,
+});
+
 export const REMOVAL_RETRY_KIND = {
   ERASURE: "removal-erasure",
   PENDING: "removal-pending",
