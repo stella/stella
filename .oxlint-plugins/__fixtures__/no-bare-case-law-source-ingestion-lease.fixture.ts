@@ -24,6 +24,5 @@ await localClaim(options);
 // oxlint-disable-next-line no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease -- fixture: namespace members must be rejected
 await leases.acquireCaseLawSourceIngestionLease(options);
 
-await withCaseLawSourceIngestionLease(options, work);
-
 // expect-clean: no-bare-case-law-source-ingestion-lease/no-bare-case-law-source-ingestion-lease
+await withCaseLawSourceIngestionLease(options, work);
