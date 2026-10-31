@@ -13,10 +13,8 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { createDatabase, createSqlClient } from "@/api/db/sql-client";
 import { envBase } from "@/api/env-base";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { getAuth } from "@/api/lib/auth";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
-import { runWithOrganizationSlugUpdate } from "@/api/lib/auth/organization-slug-update-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   instrumentSqlTransactionCounts,
@@ -27,6 +25,11 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/db/audit-recording";
+import type { AuditRecorder } from "@/api/lib/db/audit-recording";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { recordLegalResolveAuditInTransaction } from "@/api/lib/db/legal-resolve-audit";
 import type { LegalResolveAudit } from "@/api/lib/db/legal-resolve-audit";
@@ -34,6 +37,7 @@ import { meterSqlClient } from "@/api/lib/db/meter-client";
 import { readAuditedActivitySummary } from "@/api/lib/db/operator-activity/read";
 import type { RegistrationQuery } from "@/api/lib/db/operator-registrations/input";
 import { readAuditedRegistrationPage } from "@/api/lib/db/operator-registrations/read";
+import { runWithOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
 import { PARTNER_CLIENT_TYPE } from "@/api/lib/db/partner-client-contract";
 import {
   changePartnerOAuthClientInTransaction,
@@ -296,6 +300,7 @@ type ChangeOrganizationSlugOptions = {
   memberRole: AuthorizedMemberRole;
   slug: string;
   recordAuditEvent: AuditRecorder;
+  auth: ReturnType<typeof getAuth>;
 };
 
 class OrganizationSlugUpdateError extends HandlerError<500> {
@@ -320,6 +325,7 @@ export const changeOrganizationSlug = async ({
   memberRole,
   slug,
   recordAuditEvent,
+  auth,
 }: ChangeOrganizationSlugOptions) =>
   await Result.tryPromise({
     try: async () =>
@@ -384,8 +390,6 @@ export const changeOrganizationSlug = async ({
             }),
           );
         }
-        const { getAuth } = await import("@/api/lib/auth");
-        const auth = getAuth();
         // This server-only endpoint receives the already authenticated principal, not a
         // new credential. Its adapter stays inside the transaction; organization hooks run.
         const context = {

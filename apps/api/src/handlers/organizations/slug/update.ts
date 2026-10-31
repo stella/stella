@@ -6,6 +6,7 @@ import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 import { changeOrganizationSlug } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { getAuth } from "@/api/lib/auth";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { consumeOrganizationSlugRateLimit } from "@/api/lib/rate-limit/organization-slug";
@@ -73,6 +74,7 @@ const updateOrganizationSlug = createSafeRootHandler(
         memberRole,
         slug: body.type === "opaque" ? opaqueSlug() : body.slug,
         recordAuditEvent,
+        auth: getAuth(),
       }),
     );
     return Result.ok(updated);

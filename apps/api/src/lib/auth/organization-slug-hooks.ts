@@ -2,7 +2,7 @@ import { APIError } from "better-auth/api";
 
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
 
-import { isOrganizationSlugUpdate } from "@/api/lib/auth/organization-slug-update-scope";
+import { isOrganizationSlugUpdate } from "@/api/lib/db/organization-slug-update-scope";
 
 type OrganizationSlugUpdateHookArgs = {
   organization: { slug?: string };
