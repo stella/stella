@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { statuteAnchorKindPrefix } from "@stll/legal-ast/statute-anchor-scheme";
 import { normalizeUnicode } from "@stll/text-normalize";
 
 import { CZ_PROFILE } from "./cz-provision-citation-profile";
@@ -151,9 +152,9 @@ describe.each(PROFILES)("$name profile act tables", ({ profile }) => {
   });
 
   test("section and article anchors never render alike", () => {
-    const { render } = profile.anchor;
-
-    expect(render.section("1")).not.toBe(render.article("1"));
+    expect(statuteAnchorKindPrefix(profile.anchor, "section")).not.toBe(
+      statuteAnchorKindPrefix(profile.anchor, "article"),
+    );
   });
 });
 

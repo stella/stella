@@ -1,5 +1,6 @@
 import type { AppliedProvisionVersion } from "@stll/api-contract/provision-applied-version";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+import { EU_CITATION_ANCHORS } from "@stll/legal-ast/statute-anchor-scheme";
 import { Temporal } from "@stll/time";
 
 import { normalizeEuLegalIdentifier } from "./eu-legal-identity";
@@ -490,7 +491,12 @@ export const locateEuProvisionCitations = (
   return citations.toSorted((left, right) => left.start - right.start);
 };
 
-export const EU_PROVISION_ANCHOR_SEPARATOR = "-";
+const EU_ANCHOR_SEPARATOR = EU_CITATION_ANCHORS.segmentSeparator;
+const EU_ANCHOR_STEP = RegExp.escape(EU_ANCHOR_SEPARATOR);
+const EU_PROVISION_ANCHOR = new RegExp(
+  String.raw`^art_(?<article>[1-9]\d*[a-z]?)(?:${EU_ANCHOR_STEP}par_(?<wordParagraph>[1-9]\d*))?(?:${EU_ANCHOR_STEP}pt_(?<point>[a-z]))?(?:${EU_ANCHOR_STEP}num_(?<numericPoint>[1-9]\d*))?$`,
+  "u",
+);
 
 /** Stable citation identity; publisher links deliberately stop at the article. */
 export const euProvisionAnchor = (reference: ProvisionReference): string => {
@@ -506,16 +512,13 @@ export const euProvisionAnchor = (reference: ProvisionReference): string => {
   if (reference.point !== null) {
     parts.push(`num_${reference.point}`);
   }
-  return parts.join(EU_PROVISION_ANCHOR_SEPARATOR);
+  return parts.join(EU_ANCHOR_SEPARATOR);
 };
 
 export const parseEuProvisionAnchor = (
   raw: string,
 ): ProvisionReference | null => {
-  const match =
-    /^art_(?<article>[1-9]\d*[a-z]?)(?:-par_(?<wordParagraph>[1-9]\d*))?(?:-pt_(?<point>[a-z]))?(?:-num_(?<numericPoint>[1-9]\d*))?$/u.exec(
-      raw,
-    );
+  const match = EU_PROVISION_ANCHOR.exec(raw);
   if (match?.groups === undefined) {
     return null;
   }
