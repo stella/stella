@@ -61,6 +61,8 @@
     "scripts/check-cli-release-coupling.test.ts",
     "scripts/check-cli-release-coupling.ts",
     "scripts/check-cli-runtime-generation.ts",
+    "scripts/check-conflict-target-lifecycle.test.ts",
+    "scripts/check-conflict-target-lifecycle.ts",
     "scripts/check-dead-columns.test.ts",
     "scripts/check-dead-columns.ts",
     "scripts/check-desktop-rust-inputs.test.ts",

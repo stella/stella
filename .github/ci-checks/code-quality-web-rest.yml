@@ -92,6 +92,8 @@ checks:
     run: |
       bun test scripts/check-online-work-lifecycle.test.ts
       bun run check:online-work-lifecycle
+      bun test scripts/check-conflict-target-lifecycle.test.ts
+      bun run check:conflict-target-lifecycle
 
   - name: Split-button census
     if: ${{ !cancelled() }}
