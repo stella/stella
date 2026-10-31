@@ -15,6 +15,7 @@ import {
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   type ActiveCorpusProjectionSourceLock,
   CorpusIndexProjectionSubjectMissingError,
@@ -322,22 +323,36 @@ export const reserveCaseLawCorpusUploadIntents = async ({
         }
 
         if (renewed.length > 0) {
+          const write = replayWrite(caseLawCorpusUploadIntents, {
+            leaseExpiresAt,
+          });
           await tx
             .update(caseLawCorpusUploadIntents)
-            .set({ leaseExpiresAt })
-            .where(inArray(caseLawCorpusUploadIntents.id, renewed));
+            .set(write.set)
+            .where(
+              and(
+                write.setWhere,
+                inArray(caseLawCorpusUploadIntents.id, renewed),
+              ),
+            );
         }
         if (superseded.length > 0) {
           // The expired reservation named other addresses; it keeps its row as a
           // cleanup target and stops being the decision's active one, which is
           // what lets the replacement below take the partial unique index.
+          const write = replayWrite(caseLawCorpusUploadIntents, {
+            status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+            nextCleanupAt: new Date(),
+          });
           await tx
             .update(caseLawCorpusUploadIntents)
-            .set({
-              status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-              nextCleanupAt: new Date(),
-            })
-            .where(inArray(caseLawCorpusUploadIntents.id, superseded));
+            .set(write.set)
+            .where(
+              and(
+                write.setWhere,
+                inArray(caseLawCorpusUploadIntents.id, superseded),
+              ),
+            );
           await tx
             .insert(caseLawCorpusUploadIntents)
             .values(
@@ -373,24 +388,21 @@ export const reserveCaseLawCorpusUploadIntents = async ({
  * from a pack to standalone objects, and the reference that stops being true
  * has to go with it or it would pin a pack nothing reaches any more.
  */
-const recordCorpusPackRefsTx = async (
+export const recordCorpusPackRefsTx = async (
   tx: Transaction,
   decisionId: SafeId<"caseLawDecision">,
   written: WriteCorpusResult | null,
 ): Promise<void> => {
-  await tx
-    .delete(caseLawCorpusPackRefs)
-    .where(eq(caseLawCorpusPackRefs.decisionId, decisionId));
-  if (written === null) {
-    return;
-  }
   const refs = (
     [
-      ["text", written.textKey],
-      ["sections", written.sectionsKey],
-      ["ast", written.astKey],
+      ["text", written?.textKey ?? null],
+      ["sections", written?.sectionsKey ?? null],
+      ["ast", written?.astKey ?? null],
     ] as const
   ).flatMap(([kind, storedKey]) => {
+    if (storedKey === null) {
+      return [];
+    }
     const location = parseCorpusLocation(storedKey);
     return location.type === "packed"
       ? [
@@ -403,10 +415,30 @@ const recordCorpusPackRefsTx = async (
         ]
       : [];
   });
+  await tx.delete(caseLawCorpusPackRefs).where(
+    and(
+      eq(caseLawCorpusPackRefs.decisionId, decisionId),
+      refs.length === 0
+        ? undefined
+        : sql`${caseLawCorpusPackRefs.kind} NOT IN (${sql.join(
+            refs.map(({ kind }) => sql`${kind}`),
+            sql`, `,
+          )})`,
+    ),
+  );
   if (refs.length === 0) {
     return;
   }
-  await tx.insert(caseLawCorpusPackRefs).values(refs);
+  await tx
+    .insert(caseLawCorpusPackRefs)
+    .values(refs)
+    .onConflictDoUpdate({
+      target: [caseLawCorpusPackRefs.decisionId, caseLawCorpusPackRefs.kind],
+      ...replayWrite(caseLawCorpusPackRefs, {
+        packKey: sql`excluded.pack_key`,
+        location: sql`excluded.location`,
+      }),
+    });
 };
 
 export type CaseLawCorpusUploadApplyResult =
@@ -482,18 +514,22 @@ export const settleReservedCaseLawCorpusUpload = async ({
         .limit(1)
     ).at(0);
     if (!decision || decision.redactedAt !== null) {
+      const write = replayWrite(caseLawCorpusUploadIntents, {
+        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        nextCleanupAt: new Date(),
+      });
       await tx
         .update(caseLawCorpusUploadIntents)
-        .set({
-          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-          nextCleanupAt: new Date(),
-        })
+        .set(write.set)
         .where(
           and(
-            eq(caseLawCorpusUploadIntents.id, intentId),
-            eq(
-              caseLawCorpusUploadIntents.status,
-              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            write.setWhere,
+            and(
+              eq(caseLawCorpusUploadIntents.id, intentId),
+              eq(
+                caseLawCorpusUploadIntents.status,
+                CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+              ),
             ),
           ),
         );
@@ -518,13 +554,16 @@ export const settleReservedCaseLawCorpusUpload = async ({
     }
 
     if (!(await preflight(tx))) {
+      const write = replayWrite(caseLawCorpusUploadIntents, {
+        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        nextCleanupAt: new Date(),
+      });
       await tx
         .update(caseLawCorpusUploadIntents)
-        .set({
-          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-          nextCleanupAt: new Date(),
-        })
-        .where(eq(caseLawCorpusUploadIntents.id, intentId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(caseLawCorpusUploadIntents.id, intentId)),
+        );
       return { type: "superseded" };
     }
 
@@ -534,13 +573,16 @@ export const settleReservedCaseLawCorpusUpload = async ({
       written,
     });
     if (outcome.type === "superseded") {
+      const write = replayWrite(caseLawCorpusUploadIntents, {
+        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        nextCleanupAt: new Date(),
+      });
       await tx
         .update(caseLawCorpusUploadIntents)
-        .set({
-          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-          nextCleanupAt: new Date(),
-        })
-        .where(eq(caseLawCorpusUploadIntents.id, intentId));
+        .set(write.set)
+        .where(
+          and(write.setWhere, eq(caseLawCorpusUploadIntents.id, intentId)),
+        );
       return outcome;
     }
 
@@ -581,19 +623,23 @@ export const cancelCaseLawCorpusUploadIntents = async ({
 }: {
   decisionId: SafeId<"caseLawDecision">;
   tx: Transaction;
-}): Promise<CancelledCaseLawCorpusUploadIntent[]> =>
-  await tx
+}): Promise<CancelledCaseLawCorpusUploadIntent[]> => {
+  const write = replayWrite(caseLawCorpusUploadIntents, {
+    status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+    nextCleanupAt: new Date(),
+  });
+  return await tx
     .update(caseLawCorpusUploadIntents)
-    .set({
-      status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-      nextCleanupAt: new Date(),
-    })
+    .set(write.set)
     .where(
       and(
-        eq(caseLawCorpusUploadIntents.decisionId, decisionId),
-        eq(
-          caseLawCorpusUploadIntents.status,
-          CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+        write.setWhere,
+        and(
+          eq(caseLawCorpusUploadIntents.decisionId, decisionId),
+          eq(
+            caseLawCorpusUploadIntents.status,
+            CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+          ),
         ),
       ),
     )
@@ -603,6 +649,7 @@ export const cancelCaseLawCorpusUploadIntents = async ({
       sectionsKey: caseLawCorpusUploadIntents.normalizedS3Key,
       astKey: caseLawCorpusUploadIntents.astS3Key,
     });
+};
 
 /**
  * Mark the reservations of a failed batch for durable cleanup. One statement
@@ -620,18 +667,22 @@ export const enqueueCaseLawCorpusUploadIntentCleanups = async ({
     return;
   }
   await scopedDb(async (tx) => {
+    const write = replayWrite(caseLawCorpusUploadIntents, {
+      status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+      nextCleanupAt: new Date(),
+    });
     await tx
       .update(caseLawCorpusUploadIntents)
-      .set({
-        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-        nextCleanupAt: new Date(),
-      })
+      .set(write.set)
       .where(
         and(
-          inArray(caseLawCorpusUploadIntents.id, [...intentIds]),
-          eq(
-            caseLawCorpusUploadIntents.status,
-            CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+          write.setWhere,
+          and(
+            inArray(caseLawCorpusUploadIntents.id, [...intentIds]),
+            eq(
+              caseLawCorpusUploadIntents.status,
+              CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.ACTIVE,
+            ),
           ),
         ),
       );
@@ -743,12 +794,10 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
       .for("update", { skipLocked: true });
 
     if (rows.length > 0) {
-      await tx
-        .update(caseLawCorpusUploadIntents)
-        .set({
-          status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
-          cleanupAttemptCount: sql`${caseLawCorpusUploadIntents.cleanupAttemptCount} + 1`,
-          nextCleanupAt: sql`now() + (
+      const write = replayWrite(caseLawCorpusUploadIntents, {
+        status: CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS.CLEANUP,
+        cleanupAttemptCount: sql`${caseLawCorpusUploadIntents.cleanupAttemptCount} + 1`,
+        nextCleanupAt: sql`now() + (
             LEAST(
               ${CLEANUP_RETRY_MAX_DELAY_MS},
               ${CLEANUP_RETRY_UNIT_MS} * POWER(
@@ -757,11 +806,17 @@ export const reconcileCaseLawCorpusUploadIntents = async ({
               )
             ) * interval '1 millisecond'
           )`,
-        })
+      });
+      await tx
+        .update(caseLawCorpusUploadIntents)
+        .set(write.set)
         .where(
-          inArray(
-            caseLawCorpusUploadIntents.id,
-            rows.map(({ id }) => id),
+          and(
+            write.setWhere,
+            inArray(
+              caseLawCorpusUploadIntents.id,
+              rows.map(({ id }) => id),
+            ),
           ),
         );
     }

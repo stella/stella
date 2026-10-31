@@ -3,6 +3,7 @@
 // and mutable aliases are outside this syntax guard's detection boundary.
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { replayWriteSetColumns } from "../scripts/status-write-shapes.ts";
 import {
   filenameForContext,
   getPropertyName,
@@ -38,6 +39,7 @@ const MUTATION_METHODS = new Set(["insert", "update", "delete"]);
 const hasOnlyAllowedColumns = (
   { parent: member }: { parent?: unknown },
   allowed: readonly string[],
+  plans: ReturnType<typeof replayWriteSetColumns>,
 ): boolean => {
   if (
     !isAstNode(member) ||
@@ -53,6 +55,13 @@ const hasOnlyAllowedColumns = (
   const payload = Array.isArray(call.arguments)
     ? unwrapExpression(call.arguments.at(0))
     : null;
+  if (payload?.type === "MemberExpression") {
+    const plan = plans.get(payload.range[0]);
+    return (
+      plan?.table === "legislationDocuments" &&
+      plan.writtenColumns.every((column) => allowed.includes(column))
+    );
+  }
   return (
     payload?.type === "ObjectExpression" &&
     Array.isArray(payload.properties) &&
@@ -81,6 +90,7 @@ export default eslintCompatPlugin({
       },
       createOnce(context) {
         let allowedColumns: readonly string[] = [];
+        let plans: ReturnType<typeof replayWriteSetColumns> = new Map();
         return {
           before() {
             const filename = filenameForContext(context);
@@ -88,6 +98,16 @@ export default eslintCompatPlugin({
               Object.entries(LEGISLATION_PARTIAL_WRITERS).find(([owner]) =>
                 filename.endsWith(owner),
               )?.[1] ?? [];
+            // Implicit schema hooks already accompany literal SETs; only
+            // explicitly written (including modifiedAt) columns consume the
+            // partial owner's existing allowance.
+            plans =
+              allowedColumns.length === 0
+                ? new Map()
+                : replayWriteSetColumns({
+                    content: context.sourceCode.text,
+                    file: filename,
+                  });
             return (
               filename.endsWith(FIXTURE_FILE_SUFFIX) ||
               (filename.includes("apps/api/src/") &&
@@ -117,7 +137,7 @@ export default eslintCompatPlugin({
             if (
               method === "update" &&
               allowedColumns.length > 0 &&
-              hasOnlyAllowedColumns(node, allowedColumns)
+              hasOnlyAllowedColumns(node, allowedColumns, plans)
             ) {
               return;
             }

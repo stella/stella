@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -13,6 +13,7 @@ import {
 import { matchCzechDeclinedName } from "@/api/handlers/case-law/judges/czech-declined-name";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";
+import { replayRawWrite, replayWrite } from "@/api/lib/case-law/replay-write";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { DecisionJudgeInput } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -213,24 +214,18 @@ export const replaceDecisionJudges = async (
   tx: DecisionJudgeWriter,
   { decisionId, judges }: ReplaceDecisionJudgesOptions,
 ): Promise<void> => {
-  // audit: skip — public case-law data written by ingestion, not a user action
-  await tx
-    .delete(caseLawDecisionJudges)
-    .where(eq(caseLawDecisionJudges.decisionId, decisionId));
-
+  // audit: skip - public case-law judge attributions contain no workspace data
   if (judges.length === 0) {
+    await tx
+      .delete(caseLawDecisionJudges)
+      .where(eq(caseLawDecisionJudges.decisionId, decisionId));
     return;
   }
-
   const decisionCourt = await readDecisionCourt(tx, decisionId);
   const rows = decisionJudgeRows(
     decisionId,
     await keyedJudges(tx, decisionCourt, judges),
   );
-  if (rows.length === 0) {
-    return;
-  }
-
   const unlinked = rows.filter(({ judgeId }) => judgeId === null);
   const rosterIds = await rosterIdsByNameKey(
     tx,
@@ -253,7 +248,44 @@ export const replaceDecisionJudges = async (
     row.judgeId = judgeId;
   }
 
-  await tx.insert(caseLawDecisionJudges).values(rows);
+  // Keep existing keys so unchanged attributions retain their row versions.
+  await tx
+    .delete(caseLawDecisionJudges)
+    .where(
+      and(
+        eq(caseLawDecisionJudges.decisionId, decisionId),
+        rows.length === 0
+          ? undefined
+          : not(
+              or(
+                ...rows.map(({ role, nameKey }) =>
+                  and(
+                    eq(caseLawDecisionJudges.role, role),
+                    eq(caseLawDecisionJudges.nameKey, nameKey),
+                  ),
+                ),
+              ),
+            ),
+      ),
+    );
+  if (rows.length === 0) {
+    return;
+  }
+  await tx
+    .insert(caseLawDecisionJudges)
+    .values(rows)
+    .onConflictDoUpdate({
+      target: [
+        caseLawDecisionJudges.decisionId,
+        caseLawDecisionJudges.role,
+        caseLawDecisionJudges.nameKey,
+      ],
+      ...replayWrite(caseLawDecisionJudges, {
+        judgeId: sql`excluded.judge_id`,
+        nameAsPrinted: sql`excluded.name_as_printed`,
+        position: sql`excluded.position`,
+      }),
+    });
 };
 
 type RelinkUnmatchedDecisionJudgesPageOptions = DecisionCourt & {
@@ -290,39 +322,45 @@ export const relinkUnmatchedDecisionJudgesPage = async (
   { country, court, after, size }: RelinkUnmatchedDecisionJudgesPageOptions,
 ): Promise<RelinkUnmatchedDecisionJudgesPage> => {
   // audit: skip — relinks derived public case-law judge attributions
-  const result = await db.execute(sql`
-    WITH page AS (
+  const result = await replayRawWrite({
+    table: caseLawDecisionJudges,
+    alias: "dj",
+    values: { judgeId: sql`j.id` },
+    operation: { kind: "update", from: sql`page, ${caseLawJudges} AS j` },
+    predicate: sql`dj.decision_id = page.decision_id
+         AND dj.judge_id IS NULL
+         AND dj.name_key = j.name_key
+         AND j.country = ${country}
+         AND j.court = ${court}`,
+    ctes: [
+      {
+        name: "page",
+        query: sql`
       SELECT DISTINCT dj.decision_id
         FROM ${caseLawDecisionJudges} AS dj
         JOIN ${caseLawDecisions} AS d ON d.id = dj.decision_id
        WHERE dj.judge_id IS NULL
          AND dj.name_key IN (
-           SELECT j.name_key
-             FROM ${caseLawJudges} AS j
-            WHERE j.country = ${country}
-              AND j.court = ${court}
+           SELECT j.name_key FROM ${caseLawJudges} AS j
+            WHERE j.country = ${country} AND j.court = ${court}
          )
-         AND d.country = ${country}
-         AND d.court = ${court}
+         AND d.country = ${country} AND d.court = ${court}
          ${after === null ? sql`` : sql`AND dj.decision_id > ${after}`}
-       ORDER BY dj.decision_id
-       LIMIT ${size}
-    ),
-    linked AS (
-      UPDATE ${caseLawDecisionJudges} AS dj
-         SET judge_id = j.id
-        FROM page, ${caseLawJudges} AS j
-       WHERE dj.decision_id = page.decision_id
-         AND dj.judge_id IS NULL
-         AND dj.name_key = j.name_key
-         AND j.country = ${country}
-         AND j.court = ${court}
-      RETURNING 1
-    )
-    SELECT (SELECT count(*) FROM page)::int AS covered,
-           (SELECT count(*) FROM linked)::int AS linked,
-           (SELECT max(decision_id::text) FROM page) AS last
-  `);
+       ORDER BY dj.decision_id LIMIT ${size}
+    `,
+      },
+    ],
+    result: {
+      kind: "query",
+      name: "linked",
+      columns: sql`1`,
+      query: sql`
+      SELECT (SELECT count(*) FROM page)::int AS covered,
+             (SELECT count(*) FROM linked)::int AS linked,
+             (SELECT max(decision_id::text) FROM page) AS last
+    `,
+    },
+  }).execute({ kind: "drizzle", connection: db });
 
   const [row] = executedRows(result);
   if (

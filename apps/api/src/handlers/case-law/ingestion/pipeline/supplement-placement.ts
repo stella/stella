@@ -35,6 +35,10 @@ import {
 import type { SupplementTargetKey } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import type {
   DecisionSupplement,
@@ -147,7 +151,22 @@ export const placeSupplementTx = async (
     return { type: "erased" as const, decisionId: erasedOwn.id };
   }
   // audit: skip — background case-law ingestion; public case-law data
-  const [row] = await tx
+  const write = replayWrite(
+    caseLawDecisionSupplements,
+    { ...content, observedAt },
+    {
+      modifiedAt: {
+        column: caseLawDecisionSupplements.updatedAt,
+        value: new Date(),
+      },
+    },
+  );
+  const projection = {
+    decisionId: caseLawDecisionSupplements.decisionId,
+    mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
+    sourceHash: caseLawDecisionSupplements.sourceHash,
+  };
+  const written = await tx
     .insert(caseLawDecisionSupplements)
     .values({ sourceId, sourceDocumentId, observedAt, ...content })
     .onConflictDoUpdate({
@@ -155,16 +174,26 @@ export const placeSupplementTx = async (
         caseLawDecisionSupplements.sourceId,
         caseLawDecisionSupplements.sourceDocumentId,
       ],
-      set: { ...content, observedAt, updatedAt: new Date() },
+      ...write,
     })
-    .returning({
-      decisionId: caseLawDecisionSupplements.decisionId,
-      mergedSourceHash: caseLawDecisionSupplements.mergedSourceHash,
-      sourceHash: caseLawDecisionSupplements.sourceHash,
-    });
-  if (row === undefined) {
-    return panic("Supplement upsert returned no row");
-  }
+    .returning(projection);
+  const matched =
+    written.length === 0
+      ? await tx
+          .select(projection)
+          .from(caseLawDecisionSupplements)
+          .where(
+            and(
+              eq(caseLawDecisionSupplements.sourceId, sourceId),
+              eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            ),
+          )
+      : written;
+  const outcome = replayWriteOutcome(written, matched);
+  const row =
+    outcome.status === "ownership-lost"
+      ? panic("Supplement upsert lost its locked row")
+      : (outcome.row.at(0) ?? panic("Supplement upsert has no accepted row"));
   const rulings = await selectRulingsUnder(tx, {
     key,
     decisionTypes: supplement.target.decisionTypes,
@@ -306,20 +335,32 @@ const pointSupplementRawAt = async (
   }
   await scopedDb(async (tx) => {
     // audit: skip — background case-law ingestion; public case-law data
-    await tx
-      .update(caseLawDecisionSupplements)
-      .set({
+    const write = replayWrite(
+      caseLawDecisionSupplements,
+      {
         sourceRawS3Key: next?.key ?? null,
         sourceRawContentType: next?.contentType ?? null,
-        updatedAt: new Date(),
-      })
+      },
+      {
+        modifiedAt: {
+          column: caseLawDecisionSupplements.updatedAt,
+          value: new Date(),
+        },
+      },
+    );
+    await tx
+      .update(caseLawDecisionSupplements)
+      .set(write.set)
       .where(
         and(
-          eq(caseLawDecisionSupplements.sourceId, sourceId),
-          eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
-          previous === null
-            ? isNull(caseLawDecisionSupplements.sourceRawS3Key)
-            : eq(caseLawDecisionSupplements.sourceRawS3Key, previous),
+          write.setWhere,
+          and(
+            eq(caseLawDecisionSupplements.sourceId, sourceId),
+            eq(caseLawDecisionSupplements.sourceDocumentId, sourceDocumentId),
+            previous === null
+              ? isNull(caseLawDecisionSupplements.sourceRawS3Key)
+              : eq(caseLawDecisionSupplements.sourceRawS3Key, previous),
+          ),
         ),
       );
   });

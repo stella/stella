@@ -23,6 +23,11 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
+import { lockCaseLawReplaySource } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
@@ -77,14 +82,33 @@ type WriteSourceTotalsOptions = {
 };
 
 /** One mutation owner for public coverage figures and their refresh state. */
-const writeSourceTotals = ({ tx, values, where }: WriteSourceTotalsOptions) => {
+const writeSourceTotals = async ({
+  tx,
+  values,
+  where,
+}: WriteSourceTotalsOptions) => {
   if (where === undefined) {
     return panic("Source total writes require an explicit source predicate");
   }
   // audit: skip — public case-law corpus bookkeeping, no workspace data
-  return tx.update(caseLawSources).set(values).where(where).returning({
-    id: caseLawSources.id,
-  });
+  const matched = await lockCaseLawReplaySource({ tx, where });
+  const write = replayWrite(caseLawSources, values);
+  const written = await tx
+    .update(caseLawSources)
+    .set(write.set)
+    .where(and(where, write.setWhere))
+    .returning({ id: caseLawSources.id });
+  const outcome = replayWriteOutcome(written, matched);
+  switch (outcome.status) {
+    case "written":
+    case "unchanged":
+      return outcome.row;
+    case "ownership-lost":
+      return [];
+    default:
+      outcome satisfies never;
+      return panic("Unhandled source-total write outcome");
+  }
 };
 
 const UNKNOWN_HOLD_CAUSE = "indicators_unavailable";
@@ -802,14 +826,15 @@ export const invalidateSourceStoredTotalTx = async (
   sourceId: SafeId<"caseLawSource">,
 ): Promise<void> => {
   // audit: skip — source-count invalidation belongs to the canonical removal audit.
+  const write = replayWrite(caseLawSources, {
+    storedTotal: null,
+    storedTotalAsOf: null,
+    storedTotalAttemptedAt: null,
+    storedTotalNextRefreshAt: sql`clock_timestamp()`,
+    storedTotalHeldSince: null,
+  });
   await tx
     .update(caseLawSources)
-    .set({
-      storedTotal: null,
-      storedTotalAsOf: null,
-      storedTotalAttemptedAt: null,
-      storedTotalNextRefreshAt: sql`clock_timestamp()`,
-      storedTotalHeldSince: null,
-    })
-    .where(eq(caseLawSources.id, sourceId));
+    .set(write.set)
+    .where(and(write.setWhere, eq(caseLawSources.id, sourceId)));
 };

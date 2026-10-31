@@ -8,6 +8,7 @@ import noGlobalTestingLibraryScreen from "./guard-rollouts/no-global-testing-lib
 import noInertAutofocus from "./guard-rollouts/no-inert-autofocus.ts";
 import noParserInlineFlatten from "./guard-rollouts/no-parser-inline-flatten.ts";
 import noPlanScanNodeLiterals from "./guard-rollouts/no-plan-scan-node-literals.ts";
+import noUnguardedCaseLawReplayWrite from "./guard-rollouts/no-unguarded-case-law-replay-write.ts";
 import portablePath from "./guard-rollouts/portable-path.ts";
 import semanticControls from "./guard-rollouts/semantic-controls.ts";
 import testBaseRevision from "./guard-rollouts/test-base-revision.ts";
@@ -25,6 +26,7 @@ export const GUARD_ROLLOUT_FILES = {
   "no-inert-autofocus": noInertAutofocus,
   "no-parser-inline-flatten": noParserInlineFlatten,
   "no-plan-scan-node-literals": noPlanScanNodeLiterals,
+  "no-unguarded-case-law-replay-write": noUnguardedCaseLawReplayWrite,
   "portable-path": portablePath,
   "semantic-controls": semanticControls,
   "test-base-revision": testBaseRevision,

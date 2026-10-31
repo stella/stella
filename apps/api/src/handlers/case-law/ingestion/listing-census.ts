@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * A reported total for a source whose publisher states none, summed from the
  * publisher's own listing.
@@ -34,8 +35,6 @@
  * take back out) and continues from there; the earlier slices are not listed
  * again.
  */
-
-import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -51,6 +50,11 @@ import {
 } from "@/api/handlers/case-law/ingestion/slice-listing";
 import { setSourceReportedTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  replayWrite,
+  replayWriteOutcome,
+} from "@/api/lib/case-law/replay-write";
+import { lockCaseLawReplaySource } from "@/api/lib/db/aggregate-lock";
 import {
   AdapterFetchError,
   ConfigurationError,
@@ -377,7 +381,7 @@ type RecordedSlice = "advanced" | "completed" | "nothing-listed" | "superseded";
  * the value this call read, so a checkpoint another call moved in between
  * matches no row and nothing is written.
  */
-const recordSlice = async ({
+export const recordSlice = async ({
   adapterKey,
   asOf,
   next,
@@ -386,20 +390,29 @@ const recordSlice = async ({
   tx,
 }: RecordSliceOptions): Promise<RecordedSlice> => {
   // audit: skip — public case-law corpus bookkeeping, no workspace data
+  const where = and(
+    eq(caseLawSources.id, sourceId),
+    sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
+  );
+  const matched = await lockCaseLawReplaySource({ tx, where });
+  const write = replayWrite(caseLawSources, {
+    config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${LISTING_CENSUS_CONFIG_KEY}}`}::text[], ${JSON.stringify(next)}::text::jsonb)`,
+  });
   const updated = await tx
     .update(caseLawSources)
-    .set({
-      config: sql`jsonb_set(coalesce(${caseLawSources.config}, '{}'::jsonb), ${`{${LISTING_CENSUS_CONFIG_KEY}}`}::text[], ${JSON.stringify(next)}::text::jsonb)`,
-    })
-    .where(
-      and(
-        eq(caseLawSources.id, sourceId),
-        sql`${caseLawSources.config} -> ${LISTING_CENSUS_CONFIG_KEY}::text IS NOT DISTINCT FROM ${observed === null ? null : JSON.stringify(observed)}::text::jsonb`,
-      ),
-    )
+    .set(write.set)
+    .where(and(where, write.setWhere))
     .returning({ id: caseLawSources.id });
-  if (updated.length === 0) {
-    return "superseded";
+  const outcome = replayWriteOutcome(updated, matched);
+  switch (outcome.status) {
+    case "written":
+    case "unchanged":
+      break;
+    case "ownership-lost":
+      return "superseded";
+    default:
+      outcome satisfies never;
+      return panic("Unhandled listing checkpoint write outcome");
   }
   switch (next.status) {
     case LISTING_CENSUS_STATUS.COUNTING:
@@ -409,7 +422,7 @@ const recordSlice = async ({
         return "nothing-listed";
       }
       await setSourceReportedTotal({
-        scopedDb: async (write) => await write(tx),
+        scopedDb: async (record) => await record(tx),
         adapterKey,
         total: next.total,
         asOf,
