@@ -2180,12 +2180,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # The contracts and single-file bundles are derived before use, never
         # committed. Build them from source, check the bundle budgets, and fail
-        # when an output is missing, required content is empty, or tracked again.
+        # when an output is missing or tracked again. Per-app CSS may be empty
+        # when all of its styles are shared with the runtime.
         run: |
           (cd apps/api && bun run generate:mcp-app-contracts)
           (cd packages/mcp-apps && bun run build)
           bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --mcp-apps --check
-          bun scripts/check-mcp-generated-tracking.ts --outputs
+          bun scripts/check-mcp-app-outputs.ts
+          bun scripts/check-mcp-generated-tracking.ts
 
       - name: Visual sandbox document tests
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
