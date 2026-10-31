@@ -7,6 +7,7 @@ import type { RequestClass } from "@/api/lib/observability/request-metrics";
 // MCP transports execute search and other multi-step tools under the search
 // latency SLO. Stream setup does not measure the duration of the stream.
 export const ROUTE_LATENCY_CLASSES = {
+  "POST /v1/dictation/transcribe": "ai",
   "DELETE /mcp": "search",
   "DELETE /mcp-anonymized": "search",
   "DELETE /mcp-documents": "search",
@@ -37,6 +38,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "DELETE /v1/mcp/connections/:connectionId": "crud",
   "DELETE /v1/mcp/connectors/:slug": "crud",
   "DELETE /v1/me/oauth-connections/:consentId": "crud",
+  "DELETE /v1/me/push-devices/:token": "crud",
   "DELETE /v1/memories/:memoryId": "crud",
   "DELETE /v1/organization-settings/ai-config": "crud",
   "DELETE /v1/organization-settings/business-registry-credentials": "crud",
@@ -837,6 +839,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/invoices/:workspaceId": "crud",
   "PUT /v1/lists/:workspaceId": "crud",
   "PUT /v1/lists/:workspaceId/item-fact-details": "crud",
+  "PUT /v1/me/push-devices": "crud",
   "PUT /v1/organization-settings/anonymization-blacklist": "crud",
   "PUT /v1/organization-settings/feature-enrolments/:featureId": "crud",
   "PUT /v1/playbooks/:playbookId": "crud",

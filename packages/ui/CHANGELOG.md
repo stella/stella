@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.59.1
+
+### Patch Changes
+
+- [#7301](https://github.com/stella/stella/pull/7301) [`db3c4a8`](https://github.com/stella/stella/commit/db3c4a84467e039acf34f980a5418b35db6c2454) Thanks [@jan-kubica](https://github.com/jan-kubica)! - A scroll area's viewport is the containing block of what is positioned inside it, so an absolutely positioned descendant, such as a visually hidden label, stays inside the scroll instead of giving an ancestor a scrollbar of its own.
+
 ## 0.59.0
 
 ### Minor Changes

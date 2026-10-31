@@ -41,6 +41,7 @@ const MODEL_BACKGROUND = {
 } as const satisfies ActionKindDefinition;
 
 export const ACTION_KINDS = {
+  "dictation.transcribe": MODEL_ACTION,
   "chat.send": MODEL_ACTION,
   "chat.generate-thread-title": MODEL_ACTION,
   "chat.improve-prompt": MODEL_ACTION,

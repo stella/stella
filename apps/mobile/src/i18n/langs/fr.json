@@ -89,7 +89,14 @@
     "statusFailed": "La tâche n’a pas pu être modifiée. Réessayez.",
     "pickTitle": "Choisissez une tâche",
     "pickDescription": "Choisissez une tâche dans la liste pour l’afficher ici.",
-    "openMatter": "Ouvrir le dossier"
+    "openMatter": "Ouvrir le dossier",
+    "assignedTo": "Attribuée à",
+    "nobody": "Non attribué",
+    "assign": "Attribuer",
+    "doneAssigning": "Terminé",
+    "someone": "Quelqu’un",
+    "membersFailed": "Les membres du dossier n’ont pas pu être chargés.",
+    "assignFailed": "La tâche n’a pas pu être attribuée. Réessayez."
   },
   "matters": {
     "emptyTitle": "Aucun dossier pour le moment",
@@ -133,7 +140,9 @@
     },
     "add": "Ajouter",
     "scanDocument": "Numériser un document",
-    "newTask": "Nouvelle tâche"
+    "newTask": "Nouvelle tâche",
+    "uploadDocument": "Téléverser un document",
+    "uploadFailed": "Le document n’a pas pu être importé. Réessayez."
   },
   "entity": {
     "type": "Type",

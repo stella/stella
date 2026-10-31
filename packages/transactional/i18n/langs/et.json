@@ -31,6 +31,13 @@
     "subject": "Teie stella kinnituskood",
     "twoFactorManage": "Kasutage seda koodi oma kahefaktorilise autentimise seadete muudatuste kinnitamiseks."
   },
+  "pushAlert": {
+    "announcement": "Teie organisatsioon avaldas teadaande",
+    "flowRunAwaitingApproval": "Töövoog ootab teie kinnitust",
+    "flowRunCompleted": "Töövoog on lõpetatud",
+    "flowRunFailed": "Töövoog ebaõnnestus",
+    "mention": "Teid mainiti kommentaaris"
+  },
   "reportExportStatus": {
     "action": "Ava stella",
     "completedBody": "Teie aruande eksport on valmis. Avage stella, et seda vaadata või alla laadida.",

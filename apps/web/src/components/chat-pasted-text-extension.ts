@@ -124,6 +124,15 @@ export const buildPastedTextRenderChildren = (text: string): RenderChild[] => {
  * instead of vanishing the way `textContent` would.
  */
 const parsePastedTextContent = (el: HTMLElement): string => {
+  // A skill chip holds its slug, which `renderHTML` writes into the link's
+  // href; the link's text is only the label.
+  if (el.dataset["source"] === "skill") {
+    const href =
+      el.querySelector("a")?.getAttribute("href") ?? SKILL_REF_HREF_PREFIX;
+    return href.startsWith(SKILL_REF_HREF_PREFIX)
+      ? href.slice(SKILL_REF_HREF_PREFIX.length)
+      : "";
+  }
   let result = "";
   for (const child of Array.from(el.childNodes)) {
     if (child instanceof HTMLBRElement) {
