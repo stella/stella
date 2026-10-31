@@ -29,6 +29,7 @@ import {
 import {
   COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
+  decisionTypeKindLabel,
   decisionTypeSectionBuckets,
   YEAR_SECTION_LIMIT,
 } from "@/features/case-law/decision-filter-facets.logic";
@@ -70,9 +71,9 @@ export const DecisionTypeFacetSection = ({
   return (
     <FacetSection
       buckets={decisionTypeSectionBuckets(buckets, selectedValue).map(
-        ({ count, labelKey, value }) => ({
+        ({ count, kind, value }) => ({
           value,
-          label: labelKey === null ? value : t(labelKey),
+          label: kind === null ? value : decisionTypeKindLabel(kind, t),
           count,
         }),
       )}

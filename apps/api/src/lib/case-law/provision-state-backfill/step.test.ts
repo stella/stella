@@ -89,3 +89,34 @@ test("a unit refuses to run when its BEGIN joined an open repeatable-read transa
     "ROLLBACK",
   ]);
 });
+
+test("a failing isolation query rolls the unit back and returns its error", async () => {
+  const statements: string[] = [];
+  const timeout = new Error("canceling statement due to statement timeout");
+  const session: ProvisionBackfillSession = {
+    execute: async (statement) => {
+      statements.push(statement);
+    },
+    query: async () => {
+      throw timeout;
+    },
+    setTransactionBudget: async () => {},
+  };
+
+  const result = await inBackfillTransaction(
+    session,
+    { lockTimeout: 10_000, statementTimeout: 60_000 },
+    async () => {
+      await session.execute("UPDATE gated_row SET value = 1");
+    },
+  );
+
+  expect(result.isErr() && result.error).toBeInstanceOf(
+    ProvisionBackfillUnitError,
+  );
+  expect(result.isErr() && result.error.cause).toBe(timeout);
+  expect(statements).toEqual([
+    "BEGIN ISOLATION LEVEL READ COMMITTED",
+    "ROLLBACK",
+  ]);
+});

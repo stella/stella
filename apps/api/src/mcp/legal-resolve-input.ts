@@ -57,7 +57,7 @@ export const resolveLawArgsSchema = nullAsAbsent(
           ),
           collection: v.pipe(
             citationText,
-            v.description("Gazette collection, e.g. sb."),
+            v.description("Gazette collection, e.g. sb, Zb. or Z. z."),
           ),
           year: v.pipe(
             citationText,

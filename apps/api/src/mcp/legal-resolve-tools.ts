@@ -3,6 +3,10 @@ import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { admitLawRead } from "@/api/handlers/legal-resolve/admission";
@@ -55,6 +59,10 @@ const defaultResolveLawCitation: typeof resolveLawCitation = async (...input) =>
     await import("@/api/handlers/legal-resolve/law")
   ).resolveLawCitation(...input);
 
+const supportedLawCountries = PUBLIC_COUNTRIES.filter(
+  (country) => PUBLIC_COUNTRY_CAPABILITIES[country].legislation === "admitted",
+).join(", ");
+
 const common = {
   consumesServices: false,
   access: "read",
@@ -95,8 +103,7 @@ const LEGAL_RESOLVE_TOOL_DEFINITIONS = [
       readOnlyHint: true,
       openWorldHint: false,
     },
-    description:
-      "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    description: `Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: ${supportedLawCountries}; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.`,
     inputSchema: resolveLawArgsSchema,
     inputNormalization: {
       ...common.inputNormalization,
