@@ -753,8 +753,12 @@ const TemplateStudioChatInner = ({
       editorRef.current?.createAIEditSnapshot() ?? null;
     setPanelOpen(true);
     const message = buildChatTextMessage(request.text);
-    activeScopedPresetTurnMessageIdRef.current = message.id;
-    await sendMessage(message, {
+    if (message.isErr()) {
+      notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+      return;
+    }
+    activeScopedPresetTurnMessageIdRef.current = message.value.id;
+    await sendMessage(message.value, {
       body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
     });
   });
@@ -1400,12 +1404,15 @@ const TemplateStudioChatInner = ({
       // The typed composer submit carries any (+) attachments
       // (reference docs to lift clauses from); the scoped-preset
       // path below stays text-only.
-      await sendMessage(
-        await buildChatRequestMessage({
-          files,
-          html: prompt,
-        }),
-      );
+      const message = await buildChatRequestMessage({
+        files,
+        html: prompt,
+      });
+      if (message.isErr()) {
+        notifyUserError(message.error, t("chat.sendErrorMessageEmpty"));
+        return CHAT_SEND_KEPT;
+      }
+      await sendMessage(message.value);
       return CHAT_SEND_SENT;
     });
     if (Result.isError(sent)) {

@@ -1,4 +1,5 @@
 import type { MultimodalContent } from "@tanstack/ai-client";
+import { Result } from "better-result";
 
 import { createChatPastedTextPart } from "@stll/api-contract/chat";
 import type { ChatPastedTextPart } from "@stll/api-contract/chat";
@@ -11,6 +12,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   chatDraftHasModelContent,
+  type EmptyChatMessageError,
   emptyChatMessageError,
 } from "@/features/chat/lib/chat-message-model-content";
 import { toSafeId } from "@/lib/safe-id";
@@ -47,11 +49,13 @@ const toDataUrl = async (file: File) =>
  * A message of plain text, such as a preset prompt, refused like a draft
  * when it has nothing for the model to read.
  */
-export const buildChatTextMessage = (text: string): ChatRequestMessage => {
+export const buildChatTextMessage = (
+  text: string,
+): Result<ChatRequestMessage, EmptyChatMessageError> => {
   if (!hasChatModelContent([{ type: "text", content: text }])) {
-    throw emptyChatMessageError();
+    return Result.err(emptyChatMessageError());
   }
-  return { content: text, id: createChatMessageId() };
+  return Result.ok({ content: text, id: createChatMessageId() });
 };
 
 /**
@@ -62,15 +66,15 @@ export const buildChatTextMessage = (text: string): ChatRequestMessage => {
  */
 export const buildChatRequestMessage = async (
   draft: ChatInputDraft,
-): Promise<ChatRequestMessage> => {
+): Promise<Result<ChatRequestMessage, EmptyChatMessageError>> => {
   if (!chatDraftHasModelContent(draft)) {
-    throw emptyChatMessageError();
+    return Result.err(emptyChatMessageError());
   }
   const { files, html } = draft;
   const id = createChatMessageId();
 
   if (files.length === 0) {
-    return { id, content: html };
+    return Result.ok({ id, content: html });
   }
 
   const attachmentParts = await Promise.all(
@@ -96,14 +100,14 @@ export const buildChatRequestMessage = async (
   );
 
   if (!html) {
-    return { id, content: attachmentParts };
+    return Result.ok({ id, content: attachmentParts });
   }
 
-  return {
+  return Result.ok({
     id,
     content: [
       { type: "text", content: html } satisfies ChatPart,
       ...attachmentParts,
     ],
-  };
+  });
 };

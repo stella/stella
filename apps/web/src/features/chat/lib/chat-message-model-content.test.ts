@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   buildChatRequestMessage,
@@ -124,10 +123,11 @@ describe("building a request message", () => {
   test.each(BLANK_COMPOSER_HTML)(
     "a blank draft %p is refused before anything is read or sent",
     async (html) => {
-      const rejection = await rejectionOf(
-        buildChatRequestMessage({ files: [], html }),
-      );
-      expect(EmptyChatMessageError.is(rejection)).toBe(true);
+      const result = await buildChatRequestMessage({ files: [], html });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(EmptyChatMessageError.is(result.error)).toBe(true);
+      }
     },
   );
 
@@ -136,12 +136,12 @@ describe("building a request message", () => {
       files: [],
       html: DECISION_PASSAGE_HTML,
     });
-    expect(message.content).toBe(DECISION_PASSAGE_HTML);
+    expect(message.unwrap().content).toBe(DECISION_PASSAGE_HTML);
   });
 
   test("a blank preset text is refused and a real one is built", () => {
-    expect(() => buildChatTextMessage(" \n\t")).toThrow(EmptyChatMessageError);
-    expect(buildChatTextMessage("Suggest fields").content).toBe(
+    expect(buildChatTextMessage(" \n\t").isErr()).toBe(true);
+    expect(buildChatTextMessage("Suggest fields").unwrap().content).toBe(
       "Suggest fields",
     );
   });

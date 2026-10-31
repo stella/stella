@@ -21,9 +21,10 @@ export const emptyChatMessageError = () =>
 
 const IMAGE_MIME_PREFIX = "image/";
 // A reference chip has no text of its own; it reads as its label.
-const REFERENCE_CHIP_TAG = /<entity-mention\b[^>]*>/giu;
+const REFERENCE_CHIP_TAG = /<entity-mention\b[^<>]*>/giu;
 const CHIP_LABEL = /\bdata-label="([^"]*)"/u;
-const TAG = /<[^>]*>/gu;
+// Excluding another tag start keeps unmatched opening brackets linear.
+const TAG = /<[^<>]*>/gu;
 const WHITESPACE_ENTITY =
   /&(?:nbsp|ensp|emsp|thinsp|#(?:9|10|13|32|160)|#x0*(?:9|a|d|20|a0));/giu;
 
@@ -34,7 +35,7 @@ const WHITESPACE_ENTITY =
  * itself and applies the same rule to the result, so a chip it cannot
  * resolve is refused there.
  */
-export const composerHtmlModelText = (html: string): string =>
+const composerHtmlModelText = (html: string): string =>
   html
     .replace(
       REFERENCE_CHIP_TAG,

@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
@@ -33,13 +34,16 @@ export const startNewThreadCommandHandoff = async ({
   html,
   queryClient,
   threadRef,
-}: StartNewThreadCommandHandoffArgs): Promise<void> => {
+}: StartNewThreadCommandHandoffArgs) => {
+  const message = await buildChatRequestMessage({ files, html });
+  if (message.isErr()) {
+    return message;
+  }
   const activeSkill = context.getActiveSkill?.();
   if (activeSkill !== undefined) {
     setThreadActiveSkill(threadRef, activeSkill);
   }
-  const [message, data, { acquireChatRuntime }] = await Promise.all([
-    buildChatRequestMessage({ files, html }),
+  const [data, { acquireChatRuntime }] = await Promise.all([
     queryClient.query({
       ...chatThreadOptions({
         activeOrganizationId,
@@ -58,7 +62,8 @@ export const startNewThreadCommandHandoff = async ({
     queryClient,
   });
 
-  await chat.startRouteHandoffMessage(message, {
+  await chat.startRouteHandoffMessage(message.value, {
     timingSurface: "chat-thread",
   });
+  return Result.ok();
 };
