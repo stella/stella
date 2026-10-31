@@ -396,7 +396,7 @@ test("creating a client from a personal matter succeeds without replay headers",
   await waitFor(() => expect(workspaceUpdates).toHaveLength(1));
   expect(workspaceUpdates).toEqual([
     {
-      body: { clientId: createRequest.body["id"] },
+      body: { clientId: createRequest.body["id"], expectedClientId: null },
       replayKey: null,
     },
   ]);
