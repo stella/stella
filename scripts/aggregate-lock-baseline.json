@@ -4002,12 +4002,6 @@
     "reason": "builder-for in apps/api/src/lib/workflow/materialize-playbook-run.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "122efa602d9ec233a6b6e358ee5e0673eb3120117c4f5028bcf171193aae10d6",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/workspace-deletion.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
-  },
-  {
     "file": "apps/api/src/scripts/adapter-health-query.ts",
     "fingerprint": "2be5dbedc4c425cec8d094e22aafe44b7c6e57d2fd58ca167de4341c905828cf",
     "count": 1,

@@ -27,6 +27,7 @@ export type DeleteContactHandlerProps = {
   organizationId: SafeId<"organization">;
   contactId: SafeId<"contact">;
   recordAuditEvent: AuditRecorder;
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
 };
 
 // Shared contact-delete logic reused by the HTTP handler and the
@@ -37,6 +38,7 @@ export const deleteContactHandler = async function* ({
   organizationId,
   contactId,
   recordAuditEvent,
+  flushWorkspaceSearchRepairs: flushRepairs,
 }: DeleteContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
     const contact = await tx
@@ -142,7 +144,7 @@ export const deleteContactHandler = async function* ({
     );
   }
 
-  flushWorkspaceSearchRepairs(txResult.value.affectedWorkspaceIds).catch(
+  flushRepairs(txResult.value.affectedWorkspaceIds).catch(
     createErrorCapture(
       handlerErrorContext("deleteContactHandler.flushWorkspaceSearchRepairs"),
     ),
@@ -169,6 +171,7 @@ const deleteContactById = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       contactId: params.contactId,
       recordAuditEvent,
+      flushWorkspaceSearchRepairs,
     });
   },
 );

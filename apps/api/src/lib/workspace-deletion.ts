@@ -3,7 +3,6 @@ import { and, eq, not } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
-import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { documentProcessingRuns, workspaces } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -28,6 +27,7 @@ import {
 } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import type { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
@@ -40,8 +40,9 @@ export type WorkspaceDeletionDatabase = {
 
 export type WorkspaceDeletionDependencies = {
   captureDeliveryError?: typeof captureError;
-  database?: WorkspaceDeletionDatabase;
+  database: WorkspaceDeletionDatabase;
   enqueueCleanup?: typeof enqueueEntityDeletionCleanup;
+  flushWorkspaceSearchRepairs: typeof flushWorkspaceSearchRepairs;
 };
 
 type ExecuteAuthorizedWorkspaceDeletionOptions = {
@@ -154,13 +155,9 @@ export const executeAuthorizedWorkspaceDeletion = async (
     recordAuditEvent,
     workspaceId,
   }: ExecuteAuthorizedWorkspaceDeletionOptions,
-  dependencies: WorkspaceDeletionDependencies = {},
+  dependencies: WorkspaceDeletionDependencies,
 ): Promise<Result<WorkspaceDeletionOutcome, unknown>> => {
-  const database = dependencies.database ?? {
-    transaction: async <TResult>(
-      callback: (tx: Transaction) => Promise<TResult>,
-    ) => await rootDb.transaction(callback),
-  };
+  const { database } = dependencies;
   const runTransaction = async (
     attempt = 0,
   ): Promise<TransactionWorkspaceDeletionOutcome> => {
@@ -298,5 +295,6 @@ export const executeAuthorizedWorkspaceDeletion = async (
     enqueueCleanup: dependencies.enqueueCleanup ?? enqueueEntityDeletionCleanup,
     requestIds: transactionResult.value.cleanupRequestIds,
   });
+  await dependencies.flushWorkspaceSearchRepairs([workspaceId]);
   return Result.ok({ status: "deleted" });
 };

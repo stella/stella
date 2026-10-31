@@ -82,6 +82,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import {
@@ -988,6 +989,7 @@ const handleDeleteContactTool: TypedMcpToolHandler<
       organizationId: context.organizationId,
       contactId: brandPersistedContactId(parsed.output.contact_id),
       recordAuditEvent: context.recordAuditEvent,
+      flushWorkspaceSearchRepairs,
     }),
   );
   if (Result.isError(deleted)) {

@@ -498,6 +498,12 @@ afterAll(async () => {
 
 describe("workspace deletion", () => {
   test("atomically removes the complete target while preserving unrelated chats", async () => {
+    let projectionOwnerReads = 0;
+    const flushWorkspaceSearchRepairs = async () => {
+      projectionOwnerReads += 1;
+      await testDb.select({ id: organization.id }).from(organization).limit(1);
+      return { failed: 0, repaired: 0 };
+    };
     const [compactionBefore, threadBefore] = await Promise.all([
       testDb
         .select({
@@ -537,10 +543,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId: fixture.targetWorkspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      { database, enqueueCleanup: async () => {}, flushWorkspaceSearchRepairs },
     );
 
     expect(Result.isOk(result)).toBe(true);
+    expect(projectionOwnerReads).toBeGreaterThan(0);
     if (Result.isOk(result)) {
       expect(result.value).toEqual({ status: "deleted" });
     }
@@ -749,7 +756,11 @@ describe("workspace deletion", () => {
         recordAuditEvent,
         workspaceId,
       },
-      { database, enqueueCleanup: async () => {} },
+      {
+        database,
+        enqueueCleanup: async () => {},
+        flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+      },
     );
 
     expect(Result.isError(result)).toBe(true);
@@ -904,7 +915,11 @@ describe("workspace deletion", () => {
           },
           workspaceId,
         },
-        { database, enqueueCleanup: async () => {} },
+        {
+          database,
+          enqueueCleanup: async () => {},
+          flushWorkspaceSearchRepairs: async () => ({ failed: 0, repaired: 0 }),
+        },
       );
 
       expect(Result.isError(result)).toBe(true);
