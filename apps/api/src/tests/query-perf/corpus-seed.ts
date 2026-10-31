@@ -43,7 +43,7 @@ import { withSeededTableMaintenance } from "./seeded-tables";
  */
 const CORPUS_SCENARIO_ROWS = 60_000;
 const COMPLETION_SOURCE_ID = toSafeId<"caseLawSource">(
-  "01990000-00c2-7000-8000-000000000001",
+  "01990000-00c3-7000-8000-000000000001",
 );
 const COMPLETION_ROWS = 100_000;
 
@@ -402,8 +402,7 @@ const seedBrowseFacetCounts = async (database: GatedTestDb) => {
   } of FACET_SOURCES) {
     // db-await-in-loop: six fixed sources, each with its own facet rows.
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)
-      ON CONFLICT (id) DO NOTHING`);
+      VALUES (${sourceId}::uuid, ${adapterKey}, ${`Facet fixture ${String(index + 1)}`}, false)`);
     // db-await-in-loop: the source's facets follow the source row they reference.
     await database.execute(sql`INSERT INTO case_law_browse_facet_counts
       (kind, country, source_id, value, total)
@@ -452,7 +451,7 @@ export const seedCorpusReadBudgets = async (database: GatedTestDb) =>
       }
     }
     await database.execute(sql`INSERT INTO case_law_sources (id, adapter_key, name, enabled)
-    VALUES (${COMPLETION_SOURCE_ID}, 'query-perf-completion', 'Completion query fixture', false)`);
+    VALUES (${COMPLETION_SOURCE_ID}, ${ADAPTER_KEYS.EU_ECJ}, 'Completion query fixture', false)`);
     for (const chunk of chunks(COMPLETION_ROWS)) {
       await withoutTriggers(database, async (tx) => {
         await tx.execute(sql`INSERT INTO case_law_decisions
