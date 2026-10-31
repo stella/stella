@@ -73,6 +73,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   business_registry_credentials:
     "Integration credentials: never touched by the reset.",
   feedback_reports: "Product feedback the operators read.",
+  legal_holds:
+    "Audited preservation records: an active hold refuses the reset, and a released hold goes with its matter or item.",
   chat_content_v3_backfill_receipts:
     "Repair receipts the operators read; identifiers only, never chat content.",
   sanctions_organization_marks:

@@ -331,6 +331,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "apps/api/src/lib/kill-switches/registry.ts",
     "apps/api/src/lib/legal-holds/errors.ts",
     "apps/api/src/lib/legal-holds/holds.ts",
+    "apps/api/src/lib/legal-holds/lifecycle.ts",
     "apps/api/src/lib/legal-holds/refusal.ts",
     "apps/api/src/lib/legal-holds/retained-matters.ts",
     "apps/api/src/lib/legal-search/*",

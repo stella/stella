@@ -1,3 +1,5 @@
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+
 import {
   organization,
   organizationCheck,
@@ -23,12 +25,7 @@ export const legalHolds = p.pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     scopeType: p.text("scope_type", { enum: LEGAL_HOLD_SCOPES }).notNull(),
-    workspaceId: safeWorkspaceId("workspace_id").references(
-      () => workspaces.id,
-      {
-        onDelete: "restrict",
-      },
-    ),
+    workspaceId: safeWorkspaceId("workspace_id"),
     entityId: safeUuid<"entity">("entity_id").references(() => entities.id, {
       onDelete: "restrict",
     }),
@@ -41,6 +38,19 @@ export const legalHolds = p.pgTable(
     releaseReason: p.text("release_reason"),
   },
   (table) => [
+    // An item hold names its item as scope context and holds none of its content.
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.entityId, { target: "entities", kind: "context" }]]),
+    ),
+    // The matter must belong to the hold's organization.
+    p
+      .foreignKey({
+        columns: [table.workspaceId, table.organizationId],
+        foreignColumns: [workspaces.id, workspaces.organizationId],
+        name: "legal_holds_workspace_organization_fk",
+      })
+      .onDelete("restrict"),
     p.check(
       "legal_holds_scope_check",
       sql`(${table.scopeType} = 'matter' AND ${table.workspaceId} IS NOT NULL AND ${table.entityId} IS NULL) OR (${table.scopeType} = 'entity' AND ${table.entityId} IS NOT NULL AND ${table.workspaceId} IS NULL)`,

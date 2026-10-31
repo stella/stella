@@ -4,7 +4,7 @@ CREATE TABLE "legal_holds" (
   "id" uuid PRIMARY KEY NOT NULL,
   "organization_id" varchar(128) NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "scope_type" text NOT NULL,
-  "workspace_id" uuid REFERENCES "workspaces"("id") ON DELETE RESTRICT,
+  "workspace_id" uuid,
   "entity_id" uuid REFERENCES "entities"("id") ON DELETE RESTRICT,
   "reason" text NOT NULL,
   "placed_by" text NOT NULL,
@@ -12,6 +12,7 @@ CREATE TABLE "legal_holds" (
   "released_by" text,
   "released_at" timestamptz,
   "release_reason" text,
+  CONSTRAINT "legal_holds_workspace_organization_fk" FOREIGN KEY ("workspace_id", "organization_id") REFERENCES "workspaces"("id", "organization_id") ON DELETE RESTRICT,
   CONSTRAINT "legal_holds_scope_check" CHECK (("scope_type" = 'matter' AND "workspace_id" IS NOT NULL AND "entity_id" IS NULL) OR ("scope_type" = 'entity' AND "entity_id" IS NOT NULL AND "workspace_id" IS NULL)),
   CONSTRAINT "legal_holds_reason_check" CHECK ("reason" ~ '[^[:space:]]'),
   CONSTRAINT "legal_holds_release_check" CHECK (("released_at" IS NULL AND "released_by" IS NULL AND "release_reason" IS NULL) OR ("released_at" IS NOT NULL AND "released_by" IS NOT NULL AND "release_reason" IS NOT NULL AND "release_reason" ~ '[^[:space:]]'))
@@ -27,6 +28,7 @@ CREATE POLICY "organization_update" ON "legal_holds" FOR UPDATE TO stella USING 
 CREATE POLICY "legal_holds_owner_access" ON "legal_holds" AS PERMISSIVE FOR ALL TO public USING (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_holds'::regclass)) WITH CHECK (current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legal_holds'::regclass));
 
 --> statement-breakpoint
+-- stella-migration-safety: reviewed security-definer - trigger-only function with a fixed search path ending in pg_temp and PUBLIC execute revoked; it reads active holds so a delete by any role is refused while a hold is active, and removes only released hold rows of the matter or item being deleted. Rollback drops the triggers and the function.
 CREATE FUNCTION "legal_hold_delete_backstop"() RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
