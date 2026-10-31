@@ -119,7 +119,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `contacts.delete` | write, destructive | stella:contacts_write | — | curated tool `delete_contact` |
 | `contacts.export` | read | stella:read | — | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. contacts.list covers part of this: paginates the directory as JSON records without the portable import field set |
 | `contacts.get` | read | stella:read | — | curated tool `read_contact` |
-| `contacts.import` | write | stella:contacts_write | — | covered by `save_contact` |
+| `contacts.import` | write | stella:contacts_write | — | generic invoke → `stella capability contacts import` |
 | `contacts.list` | read | stella:read | — | curated tool `list_contacts` |
 | `contacts.sanctions.events.list` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-events-list` |
 | `contacts.sanctions.get` | read | stella:read | — | generic invoke → `stella capability contacts sanctions-get` |
@@ -738,7 +738,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 4 |
 | assistant_chat | 15 |
 | auth_plumbing | 33 |
-| billing_ui | 1 |
+| billing_ui | 2 |
 | chat_thread_ui | 18 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
@@ -753,5 +753,5 @@ mechanics, and similar), not gaps in coverage.
 | search_ui | 19 |
 | session_token_exchange | 21 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 20 |
+| upload_mechanics | 21 |
 | url_preview | 2 |

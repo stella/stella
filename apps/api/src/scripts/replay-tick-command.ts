@@ -16,10 +16,6 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type {
-  SourceAdapter,
-  StoredRawReader,
-} from "@/api/handlers/case-law/ingestion/adapter";
-import type {
   BackgroundReplaySource,
   BackgroundReplayTickReport,
 } from "@/api/handlers/case-law/ingestion/background-replay";
@@ -50,6 +46,10 @@ import {
   type AdapterKey,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/lib/legal-search/ingestion-types";
 import { isLocalTestRun } from "@/api/runtime-mode";
 
 const now = () => Temporal.Now.instant().epochMilliseconds;

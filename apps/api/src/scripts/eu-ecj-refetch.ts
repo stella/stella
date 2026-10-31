@@ -280,6 +280,26 @@ const loadRequestedCelex = async ({
   })();
 };
 
+const validateRequestedCelex = (
+  requestedCelex: readonly string[],
+  after: string | null,
+): void => {
+  // Validated here, before the lease: a malformed entry deep in the plan
+  // would otherwise burn the consecutive-failure budget mid-run and could
+  // halt a valid recovery.
+  const malformed = requestedCelex.filter((celex) => !isValidCelex(celex));
+  if (malformed.length > 0) {
+    console.error(
+      `Invalid CELEX number(s): ${malformed.slice(0, 5).join(", ")}${malformed.length > 5 ? ` (+${malformed.length - 5} more)` : ""}`,
+    );
+    process.exit(1);
+  }
+  if (after !== null && !isValidCelex(after)) {
+    console.error(`--after must be a CELEX number, got: ${after}`);
+    process.exit(1);
+  }
+};
+
 type CelexRefreshOptions = Omit<FormexOnlyOptions, "resultsOut"> & {
   delayMs: number;
   failedOutPath: string;
@@ -313,20 +333,7 @@ const runCelexRefresh = async ({
     celexFilePath,
   });
 
-  // Validated here, before the lease: a malformed entry deep in the plan
-  // would otherwise burn the consecutive-failure budget mid-run and could
-  // halt a valid recovery.
-  const malformed = requestedCelex.filter((celex) => !isValidCelex(celex));
-  if (malformed.length > 0) {
-    console.error(
-      `Invalid CELEX number(s): ${malformed.slice(0, 5).join(", ")}${malformed.length > 5 ? ` (+${malformed.length - 5} more)` : ""}`,
-    );
-    process.exit(1);
-  }
-  if (after !== null && !isValidCelex(after)) {
-    console.error(`--after must be a CELEX number, got: ${after}`);
-    process.exit(1);
-  }
+  validateRequestedCelex(requestedCelex, after);
 
   const plan = [...new Set(requestedCelex)]
     .toSorted()
@@ -443,7 +450,7 @@ const runCelexRefresh = async ({
             sourceId: source.id,
           });
           // db-await-in-loop: per-decision ingest pipeline, ordered by the observation number allocated just above
-          const processed = await processDecision(
+          const written = await processDecision(
             {
               input: result,
               sourceId: source.id,
@@ -454,6 +461,12 @@ const runCelexRefresh = async ({
             },
             resolveSourceContract,
           );
+          if (written.isErr()) {
+            celexFailed = true;
+            printError(`${celex}: failed`, written.error);
+            continue;
+          }
+          const processed = written.value;
           if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
             counts.retryable += 1;
             celexFailed = true;
