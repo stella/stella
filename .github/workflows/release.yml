@@ -1506,6 +1506,7 @@ jobs:
             scripts/api-health.ts
             apps/api/src/db-components.ts
             apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -1525,11 +1526,57 @@ jobs:
           cp "$GITHUB_WORKSPACE/.gh-retry/scripts/api-health.ts" "$RUNNER_TEMP/scripts/api-health.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/db-components.ts" "$RUNNER_TEMP/apps/api/src/db-components.ts"
           cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/deploy-env-contract.ts" "$RUNNER_TEMP/apps/api/src/deploy-env-contract.ts"
+          cp "$GITHUB_WORKSPACE/.gh-retry/apps/api/src/bullmq-queue-hosts.ts" "$RUNNER_TEMP/apps/api/src/bullmq-queue-hosts.ts"
 
       - name: Checkout workflow source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The queue consumers a release needs must already be deployed: the
+      # promote ships the image, not the infra that runs its workers. The gate
+      # comes from main, never from the release tree it judges.
+      - name: Checkout deploy contract gate from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          path: .trusted-main
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/gh-retry.sh
+            scripts/check-deploy-env-contract.ts
+            apps/api/src/db-components.ts
+            apps/api/src/deploy-env-contract.ts
+            apps/api/src/bullmq-queue-hosts.ts
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Bun for the deploy contract gate
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .trusted-main/package.json
+          no-cache: true
+
+      - name: Mint deployment contract read token
+        id: contract-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: stella-infra
+          permission-contents: read
+
+      # Run inside the main checkout: Bun reads bunfig.toml (preloads) from its
+      # working directory, and the release tree must never configure the check.
+      - name: Refuse a deploy whose queues have no consumer container
+        timeout-minutes: 5
+        working-directory: .trusted-main
+        env:
+          GH_TOKEN: ${{ steps.contract-token.outputs.token }}
+          DEPLOY_ENV_CONTRACT_INFRA_REPOSITORY: ${{ github.repository_owner }}/stella-infra
+        run: bun --no-install --no-env-file scripts/check-deploy-env-contract.ts
 
       - name: Promote to production
         # Waits for the infra promote, online migrations included: only the
