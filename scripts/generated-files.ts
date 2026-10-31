@@ -2091,6 +2091,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     inputs: [
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "scripts/env-catalog.ts",
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
@@ -2144,6 +2145,7 @@ const GENERATOR_DECLARATIONS = [
       "bunfig.toml",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
+      "packages/scripts/src/syntax-tree.ts",
       "apps/api/src/env*.ts",
       ".github/workflows/release.yml",
       "scripts/create-release-manifest.sh",
