@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import {
   chmodSync,
-  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -49,12 +48,6 @@ const outcome = result?.steps?.find(
 );
 if (!outcome?.run || !outcome.env || !Array.isArray(result?.needs)) {
   panic("Missing ci-result/Evaluate CI outcome");
-}
-const violationsWriter = result.steps?.find(
-  ({ name }) => name === "Write required-violations record",
-)?.run;
-if (!violationsWriter) {
-  panic("Missing ci-result/Write required-violations record");
 }
 const needs = result.needs;
 const script = outcome.run;
@@ -191,37 +184,8 @@ const runOutcome = (
   );
   const lines = readFileSync(output, "utf-8").split("\n");
   const line = lines.find((entry) => entry.startsWith("required_summary="));
-  const violationsLine = lines.find((entry) =>
-    entry.startsWith("required_violations="),
-  );
-  const violationsPath = path.join(directory, "ci-required-violations.json");
-  const write = Bun.spawnSync(
-    ["bash", "-e", "-o", "pipefail", "-c", violationsWriter],
-    {
-      timeout: 10_000,
-      env: {
-        PATH: process.env["PATH"] ?? "",
-        REQUIRED_VIOLATIONS:
-          violationsLine?.slice("required_violations=".length) ?? "",
-        RECORD_PATH: violationsPath,
-      },
-    },
-  );
   return {
     exitCode: child.exitCode,
-    violationsWriteExitCode: write.exitCode,
-    violationsRecord: existsSync(violationsPath)
-      ? v.parse(
-          v.object({
-            run_id: v.nullable(v.number()),
-            run_attempt: v.nullable(v.number()),
-            head_sha: v.nullable(v.string()),
-            evaluated: v.boolean(),
-            violations: v.nullable(v.string()),
-          }),
-          JSON.parse(readFileSync(violationsPath, "utf-8")),
-        )
-      : undefined,
     log: child.stdout.toString() + child.stderr.toString(),
     record: line
       ? v.parse(
@@ -592,36 +556,14 @@ test("metadata mirroring and verified supersession remain fail closed", () => {
   expect(script).toContain("CI run was superseded by a newer run");
 });
 
-test("every missing evaluator input still writes required violations", () => {
+test("every missing evaluator input fails the outcome", () => {
   for (const missingInput of ["needs", "plan"] as const) {
     const run = runOutcome({ NEEDS: "{}" }, {}, missingInput);
     expect(run.exitCode, run.log).not.toBe(0);
-    expect(run.violationsWriteExitCode, run.log).toBe(0);
-    expect(run.violationsRecord).toEqual({
-      run_id: RUN,
-      run_attempt: 1,
-      head_sha: HEAD,
-      evaluated: false,
-      violations: null,
-    });
   }
 });
 
-test("a failed required-jobs serialization cannot suppress required violations", () => {
-  const run = runOutcome(
-    { NEEDS: "malformed-json", PLAN_RESULT: "failure" },
-    {},
-  );
-  expect(run.exitCode, run.log).not.toBe(0);
-  expect(run.record).toBeUndefined();
-  expect(run.violationsWriteExitCode, run.log).toBe(0);
-  expect(run.violationsRecord).toMatchObject({
-    evaluated: false,
-    violations: null,
-  });
-});
-
-test("heavy infrastructure cancellations and code failures always write required violations", () => {
+test("heavy infrastructure cancellations and code failures always record a failure", () => {
   for (const job of [
     { conclusion: "cancelled", runner_name: "", steps: [] },
     {
@@ -674,11 +616,5 @@ test("heavy infrastructure cancellations and code failures always write required
     );
     expect(run.exitCode, run.log).toBe(1);
     expect(run.record?.verdict, run.log).toBe("failure");
-    expect(run.violationsWriteExitCode, run.log).toBe(0);
-    expect(run.violationsRecord).toMatchObject({
-      run_id: RUN,
-      run_attempt: 1,
-      head_sha: HEAD,
-    });
   }
 });

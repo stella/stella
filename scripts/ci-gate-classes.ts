@@ -268,8 +268,6 @@ export const CI_GATES: Readonly<Record<string, JobGate>> = {
     steps: {
       "Write required-jobs record": { class: "advisory", owner: "ci" },
       "Upload required-jobs record": { class: "advisory", owner: "ci" },
-      "Write required-violations record": { class: "advisory", owner: "ci" },
-      "Upload required-violations record": { class: "advisory", owner: "ci" },
     },
   },
 };
