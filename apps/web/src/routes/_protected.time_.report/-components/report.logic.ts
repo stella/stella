@@ -188,18 +188,23 @@ export const buildPivot = (
     const { parentId } = pivot.row;
     if (parentId === null) {
       parents.push(pivot);
+      continue;
+    }
+    const siblings = childrenOf.get(parentId);
+    if (siblings === undefined) {
+      childrenOf.set(parentId, [pivot]);
     } else {
-      childrenOf.set(parentId, [...(childrenOf.get(parentId) ?? []), pivot]);
+      siblings.push(pivot);
     }
   }
   const byOrder = (a: PivotRow, b: PivotRow) => order(a.row, b.row);
   return {
-    rows: parents
-      .toSorted(byOrder)
-      .flatMap((parent) => [
-        parent,
-        ...(childrenOf.get(parent.row.rowId) ?? []).toSorted(byOrder),
-      ]),
+    rows: parents.toSorted(byOrder).flatMap((parent) => {
+      const children = childrenOf.get(parent.row.rowId);
+      return children === undefined
+        ? [parent]
+        : [parent, ...children.toSorted(byOrder)];
+    }),
     byId,
     parentIds: new Set(childrenOf.keys()),
     totals,

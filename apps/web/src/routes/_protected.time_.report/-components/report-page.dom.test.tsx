@@ -276,10 +276,8 @@ test("lists an expanded member's matters right under that member", async () => {
   const names = within(screen.getByRole("table"))
     .getAllByRole("row")
     .slice(1, -1)
-    .map((row) => row.textContent ?? "");
-  expect(
-    names.map((text) => text.match(/Anna|Harbour lease|Ben|Merger/u)?.[0]),
-  ).toEqual(["Anna", "Harbour lease", "Ben", "Merger"]);
+    .map((row) => /Anna|Harbour lease|Ben|Merger/u.exec(row.textContent)?.[0]);
+  expect(names).toEqual(["Anna", "Harbour lease", "Ben", "Merger"]);
 });
 
 test("explains a range too large to load instead of failing the page", async () => {
