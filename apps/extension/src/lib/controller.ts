@@ -170,14 +170,13 @@ export const pairStellaTab = async (
 };
 
 /** Ends the connection: forgets its controlled tab, receipts and budget. */
-export const endBrowserController =
-  async (): Promise<BrowserController | null> => {
-    const controller = await readBrowserController();
-    await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
-    // Control ended, so the user's former controlled tab is theirs again.
-    await releaseContainedTabs();
-    return controller;
-  };
+const endBrowserController = async (): Promise<BrowserController | null> => {
+  const controller = await readBrowserController();
+  await chrome.storage.session.remove([...CONTROLLER_SESSION_STORAGE_KEYS]);
+  // Control ended, so the user's former controlled tab is theirs again.
+  await releaseContainedTabs();
+  return controller;
+};
 
 export const disconnectBrowserController = async (): Promise<void> => {
   const controller = await endBrowserController();

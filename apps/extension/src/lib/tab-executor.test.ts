@@ -55,12 +55,13 @@ const createFakeChrome = () => {
       controllerId: CONTROLLER_ID,
       origin: "https://my.stll.app",
     },
-    browserStellaTabs: {
-      [CONTROLLER_TAB_ID]: {
+    browserStellaTabs: [
+      {
         documentId: "document-stella",
         origin: "https://my.stll.app",
+        tabId: CONTROLLER_TAB_ID,
       },
-    },
+    ],
   };
   const tabs = new Map<number, FakeTab>([
     [

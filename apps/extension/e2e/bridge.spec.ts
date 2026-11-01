@@ -83,15 +83,12 @@ const openStellaPage = async (context: BrowserContext, url: string) => {
     .not.toBeNull();
 
   const response = async (requestId: string): Promise<unknown> => {
-    let raw: string | null = null;
-    await expect
-      .poll(async () => {
-        raw = await page
-          .locator("html")
-          .getAttribute(`data-extension-response-${requestId}`);
-        return raw;
-      })
-      .not.toBeNull();
+    const readResponse = async (): Promise<string | null> =>
+      await page
+        .locator("html")
+        .getAttribute(`data-extension-response-${requestId}`);
+    await expect.poll(readResponse).not.toBeNull();
+    const raw = await readResponse();
     return raw === null ? null : JSON.parse(raw);
   };
 

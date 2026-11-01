@@ -238,9 +238,9 @@ describe("stella tab registry", () => {
           }),
       ),
     );
-    expect([...(await readStellaTabs()).keys()].toSorted()).toEqual([
-      1, 2, 3, 4,
-    ]);
+    expect(
+      [...(await readStellaTabs()).keys()].toSorted((a, b) => a - b),
+    ).toEqual([1, 2, 3, 4]);
   });
 
   test("moves a tab Chrome swapped for another", async () => {

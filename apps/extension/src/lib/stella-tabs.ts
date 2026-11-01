@@ -11,12 +11,16 @@ export type StellaTab = {
   origin: string;
 };
 
-type StellaTabRecord = Record<string, StellaTab>;
+/** Stored as entries, so the tab id stays a number rather than an object key. */
+type StoredStellaTab = StellaTab & { tabId: number };
 
-const parseStellaTab = (input: unknown): StellaTab | null => {
+const parseStoredStellaTab = (input: unknown): StoredStellaTab | null => {
   if (
     typeof input !== "object" ||
     input === null ||
+    !("tabId" in input) ||
+    typeof input.tabId !== "number" ||
+    !Number.isSafeInteger(input.tabId) ||
     !("origin" in input) ||
     typeof input.origin !== "string" ||
     !("documentId" in input) ||
@@ -24,7 +28,11 @@ const parseStellaTab = (input: unknown): StellaTab | null => {
   ) {
     return null;
   }
-  return { documentId: input.documentId, origin: input.origin };
+  return {
+    documentId: input.documentId,
+    origin: input.origin,
+    tabId: input.tabId,
+  };
 };
 
 export const readStellaTabs = async (): Promise<Map<number, StellaTab>> => {
@@ -33,14 +41,16 @@ export const readStellaTabs = async (): Promise<Map<number, StellaTab>> => {
   );
   const raw: unknown = stored[BROWSER_STELLA_TABS_STORAGE_KEY];
   const tabs = new Map<number, StellaTab>();
-  if (typeof raw !== "object" || raw === null) {
+  if (!Array.isArray(raw)) {
     return tabs;
   }
-  for (const [key, value] of Object.entries(raw)) {
-    const tabId = Number(key);
-    const tab = parseStellaTab(value);
-    if (Number.isSafeInteger(tabId) && tab !== null) {
-      tabs.set(tabId, tab);
+  for (const value of raw) {
+    const entry = parseStoredStellaTab(value);
+    if (entry !== null) {
+      tabs.set(entry.tabId, {
+        documentId: entry.documentId,
+        origin: entry.origin,
+      });
     }
   }
   return tabs;
@@ -56,9 +66,9 @@ const updateStellaTabs = async <T>(
     const tabs = await readStellaTabs();
     const result = change(tabs);
     await chrome.storage.session.set({
-      [BROWSER_STELLA_TABS_STORAGE_KEY]: Object.fromEntries(
-        tabs,
-      ) satisfies StellaTabRecord,
+      [BROWSER_STELLA_TABS_STORAGE_KEY]: [...tabs].map(
+        ([tabId, tab]): StoredStellaTab => ({ ...tab, tabId }),
+      ),
     });
     return result;
   });
