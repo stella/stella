@@ -949,7 +949,14 @@ test("reader breadcrumb uses translated Arabic chrome and isolates source titles
   ).toBeTruthy();
 });
 
-test("reader breadcrumb allocates narrow width to the current number before outer titles", async () => {
+/**
+ * Stands in for layout, which happy-dom does not do: the trail's width and
+ * each crumb's measured width, handed to the trail as its resize observer
+ * would. Install before mounting; `restore` puts the real observer back.
+ */
+const fakeTrailLayout = (
+  measured: (part: "label" | "full", anchorId: string) => number,
+) => {
   const originalObserver = globalThis.ResizeObserver;
   const callbacks: (() => void)[] = [];
   globalThis.ResizeObserver = class {
@@ -960,61 +967,152 @@ test("reader breadcrumb allocates narrow width to the current number before oute
     unobserve() {}
     disconnect() {}
   };
+  const resizeTo = async (width: number) => {
+    const navigation = screen.getByRole("navigation");
+    Object.defineProperty(navigation, "clientWidth", {
+      value: width,
+      configurable: true,
+    });
+    const stub = (part: "label" | "full") => {
+      for (const element of navigation.querySelectorAll<HTMLElement>(
+        `[data-breadcrumb-${part}]`,
+      )) {
+        const anchorId = element.getAttribute(`data-breadcrumb-${part}`) ?? "";
+        element.getBoundingClientRect = () =>
+          new DOMRect(0, 0, measured(part, anchorId), 16);
+      }
+    };
+    stub("label");
+    stub("full");
+    await act(async () => {
+      for (const resize of callbacks) {
+        resize();
+      }
+    });
+  };
+  return {
+    resizeTo,
+    restore: () => {
+      globalThis.ResizeObserver = originalObserver;
+    },
+  };
+};
+
+const currentCrumb = () =>
+  screen.getByRole("button", { name: /Contents: § 5/u });
+
+test("reader breadcrumb gives outer levels to the menu before the current title, and keeps every level reachable", async () => {
+  const current = path.at(-1) ?? panic("The fixture needs a current heading");
+  // Outer levels are labels alone (100px); the current heading is "§ 5"
+  // (44px) and, with its title, 176px. The measurer is the crumb's own button,
+  // so these widths hold its padding.
+  const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
+    if (anchorId !== current.anchorId) {
+      return 100;
+    }
+    return part === "label" ? 44 : 176;
+  });
   try {
     mount(() => {});
     const navigation = screen.getByRole("navigation");
-    Object.defineProperty(navigation, "clientWidth", {
-      value: 218,
-      configurable: true,
-    });
-    for (const label of navigation.querySelectorAll(
-      "[data-breadcrumb-measure]",
-    )) {
-      label.getBoundingClientRect = () => new DOMRect(0, 0, 84, 16);
-    }
-    const number = navigation.querySelector("[data-breadcrumb-number-measure]");
-    if (number === null) {
-      throw new Error("Number measurement not rendered");
-    }
-    number.getBoundingClientRect = () => new DOMRect(0, 0, 28, 16);
-    await act(async () => {
-      for (const resize of callbacks) {
-        resize();
-      }
-    });
+
+    await resizeTo(600);
     expect(screen.getByRole("button", { name: "Část druhá" }).style.width).toBe(
-      "16px",
+      "100px",
     );
     expect(screen.getByRole("button", { name: "Díl 1" }).style.width).toBe(
-      "16px",
+      "100px",
     );
-    const current = screen.getByRole("button", { name: /Contents: § 5/u });
-    expect(current.style.width).toBe("94px");
-    expect(current.querySelector("bdi")?.textContent).toBe("§ 5");
-    expect(current.querySelector("bdi")?.classList.contains("shrink-0")).toBe(
-      true,
+    expect(currentCrumb().style.width).toBe("176px");
+    expect(
+      [...currentCrumb().querySelectorAll("bdi")].map(
+        (part) => part.textContent,
+      ),
+    ).toEqual(["§ 5", "Žádost o poskytnutí přímé platby"]);
+
+    // The current title keeps a readable part; the outermost level folds.
+    await resizeTo(300);
+    expect(screen.queryByRole("button", { name: "Část druhá" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Díl 1" }).style.width).toBe(
+      "100px",
     );
+    expect(currentCrumb().style.width).toBe("124px");
+    expect(currentCrumb().querySelectorAll("bdi")).toHaveLength(2);
+    // The menu stands where the folded levels were, and lists them in order.
+    const more = screen.getByRole("button", { name: messages.common.showMore });
+    expect(navigation.querySelector("ol > li")?.contains(more)).toBe(true);
+    await act(async () => fireEvent.click(more));
+    expect(
+      within(screen.getByRole("dialog", { name: messages.common.showMore }))
+        .getAllByRole("button")
+        .map((entry) => entry.getAttribute("aria-label")),
+    ).toEqual(["Část druhá", "Hlava I", "Oddíl A"]);
+    await act(async () =>
+      fireEvent.keyDown(
+        screen.getByRole("dialog", { name: messages.common.showMore }),
+        {
+          key: "Escape",
+        },
+      ),
+    );
+
+    // Only the current label is left, and it is never folded.
+    await resizeTo(120);
+    expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
+    expect(currentCrumb().style.width).toBe("44px");
+    expect(
+      [...currentCrumb().querySelectorAll("bdi")].map(
+        (part) => part.textContent,
+      ),
+    ).toEqual(["§ 5"]);
     expect(navigation.querySelector('[aria-live="polite"]')?.textContent).toBe(
       path.map(({ title }) => title).join(" › "),
     );
-    Object.defineProperty(navigation, "clientWidth", {
-      value: 60,
-      configurable: true,
-    });
-    await act(async () => {
-      for (const resize of callbacks) {
-        resize();
-      }
-    });
-    expect(screen.queryByRole("button", { name: "Část druhá" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Show more" })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: /Contents: § 5/u }).style.width,
-    ).toBe("60px");
   } finally {
     cleanup();
-    globalThis.ResizeObserver = originalObserver;
+    restore();
+  }
+});
+
+test("once the menu leaves the bar, the contents control stays a full touch target and reaches every level", async () => {
+  const current = path.at(-1) ?? panic("The fixture needs a current heading");
+  // "§ 5" alone (36px, padding included) is narrower than a touch target.
+  const { resizeTo, restore } = fakeTrailLayout((part, anchorId) => {
+    if (anchorId !== current.anchorId) {
+      return 100;
+    }
+    return part === "label" ? 36 : 176;
+  });
+  try {
+    mount(() => {});
+    const navigation = screen.getByRole("navigation");
+    // Too narrow for the menu beside the current label, then narrower than
+    // the label itself, which the bar clips rather than shrink the control.
+    for (const width of [60, 30]) {
+      await resizeTo(width);
+      expect(
+        screen.queryByRole("button", { name: messages.common.showMore }),
+      ).toBeNull();
+      expect(screen.queryByRole("button", { name: "Díl 1" })).toBeNull();
+      // The control stands alone, with no separator before it.
+      const entries = navigation.querySelectorAll("ol > li");
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.firstElementChild).toBe(currentCrumb());
+      expect(currentCrumb().style.width).toBe("44px");
+    }
+
+    await act(async () => fireEvent.click(currentCrumb()));
+    const contents = screen.getByRole("dialog", {
+      name: messages.statutes.outline,
+    });
+    expect(
+      [...contents.querySelectorAll<HTMLElement>("[data-contents-anchor]")].map(
+        (row) => row.dataset["contentsAnchor"],
+      ),
+    ).toEqual(path.map(({ anchorId }) => anchorId));
+  } finally {
+    cleanup();
+    restore();
   }
 });
 
@@ -1228,3 +1326,58 @@ test("Contents places streamed analysis sections among the headings without movi
     viewport.remove();
   }
 });
+
+test.each(["contents", "hidden"])(
+  "%s rows let long titles grow without overlapping the following row",
+  async (surface) => {
+    const longPath = path.map((entry) => ({
+      ...entry,
+      title: `${entry.title}: Podmínky poskytování přímých plateb zemědělcům a požadavky na způsobilost žádosti`,
+    }));
+    render(
+      <IntlProvider locale="en" messages={messages}>
+        <TooltipProvider>
+          <ReaderBreadcrumb
+            activeAnchorId={longPath.at(-1)?.anchorId ?? null}
+            onJump={() => {}}
+            rows={longPath.map(({ anchorId, title }) => ({
+              type: "heading",
+              anchorId,
+              title,
+            }))}
+            trail={{ type: "document", segments: longPath }}
+          />
+        </TooltipProvider>
+      </IntlProvider>,
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", {
+          name:
+            surface === "contents" ? /^Contents/u : messages.common.showMore,
+        }),
+      ),
+    );
+    const dialog = screen.getByRole("dialog", {
+      name:
+        surface === "contents"
+          ? messages.statutes.outline
+          : messages.common.showMore,
+    });
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.length).toBeGreaterThan(1);
+    // Happy DOM has no layout engine. Auto height at both breakpoints, with
+    // normal wrapping and padding, lets each row reserve all its text's height.
+    for (const button of buttons) {
+      expect(button.classList.contains("h-auto")).toBe(true);
+      expect(button.classList.contains("sm:h-auto")).toBe(true);
+      expect(button.classList.contains("whitespace-normal")).toBe(true);
+      expect(button.classList.contains("py-2")).toBe(true);
+      expect(
+        [...button.classList].filter((name) =>
+          /^(?:sm:)?h-(?!auto$)/u.test(name),
+        ),
+      ).toEqual([]);
+    }
+  },
+);

@@ -35,6 +35,7 @@ import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   decodeSourceRawEnvelope,
+  PUBLISHER_REQUEST,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/lib/legal-search/ingestion-types";
 import type { IngestionResult } from "@/api/lib/legal-search/ingestion-types";
@@ -789,6 +790,7 @@ describe("the crawl over modification time", () => {
     expect(Result.isOk(again) && again.value).toEqual({
       decisions: [],
       nextCursor: parked,
+      publisherRequest: PUBLISHER_REQUEST.NONE,
     });
     expect(model.requests).toEqual([]);
   });

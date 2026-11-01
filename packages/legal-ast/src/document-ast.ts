@@ -1,4 +1,4 @@
-// parser-output-unchanged: the persisted reader stops refusing stored rows over head-matter order and reports them; writers keep the same order check, so no parser output or stored field changes.
+// parser-output-unchanged: persisted readers and ingestion writers accept head matter after the body and report late blocks; parsers emit the same output, and writers now store such an AST instead of refusing it.
 // parser-output-unchanged: adds withUniqueBlockIdentities and re-keys repeated identities in the persisted reader. sk-us carries its parser version bump; main already gives sk-courts unique identities; every other enrolled fixture output repeats none (replay conformance asserts it).
 // parser-output-unchanged: [cz-uohs] the reader supplies fulltext and every block plainText directly; its stored footnote inlines and replay fixture fields are unchanged.
 // parser-output-unchanged: [at-courts] registered replay fixture fields are unchanged by numeric index normalization.
@@ -1233,14 +1233,15 @@ const headMatterOrderCheck = v.check(
   HEAD_MATTER_ORDER_MESSAGE,
 );
 
-export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+/** The writer contract without the head-matter order rule, which rows written
+ * before that rule existed may break while every other rule still holds. */
+const documentAstAnyOrderSchema: v.GenericSchema<DocumentAst> = v.pipe(
   v.object({
     version: v.literal(1),
     source: documentAstSourceSchema,
     metadata: documentAstMetadataSchema,
     blocks: v.array(blockSchema),
   }),
-  headMatterOrderCheck,
   v.check(
     ({ blocks }) => footnoteGroupsShareLabels(blocks),
     "Adjacent footnote blocks sharing a noteId must repeat one label",
@@ -1249,6 +1250,11 @@ export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
     ({ blocks }) => hasUniqueBlockIdentities(blocks),
     "Block ids and anchorIds must be unique",
   ),
+);
+
+export const documentAstSchema: v.GenericSchema<DocumentAst> = v.pipe(
+  documentAstAnyOrderSchema,
+  headMatterOrderCheck,
 );
 
 const emptyDocumentAstSource = () =>
@@ -1294,8 +1300,7 @@ const persistedDocumentAstWireSchema = v.object({
  * (`withUniqueBlockIdentities`) and reports each one.
  *
  * Block order is never a reason to refuse a stored row: rows written before
- * an ordering rule existed would lose their text on read. Writers enforce
- * ordering through `persistedDocumentAstWriteSchema`; the reader reports
+ * an ordering rule existed would lose their text on read. The reader reports
  * misplaced head matter (`headMatterOrderDegradations`).
  */
 export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
@@ -1317,14 +1322,13 @@ export const persistedDocumentAstSchema: v.GenericSchema<unknown, DocumentAst> =
     ),
   );
 
-/** The persisted shape a writer may store: the reader's, plus block order. */
-export const persistedDocumentAstWriteSchema: v.GenericSchema<
-  unknown,
-  DocumentAst
-> = v.pipe(persistedDocumentAstSchema, headMatterOrderCheck);
-
 export const isDocumentAst = (val: unknown): val is DocumentAst =>
   v.is(documentAstSchema, val);
+
+/** A writer-valid AST whose head matter may follow the body. */
+export const isDocumentAstInAnyBlockOrder = (
+  val: unknown,
+): val is DocumentAst => v.is(documentAstAnyOrderSchema, val);
 
 export const parseDocumentAst = (raw: unknown): DocumentAst | null => {
   if (raw === null || raw === undefined) {

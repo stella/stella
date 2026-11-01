@@ -5,11 +5,36 @@ import path from "node:path";
 import { CODE_CHECK_LEGS } from "./code-quality-partition";
 import {
   findResultWorkspaceConfigs,
+  isImportGraphPath,
+  isProductSourcePath,
   parseResultConsumptionArgs,
   partitionResultProjects,
   scanResultConsumption,
 } from "./result-consumption";
 import { createProgram } from "./typescript-program";
+
+test("generated modules link importers to a change but are not scanned", () => {
+  for (const file of [
+    "apps/web/src/routeTree.gen.ts",
+    "packages/api-contract/src/generated/client.ts",
+    "apps/web/src/env.d.ts",
+  ]) {
+    expect([isImportGraphPath(file), isProductSourcePath(file)]).toEqual([
+      true,
+      false,
+    ]);
+  }
+  expect([
+    isImportGraphPath("apps/api/src/handlers/read.ts"),
+    isProductSourcePath("apps/api/src/handlers/read.ts"),
+  ]).toEqual([true, true]);
+  for (const file of [
+    "apps/api/src/handlers/read.test.ts",
+    "apps/api/src/node_modules/x/index.ts",
+  ]) {
+    expect(isImportGraphPath(file)).toBe(false);
+  }
+});
 
 const createFixtureDirectory = (prefix: string) => {
   const root = path.join(import.meta.dir, "../.cache/result-consumption");

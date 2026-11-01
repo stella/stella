@@ -11,7 +11,7 @@ import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
 import { ReaderPresentationProvider } from "@stll/decision-reader/reader-adapters";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
+import { Button, ButtonTextRun } from "@stll/ui/button";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 
 import type { ProvisionPreview } from "../shared/generated/contracts";
@@ -63,9 +63,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openDecisionAnchor(anchor, linkHost),
@@ -74,7 +72,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }
@@ -87,9 +85,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
         !host.bridge.supportsTools() && anchor.url === null ? (
           children
         ) : (
-          <button
-            type="button"
-            className="underline underline-offset-2"
+          <ButtonTextRun
             onClick={() =>
               host.bridge.detached(
                 openProvisionAnchor(anchor, linkHost),
@@ -98,7 +94,7 @@ const anchorsFor = (document: ReaderPager, host: ReaderController) => {
             }
           >
             {children}
-          </button>
+          </ButtonTextRun>
         ),
     });
   }

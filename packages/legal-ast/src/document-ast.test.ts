@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
 import {
   APPARATUS_ROLES,
@@ -15,7 +14,6 @@ import {
   parseDocumentAst,
   parseUsableDocumentAst,
   persistedAstDegradations,
-  persistedDocumentAstWriteSchema,
   resolveDocumentAnchor,
   resolveDocumentHeadingAnchor,
   withProjectedPlainText,
@@ -1067,9 +1065,6 @@ describe("head matter ordering", () => {
         expect(headMatterPrecedesBody([head, body])).toBe(true);
         expect(headMatterPrecedesBody(invalid.blocks)).toBe(false);
         expect(isDocumentAst(invalid)).toBe(false);
-        expect(
-          v.safeParse(persistedDocumentAstWriteSchema, invalid).success,
-        ).toBe(false);
         // A row stored before the rule reads in its stored order.
         for (const stored of [invalid, JSON.stringify(invalid)]) {
           const read = parseDocumentAst(stored);

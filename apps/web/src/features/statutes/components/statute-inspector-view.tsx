@@ -32,7 +32,6 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import { useReaderElement } from "@/components/legal-reader/use-reader-element";
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
-import { StatuteDisplayLabel } from "@/features/statutes/components/statute-display-label";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
   statuteOptions,
@@ -161,12 +160,8 @@ export const StatuteInspectorView = ({
             ),
           },
         ]}
-        label={tab.label}
-        labelOverflow="wrap"
-        labelContent={
-          statute === undefined ? undefined : (
-            <StatuteDisplayLabel statute={statute} />
-          )
+        label={
+          statute === undefined ? tab.label : statuteDisplayLabel(statute).text
         }
         onClose={onClose}
       />
