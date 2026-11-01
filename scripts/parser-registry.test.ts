@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { fail as panic } from "node:assert";
 import {
   existsSync,
   mkdirSync,
@@ -151,6 +152,66 @@ test("canonical JSON entries define unique complete parser and import metadata",
     readFileSync(path.join(repositoryRoot, PARSER_REGISTRY_OUTPUT), "utf-8"),
   );
   assertRegistryMatchesEntries(repositoryRoot);
+});
+
+const bumpEntry = (file: string, source: string, side: string) => {
+  const entry = parseParserEntry({ file, source });
+  const bumped =
+    entry.type === "parser"
+      ? {
+          ...entry,
+          parserVersion: entry.parserVersion + 1,
+          sourceFingerprintVersion: entry.sourceFingerprintVersion + 1,
+          scope: { type: "all", reason: `Changed on ${side}.` },
+        }
+      : {
+          ...entry,
+          sourceFingerprintVersion: entry.sourceFingerprintVersion + 1,
+        };
+  return `${JSON.stringify(bumped)}\n`;
+};
+
+test("changes to neighbouring entries merge without a registry conflict", () => {
+  const base = sourceEntries(repositoryRoot);
+  const files = [...base.keys()].toSorted();
+  const directory = mkdtempSync(path.join(tmpdir(), "parser-registry-merge-"));
+  try {
+    for (const [index, left] of files.slice(0, -1).entries()) {
+      const right = files.at(index + 1) ?? panic("Missing neighbour entry");
+      const leftSource = base.get(left) ?? panic(`Missing entry: ${left}`);
+      const rightSource = base.get(right) ?? panic(`Missing entry: ${right}`);
+      const ours = new Map(base).set(left, bumpEntry(left, leftSource, "ours"));
+      const theirs = new Map(base).set(
+        right,
+        bumpEntry(right, rightSource, "theirs"),
+      );
+      const both = new Map(ours).set(
+        right,
+        bumpEntry(right, rightSource, "theirs"),
+      );
+      for (const [name, entries] of [
+        ["base", base],
+        ["ours", ours],
+        ["theirs", theirs],
+      ] as const) {
+        writeFileSync(
+          path.join(directory, name),
+          renderParserRegistry(entries),
+        );
+      }
+      const merged = gitResult(directory, [
+        "merge-file",
+        "-p",
+        "ours",
+        "base",
+        "theirs",
+      ]);
+      expect(merged.exitCode, `${left} next to ${right}`).toBe(0);
+      expect(merged.stdout.toString()).toBe(renderParserRegistry(both));
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("entry JSON schema rejects malformed and type-inconsistent records", () => {
