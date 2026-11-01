@@ -6681,11 +6681,14 @@
         "empty": "V tomto spisu zatím není žádná aktivita.",
         "fields": {
           "dueDate": "termín",
+          "name": "název",
           "parentFolder": "nadřazená složka",
           "priority": "priorita",
           "property": "vlastnost",
           "schedule": "plán",
-          "sortOrder": "pořadí"
+          "sortOrder": "pořadí",
+          "status": "stav",
+          "type": "typ"
         },
         "filterLabel": "Filtrovat aktivitu",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "tým spisu",
           "translation": "překlad"
         },
+        "taskLinks": {
+          "added": "Propojil(a) {name} s úkolem",
+          "addedUnnamed": "Propojil(a) položku s úkolem",
+          "removed": "Odpojil(a) {name} od úkolu",
+          "removedUnnamed": "Odpojil(a) položku od úkolu"
+        },
         "title": "Aktivita",
         "updatedFields": "Aktualizováno: {fields}",
+        "versions": {
+          "added": "Přidal(a) verzi {version} dokumentu",
+          "deleted": "Smazal(a) verzi {version} dokumentu"
+        },
         "views": {
           "list": "Seznam",
           "timeline": "Časová osa"

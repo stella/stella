@@ -6681,11 +6681,14 @@
         "empty": "No activity in this matter yet.",
         "fields": {
           "dueDate": "due date",
+          "name": "name",
           "parentFolder": "parent folder",
           "priority": "priority",
           "property": "property",
           "schedule": "schedule",
-          "sortOrder": "order"
+          "sortOrder": "order",
+          "status": "status",
+          "type": "type"
         },
         "filterLabel": "Filter activity",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "matter team",
           "translation": "translation"
         },
+        "taskLinks": {
+          "added": "Linked {name} to",
+          "addedUnnamed": "Linked an item to",
+          "removed": "Unlinked {name} from",
+          "removedUnnamed": "Unlinked an item from"
+        },
         "title": "Matter activity",
         "updatedFields": "Updated {fields}",
+        "versions": {
+          "added": "Added version {version} of",
+          "deleted": "Deleted version {version} of"
+        },
         "views": {
           "list": "List view",
           "timeline": "Timeline view"

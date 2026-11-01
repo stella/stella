@@ -6681,11 +6681,14 @@
         "empty": "لا يوجد نشاط في هذا الملف القانوني بعد.",
         "fields": {
           "dueDate": "تاريخ الاستحقاق",
+          "name": "الاسم",
           "parentFolder": "المجلد الأصل",
           "priority": "الأولوية",
           "property": "الخاصية",
           "schedule": "الجدول الزمني",
-          "sortOrder": "الترتيب"
+          "sortOrder": "الترتيب",
+          "status": "الحالة",
+          "type": "النوع"
         },
         "filterLabel": "تصفية النشاط",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "فريق الملف القانوني",
           "translation": "ترجمة"
         },
+        "taskLinks": {
+          "added": "ربط {name} بـ",
+          "addedUnnamed": "ربط عنصرًا بـ",
+          "removed": "ألغى ربط {name} من",
+          "removedUnnamed": "ألغى ربط عنصر من"
+        },
         "title": "النشاط",
         "updatedFields": "تم تحديث {fields}",
+        "versions": {
+          "added": "أضاف الإصدار {version} من",
+          "deleted": "حذف الإصدار {version} من"
+        },
         "views": {
           "list": "عرض القائمة",
           "timeline": "عرض الخط الزمني"

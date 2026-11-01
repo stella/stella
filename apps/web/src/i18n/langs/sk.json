@@ -6681,11 +6681,14 @@
         "empty": "V tomto spise zatiaľ nie je žiadna aktivita.",
         "fields": {
           "dueDate": "termín",
+          "name": "názov",
           "parentFolder": "nadradený priečinok",
           "priority": "priorita",
           "property": "vlastnosť",
           "schedule": "plán",
-          "sortOrder": "poradie"
+          "sortOrder": "poradie",
+          "status": "stav",
+          "type": "typ"
         },
         "filterLabel": "Filtrovať aktivitu",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "tím spisu",
           "translation": "preklad"
         },
+        "taskLinks": {
+          "added": "Prepojil(a) {name} s úlohou",
+          "addedUnnamed": "Prepojil(a) položku s úlohou",
+          "removed": "Odpojil(a) {name} od úlohy",
+          "removedUnnamed": "Odpojil(a) položku od úlohy"
+        },
         "title": "Aktivita",
         "updatedFields": "Aktualizované: {fields}",
+        "versions": {
+          "added": "Pridal(a) verziu {version} dokumentu",
+          "deleted": "Vymazal(a) verziu {version} dokumentu"
+        },
         "views": {
           "list": "Zoznam",
           "timeline": "Časová os"

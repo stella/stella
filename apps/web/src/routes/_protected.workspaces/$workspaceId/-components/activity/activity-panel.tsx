@@ -1816,6 +1816,9 @@ const ActivityAction = ({ group }: { group: ActivityGroup }) => {
   if (item.target.kind === "documentReviewRun" && item.action === "execute") {
     return t("workspaces.overview.activity.documentReview.started");
   }
+  if (item.detail.type !== "none") {
+    return <ActivityDetailAction detail={item.detail} />;
+  }
   if (item.action !== "update") {
     return t(ROW_ACTION_LABEL_KEYS[item.action]);
   }
@@ -1830,6 +1833,33 @@ const ActivityAction = ({ group }: { group: ActivityGroup }) => {
       .map((field) => t(CHANGED_FIELD_LABEL_KEYS[field]))
       .join(", "),
   });
+};
+
+const ActivityDetailAction = ({
+  detail,
+}: {
+  detail: Exclude<MatterActivityItem["detail"], { type: "none" }>;
+}) => {
+  const t = useTranslations();
+  if (detail.type === "version") {
+    const version = detail.versionNumber;
+    return detail.change === "added"
+      ? t("workspaces.overview.activity.versions.added", { version })
+      : t("workspaces.overview.activity.versions.deleted", { version });
+  }
+  const name = detail.linkedName;
+  if (name === null) {
+    return detail.change === "added"
+      ? t("workspaces.overview.activity.taskLinks.addedUnnamed")
+      : t("workspaces.overview.activity.taskLinks.removedUnnamed");
+  }
+  return detail.change === "added"
+    ? t("workspaces.overview.activity.taskLinks.added", {
+        name: isolateBidi(name),
+      })
+    : t("workspaces.overview.activity.taskLinks.removed", {
+        name: isolateBidi(name),
+      });
 };
 
 const TargetName = ({ item }: { item: MatterActivityItem }) => {

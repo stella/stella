@@ -6681,11 +6681,14 @@
         "empty": "Brak aktywności w tej sprawie.",
         "fields": {
           "dueDate": "termin",
+          "name": "nazwa",
           "parentFolder": "folder nadrzędny",
           "priority": "priorytet",
           "property": "właściwość",
           "schedule": "harmonogram",
-          "sortOrder": "kolejność"
+          "sortOrder": "kolejność",
+          "status": "status",
+          "type": "typ"
         },
         "filterLabel": "Filtruj aktywność",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "zespół sprawy",
           "translation": "tłumaczenie"
         },
+        "taskLinks": {
+          "added": "Połączył(-a) {name} z",
+          "addedUnnamed": "Połączył(-a) element z",
+          "removed": "Odłączył(-a) {name} od",
+          "removedUnnamed": "Odłączył(-a) element od"
+        },
         "title": "Aktywność",
         "updatedFields": "Zaktualizowano: {fields}",
+        "versions": {
+          "added": "Dodał(-a) wersję {version} dokumentu",
+          "deleted": "Usunął(-ęła) wersję {version} dokumentu"
+        },
         "views": {
           "list": "Widok listy",
           "timeline": "Widok osi czasu"

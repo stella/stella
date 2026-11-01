@@ -6681,11 +6681,14 @@
         "empty": "Šioje byloje veiklos dar nėra.",
         "fields": {
           "dueDate": "terminas",
+          "name": "pavadinimas",
           "parentFolder": "pirminis aplankas",
           "priority": "prioritetas",
           "property": "savybė",
           "schedule": "tvarkaraštis",
-          "sortOrder": "eilės tvarka"
+          "sortOrder": "eilės tvarka",
+          "status": "būsena",
+          "type": "tipas"
         },
         "filterLabel": "Filtruoti veiklą",
         "filters": {
@@ -6735,8 +6738,18 @@
           "team": "bylos komanda",
           "translation": "vertimas"
         },
+        "taskLinks": {
+          "added": "Susiejo {name} su",
+          "addedUnnamed": "Susiejo elementą su",
+          "removed": "Atsiejo {name} nuo",
+          "removedUnnamed": "Atsiejo elementą nuo"
+        },
         "title": "Veikla",
         "updatedFields": "Atnaujinta: {fields}",
+        "versions": {
+          "added": "Pridėjo {version} versiją:",
+          "deleted": "Ištrynė {version} versiją:"
+        },
         "views": {
           "list": "Sąrašo rodinys",
           "timeline": "Laiko juostos rodinys"
