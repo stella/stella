@@ -3567,9 +3567,9 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       );
       const graphInputs = deriveOrgWriteGraphInputs(sources, ownershipSources, {
         role: context.role,
-        ...(context.role === "base" && context.headOrgGraph !== undefined
-          ? { head: context.headOrgGraph }
-          : {}),
+        ...(context.headOrgGraph === undefined
+          ? {}
+          : { head: context.headOrgGraph }),
       });
       const { rootDoorFiles, ...analysisInputs } = graphInputs;
       const policyEntryFiles = new Set(

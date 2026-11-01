@@ -686,12 +686,12 @@ export const deriveOrgWriteGraphInputs = (
     recoveryOwnerFiles = parseRecoveryOwnerFiles(recoveryContent);
   }
   const metadata =
-    role === "head"
+    head ??
+    (role === "head"
       ? orgWriteGraphHeadMetadata(
           (file) => sources.get(file) ?? panic(`Missing tree source ${file}`),
         )
-      : (head ??
-        panic(
+      : panic(
           "Base organization graph requires the measured HEAD scope registry and table relations",
         ));
   const { registry } = metadata;
