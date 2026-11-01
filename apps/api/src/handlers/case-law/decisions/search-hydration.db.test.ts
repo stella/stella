@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import {
@@ -18,9 +18,11 @@ import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
+  publishedCaseLawDecisions,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  assertProvisionWalkOrder,
   candidateDecisionRowsQuery,
   candidateDecisionRowsStatement,
   caseLawSearchPlan,
@@ -28,17 +30,22 @@ import {
   listCaseLawProvisionDecisions,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
+  provisionDecisionWalkQuery,
+  provisionListCursorCodec,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
   searchCorpusIndexDecisions,
   searchPostgresDecisions,
 } from "@/api/handlers/case-law/decisions/search";
+import type { ProvisionRank } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { decisionDateRankSql } from "@/api/lib/case-law/decision-date-order";
 import { provisionScopeLinksQuery } from "@/api/lib/case-law/provision-filter";
+import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
@@ -60,6 +67,7 @@ import {
 import { CORPUS_BM25_RATIO_POWER } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import { SEARCH_INDEX_UNAVAILABLE_CODE } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -1927,13 +1935,14 @@ const withGappedLinks = async (
 const listGapped = async (
   sort: "relevance" | "newest",
   cursor: string | undefined,
+  limit = 1,
 ) => {
   const listed = await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
       provision: GAPPED_PROVISION,
       sort,
-      limit: 1,
+      limit,
       ...(cursor === undefined ? {} : { cursor }),
     },
     caseLawDb,
@@ -2016,6 +2025,352 @@ test("a provision list whose resumed decision left the list reads on from its po
   });
 });
 
+test("a resumed probe's match and the walk after it fill one page together", async () => {
+  await withGappedLinks({}, async () => {
+    // A third decision citing the provision at once, ranked below the others.
+    await drizzle({ client })
+      .insert(caseLawProvisionCitations)
+      .values(gappedLink(withheldId, 1, "z"));
+    const pages: string[][] = [];
+    let cursor: string | undefined;
+    do {
+      // db-await-in-loop: each page resumes from the cursor the previous page issued.
+      const page = await listGapped("relevance", cursor, 2);
+      pages.push(page.hits.map(({ decisionId }) => decisionId));
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined && pages.length < 6);
+    // The third page holds the resumed match and the walk's first match; a
+    // walk stopped one row short would end the list there and lose the last.
+    expect(pages).toEqual([
+      [],
+      [],
+      [String(czechId), String(slovakId)],
+      [String(withheldId)],
+    ]);
+  });
+});
+
+const walkRanks = {
+  relevance: {
+    key: publishedCaseLawDecisions.citationAuthority,
+    direction: desc,
+  },
+  newest: {
+    key: decisionDateRankSql("newest", publishedCaseLawDecisions.decisionDate),
+    direction: desc,
+  },
+} as const satisfies Record<"relevance" | "newest", ProvisionRank>;
+
+/** The plan nodes from `root` down to the first node `match` accepts. */
+const planPathTo = (
+  root: Record<string, unknown>,
+  match: (node: Record<string, unknown>) => boolean,
+): Record<string, unknown>[] | null => {
+  if (match(root)) {
+    return [root];
+  }
+  const children = root["Plans"];
+  if (!isUnknownArray(children)) {
+    return null;
+  }
+  for (const child of children) {
+    if (!isRecord(child)) {
+      return panic("The walk plan has a malformed child");
+    }
+    const below = planPathTo(child, match);
+    if (below !== null) {
+      return [root, ...below];
+    }
+  }
+  return null;
+};
+
+test.each([
+  { sort: "relevance", first: () => czechId },
+  { sort: "newest", first: () => slovakId },
+] as const)(
+  "the $sort walk orders its rows in SQL and pulls candidates only until it stops",
+  async ({ sort, first }) => {
+    await withGappedLinks({}, async () => {
+      await caseLawDb(async (tx) => {
+        const walk = { budget: 10, stopAfter: 1 };
+        const query = provisionDecisionWalkQuery(tx, {
+          body: { ...SEARCH_BODY, provision: GAPPED_PROVISION },
+          generation: GENERATION,
+          after: undefined,
+          rank: walkRanks[sort],
+          ...walk,
+        });
+        // The rank order is the outer query's own ORDER BY, not the plan's.
+        expect(query.toSQL().sql).toMatch(
+          /order by "ranked"\."rank_key" desc, "ranked"\."id" desc limit \$\d+$/u,
+        );
+        const rows = assertProvisionWalkOrder(await query, walk);
+        expect(rows.map(({ id }) => id)).toEqual([first()]);
+        const plan = explainRoot(
+          await tx.execute(
+            sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query.getSQL()}`,
+          ),
+        );
+        // The candidates are numbered by the one window over the rank.
+        const path =
+          planPathTo(plan, (node) => node["Node Type"] === "WindowAgg") ??
+          panic("The walk plan numbers no ranked candidates");
+        // No sort above the candidates: the ORDER BY is met by the order
+        // they stream in, so the walk stops pulling at its first stop.
+        expect(
+          path.slice(0, -1).map((node) => node["Node Type"]),
+        ).not.toContain("Sort");
+        const ranked = path.at(-1) ?? panic("The walk plan path is empty");
+        expect(ranked["Actual Rows"]).toBe(rows.at(-1)?.ordinal);
+      });
+    });
+  },
+);
+
+test("the walk order check refuses rows out of rank order, past the budget or past the stop", () => {
+  const walk = { budget: 5, stopAfter: 3 };
+  const rows = (...ordinals: number[]) =>
+    ordinals.map((ordinal) => ({ ordinal }));
+  expect(assertProvisionWalkOrder(rows(1, 3, 5), walk)).toEqual(rows(1, 3, 5));
+  expect(assertProvisionWalkOrder([], walk)).toEqual([]);
+  for (const refused of [
+    rows(2, 1),
+    rows(2, 2),
+    rows(0),
+    rows(1, 6),
+    rows(1, 2, 3, 4),
+    rows(1.5),
+  ]) {
+    expect(() => assertProvisionWalkOrder(refused, walk)).toThrow(
+      /^The provision walk returned /u,
+    );
+  }
+});
+
+/**
+ * Takes the rank index away the way a deploy finds it before the online
+ * build: absent under its name, or left invalid by a build that has not
+ * finished. Neither rebuilds it, so the table's planner statistics, which
+ * later tests' plans read, stay as they were.
+ */
+const withoutRankIndex = async (
+  state: "missing" | "invalid",
+  run: () => Promise<void>,
+) => {
+  const name = CASE_LAW_PROVISION_SEARCH_INDEX.name;
+  const away = `${name}_away`;
+  const set = (valid: boolean) =>
+    `UPDATE pg_catalog.pg_index SET indisvalid = ${String(valid)} WHERE indexrelid = 'public."${name}"'::regclass`;
+  await client.exec(
+    state === "missing"
+      ? `ALTER INDEX public."${name}" RENAME TO "${away}"`
+      : set(false),
+  );
+  try {
+    await run();
+  } finally {
+    await client.exec(
+      state === "missing"
+        ? `ALTER INDEX public."${away}" RENAME TO "${name}"`
+        : set(true),
+    );
+  }
+};
+
+test.each(["missing", "invalid"] as const)(
+  "a broad relevance list waits for its rank index while it is %s; other lists read on",
+  async (state) => {
+    await withGappedLinks({}, async () => {
+      const broadRelevance = async () =>
+        await listCaseLawProvisionDecisions({
+          body: { ...SEARCH_BODY, provision: GAPPED_PROVISION, limit: 1 },
+          caseLawDb,
+          dependencies: {
+            provisionIdSetMax: 0,
+            servingGeneration: GENERATION,
+            provider: "corpus-index",
+            loadCourtWeights: async () => await Promise.resolve(courtWeights),
+          },
+        });
+      await withoutRankIndex(state, async () => {
+        expect(await broadRelevance()).toMatchObject({
+          code: 503,
+          response: { code: SEARCH_INDEX_UNAVAILABLE_CODE, retryable: true },
+        });
+        // The newest walk reads the date index, built long before.
+        const newest = await listGapped("newest", undefined);
+        expect(newest.hits.map(({ decisionId }) => decisionId)).toEqual([
+          String(slovakId),
+        ]);
+        // A small citing set is read by id, never walked.
+        const idSet = await listCaseLawProvisionDecisions({
+          body: {
+            ...SEARCH_BODY,
+            provision: { work: "262/2006 Sb.", anchor: "par_316" },
+          },
+          caseLawDb,
+          dependencies: {
+            servingGeneration: GENERATION,
+            provider: "corpus-index",
+            loadCourtWeights: async () => await Promise.resolve(courtWeights),
+          },
+        });
+        expect(
+          "hits" in idSet ? idSet.hits.map(({ decisionId }) => decisionId) : [],
+        ).toEqual([String(czechId)]);
+      });
+      // Once the index is valid, the same list walks.
+      const ready = await broadRelevance();
+      if (!("hits" in ready)) {
+        throw new Error("expected a page once the rank index is built");
+      }
+      expect(ready.nextCursor).not.toBeNull();
+    });
+  },
+);
+
+test("a broad newest list pages through plain position cursors", async () => {
+  const db = drizzle({ client });
+  // A second decision citing § 316 of the labour code at once, so a broad
+  // newest list has two hits and no probe to resume.
+  const [extra] = await db
+    .insert(caseLawProvisionCitations)
+    .values({
+      anchor: "par_316-odst_1",
+      confidence: 0.9,
+      decisionDate: "2024-01-01",
+      decisionId: slovakId,
+      jurisdiction: "CZE",
+      section: 316,
+      subsection: "1",
+      sentenceText: "sentence par_316-odst_1",
+      spanEnd: 60,
+      spanStart: 50,
+      unit: "section",
+      workCollection: "Sb.",
+      workIdentifier: "262/2006 Sb.",
+      workNumber: 262,
+      workYear: 2006,
+    })
+    .returning({ id: caseLawProvisionCitations.id });
+  try {
+    const list = async (cursor: string | undefined) => {
+      const listed = await listCaseLawProvisionDecisions({
+        body: {
+          ...SEARCH_BODY,
+          provision: { work: "262/2006 Sb.", anchor: "par_316" },
+          sort: "newest",
+          limit: 1,
+          ...(cursor === undefined ? {} : { cursor }),
+        },
+        caseLawDb,
+        dependencies: {
+          provisionIdSetMax: 0,
+          servingGeneration: GENERATION,
+          provider: "corpus-index",
+          loadCourtWeights: async () => await Promise.resolve(courtWeights),
+        },
+      });
+      if (!("hits" in listed)) {
+        throw new Error("expected a newest provision page");
+      }
+      return listed;
+    };
+    const first = await list(undefined);
+    const cursor = first.nextCursor ?? panic("expected a second page");
+    // A plain cursor is the position's own: request digest, date band, id.
+    const parts = decodePaginationCursor(cursor) ?? [];
+    expect(parts).toHaveLength(3);
+    expect(parts.at(1)).toBeNull();
+    const second = await list(cursor);
+    expect(second.nextCursor).toBeNull();
+    expect(
+      [...first.hits, ...second.hits].map(({ decisionId }) => decisionId),
+    ).toEqual([String(slovakId), String(czechId)]);
+  } finally {
+    if (extra !== undefined) {
+      await db
+        .delete(caseLawProvisionCitations)
+        .where(eq(caseLawProvisionCitations.id, extra.id));
+    }
+  }
+});
+
+test("a probe cursor whose resume position an integer column cannot hold is an invalid cursor", async () => {
+  await withGappedLinks({}, async () => {
+    const first = await listGapped("relevance", undefined);
+    const cursor =
+      first.nextCursor ?? panic("expected a cursor resuming the probe");
+    const [tag, positionCursor, probe] = decodePaginationCursor(cursor) ?? [];
+    if (!isRecord(probe)) {
+      throw new TypeError("expected a probe position in the cursor");
+    }
+    // The issued cursor resumes.
+    expect((await listGapped("relevance", cursor)).hits).toEqual([]);
+    for (const spanStart of [2 ** 31, -1, 1.5, Number.MAX_SAFE_INTEGER]) {
+      const tampered = encodePaginationCursor([
+        tag,
+        positionCursor,
+        { ...probe, spanStart },
+      ]);
+      expect(
+        // db-await-in-loop: one refusal per out-of-range position.
+        await listCaseLawProvisionDecisions({
+          body: {
+            ...SEARCH_BODY,
+            provision: GAPPED_PROVISION,
+            limit: 1,
+            cursor: tampered,
+          },
+          caseLawDb,
+          dependencies: {
+            provisionIdSetMax: 0,
+            servingGeneration: GENERATION,
+            provider: "corpus-index",
+            loadCourtWeights: async () => await Promise.resolve(courtWeights),
+          },
+        }),
+      ).toMatchObject({ code: 400, response: { message: "Invalid cursor" } });
+    }
+  });
+});
+
+test("the provision cursor codec tells a probe cursor from a plain one by its tag, not its length", () => {
+  type Position = { key: string };
+  // A position codec whose own cursors have two parts, the length a probe
+  // cursor once had.
+  const codec = provisionListCursorCodec<Position>({
+    encode: ({ key }) => encodePaginationCursor(["scope", key]),
+    decode: (cursor) => {
+      const [scope, key] = decodePaginationCursor(cursor) ?? [];
+      return scope === "scope" && typeof key === "string" ? { key } : null;
+    },
+  });
+  const position = { key: "a" };
+  const probe = { anchor: "par_5", spanStart: 7 };
+  expect(codec.decode(codec.encode({ position }))).toEqual({ position });
+  expect(codec.decode(codec.encode({ position, probe }))).toEqual({
+    position,
+    probe,
+  });
+  const probed =
+    decodePaginationCursor(codec.encode({ position, probe })) ?? [];
+  const [tag] = probed;
+  for (const refused of [
+    encodePaginationCursor([tag, codec.encode({ position })]),
+    encodePaginationCursor([...probed, "extra"]),
+    encodePaginationCursor([
+      tag,
+      codec.encode({ position }),
+      { ...probe, spanStart: 2 ** 31 },
+    ]),
+    encodePaginationCursor(["scope", 1]),
+  ]) {
+    expect(codec.decode(refused)).toBeNull();
+  }
+});
+
 test("the Postgres search plan and the engine page read agree on a citation past the probe budget", async () => {
   await withGappedLinks({ missesOnly: [withheldId] }, async () => {
     const planIds = async (provision?: typeof GAPPED_PROVISION) => {
@@ -2075,10 +2430,9 @@ test("the Postgres search plan and the engine page read agree on a citation past
   });
 });
 
-// The planner picks the decision-id or the work-subtree index by the data's
-// shape; either probes the provision's own links. Neither scans the table,
-// and neither walks every link of the act, which for a civil code is
-// millions of rows.
+// The probe reads the provision's own links through the decision's
+// work-subtree index. It never scans the table, and never walks every link
+// of the act, which for a civil code is millions of rows.
 test("the provision filter reads links through an index, never by scanning them", async () => {
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);

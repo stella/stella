@@ -310,6 +310,21 @@ test("the provision scope includes only published redistributable decisions in i
   });
   // Repeated links spend the physical-row budget too.
   expect((await read(subsection, 2)).type).toBe("broad");
+  // Exactly at the bound the set still fits; one link past it, it does not.
+  const [subsectionLinks] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(caseLawProvisionCitations)
+    .where(eq(caseLawProvisionCitations.anchor, "par_316-odst_2"));
+  const linkCount = subsectionLinks?.count ?? 0;
+  // Two links of the first decision, one of the second, one per excluded one.
+  expect(linkCount).toBe(3 + excludedDecisions.length);
+  const atBound = await read(subsection, linkCount);
+  expect(
+    atBound.type === "decisions"
+      ? atBound.decisionIds.map(String).toSorted()
+      : atBound,
+  ).toEqual([first.id, second.id].map(String).toSorted());
+  expect((await read(subsection, linkCount - 1)).type).toBe("broad");
   expect(await read({ work: "262/2006 Sb.", anchor: "par_317" })).toEqual({
     type: "decisions",
     decisionIds: [],

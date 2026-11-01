@@ -5,9 +5,11 @@ import { desc, sql } from "drizzle-orm";
 import { caseLawSources, publishedCaseLawDecisions } from "@/api/db/schema";
 import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
 import {
+  assertProvisionWalkOrder,
   provisionDecisionProbeQuery,
   provisionDecisionWalkQuery,
 } from "@/api/handlers/case-law/decisions/search";
+import type { ProvisionRank } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import {
@@ -49,10 +51,10 @@ const SPARSE_EVERY = 1000;
  * constant per candidate; a scan of the corpus or of every link would not fit.
  */
 const SPARSE_BLOCKS_PER_CANDIDATE = 16;
-const RANK_ORDER = [
-  desc(publishedCaseLawDecisions.citationAuthority),
-  desc(publishedCaseLawDecisions.id),
-];
+const RANK = {
+  key: publishedCaseLawDecisions.citationAuthority,
+  direction: desc,
+} satisfies ProvisionRank;
 const TABLES = [
   "case_law_sources",
   "case_law_decisions",
@@ -259,11 +261,14 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
             body: { country: "CZE", query: "", provision: PROVISION },
             generation: GENERATION,
             after: undefined,
-            orderBy: RANK_ORDER,
+            rank: RANK,
             budget: LIMITS.caseLawProvisionCandidateBudget,
             stopAfter: PAGE_SIZE + 1,
           });
-          const rows = await pageQuery;
+          const rows = assertProvisionWalkOrder(await pageQuery, {
+            budget: LIMITS.caseLawProvisionCandidateBudget,
+            stopAfter: PAGE_SIZE + 1,
+          });
           expect(rows).toHaveLength(PAGE_SIZE + 1);
           expect(
             rows.every(
@@ -278,6 +283,10 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           expect(
             nodesOf(pagePlan).some((node) => node["Index Name"] === index.name),
           ).toBe(true);
+          // The stated order is the one the rank index streams: no sort.
+          expect(
+            nodesOf(pagePlan).some((node) => node["Node Type"] === "Sort"),
+          ).toBe(false);
           for (const scan of citationScans(pagePlan)) {
             expect(Number(scan["Actual Rows"])).toBeLessThanOrEqual(
               LIMITS.caseLawProvisionLinkProbeMax + 1,
@@ -334,13 +343,14 @@ describe.skipIf(!enabled)("widely cited provision search (postgres)", () => {
           body: { country: "CZE", query: "", provision: PROVISION },
           generation: GENERATION,
           after: undefined,
-          orderBy: RANK_ORDER,
+          rank: RANK,
           budget,
           stopAfter: PAGE_SIZE + 1,
         });
-        const sparse = (await sparseQuery).toSorted(
-          (left, right) => left.ordinal - right.ordinal,
-        );
+        const sparse = assertProvisionWalkOrder(await sparseQuery, {
+          budget,
+          stopAfter: PAGE_SIZE + 1,
+        });
         expect(
           sparse
             .filter(({ provisionOutcome }) => provisionOutcome.type === "match")

@@ -1,6 +1,6 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, desc, eq, getColumns, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type * as v from "valibot";
 
@@ -83,10 +83,10 @@ import {
 } from "@/api/lib/case-law/court-weights";
 import type { CourtWeightMap } from "@/api/lib/case-law/court-weights";
 import {
+  DECISION_DATE_DIRECTIONS,
   type DecisionDatePosition,
   decisionDatePositionOf,
   decisionDateRankAfterSql,
-  decisionDateRankOrderBySql,
   decisionDateRankSql,
   decodeDecisionDateCursor,
   encodeDecisionDateCursor,
@@ -151,6 +151,7 @@ import {
   readCaseLawProvisionScope,
   readProvisionCitingSentences,
 } from "@/api/lib/case-law/provision-filter";
+import { CASE_LAW_PROVISION_SEARCH_INDEX } from "@/api/lib/case-law/provision-search-index";
 import {
   loadPublicCourtWeights,
   loadPublicFtsSearchConfigs,
@@ -168,6 +169,9 @@ import {
   publicCaseLawDecisionJoin,
 } from "@/api/lib/case-law/search-sql";
 import { publicRowHoldsDocumentFor } from "@/api/lib/case-law/stored-payload";
+import { readOnlineIndexesReady } from "@/api/lib/db/online-index-readiness";
+import type { OnlineIndexName } from "@/api/lib/db/online-index-readiness";
+import { POSTGRES_INTEGER_MAX } from "@/api/lib/db/postgres-integer";
 import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
@@ -3413,6 +3417,14 @@ type ListCaseLawProvisionDecisionsOptions = {
   };
 };
 
+/**
+ * A broad provision list asked for an order whose rank walk needs an online
+ * index the migrator has not finished building.
+ */
+class ProvisionWalkIndexNotReadyError extends TaggedError(
+  "ProvisionWalkIndexNotReadyError",
+)<{ message: string; sort: SearchSort }> {}
+
 /** Where a relevance page of a provision list ended. */
 type ProvisionAuthorityPosition = {
   key: number;
@@ -3471,35 +3483,49 @@ type ProvisionPositionCodec<Position> = {
 };
 
 /**
- * The one provision list cursor codec, for every order: an order supplies
- * only its position codec. A resumed probe wraps the position's own cursor,
- * so no part of it is read or rebuilt here:
- *
- *     base64url(JSON [positionCursor, { anchor, spanStart }])
+ * The tag that opens a cursor resuming a link probe. A position cursor opens
+ * with its request digest, a hex string, so the tag alone tells the two apart.
  */
-const provisionListCursorCodec = <Position>(
+const PROVISION_PROBE_CURSOR_TAG = "provision-probe/1";
+
+/**
+ * The one provision list cursor codec, for every order: an order supplies
+ * only its position codec. A plain cursor is the position's own; a resumed
+ * probe wraps it, so no part of it is read or rebuilt here:
+ *
+ *     base64url(JSON [PROVISION_PROBE_CURSOR_TAG, positionCursor, { anchor, spanStart }])
+ */
+export const provisionListCursorCodec = <Position>(
   positions: ProvisionPositionCodec<Position>,
 ) => ({
   encode: ({ position, probe }: ProvisionListCursor<Position>): string =>
     probe === undefined
       ? positions.encode(position)
       : encodePaginationCursor([
+          PROVISION_PROBE_CURSOR_TAG,
           positions.encode(position),
           { anchor: probe.anchor, spanStart: probe.spanStart },
         ]),
   decode: (cursor: string): ProvisionListCursor<Position> | null => {
     const parts = decodePaginationCursor(cursor);
-    if (parts?.length !== 2) {
+    if (parts?.at(0) !== PROVISION_PROBE_CURSOR_TAG) {
       const position = positions.decode(cursor);
       return position === null ? null : { position };
     }
-    const [positionCursor, probe] = parts;
+    if (parts.length !== 3) {
+      return null;
+    }
+    const [, positionCursor, probe] = parts;
+    // The probe resumes after a link's `span_start`, an `integer` column: a
+    // value it cannot hold is a cursor this list never issued.
     if (
       typeof positionCursor !== "string" ||
       !isRecord(probe) ||
       typeof probe["anchor"] !== "string" ||
       typeof probe["spanStart"] !== "number" ||
-      !Number.isSafeInteger(probe["spanStart"])
+      !Number.isSafeInteger(probe["spanStart"]) ||
+      probe["spanStart"] < 0 ||
+      probe["spanStart"] > POSTGRES_INTEGER_MAX
     ) {
       return null;
     }
@@ -3513,11 +3539,31 @@ const provisionListCursorCodec = <Position>(
   },
 });
 
+/**
+ * An order as one rank key and the id tiebreak, both read in `direction`.
+ * The rank walk re-reads the key from its own ranked rows, so the order its
+ * rows leave in is stated in SQL, never left to the plan.
+ */
+export type ProvisionRank = {
+  key: SQLWrapper;
+  direction: (value: SQLWrapper) => SQL;
+};
+
+const provisionRankOrderBy = (
+  { key, direction }: ProvisionRank,
+  id: SQLWrapper,
+): SQL[] => [direction(key), direction(id)];
+
 /** How a provision list reads its page in one order. */
 type ProvisionListOrder = {
   /** Rows after the page the cursor ended; undefined on a first page. */
   after: SQL | undefined;
-  orderBy: SQL[];
+  rank: ProvisionRank;
+  /**
+   * The online indexes that keep this order's broad rank walk bounded. Until
+   * every one is built, a broad list in this order is refused, not walked.
+   */
+  walkIndexes: readonly OnlineIndexName[];
   /** The cursor after `row`; with `probe`, one that resumes its link probe. */
   cursorAfter: (
     row: ProvisionListRow,
@@ -3538,7 +3584,8 @@ type ProvisionOrderOfOptions<Position> = {
   positionOf: (row: ProvisionListRow) => Position;
   /** Rows after `position`, in this order. */
   after: (position: Position) => SQL;
-  orderBy: SQL[];
+  rank: ProvisionRank;
+  walkIndexes: readonly OnlineIndexName[];
 };
 
 /** An order with its cursors written and read by the one cursor codec. */
@@ -3547,7 +3594,8 @@ const provisionOrderOf = <Position extends { id: SafeId<"caseLawDecision"> }>({
   positions,
   positionOf,
   after,
-  orderBy,
+  rank,
+  walkIndexes,
 }: ProvisionOrderOfOptions<Position>): ProvisionListOrder | null => {
   const codec = provisionListCursorCodec(positions);
   const decoded = cursor === undefined ? undefined : codec.decode(cursor);
@@ -3556,7 +3604,8 @@ const provisionOrderOf = <Position extends { id: SafeId<"caseLawDecision"> }>({
   }
   return {
     after: decoded && after(decoded.position),
-    orderBy,
+    rank,
+    walkIndexes,
     cursorAfter: (row, probe) =>
       codec.encode({
         position: positionOf(row),
@@ -3605,7 +3654,8 @@ const provisionListOrder = ({
         positionOf: (row) => ({ key: row.citationAuthority, id: row.id }),
         after: (position) =>
           sql`(${key}, ${id}) < (${position.key}, ${position.id})`,
-        orderBy: [desc(key), desc(id)],
+        rank: { key, direction: desc },
+        walkIndexes: [CASE_LAW_PROVISION_SEARCH_INDEX],
       });
     }
     case "newest": {
@@ -3623,7 +3673,10 @@ const provisionListOrder = ({
         positionOf: decisionDatePositionOf,
         after: (position) =>
           decisionDateRankAfterSql({ order: "newest", position, rank, id }),
-        orderBy: decisionDateRankOrderBySql("newest", { rank, id }),
+        rank: { key: rank, direction: DECISION_DATE_DIRECTIONS.newest },
+        // The rank is the key of an index built before this list existed
+        // (`case_law_decisions_country_date_published_idx`).
+        walkIndexes: [],
       });
     }
     default:
@@ -3693,7 +3746,7 @@ type ProvisionDecisionWalkQueryOptions = {
   body: BroadProvisionBody;
   generation: string;
   after: SQL | undefined;
-  orderBy: SQL[];
+  rank: ProvisionRank;
   /** Ranked candidates the walk may examine: its hard read bound. */
   budget: number;
   /** Rows that end the walk: matches and undecided probes. */
@@ -3706,12 +3759,13 @@ type ProvisionDecisionWalkQueryOptions = {
  * only when the outer read pulls it, so the walk stops probing as soon as
  * `stopAfter` matching or undecided candidates are found.
  *
- * Every subquery keeps a LIMIT, so none is flattened: the probe runs once per
- * pulled candidate, and the rows stream in rank order with no sort above the
- * probes (a sort would pull every candidate first). The caller orders the
- * returned rows by `ordinal`. The candidate at `ordinal = budget` is always
- * returned when it is reached, so a walk that spent its budget hands out the
- * position it stopped at.
+ * The rows leave in rank order because the outer query says so: it orders by
+ * the rank the candidates were capped in, re-read from their own columns.
+ * That order is the one the ranked candidates already stream in, so the plan
+ * needs no sort above the probes (a sort would pull every candidate first),
+ * and `ordinal` numbers the same order. The candidate at `ordinal = budget`
+ * is always returned when it is reached, so a walk that spent its budget
+ * hands out the position it stopped at.
  */
 export const provisionDecisionWalkQuery = (
   tx: CaseLawPublicReadTransaction,
@@ -3719,16 +3773,18 @@ export const provisionDecisionWalkQuery = (
     body,
     generation,
     after,
-    orderBy,
+    rank,
     budget,
     stopAfter,
   }: ProvisionDecisionWalkQueryOptions,
 ) => {
+  const orderBy = provisionRankOrderBy(rank, publishedCaseLawDecisions.id);
   const ranked = tx
     .select({
       id: publishedCaseLawDecisions.id,
       decisionDate: publishedCaseLawDecisions.decisionDate,
       citationAuthority: publishedCaseLawDecisions.citationAuthority,
+      rankKey: sql`${rank.key}`.as("rank_key"),
       ordinal:
         sql<number>`(row_number() OVER (ORDER BY ${sql.join(orderBy, sql`, `)}))::int`.as(
           "ordinal",
@@ -3743,12 +3799,10 @@ export const provisionDecisionWalkQuery = (
     .orderBy(...orderBy)
     .limit(budget)
     .as("ranked");
-  const probed = tx
+  // One probe per pulled candidate. The LIMIT keeps the lateral a subquery
+  // of its own, so the filter and the result read one evaluation of it.
+  const probe = tx
     .select({
-      id: ranked.id,
-      decisionDate: ranked.decisionDate,
-      citationAuthority: ranked.citationAuthority,
-      ordinal: ranked.ordinal,
       provisionOutcome:
         sql<ProvisionLinkReadOutcome>`${provisionLinkReadOutcomeSql({
           decisionId: sql`${ranked.id}`,
@@ -3756,16 +3810,59 @@ export const provisionDecisionWalkQuery = (
           provision: body.provision,
         })}`.as("provision_outcome"),
     })
-    .from(ranked)
-    .limit(budget)
-    .as("probed");
+    .from(sql`(VALUES (1)) AS probe_source(one)`)
+    .limit(1)
+    .as("probe");
   return tx
-    .select()
-    .from(probed)
+    .select({
+      id: ranked.id,
+      decisionDate: ranked.decisionDate,
+      citationAuthority: ranked.citationAuthority,
+      ordinal: ranked.ordinal,
+      provisionOutcome: probe.provisionOutcome,
+    })
+    .from(ranked)
+    .crossJoinLateral(probe)
     .where(
-      sql`(${probed.provisionOutcome} ->> 'type' <> 'noMatch' OR ${probed.ordinal} = ${budget})`,
+      sql`(${probe.provisionOutcome} ->> 'type' <> 'noMatch' OR ${ranked.ordinal} = ${budget})`,
+    )
+    .orderBy(
+      ...provisionRankOrderBy({ ...rank, key: ranked.rankKey }, ranked.id),
     )
     .limit(stopAfter);
+};
+
+/**
+ * The walk's rows, checked to be the rank order it states: ordinals strictly
+ * increasing from the first candidate after the cursor, inside the budget,
+ * and no more rows than the walk stops after. A walk read in any other order
+ * could leave out a match before the position its cursor moves past, so a
+ * violation is a defect, never a page.
+ */
+export const assertProvisionWalkOrder = <Row extends { ordinal: number }>(
+  rows: readonly Row[],
+  { budget, stopAfter }: { budget: number; stopAfter: number },
+): readonly Row[] => {
+  if (rows.length > stopAfter) {
+    return panic(
+      `The provision walk returned ${rows.length} rows past its stop at ${stopAfter}`,
+    );
+  }
+  let previous = 0;
+  for (const { ordinal } of rows) {
+    if (!Number.isSafeInteger(ordinal) || ordinal <= previous) {
+      return panic(
+        `The provision walk returned ordinal ${ordinal} after ${previous}`,
+      );
+    }
+    if (ordinal > budget) {
+      return panic(
+        `The provision walk returned ordinal ${ordinal} past its budget of ${budget}`,
+      );
+    }
+    previous = ordinal;
+  }
+  return rows;
 };
 
 type ProvisionDecisionProbeQueryOptions = {
@@ -3835,7 +3932,7 @@ const readProvisionIdSetPage = async (
     body,
     generation,
     after: order.after,
-    orderBy: order.orderBy,
+    orderBy: provisionRankOrderBy(order.rank, publishedCaseLawDecisions.id),
     limit: limit + 1,
     decisionIds,
   });
@@ -3904,16 +4001,20 @@ const readBroadProvisionPage = async (
       return { rows: hits, nextCursor: order.probe.positionCursor };
     }
   }
-  const walked = (
+  const walk = {
+    budget: walkBudget,
+    stopAfter: limit + 1 - hits.length,
+  };
+  const walked = assertProvisionWalkOrder(
     await provisionDecisionWalkQuery(tx, {
       body,
       generation,
       after: order.after,
-      orderBy: order.orderBy,
-      budget: walkBudget,
-      stopAfter: limit + 1 - hits.length,
-    })
-  ).toSorted((left, right) => left.ordinal - right.ordinal);
+      rank: order.rank,
+      ...walk,
+    }),
+    walk,
+  );
   for (const row of walked) {
     const outcome = row.provisionOutcome;
     switch (outcome.type) {
@@ -4012,47 +4113,64 @@ export const listCaseLawProvisionDecisions = async ({
   const candidateBudget =
     dependencies.candidateBudget ?? LIMITS.caseLawProvisionCandidateBudget;
   // The page, citing sentences and hydrated rows share one snapshot.
-  const { emitted, nextCursor, sentences, byId } = await caseLawDb(
-    async (tx) => {
-      const provisionScope = await readCaseLawProvisionScope(tx, {
-        ...scope,
-        ...(dependencies.provisionIdSetMax === undefined
-          ? {}
-          : { idSetMax: dependencies.provisionIdSetMax }),
-      });
-      const page =
-        provisionScope.type === "broad"
-          ? await readBroadProvisionPage(tx, {
-              body,
-              candidateBudget,
-              generation,
-              order,
-              limit,
-            })
-          : await readProvisionIdSetPage(tx, {
-              body,
-              decisionIds: provisionScope.decisionIds,
-              generation,
-              order,
-              limit,
-            });
-      const pageIds = page.rows.map(({ id }) => id);
-      const hydrated = await pageDecisionRowsQuery(tx, {
-        body,
-        generation,
-        ids: pageIds,
-        provisionProofs: new Map(
-          pageIds.map((id) => [String(id), { type: "match" } as const]),
-        ),
-      });
-      return {
-        emitted: page.rows,
-        nextCursor: page.nextCursor,
-        sentences: await readProvisionCitingSentences(tx, scope, pageIds),
-        byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
-      };
-    },
-  );
+  const read = await caseLawDb(async (tx) => {
+    const provisionScope = await readCaseLawProvisionScope(tx, {
+      ...scope,
+      ...(dependencies.provisionIdSetMax === undefined
+        ? {}
+        : { idSetMax: dependencies.provisionIdSetMax }),
+    });
+    // Without its index the walk sorts the whole country per request, the
+    // unbounded read it replaces; it waits for the online build instead.
+    if (
+      provisionScope.type === "broad" &&
+      order.walkIndexes.length > 0 &&
+      !(await readOnlineIndexesReady(tx, order.walkIndexes))
+    ) {
+      return { type: "walkIndexNotReady" } as const;
+    }
+    const page =
+      provisionScope.type === "broad"
+        ? await readBroadProvisionPage(tx, {
+            body,
+            candidateBudget,
+            generation,
+            order,
+            limit,
+          })
+        : await readProvisionIdSetPage(tx, {
+            body,
+            decisionIds: provisionScope.decisionIds,
+            generation,
+            order,
+            limit,
+          });
+    const pageIds = page.rows.map(({ id }) => id);
+    const hydrated = await pageDecisionRowsQuery(tx, {
+      body,
+      generation,
+      ids: pageIds,
+      provisionProofs: new Map(
+        pageIds.map((id) => [String(id), { type: "match" } as const]),
+      ),
+    });
+    return {
+      type: "page",
+      emitted: page.rows,
+      nextCursor: page.nextCursor,
+      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+      byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
+    } as const;
+  });
+  if (read.type === "walkIndexNotReady") {
+    return searchIndexUnavailableResponse(
+      new ProvisionWalkIndexNotReadyError({
+        message: `The ${sort} provision list waits for ${order.walkIndexes.map(({ name }) => name).join(", ")}`,
+        sort,
+      }),
+    );
+  }
+  const { emitted, nextCursor, sentences, byId } = read;
   const pageRanked: RankedHit[] = emitted.map((row) => ({
     id: String(row.id),
     score: row.citationAuthority,

@@ -143,7 +143,7 @@ export const decisionDateBandsFrom = (
     : DECISION_DATE_BANDS.slice(DECISION_DATE_BANDS.indexOf(position.band));
 
 /** The direction each order reads its key and its id in. */
-const DECISION_DATE_DIRECTIONS = {
+export const DECISION_DATE_DIRECTIONS = {
   newest: desc,
   oldest: asc,
 } as const satisfies Record<DecisionDateOrder, (column: SQLWrapper) => SQL>;
