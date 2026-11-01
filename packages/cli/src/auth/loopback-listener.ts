@@ -6,6 +6,8 @@
 // matches on hostname/pathname/protocol/search only, so any ephemeral port
 // still satisfies the registered redirect_uri.
 
+import { panic } from "better-result";
+import { timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
 import type { ServerResponse } from "node:http";
 
@@ -31,16 +33,23 @@ export type LoopbackListener = {
   readonly close: () => void;
 };
 
-type CallbackPageOptions = {
-  status: "success" | "failure";
-  organizationName: string | null;
+/** A success redirect whose `state` matched this sign-in. */
+type VerifiedCallback = {
+  readonly kind: "verified";
+  readonly code: string;
+  readonly state: string;
+  readonly organizationName: string | null;
 };
 
-const renderCallbackPage = ({
-  status,
-  organizationName,
-}: CallbackPageOptions) => {
-  const ok = status === "success";
+// Only a verified callback carries query text onto the page; the failure
+// page renders fixed text.
+type CallbackPageOptions =
+  | { readonly status: "success"; readonly callback: VerifiedCallback }
+  | { readonly status: "failure" };
+
+const renderCallbackPage = (page: CallbackPageOptions) => {
+  const ok = page.status === "success";
+  const organizationName = ok ? page.callback.organizationName : null;
   const title = ok ? "Signed in to stella" : "Sign-in failed";
   const message = ok
     ? `Return to your terminal to continue with ${CLIENT_NAME}.`
@@ -180,11 +189,12 @@ const renderCallbackPage = ({
 
 const sendCallbackPage = (
   response: ServerResponse,
+  statusCode: 200 | 400,
   page: CallbackPageOptions,
-  onSent: () => void,
+  onSent?: () => void,
 ) => {
   const { html, contentSecurityPolicy } = renderCallbackPage(page);
-  response.writeHead(200, {
+  response.writeHead(statusCode, {
     "Content-Type": "text/html; charset=utf-8",
     "Content-Security-Policy": contentSecurityPolicy,
     "Cache-Control": "no-store",
@@ -218,15 +228,56 @@ const raceWithTimeout = async (
   }
 };
 
+const isExpectedState = (received: string, expected: string): boolean => {
+  const receivedBytes = Buffer.from(received);
+  const expectedBytes = Buffer.from(expected);
+  return (
+    receivedBytes.length === expectedBytes.length &&
+    timingSafeEqual(receivedBytes, expectedBytes)
+  );
+};
+
+/**
+ * Reads a success redirect. The state is compared before any other query value
+ * is read, so only the redirect for this sign-in can put text on the page.
+ */
+const readSuccessCallback = (
+  url: URL,
+  expectedState: string,
+): VerifiedCallback | { readonly kind: "incomplete" | "state_mismatch" } => {
+  const state = url.searchParams.get("state");
+  if (!state) {
+    return { kind: "incomplete" };
+  }
+  if (!isExpectedState(state, expectedState)) {
+    return { kind: "state_mismatch" };
+  }
+  const code = url.searchParams.get("code");
+  if (!code) {
+    return { kind: "incomplete" };
+  }
+  return {
+    code,
+    kind: "verified",
+    organizationName: url.searchParams.get("organization_name"),
+    state,
+  };
+};
+
+type LoopbackListenerOptions = {
+  /** The `state` sent in the authorize request this listener answers. */
+  readonly expectedState: string;
+};
+
 /**
  * Starts the loopback HTTP listener. Resolves to `undefined` if binding fails
  * (sandboxed/offline environments) so callers can fall back to the manual
  * paste flow instead of crashing. Async because `node:http`'s `listen` reports
  * its OS-assigned port on the `listening` event, not synchronously.
  */
-export const startLoopbackListener = async (): Promise<
-  LoopbackListener | undefined
-> => {
+export const startLoopbackListener = async ({
+  expectedState,
+}: LoopbackListenerOptions): Promise<LoopbackListener | undefined> => {
   let deliver: ((callback: LoopbackCallback) => void) | undefined;
   const received = new Promise<LoopbackCallback>((resolve) => {
     deliver = resolve;
@@ -246,39 +297,40 @@ export const startLoopbackListener = async (): Promise<
     if (error) {
       const errorDescription = url.searchParams.get("error_description");
       const state = url.searchParams.get("state");
-      sendCallbackPage(
-        response,
-        { status: "failure", organizationName: null },
-        () => {
+      sendCallbackPage(response, 200, { status: "failure" }, () => {
+        deliver?.({
+          error,
+          kind: "error",
+          ...(errorDescription ? { errorDescription } : {}),
+          ...(state ? { state } : {}),
+        });
+      });
+      return;
+    }
+
+    const callback = readSuccessCallback(url, expectedState);
+    switch (callback.kind) {
+      case "incomplete":
+        sendCallbackPage(response, 400, { status: "failure" });
+        return;
+      case "state_mismatch":
+        sendCallbackPage(response, 400, { status: "failure" }, () => {
+          deliver?.({ error: "invalid_state", kind: "error" });
+        });
+        return;
+      case "verified":
+        sendCallbackPage(response, 200, { status: "success", callback }, () => {
           deliver?.({
-            error,
-            kind: "error",
-            ...(errorDescription ? { errorDescription } : {}),
-            ...(state ? { state } : {}),
+            code: callback.code,
+            kind: "success",
+            state: callback.state,
           });
-        },
-      );
-      return;
+        });
+        return;
+      default:
+        callback satisfies never;
+        panic("Unhandled loopback callback");
     }
-
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    if (!code || !state) {
-      response.writeHead(400);
-      response.end("Missing code or state");
-      return;
-    }
-
-    sendCallbackPage(
-      response,
-      {
-        status: "success",
-        organizationName: url.searchParams.get("organization_name"),
-      },
-      () => {
-        deliver?.({ code, kind: "success", state });
-      },
-    );
   });
 
   const listenerPort = await new Promise<number | undefined>((resolve) => {

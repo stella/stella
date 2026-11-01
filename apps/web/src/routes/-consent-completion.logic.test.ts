@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { consentCompletion } from "@/routes/-consent-completion.logic";
+import { queryView } from "@/lib/query-view.logic";
+import {
+  consentCompletion,
+  isConsentAllowDisabled,
+} from "@/routes/-consent-completion.logic";
 
 describe("consent completion", () => {
   test.each([
@@ -58,5 +62,87 @@ describe("consent completion", () => {
     expect(
       consentCompletion({ accept: true, redirectUrl, organizationName: null }),
     ).toEqual({ status: "redirect", redirectUrl });
+  });
+});
+
+describe("consent Allow", () => {
+  const sessionReadError = new Error("Session read failed");
+  const refetch = async () => {
+    throw sessionReadError;
+  };
+  const previousSession = { session: { activeOrganizationId: "org-previous" } };
+  const currentSession = queryView({
+    status: "success",
+    fetchStatus: "idle",
+    data: previousSession,
+    error: null,
+    isPlaceholderData: false,
+    refetch,
+  });
+
+  test("is enabled with client details and a current session read", () => {
+    expect(
+      isConsentAllowDisabled({
+        clientInfoFailed: false,
+        clientInfoLoaded: true,
+        session: currentSession,
+      }),
+    ).toBe(false);
+  });
+
+  test("stays disabled when the session refetch after an organization switch fails", () => {
+    // The cached session still names the previous organization, so the page
+    // would show it while the server binds the grant to the new one.
+    const staleSession = queryView({
+      status: "error",
+      fetchStatus: "idle",
+      data: previousSession,
+      error: sessionReadError,
+      isPlaceholderData: false,
+      refetch,
+    });
+    expect(staleSession.type).toBe("items");
+    expect(
+      isConsentAllowDisabled({
+        clientInfoFailed: false,
+        clientInfoLoaded: true,
+        session: staleSession,
+      }),
+    ).toBe(true);
+  });
+
+  test("stays disabled when the session cannot be read", () => {
+    const failedSession = queryView({
+      status: "error",
+      fetchStatus: "idle",
+      data: undefined,
+      error: sessionReadError,
+      isPlaceholderData: false,
+      refetch,
+    });
+    expect(
+      isConsentAllowDisabled({
+        clientInfoFailed: false,
+        clientInfoLoaded: true,
+        session: failedSession,
+      }),
+    ).toBe(true);
+  });
+
+  test("stays disabled until the client details load", () => {
+    expect(
+      isConsentAllowDisabled({
+        clientInfoFailed: false,
+        clientInfoLoaded: false,
+        session: currentSession,
+      }),
+    ).toBe(true);
+    expect(
+      isConsentAllowDisabled({
+        clientInfoFailed: true,
+        clientInfoLoaded: false,
+        session: currentSession,
+      }),
+    ).toBe(true);
   });
 });

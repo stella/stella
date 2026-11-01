@@ -43,7 +43,10 @@ import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { APP_FRAME_SCOPE } from "@/routes/-app-frame-scope";
 import { loadAuthContext } from "@/routes/-auth-context";
-import { consentCompletion } from "@/routes/-consent-completion.logic";
+import {
+  consentCompletion,
+  isConsentAllowDisabled,
+} from "@/routes/-consent-completion.logic";
 import { ConsentSuccess } from "@/routes/-consent-success";
 
 export const Route = createFileRoute("/consent")({
@@ -273,7 +276,12 @@ function ConsentPage() {
       }
       decision={
         <ConsentDecisionBar
-          allowDisabled={clientQuery.isError || !clientQuery.data}
+          allowDisabled={isConsentAllowDisabled({
+            clientInfoFailed: clientQuery.isError,
+            clientInfoLoaded:
+              clientQuery.data !== undefined && clientQuery.data !== null,
+            session: sessionView,
+          })}
           hasError={hasError}
           isPending={isPending}
           onDecide={(accept) => {

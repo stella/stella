@@ -5,7 +5,7 @@ import { startLoopbackListener } from "./loopback-listener.js";
 
 describe("startLoopbackListener", () => {
   test("binds an ephemeral 127.0.0.1 port and reports it in redirectUri", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -21,7 +21,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("delivers a success callback parsed from the redirect query string", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -45,7 +45,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("delivers an error callback with error_description when the provider redirects an error", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -71,7 +71,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("responds 400 and does not resolve when code or state is missing", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -85,7 +85,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("responds 404 for a path other than the callback path", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -99,7 +99,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("waitForCallback times out with a LoopbackTimeoutError when nothing arrives", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -131,7 +131,9 @@ const textContent = async (html: string, selector: string) => {
 
 describe("browser sign-in completion", () => {
   test("shows one branded success screen with the organization escaped as text", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({
+      expectedState: "expected-state",
+    });
     expect(listener).toBeDefined();
     if (!listener) {
       return;
@@ -174,7 +176,7 @@ describe("browser sign-in completion", () => {
   });
 
   test("shows success without an organization when none is known", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "state" });
     expect(listener).toBeDefined();
     if (!listener) {
       return;
@@ -194,8 +196,48 @@ describe("browser sign-in completion", () => {
     }
   });
 
+  test.each([
+    ["a different state", "state=other-state&"],
+    ["a state that differs only in length", "state=expected-state-2&"],
+    ["no state", ""],
+  ])(
+    "shows the failure page without query text for %s",
+    async (_label, stateQuery) => {
+      const listener = await startLoopbackListener({
+        expectedState: "expected-state",
+      });
+      expect(listener).toBeDefined();
+      if (!listener) {
+        return;
+      }
+      try {
+        const pending = listener.waitForCallback(200);
+        const organizationName = "Injected Organization";
+        const response = await fetch(
+          `${listener.redirectUri}?${stateQuery}code=authorization-code&organization_name=${encodeURIComponent(organizationName)}`,
+          { signal: AbortSignal.timeout(1000) },
+        );
+        const html = await response.text();
+        expect(response.status).toBe(400);
+        expect(await textContent(html, "h1")).toBe("Sign-in failed");
+        expect(html).not.toContain(organizationName);
+        expect(html).not.toContain("authorization-code");
+        expect(html).not.toContain('<p class="organization">');
+        // The code is never handed to the terminal for exchange.
+        const callback = await pending;
+        if (stateQuery === "") {
+          expect(callback).toBeInstanceOf(Error);
+        } else {
+          expect(callback).toEqual({ error: "invalid_state", kind: "error" });
+        }
+      } finally {
+        listener.close();
+      }
+    },
+  );
+
   test("shows the failure variant and sends the error to the terminal", async () => {
-    const listener = await startLoopbackListener();
+    const listener = await startLoopbackListener({ expectedState: "xyz789" });
     expect(listener).toBeDefined();
     if (!listener) {
       return;
