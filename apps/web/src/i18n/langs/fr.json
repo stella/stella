@@ -5330,6 +5330,7 @@
         "legal_list_item": "entrée de liste juridique",
         "legal_list_verification": "vérification de liste juridique",
         "legal_resolve": "recherche de référence juridique",
+        "legislation_matter_link": "lien entre législation et dossier",
         "machine_api_key": "clé API de machine",
         "mcp_connection": "connexion MCP",
         "mcp_gateway_tool": "outil de passerelle MCP",

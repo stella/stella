@@ -550,6 +550,7 @@ export const LIMITS = {
   clauseImportBatchLimit: 200,
   templateFillsRetentionDays: 365,
   caseLawMatterLinksPerWorkspace: 1000,
+  legislationMatterLinksPerWorkspace: 1000,
   /** An empty coverage country reads as unset: all jurisdictions. */
   caseLawCoverageCountryMinLength: 1,
   /**

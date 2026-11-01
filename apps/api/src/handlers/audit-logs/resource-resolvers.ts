@@ -171,6 +171,10 @@ const AUDIT_RESOURCE_RESOLVERS = {
     type: "unresolvable",
     reason: "No canonical user-facing name source",
   },
+  [AUDIT_RESOURCE_TYPE.LEGISLATION_MATTER_LINK]: {
+    type: "unresolvable",
+    reason: "No canonical user-facing name source",
+  },
   [AUDIT_RESOURCE_TYPE.CASE_LAW_DECISION_ANNOTATION]: {
     type: "unresolvable",
     reason: "No canonical user-facing name source",

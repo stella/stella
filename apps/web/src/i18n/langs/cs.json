@@ -5330,6 +5330,7 @@
         "legal_list_item": "položka právního seznamu",
         "legal_list_verification": "ověření právního seznamu",
         "legal_resolve": "dohledání právního odkazu",
+        "legislation_matter_link": "propojení předpisu se spisem",
         "machine_api_key": "strojový klíč API",
         "mcp_connection": "připojení MCP",
         "mcp_gateway_tool": "nástroj brány MCP",
