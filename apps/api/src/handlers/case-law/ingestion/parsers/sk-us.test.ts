@@ -629,6 +629,24 @@ describe("the plain spaces of a file that sets its word gaps as no-break spaces"
     ]);
   });
 
+  test("between two words the file prints whole are the court's own gaps", () => {
+    // One gap of the court's ordinary sentence set as a plain space, as a
+    // pasted quotation would be; both words read whole everywhere else.
+    const html = holding(NBSP).replace(`súd${NBSP}preskúmal`, "súd preskúmal");
+    const text = parse(
+      `<html><body><div><span style="font-size: 12px; ">${html}<br/></span></div></body></html>`,
+    )
+      .documentAst.blocks.map((block) =>
+        "inlines" in block ? plainTextOf(block.inlines) : "",
+      )
+      .join("\n")
+      .replaceAll(NBSP, " ");
+    expect(text).toContain("1. Ústavný súd preskúmal sťažnosť a dospel");
+    expect(text).not.toContain("súdpreskúmal");
+    // The file still reads as one that sets its gaps as no-break spaces.
+    expect(text).toContain("zrušuje");
+  });
+
   test("say nothing in a file that sets plain spaces throughout", () => {
     expect(holdingTexts(" ")).toEqual([
       "1. Základné právo na súdnu ochranu sťažovateľa poru šen é boli. 2. Uznesenie krajského súdu zru šuje a vec vracia na ďalšie konanie.",

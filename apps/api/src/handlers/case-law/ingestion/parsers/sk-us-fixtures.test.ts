@@ -216,6 +216,17 @@ describe("PL. ÚS 10/2014", () => {
     expect(text).toContain("Landesregierung a iní, C-293/12 a C-594/12");
   });
 
+  // The file sets its word gaps as no-break spaces; its one plain gap
+  // between letters is the seam in the instruction's heading.
+  test("the instruction's heading the text layer splits reads whole", async () => {
+    const blocks = await parsedFixture("sk-us-pl-us-10-2014", "PL. ÚS 10/2014");
+    const text = blocks
+      .map((block) => ("inlines" in block ? textOf(block) : ""))
+      .join("\n");
+    expect(text).toContain("Poučenie");
+    expect(text).not.toContain("Pou čenie");
+  });
+
   test("a quoted `takto rozhodol:` inside the reasoning does not turn the reasoning into the holding", async () => {
     const blocks = await parsedFixture("sk-us-pl-us-10-2014", "PL. ÚS 10/2014");
     expect(headings(blocks, 2)).toEqual(["rozhodol:", "Odôvodnenie:"]);
