@@ -1,6 +1,8 @@
 import { request as playwrightRequest } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
+import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
+
 import { signInWithEmailOtp } from "../helpers/sign-in";
 import { expect, test } from "../helpers/test";
 
@@ -26,16 +28,26 @@ const createOrganizationSelectionSession = async ({
     // auto-selecting the sole organization. Neither create activates its
     // organization, so the stored session has none, as after a fresh sign-in.
     const primaryCreateResponse = await loginApi.post(
-      `${API_BASE_URL}/api/auth/organization/create`,
-      { data: { ...primaryOrganization, keepCurrentActiveOrganization: true } },
+      `${API_BASE_URL}/v1/organizations`,
+      {
+        data: primaryOrganization,
+        headers: {
+          "Idempotency-Key": primaryOrganization.slug,
+          [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+        },
+      },
     );
     expect(primaryCreateResponse.ok(), await primaryCreateResponse.text()).toBe(
       true,
     );
     const secondaryCreateResponse = await loginApi.post(
-      `${API_BASE_URL}/api/auth/organization/create`,
+      `${API_BASE_URL}/v1/organizations`,
       {
-        data: { ...secondaryOrganization, keepCurrentActiveOrganization: true },
+        data: secondaryOrganization,
+        headers: {
+          "Idempotency-Key": secondaryOrganization.slug,
+          [CAPABILITY_REQUEST_HEADER]: "organizations.create",
+        },
       },
     );
     expect(

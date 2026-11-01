@@ -6,6 +6,7 @@ import type { RawHeaders } from "@/api/http/route-input";
 import { status } from "@/api/http/status";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AccountCapabilityAuthority } from "@/api/lib/auth/account-export-policy";
 import type {
   AuditRecorderFactory,
   MemberCaller,
@@ -33,7 +34,7 @@ export type CapabilityHandlerContext = HandlerContext<
   RawHeaders
 > &
   MemberCaller &
-  Partial<WorkspaceCaller>;
+  Partial<WorkspaceCaller> & { accountAuthority: AccountCapabilityAuthority };
 
 const recorderFactory =
   (
@@ -92,7 +93,13 @@ const mcpMemberCaller = async (
 
   return {
     user: { id: context.userId, email: context.userEmail },
-    session: { id: null, activeOrganizationId: context.organizationId },
+    session: {
+      id: null,
+      activeOrganizationId: context.organizationId,
+      ...(context.sessionCredentialType === undefined
+        ? {}
+        : { credentialType: context.sessionCredentialType }),
+    },
     ...(featureAccessSnapshot === undefined ? {} : { featureAccessSnapshot }),
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -185,6 +192,10 @@ export const capabilityHandlerContext = async ({
     headers: {},
     status,
     ...member,
+    accountAuthority: {
+      credential: context.credential,
+      grantedScopes: context.grantedScopes,
+    },
     ...workspace,
   };
 };
