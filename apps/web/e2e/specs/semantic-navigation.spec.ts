@@ -173,7 +173,7 @@ for (const email of [null, "a@example.test"]) {
   test(`contact email cell space opens the contact (${email === null ? "empty" : "with address"})`, async ({
     page,
     request,
-  }, testInfo) => {
+  }) => {
     const contactId = randomUUID();
     const displayName = `Contact click ${contactId.slice(0, 8)}`;
     await apiPut(request, "/contacts", {
@@ -186,13 +186,25 @@ for (const email of [null, "a@example.test"]) {
             emails: [{ type: "work", address: email, isPrimary: true }],
           }),
     });
+    let passed = false;
     try {
       await page.context().addCookies((await request.storageState()).cookies);
       await page.setViewportSize({ width: 1440, height: 900 });
       await page.goto("/contacts", { waitUntil: "domcontentloaded" });
+      // The search is debounced and a new query swaps the table to its loading
+      // rows, so the unfiltered list (which already shows this contact) must not
+      // stand in for the searched one.
+      const searched = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname.endsWith("/v1/contacts") &&
+          url.searchParams.get("q") === displayName
+        );
+      });
       await page
         .getByRole("searchbox", { name: "Search contacts" })
         .fill(displayName);
+      expect((await searched).ok()).toBe(true);
       const row = page.getByRole("row").filter({
         has: page.getByRole("link", { exact: true, name: displayName }),
       });
@@ -216,21 +228,38 @@ for (const email of [null, "a@example.test"]) {
         await link.click();
         await expect(page).toHaveURL(/\/contacts$/u);
       }
+      // Probe the middle of the empty space between the address and the cell
+      // edge, and name what is actually there.
       const space = await cell.evaluate((element) => {
         const bounds = element.getBoundingClientRect();
-        const x = bounds.width - 4;
+        const contentEnd =
+          element.querySelector("a")?.getBoundingClientRect().right ??
+          bounds.left;
+        const x = (contentEnd + bounds.right) / 2 - bounds.left;
         const y = bounds.height / 2;
         const target = document.elementFromPoint(
           bounds.left + x,
           bounds.top + y,
         );
-        return { x, y, hitsLink: target?.closest("a") !== null };
+        const describe = () => {
+          if (target === null) {
+            return "nothing (outside the viewport)";
+          }
+          if (target.closest("a") !== null) {
+            return "a link";
+          }
+          return element.contains(target) ? "the cell" : "outside the cell";
+        };
+        return { emptyWidth: bounds.right - contentEnd, hit: describe(), x, y };
       });
-      expect(space.hitsLink).toBe(false);
+      expect(space.emptyWidth).toBeGreaterThan(8);
+      expect(space.hit).toBe("the cell");
       await cell.click({ position: { x: space.x, y: space.y } });
       await expect(page).toHaveURL(new RegExp(`/contacts/${contactId}$`, "u"));
+      passed = true;
     } finally {
-      if (testInfo.status === testInfo.expectedStatus) {
+      // Keep the failing page for the failure screenshot and trace.
+      if (passed) {
         await page.goto("about:blank", { waitUntil: "commit" });
       }
       await apiDelete(request, `/contacts/${contactId}`);
