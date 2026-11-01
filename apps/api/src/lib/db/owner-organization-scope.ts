@@ -1,7 +1,9 @@
 import { panic } from "better-result";
-import { type SQL, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { SETTING_ORGANIZATION_ID } from "@/api/db/rls";
+import type { RootDatabase, Transaction } from "@/api/db/root";
+import type { RlsDatabaseMarker } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -13,47 +15,73 @@ import { isRecord } from "@/api/lib/type-guards";
  * table forces row security on its owner, and the owner's policy admits the
  * rows of the organization the transaction names in `app.organization_id`.
  * This module is the one place owner-connection code names that
- * organization.
+ * organization; `scripts/ownership/owner-organization-scope.ts` lists the
+ * modules that may import it.
  *
  * `withOwnerOrganizationScope` runs `run` in a transaction (a savepoint when
  * `handle` already is one) whose organization setting is `organizationId`,
- * then restores the enclosing transaction's setting, so the owner work
- * around it keeps the scope it had. The owner role stays the current role:
- * nothing else the transaction reads changes, and other organizations'
- * contacts stay unreadable and unwritable through it.
+ * then hands the enclosing transaction its own setting back. The owner role
+ * stays the current role: nothing else the transaction reads changes, and
+ * other organizations' contacts stay unreadable and unwritable through it.
  *
- * A transaction that already names an organization keeps it: entering a
- * different one there is refused, so a tenant transaction never reaches
- * another tenant's contacts through this helper.
+ * Only the table owner may enter: the handle is the owner database or one of
+ * its transactions (an RLS-marked application database does not typecheck),
+ * and the savepoint refuses any other current role, so an application-role
+ * transaction, tenantless or not, never gains an organization here. A
+ * transaction that already names an organization keeps it: entering a
+ * different one is refused.
  */
 
-type OwnerScopeTransaction = {
-  execute: (query: SQL) => PromiseLike<unknown>;
-};
-
 /** The owner database, or an owner transaction to scope a savepoint of. */
-type OwnerScopeHandle<Tx extends OwnerScopeTransaction> = {
-  transaction: <Value>(run: (tx: Tx) => Promise<Value>) => Promise<Value>;
+type OwnerScopeHandle =
+  Pick<RootDatabase, "transaction"> | Pick<Transaction, "transaction">;
+
+/** Application databases carry the RLS marker; they are not owner handles. */
+type NotRlsMarked = { readonly [Key in keyof RlsDatabaseMarker]?: never };
+
+type OwnerScopeState = {
+  previous: SafeId<"organization"> | "";
 };
 
-const readOrganizationSetting = async (
-  tx: OwnerScopeTransaction,
-): Promise<SafeId<"organization"> | ""> => {
+/**
+ * The enclosing setting, after proving the transaction runs as the owner of
+ * the `contacts` table its search path resolves (the table the owner policy
+ * reads).
+ */
+const readOwnerScopeState = async (
+  tx: Transaction,
+): Promise<OwnerScopeState> => {
   const [row] = executedRows(
     await tx.execute(
-      sql`SELECT coalesce(pg_catalog.current_setting(${SETTING_ORGANIZATION_ID}, true), '') AS organization_id`,
+      sql`SELECT
+        coalesce(pg_catalog.current_setting(${SETTING_ORGANIZATION_ID}, true), '') AS organization_id,
+        coalesce(
+          current_user = (
+            SELECT pg_catalog.pg_get_userbyid(relation.relowner)
+            FROM pg_catalog.pg_class relation
+            WHERE relation.oid = pg_catalog.to_regclass('contacts')
+          ),
+          false
+        ) AS is_owner`,
     ),
   );
-  const setting = isRecord(row) ? row["organization_id"] : undefined;
-  if (typeof setting !== "string") {
+  if (!isRecord(row) || typeof row["organization_id"] !== "string") {
     return panic("Organization setting read returned an invalid row");
   }
-  return setting === "" ? "" : brandPersistedOrganizationId(setting);
+  if (row["is_owner"] !== true) {
+    return panic(
+      "The owner organization scope runs only as the contacts table owner",
+    );
+  }
+  const setting = row["organization_id"];
+  return {
+    previous: setting === "" ? "" : brandPersistedOrganizationId(setting),
+  };
 };
 
 /** `setting` is an organization id, or the empty setting it hands back. */
 const writeOrganizationSetting = async (
-  tx: OwnerScopeTransaction,
+  tx: Transaction,
   setting: SafeId<"organization"> | "",
 ) => {
   await tx.execute(
@@ -61,19 +89,16 @@ const writeOrganizationSetting = async (
   );
 };
 
-export const withOwnerOrganizationScope = async <
-  Tx extends OwnerScopeTransaction,
-  T,
->(
-  handle: OwnerScopeHandle<Tx>,
+export const withOwnerOrganizationScope = async <T>(
+  handle: OwnerScopeHandle & NotRlsMarked,
   organizationId: SafeId<"organization">,
-  run: (tx: Tx) => Promise<T>,
+  run: (tx: Transaction) => Promise<T>,
 ): Promise<T> =>
   // A savepoint of an enclosing transaction, or a fresh transaction. A failed
   // statement rolls the savepoint and its setting back together; a completed
   // run hands the enclosing transaction its own setting back.
-  await withAggregateSavepoint(handle, async (tx) => {
-    const previous = await readOrganizationSetting(tx);
+  await withAggregateSavepoint<Transaction, T>(handle, async (tx) => {
+    const { previous } = await readOwnerScopeState(tx);
     if (previous !== "" && previous !== organizationId) {
       return panic(
         "An organization-scoped transaction cannot enter another organization",

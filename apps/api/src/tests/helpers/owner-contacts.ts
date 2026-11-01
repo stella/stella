@@ -18,7 +18,7 @@ export const insertOwnerContacts = async (
     rows,
     (row) => row.organizationId,
   )) {
-    await withOwnerOrganizationScope<Transaction, unknown>(
+    await withOwnerOrganizationScope(
       database,
       brandPersistedOrganizationId(organizationId),
       async (tx) => {
