@@ -72,8 +72,8 @@ export const chainComparisonOwner = (
   if (!trueForUndefined(operator, literal)) {
     return "prefer-optional-chain";
   }
-  // `!== null` is the strict null form; the other absent-as-match forms
-  // follow a dated rollout in scripts/guard-rollouts.
+  // `!== null` is the strict null form; the other absent-as-match forms have
+  // their own rule and message, since their explicit spelling differs.
   return operator === "!==" && literal === "null"
     ? "no-optional-chain-null-compare"
     : "no-optional-chain-absent-match";
