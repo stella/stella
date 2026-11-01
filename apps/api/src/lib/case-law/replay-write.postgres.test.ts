@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import {
   caseLawDecisions,
@@ -52,8 +53,11 @@ if (!databaseUrl || !enabled) {
         adapterKey: `replay-${sourceId}`,
         name: "Replay fixture",
       });
+      // A shared database may already hold the generation; only a row this
+      // test inserted is its to retire.
+      let insertedGeneration = false;
       try {
-        await db
+        const inserted = await db
           .insert(corpusIndexGenerations)
           .values({
             family: "case_law",
@@ -64,7 +68,9 @@ if (!databaseUrl || !enabled) {
             ),
             status: "building",
           })
-          .onConflictDoNothing();
+          .onConflictDoNothing()
+          .returning({ generation: corpusIndexGenerations.generation });
+        insertedGeneration = inserted.length > 0;
         await db.insert(caseLawDecisions).values(decisions);
         const supplements = decisions.map(
           (decision) =>
@@ -166,81 +172,91 @@ if (!databaseUrl || !enabled) {
         await replay();
         expect(await versions()).toEqual(before);
         expect(await statistics()).toEqual(beforeStatistics);
-        const lsn = executedRows(
-          await db.execute(sql`SELECT pg_current_wal_lsn()::text AS lsn`),
-        ).at(0);
-        if (!lsn || !("lsn" in lsn) || typeof lsn.lsn !== "string") {
-          throw new TypeError("WAL LSN missing");
+        // This client's own WAL, read after a forced statistics flush: other
+        // sessions' writes are excluded, and a window that logged a full-page
+        // image crossed a checkpoint, so its byte count measures the
+        // checkpoint rather than the writer and the pair runs again.
+        const backendWal = async () => {
+          await db.execute(sql`SELECT pg_stat_force_next_flush()`);
+          await db.execute(sql`SELECT pg_stat_clear_snapshot()`);
+          return v.parse(
+            v.tuple([
+              v.object({
+                bytes: v.pipe(v.string(), v.transform(Number)),
+                images: v.pipe(v.string(), v.transform(Number)),
+              }),
+            ]),
+            executedRows(
+              await db.execute(
+                sql`SELECT wal_bytes::text AS bytes, wal_fpi::text AS images FROM pg_stat_get_backend_wal(pg_backend_pid())`,
+              ),
+            ),
+          )[0];
+        };
+        const walOf = async (work: () => Promise<void>) => {
+          const start = await backendWal();
+          await work();
+          const end = await backendWal();
+          return {
+            bytes: end.bytes - start.bytes,
+            images: end.images - start.images,
+          };
+        };
+        // These upserts still lock conflicting tuples. Measure the same four
+        // rows per decision and commit grouping as a conservative WAL control.
+        const lockControl = async () => {
+          for (const decision of decisions) {
+            await db.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT decision_id FROM case_law_decision_judges WHERE decision_id=${decision.id} FOR UPDATE`,
+              );
+              await tx.execute(
+                sql`SELECT source_document_id FROM case_law_decision_supplements WHERE source_id=${sourceId} AND source_document_id=${decision.id} FOR UPDATE`,
+              );
+            });
+          }
+          await db.transaction(
+            async (tx) =>
+              await tx.execute(
+                sql`SELECT entity_id FROM corpus_index_projection_states WHERE entity_id IN (SELECT id FROM case_law_decisions WHERE source_id=${sourceId}) FOR UPDATE`,
+              ),
+          );
+        };
+        const WAL_ATTEMPTS = 5;
+        let pair: { measured: number; control: number } | undefined;
+        for (let attempt = 0; attempt < WAL_ATTEMPTS && !pair; attempt += 1) {
+          // db-await-in-loop: each attempt replays and measures sequentially on one client.
+          const measured = await walOf(replay);
+          // db-await-in-loop: the lock control runs after the replay on the same client.
+          const control = await walOf(lockControl);
+          if (measured.images === 0 && control.images === 0) {
+            pair = { measured: measured.bytes, control: control.bytes };
+          }
         }
-        await replay();
-        const wal = executedRows(
-          await db.execute(
-            sql`SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), ${lsn.lsn}::pg_lsn)::text AS bytes`,
-          ),
-        );
-        process.stdout.write(`REPLAY_WAL_1000 ${JSON.stringify(wal)}\n`);
+        if (!pair) {
+          throw new Error(
+            `Every WAL measurement crossed a checkpoint in ${WAL_ATTEMPTS} attempts`,
+          );
+        }
+        process.stdout.write(`REPLAY_WAL_1000 ${pair.measured}\n`);
+        process.stdout.write(`REPLAY_LOCK_CONTROL_1000 ${pair.control}\n`);
         const after = await versions();
         process.stdout.write(
           `REPLAY_VERSIONS ${before.filter((row, i) => JSON.stringify(row) !== JSON.stringify(after.at(i))).length}\n`,
         );
         expect(after).toEqual(before);
         expect(await statistics()).toEqual(beforeStatistics);
-        // These upserts still lock conflicting tuples. Measure the same four
-        // rows per decision and commit grouping as a conservative WAL control.
-        const controlBefore = executedRows(
-          await db.execute(sql`SELECT pg_current_wal_lsn()::text AS lsn`),
-        ).at(0);
-        if (
-          !controlBefore ||
-          !("lsn" in controlBefore) ||
-          typeof controlBefore.lsn !== "string"
-        ) {
-          throw new TypeError("Control WAL LSN missing");
-        }
-        for (const decision of decisions) {
-          await db.transaction(async (tx) => {
-            await tx.execute(
-              sql`SELECT decision_id FROM case_law_decision_judges WHERE decision_id=${decision.id} FOR UPDATE`,
-            );
-            await tx.execute(
-              sql`SELECT source_document_id FROM case_law_decision_supplements WHERE source_id=${sourceId} AND source_document_id=${decision.id} FOR UPDATE`,
-            );
-          });
-        }
-        await db.transaction(
-          async (tx) =>
-            await tx.execute(
-              sql`SELECT entity_id FROM corpus_index_projection_states WHERE entity_id IN (SELECT id FROM case_law_decisions WHERE source_id=${sourceId}) FOR UPDATE`,
-            ),
-        );
-        const control = executedRows(
-          await db.execute(
-            sql`SELECT pg_wal_lsn_diff(pg_current_wal_lsn(), ${controlBefore.lsn}::pg_lsn)::text AS bytes`,
-          ),
-        ).at(0);
-        const measured = wal.at(0);
-        if (
-          !control ||
-          !("bytes" in control) ||
-          typeof control.bytes !== "string" ||
-          !measured ||
-          !("bytes" in measured) ||
-          typeof measured.bytes !== "string"
-        ) {
-          throw new TypeError("WAL measurement missing");
-        }
-        process.stdout.write(`REPLAY_LOCK_CONTROL_1000 ${control.bytes}\n`);
         // Allow one 64 KiB WAL segment fraction beyond the measured lock and
         // commit control; baseline main produced 2,035,464 bytes for this fixture.
-        expect(Number(measured.bytes)).toBeLessThanOrEqual(
-          Number(control.bytes) + 65_536,
-        );
-        expect(Number(measured.bytes)).toBeLessThan(2_035_464 / 4);
+        expect(pair.measured).toBeLessThanOrEqual(pair.control + 65_536);
+        expect(pair.measured).toBeLessThan(2_035_464 / 4);
       } finally {
-        await db
-          .update(corpusIndexGenerations)
-          .set({ status: "retired" })
-          .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+        if (insertedGeneration) {
+          await db
+            .update(corpusIndexGenerations)
+            .set({ status: "retired" })
+            .where(eq(corpusIndexGenerations.generation, "case_law_v5"));
+        }
         await db
           .delete(corpusIndexProjectionStates)
           .where(
