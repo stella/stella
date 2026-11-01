@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 import * as v from "valibot";
 
-import { GENERATED_ENTRIES, GENERATED_RECOMMENDED } from "./catalogue.gen";
+import {
+  GENERATED_ENTRIES,
+  type GENERATED_NATIVE_TOOL_SLUGS,
+  GENERATED_RECOMMENDED,
+} from "./catalogue.gen";
 import {
   type CatalogueEntry,
   catalogueEntrySchema,
@@ -14,6 +18,9 @@ import {
 export type LoadedCatalogueEntry = CatalogueEntry & {
   icon: string | null;
 };
+
+/** The slug of every native-tool manifest, generated from the entries. */
+export type NativeToolSlug = (typeof GENERATED_NATIVE_TOOL_SLUGS)[number];
 
 const formatIssues = (issues: readonly v.BaseIssue<unknown>[]): string =>
   issues

@@ -1337,9 +1337,30 @@
       "none": "Bez nastavenia"
     },
     "skillNeedsUnavailableTools": "V chate sa neponúka. Potrebuje nástroj, ktorý tam nie je k dispozícii: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Skryje mená klientov, čísla účtov, adresy a ďalšie osobné údaje ešte pred zdieľaním obsahu spisu s poskytovateľmi AI. Anonymizáciu možno na strane klienta vrátiť späť a pôvodný text nikdy neopustí váš pracovný priestor.",
+      "ares": "Vyhľadávanie českých firiem podľa IČO alebo názvu vo verejnom registri ARES (administratívny register ekonomických subjektov, české obdobie obchodného registra).",
+      "boe": "Španielske konsolidované právne predpisy, denný úradný vestník a BORME (vestník obchodného registra) z oficiálneho otvoreného dátového rozhrania Boletín Oficial del Estado.",
+      "brreg": "Vyhľadávanie nórskych firiem podľa organisasjonsnummer alebo názvu vo verejnom otvorenom rozhraní Enhetsregisteret (Brreg).",
+      "companiesHouse": "Vyhľadávanie britských firiem podľa registračného čísla Companies House alebo názvu cez verejné dátové rozhranie Companies House. Vyžaduje bezplatný kľúč API.",
+      "createDocx": "Vytváranie dokumentov Word priamo z chatu vrátane formátovania, tabuliek, hlavičiek a vložených štýlov. Výsledok možno stiahnuť a ďalej upravovať vo Worde, LibreOffice a Pages.",
+      "denue": "Vyhľadávanie mexických prevádzok a ekonomických jednotiek podľa identifikátora prevádzky DENUE, názvu alebo obchodného mena v oficiálnom rozhraní DENUE inštitútu INEGI. DENUE je adresár prevádzok, nie obchodný register Registro Público de Comercio. Vyžaduje bezplatný token INEGI API.",
+      "edgar": "Vyhľadávanie amerických verejne obchodovaných spoločností podľa Central Index Key (CIK) v rozhraní EDGAR americkej komisie SEC.",
+      "gcis": "Vyhľadávanie taiwanských firiem podľa 統一編號 (tongbian, daňové identifikačné číslo) alebo názvu v otvorenom dátovom rozhraní portálu Commerce Industrial Services ministerstva hospodárstva (MoEA).",
+      "infosoud": "Vyhľadávanie českých súdnych konaní a kalendár pojednávaní z infosoud.gov.cz. Podľa spisovej značky, súdu alebo účastníka zistíte termíny pojednávaní a stav konania.",
+      "krs": "Vyhľadávanie poľských firiem podľa čísla KRS v otvorenom rozhraní Krajowy Rejestr Sądowy (KRS) ministerstva spravodlivosti. Zahŕňa Rejestr Przedsiębiorców (podnikatelia) aj Rejestr Stowarzyszeń (združenia a nadácie).",
+      "orsr": "Vyhľadávanie slovenských firiem podľa IČO alebo názvu v rozhraní JSON Obchodného registra Slovenskej republiky, ktoré prevádzkuje ministerstvo spravodlivosti.",
+      "prh": "Vyhľadávanie fínskych firiem podľa Y-tunnus alebo názvu v otvorenom rozhraní AvoinData v3 úradu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Vyhľadávanie francúzskych firiem podľa SIREN, SIRET alebo názvu v otvorenom rozhraní recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Vyhľadávanie podľa IČO alebo názvu v Registri právnických osôb, podnikateľov a orgánov verejnej moci (RPO), ktorý vedie Štatistický úrad Slovenskej republiky. Zahŕňa všetky právnické osoby a podnikateľov vrátane živnostníkov, združení, nadácií a verejných orgánov mimo obchodného registra.",
+      "vies": "Overenie IČ DPH v celej EÚ cez rozhranie REST systému VAT Information Exchange System (VIES) Európskej komisie. Potvrdí, či je IČ DPH registrované v členskom štáte dodávateľa, a vráti názov a adresu registrovaného obchodníka, ak ich členský štát zverejňuje.",
+      "webSearch": "Vyhľadávanie na verejnom webe a čítanie jednotlivých stránok. Ak je nastavená jurisdikcia, dopyty smerujú najprv na primárne zdroje (súdy, portály s právnymi predpismi), inak na otvorený web. Zapína sa pre každú konverzáciu zvlášť."
+    },
     "toolNames": {
       "anonymize": "Anonymizovať",
       "createDocx": "Vytvoriť DOCX",
+      "gcis": "Register spoločností GCIS",
+      "vies": "Overenie IČ DPH v EÚ (VIES)",
       "webSearch": "Webové vyhľadávanie"
     },
     "unavailable": "Zatiaľ nedostupné"

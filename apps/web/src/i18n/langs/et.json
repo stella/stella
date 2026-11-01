@@ -1337,9 +1337,30 @@
       "none": "Seadistus puudub"
     },
     "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Peidab klientide nimed, kontonumbrid, aadressid ja muud isikuandmed enne toimiku sisu jagamist AI-teenuse pakkujatega. Kliendi poolel pööratav; avatekst ei lahku kunagi teie tööruumist.",
+      "ares": "Tšehhi ettevõtete otsing IČO või ärinime järgi avalikust ARES-i registrist (majandusüksuste haldusregister, Tšehhi vaste äriregistrile).",
+      "boe": "Hispaania konsolideeritud õigusaktid, igapäevane ametlik väljaanne ja BORME (äriregistri väljaanne) Boletín Oficial del Estado ametlikust avaandmete API-st.",
+      "brreg": "Norra ettevõtete otsing organisasjonsnummeri või ärinime järgi Brreg Enhetsregisteret'i avalikust avatud API-st.",
+      "companiesHouse": "Ühendkuningriigi ettevõtete otsing Companies House'i registrinumbri või ärinime järgi Companies House'i avalike andmete API-st. Vajalik on tasuta API-võti.",
+      "createDocx": "Loob vestlusest Wordi dokumente koos vormingu, tabelite, päiste ja manustatud stiilidega. Tulemuse saab alla laadida ning seda Wordis, LibreOffice'is ja Pagesis muuta.",
+      "denue": "Mehhiko tegevuskohtade ja majandusüksuste otsing DENUE tegevuskoha ID, nime või ärinime järgi INEGI ametlikust DENUE API-st. DENUE on tegevuskohtade kataloog, mitte äriühinguõiguse register Registro Público de Comercio. Vajalik on tasuta INEGI API-tunnus.",
+      "edgar": "USA börsiettevõtete otsing Central Index Key (CIK) järgi SEC-i EDGAR-i esitiste API-st.",
+      "gcis": "Taiwani ettevõtete otsing 統一編號 (tongbian, maksukohustuslase number) või ärinime järgi majandusministeeriumi (MoEA) portaali Commerce Industrial Services avaandmete API-st.",
+      "infosoud": "Tšehhi kohtuasjade otsing ja istungite kalender aadressilt infosoud.gov.cz. Otsi kohtuasja numbri, kohtu või poole järgi, et saada istungite ajad ja menetluse seis.",
+      "krs": "Poola ettevõtete otsing KRS-numbri järgi justiitsministeeriumi Krajowy Rejestr Sądowy (KRS) avatud API-st. Hõlmab registreid Rejestr Przedsiębiorców (äriühingud) ja Rejestr Stowarzyszeń (ühingud ja sihtasutused).",
+      "orsr": "Slovakkia ettevõtete otsing IČO või ärinime järgi justiitsministeeriumi hallatava registri Obchodný register Slovenskej republiky JSON API-st.",
+      "prh": "Soome ettevõtete otsing Y-tunnuse või ärinime järgi asutuse Patentti- ja rekisterihallitus (PRH) avatud API-st AvoinData v3.",
+      "rechercheEntreprises": "Prantsuse ettevõtete otsing SIREN-i, SIRET-i või ärinime järgi avatud API-st recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakkia otsing IČO või nime järgi Slovaki Vabariigi Statistikaameti hallatavas registris Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO). Hõlmab kõiki juriidilisi isikuid ja ettevõtjaid, sealhulgas füüsilisest isikust ettevõtjaid, ühinguid, sihtasutusi ja avalikke asutusi, kes äriregistris ei ole.",
+      "vies": "Üle-ELiline käibemaksukohustuslase numbri kontroll Euroopa Komisjoni käibemaksuteabe vahetamise süsteemi (VIES) REST API kaudu. Kinnitab, kas number on tarnija liikmesriigis registreeritud, ning tagastab registreeritud ettevõtja nime ja aadressi, kui liikmesriik need avaldab.",
+      "webSearch": "Otsib avalikust veebist ja loeb üksikuid lehti. Kui jurisdiktsioon on määratud, suunatakse päringud esmalt esmaallikatesse (kohtud, õigusaktide portaalid), muidu avatud veebi. Lubatakse iga vestluse jaoks eraldi."
+    },
     "toolNames": {
       "anonymize": "Anonüümimine",
       "createDocx": "Loo DOCX",
+      "gcis": "GCIS-i äriregister",
+      "vies": "ELi käibemaksukohustuslase kontroll (VIES)",
       "webSearch": "Veebiotsing"
     },
     "unavailable": "Veel pole saadaval"

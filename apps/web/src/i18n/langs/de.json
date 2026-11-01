@@ -1337,9 +1337,30 @@
       "none": "Keine Einrichtung"
     },
     "skillNeedsUnavailableTools": "Wird im Chat nicht angeboten. Benötigt ein Tool, das dort nicht verfügbar ist: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Maskiert Mandantennamen, Kontonummern, Adressen und andere personenbezogene Daten, bevor Akteninhalte mit KI-Anbietern geteilt werden. Auf Clientseite umkehrbar; der Klartext verlässt Ihren Arbeitsbereich nie.",
+      "ares": "Suche nach tschechischen Unternehmen per IČO oder Firmenname im öffentlichen ARES-Register (Verwaltungsregister der Wirtschaftssubjekte, tschechisches Pendant zum Handelsregister).",
+      "boe": "Spanische konsolidierte Rechtsvorschriften, tägliches Amtsblatt und BORME (Handelsregisterblatt) aus der offiziellen Open-Data-API des Boletín Oficial del Estado.",
+      "brreg": "Suche nach norwegischen Unternehmen per organisasjonsnummer oder Firmenname über die öffentliche offene API von Brreg Enhetsregisteret.",
+      "companiesHouse": "Suche nach britischen Unternehmen per Companies-House-Registernummer oder Firmenname über die öffentliche Daten-API von Companies House. Erfordert einen kostenlosen API-Schlüssel.",
+      "createDocx": "Erstellt Word-Dokumente direkt aus dem Chat mit Formatierung, Tabellen, Kopfzeilen und eingebetteten Formatvorlagen. Das Ergebnis lässt sich herunterladen und in Word, LibreOffice und Pages bearbeiten.",
+      "denue": "Suche nach mexikanischen Betriebsstätten und Wirtschaftseinheiten per DENUE-Betriebsstätten-ID, Name oder Firmenname über die offizielle DENUE-API von INEGI. DENUE ist ein Betriebsstättenverzeichnis, nicht das gesellschaftsrechtliche Register Registro Público de Comercio. Erfordert ein kostenloses INEGI-API-Token.",
+      "edgar": "Suche nach börsennotierten US-Unternehmen per Central Index Key (CIK) über die EDGAR-Submissions-API der SEC.",
+      "gcis": "Suche nach taiwanischen Unternehmen per 統一編號 (tongbian, Steuer-ID) oder Firmenname über die Open-Data-API des Commerce Industrial Services Portal des Wirtschaftsministeriums (MoEA).",
+      "infosoud": "Suche nach tschechischen Gerichtsverfahren und Verhandlungskalender von infosoud.gov.cz. Suchen Sie nach Aktenzeichen, Gericht oder Partei, um Verhandlungstermine und den Verfahrensstand abzurufen.",
+      "krs": "Suche nach polnischen Unternehmen per KRS-Nummer über die offene API des Krajowy Rejestr Sądowy (KRS) des Justizministeriums. Umfasst das Rejestr Przedsiębiorców (Handelsgesellschaften) und das Rejestr Stowarzyszeń (Vereine und Stiftungen).",
+      "orsr": "Suche nach slowakischen Unternehmen per IČO oder Firmenname über die JSON-API des Obchodný register Slovenskej republiky, betrieben vom Justizministerium.",
+      "prh": "Suche nach finnischen Unternehmen per Y-tunnus oder Firmenname über die offene API AvoinData v3 von Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Suche nach französischen Unternehmen per SIREN, SIRET oder Firmenname über die offene API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slowakische Suche per IČO oder Name im Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) des Statistischen Amts der Slowakischen Republik. Umfasst alle juristischen Personen und Unternehmer, darunter Einzelunternehmer, Vereine, Stiftungen und öffentliche Stellen außerhalb des Handelsregisters.",
+      "vies": "EU-weite Prüfung von Umsatzsteuer-Identifikationsnummern über die REST-API des VAT Information Exchange System (VIES) der Europäischen Kommission. Bestätigt, ob eine Nummer im Mitgliedstaat des Lieferanten registriert ist, und liefert Name und Anschrift des registrierten Unternehmens, sofern der Mitgliedstaat sie offenlegt.",
+      "webSearch": "Durchsucht das öffentliche Web und liest einzelne Seiten. Ist eine Rechtsordnung festgelegt, werden zuerst Primärquellen abgefragt (Gerichte, Rechtsportale), sonst das offene Web. Wird pro Unterhaltung aktiviert."
+    },
     "toolNames": {
       "anonymize": "Anonymisieren",
       "createDocx": "DOCX erstellen",
+      "gcis": "GCIS-Unternehmensregister",
+      "vies": "EU-USt-IdNr.-Prüfung (VIES)",
       "webSearch": "Websuche"
     },
     "unavailable": "Noch nicht verfügbar"

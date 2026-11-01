@@ -1337,9 +1337,30 @@
       "none": "Sin configuración"
     },
     "skillNeedsUnavailableTools": "No se ofrece en el chat. Necesita una herramienta que allí no está disponible: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Oculta nombres de clientes, números de cuenta, direcciones y otros datos personales antes de compartir el contenido del asunto con proveedores de IA. Reversible en el lado del cliente; el texto original nunca sale de tu espacio de trabajo.",
+      "ares": "Búsqueda de empresas checas por IČO o denominación en el registro público ARES (registro administrativo de agentes económicos, equivalente checo de un registro mercantil).",
+      "boe": "Legislación consolidada española, diario oficial y BORME (boletín del registro mercantil) desde la API oficial de datos abiertos del Boletín Oficial del Estado.",
+      "brreg": "Búsqueda de empresas noruegas por organisasjonsnummer o denominación en la API abierta pública Enhetsregisteret de Brreg.",
+      "companiesHouse": "Búsqueda de empresas británicas por número de registro de Companies House o denominación en la API de datos públicos de Companies House. Requiere una clave de API gratuita.",
+      "createDocx": "Genera documentos de Word desde el chat con formato, tablas, encabezados y estilos integrados. El resultado se puede descargar y editar en Word, LibreOffice y Pages.",
+      "denue": "Búsqueda de establecimientos y unidades económicas de México por Id de establecimiento DENUE, nombre o razón social en la API oficial DENUE del INEGI. DENUE es un directorio de establecimientos, no el Registro Público de Comercio. Requiere un token gratuito de la API del INEGI.",
+      "edgar": "Búsqueda de sociedades cotizadas de EE. UU. por Central Index Key (CIK) en la API de presentaciones EDGAR de la SEC.",
+      "gcis": "Búsqueda de empresas taiwanesas por 統一編號 (tongbian, identificación fiscal) o denominación en la API de datos abiertos del portal Commerce Industrial Services del Ministerio de Asuntos Económicos (MoEA).",
+      "infosoud": "Búsqueda de procedimientos judiciales checos y calendario de vistas desde infosoud.gov.cz. Busca por número de procedimiento, tribunal o parte para obtener las fechas de las vistas y el estado del procedimiento.",
+      "krs": "Búsqueda de empresas polacas por número KRS en la API abierta del Krajowy Rejestr Sądowy (KRS) del Ministerio de Justicia. Incluye el Rejestr Przedsiębiorców (sociedades mercantiles) y el Rejestr Stowarzyszeń (asociaciones y fundaciones).",
+      "orsr": "Búsqueda de empresas eslovacas por IČO o denominación en la API JSON del Obchodný register Slovenskej republiky, gestionada por el Ministerio de Justicia.",
+      "prh": "Búsqueda de empresas finlandesas por Y-tunnus o denominación en la API abierta AvoinData v3 de Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Búsqueda de empresas francesas por SIREN, SIRET o denominación en la API abierta recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Búsqueda eslovaca por IČO o nombre en el Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), gestionado por la Oficina de Estadística de la República Eslovaca. Incluye todas las personas jurídicas y empresarios, también autónomos, asociaciones, fundaciones y organismos públicos fuera del registro mercantil.",
+      "vies": "Validación de números de IVA en toda la UE mediante la API REST del sistema de intercambio de información sobre el IVA (VIES) de la Comisión Europea. Confirma si un número de IVA está registrado en el Estado miembro del proveedor y devuelve el nombre y la dirección del operador cuando el Estado miembro los divulga.",
+      "webSearch": "Busca en la web pública y lee páginas concretas. Las consultas van primero a fuentes primarias (tribunales, portales legislativos) cuando hay una jurisdicción definida; si no, a la web abierta. Se activa por conversación."
+    },
     "toolNames": {
       "anonymize": "Anonimizar",
       "createDocx": "Crear DOCX",
+      "gcis": "Registro de empresas GCIS",
+      "vies": "Validación de IVA de la UE (VIES)",
       "webSearch": "Búsqueda web"
     },
     "unavailable": "Aún no disponible"

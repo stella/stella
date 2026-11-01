@@ -1337,9 +1337,30 @@
       "none": "Bez konfiguracji"
     },
     "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Ukrywa nazwiska klientów, numery rachunków, adresy i inne dane osobowe przed udostępnieniem zawartości sprawy dostawcom AI. Działanie odwracalne po stronie klienta; tekst jawny nigdy nie opuszcza Twojego obszaru roboczego.",
+      "ares": "Wyszukiwanie czeskich firm po numerze IČO lub nazwie w publicznym rejestrze ARES (administracyjny rejestr podmiotów gospodarczych, czeski odpowiednik rejestru handlowego).",
+      "boe": "Hiszpańskie skonsolidowane akty prawne, dziennik urzędowy i BORME (biuletyn rejestru handlowego) z oficjalnego otwartego API Boletín Oficial del Estado.",
+      "brreg": "Wyszukiwanie norweskich firm po organisasjonsnummer lub nazwie w publicznym otwartym API Enhetsregisteret (Brreg).",
+      "companiesHouse": "Wyszukiwanie brytyjskich firm po numerze rejestracyjnym Companies House lub nazwie w publicznym API danych Companies House. Wymaga bezpłatnego klucza API.",
+      "createDocx": "Tworzy dokumenty Word z poziomu czatu, z formatowaniem, tabelami, nagłówkami i osadzonymi stylami. Wynik można pobrać i edytować w Wordzie, LibreOffice i Pages.",
+      "denue": "Wyszukiwanie meksykańskich zakładów i jednostek gospodarczych po identyfikatorze zakładu DENUE, nazwie lub firmie w oficjalnym API DENUE instytutu INEGI. DENUE to katalog zakładów, a nie rejestr spółek Registro Público de Comercio. Wymaga bezpłatnego tokenu API INEGI.",
+      "edgar": "Wyszukiwanie amerykańskich spółek publicznych po Central Index Key (CIK) w API zgłoszeń EDGAR komisji SEC.",
+      "gcis": "Wyszukiwanie tajwańskich firm po 統一編號 (tongbian, identyfikator podatkowy) lub nazwie w otwartym API portalu Commerce Industrial Services Ministerstwa Gospodarki (MoEA).",
+      "infosoud": "Wyszukiwanie czeskich spraw sądowych i kalendarz rozpraw z infosoud.gov.cz. Szukaj po sygnaturze, sądzie lub stronie, aby poznać terminy rozpraw i stan sprawy.",
+      "krs": "Wyszukiwanie polskich firm po numerze KRS w otwartym API Krajowego Rejestru Sądowego (KRS) Ministerstwa Sprawiedliwości. Obejmuje Rejestr Przedsiębiorców oraz Rejestr Stowarzyszeń (stowarzyszenia i fundacje).",
+      "orsr": "Wyszukiwanie słowackich firm po numerze IČO lub nazwie w API JSON Obchodný register Slovenskej republiky prowadzonym przez Ministerstwo Sprawiedliwości.",
+      "prh": "Wyszukiwanie fińskich firm po Y-tunnus lub nazwie w otwartym API AvoinData v3 urzędu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Wyszukiwanie francuskich firm po SIREN, SIRET lub nazwie w otwartym API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Słowackie wyszukiwanie po IČO lub nazwie w Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) prowadzonym przez Urząd Statystyczny Republiki Słowackiej. Obejmuje wszystkie osoby prawne i przedsiębiorców, w tym jednoosobowe działalności, stowarzyszenia, fundacje i organy publiczne spoza rejestru handlowego.",
+      "vies": "Weryfikacja numerów VAT w całej UE przez API REST systemu wymiany informacji o VAT (VIES) Komisji Europejskiej. Potwierdza, czy numer VAT jest zarejestrowany w państwie członkowskim dostawcy, i zwraca nazwę oraz adres podmiotu, jeśli państwo członkowskie je ujawnia.",
+      "webSearch": "Wyszukiwanie w publicznej sieci i czytanie poszczególnych stron. Gdy ustawiono jurysdykcję, zapytania trafiają najpierw do źródeł pierwotnych (sądy, portale prawne), w przeciwnym razie do otwartej sieci. Włączane dla każdej rozmowy osobno."
+    },
     "toolNames": {
       "anonymize": "Anonimizuj",
       "createDocx": "Utwórz DOCX",
+      "gcis": "Rejestr spółek GCIS",
+      "vies": "Weryfikacja VAT UE (VIES)",
       "webSearch": "Wyszukiwanie w sieci"
     },
     "unavailable": "Jeszcze niedostępne"

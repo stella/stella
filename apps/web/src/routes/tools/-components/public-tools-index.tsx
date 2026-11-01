@@ -30,6 +30,10 @@ import {
 import { Prose } from "@stll/ui/prose";
 import { cn } from "@stll/ui/utils";
 
+import {
+  nativeToolDescriptionKey,
+  nativeToolLabelKey,
+} from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import { ToggleChip } from "@/features/knowledge/public/tools/toggle-chip";
 import type { TranslationKey } from "@/i18n/types";
@@ -124,8 +128,20 @@ export function PublicToolsIndex({
     ReadonlySet<string>
   >(new Set());
 
+  // Search and order follow what the reader sees on each card.
+  const localizedEntries = catalogueEntries.map((entry) => {
+    const identity = { slug: entry.slug, kind: entry.kind };
+    const labelKey = nativeToolLabelKey(identity);
+    const descriptionKey = nativeToolDescriptionKey(identity);
+    return {
+      ...entry,
+      displayName: labelKey ? t(labelKey) : entry.displayName,
+      description: descriptionKey ? t(descriptionKey) : entry.description,
+    };
+  });
+
   const entries = sortToolEntries(
-    filterPublicToolEntries(catalogueEntries, {
+    filterPublicToolEntries(localizedEntries, {
       jurisdictions: selectedJurisdictions,
       kind,
       query,
