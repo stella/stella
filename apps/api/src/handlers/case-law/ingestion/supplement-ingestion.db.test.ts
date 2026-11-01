@@ -35,6 +35,7 @@ import {
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {
+  PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
   SUPPLEMENT_RETRY_REASON,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -889,6 +890,70 @@ test("reasons an erasure removes while a correction moves them end the step, and
     status: PROCESS_DECISION_STATUS.COMPLETE,
     disposition: { type: "merged", judgmentId: judgment.id },
   });
+});
+
+test("reasons a concurrent placement moves while a correction moves them wait for the next observation", async () => {
+  const fixture = await newSource();
+  const OTHER_DOCKET = "IV Ka 96/18";
+  await ingestDecision(fixture, decisionOf(RULING));
+  await ingestDecision(
+    fixture,
+    decisionOf(
+      saosRow({
+        id: 339_003,
+        judgmentType: "SENTENCE",
+        judgmentDate: "2018-03-22",
+        caseNumber: OTHER_DOCKET,
+        body: RULING_TEXT,
+      }),
+    ),
+  );
+  await ingestSupplement(fixture, supplementOf(REASONS));
+  const former = await decisionBy(fixture.sourceId, "339002");
+  const other = await decisionBy(fixture.sourceId, "339003");
+  const corrected = supplementOf(
+    saosRow({
+      id: 339_001,
+      judgmentType: "REASONS",
+      judgmentDate: "2018-04-19",
+      caseNumber: OTHER_DOCKET,
+      body: REASONS_TEXT,
+    }),
+  );
+
+  // A concurrent placement commits where the erasure did above: the row
+  // still exists, under another ruling.
+  let moves = 0;
+  const waited = (
+    await processSupplement({
+      supplement: corrected,
+      sourceId: fixture.sourceId,
+      scopedDb,
+      observedAt: new Date("2026-09-23T10:00:00.000Z"),
+      nextObservationOrder: async () => {
+        if (moves === 0) {
+          moves += 1;
+          await db
+            .update(caseLawDecisionSupplements)
+            .set({ decisionId: other.id })
+            .where(eq(caseLawDecisionSupplements.decisionId, former.id));
+        }
+        return await fixture.nextObservationOrder();
+      },
+      reparseStoredRaw,
+      readStoredRaw,
+    })
+  ).unwrap();
+
+  // Not placed over the concurrent placement, and not ended: it waits.
+  expect(moves).toBe(1);
+  expect(waited).toEqual({
+    status: PROCESS_DECISION_STATUS.RETRYABLE,
+    reason: PROCESS_DECISION_RETRY_REASON.CONTENTION,
+  });
+  expect((await supplementRow(fixture.sourceId, "339001")).decisionId).toBe(
+    other.id,
+  );
 });
 
 test("a ruling a correction dates after its reasons drops them and parks them again", async () => {

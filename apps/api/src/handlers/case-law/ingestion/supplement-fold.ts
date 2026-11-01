@@ -28,6 +28,7 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
+import type { SupplementDisposition } from "@/api/handlers/case-law/ingestion/pipeline/supplement-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decisionAbsorptionSql } from "@/api/lib/case-law/decision-absorption";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -77,6 +78,49 @@ export type SupplementFoldReport = {
 };
 
 const SUPPLEMENT_FOLD_LISTED_ROWS = 50;
+
+/**
+ * What a placed supplement counts as in the fold's report. Every way the
+ * pipeline keeps a supplement unpublished (a takedown of its judgment, an
+ * erasure of its own row, an erasure or takedown that removed its row while
+ * it moved) reads as withheld, with the decision that withheld it.
+ */
+export const foldOutcomeOf = (
+  disposition: SupplementDisposition,
+): { outcome: SupplementFoldOutcome; detail: string } => {
+  switch (disposition.type) {
+    case "merged":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.MERGED,
+        detail: disposition.judgmentId,
+      };
+    case "standalone":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.STANDALONE,
+        detail: disposition.reason,
+      };
+    case "withheld":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.judgmentId,
+      };
+    case "erased":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.decisionId,
+      };
+    case "removed":
+      return {
+        outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
+        detail: disposition.formerJudgmentId,
+      };
+    default:
+      disposition satisfies never;
+      return panic(
+        `Unhandled supplement disposition: ${JSON.stringify(disposition)}`,
+      );
+  }
+};
 
 const emptyOutcomes = (): Record<SupplementFoldOutcome, number> => ({
   [SUPPLEMENT_FOLD_OUTCOME.MERGED]: 0,
@@ -289,45 +333,7 @@ export const foldStoredSupplements = async ({
         detail: placed.reason,
       });
     }
-    const { disposition } = placed;
-    switch (disposition.type) {
-      case "merged":
-        return Result.ok({
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.MERGED,
-          detail: disposition.judgmentId,
-        });
-      case "standalone":
-        return Result.ok({
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.STANDALONE,
-          detail: disposition.reason,
-        });
-      case "withheld":
-        return Result.ok({
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
-          detail: disposition.judgmentId,
-        });
-      case "erased":
-        return Result.ok({
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
-          detail: disposition.decisionId,
-        });
-      case "removed":
-        return Result.ok({
-          ...base,
-          outcome: SUPPLEMENT_FOLD_OUTCOME.WITHHELD,
-          detail: disposition.formerJudgmentId,
-        });
-      default: {
-        disposition satisfies never;
-        return panic(
-          `Unhandled supplement disposition: ${JSON.stringify(disposition)}`,
-        );
-      }
-    }
+    return Result.ok({ ...base, ...foldOutcomeOf(placed.disposition) });
   };
 
   let cursor = after;
