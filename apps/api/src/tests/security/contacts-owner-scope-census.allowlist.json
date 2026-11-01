@@ -7,6 +7,12 @@
       "seed.seedContacts": 2
     }
   },
+  "apps/api/scripts/seed-slovak-firm.ts::names-contacts-table": {
+    "reason": "Development seed: `persistSlovakFirmSeed` runs inside the seed transaction after a `set_config` that switches to the application role and names the fixture's organization, so its contacts statements run under that organization's row policies.",
+    "sites": {
+      "persistSlovakFirmSeed": 1
+    }
+  },
   "apps/api/src/db/auth-schema.ts::names-contacts-table": {
     "reason": "Names the OAuth client's `contacts` column, not the contacts table.",
     "sites": {
@@ -123,6 +129,12 @@
     "reason": "Local development route: cleans the session organization through its `scopedDb`, scoped to that organization.",
     "sites": {
       "cleanOrganization": 1
+    }
+  },
+  "apps/api/src/handlers/time-entries/report/get.ts::names-contacts-table": {
+    "reason": "Request handler: its contacts statements run in the request's organization-scoped application transaction (`safeDb`), whose row policies admit the request's organization only.",
+    "sites": {
+      "getTimeReport.data.readRows": 1
     }
   },
   "apps/api/src/handlers/workspaces/contacts/create.ts::names-contacts-table": {
