@@ -90,24 +90,26 @@ describe("section heading title shape", () => {
   );
   const endArb = fc.constantFrom("", ".", ";", ",", ":");
 
-  assertProperty(
-    "a promoted heading never ends a sentence or carries an operative verb",
-    fc.property(
-      romanArb,
-      fc.array(wordArb, { minLength: 1, maxLength: 8 }),
-      endArb,
-      (numeral, words, end) => {
-        const text = `${numeral}. ${words.join(" ")}${end}`;
-        if (caseLawSectionHeading(text) === null) {
-          return;
-        }
-        expect(text).not.toMatch(/[.;]$/u);
-        expect(text).not.toMatch(
-          /je povinen|se zamítá|se ruší|se mění|se potvrzuje|zaplatit/u,
-        );
-      },
-    ),
-  );
+  test("a promoted heading never ends a sentence or carries an operative verb", () => {
+    assertProperty(
+      "a promoted heading never ends a sentence or carries an operative verb",
+      fc.property(
+        romanArb,
+        fc.array(wordArb, { minLength: 1, maxLength: 8 }),
+        endArb,
+        (numeral, words, end) => {
+          const text = `${numeral}. ${words.join(" ")}${end}`;
+          if (caseLawSectionHeading(text) === null) {
+            return;
+          }
+          expect(text).not.toMatch(/[.;]$/u);
+          expect(text).not.toMatch(
+            /je povinen|zamítá|ruší|mění|potvrzuje|zaplatit/u,
+          );
+        },
+      ),
+    );
+  });
 });
 
 describe("labelled heading", () => {
