@@ -41,6 +41,7 @@ const catalogEntrySchema = v.object({
   access: v.picklist(["read", "write"]),
   destructive: v.boolean(),
   confirmation: v.optional(v.literal("required")),
+  idempotency: v.optional(v.object({ type: v.literal("replay") })),
   scope: v.string(),
   additionalScopes: v.optional(v.array(v.string())),
   requestTimeoutMs: v.optional(
@@ -145,6 +146,9 @@ export const parseCapabilityCatalog = (
       inputSchema: parts,
       transport: projectTransport(entry.transport),
     };
+    if (entry.idempotency !== undefined) {
+      projected.idempotency = entry.idempotency;
+    }
     if (entry.confirmation !== undefined) {
       projected.confirmation = entry.confirmation;
     }

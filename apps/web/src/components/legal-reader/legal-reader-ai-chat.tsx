@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 
+import type { AISuggestionPreset } from "@stll/folio-react";
 import { useIsMobile } from "@stll/ui/use-mobile";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -31,6 +32,11 @@ type LegalReaderAIChatProps = {
   /** The reader's own text, which the composer floats over. */
   children: ReactNode;
   className?: string | undefined;
+  /**
+   * Questions the reader offers as chips over the empty composer, each sent
+   * as it is: the starting points the surface would otherwise draw itself.
+   */
+  presets?: AISuggestionPreset[] | undefined;
 };
 
 /**
@@ -52,6 +58,7 @@ export const LegalReaderAIChat = ({
   aiMode,
   children,
   className,
+  presets,
 }: LegalReaderAIChatProps) => {
   const user = useMaybeAuthenticatedUser();
   const { key: documentKey } = activeLegalDocumentRef(activeLegal);
@@ -64,6 +71,7 @@ export const LegalReaderAIChat = ({
     <FileViewerWithAI
       activeLegal={activeLegal}
       className={className}
+      presets={presets}
       {...binding}
     >
       {children}

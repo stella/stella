@@ -27,6 +27,16 @@ const validEntry = (
 });
 
 describe("parseCapabilityCatalog fail-closed parsing", () => {
+  test("preserves declared receipt replay and rejects unknown replay policies", () => {
+    const parsed = parseCapabilityCatalog([
+      validEntry({ idempotency: { type: "replay" } }),
+    ]);
+    expect(parsed?.at(0)?.idempotency).toEqual({ type: "replay" });
+    for (const idempotency of [true, "replay", {}, { type: "best-effort" }]) {
+      expect(parseCapabilityCatalog([validEntry({ idempotency })])).toBeNull();
+    }
+  });
+
   test("preserves deployment ownership independently from caller feature access", () => {
     expect(
       parseCapabilityCatalog([validEntry({ feature: "FEATURE_EXAMPLE" })]),

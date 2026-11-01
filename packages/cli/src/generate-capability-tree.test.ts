@@ -58,6 +58,19 @@ test("catalog confirmation requirements survive generated leaf projection", () =
   }
 });
 
+test("catalog replay declarations survive every generated capability projection", () => {
+  const parsed = parseCapabilityCatalog(readCapabilityCatalog());
+  expect(parsed).not.toBeNull();
+  expect(parsed?.some((item) => item.idempotency?.type === "replay")).toBe(
+    true,
+  );
+  for (const item of parsed ?? []) {
+    expect(deriveCapabilityLeaf(item).spec.idempotency, item.id).toEqual(
+      item.idempotency,
+    );
+  }
+});
+
 const fileInput = (field: string, required: boolean): CatalogTransport => ({
   type: "file-input",
   input: { field, required },
