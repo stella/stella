@@ -7,12 +7,13 @@ test("autocomplete playground matches the web runtime mode", async ({
   await page.goto("/dev?visual=autocomplete", { waitUntil: "commit" });
 
   if (!EXPECTS_DEV_RUNTIME) {
-    await expect(page).toHaveURL((url) =>
-      url.pathname.startsWith("/workspaces"),
-    );
-    await expect(page.locator("main").first()).toBeVisible({
-      timeout: 30_000,
-    });
+    // Production builds leave the dev routes out, so /dev is an unknown page.
+    await expect(
+      page.getByRole("heading", {
+        name: "We could not find what you requested.",
+      }),
+    ).toBeVisible({ timeout: 30_000 });
+    await expect(page).toHaveURL(/\/dev\?visual=autocomplete$/u);
     await expect(
       page.locator('[data-playground-section="fixture:autocomplete"]'),
     ).toHaveCount(0);
