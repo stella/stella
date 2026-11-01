@@ -13,8 +13,11 @@ import type {
   BedrockConverseProviderOptions,
   ResolvedBedrockAuth,
 } from "@tanstack/ai-bedrock";
-import { createGeminiChat } from "@tanstack/ai-gemini";
-import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
+import { GeminiTextAdapter } from "@tanstack/ai-gemini";
+import type {
+  createGeminiChat,
+  GeminiTextProviderOptions,
+} from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
 import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { OpenAITextAdapter } from "@tanstack/ai-openai";
@@ -669,11 +672,63 @@ const requireCredential = (
   throw missingProviderCredentialError(provider, envVar);
 };
 
+/**
+ * `@google/genai` continues an answer that stops with a `CONTINUATION`
+ * finish on its own, and reconnects a dropped stream from its last
+ * checkpoint: each hop sends the whole request again, below the generation
+ * layer. Off, so each request is sent once (`SDK_RETRIES_OFF`). The flag is
+ * read by the SDK and never sent.
+ */
+const GEMINI_CONTINUATION_OFF = { automaticContinuation: false } as const;
+
+type GeminiChatModel = Parameters<typeof createGeminiChat>[0];
+type GeminiChatOptions = Parameters<GeminiTextAdapter<never>["chatStream"]>[0];
+type GeminiStructuredOptions = Parameters<
+  GeminiTextAdapter<never>["structuredOutput"]
+>[0];
+
+const withoutContinuation = <TOptions extends GeminiChatOptions>(
+  options: TOptions,
+): TOptions => ({
+  ...options,
+  modelOptions: { ...options.modelOptions, ...GEMINI_CONTINUATION_OFF },
+});
+
+// Every request path the adapter has goes through these three methods; the
+// interactions path (agentic video) uses a different API with no
+// continuation.
+class SinglePassGeminiTextAdapter<
+  TModel extends GeminiChatModel,
+> extends GeminiTextAdapter<TModel> {
+  override chatStream(options: GeminiChatOptions) {
+    return super.chatStream(withoutContinuation(options));
+  }
+
+  override async structuredOutput(options: GeminiStructuredOptions) {
+    return await super.structuredOutput({
+      ...options,
+      chatOptions: withoutContinuation(options.chatOptions),
+    });
+  }
+
+  override structuredOutputStream(options: GeminiStructuredOptions) {
+    return super.structuredOutputStream({
+      ...options,
+      chatOptions: withoutContinuation(options.chatOptions),
+    });
+  }
+}
+
+const createGeminiChatWithoutContinuation = (
+  model: GeminiChatModel,
+  apiKey: string,
+) => new SinglePassGeminiTextAdapter({ apiKey }, model);
+
 const createExtendedGeminiAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const gemini = extendAdapter(createGeminiChat, [
+  const gemini = extendAdapter(createGeminiChatWithoutContinuation, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
