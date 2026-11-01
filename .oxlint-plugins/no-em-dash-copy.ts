@@ -57,6 +57,18 @@ const markerText = (node: ESTree.Node): string | null => {
   return null;
 };
 
+const SOLE_CONTENT_ENDS: ReadonlySet<string> = new Set([
+  "VariableDeclarator",
+  "ReturnStatement",
+  "ArrowFunctionExpression",
+  "Property",
+  "PropertyDefinition",
+  "AssignmentPattern",
+  "JSXAttribute",
+  "ExpressionStatement",
+  "ExportDefaultDeclaration",
+]);
+
 const isSoleMarkerContent = (node: ESTree.Node): boolean => {
   const raw = markerText(node);
   if (raw === null || !EMPTY_CELL_MARKER.test(raw)) {
@@ -70,58 +82,41 @@ const isSoleMarkerContent = (node: ESTree.Node): boolean => {
       content = parent;
       continue;
     }
-    switch (parent.type) {
-      case "TemplateLiteral":
-        if (parent.expressions.length !== 0) {
-          return false;
-        }
-        break;
-      case "JSXElement":
-      case "JSXFragment":
-        if (
-          !parent.children.every(
-            (child) =>
-              child === current ||
-              (child.type === "JSXText" && child.value.trim() === "") ||
-              (child.type === "JSXExpressionContainer" &&
-                child.expression.type === "JSXEmptyExpression"),
-          )
-        ) {
-          return false;
-        }
-        if (parent.type === "JSXElement") {
-          return true;
-        }
-        break;
-      case "ConditionalExpression":
-        if (parent.test === content) {
-          return false;
-        }
-        break;
-      case "LogicalExpression":
-        if (parent.operator === "&&" && parent.left === content) {
-          return false;
-        }
-        break;
-      case "SequenceExpression":
-        if (parent.expressions.at(-1) !== content) {
-          return false;
-        }
-        break;
-      case "JSXExpressionContainer":
-        break;
-      case "VariableDeclarator":
-      case "ReturnStatement":
-      case "ArrowFunctionExpression":
-      case "Property":
-      case "PropertyDefinition":
-      case "AssignmentPattern":
-      case "JSXAttribute":
-      case "ExpressionStatement":
-      case "ExportDefaultDeclaration":
-        return true;
-      default:
+    if (parent.type === "TemplateLiteral") {
+      if (parent.expressions.length !== 0) {
         return false;
+      }
+    } else if (parent.type === "JSXElement" || parent.type === "JSXFragment") {
+      if (
+        !parent.children.every(
+          (child) =>
+            child === current ||
+            (child.type === "JSXText" && child.value.trim() === "") ||
+            (child.type === "JSXExpressionContainer" &&
+              child.expression.type === "JSXEmptyExpression"),
+        )
+      ) {
+        return false;
+      }
+      if (parent.type === "JSXElement") {
+        return true;
+      }
+    } else if (parent.type === "ConditionalExpression") {
+      if (parent.test === content) {
+        return false;
+      }
+    } else if (parent.type === "LogicalExpression") {
+      if (parent.operator === "&&" && parent.left === content) {
+        return false;
+      }
+    } else if (parent.type === "SequenceExpression") {
+      if (parent.expressions.at(-1) !== content) {
+        return false;
+      }
+    } else if (parent.type !== "JSXExpressionContainer") {
+      // A binding, return, property, attribute or statement holds the marker
+      // alone; any other parent composes it with more content.
+      return SOLE_CONTENT_ENDS.has(parent.type);
     }
     content = parent;
   }
