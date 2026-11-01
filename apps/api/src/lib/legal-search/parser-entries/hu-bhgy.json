@@ -6,6 +6,6 @@
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."
+    "reason": "Reclassify closing certification, principle-summary and applied-legislation sections from stored Hungarian documents; AST roles have no separate feature storage. Read a partial or interim judgment's operative introduction and the kind printed below a header table as opening the operative part; a header label needs its colon; paragraph roles and the decision type have no separate feature storage. Type the reasons printed after the ruling as argumentation, not as the document's tail, in the sections derived from the AST."
   }
 }

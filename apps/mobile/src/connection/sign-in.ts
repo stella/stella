@@ -140,6 +140,7 @@ export const signIn = async ({
     });
     return Result.ok({
       session: {
+        signInId: createAuthorizationState(crypto),
         serverUrl,
         issuer: metadata.issuer,
         clientId,

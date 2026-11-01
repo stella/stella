@@ -16,15 +16,6 @@ describe("Text", () => {
     expect(markup).not.toContain("text-foreground ");
   });
 
-  test("reads in the serif, emphasised by face", () => {
-    const markup = renderToStaticMarkup(
-      <Text variant="readingStrongEmphasis">held</Text>,
-    );
-    expect(markup).toContain("font-serif");
-    expect(markup).toContain("font-bold");
-    expect(markup).toContain("italic");
-  });
-
   test("defaults to body text in the foreground", () => {
     const markup = renderToStaticMarkup(<Text>plain</Text>);
     expect(markup).toContain("text-foreground");

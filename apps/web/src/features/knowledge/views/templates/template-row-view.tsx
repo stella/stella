@@ -21,14 +21,14 @@ import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
+import { TEMPLATE_ROW_SPACING } from "@/features/knowledge/views/templates/templates-seam";
 import type {
   KnowledgeTemplate,
+  TemplateDensity,
   TemplateRowActions,
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { formatRelativeTime } from "@/lib/relative-time";
-
-export type TemplateDensity = "compact" | "comfortable";
 
 type TemplateRowViewProps = {
   template: KnowledgeTemplate;
@@ -189,9 +189,8 @@ export const TemplateRowView = ({
       <ContextMenu actions={actions.menu}>
         <div
           className={cn(
-            density === "compact"
-              ? "hover:bg-muted/50 relative flex cursor-pointer items-center gap-3 px-4 py-2"
-              : "hover:bg-muted/50 relative flex cursor-pointer items-start gap-3 px-4 py-3",
+            "hover:bg-muted/50 relative flex cursor-pointer gap-3 px-4",
+            TEMPLATE_ROW_SPACING[density],
           )}
           draggable={actions.dragStart !== undefined}
           onDragStart={actions.dragStart}
