@@ -206,7 +206,7 @@ if (!databaseUrl || !runPostgresTests) {
             .select({ id: correspondence.id })
             .from(correspondence)
             .where(eq(correspondence.workspaceId, workspaceId));
-          expect(records).toEqual([{ id: ids[0] ?? "" }]);
+          expect(records.map(({ id }) => String(id))).toEqual([String(ids[0])]);
           const filers = await adminDb
             .select({ userId: correspondenceFilers.filedByUserId })
             .from(correspondenceFilers)
