@@ -4992,6 +4992,7 @@
     "caseLawEmptyState": "Tippen Sie, um Gerichtsentscheidungen zu durchsuchen.",
     "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
+    "chatCoveragePartial": "Nicht alle Chats wurden vollständig durchsucht.",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
     "dateTo": "Bis",

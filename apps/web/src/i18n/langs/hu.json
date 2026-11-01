@@ -4992,6 +4992,7 @@
     "caseLawEmptyState": "Kezdjen el gépelni a bírósági határozatok közötti kereséshez.",
     "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
+    "chatCoveragePartial": "Nem minden csevegésben történt teljes keresés.",
     "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",

@@ -108,6 +108,7 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
@@ -190,6 +191,7 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
@@ -251,6 +253,7 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 
@@ -338,6 +341,7 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 2,
     });
 
@@ -417,6 +421,7 @@ describe("search summary chat", () => {
         },
       ],
       nextCursor: null,
+      chatCoverage: "complete",
       totalCount: 1,
     });
 

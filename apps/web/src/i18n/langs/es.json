@@ -4992,6 +4992,7 @@
     "caseLawEmptyState": "Empiece a escribir para buscar resoluciones judiciales.",
     "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
     "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
+    "chatCoveragePartial": "No se han buscado todos los chats por completo.",
     "continueInChat": "Continuar en el chat",
     "dateFrom": "Desde",
     "dateTo": "Hasta",
