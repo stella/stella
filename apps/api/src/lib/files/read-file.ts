@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
-import { buildVersionedApiUrl } from "@stll/api-contract";
+import {
+  buildVersionedApiUrl,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
+} from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -39,6 +42,12 @@ export const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
 const FILE_READ_STORAGE_TIMEOUT_MS = 30_000;
 const refuseBackgroundSessionAuthority: SyntheticSessionAuthorityReader =
   async () => await Promise.resolve(null);
+
+const previewUnavailable = () =>
+  status(400, {
+    code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+    message: "This file has no preview. Download it instead.",
+  });
 
 type ReadFileHandlerProps = {
   source: SignedDownloadSource;
@@ -185,7 +194,8 @@ type FileDelivery = {
 };
 
 type FileDeliveryResolution =
-  { type: "found"; delivery: FileDelivery } | { type: "invalid" | "not-found" };
+  | { type: "found"; delivery: FileDelivery }
+  | { type: "invalid" | "not-found" | "preview-unavailable" };
 
 const resolveFileDelivery = ({
   organizationId,
@@ -238,7 +248,7 @@ const resolveFileDelivery = ({
     purpose === "native-display" &&
     !isNativelyRenderableMimeType(content.mimeType)
   ) {
-    return { type: "invalid" };
+    return { type: "preview-unavailable" };
   }
   if (
     purpose === "native-display" ||
@@ -263,7 +273,7 @@ const resolveFileDelivery = ({
 
   const displayFileId = displayedPdfFileId(content);
   if (displayFileId === null) {
-    return { type: "invalid" };
+    return { type: "preview-unavailable" };
   }
   return {
     type: "found",
@@ -311,8 +321,18 @@ export const readFileHandler = async ({
     row,
     workspaceId,
   });
-  if (resolution.type !== "found") {
-    return resolution.type === "not-found" ? status(404) : status(400);
+  switch (resolution.type) {
+    case "found":
+      break;
+    case "not-found":
+      return status(404);
+    case "preview-unavailable":
+      return previewUnavailable();
+    case "invalid":
+      return status(400);
+    default:
+      resolution satisfies never;
+      return panic("Unhandled file delivery resolution");
   }
 
   const delivery: FileDelivery = resolution.delivery;
@@ -429,6 +449,8 @@ export const readFileContentHandler = async ({
   switch (result.type) {
     case "invalid":
       return status(400);
+    case "preview-unavailable":
+      return previewUnavailable();
     case "not-found":
       return status(404);
     case "storage-failure":

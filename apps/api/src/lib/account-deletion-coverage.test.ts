@@ -83,6 +83,12 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
     note: "Provenance of who linked a case-law citation to a matter (workspace-owned record, not personal data). Likely intentional per the historical-attribution pattern, unconfirmed.",
   },
   {
+    table: "legislation_matter_links",
+    column: "linked_by",
+    onDelete: "restrict",
+    note: "Provenance of who linked a statute provision to a matter; the workspace owns the link and retains its historical attribution.",
+  },
+  {
     table: "clauses",
     column: "created_by",
     onDelete: "restrict",
