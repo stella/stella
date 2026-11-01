@@ -15,19 +15,25 @@
  * organization settings API, exactly as a real owner would.
  */
 
+import { panic } from "better-result";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+
 import { member, organization, session, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
 } from "@/api/lib/safe-id-boundaries";
+import type { DECLARED_SCHEDULER_JOBS } from "@/api/lib/scheduler/jobs";
 import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { runtimeMode } from "@/api/runtime-mode";
 
@@ -206,3 +212,89 @@ export const mintSmokeSession = async (
     expiresAt: expiresAt.toISOString(),
   };
 };
+
+type DeclaredSchedulerJobId = (typeof DECLARED_SCHEDULER_JOBS)[number]["id"];
+
+/**
+ * The recurring jobs that read the public corpus. The staging release proof
+ * brings them forward and runs its MCP load while they run, because a heavy
+ * job and user traffic only interfere when they overlap.
+ */
+const RELEASE_LOAD_JOB_IDS = [
+  "caseLaw.reportFreshness.fiveMinute",
+  "caseLaw.refreshSitemapShards.hourly",
+  "caseLaw.refreshBrowseFacets.hourly",
+  "caseLaw.refreshSourceArrivals.threeHourly",
+  "legislation.refreshSitemapShards.hourly",
+  "legislation.refreshFacetCounts.hourly",
+] as const satisfies readonly DeclaredSchedulerJobId[];
+
+const releaseLoadJobColumns = {
+  id: schedulerJobs.id,
+  lastRunAt: schedulerJobs.lastRunAt,
+  lockedAt: schedulerJobs.lockedAt,
+  nextRunAt: schedulerJobs.nextRunAt,
+};
+
+const releaseLoadJobListed = inArray(schedulerJobs.id, RELEASE_LOAD_JOB_IDS);
+
+/**
+ * The recurring runs within this window are a handful per job (the listed
+ * jobs run hourly at most, plus one brought forward), so the cap only guards
+ * against a misconfigured schedule.
+ */
+
+const RELEASE_LOAD_RUN_CAP = 20 * RELEASE_LOAD_JOB_IDS.length;
+
+/**
+ * The scheduler's own records of the release-load jobs' runs that started in
+ * the last half hour: when each started and, once it has, finished.
+ */
+export const readReleaseLoadJobRuns = async () => {
+  const read = await readBounded(
+    rootDb
+      .select({
+        jobId: schedulerJobRuns.jobId,
+        status: schedulerJobRuns.status,
+        startedAt: schedulerJobRuns.startedAt,
+        finishedAt: schedulerJobRuns.finishedAt,
+      })
+      .from(schedulerJobRuns)
+      .where(
+        and(
+          inArray(schedulerJobRuns.jobId, RELEASE_LOAD_JOB_IDS),
+          // The cutoff is the database's own clock, at the column's precision.
+          sql`${schedulerJobRuns.startedAt} >= now() - interval '30 minutes'`,
+        ),
+      )
+      .orderBy(schedulerJobRuns.startedAt, schedulerJobRuns.jobId),
+    RELEASE_LOAD_RUN_CAP,
+  );
+  return read.type === "complete"
+    ? read.rows
+    : panic("More release-load job runs than their schedules allow", {
+        cap: read.cap,
+      });
+};
+
+/**
+ * Makes every enabled, unpaused release-load job due now; the next scheduler
+ * sweep on any replica claims them through its usual lease. A job already
+ * running keeps its lease, and its finish sets its next slot as usual.
+ */
+export const bringReleaseLoadJobsForward = async () =>
+  // audit: skip — scheduler system state on the staging deployment; the smoke route logs the ids it moved.
+  await rootDb
+    .update(schedulerJobs)
+    .set({ nextRunAt: sql`now()` })
+    .where(
+      and(
+        releaseLoadJobListed,
+        eq(schedulerJobs.enabled, true),
+        or(
+          isNull(schedulerJobs.pausedUntil),
+          lte(schedulerJobs.pausedUntil, sql`now()`),
+        ),
+      ),
+    )
+    .returning(releaseLoadJobColumns);
