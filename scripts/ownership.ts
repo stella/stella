@@ -51,6 +51,10 @@ export const SCHEMA_INTROSPECTION = [
     reason: "Enumerates full-schema metadata without database operations.",
   },
   {
+    path: "apps/api/scripts/generate-table-relations.ts",
+    reason: "Enumerates full-schema table names without database operations.",
+  },
+  {
     path: "apps/api/src/lib/account-export/schema-census.ts",
     reason:
       "Enumerates user ownership from full-schema metadata without database operations.",
