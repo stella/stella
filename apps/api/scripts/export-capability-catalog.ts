@@ -28,8 +28,9 @@
 //       regenerate coverage and embedded API runtime data
 //   bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts --check
 //       drift guard: regenerate in memory and compare coverage
-//   bun apps/api/scripts/export-capability-catalog.ts --catalog-only
-//       write the npm package shards (--check compares them instead)
+//   bun apps/api/scripts/export-capability-catalog.ts --catalog-only [--out <dir>]
+//       write the npm package shards (--check compares them instead); --out
+//       names another shard directory than packages/cli/capabilities
 //
 // Env-dependent by design (it imports the handler graph, which validates the API
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
@@ -1798,6 +1799,7 @@ export const buildCapabilityCatalog = async () => {
 export const exportCapabilityCatalog = async (
   mode: "write" | "check",
   catalogOnly = false,
+  catalogDirectory = CATALOG_PATH,
 ): Promise<number> => {
   const checkMode = mode === "check";
   const { entries, errors, internalWaiverCounts } =
@@ -1866,7 +1868,7 @@ export const exportCapabilityCatalog = async (
 
   const catalogDrift = catalogOnly
     ? await syncCapabilityShards({
-        directory: CATALOG_PATH,
+        directory: catalogDirectory,
         shards: catalogShards,
         mode,
       })
@@ -1905,10 +1907,18 @@ export const exportCapabilityCatalog = async (
 // time and never unrefs it, so this one-off script's event loop would hang. The
 // work is done here; exit explicitly like export-mcp-tool-registry.ts.
 if (import.meta.main) {
+  const out = process.argv.indexOf("--out");
+  const catalogDirectory =
+    out === -1
+      ? CATALOG_PATH
+      : path.resolve(
+          process.argv.at(out + 1) ?? panic("--out requires a directory"),
+        );
   process.exit(
     await exportCapabilityCatalog(
       process.argv.includes("--check") ? "check" : "write",
       process.argv.includes("--catalog-only"),
+      catalogDirectory,
     ),
   );
 }

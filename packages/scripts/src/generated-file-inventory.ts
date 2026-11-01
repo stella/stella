@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -11,7 +10,8 @@ import {
 type GeneratedInventoryOptions = { generatedRoot?: string };
 
 // The dispatch aggregator names its complete module set. Restores read it from
-// the artifact before any output exists in the destination checkout.
+// the artifact before any output exists in the destination checkout. CI runs
+// this before the dependency install, so it imports only built-ins.
 export const ciGeneratedFiles = (
   root: string,
   { generatedRoot = root }: GeneratedInventoryOptions = {},
@@ -26,11 +26,12 @@ export const ciGeneratedFiles = (
         ...readFileSync(aggregator, "utf-8").matchAll(
           /from "\.\/capability-dispatch\/([a-z0-9]+(?:-[a-z0-9]+)*(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)+)"/gu,
         ),
-      ].map((match) => {
-        const id =
-          match[1] ?? panic("Dispatch import is missing its capability id");
-        return `apps/api/src/mcp/generated/capability-dispatch/${id}.ts`;
-      })
+      ].flatMap(([, id]) =>
+        // The pattern's only group always participates in a match.
+        id === undefined
+          ? []
+          : [`apps/api/src/mcp/generated/capability-dispatch/${id}.ts`],
+      )
     : [];
   const bundles = existsSync(apps)
     ? readdirSync(apps, { withFileTypes: true })

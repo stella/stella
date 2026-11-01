@@ -513,29 +513,23 @@ describe("catalog storage layout preserves the release contract", () => {
   });
 });
 
-test("release contract reads committed data without installed dependencies or derived runtime outputs", () => {
+test("release contract reads committed data and generated shards without installed dependencies or derived runtime outputs", () => {
   const root = mkdtempSync(
     path.join(tmpdir(), "stella-cli-release-no-install-"),
   );
   try {
     copyNoInstallFiles(root);
     for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
-      // The catalog's committed data is the per-capability shard directory.
+      // The catalog is generated, never committed; a fixture shard stands in
+      // for the directory the gate derives before comparing.
       if (part === "capability-catalog.json") {
-        const archive = spawnSync(
-          "git",
-          ["archive", "--format=tar", "HEAD", "packages/cli/capabilities"],
-          { cwd: REPO_ROOT, timeout: 10_000, maxBuffer: 64 * 1024 * 1024 },
-        );
-        expect(archive.error).toBeUndefined();
-        expect(archive.status, archive.stderr.toString()).toBe(0);
-        const extracted = spawnSync("tar", ["-x", "-C", root], {
-          maxBuffer: 2 ** 30,
-          input: archive.stdout,
-          timeout: 10_000,
+        mkdirSync(path.join(root, "packages/cli/capabilities"), {
+          recursive: true,
         });
-        expect(extracted.error).toBeUndefined();
-        expect(extracted.status, extracted.stderr.toString()).toBe(0);
+        writeFileSync(
+          path.join(root, "packages/cli/capabilities/matters.list.json"),
+          '{"id":"matters.list","inputSchema":{"type":"object"}}',
+        );
         continue;
       }
       const relativePath = `packages/cli/${part}`;

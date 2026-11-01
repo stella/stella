@@ -83,19 +83,21 @@ export const CI_GENERATION_COMMANDS = [
   ],
 ] as const;
 
+// Everything the in-memory catalog's handler graph can read keys the cache.
 export const CAPABILITY_RUNTIME_INPUTS = [
-  "apps/api/scripts/generate-capability-runtime.ts",
-  "apps/api/scripts/export-capability-catalog.ts",
-  "apps/api/scripts/lib/**",
+  "apps/api/scripts/**",
   "apps/api/src/**",
   "apps/api/package.json",
   "packages/*/src/**",
   "packages/*/package.json",
   "packages/api-contract/assets/**",
+  "packages/catalogue/entries/**",
   "packages/skills/blueprints/**",
   "packages/skills/skills/**",
+  "packages/transactional/components/**",
   "packages/transactional/emails/**",
   "packages/transactional/i18n/**",
+  "packages/transactional/render/**",
   "bunfig.toml",
   "bun.lock",
   "package.json",

@@ -44,7 +44,8 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "codegen": "bun run generate:capabilities && cd ../../apps/api && bun scripts/export-mcp-tool-registry.ts && cd ../../packages/cli && bun run scripts/codegen.ts && bun run src/codegen-version.ts && bun fmt .",
+    "codegen": "bun run generate:capabilities && bun run codegen:registry",
+    "codegen:registry": "cd ../../apps/api && bun scripts/export-mcp-tool-registry.ts && cd ../../packages/cli && bun run scripts/codegen.ts && bun run src/codegen-version.ts && bun fmt .",
     "codegen:version": "bun run src/codegen-version.ts",
     "build": "bun run codegen:runtime && rm -rf dist && bun ../../packages/scripts/src/tsc-native.ts -p tsconfig.build.json && cp src/generated/registry-snapshot.json dist/generated/registry-snapshot.json && printf '%s\\n' '#!/usr/bin/env node' > dist/cli.js.tmp && tail -n +2 dist/cli.js >> dist/cli.js.tmp && mv dist/cli.js.tmp dist/cli.js && chmod +x dist/cli.js",
     "prepack": "bun run build",

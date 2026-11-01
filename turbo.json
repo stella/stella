@@ -1737,12 +1737,10 @@
         "transit",
         "generate:api-types",
         "generate:route-tree",
-        "generate:messages",
-        "@stll/cli#generate:capabilities"
+        "generate:messages"
       ],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
         "$TURBO_ROOT$/packages/ui/src/**",
         "$TURBO_ROOT$/packages/workspace-ui/src/**",
         "$TURBO_ROOT$/.oxlint-plugins/**",

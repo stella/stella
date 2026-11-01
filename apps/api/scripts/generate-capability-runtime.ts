@@ -37,7 +37,9 @@ if (
     environment: readRuntimeMode().nodeEnv,
     inputs: CAPABILITY_RUNTIME_INPUTS,
     outputs: ["apps/api/src/mcp/generated/**/*.ts"],
-    generate: () => generateCapabilityRuntime(),
+    generate: async () => {
+      await generateCapabilityRuntime();
+    },
   });
   process.exit(0);
 }

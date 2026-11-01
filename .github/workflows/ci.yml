@@ -2199,13 +2199,11 @@ jobs:
 
       - name: Capability catalog drift guard
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # The committed capability catalog (every `tool`/`covered` safe handler,
-        # projected to id + input schema + permissions + scope + access +
-        # destructive) must match the live handler graph. `--check` regenerates
-        # it in-memory and byte-compares against the committed JSON, so a handler
-        # or mapping-table change cannot silently ship a stale catalog.
-        # Regenerate: `bun --env-file=apps/api/.env
-        # apps/api/scripts/export-capability-catalog.ts`.
+        # The capability catalog is derived from the live handler graph and
+        # never committed. `--check` derives it in memory, fails on any catalog
+        # error, and byte-compares the committed coverage table, so a handler or
+        # mapping-table change cannot silently ship a stale table.
+        # Regenerate: `bun apps/api/scripts/export-capability-catalog.ts`.
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 

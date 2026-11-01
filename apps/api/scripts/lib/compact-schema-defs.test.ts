@@ -55,7 +55,7 @@ const compactedById = new Map(
   ),
 );
 
-describe("committed capability catalog", () => {
+describe("exported capability catalog", () => {
   test("holds every capability, so the properties below are not vacuous", () => {
     expect(compactedById.size).toBeGreaterThan(300);
   });

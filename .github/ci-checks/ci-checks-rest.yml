@@ -103,8 +103,9 @@ checks:
       CI_CHECK_CONTEXT: "CLI runtime pack test selects a real merge-base against origin/main."
     id: cli_runtime_parity
     if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-    # Worst pilot test 31.52 s; 80 s allows about 2.5x contention headroom.
-    run: bun test --timeout 80000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+    # Fresh packs derive the capability catalog from API sources after
+    # building the MCP Apps; the pack test sets its own budget.
+    run: bun test --timeout 240000 scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
   # Root script tests belong to no workspace package, so no scoped test
   # run reaches them. Other steps call some by path; this runs every

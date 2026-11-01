@@ -177,7 +177,7 @@
   {
     "access": "destructive",
     "command": ["contact", "save"],
-    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type required, plus display_name or the name parts it is derived from); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "description": "Save a contact in the organization address book. Set contact_id to update; otherwise type and display_name or name parts create it. Null clears strings except display_name.",
     "name": "save_contact",
     "title": "Save contact"
   },
@@ -247,7 +247,7 @@
   {
     "access": "read",
     "command": ["legislation", "resolve"],
-    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supports Czech statutes; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
+    "description": "Resolve one statute provision from a citation or structured gazette identity and section. Supported countries: CZE, SVK; unrecognized or unsupported countries return country_unavailable. Omit as_of for the current expression. Returns the legal resolve API envelope: resolved carries a provision, readerUrl, force dates, versionStatus and blocks; not_found names unknown_document or unknown_section; incomplete_identifier lists missing parts; ambiguous lists candidates without choosing. Open through readerUrl; supply missing parts and retry. For unknown_document use search_legislation; for unknown_section search then read_statute_provisions. Add missing stella:search (search) or stella:read (read) through OAuth consent before recovery calls.",
     "name": "resolve_law_citation",
     "title": "Resolve a statute provision"
   },
@@ -317,7 +317,7 @@
   {
     "access": "destructive",
     "command": ["task", "save"],
-    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, item_type, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "description": "Create or update a task and its assignees and links. Omit task_id to create (matter_id and name required). Pass task_id to update name, item_type, status, priority or due_date (ISO YYYY-MM-DD; null clears). Assign a matter member by ID or email (assignee), or unassign by remove_assignee_user_id. Link with link_entity_id; unlink with unlink_link_id. Returns the task ID.",
     "name": "save_task",
     "title": "Save task"
   },
@@ -443,7 +443,7 @@
   {
     "access": "read",
     "command": ["audit-log", "list"],
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matter_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "name": "list_audit_log",
     "title": "List audit log"
   },
@@ -520,7 +520,7 @@
   {
     "access": "read",
     "command": ["capability", "audit-logs", "list"],
-    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail. Filter by matterId, action, resourceType (with optional resourceId), userId, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, matter, timestamp, and change detail (null unless changesStatus is \"visible\"). Filter by matterId, action, resourceType (with optional resourceId), userId, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "name": "capability:audit-logs.list",
     "title": "audit-logs.list"
   },
@@ -842,7 +842,7 @@
   {
     "access": "write",
     "command": ["capability", "contacts", "create"],
-    "description": "Create a contact in the organization address book. type (person or organization), displayName, and the contact id are supplied in the body; names, emails, phones, addresses, tags, registration and tax numbers, bank and billing details, default hourly rate, payment terms, and originating or responsible attorneys are optional. Refused once the organization holds its maximum number of contacts, or when an attorney id is not a member of the organization.",
+    "description": "Create an organization address-book contact. Supply id, type (person or organization) and displayName; other fields are optional. Refuses the contact limit, attorney IDs outside this organization, and an external source/id already used by another contact.",
     "name": "capability:contacts.create",
     "title": "contacts.create"
   },
@@ -863,7 +863,7 @@
   {
     "access": "write",
     "command": ["capability", "contacts", "import"],
-    "description": "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). Rows failing the import rules, duplicates, and over-limit rows are skipped; all accepted rows commit atomically.",
+    "description": "Import a reviewed batch of up to 500 contacts into the organization address book. Supply a caller-generated importRequestId: replaying it with the same rows returns the original result, while changing the rows is rejected. taxIdScheme selects tax-id validation (none, or br_cpf_cnpj checksums with duplicate detection). A row may carry external (source and id in the system it came from): a later import of the same ref updates a changed contact or reports it unchanged. Rows failing the import rules, duplicates, and over-limit rows are skipped; all accepted rows commit atomically.",
     "name": "capability:contacts.import",
     "title": "contacts.import"
   },
@@ -1185,7 +1185,7 @@
   {
     "access": "read",
     "command": ["capability", "entities", "versions-list"],
-    "description": "List one document's version history, newest first, with a before cursor for older pages. Each version carries its number, stamp, label, description, the words added and removed against its predecessor, its author, and the file attached to it; tombstoned versions are left out. The response also names the entity's current version.",
+    "description": "List one document's version history, newest first, with a before cursor for older pages. Each version carries its number, stamp, label, description, the words added and removed against its predecessor, its author, the file attached to it, and, for a file imported from another system, its importOrigin (source, id, original dates and author); tombstoned versions are left out. The response also names the entity's current version.",
     "name": "capability:entities.versions.list",
     "title": "entities.versions.list"
   },
@@ -1655,7 +1655,7 @@
   {
     "access": "read",
     "command": ["capability", "lists", "items-activity-list"],
-    "description": "Read one list item's activity trail, newest first with cursor pagination: the audit entries recorded against the item and against the task behind it, each with its action, the actor's name, the recorded changes, and the operation label. changesStatus is visible or feature_unavailable; unavailable changes and operation are null.",
+    "description": "Read one list item's activity trail, newest first with cursor pagination: the audit entries recorded against the item and against the task behind it, each with its action, the actor's name, the recorded changes, and the operation label. changesStatus is visible or feature_unavailable; non-visible changes and operation are null.",
     "name": "capability:lists.items.activity.list",
     "title": "lists.items.activity.list"
   },
@@ -1951,6 +1951,13 @@
     "title": "matters.members.add"
   },
   {
+    "access": "read",
+    "command": ["capability", "matters", "members-list"],
+    "description": "List a matter's members, each with their user's id, name, email and image, as the people its tasks can be assigned to. Add one with matters.members.add.",
+    "name": "capability:matters.members.list",
+    "title": "matters.members.list"
+  },
+  {
     "access": "destructive",
     "command": ["capability", "matters", "members-remove"],
     "description": "Remove one member from a matter, revoking their live access and cancelling their open desktop editing sessions. Their active work obligations are unassigned rather than deleted; refused when they are the matter's last member, when a timer of theirs is still running, or when they own more work obligations than one call may unassign at once.",
@@ -2199,7 +2206,7 @@
   {
     "access": "read",
     "command": ["capability", "organization-settings", "get"],
-    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, memory extraction, time policy, and the time zone whose calendar decides the organization's day. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). An organization that has never saved settings gets the defaults rather than an error.",
+    "description": "Read the organization's general settings: document processing mode, matter-number pattern, padding, and whether titles show that number, practice jurisdictions, prompt caching, memory extraction, time policy, and the time zone whose calendar decides the organization's day. declaredFeatureIds identifies policies in force; capabilities contains caller decisions; deploymentFeatures supplies deployment availability. timeZoneSource says whether the zone was chosen or derived from the primary practice jurisdiction (Europe/Prague for CZ and SK, UTC otherwise). primaryJurisdictionTimeZone is the zone the primary jurisdiction implies, regardless of an organization override. An organization that has never saved settings gets the defaults rather than an error.",
     "name": "capability:organization-settings.get",
     "title": "organization-settings.get"
   },
@@ -2238,6 +2245,13 @@
     "description": "Change the organization's general settings: document processing mode, matter-number pattern, padding, whether titles show that number, prompt caching, memory extraction, time policy, and time zone. Only the fields you pass are written and the matter-number pattern is validated against its padding first. Turning document processing off is refused while an automatic run is still going. Practice jurisdictions are set through organization-settings.practice-jurisdictions.update.",
     "name": "capability:organization-settings.update",
     "title": "organization-settings.update"
+  },
+  {
+    "access": "write",
+    "command": ["capability", "organizations", "slug-update"],
+    "description": "Change the active organization's slug. Owners and admins may choose a lowercase slug or generate an opaque org- identifier. The old slug has no alias. A taken slug returns organization_slug_conflict; choose another or use type opaque.",
+    "name": "capability:organizations.slug.update",
+    "title": "organizations.slug.update"
   },
   {
     "access": "write",
@@ -3502,7 +3516,7 @@
   {
     "access": "write",
     "command": ["capability", "uploads", "create"],
-    "description": "Step 1 of 3 of the file-upload flow: reserve an upload and mint a short-lived presigned S3 PUT URL. This is the ONLY way to get a file into stella from an agent surface; the multipart endpoints cannot be called with JSON. Pass purpose plus the file metadata: name, mimeType, size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact bytes). purpose is entity_create (with propertyId, optional parentId) to add a new document, entity_version (with entityId) to add a version to an existing one, or agent_skill (with scope team or private) for a skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT the bytes to url with those headers verbatim -- the URL is signed against the exact size and checksum, so any deviation is rejected. Step 3: call uploads.update with the uploadId to commit the record. Call uploads.delete instead if the PUT fails.",
+    "description": "Step 1 of 3 of the file-upload flow: reserve an upload and mint a short-lived presigned S3 PUT URL. This is the ONLY way to get a file into stella from an agent surface; the multipart endpoints cannot be called with JSON. Pass purpose plus the file metadata: name, mimeType, size in bytes, and sha256Hex (lowercase hex SHA-256 of the exact bytes). purpose is entity_create (with propertyId, optional parentId, and optional importOrigin to keep an imported file's source, id, original dates and author) to add a new document, entity_version (with entityId) to add a version to an existing one, or agent_skill (with scope team or private) for a skill pack. Returns uploadId, url, expiresAt, and headers. Step 2: PUT the bytes to url with those headers verbatim -- the URL is signed against the exact size and checksum, so any deviation is rejected. Step 3: call uploads.update with the uploadId to commit the record. Call uploads.delete instead if the PUT fails.",
     "name": "capability:uploads.create",
     "title": "uploads.create"
   },

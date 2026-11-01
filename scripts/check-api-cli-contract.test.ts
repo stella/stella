@@ -235,8 +235,10 @@ describe("API and CLI release contract", () => {
     expect(releaseSmoke).toContain(`grep -F '"message":"scheduler.started"'`);
     expect(migrationSmoke).toContain("curl -fsS http://127.0.0.1:3001/live");
     expect(migrationSmoke).toContain(`grep -q '"message":"scheduler.started"'`);
+    // Catalog discovery imports handlers that embed MCP App bundles, so the
+    // bundles are prepared before the runtime generator reads them.
     expect(apiPackage.scripts["generate:capability-runtime"]).toBe(
-      "bun scripts/generate-capability-runtime.ts && bun ../../scripts/prepare-mcp-apps.ts",
+      "bun ../../scripts/prepare-mcp-apps.ts && bun scripts/generate-capability-runtime.ts",
     );
     const prepareRuntime = migrationSmoke.indexOf(
       "bun --filter @stll/api generate:capability-runtime",

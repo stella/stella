@@ -5,11 +5,12 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { borrowDependencies } from "./borrowed-dependencies";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const HANDLERS = "apps/api/src/handlers";
@@ -168,12 +169,10 @@ test.skipIf(!process.env["CI"])(
         [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
         cwd,
       );
+    // Runtime preparation builds the MCP Apps from the clone's own workspace
+    // packages, so dependencies are borrowed without redirecting those.
     const linkDependencies = (cwd: string) =>
-      symlinkSync(
-        path.join(REPO_ROOT, "node_modules"),
-        path.join(cwd, "node_modules"),
-        "dir",
-      );
+      borrowDependencies(REPO_ROOT, cwd);
 
     try {
       await succeed(

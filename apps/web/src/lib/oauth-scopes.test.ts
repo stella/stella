@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
 import { createTranslator } from "use-intl";
 import * as v from "valibot";
@@ -203,25 +202,28 @@ describe("OAuth scope display groups", () => {
     });
   });
 
-  test("every destructive capability scope triggers the single deletion warning", () => {
-    const catalog = path.resolve(
-      import.meta.dir,
-      "../../../../packages/cli/capabilities",
+  test("every destructive capability scope triggers the single deletion warning", async () => {
+    // The API derives the catalog in memory and embeds it in this generated
+    // module; npm shards exist only in the packed CLI.
+    const generatedCatalog: unknown = await import(
+      path.resolve(
+        import.meta.dir,
+        "../../../api/src/mcp/generated/capability-catalog.ts",
+      )
     );
-    const capabilitySchema = v.object({
-      scope: v.string(),
-      destructive: v.boolean(),
-    });
-    const destructiveScopes = new Set<string>();
-    for (const file of new Bun.Glob("*.json").scanSync({ cwd: catalog })) {
-      const capability = v.parse(
-        capabilitySchema,
-        JSON.parse(readFileSync(path.join(catalog, file), "utf-8")),
-      );
-      if (capability.destructive) {
-        destructiveScopes.add(capability.scope);
-      }
-    }
+    const { default: catalog } = v.parse(
+      v.object({
+        default: v.array(
+          v.object({ scope: v.string(), destructive: v.boolean() }),
+        ),
+      }),
+      generatedCatalog,
+    );
+    const destructiveScopes = new Set(
+      catalog
+        .filter((capability) => capability.destructive)
+        .map((capability) => capability.scope),
+    );
     expect(destructiveScopes.size).toBeGreaterThan(0);
     for (const scope of destructiveScopes) {
       const [entry] = toOAuthScopeDisplayEntries([scope]);

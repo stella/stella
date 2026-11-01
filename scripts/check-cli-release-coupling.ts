@@ -29,9 +29,11 @@
 //
 // The published tarball is data, never code: its generated modules are read
 // as text and parsed as literals, so nothing fetched from the registry runs
-// inside the release job. Runs without `bun install`: the tag workflow checks
-// out the repository and nothing else, so this file uses only Bun and Node
-// built-ins.
+// inside the release job. This file uses only Bun and Node built-ins, so the
+// verdicts that need no contract comparison run without `bun install`. The
+// capability catalog is generated from API sources, never committed: the
+// drift comparison derives the head's catalog in a child process, which needs
+// the installed dependencies and fails the gate closed without them.
 //
 //   bun scripts/check-cli-release-coupling.ts --version 1.2.3
 //   bun scripts/check-cli-release-coupling.ts --base origin/main
@@ -172,7 +174,7 @@ export const classifyCliRelease = ({
  * The generated files that decide whether a CLI can drive a server: the tool
  * catalog and registry it bakes in, the negotiated API contract, and the MCP
  * paths, scopes and error codes. The catalog retains its logical surface name
- * while its committed and newly published data lives in per-capability shards.
+ * while its generated and newly published data lives in per-capability shards.
  */
 const SURFACE_PARTS = [
   "capability-catalog.json",
@@ -181,7 +183,7 @@ const SURFACE_PARTS = [
   "src/generated/mcp-contract.ts",
 ] as const;
 
-/** Logical surface names; the catalog is assembled from committed shards. */
+/** Logical surface names; the catalog is assembled from generated shards. */
 export const CLI_CONTRACT_SURFACE_PATHS = SURFACE_PARTS;
 
 export type CliContractSurfacePart = (typeof SURFACE_PARTS)[number];
@@ -612,8 +614,12 @@ const readPublishedCli = (): PublishedCli => {
   return { latest: parsed["dist-tags.latest"], versions: parsed.versions };
 };
 
-const readCapabilityShards = (root: string): string => {
-  const directory = path.join(root, "capabilities");
+const readCapabilityShards = (directory: string): string => {
+  if (!existsSync(directory)) {
+    return panic(
+      `${directory} is missing: the capability catalog is generated, never committed`,
+    );
+  }
   const entries = readdirSync(directory)
     .filter((file) => file.endsWith(".json"))
     .toSorted()
@@ -647,13 +653,43 @@ const readSurface = (
       : readFileSync(path.join(root, locate(part)), "utf-8"),
   );
 
-export const readHeadSurface = (root: string): CliContractSurface => {
-  const directory = path.join(root, CLI_DIRECTORY);
-  return readSurface(
-    directory,
+/** Reads the head's committed parts and the shards in `catalogDirectory`. */
+export const readHeadSurface = (
+  root: string,
+  catalogDirectory = path.join(root, CLI_DIRECTORY, "capabilities"),
+): CliContractSurface =>
+  readSurface(
+    path.join(root, CLI_DIRECTORY),
     (part) => part,
-    readCapabilityShards(directory),
+    readCapabilityShards(catalogDirectory),
   );
+
+/**
+ * Derives the head's capability catalog into a private directory, so the
+ * comparison never reads a stale or concurrently rewritten checkout copy. The
+ * handler graph validates the API environment when it loads; the committed
+ * example supplies static defaults, and no configuration enters the catalog.
+ */
+const generateHeadCatalog = (root: string): string => {
+  const directory = mkdtempSync(path.join(tmpdir(), "stella-cli-catalog-"));
+  for (const command of [
+    ["bun", "scripts/prepare-mcp-apps.ts"],
+    [
+      "bun",
+      "--env-file=apps/api/.env.example",
+      "apps/api/scripts/export-capability-catalog.ts",
+      "--catalog-only",
+      "--out",
+      directory,
+    ],
+  ]) {
+    if (!run(command, root).ok) {
+      return panic(
+        `${command.join(" ")} failed, so the head capability catalog cannot be compared`,
+      );
+    }
+  }
+  return directory;
 };
 
 /** Published versions before the shard cutover contain the monolithic catalog. */
@@ -662,7 +698,7 @@ export const readPublishedPackageSurface = (root: string): CliContractSurface =>
     root,
     (part) => CLI_CONTRACT_SURFACE[part].published,
     existsSync(path.join(root, "capabilities"))
-      ? readCapabilityShards(root)
+      ? readCapabilityShards(path.join(root, "capabilities"))
       : readFileSync(path.join(root, "capability-catalog.json"), "utf-8"),
   );
 
@@ -767,7 +803,7 @@ const main = (args: readonly string[]): number => {
   }
 
   const drift = findSurfaceDrift({
-    head: readHeadSurface(REPO_ROOT),
+    head: readHeadSurface(REPO_ROOT, generateHeadCatalog(REPO_ROOT)),
     published: readPublishedSurface(verdict.cliVersion),
   });
   if (drift.length === 0) {

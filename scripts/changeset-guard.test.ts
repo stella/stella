@@ -822,10 +822,6 @@ describe("changeset policy file", () => {
     }
   });
 
-  test("gates the CLI capability catalog", () => {
-    expect(policy.releasePaths).toContain("packages/cli/capabilities/**");
-  });
-
   test("declares the same packages to the changesets entry validator", () => {
     expect([...policy.packageFiles].toSorted()).toEqual(
       gatedWorkspaces().map((workspace) => `${workspace}/package.json`),
