@@ -103,6 +103,11 @@ export const RESOURCE_MUTATION_CONTRACTS = {
       {
         type: "handler-route",
         method: "PUT",
+        route: "/client-invoices/:clientId",
+      },
+      {
+        type: "handler-route",
+        method: "PUT",
         route: "/invoices/:workspaceId",
       },
       {

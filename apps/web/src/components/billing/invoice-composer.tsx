@@ -450,11 +450,8 @@ export const useComposerSubmit = ({
     workspaceId: string;
     issue: boolean;
     body: CreateInvoiceBody;
-  }): Promise<IssuedInvoice> => {
-    const invoices = api.invoices({
-      workspaceId: toSafeId<"workspace">(workspaceId),
-    });
-    return await submitComposedInvoice({
+  }): Promise<IssuedInvoice> =>
+    await submitComposedInvoice({
       issue,
       create: async () => {
         if (client === undefined) {
@@ -464,7 +461,11 @@ export const useComposerSubmit = ({
               body,
               send: async (payload) =>
                 await invokeCapability("invoices.create", async (request) =>
-                  invoices.put(payload, request),
+                  api
+                    .invoices({
+                      workspaceId: toSafeId<"workspace">(workspaceId),
+                    })
+                    .put(payload, request),
                 ),
             }),
           );
@@ -518,9 +519,11 @@ export const useComposerSubmit = ({
         const finalized = await invokeCapability(
           "invoices.transition",
           async (request) =>
-            invoices({
-              invoiceId: toSafeId<"invoice">(id),
-            }).transition.post({ action: "finalize" }, request),
+            api
+              .invoices({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+                invoiceId: toSafeId<"invoice">(id),
+              })
+              .transition.post({ action: "finalize" }, request),
         );
         unwrapApiResponse(finalized);
       },
@@ -551,7 +554,6 @@ export const useComposerSubmit = ({
         };
       },
     });
-  };
   const createInvoiceMutation = resourceMutation({
     mutation: "createInvoice",
     queryClient,
