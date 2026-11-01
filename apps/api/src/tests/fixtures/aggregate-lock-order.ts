@@ -196,6 +196,11 @@ export const aggregateFences = () => {
       id: { id: createSafeId<"entity">(), workspaceId },
       mode: "update",
     },
+    correspondence: {
+      aggregate: "correspondence",
+      id: { id: createSafeId<"correspondence">(), workspaceId },
+      mode: "update",
+    },
     entityVersion: {
       aggregate: "entityVersion",
       id: { id: createSafeId<"entityVersion">(), workspaceId },

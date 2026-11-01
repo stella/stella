@@ -290,6 +290,7 @@ describe("organization data boxes", () => {
           bodyText: "",
           bodyHtml: null,
         },
+        expectedSourceVersionId: null,
         attachments: [],
         recordAuditEvent: context.recordAuditEvent,
       });

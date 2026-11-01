@@ -312,6 +312,7 @@ if (!databaseUrl || !runPostgresTests) {
           const delivered = await fileUploadedMail({
             database: testDb,
             scope: { ...scope, entityId: deliveredFileId },
+            sourceFileId: "unversioned-file",
             mimeType: EML_MIME_TYPE,
             bytes: emlFile(GOLDEN_MESSAGE),
             scopedDbForUploader,
@@ -545,6 +546,7 @@ if (!databaseUrl || !runPostgresTests) {
       const outcome = await retireUploadedMailSource({
         database: testDb,
         scope: { organizationId: ids.orgA, workspaceId: ids.wsA1, entityId },
+        sourceFileId: "unversioned-file",
         scopedDbForSource: () => async (run) =>
           await createScopedDb(
             testDb,
@@ -666,11 +668,20 @@ if (!databaseUrl || !runPostgresTests) {
         .update(entities)
         .set({ currentVersionId })
         .where(eq(entities.id, entityId));
-      for (const sourceFileId of [initialFileId, undefined]) {
+      // A job names the stored file it read; it can never omit it and match
+      // whatever generation is current. Typechecking fails here otherwise.
+      const requiresStoredFile: Omit<
+        FilingOptions,
+        "sourceFileId"
+      > extends FilingOptions
+        ? false
+        : true = true;
+      expect(requiresStoredFile).toBe(true);
+      for (const sourceFileId of [initialFileId, "never-stored-file"]) {
         const stale = await fileUploadedMail({
           database: testDb,
           scope,
-          ...(sourceFileId === undefined ? {} : { sourceFileId }),
+          sourceFileId,
           mimeType: EML_MIME_TYPE,
           bytes: new ArrayBuffer(0),
           scopedDbForUploader,

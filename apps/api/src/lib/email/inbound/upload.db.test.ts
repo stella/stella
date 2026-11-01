@@ -113,6 +113,8 @@ const processUpload = async ({
   await fileUploadedMail({
     bytes,
     mimeType,
+    // These fixture files have no stored version; no generation is fenced.
+    sourceFileId: "unversioned-file",
     scope: { organizationId, workspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>

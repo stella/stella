@@ -173,6 +173,8 @@ const processUpload = async ({
   await fileUploadedMail({
     bytes: toArrayBuffer(bytes),
     mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    // These fixture files have no stored version; no generation is fenced.
+    sourceFileId: "unversioned-file",
     scope: { organizationId, workspaceId: fileWorkspaceId, entityId },
     database: db,
     scopedDbForUploader: (scope) =>
@@ -483,6 +485,69 @@ if (!databaseUrl || !runPostgresTests) {
               .where(eq(correspondenceFilers.correspondenceId, original.id)),
         ),
       ).toHaveLength(1);
+    });
+
+    test("exports of one message before and after acceptance converge on its record", async () => {
+      const deliveredExport = await zfoFile({
+        messageStatus: "4",
+        acceptanceTime: "",
+      });
+      const acceptedExport = await zfoFile();
+      const delivered = parseDataBoxMessage(deliveredExport);
+      const accepted = parseDataBoxMessage(acceptedExport);
+      if (delivered.isErr() || accepted.isErr()) {
+        throw new Error("Expected both exports to parse");
+      }
+      // Only the delivery state differs between the two exports.
+      expect(delivered.value.envelope).toMatchObject({
+        status: "delivered",
+        acceptedAt: null,
+      });
+      expect(accepted.value.envelope).toMatchObject({
+        status: "accepted_by_login",
+        acceptedAt: expect.any(String),
+      });
+      const {
+        status: _deliveredStatus,
+        acceptedAt: _deliveredAcceptedAt,
+        seal: _deliveredSeal,
+        ...deliveredMessage
+      } = delivered.value.envelope;
+      const {
+        status: _acceptedStatus,
+        acceptedAt: _acceptedAcceptedAt,
+        seal: _acceptedSeal,
+        ...acceptedMessage
+      } = accepted.value.envelope;
+      expect(acceptedMessage).toEqual(deliveredMessage);
+
+      const first = await storeZfoFile({ createdBy: uploaderId });
+      const copy = await storeZfoFile({ createdBy: uploaderId });
+      const outcomes = [
+        await processUpload({ entityId: first, bytes: deliveredExport }),
+        await processUpload({ entityId: copy, bytes: acceptedExport }),
+      ];
+      expect(
+        outcomes.map((outcome) => outcome.isOk() && outcome.value.status),
+      ).toEqual(["filed", "duplicate"]);
+      const [record, ...others] = await records();
+      if (record === undefined) {
+        throw new Error("expected the message's record");
+      }
+      expect(others).toEqual([]);
+      expect(record.sourceEntityId).toBe(first);
+      const linked = await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .select({ entityId: correspondenceSources.entityId })
+            .from(correspondenceSources)
+            .where(eq(correspondenceSources.correspondenceId, record.id)),
+      );
+      expect(linked.map(({ entityId }) => entityId).toSorted()).toEqual(
+        [first, copy].toSorted(),
+      );
+      // The copy stored no second set of documents.
+      expect(await attachmentsOf(record.id)).toHaveLength(2);
     });
 
     test("a replay after a failed document write resumes the missing files", async () => {

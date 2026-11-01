@@ -134,10 +134,15 @@ const readDataBoxContacts = async ({
   envelope,
   ...options
 }: ReadDataBoxContactsOptions): Promise<CorrespondenceDataBoxContacts> => {
-  const [sender, recipient] = await Promise.all([
-    matchDataBoxContacts({ ...options, boxId: envelope.sender.boxId }),
-    matchDataBoxContacts({ ...options, boxId: envelope.recipient.boxId }),
-  ]);
+  // One transaction runs one statement at a time; read the parties in turn.
+  const sender = await matchDataBoxContacts({
+    ...options,
+    boxId: envelope.sender.boxId,
+  });
+  const recipient = await matchDataBoxContacts({
+    ...options,
+    boxId: envelope.recipient.boxId,
+  });
   return { sender, recipient };
 };
 

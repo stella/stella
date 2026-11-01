@@ -14,6 +14,7 @@ import {
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeEmailBodyHtml } from "@/api/lib/files/email-to-html";
@@ -211,14 +212,68 @@ const sourceHasOtherCopies = async ({
   ).has_other_sources;
 };
 
-type PlanContentOptions = FindSourceContentOptions & {
+type LockSourceContentOptions = FindSourceContentOptions & {
+  tx: Pick<Transaction, "select" | "execute">;
+};
+
+const sourceConflict = () =>
+  new HandlerError({
+    status: 409,
+    message: "The source update conflicts with another correspondence record",
+  });
+
+/**
+ * The record this file backs, locked before its source set is read. Removing
+ * another copy transitions the same record under this row lock (its trigger
+ * locks the record after the deleted file), so the survivor decision below
+ * never reads a source set that a concurrent removal or re-filing is changing.
+ */
+const lockSourceContent = async (options: LockSourceContentOptions) => {
+  const { tx, workspaceId } = options;
+  const [candidate] = await findSourceContent(options);
+  if (candidate === undefined) {
+    return Result.ok(undefined);
+  }
+  const record = await withAggregateLock({
+    tx,
+    aggregate: "correspondence",
+    id: { id: candidate.id, workspaceId },
+    mode: "update",
+  });
+  switch (record.status) {
+    case "locked":
+    case "missing":
+      break;
+    case "busy":
+      return Result.err(record.error);
+    default:
+      record satisfies never;
+      return panic("Unhandled correspondence record lock");
+  }
+  // Read again under the lock: a removal committed while this waited may have
+  // moved the record to this file or left this file without a record.
+  const [current] = await findSourceContent(options);
+  if (
+    current !== undefined &&
+    (record.status !== "locked" || current.id !== candidate.id)
+  ) {
+    return Result.err(sourceConflict());
+  }
+  return Result.ok(current);
+};
+
+type PlanContentOptions = LockSourceContentOptions & {
   readSourceLifetime: () => Promise<boolean | null>;
 };
 
-/** Only reads are available until the entire filing target is admitted. */
+/** Only reads and the source record's lock happen before the target is admitted. */
 const planCorrespondenceContent = async (options: PlanContentOptions) => {
   const { tx, organizationId, workspaceId, content } = options;
-  const [previous] = await findSourceContent(options);
+  const locked = await lockSourceContent(options);
+  if (locked.isErr()) {
+    return Result.err(locked.error);
+  }
+  const previous = locked.value;
   const [target] = await tx
     .select({ id: correspondence.id, contentHash: correspondence.contentHash })
     .from(correspondence)
@@ -261,13 +316,7 @@ const planCorrespondenceContent = async (options: PlanContentOptions) => {
     target !== undefined &&
     target.id !== previous.id
   ) {
-    return Result.err(
-      new HandlerError({
-        status: 409,
-        message:
-          "The source update conflicts with another correspondence record",
-      }),
-    );
+    return Result.err(sourceConflict());
   }
   return Result.ok({
     type: "ready" as const,
@@ -277,7 +326,11 @@ const planCorrespondenceContent = async (options: PlanContentOptions) => {
   });
 };
 
-/** The caller holds the matter and current source generation through this write. */
+/**
+ * The caller holds the matter and current source generation through this
+ * write; the record this source backs is locked here before its source set is
+ * read.
+ */
 export const persistCorrespondenceContent = async ({
   tx,
   organizationId,

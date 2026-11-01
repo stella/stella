@@ -208,21 +208,38 @@ const linkAttachments = async ({
   );
 };
 
-type CreateCorrespondenceOptions = {
-  expectedSourceVersionId?: SafeId<"entityVersion"> | null;
+/**
+ * An uploaded file is filed only at the version its job read, so its caller
+ * must name that version (null for a file without one); a delivery has none.
+ */
+type CorrespondenceFiling =
+  | {
+      parsed: Extract<ParsedCorrespondence, { source: "delivery" }>;
+      expectedSourceVersionId?: never;
+    }
+  | {
+      parsed: Extract<ParsedCorrespondence, { source: "upload" }>;
+      expectedSourceVersionId: SafeId<"entityVersion"> | null;
+    };
+
+type CreateCorrespondenceOptions = CorrespondenceFiling & {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   filer: CorrespondenceActor;
-  parsed: ParsedCorrespondence;
   attachments: PreparedCorrespondenceAttachment[];
   recordAuditEvent: AuditRecorder;
 };
 
-type ValidateContentOptions = Pick<
-  CreateCorrespondenceOptions,
-  "parsed" | "attachments"
->;
+type ValidateContentOptions = {
+  parsed: ParsedCorrespondence;
+  attachments: PreparedCorrespondenceAttachment[];
+};
+
+const isUploadFiling = (
+  filing: CorrespondenceFiling,
+): filing is Extract<CorrespondenceFiling, { parsed: { source: "upload" } }> =>
+  filing.parsed.source === "upload";
 
 // An upload is not a delivery: its uploader's matter access, rechecked in the
 // filing transaction, admits it instead of transport authentication.
@@ -285,16 +302,18 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
 };
 
 /** Converges concurrent deliveries on one record and one row per filer. */
-export const createCorrespondence = async ({
-  expectedSourceVersionId = null,
-  safeDb,
-  workspaceId,
-  organizationId,
-  filer,
-  parsed,
-  attachments,
-  recordAuditEvent,
-}: CreateCorrespondenceOptions) => {
+export const createCorrespondence = async (
+  options: CreateCorrespondenceOptions,
+) => {
+  const {
+    safeDb,
+    workspaceId,
+    organizationId,
+    filer,
+    parsed,
+    attachments,
+    recordAuditEvent,
+  } = options;
   const invalid = validateContent({ parsed, attachments });
   if (invalid !== null) {
     return invalid;
@@ -311,13 +330,14 @@ export const createCorrespondence = async ({
       return access;
     }
 
-    if (parsed.source === "upload") {
+    if (isUploadFiling(options)) {
+      const { expectedSourceVersionId } = options;
       // Hold the copy before touching the record: entity deletion must not
       // race a deduplicated upload into attaching a disappearing source.
       const source = await withAggregateLock({
         tx,
         aggregate: "entity",
-        id: { id: parsed.sourceEntityId, workspaceId },
+        id: { id: options.parsed.sourceEntityId, workspaceId },
         mode: "share",
       });
       switch (source.status) {
@@ -336,7 +356,7 @@ export const createCorrespondence = async ({
         .from(entities)
         .where(
           and(
-            eq(entities.id, parsed.sourceEntityId),
+            eq(entities.id, options.parsed.sourceEntityId),
             eq(entities.workspaceId, workspaceId),
           ),
         )

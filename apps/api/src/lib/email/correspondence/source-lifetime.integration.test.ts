@@ -520,6 +520,7 @@ test("a conflicting target preserves a split source and both correspondence reco
     workspaceId: ids.wsA1,
     filer: { type: "user", userId: ids.userA1 },
     parsed: attempted,
+    expectedSourceVersionId: null,
     attachments: [
       {
         entityId: attemptedAttachmentId,

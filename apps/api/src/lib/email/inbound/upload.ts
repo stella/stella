@@ -132,7 +132,8 @@ type UploaderScope = {
 type FileUploadedMailOptions = {
   bytes: ArrayBuffer;
   mimeType: string;
-  sourceFileId?: string;
+  /** The stored file the job read; a job for another generation is stale. */
+  sourceFileId: string;
   scope: UploadedMailScope;
   /** The filing job's connection; it reads only the file's uploader. */
   database: {
@@ -166,7 +167,7 @@ const scopedDbForSourceDefault = ({
 type ReadUploadedSourceOptions = {
   database: FileUploadedMailOptions["database"];
   scope: UploadedMailScope;
-  sourceFileId?: string;
+  sourceFileId: string;
 };
 
 // Membership scopes uploader attribution; the immutable file id fences stale jobs.
@@ -186,7 +187,7 @@ const readUploader = async ({
           WHERE ${fields.workspaceId} = ${workspaceId}
             AND ${fields.entityVersionId} = ${entities.currentVersionId}
             AND ${fields.content}->>'type' = 'file'
-            AND ${fields.content}->>'id' = ${sourceFileId ?? null}
+            AND ${fields.content}->>'id' = ${sourceFileId}
         )`,
         uploaderEmail: user.email,
       })
@@ -227,12 +228,7 @@ export const retireUploadedMailSource = async ({
   Result<UploadedMailOutcome, UploadedMailUnavailableError>
 > => {
   const read = await Result.tryPromise({
-    try: async () =>
-      await readUploader({
-        database,
-        scope,
-        ...(sourceFileId === undefined ? {} : { sourceFileId }),
-      }),
+    try: async () => await readUploader({ database, scope, sourceFileId }),
     catch: unavailable,
   });
   if (read.isErr()) {
@@ -405,7 +401,10 @@ const dataBoxCorrespondence = ({
   message: { annotation, envelope, files },
   sourceEntityId,
   uploadedAt,
-}: DataBoxCorrespondenceOptions): ParsedCorrespondence => ({
+}: DataBoxCorrespondenceOptions): Extract<
+  ParsedCorrespondence,
+  { source: "upload" }
+> => ({
   source: "upload",
   sourceEntityId,
   originalSignature: UNVERIFIED_SIGNATURE,
@@ -414,8 +413,10 @@ const dataBoxCorrespondence = ({
   direction: null,
   messageId: envelope.messageId,
   // The seal describes this exported source, not the message asserted inside
-  // it. Bind stable message fields and every ordered attachment so another
-  // export with a different seal can resume the same filing.
+  // it, and the delivery state (delivery, acceptance and status) advances
+  // between exports of one message. Bind only the fields fixed when the
+  // message was sent, and every ordered attachment, so any other export of
+  // the message converges on the same filing.
   contentHash: hashSha256Hex(
     JSON.stringify([
       annotation,
@@ -427,10 +428,10 @@ const dataBoxCorrespondence = ({
         toHands: envelope.toHands,
         personalDelivery: envelope.personalDelivery,
         substituteDelivery: envelope.substituteDelivery,
-        deliveredAt: envelope.deliveredAt,
-        acceptedAt: envelope.acceptedAt,
-        status: envelope.status,
-      } satisfies Omit<typeof envelope, "seal">,
+      } satisfies Omit<
+        typeof envelope,
+        "seal" | "deliveredAt" | "acceptedAt" | "status"
+      >,
       files.map(({ fileName, mimeType, bytes }) => [
         fileName,
         mimeType,
