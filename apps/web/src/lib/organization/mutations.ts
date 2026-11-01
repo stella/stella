@@ -8,7 +8,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import type { Role } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
-import type { FailureSurface } from "@/lib/errors/failure-surface";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { organizationKeys } from "@/lib/organization/queries";
 
@@ -56,12 +55,15 @@ type InviteMemberVars = {
   resend?: boolean;
 };
 
-export const useInviteMember = (errorSurface: FailureSurface) => {
+/**
+ * `isShownInline` is asked when a failure arrives, not when the request
+ * starts: a form closed in between can no longer show it, so a toast does.
+ */
+export const useInviteMember = (isShownInline: () => boolean = () => false) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
   return useMutation({
-    meta: { errorSurface },
     mutationFn: async ({ email, role, resend }: InviteMemberVars) => {
       const result = await authClient.organization.inviteMember({
         email,
@@ -83,7 +85,9 @@ export const useInviteMember = (errorSurface: FailureSurface) => {
         fingerprintKey: "useInviteMember:failure",
         scope: { type: "handler", handlerId: "useInviteMember:failure" },
       });
-      notifyUserError(error, getTranslator()("errors.actionFailed"));
+      if (!isShownInline()) {
+        notifyUserError(error, getTranslator()("errors.actionFailed"));
+      }
     },
   });
 };

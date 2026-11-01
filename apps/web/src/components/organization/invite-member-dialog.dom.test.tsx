@@ -13,7 +13,7 @@ const memberRefusal = () =>
     "USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION",
     "User is already a member of this organization",
   );
-let answer = memberRefusal;
+let answer: () => Promise<Response> | Response = memberRefusal;
 globalThis.fetch = Object.assign(async () => answer(), {
   preconnect: originalFetch.preconnect,
 });
@@ -89,6 +89,43 @@ test("an address that is already a member is told once, beside the field", async
   });
   expect(addToast).not.toHaveBeenCalled();
   expect(view.queryByText(englishMessages.errors.actionFailed)).toBeNull();
+});
+
+test("a refusal that arrives after the dialog closed reaches a toast", async () => {
+  const { promise: released, resolve: release } =
+    Promise.withResolvers<undefined>();
+  answer = async () => {
+    await released;
+    return memberRefusal();
+  };
+  const addToast = spyOn(stellaToast, "add");
+  const view = renderDialog();
+
+  await submitInvite(view);
+  // Unsaved changes hold back the first close; the second one discards.
+  for (const closeAttempt of ["holds", "discards"]) {
+    const close = view
+      .getAllByRole("button", { name: englishMessages.common.cancel })
+      .at(-1);
+    if (close === undefined) {
+      throw new TypeError(`Expected a close button: ${closeAttempt}`);
+    }
+    await act(async () => {
+      fireEvent.click(close);
+    });
+  }
+  await waitFor(() => {
+    expect(view.queryByRole("dialog")).toBeNull();
+  });
+
+  await act(async () => {
+    release(undefined);
+    await released;
+  });
+
+  await waitFor(() => {
+    expect(addToast).toHaveBeenCalled();
+  });
 });
 
 test("an address already invited says where to resend, without a toast", async () => {

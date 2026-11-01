@@ -34,6 +34,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -113,6 +114,7 @@ const RateTablesView = ({
 }) => {
   const t = useTranslations();
   const [showForm, setShowForm] = useState(false);
+  const isFormOpen = useLatestCallback(() => showForm);
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const analytics = useAnalytics();
@@ -211,7 +213,12 @@ const RateTablesView = ({
         return undefined;
       },
       (error: unknown) =>
-        fieldIssueOrToast(error, "name", t("common.somethingWentWrong")),
+        fieldIssueOrToast(
+          error,
+          "name",
+          t("common.somethingWentWrong"),
+          isFormOpen,
+        ),
     );
 
   const handleSetDefault = (id: string) => {

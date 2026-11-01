@@ -19,16 +19,7 @@ import { Result, TaggedError } from "better-result";
 import { STALE_TIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { shouldRetryAPIRequest } from "@/lib/errors/api";
-import { recordFailureSurface } from "@/lib/errors/failure-surface";
-import type { FailureSurface } from "@/lib/errors/failure-surface";
 import { notifySessionExpired } from "@/lib/errors/session-expired";
-
-declare module "@tanstack/react-query" {
-  // oxlint-disable-next-line typescript/consistent-type-definitions -- module augmentation requires interface for declaration merging
-  interface Register {
-    mutationMeta: { errorSurface?: FailureSurface | undefined };
-  }
-}
 
 /**
  * Typed input shape for query option factories.
@@ -387,9 +378,8 @@ export const createAppQueryClient = () =>
   new QueryClient({
     // Covers every mutation, also those that show no failure of their own.
     mutationCache: new MutationCache({
-      onError: (error, _variables, _context, mutation) => {
+      onError: (error) => {
         notifySessionExpired(error);
-        recordFailureSurface(error, mutation.meta?.errorSurface);
       },
     }),
     defaultOptions: {

@@ -37,7 +37,6 @@ import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
-import { FAILURE_SURFACE } from "@/lib/errors/failure-surface";
 import {
   useCancelInvitation,
   useInviteMember,
@@ -183,7 +182,7 @@ function Members() {
 
   const removeMember = useRemoveMember();
   const cancelInvitation = useCancelInvitation();
-  const inviteMember = useInviteMember(FAILURE_SURFACE.toast);
+  const inviteMember = useInviteMember();
 
   return (
     <>

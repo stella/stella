@@ -22,7 +22,6 @@ import {
   isCancellation,
 } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { isShownInline } from "@/lib/errors/failure-surface";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -195,9 +194,6 @@ export const notifyUserError = <Cause>(
     notice: refusal?.messageKey ?? title,
     occurrence,
   });
-  if (isShownInline(error)) {
-    return false;
-  }
   if (refusal) {
     const t = getTranslator();
     stellaToast.add({
@@ -258,16 +254,19 @@ export const notifyUserError = <Cause>(
 
 /**
  * One failure, one message: the issue a rejected request names on `field`, for
- * the form to show beside it, or a toast when the failure names no such issue.
+ * the form to show beside it, or a toast when the failure names no such issue
+ * or the form closed while the request was running.
  */
 export const fieldIssueOrToast = (
   error: unknown,
   field: string,
   fallback: string,
+  isFormOpen: () => boolean = () => true,
 ): string | undefined => {
   const issue = apiFieldIssueMessage(error, field);
-  if (issue === undefined) {
+  if (issue === undefined || !isFormOpen()) {
     notifyUserError(error, fallback);
+    return undefined;
   }
   return issue;
 };
