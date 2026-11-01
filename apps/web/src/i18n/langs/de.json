@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Angenommen",
         "canceled": "Storniert",
+        "expired": "Abgelaufen",
         "pending": "Ausstehend",
         "rejected": "Abgelehnt"
       }
@@ -5379,6 +5380,7 @@
         "title": "Gedächtnis-Extraktion",
         "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
       },
+      "pastInvitations": "Frühere Einladungen",
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",

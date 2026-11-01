@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Vastu võetud",
         "canceled": "Tühistatud",
+        "expired": "Aegunud",
         "pending": "Ootel",
         "rejected": "Tagasi lükatud"
       }
@@ -5379,6 +5380,7 @@
         "title": "Mälu ekstraktimine",
         "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
       },
+      "pastInvitations": "Varasemad kutsed",
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",

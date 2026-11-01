@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Přijato",
         "canceled": "Zrušeno",
+        "expired": "Platnost vypršela",
         "pending": "Čeká",
         "rejected": "Odmítnuto"
       }
@@ -5379,6 +5380,7 @@
         "title": "Extrakce paměti",
         "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
       },
+      "pastInvitations": "Dřívější pozvánky",
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",

@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Priimtas",
         "canceled": "Atšauktas",
+        "expired": "Nebegalioja",
         "pending": "Laukiama",
         "rejected": "Atmestas"
       }
@@ -5379,6 +5380,7 @@
         "title": "Atminties išgavimas",
         "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
       },
+      "pastInvitations": "Ankstesni kvietimai",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",

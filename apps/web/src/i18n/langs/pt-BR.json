@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Aceito",
         "canceled": "Cancelado",
+        "expired": "Expirado",
         "pending": "Pendente",
         "rejected": "Rejeitado"
       }
@@ -5379,6 +5380,7 @@
         "title": "Extração de memória",
         "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
       },
+      "pastInvitations": "Convites anteriores",
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",

@@ -4736,6 +4736,7 @@
       "statuses": {
         "accepted": "Acceptée",
         "canceled": "Annulée",
+        "expired": "Expirée",
         "pending": "En attente",
         "rejected": "Refusée"
       }
@@ -5379,6 +5380,7 @@
         "title": "Extraction de mémoire",
         "toggleLabel": "Suggérer des souvenirs à partir de l'historique des conversations en arrière-plan"
       },
+      "pastInvitations": "Invitations passées",
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
       "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",

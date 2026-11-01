@@ -27,7 +27,8 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/contract.ts"
+    ".": "./src/contract.ts",
+    "./invitation-sections": "./src/invitation-sections.ts"
   },
   "publishConfig": {
     "access": "public"
