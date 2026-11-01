@@ -14,8 +14,8 @@ import { parseRisDecisionXml } from "./at-ris";
 
 type Expected = readonly (readonly [string, ParagraphRole | undefined])[];
 
-const fixtureText = (name: string): Promise<string> =>
-  Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
+const fixtureText = async (name: string): Promise<string> =>
+  await Bun.file(new URL(`__fixtures__/${name}`, import.meta.url)).text();
 
 const risBlocks = async (
   name: string,

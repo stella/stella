@@ -68,29 +68,28 @@ const SECTIONS = [
   "text",
 ] as const satisfies readonly AtCourtTextSection[];
 
-/** Head matter, ruling, reasons, closing, annex: the order the reader keeps. */
+/**
+ * Head matter, ruling, reasons, closing, annex: the order the reader keeps.
+ * The reader gives no other role; meeting one fails the property.
+ */
+const RANK: ReadonlyMap<ParagraphRole | undefined, number> = new Map<
+  ParagraphRole | undefined,
+  number
+>([
+  ["intro", 0],
+  ["case-number", 0],
+  ["holding", 1],
+  ["argumentation", 2],
+  ["closing", 3],
+  [undefined, 4],
+]);
+
 const rankOf = (role: ParagraphRole | undefined): number => {
-  switch (role) {
-    case "intro":
-    case "case-number": {
-      return 0;
-    }
-    case "holding": {
-      return 1;
-    }
-    case "argumentation": {
-      return 2;
-    }
-    case "closing": {
-      return 3;
-    }
-    case undefined: {
-      return 4;
-    }
-    default: {
-      throw new Error(`unexpected role ${role}`);
-    }
+  const rank = RANK.get(role);
+  if (rank === undefined) {
+    throw new Error(`unexpected role ${String(role)}`);
   }
+  return rank;
 };
 
 const lineArb: fc.Arbitrary<AtPrintedLine> = fc.oneof(

@@ -1,5 +1,5 @@
 /** Parse Findok's decision XML envelope and embedded publisher XHTML. */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
@@ -302,8 +302,14 @@ export const parseFindokDecisionXml = (
         case "paragraph": {
           return { type: "paragraph", text: block.plainText, section: "text" };
         }
-        default: {
+        case "table":
+        case "image": {
+          // Findok's reader emits neither; a block with no text is no line.
           return { type: "field" };
+        }
+        default: {
+          block satisfies never;
+          return panic("Unhandled Findok block type");
         }
       }
     }),
