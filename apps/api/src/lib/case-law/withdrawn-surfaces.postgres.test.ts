@@ -1266,6 +1266,7 @@ describe.skipIf(!enabled)("withdrawn copy read surfaces (postgres)", () => {
             mimeTypes: [],
             query: text,
             limit: 10,
+            grantedScopes: undefined,
           },
           { scopedDb },
         ),
