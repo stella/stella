@@ -804,6 +804,19 @@ export const networkViolations = (
         rawJob["steps"],
       ).entries()) {
         const name = stepName(step, index);
+        const uses = step["uses"];
+        const withInputs = record(step["with"]) ? step["with"] : {};
+        if (
+          typeof uses === "string" &&
+          uses.startsWith("actions/checkout@") &&
+          withInputs["filter"] === "blob:none"
+        ) {
+          add({
+            id: violationId(file, job, name, "retry"),
+            rule: "retry",
+            message: `${file}: ${job}: ${name}: partial-clone actions/checkout must use ./.github/actions/partial-clone-checkout`,
+          });
+        }
         const fetches: NetworkFetch[] = [];
         const run = step["run"];
         if (typeof run === "string") {
@@ -826,7 +839,6 @@ export const networkViolations = (
             });
           }
         }
-        const uses = step["uses"];
         const action = typeof uses === "string" ? localAction(uses) : null;
         if (action !== null) {
           fetches.push(...summarizeAction(action, new Set()).fetches);
