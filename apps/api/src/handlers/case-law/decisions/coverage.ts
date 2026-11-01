@@ -717,7 +717,7 @@ export const loadCaseLawCoverage = async ({
 
 /** The answer the scheduler computes and stores. */
 type CaseLawCoverageSnapshot = CaseLawCoverage & {
-  countsFreshness?: PopulationCountsFreshness;
+  countsFreshness?: PopulationCountsFreshness | undefined;
   provisionProcessing: Awaited<ReturnType<typeof readProvisionPendingCounts>>;
 };
 

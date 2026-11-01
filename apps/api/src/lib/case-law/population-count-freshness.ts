@@ -6,17 +6,20 @@ import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-rea
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
+/** A PostgreSQL timestamptz rendered as ISO 8601 text. */
+const foldedAtSchema = v.pipe(v.string(), v.maxLength(64));
+
 /** A fold identifies the persisted snapshot; current also includes the complete pending window. */
 export const populationCountsFreshnessSchema = v.variant("status", [
   v.object({
     status: v.literal("current"),
     fold: v.number(),
-    foldedAt: v.nullable(v.string()),
+    foldedAt: v.nullable(foldedAtSchema),
   }),
   v.object({
     status: v.literal("stale"),
     fold: v.number(),
-    foldedAt: v.nullable(v.string()),
+    foldedAt: v.nullable(foldedAtSchema),
   }),
 ]);
 

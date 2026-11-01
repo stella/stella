@@ -49,9 +49,6 @@ class FixtureRollback extends TaggedError("FixtureRollback")<{
   message: string;
 }> {}
 
-const PROPERTY_ID =
-  "maintained coverage counts equal fresh aggregation after arbitrary decision writes";
-
 const operation = fc.record({
   type: fc.constantFrom("upsert", "delete"),
   slot: fc.integer({ min: 0, max: 5 }),
@@ -106,7 +103,7 @@ const assertFreshAggregation = async (
       caseLawPopulationCountsLive.sourceId,
       caseLawPopulationCountsLive.value,
     );
-  expect(actual).toEqual([...expected]);
+  expect<readonly Record<string, unknown>[]>(actual).toEqual([...expected]);
   return actual;
 };
 
@@ -202,7 +199,7 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
       process.env["DATABASE_URL"] ??
       panic("Coverage refresh proof requires DATABASE_URL");
     // Run this proof with LEGAL_SEARCH_PROVIDER=corpus-index to exercise production's provider configuration.
-    expect(envBase.LEGAL_SEARCH_PROVIDER).toBe(
+    expect<string>(envBase.LEGAL_SEARCH_PROVIDER).toBe(
       process.env["LEGAL_SEARCH_PROVIDER"] ?? "pg-fts",
     );
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
@@ -781,102 +778,96 @@ describe.skipIf(!enabled)("incremental coverage counts (postgres)", () => {
   }, 30_000);
 
   // timeout: real PostgreSQL checks the aggregate after every generated transition.
-  test(
-    PROPERTY_ID,
-    async () => {
-      const databaseUrl =
-        process.env["DATABASE_URL"] ??
-        panic("Coverage count property requires DATABASE_URL");
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const { db } = openClient({ max: 1 });
-        const sourceIds = [
-          createSafeId<"caseLawSource">(),
-          createSafeId<"caseLawSource">(),
-        ];
-        const decisions = Array.from({ length: 6 }, () =>
-          createSafeId<"caseLawDecision">(),
-        );
-        await db.insert(caseLawSources).values(
-          sourceIds.map((id) => ({
-            id,
-            adapterKey: `coverage-property-${id}`,
-            name: "Coverage property fixture",
-          })),
-        );
-        try {
-          await assertProperty(
-            PROPERTY_ID,
-            fc.asyncProperty(
-              fc.array(operation, { minLength: 5, maxLength: 25 }),
-              async (operations) => {
-                await db
-                  .delete(caseLawDecisions)
-                  .where(inArray(caseLawDecisions.sourceId, sourceIds));
-                for (const input of operations) {
-                  const id =
-                    decisions.at(input.slot) ??
-                    panic("Missing generated decision slot");
-                  if (input.type === "delete") {
-                    // db-await-in-loop: exercise each state-machine transition and compare its committed aggregate.
-                    await db
-                      .delete(caseLawDecisions)
-                      .where(eq(caseLawDecisions.id, id));
-                  } else {
-                    const sourceId =
-                      sourceIds.at(input.source) ??
-                      panic("Missing generated source slot");
-                    const row = {
-                      id,
-                      sourceId,
-                      sourceDocumentId: id,
-                      country: input.country,
-                      court: input.court,
-                      language: "cs",
-                      decisionDate: input.decisionDate,
-                      caseNumber: input.caseNumber,
-                      fulltext:
-                        input.publication === "published"
-                          ? "Fixture text"
-                          : null,
-                      redactedAt:
-                        input.publication === "redacted"
-                          ? new Date("2026-01-01T00:00:00Z")
-                          : null,
-                      metadata:
-                        input.publication === "listing-only"
-                          ? {
-                              _stellaPartialObservation: {
-                                isListingOnly: true,
-                              },
-                            }
-                          : {},
-                    };
-                    // db-await-in-loop: real insert/upsert writes exercise trigger transitions, including source and country changes.
-                    await db
-                      .insert(caseLawDecisions)
-                      .values(row)
-                      .onConflictDoUpdate({
-                        target: caseLawDecisions.id,
-                        set: row,
-                      });
-                  }
-                  // db-await-in-loop: the invariant must hold after every generated write, including deletes and no-op replay.
-                  await assertFreshAggregation(db, sourceIds);
+  test("maintained coverage counts equal fresh aggregation after arbitrary decision writes", async () => {
+    const databaseUrl =
+      process.env["DATABASE_URL"] ??
+      panic("Coverage count property requires DATABASE_URL");
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient({ max: 1 });
+      const sourceIds = [
+        createSafeId<"caseLawSource">(),
+        createSafeId<"caseLawSource">(),
+      ];
+      const decisions = Array.from({ length: 6 }, () =>
+        createSafeId<"caseLawDecision">(),
+      );
+      await db.insert(caseLawSources).values(
+        sourceIds.map((id) => ({
+          id,
+          adapterKey: `coverage-property-${id}`,
+          name: "Coverage property fixture",
+        })),
+      );
+      try {
+        await assertProperty(
+          "maintained coverage counts equal fresh aggregation after arbitrary decision writes",
+          fc.asyncProperty(
+            fc.array(operation, { minLength: 5, maxLength: 25 }),
+            async (operations) => {
+              await db
+                .delete(caseLawDecisions)
+                .where(inArray(caseLawDecisions.sourceId, sourceIds));
+              for (const input of operations) {
+                const id =
+                  decisions.at(input.slot) ??
+                  panic("Missing generated decision slot");
+                if (input.type === "delete") {
+                  // db-await-in-loop: exercise each state-machine transition and compare its committed aggregate.
+                  await db
+                    .delete(caseLawDecisions)
+                    .where(eq(caseLawDecisions.id, id));
+                } else {
+                  const sourceId =
+                    sourceIds.at(input.source) ??
+                    panic("Missing generated source slot");
+                  const row = {
+                    id,
+                    sourceId,
+                    sourceDocumentId: id,
+                    country: input.country,
+                    court: input.court,
+                    language: "cs",
+                    decisionDate: input.decisionDate,
+                    caseNumber: input.caseNumber,
+                    fulltext:
+                      input.publication === "published" ? "Fixture text" : null,
+                    redactedAt:
+                      input.publication === "redacted"
+                        ? new Date("2026-01-01T00:00:00Z")
+                        : null,
+                    metadata:
+                      input.publication === "listing-only"
+                        ? {
+                            _stellaPartialObservation: {
+                              isListingOnly: true,
+                            },
+                          }
+                        : {},
+                  };
+                  // db-await-in-loop: real insert/upsert writes exercise trigger transitions, including source and country changes.
+                  await db
+                    .insert(caseLawDecisions)
+                    .values(row)
+                    .onConflictDoUpdate({
+                      target: caseLawDecisions.id,
+                      set: row,
+                    });
                 }
-              },
-            ),
-            { numRuns: 30 },
-          );
-        } finally {
-          await db
-            .delete(caseLawDecisions)
-            .where(inArray(caseLawDecisions.sourceId, sourceIds));
-          await db
-            .delete(caseLawSources)
-            .where(inArray(caseLawSources.id, sourceIds));
-        }
-      });
-    },
-    120_000,
-  );
+                // db-await-in-loop: the invariant must hold after every generated write, including deletes and no-op replay.
+                await assertFreshAggregation(db, sourceIds);
+              }
+            },
+          ),
+          { numRuns: 30 },
+        );
+      } finally {
+        await db
+          .delete(caseLawDecisions)
+          .where(inArray(caseLawDecisions.sourceId, sourceIds));
+        await db
+          .delete(caseLawSources)
+          .where(inArray(caseLawSources.id, sourceIds));
+      }
+    });
+  }, 120_000);
 });

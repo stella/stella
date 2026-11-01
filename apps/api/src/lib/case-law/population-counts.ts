@@ -1,11 +1,11 @@
 import { eq, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
 import { caseLawPopulationCountsLive, caseLawSources } from "@/api/db/schema";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { redistributableCaseLawSource } from "@/api/lib/case-law/redistribution";
 import { typedPgArray } from "@/api/lib/search/sql";
 
-type PopulationReadDb = Pick<typeof rootDb, "select">;
+type PopulationReadDb = Pick<CaseLawPublicReadTransaction, "select">;
 
 /** Every caller supplies the source exclusions used for its population snapshot. */
 export const caseLawPopulationRows = (

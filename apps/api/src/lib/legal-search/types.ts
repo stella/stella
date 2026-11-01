@@ -131,7 +131,8 @@ export type LegalBrowseFacetsQuery = {
 
 export type LegalBrowseFacets = {
   /** Present for the maintained population owner; provider-native facets have no fold. */
-  countsFreshness?: PopulationCountsFreshness | { status: "unavailable" };
+  countsFreshness?:
+    PopulationCountsFreshness | { status: "unavailable" } | undefined;
   country: FacetBucket[];
   court: FacetBucket[];
   year: FacetBucket[];
