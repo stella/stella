@@ -6330,7 +6330,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
-          cache-write: save
+          cache-write: ${{ matrix.target == 'x86_64-pc-windows-msvc' && 'save' || 'restore' }}
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
           log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run-${{ matrix.target }}.log"
         env:
