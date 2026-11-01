@@ -315,6 +315,7 @@ export const reparseUkFclStoredRaw = (
   stored: StoredRawReparseInput,
 ): StoredRawReparseOutcome => {
   const parts = decodeSourceRawEnvelope(new TextDecoder().decode(stored.raw));
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const missingEnvelope: StoredRawReparseOutcome = {
     type: "rejected",
     rejection: STORED_RAW_REPARSE_REJECTION.UNSUPPORTED_CONTENT,

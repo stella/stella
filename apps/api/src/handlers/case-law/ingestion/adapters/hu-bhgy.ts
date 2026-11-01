@@ -932,6 +932,7 @@ export const assembleHuBhgyDecision = async ({
     court,
     country: ADAPTER_MANIFESTS[ADAPTER_KEYS.HU_BHGY].country,
     language: HU_BHGY_LANGUAGE,
+    // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
     ...(read?.decisionDate !== undefined
       ? { decisionDate: read.decisionDate }
       : {}),

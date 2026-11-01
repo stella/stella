@@ -1082,6 +1082,7 @@ export const assemblePlTkDecision = ({
       ? ruling.wordDocumentUrl
       : undefined;
 
+  // parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
   const parsed =
     ruling?.textHtml !== undefined
       ? Result.try({

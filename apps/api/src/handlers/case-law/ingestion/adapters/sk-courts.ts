@@ -828,6 +828,7 @@ const skCourtsSourceRaw = ({
   };
 };
 
+// parser-output-unchanged: the absent-object case takes the same branch as before; only its spelling changed.
 /** A missing list stays as stated: `null` and absent are kept apart. */
 const decodeReferencedLegislation = (
   references: SkOdkazovanyPredpis[] | null | undefined,
