@@ -442,7 +442,7 @@ export const runChecks = async ({
       try {
         await runOne(item);
       } catch (error) {
-        reject(error);
+        reject(error instanceof Error ? error : new Error(String(error)));
         return;
       }
       running -= 1;
