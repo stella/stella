@@ -28,6 +28,7 @@ import { routes } from "@/api/http/route";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { deploymentFeatureGateExcept } from "@/api/lib/deployment-feature-route";
 import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { errorBoundary } from "@/api/lib/observability/request-lifecycle";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -51,6 +52,7 @@ import {
 } from "./billing-draft-mode";
 import type { readSettingsView } from "./billing-draft-settings";
 import {
+  consentWithdrawalException,
   createDesktopBillingDraftSettingsReadEndpoint,
   createDesktopBillingDraftSettingsUpdateEndpoint,
   writeOwnBillingDraftSettings,
@@ -334,12 +336,15 @@ type Caller = {
   enrolled?: boolean;
   /** Replaces the update's second read, the settings view. */
   readView?: typeof readSettingsView;
+  /** Calls the update through the route's deployment gate while the
+   * deployment is off, as production mounts it. */
+  deploymentOff?: boolean;
 };
 
 /** One linked desktop calling the settings endpoints on the real HTTP core,
  * through its own membership-scoped database. */
 const callSettings = async (
-  { organizationId, userId, enrolled = true, readView }: Caller,
+  { organizationId, userId, enrolled = true, readView, deploymentOff }: Caller,
   change?: DesktopBillingDraftSettingsRequest,
 ) => {
   const authorizeAccount = async (request: Request) => {
@@ -378,15 +383,30 @@ const callSettings = async (
   await using server = serveForTest(
     createHttpApp({
       middleware: [errorBoundary],
-      routes: routes({
-        "/settings": {
-          GET: createDesktopBillingDraftSettingsReadEndpoint(authorizeAccount),
-          PUT: createDesktopBillingDraftSettingsUpdateEndpoint(
-            authorizeAccount,
-            readView === undefined ? {} : { readView },
-          ),
+      routes: routes(
+        {
+          "/settings": {
+            GET: createDesktopBillingDraftSettingsReadEndpoint(
+              authorizeAccount,
+            ),
+            PUT: createDesktopBillingDraftSettingsUpdateEndpoint(
+              authorizeAccount,
+              readView === undefined ? {} : { readView },
+            ),
+          },
         },
-      }),
+        deploymentOff === true
+          ? {
+              middleware: [
+                deploymentFeatureGateExcept(
+                  "FEATURE_TIME_BILLING",
+                  consentWithdrawalException,
+                  { isEnabled: () => false },
+                ),
+              ],
+            }
+          : {},
+      ),
     }),
   );
   const response = await server.fetch(
@@ -507,6 +527,34 @@ test("a member without the feature can still withdraw consent, and change nothin
     consent: "revoked",
     preference: null,
   });
+  expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeNull();
+});
+
+test("with the deployment off, a withdrawal passes the gate and the route reads the same body", async () => {
+  const granted = await callSettings(A1_IN_A, {
+    type: "grant_consent",
+    revision: null,
+  });
+  expect(granted.status).toBe(200);
+  const off = { ...A1_IN_A, deploymentOff: true };
+  const { revision } = v.parse(
+    desktopBillingDraftSettingsUpdateResponseSchema,
+    granted.body,
+  );
+  expect(
+    (
+      await callSettings(off, {
+        type: "set_preference",
+        revision,
+        preference: "Refused",
+      })
+    ).status,
+  ).toBe(404);
+
+  const withdrawn = await callSettings(off, { type: "withdraw_consent" });
+
+  expect(withdrawn.status).toBe(200);
+  expect(withdrawn.body).toMatchObject({ consent: "revoked" });
   expect((await rowOf(ids.orgA, ids.userA1))?.consentAt).toBeNull();
 });
 
