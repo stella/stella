@@ -688,6 +688,7 @@ describe("workflow_run trust", () => {
     expect(workflows.map(({ file }) => file).toSorted()).toEqual(
       [
         ...WORKFLOW_RUN_WORKFLOWS,
+        "merge-group-hold.yml",
         "network-baseline-request.yml",
         "pr-lint.yml",
         "release-proof.yml",
