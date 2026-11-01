@@ -19,6 +19,7 @@ import {
   resolveCaughtRouteTemplate,
 } from "@/lib/analytics/route-error-lifecycle";
 import { getWebHangDetector } from "@/lib/analytics/web-hang/web-hang-detector";
+import { installSessionExpiredNotice } from "@/lib/errors/session-expired";
 import { setUserErrorRouteTemplate } from "@/lib/errors/user-toast";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
 import {
@@ -57,6 +58,7 @@ export function getRouter() {
     },
   });
   if (typeof window !== "undefined") {
+    installSessionExpiredNotice(queryClient);
     installUserScopedStorage(queryClient);
     installSessionChangeListener(queryClient, {
       listen: listenForSessionChange,

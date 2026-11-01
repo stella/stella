@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Vuelva a iniciar sesión para continuar con esta acción.",
     "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
+    "sessionExpired": "Su sesión ha caducado",
+    "sessionExpiredDescription": "Inicie sesión en una pestaña nueva. Lo que ha escrito se mantiene en esta página.",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
     "signInWithPassword": "Iniciar sesión con contraseña",

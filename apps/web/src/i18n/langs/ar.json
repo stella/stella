@@ -170,6 +170,8 @@
     "reauthenticationRequired": "سجّل الدخول مرة أخرى للمتابعة بهذا الإجراء.",
     "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
+    "sessionExpired": "انتهت جلستك",
+    "sessionExpiredDescription": "سجّل الدخول من علامة تبويب جديدة. يبقى ما كتبته في هذه الصفحة.",
     "signIn": "تسجيل الدخول",
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
     "signInWithPassword": "تسجيل الدخول بكلمة المرور",

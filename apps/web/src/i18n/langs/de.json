@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Melden Sie sich erneut an, um diese Aktion fortzusetzen.",
     "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
+    "sessionExpired": "Ihre Sitzung ist abgelaufen",
+    "sessionExpiredDescription": "Melden Sie sich in einem neuen Tab an. Ihre Eingaben bleiben auf dieser Seite erhalten.",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "signInWithPassword": "Mit Passwort anmelden",

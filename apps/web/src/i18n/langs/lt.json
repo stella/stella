@@ -170,6 +170,8 @@
     "reauthenticationRequired": "Norėdami tęsti šį veiksmą, prisijunkite iš naujo.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
+    "sessionExpired": "Jūsų sesija baigėsi",
+    "sessionExpiredDescription": "Prisijunkite naujame skirtuke. Tai, ką įvedėte, liks šiame puslapyje.",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "signInWithPassword": "Prisijungti slaptažodžiu",
