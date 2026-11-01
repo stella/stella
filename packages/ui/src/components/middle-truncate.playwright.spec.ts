@@ -35,6 +35,10 @@ const setFrameWidth = async (page: Page, width: number) =>
  * the last whole grapheme that fits inside the head's box, measured from the
  * text itself. Flush means under a pixel: no blank slack and no half glyph
  * before the ellipsis.
+ *
+ * A grapheme fits only when it ends inside the box. Both edges come from the
+ * same layout, so an allowance here would count a grapheme that overflows by
+ * a fraction of a pixel as whole, while the component clips it.
  */
 const measureCut = async (page: Page) =>
   await page.locator("[data-slot=middle-truncate]").evaluate((root) => {
@@ -61,8 +65,8 @@ const measureCut = async (page: Page) =>
       range.setEnd(text, offset);
       const rect = range.getBoundingClientRect();
       const fits = rtl
-        ? rect.left >= headBox.left - 0.5
-        : rect.right <= headBox.right + 0.5;
+        ? rect.left >= headBox.left
+        : rect.right <= headBox.right;
       if (!fits) {
         break;
       }
