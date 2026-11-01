@@ -202,7 +202,8 @@
     "server": "Server",
     "signOut": "Sign out",
     "deleteAccount": "Delete account",
-    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours."
+    "deleteAccountHint": "Opens your account on the web, where you can delete it and everything in it that is yours.",
+    "signOutFailed": "Sign-out could not be completed. Try again."
   },
   "header": {
     "search": "Search"

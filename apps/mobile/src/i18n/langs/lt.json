@@ -202,7 +202,8 @@
     "server": "Serveris",
     "signOut": "Atsijungti",
     "deleteAccount": "Ištrinti paskyrą",
-    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų."
+    "deleteAccountHint": "Atveria jūsų paskyrą žiniatinklyje, kur galite ją ištrinti kartu su viskuo, kas jūsų.",
+    "signOutFailed": "Nepavyko atsijungti. Bandykite dar kartą."
   },
   "header": {
     "search": "Ieškoti"

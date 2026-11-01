@@ -202,7 +202,8 @@
     "server": "Szerver",
     "signOut": "Kijelentkezés",
     "deleteAccount": "Fiók törlése",
-    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné."
+    "deleteAccountHint": "Megnyitja a fiókját a weben, ahol mindazzal együtt törölheti, ami az öné.",
+    "signOutFailed": "A kijelentkezést nem sikerült befejezni. Próbálja újra."
   },
   "header": {
     "search": "Keresés"

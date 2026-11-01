@@ -202,7 +202,8 @@
     "server": "Serwer",
     "signOut": "Wyloguj się",
     "deleteAccount": "Usuń konto",
-    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy."
+    "deleteAccountHint": "Otwiera Twoje konto w przeglądarce, gdzie możesz je usunąć wraz ze wszystkim, co do Ciebie należy.",
+    "signOutFailed": "Nie udało się wylogować. Spróbuj ponownie."
   },
   "header": {
     "search": "Szukaj"
