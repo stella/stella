@@ -30,7 +30,9 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
     run: |
-      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+      # Outside a pull request or merge group the base is this tree, so a
+      # changed-file scan would check nothing.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
         bun run check:result-consumption -- --all --leg web
       else
         bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
@@ -128,7 +130,9 @@ checks:
       BASE_REF: ${{ github.base_ref || 'main' }}
       EVENT_NAME: ${{ github.event_name }}
     run: |
-      if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+      # Outside a pull request or merge group the base is this tree, so a
+      # changed-file scan would check nothing.
+      if [[ "$EVENT_NAME" != "pull_request" && "$EVENT_NAME" != "merge_group" ]]; then
         bun run check:result-consumption -- --all --leg rest
       else
         bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest

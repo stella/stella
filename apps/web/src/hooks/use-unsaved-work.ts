@@ -15,6 +15,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 type UnsavedWorkSurface =
   | "ai-provider-settings"
   | "chat-draft"
+  | "chat-message-edit"
   | "docx-edit-session"
   | "document-docx-editor"
   | "file-upload"
@@ -29,6 +30,7 @@ const useUnsavedWorkStore = create<
 >(() => ({
   "ai-provider-settings": 0,
   "chat-draft": 0,
+  "chat-message-edit": 0,
   "docx-edit-session": 0,
   "document-docx-editor": 0,
   "file-upload": 0,

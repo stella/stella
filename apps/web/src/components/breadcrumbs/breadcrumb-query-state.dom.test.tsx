@@ -109,6 +109,8 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
 
 // The matter title reads whether numbering is on; this suite fails only the
 // breadcrumb's own read.
+const utcTimeZone =
+  parseTimeZoneId("UTC") ?? panic("UTC fixture must be a supported time zone");
 const organizationSettings = {
   declaredFeatureIds: [],
   deploymentFeatures: { legalLists: true },
@@ -125,9 +127,8 @@ const organizationSettings = {
   timeEditWindowDays: 30,
   timeLockedThroughMonth: null,
   timeNarrativeRequired: false,
-  timeZone:
-    parseTimeZoneId("UTC") ??
-    panic("UTC fixture must be a supported time zone"),
+  timeZone: utcTimeZone,
+  primaryJurisdictionTimeZone: utcTimeZone,
   timeZoneSource: "organization",
 } satisfies OrganizationSettings;
 const seedOrganizationSettings = (client: InstanceType<typeof QueryClient>) => {

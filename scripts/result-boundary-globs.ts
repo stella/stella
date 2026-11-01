@@ -53,6 +53,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio-response-budget.ts",
   "apps/api/src/handlers/case-law/ingestion/adapters/pl-kio.ts",
   "apps/api/src/lib/auth/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/account-exports/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
@@ -68,6 +69,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-registry/**/*.ts",
   "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
+  "apps/api/src/handlers/dictation/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
   "apps/api/src/handlers/documents/**/*.ts",
@@ -88,6 +90,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
+  "apps/api/src/handlers/organizations/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
   "apps/api/src/handlers/saved-time-narratives/**/*.ts",
@@ -114,6 +117,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/document-review/**/*.ts",
   "apps/api/src/lib/document-translation/**/*.ts",
   "apps/api/src/lib/document-types/**/*.ts",
+  "apps/api/src/lib/imports/**/*.ts",
   "apps/api/src/lib/docx-authoring/**/*.ts",
   "apps/api/src/lib/email/correspondence/**/*.ts",
   "apps/api/src/lib/email/inbound/**/*.ts",
@@ -129,6 +133,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/lists/**/*.ts",
   "apps/api/src/lib/load/**/*.ts",
   "apps/api/src/lib/machine-api-keys/**/*.ts",
+  "apps/api/src/lib/push/**/*.ts",
   "apps/api/src/lib/synthetic-principal/**/*.ts",
   "apps/api/src/lib/markdown/**/*.ts",
   "apps/api/src/lib/mcp-connectors/**/*.ts",
@@ -269,6 +274,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Browser startup captures detector installation failures in its outer Result.
   "apps/web/src/lib/analytics/web-hang/web-hang-detector.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
+  // Better Auth organization hooks reject invalid slug operations through APIError.
+  "apps/api/src/lib/auth/organization-slug-hooks.ts",
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
   "apps/api/src/lib/auth/request-budget-hooks.ts",
@@ -292,6 +299,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-translation/run-queue.ts",
   "apps/api/src/lib/entity-deletion-cleanup-queue.ts",
   "apps/api/src/lib/file-derivative-queue.ts",
+  // BullMQ retries an attempt only when its processor rejects.
+  "apps/api/src/lib/push/push-delivery-worker.ts",
   "apps/api/src/lib/flows/flow-run-worker.ts",
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
@@ -337,6 +346,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Handed to TanStack's connection adapter, which consumes rejections: a
   // refused response travels back as a thrown `APIError`, not as a `Result`.
   "apps/web/src/features/chat/chat-fetch.ts",
+  // TanStack Router reads the chat thread loader's redirect and its unchanged
+  // load failure only through rejection.
+  "apps/web/src/routes/_protected.chat/-thread-scope-redirect-boundary.ts",
   // TanStack's fetch and connection adapters consume Response/rejection;
   // this transport cannot return Result across the SDK callback boundary.
   "packages/chat/src/durable-transport.ts",
