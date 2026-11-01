@@ -339,6 +339,59 @@ const workflowOn = (file: string, workflow: unknown) => {
   return workflow["on"];
 };
 
+// GitHub branch filters: `**` also matches `/`, `*` does not. Any other
+// pattern syntax is refused here, so a new kind cannot pass unevaluated.
+const branchFilterMatches = (pattern: string, branch: string) => {
+  if (/[?+[\]!]/u.test(pattern)) {
+    expect.unreachable(`unsupported branch filter pattern: ${pattern}`);
+  }
+  const source = pattern
+    .split("**")
+    .map((part) =>
+      part
+        .split("*")
+        .map((literal) => literal.replaceAll(/[.^${}()|\\]/gu, "\\$&"))
+        .join("[^/]*"),
+    )
+    .join(".*");
+  return new RegExp(`^${source}$`, "u").test(branch);
+};
+
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+// Tags the release chain pushes, in both shapes release.yml publishes.
+const RELEASE_TAG_SAMPLES = ["v1.2.3", "v1.2.3-rc.1"];
+
+/**
+ * The head_branch a run of this trigger reports: the pushed tag for a tag
+ * push, the pushed branch for a branch push, and main for dispatched,
+ * scheduled and workflow_run runs, which start from the default branch.
+ */
+const headBranches = (file: string, on: unknown, event: string): string[] => {
+  const push = isRecord(on) ? on["push"] : undefined;
+  if (event !== "push" || !isRecord(push)) {
+    return ["main"];
+  }
+  const tags = stringList(push["tags"]).flatMap((pattern) => {
+    const samples = RELEASE_TAG_SAMPLES.filter((tag) =>
+      branchFilterMatches(pattern, tag),
+    );
+    expect(samples, `${file}: tag pattern ${pattern}`).not.toEqual([]);
+    return samples;
+  });
+  const branches = stringList(push["branches"]);
+  return [
+    ...(branches.length > 0 || tags.length > 0 ? branches : ["main"]),
+    ...tags,
+  ];
+};
+
+const branchFilterCovers = (filter: unknown, branch: string) =>
+  stringList(filter).some((pattern) => branchFilterMatches(pattern, branch));
+
 const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
   const alerting = workflows.find(
     ({ file }) => file === "scheduled-run-alerts.yml",
@@ -357,17 +410,33 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
     expect.unreachable("scheduled run alerts require a notify job");
   }
   const alertedNames: unknown[] = workflowRun["workflows"];
+  const branchFilter = workflowRun["branches"];
   const condition = conditionOf(jobs["notify"]);
   // GitHub starts the alert run for a listed workflow name; the notify
   // condition must then let a failed run of that file and event through.
-  const alerts = (file: string, workflow: unknown, event: string) =>
+  type FailedRunAlertOptions = {
+    file: string;
+    workflow: unknown;
+    event: string;
+    conclusion?: string;
+    // GitHub starts the alert run only for a head_branch its filter matches.
+    headBranch?: string;
+  };
+  const alerts = ({
+    file,
+    workflow,
+    event,
+    conclusion = "failure",
+    headBranch = "main",
+  }: FailedRunAlertOptions) =>
     isRecord(workflow) &&
     alertedNames.includes(workflow["name"]) &&
+    branchFilterCovers(branchFilter, headBranch) &&
     !definitelyFalse(condition, {
       values: {
         "github.event_name": "workflow_run",
         "github.repository": "owner/repo",
-        "github.event.workflow_run.conclusion": "failure",
+        "github.event.workflow_run.conclusion": conclusion,
         "github.event.workflow_run.event": event,
         "github.event.workflow_run.head_repository.full_name": "owner/repo",
         "github.event.workflow_run.path": `.github/workflows/${file}`,
@@ -379,7 +448,7 @@ const failedRunAlerting = (workflows: ReturnType<typeof allWorkflows>) => {
         cancelled: false,
       },
     });
-  return { alerts };
+  return { alerts, branchFilter, condition, notify: jobs["notify"] };
 };
 
 const GATE = [
@@ -410,7 +479,7 @@ describe("workflow_run trust", () => {
       return workflow["on"]["workflow_run"];
     };
     expect(trigger("scheduled-run-alerts.yml")).toMatchObject({
-      branches: ["main"],
+      branches: ["main", "v*"],
       types: ["completed"],
     });
     expect(trigger("bot-refresh-auto-merge.yml")).toMatchObject({
@@ -429,11 +498,75 @@ describe("workflow_run trust", () => {
     );
 
     for (const { file, workflow } of releaseChain) {
+      const on = workflowOn(file, workflow);
+      for (const event of triggers(on)) {
+        for (const headBranch of headBranches(file, on, event)) {
+          expect(
+            alerting.alerts({ file, workflow, event, headBranch }),
+            `${file}: ${event} on ${headBranch}`,
+          ).toBe(true);
+        }
+      }
+    }
+    // A tag-push release run reports its tag as head_branch, so a filter
+    // naming only main never starts an alert run for it.
+    const release = releaseChain.find(({ file }) => file === "release.yml");
+    const tagBranches = headBranches(
+      "release.yml",
+      workflowOn("release.yml", release?.workflow),
+      "push",
+    );
+    expect(tagBranches).toEqual(RELEASE_TAG_SAMPLES);
+    for (const tag of tagBranches) {
+      expect(branchFilterCovers(["main"], tag), tag).toBe(false);
+      expect(branchFilterCovers(alerting.branchFilter, tag), tag).toBe(true);
+    }
+  });
+
+  test("only marker workflows alert on cancellation, with trigger name coverage", () => {
+    const workflows = allWorkflows();
+    const alerting = failedRunAlerting(workflows);
+    const cancelledPaths =
+      /conclusion == 'cancelled'\s*&& contains\(fromJSON\('([^']+)'\)/u
+        .exec(alerting.condition)
+        ?.at(1);
+    if (typeof cancelledPaths !== "string") {
+      expect.unreachable("alerts require cancellation paths");
+    }
+    expect(JSON.parse(cancelledPaths).toSorted()).toEqual(
+      workflows
+        .filter(({ source }) => source.includes(RELEASE_CHAIN_MARKER))
+        .map(({ file }) => `.github/workflows/${file}`)
+        .toSorted(),
+    );
+    const steps = alerting.notify["steps"];
+    const send = Array.isArray(steps)
+      ? steps.find(
+          (step: unknown) =>
+            isRecord(step) && step["name"] === "Send failure alert",
+        )
+      : undefined;
+    if (
+      !isRecord(send) ||
+      !isRecord(send["env"]) ||
+      typeof send["env"]["ALERT_KIND"] !== "string"
+    ) {
+      expect.unreachable("alerts require kind");
+    }
+    expect(
+      evaluate(send["env"]["ALERT_KIND"], {
+        values: {
+          "github.event_name": "workflow_run",
+          "github.event.workflow_run.conclusion": "cancelled",
+        },
+      }),
+    ).toBe("Cancelled release run");
+    for (const { file, source, workflow } of workflows) {
       for (const event of triggers(workflowOn(file, workflow))) {
         expect(
-          alerting.alerts(file, workflow, event),
+          alerting.alerts({ file, workflow, event, conclusion: "cancelled" }),
           `${file}: ${event}`,
-        ).toBe(true);
+        ).toBe(source.includes(RELEASE_CHAIN_MARKER));
       }
     }
   });
@@ -455,7 +588,7 @@ describe("workflow_run trust", () => {
         continue;
       }
       for (const event of events) {
-        if (!alerting.alerts(file, workflow, event)) {
+        if (!alerting.alerts({ file, workflow, event })) {
           missing.push(`${file}: ${event}`);
         }
       }
@@ -472,7 +605,7 @@ describe("workflow_run trust", () => {
       expect(
         triggers(workflowOn(file, workflow))
           .filter((event) => UNATTENDED_EVENTS.has(event))
-          .some((event) => alerting.alerts(file, workflow, event)),
+          .some((event) => alerting.alerts({ file, workflow, event })),
         file,
       ).toBe(false);
     }
@@ -481,20 +614,38 @@ describe("workflow_run trust", () => {
   test("the unattended-workflow guard reports a workflow missing from alerts", () => {
     const alerting = failedRunAlerting(allWorkflows());
     const unlisted = { name: "Unlisted nightly", on: { schedule: [] } };
-    expect(alerting.alerts("unlisted-nightly.yml", unlisted, "schedule")).toBe(
-      false,
-    );
+    expect(
+      alerting.alerts({
+        file: "unlisted-nightly.yml",
+        workflow: unlisted,
+        event: "schedule",
+      }),
+    ).toBe(false);
     const nightly = allWorkflows().find(
       ({ file }) => file === "nightly-test.yml",
     )?.workflow;
-    expect(alerting.alerts("nightly-test.yml", nightly, "schedule")).toBe(true);
+    expect(
+      alerting.alerts({
+        file: "nightly-test.yml",
+        workflow: nightly,
+        event: "schedule",
+      }),
+    ).toBe(true);
     // Listed by name but run from another path: the condition refuses it.
-    expect(alerting.alerts("renamed-nightly.yml", nightly, "schedule")).toBe(
-      false,
-    );
-    expect(alerting.alerts("nightly-test.yml", nightly, "pull_request")).toBe(
-      false,
-    );
+    expect(
+      alerting.alerts({
+        file: "renamed-nightly.yml",
+        workflow: nightly,
+        event: "schedule",
+      }),
+    ).toBe(false);
+    expect(
+      alerting.alerts({
+        file: "nightly-test.yml",
+        workflow: nightly,
+        event: "pull_request",
+      }),
+    ).toBe(false);
   });
 
   test("reusable network delivery trusts only the main recorder caller", () => {
@@ -1170,6 +1321,97 @@ describe("desktop recovery", () => {
     expect(typeof run, `${jobName}/${stepName}`).toBe("string");
     return typeof run === "string" ? run : "";
   };
+  test("completion gate checks every required job and permits intentional skips", () => {
+    const gate = job("release-complete");
+    const dependencies = needsOf(gate);
+    expect(dependencies.toSorted()).toEqual(
+      Object.keys(jobs)
+        .filter((name) => name !== "release-complete")
+        .toSorted(),
+    );
+    for (const channel of ["prod", "rc"]) {
+      for (const shouldBuild of ["true", "false"]) {
+        const required = dependencies.filter(
+          (name) =>
+            name !== "resolve" &&
+            (shouldBuild === "true"
+              ? name !== "carry-forward" &&
+                (channel === "prod" ||
+                  !["verify-production", "promote-latest"].includes(name))
+              : name === "carry-forward" && channel === "prod"),
+        );
+        for (const changed of dependencies) {
+          for (const result of ["success", "cancelled", "skipped", "failure"]) {
+            expect(
+              evaluate(conditionOf(gate), {
+                values: {
+                  "needs.resolve.result": "success",
+                  [`needs.${changed}.result`]: result,
+                },
+                status: { always: true, success: false, cancelled: true },
+              }),
+            ).toBe(changed !== "resolve" || result === "success");
+            if (changed === "resolve") {
+              continue;
+            }
+            const needs = Object.fromEntries(
+              dependencies.map((name) => {
+                const expectedResult =
+                  required.includes(name) || name === "resolve"
+                    ? "success"
+                    : "skipped";
+                return [
+                  name,
+                  {
+                    result: name === changed ? result : expectedResult,
+                    ...(name === "resolve"
+                      ? { outputs: { should_build: shouldBuild, channel } }
+                      : {}),
+                  },
+                ];
+              }),
+            );
+            const run = Bun.spawnSync(
+              [
+                "bash",
+                "-c",
+                stepRun(
+                  "release-complete",
+                  "Require all release jobs to complete",
+                ),
+              ],
+              { env: { ...process.env, NEEDS: JSON.stringify(needs) } },
+            );
+            const fails = required.includes(changed) && result !== "success";
+            expect(
+              run.exitCode,
+              `${channel}/${shouldBuild}/${changed}/${result}: ${run.stderr.toString()}`,
+            ).toBe(fails ? 1 : 0);
+            if (fails) {
+              expect(run.stdout.toString()).toContain(
+                `job ${changed} ended ${result}`,
+              );
+            }
+          }
+        }
+      }
+    }
+  });
+
+  test("completion gate fails when it cannot read the job results", () => {
+    for (const needs of ["", "{", "[]", '"success"']) {
+      const run = Bun.spawnSync(
+        [
+          "bash",
+          "-c",
+          stepRun("release-complete", "Require all release jobs to complete"),
+        ],
+        { env: { ...process.env, NEEDS: needs } },
+      );
+      expect(run.exitCode, JSON.stringify(needs)).not.toBe(0);
+    }
+  });
+
   const current = "v1.2.3";
   const previous = "v1.2.2";
   const createFixture = (root: string) => {
