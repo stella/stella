@@ -616,8 +616,12 @@ describe("confirmed file rename state", () => {
       expect(result.current.first.isSuccess).toBe(true);
       expect(toast).not.toHaveBeenCalled();
       expect(capture).toHaveBeenCalledWith(expect.any(Error), {
-        type: "detached",
-        operation: "resource-query.invalidate",
+        fingerprintKey: "detached:resource-query.invalidate",
+        scope: {
+          type: "handler",
+          handlerId: "detached:resource-query.invalidate",
+        },
+        context: { type: "detached", operation: "resource-query.invalidate" },
       });
     } finally {
       capture.mockRestore();

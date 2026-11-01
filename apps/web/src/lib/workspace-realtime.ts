@@ -685,8 +685,12 @@ export const applyResourceQueryActions = async (
   );
   if (Result.isError(invalidated)) {
     getAnalytics().captureError(invalidated.error, {
-      type: "detached",
-      operation: "resource-query.invalidate",
+      fingerprintKey: "detached:resource-query.invalidate",
+      scope: {
+        type: "handler",
+        handlerId: "detached:resource-query.invalidate",
+      },
+      context: { type: "detached", operation: "resource-query.invalidate" },
     });
   }
   // Refetch failure must not turn a committed write into a rejected mutation.

@@ -402,8 +402,15 @@ test("cache invalidation failures preserve every registered mutation's committed
       expect(capture).toHaveBeenCalledWith(
         expect.objectContaining({ cause: failure }),
         {
-          type: "detached",
-          operation: "resource-query.invalidate",
+          fingerprintKey: "detached:resource-query.invalidate",
+          scope: {
+            type: "handler",
+            handlerId: "detached:resource-query.invalidate",
+          },
+          context: {
+            type: "detached",
+            operation: "resource-query.invalidate",
+          },
         },
       );
     } finally {
