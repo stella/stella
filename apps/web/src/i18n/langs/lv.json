@@ -2410,7 +2410,6 @@
     "unverifiedCitationHint": "Šo citātu neizdevās sasaistīt ar avota dokumentu.",
     "uploadFiles": "Augšupielādēt failus",
     "urlIdentifier": "Identifikators",
-    "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
     "value": "Vērtība",
     "vatId": "PVN numurs",
@@ -2461,6 +2460,7 @@
     "scopeMemoryWrite": "Izveidot un atjaunināt asistenta atmiņu",
     "scopeOfflineAccess": "Paturēt jūs pieslēgtu bez atkārtotas apstiprināšanas",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
+    "scopeOrganizationCreate": "Veidot jaunas organizācijas, kuru īpašnieks būsiet jūs",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
     "scopeRead": "Lasīt jūsu dokumentus, lietas un kontaktus",
     "scopeReadAnonymized": "Lasīt jūsu dokumentu un lietu anonimizētās versijas",
@@ -2987,7 +2987,6 @@
     "failedToVerifyOtp": "Neizdevās verificēt kodu",
     "matterNotFound": "Lieta nav atrasta",
     "partyAlreadyExists": "Kontaktam jau ir šī loma lietā",
-    "slugAlreadyTaken": "Šis slug jau ir aizņemts",
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
@@ -4740,6 +4739,13 @@
       "selectedProvider": "{provider}",
       "usingDefaults": "Tiek izmantoti noklusējuma iestatījumi"
     },
+    "creationEvaluationLimitReached": "Jūs esat izmantojis visus {limit} organizāciju izmēģinājuma periodus. Organizācijas dzēšana neatjauno izmēģinājuma periodu. Izmantojiet esošu organizāciju vai sazinieties ar atbalsta dienestu, lai saņemtu maksas piekļuvi.",
+    "creationInvalidName": "Ievadiet derīgu organizācijas nosaukumu (ne vairāk kā {maxLength} rakstzīmes).",
+    "creationNotAllowed": "Ar šo kontu nevar izveidot organizācijas.",
+    "creationOutcomeUnknown": "Pieprasījums, iespējams, ir izveidojis organizāciju. Mēģiniet vēlreiz, lai pārbaudītu rezultātu.",
+    "creationRateLimited": "Pēdējā laikā izveidots pārāk daudz organizāciju. Mēģiniet vēlāk vēlreiz.",
+    "creationRefused": "Organizāciju neizdevās izveidot. Pārbaudiet datus un mēģiniet vēlreiz.",
+    "creationSlugConflict": "Šī organizācijas adrese jau tiek izmantota. Izvēlieties citu nosaukumu vai adresi.",
     "invitations": {
       "cancelInvitation": "Atcelt uzaicinājumu",
       "emailAddressLabel": "E-pasta adrese",
@@ -4754,6 +4760,7 @@
       "statuses": {
         "accepted": "Pieņemts",
         "canceled": "Atcelts",
+        "expired": "Derīguma termiņš beidzies",
         "pending": "Gaida",
         "rejected": "Noraidīts"
       }
@@ -4787,6 +4794,8 @@
       "typeEmailToConfirm": "Ierakstiet {email}, lai apstiprinātu",
       "updateRole": "Atjaunināt lomu"
     },
+    "newOrganization": "Jauna organizācija",
+    "newOrganizationDescription": "Izveidojiet organizāciju, kuras īpašnieks būsiet jūs.",
     "roles": {
       "admin": "Administrators",
       "descriptions": {
@@ -4802,6 +4811,9 @@
       "owner": "Īpašnieks"
     },
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
+    "startOver": "Sākt no jauna",
+    "startOverDescription": "Sākotnējais pieprasījums, iespējams, jau ir izveidojis organizāciju. Pirms sākat no jauna, pārbaudiet savas organizācijas; jauns pieprasījums var izveidot vēl vienu organizāciju.",
+    "startOverTitle": "Sākt jaunu izveides pieprasījumu?",
     "switchOrganization": "Mainīt organizāciju"
   },
   "publicTools": {
@@ -5397,6 +5409,7 @@
         "title": "Atmiņas iegūšana",
         "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
       },
+      "pastInvitations": "Iepriekšējie uzaicinājumi",
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
@@ -6234,8 +6247,7 @@
   "validation": {
     "invalidEmail": "Ievadiet derīgu e-pasta adresi.",
     "organizationNameRequired": "Organizācijas nosaukums ir obligāts",
-    "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises",
-    "slugRequired": "Slug ir obligāts"
+    "slugFormat": "Slug drīkst saturēt tikai mazos burtus, ciparus un defises"
   },
   "verify": {
     "history": "{history, select, refiled {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>.} superseded {Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.} other {Izdrukāts ar atsauces numuru <bdi>{reference}</bdi>; tagad dokuments ir reģistrēts ar numuru <bdi>{currentReference}</bdi> lietā <bdi>{matterName}</bdi>. Šis atsauces numurs norāda uz {version, number}. versiju; pašreizējā versija ir {currentVersion, number}.}}",

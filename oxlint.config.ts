@@ -2062,6 +2062,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-direct-test-state.ts",
     "./.oxlint-plugins/no-shared-checkout-mutation.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/inspector-header-title.ts",
     "./.oxlint-plugins/no-raw-overflow-scroll.ts",
     "./.oxlint-plugins/no-hover-only-reveal.ts",
     "./.oxlint-plugins/no-imported-class-constant.ts",
@@ -3716,6 +3717,16 @@ const config = defineConfig({
       ],
       rules: {
         "no-centered-scroll-column/no-centered-scroll-column": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/components/inspector/**/*.tsx",
+        "apps/web/src/**/*{inspector,side-panel}*.tsx",
+        ".oxlint-plugins/__fixtures__/inspector-header-title.fixture.tsx",
+      ],
+      rules: {
+        "inspector-header-title/inspector-header-title": "error",
       },
     },
     {
