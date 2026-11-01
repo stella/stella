@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
@@ -58,7 +59,17 @@ describe("DetailsGrid labelWidth", () => {
 });
 
 describe("DetailsItem empty value", () => {
-  test.each([null, undefined, "", "   "])("draws a dash for %p", (value) => {
+  // Each case is wrapped: `test.each` spreads an array row into arguments.
+  test.each<[ReactNode]>([
+    [null],
+    [undefined],
+    [false],
+    [true],
+    [""],
+    ["   "],
+    [[]],
+    [[null, " "]],
+  ])("draws a dash for %p", (value) => {
     const markup = renderToStaticMarkup(
       <DetailsGrid>
         <DetailsItem label="Judge">{value}</DetailsItem>

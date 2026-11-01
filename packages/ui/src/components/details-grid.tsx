@@ -1,6 +1,7 @@
 import { createContext, useContext } from "react";
 import type * as React from "react";
 
+import { rendersNothing } from "../lib/renders-nothing";
 import { cn } from "../lib/utils";
 
 /**
@@ -232,12 +233,18 @@ const DetailsItem = ({
   );
 };
 
-/** No value to show: nothing, or only whitespace. */
+/**
+ * No value to show: what React draws nothing for (see `rendersNothing`),
+ * only whitespace, or a list of only those.
+ */
 function isEmptyValue(value: React.ReactNode): boolean {
-  if (value === null || value === undefined || value === false) {
-    return true;
+  if (typeof value === "string") {
+    return value.trim() === "";
   }
-  return typeof value === "string" && value.trim() === "";
+  if (Array.isArray(value)) {
+    return value.every((item: React.ReactNode) => isEmptyValue(item));
+  }
+  return rendersNothing(value);
 }
 
 export {
