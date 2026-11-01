@@ -17,6 +17,7 @@
   "admin": {
     "ai": "DI",
     "auditArchiveDescription": "Ištrynus organizaciją ištrinamas ir jos veiklos žurnalas. Pirmiausia eksportuokite veiklos žurnalą ir atsisiųskite archyvą; jis bus pasiekiamas vieną valandą.",
+    "auditArchiveDownloadFirst": "Prieš ištrindami organizaciją atsisiųskite veiklos žurnalo archyvą.",
     "auditArchiveFailed": "Nepavyko paruošti veiklos žurnalo archyvo.",
     "auditArchiveOutdated": "Nuo šio archyvo sukūrimo veiklos žurnale atsirado naujų įrašų. Prieš ištrindami organizaciją eksportuokite jį iš naujo.",
     "auditArchiveReady": "Veiklos žurnalo archyvas paruoštas. Dabar galite ištrinti organizaciją.",

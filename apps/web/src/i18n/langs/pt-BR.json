@@ -17,6 +17,7 @@
   "admin": {
     "ai": "IA",
     "auditArchiveDescription": "Excluir a organização também exclui o registro de atividades dela. Exporte primeiro o registro de atividades e baixe o arquivo; ele fica disponível para você por uma hora.",
+    "auditArchiveDownloadFirst": "Baixe o arquivo do registro de atividades antes de excluir a organização.",
     "auditArchiveFailed": "Não foi possível preparar o arquivo do registro de atividades.",
     "auditArchiveOutdated": "O registro de atividades tem novas entradas desde este arquivo. Exporte-o novamente antes de excluir a organização.",
     "auditArchiveReady": "O arquivo do registro de atividades está pronto. Agora você pode excluir a organização.",

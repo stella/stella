@@ -17,6 +17,7 @@
   "admin": {
     "ai": "AI",
     "auditArchiveDescription": "Deleting the organization also deletes its activity log. Export the activity log first and download the archive; it stays available to you for one hour.",
+    "auditArchiveDownloadFirst": "Download the activity log archive before you delete the organization.",
     "auditArchiveFailed": "The activity log archive could not be prepared.",
     "auditArchiveOutdated": "The activity log has new entries since this archive. Export it again before you delete the organization.",
     "auditArchiveReady": "The activity log archive is ready. You can now delete the organization.",

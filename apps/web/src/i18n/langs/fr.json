@@ -17,6 +17,7 @@
   "admin": {
     "ai": "IA",
     "auditArchiveDescription": "La suppression de l’organisation supprime aussi son journal d’activité. Exportez d’abord le journal d’activité et téléchargez l’archive ; elle reste disponible pendant une heure.",
+    "auditArchiveDownloadFirst": "Téléchargez l’archive du journal d’activité avant de supprimer l’organisation.",
     "auditArchiveFailed": "L’archive du journal d’activité n’a pas pu être préparée.",
     "auditArchiveOutdated": "Le journal d’activité contient de nouvelles entrées depuis cette archive. Exportez-le à nouveau avant de supprimer l’organisation.",
     "auditArchiveReady": "L’archive du journal d’activité est prête. Vous pouvez maintenant supprimer l’organisation.",

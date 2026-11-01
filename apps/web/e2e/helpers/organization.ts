@@ -7,12 +7,12 @@ const AUDIT_EXPORT_PATH = "/organizations/audit-export";
 const AUDIT_EXPORT_READY_TIMEOUT_MS = 120_000;
 
 type AuditExportLatest = {
-  latest: { status: string; coversCurrentTrail?: boolean } | null;
+  latest: { id: string; status: string; coversCurrentTrail?: boolean } | null;
 };
 
 /**
  * Delete the request context's active organization the way an owner does:
- * export its audit log, wait for the archive, then delete.
+ * export its audit log, wait for the archive, download it, then delete.
  */
 export const deleteTestOrganization = async (
   request: APIRequestContext,
@@ -29,6 +29,14 @@ export const deleteTestOrganization = async (
       { timeout: AUDIT_EXPORT_READY_TIMEOUT_MS },
     )
     .toMatchObject({ status: "ready", coversCurrentTrail: true });
+  const { latest } = await apiGet<AuditExportLatest>(
+    request,
+    AUDIT_EXPORT_PATH,
+  );
+  const archive = await request.get(
+    `${E2E_API_ORIGIN}/v1/me/data-exports/${encodeURIComponent(latest?.id ?? "")}/download`,
+  );
+  expect(archive.ok(), await archive.text()).toBe(true);
   const deleted = await request.post(
     `${E2E_API_ORIGIN}/api/auth/organization/delete`,
     { data: { organizationId } },

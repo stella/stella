@@ -34,6 +34,13 @@ const ONLY_OWNER_LEAVE_CODE =
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
 const AUDIT_EXPORT_REQUIRED_CODE = "organization_audit_export_required";
 const AUDIT_EXPORT_STALE_CODE = "organization_audit_export_stale";
+const AUDIT_EXPORT_NOT_DOWNLOADED_CODE =
+  "organization_audit_export_not_downloaded";
+const AUDIT_EXPORT_REFUSAL_CODES: readonly (string | undefined)[] = [
+  AUDIT_EXPORT_REQUIRED_CODE,
+  AUDIT_EXPORT_STALE_CODE,
+  AUDIT_EXPORT_NOT_DOWNLOADED_CODE,
+];
 
 export const OrganizationDangerZone = ({
   organizationId,
@@ -59,7 +66,9 @@ export const OrganizationDangerZone = ({
   const auditArchive =
     auditExportView.type === "items" ? auditExportView.items : null;
   const auditArchiveCurrent =
-    auditArchive?.status === "ready" && auditArchive.coversCurrentTrail;
+    auditArchive?.status === "ready" &&
+    auditArchive.coversCurrentTrail &&
+    auditArchive.downloaded;
   const requestAuditArchive = useMutation({
     onMutate: async () => {
       await queryClient.cancelQueries({
@@ -108,10 +117,7 @@ export const OrganizationDangerZone = ({
           },
         });
         setOutcome({ status: "refused", code: result.error.code });
-        if (
-          result.error.code === AUDIT_EXPORT_REQUIRED_CODE ||
-          result.error.code === AUDIT_EXPORT_STALE_CODE
-        ) {
+        if (AUDIT_EXPORT_REFUSAL_CODES.includes(result.error.code)) {
           await queryClient.invalidateQueries({
             queryKey: auditExportOptions.queryKey,
           });
@@ -155,6 +161,8 @@ export const OrganizationDangerZone = ({
         return t("admin.deleteRefusedAuditArchive");
       case AUDIT_EXPORT_STALE_CODE:
         return t("admin.auditArchiveOutdated");
+      case AUDIT_EXPORT_NOT_DOWNLOADED_CODE:
+        return t("admin.auditArchiveDownloadFirst");
       default:
         return t("errors.actionFailed");
     }

@@ -17,6 +17,7 @@
   "admin": {
     "ai": "IA",
     "auditArchiveDescription": "Al eliminar la organización también se elimina su registro de actividad. Exporta primero el registro de actividad y descarga el archivo; estará disponible para ti durante una hora.",
+    "auditArchiveDownloadFirst": "Descarga el archivo del registro de actividad antes de eliminar la organización.",
     "auditArchiveFailed": "No se pudo preparar el archivo del registro de actividad.",
     "auditArchiveOutdated": "El registro de actividad tiene entradas nuevas desde este archivo. Vuelve a exportarlo antes de eliminar la organización.",
     "auditArchiveReady": "El archivo del registro de actividad está listo. Ya puedes eliminar la organización.",

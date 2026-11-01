@@ -42,6 +42,7 @@ const CURRENT_ARCHIVE = {
   status: "ready",
   expiresAt: "2099-01-01T00:00:00.000Z",
   coversCurrentTrail: true,
+  downloaded: true,
 } as const satisfies AuditArchive;
 
 afterEach(() => {
@@ -273,4 +274,14 @@ test("a deletion refused for an outdated archive says to export again", async ()
       messages.admin.auditArchiveOutdated,
     ),
   );
+});
+
+test("a ready archive the owner has not downloaded keeps deletion closed", () => {
+  mount(true, undefined, { ...CURRENT_ARCHIVE, downloaded: false });
+  expect(screen.getByRole("status").textContent).toBe(
+    messages.admin.auditArchiveDownloadFirst,
+  );
+  expect(
+    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+  ).toHaveProperty("disabled", true);
 });

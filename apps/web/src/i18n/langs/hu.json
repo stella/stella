@@ -17,6 +17,7 @@
   "admin": {
     "ai": "MI",
     "auditArchiveDescription": "A szervezet törlésével a tevékenységnaplója is törlődik. Először exportálja a tevékenységnaplót, és töltse le az archívumot; egy óráig érhető el.",
+    "auditArchiveDownloadFirst": "A szervezet törlése előtt töltse le a tevékenységnapló archívumát.",
     "auditArchiveFailed": "A tevékenységnapló archívumát nem sikerült előkészíteni.",
     "auditArchiveOutdated": "Az archívum elkészülte óta új bejegyzések kerültek a tevékenységnaplóba. Exportálja újra, mielőtt törli a szervezetet.",
     "auditArchiveReady": "A tevékenységnapló archívuma elkészült. Most már törölheti a szervezetet.",

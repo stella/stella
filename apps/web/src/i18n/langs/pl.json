@@ -17,6 +17,7 @@
   "admin": {
     "ai": "AI",
     "auditArchiveDescription": "Usunięcie organizacji usuwa również jej rejestr aktywności. Najpierw wyeksportuj rejestr aktywności i pobierz archiwum; będzie dostępne przez godzinę.",
+    "auditArchiveDownloadFirst": "Przed usunięciem organizacji pobierz archiwum rejestru aktywności.",
     "auditArchiveFailed": "Nie udało się przygotować archiwum rejestru aktywności.",
     "auditArchiveOutdated": "Od utworzenia tego archiwum w rejestrze aktywności pojawiły się nowe wpisy. Wyeksportuj go ponownie przed usunięciem organizacji.",
     "auditArchiveReady": "Archiwum rejestru aktywności jest gotowe. Możesz teraz usunąć organizację.",

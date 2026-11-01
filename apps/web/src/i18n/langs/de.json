@@ -17,6 +17,7 @@
   "admin": {
     "ai": "KI",
     "auditArchiveDescription": "Wenn Sie die Organisation löschen, wird auch ihr Aktivitätsprotokoll gelöscht. Exportieren Sie zuerst das Aktivitätsprotokoll und laden Sie das Archiv herunter; es steht Ihnen eine Stunde lang zur Verfügung.",
+    "auditArchiveDownloadFirst": "Laden Sie das Archiv des Aktivitätsprotokolls herunter, bevor Sie die Organisation löschen.",
     "auditArchiveFailed": "Das Archiv des Aktivitätsprotokolls konnte nicht vorbereitet werden.",
     "auditArchiveOutdated": "Seit diesem Archiv sind neue Einträge im Aktivitätsprotokoll hinzugekommen. Exportieren Sie es erneut, bevor Sie die Organisation löschen.",
     "auditArchiveReady": "Das Archiv des Aktivitätsprotokolls ist bereit. Sie können die Organisation jetzt löschen.",

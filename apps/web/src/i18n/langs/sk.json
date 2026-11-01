@@ -17,6 +17,7 @@
   "admin": {
     "ai": "AI",
     "auditArchiveDescription": "Vymazaním organizácie sa vymaže aj jej záznam všetkých aktivít. Najprv záznam aktivít exportujte a stiahnite archív; bude vám k dispozícii jednu hodinu.",
+    "auditArchiveDownloadFirst": "Pred vymazaním organizácie si stiahnite archív záznamu aktivít.",
     "auditArchiveFailed": "Archív záznamu aktivít sa nepodarilo pripraviť.",
     "auditArchiveOutdated": "Od vytvorenia tohto archívu pribudli v zázname aktivít nové položky. Pred vymazaním organizácie ho exportujte znova.",
     "auditArchiveReady": "Archív záznamu aktivít je pripravený. Teraz môžete organizáciu vymazať.",

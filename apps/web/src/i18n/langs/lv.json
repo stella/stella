@@ -17,6 +17,7 @@
   "admin": {
     "ai": "AI",
     "auditArchiveDescription": "Dzēšot organizāciju, tiek dzēsts arī tās darbību žurnāls. Vispirms eksportējiet darbību žurnālu un lejupielādējiet arhīvu; tas būs pieejams vienu stundu.",
+    "auditArchiveDownloadFirst": "Pirms organizācijas dzēšanas lejupielādējiet darbību žurnāla arhīvu.",
     "auditArchiveFailed": "Darbību žurnāla arhīvu neizdevās sagatavot.",
     "auditArchiveOutdated": "Kopš šī arhīva izveides darbību žurnālā ir jauni ieraksti. Pirms organizācijas dzēšanas eksportējiet to vēlreiz.",
     "auditArchiveReady": "Darbību žurnāla arhīvs ir gatavs. Tagad varat dzēst organizāciju.",

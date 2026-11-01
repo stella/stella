@@ -42,6 +42,18 @@ export const OrganizationAuditArchive = ({
     </Button>
   );
 
+  const readyMessage = ({
+    coversCurrentTrail,
+    downloaded,
+  }: Extract<OrganizationAuditExportStatus, { status: "ready" }>) => {
+    if (!coversCurrentTrail) {
+      return t("admin.auditArchiveOutdated");
+    }
+    return downloaded
+      ? t("admin.auditArchiveReady")
+      : t("admin.auditArchiveDownloadFirst");
+  };
+
   const state = (() => {
     if (status === null) {
       return requestButton(t("admin.auditArchiveRequest"));
@@ -63,9 +75,7 @@ export const OrganizationAuditArchive = ({
           <div className="flex flex-col items-start gap-3">
             <div className="space-y-1">
               <p role="status" className="text-sm">
-                {status.coversCurrentTrail
-                  ? t("admin.auditArchiveReady")
-                  : t("admin.auditArchiveOutdated")}
+                {readyMessage(status)}
               </p>
               <p className="text-muted-foreground text-sm">
                 {t("settings.account.personalDataExportExpiresAt", {
