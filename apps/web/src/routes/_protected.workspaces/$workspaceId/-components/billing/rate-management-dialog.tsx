@@ -34,12 +34,13 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MEMBER_CHOICE, MemberCombobox } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { apiFieldIssueMessage, unwrapApiResponse } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { unwrapApiResponse } from "@/lib/errors/api";
+import { fieldIssueOrToast, notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { localISODate } from "@/lib/local-iso-date";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
@@ -113,6 +114,7 @@ const RateTablesView = ({
 }) => {
   const t = useTranslations();
   const [showForm, setShowForm] = useState(false);
+  const isFormOpen = useLatestCallback(() => showForm);
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const analytics = useAnalytics();
@@ -210,10 +212,13 @@ const RateTablesView = ({
         setShowForm(false);
         return undefined;
       },
-      (error: unknown) => {
-        notifyUserError(error, t("common.somethingWentWrong"));
-        return apiFieldIssueMessage(error, "name");
-      },
+      (error: unknown) =>
+        fieldIssueOrToast(
+          error,
+          "name",
+          t("common.somethingWentWrong"),
+          isFormOpen,
+        ),
     );
 
   const handleSetDefault = (id: string) => {

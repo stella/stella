@@ -778,6 +778,9 @@
       "dependsOn": ["transit"],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    "@stll/desktop#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/**"]
+    },
     "@stll/cli#codegen:runtime": {
       "inputs": [
         "package.json",
