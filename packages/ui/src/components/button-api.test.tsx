@@ -294,7 +294,10 @@ describe("Button loading keeps its width", () => {
 
     expect(markup).toContain('data-slot="button-label"');
     expect(markup).toMatch(/data-slot="button-label"[^>]*>Save draft</u);
-    expect(markup).toContain("opacity-0");
+    // The label itself is transparent; the loader's `starting:opacity-0`
+    // must not stand in for it.
+    const label = /<span[^>]*data-slot="button-label"[^>]*>/u.exec(markup)?.[0];
+    expect(label).toMatch(/class="(?:[^"]* )?opacity-0(?: [^"]*)?"/u);
     expect(markup).toContain("absolute inset-0 m-auto");
     expect(markup).toContain('aria-busy="true"');
   });
