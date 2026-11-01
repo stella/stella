@@ -39,6 +39,5 @@ export const _strictNotUndefinedChain = log?.closedAt !== undefined;
 export const _strictNotUndefinedNarrowed = log !== undefined && log.closedAt !== undefined;
 
 // --- Folded absence stays clean for both rules ---
-// expect-clean: no-optional-chain-null-compare/no-optional-chain-null-compare
-// expect-clean: no-optional-chain-null-compare/no-optional-chain-absent-match
+// expect-clean: no-optional-chain-null-compare/no-optional-chain-null-compare, no-optional-chain-null-compare/no-optional-chain-absent-match
 export const _folded = (log?.closedAt ?? null) !== null;
