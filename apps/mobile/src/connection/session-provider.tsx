@@ -6,7 +6,7 @@ import { apiOAuthResourceUrl } from "@stll/api-contract/api-oauth-resource";
 import { mobileRedirectUri } from "@stll/api-contract/mobile-client";
 
 import { epochMilliseconds } from "@/connection/clock";
-import { TokenError } from "@/connection/errors";
+import type { TokenError } from "@/connection/errors";
 import {
   deviceCrypto,
   deviceSessionStore,
@@ -17,8 +17,9 @@ import { isCurrentSessionSource } from "@/connection/session";
 import type {
   AccessTokenSource,
   SessionGeneration,
+  StoredSession,
 } from "@/connection/session";
-import { signOutSession } from "@/connection/session-actions";
+import { keepSignIn, signOutSession } from "@/connection/session-actions";
 import {
   type BeforeSessionEnd,
   createSessionEndBoundary,
@@ -77,6 +78,18 @@ const stopPushNotifications = async (source: AccessTokenSource) => {
   }
 };
 
+/** Gives a grant back to the server. Best effort: an unrevoked grant expires unused. */
+const revokeSession = async (session: StoredSession) => {
+  (
+    await revokeRefreshToken({
+      clientId: session.clientId,
+      fetch,
+      refreshToken: session.refreshToken,
+      revocationEndpoint: session.revocationEndpoint,
+    })
+  ).unwrapOr(undefined);
+};
+
 export const SessionProvider = ({ children }: React.PropsWithChildren) => {
   const restored = use(restoredSource);
   const [state, setState] = useState<SessionState>(() =>
@@ -120,48 +133,23 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
       if (Result.isError(signedIn)) {
         return Result.err(signedIn.error);
       }
-      const { session } = signedIn.value;
-      const stored = await Result.tryPromise({
-        try: async () => await transition.write(session),
-        catch: (cause) =>
-          new TokenError({
-            message: "The keychain refused the session",
-            cause,
-          }),
+      const { session, access } = signedIn.value;
+      return await keepSignIn({
+        store: deviceSessionStore,
+        transition,
+        session,
+        revoke: revokeSession,
+        publish: (generation) => {
+          const next = {
+            status: "signed-in",
+            source: sourceFor({ session, initialAccess: access, generation }),
+          } as const satisfies SessionState;
+          setState(
+            (current) =>
+              deviceSessionStore.commit(generation, () => next) ?? current,
+          );
+        },
       });
-      if (Result.isError(stored)) {
-        // A grant the phone cannot keep is one nobody can use; give it back.
-        // Sign-in fails either way, and an unrevoked grant expires unused.
-        (
-          await revokeRefreshToken({
-            clientId: session.clientId,
-            fetch,
-            refreshToken: session.refreshToken,
-            revocationEndpoint: session.revocationEndpoint,
-          })
-        ).unwrapOr(undefined);
-        return Result.err(stored.error);
-      }
-      if (
-        stored.value.type === "stale" ||
-        !deviceSessionStore.isCurrent(stored.value.generation)
-      ) {
-        return Result.ok(undefined);
-      }
-      const outcome = stored.value;
-      const next = {
-        status: "signed-in",
-        source: sourceFor({
-          session,
-          initialAccess: signedIn.value.access,
-          generation: outcome.generation,
-        }),
-      } as const satisfies SessionState;
-      setState(
-        (current) =>
-          deviceSessionStore.commit(outcome.generation, () => next) ?? current,
-      );
-      return Result.ok(undefined);
     },
     signOut: async () =>
       await signOutSession({
@@ -175,16 +163,7 @@ export const SessionProvider = ({ children }: React.PropsWithChildren) => {
             await stopPushNotifications(state.source);
           }
         },
-        revoke: async (session) => {
-          (
-            await revokeRefreshToken({
-              clientId: session.clientId,
-              fetch,
-              refreshToken: session.refreshToken,
-              revocationEndpoint: session.revocationEndpoint,
-            })
-          ).unwrapOr(undefined);
-        },
+        revoke: revokeSession,
         publish: (generation) =>
           setState(
             (current) =>

@@ -6,7 +6,7 @@ import {
   type SessionGeneration,
   type StoredSession,
 } from "./session";
-import { signOutSession } from "./session-actions";
+import { keepSignIn, signOutSession } from "./session-actions";
 
 const SESSION = {
   signInId: "sign-in-a",
@@ -158,4 +158,115 @@ test("session cleanup can authenticate before its credentials are retired", asyn
   expect(cleaned).toBeTrue();
   expect(source.session()).toBeUndefined();
   expect(stored).toBeUndefined();
+});
+
+const SIGN_IN_B = {
+  ...SESSION,
+  signInId: "sign-in-b",
+  refreshToken: "refresh-b",
+} satisfies StoredSession;
+
+for (const overtaken of ["before-write", "during-write"] as const) {
+  test(`a sign-in overtaken ${overtaken} gives its grant back`, async () => {
+    const writing = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    let stored: StoredSession | null | undefined;
+    const store = createSessionStore({
+      read: async () => stored,
+      write: async (session) => {
+        if (session === SESSION && overtaken === "during-write") {
+          writing.resolve(undefined);
+          await resume.promise;
+        }
+        stored = session;
+      },
+      prepareClear: async () => {
+        stored = null;
+      },
+      clear: async () => {
+        stored = undefined;
+      },
+    });
+    const revoked: StoredSession[] = [];
+    const published: SessionGeneration[] = [];
+    const keeping = keepSignIn({
+      store,
+      transition: store.begin(),
+      session: SESSION,
+      revoke: async (session) => {
+        revoked.push(session);
+      },
+      publish: (generation) => {
+        published.push(generation);
+      },
+    });
+    if (overtaken === "during-write") {
+      await writing.promise;
+    }
+    const later = store.begin();
+    resume.resolve(undefined);
+    expect((await keeping).isOk()).toBeTrue();
+    expect((await later.write(SIGN_IN_B)).type).toBe("committed");
+    expect(revoked).toEqual([SESSION]);
+    expect(published).toEqual([]);
+    expect(stored).toEqual(SIGN_IN_B);
+  });
+}
+
+test("a sign-in the keychain refuses fails and gives its grant back", async () => {
+  const store = createSessionStore({
+    read: async () => undefined,
+    write: async () => {
+      throw new Error("keychain locked");
+    },
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  const revoked: StoredSession[] = [];
+  const published: SessionGeneration[] = [];
+  const outcome = await keepSignIn({
+    store,
+    transition: store.begin(),
+    session: SESSION,
+    revoke: async (session) => {
+      revoked.push(session);
+    },
+    publish: (generation) => {
+      published.push(generation);
+    },
+  });
+  expect(outcome.isErr()).toBeTrue();
+  expect(revoked).toEqual([SESSION]);
+  expect(published).toEqual([]);
+});
+
+test("a sign-in that commits publishes its generation and keeps its grant", async () => {
+  let stored: StoredSession | null | undefined;
+  const store = createSessionStore({
+    read: async () => stored,
+    write: async (session) => {
+      stored = session;
+    },
+    prepareClear: async () => {},
+    clear: async () => {},
+  });
+  const before = store.generation();
+  const revoked: StoredSession[] = [];
+  const published: SessionGeneration[] = [];
+  const outcome = await keepSignIn({
+    store,
+    transition: store.begin(),
+    session: SESSION,
+    revoke: async (session) => {
+      revoked.push(session);
+    },
+    publish: (generation) => {
+      published.push(generation);
+    },
+  });
+  expect(outcome.isOk()).toBeTrue();
+  expect(revoked).toEqual([]);
+  expect(published).toEqual([store.generation()]);
+  expect(store.isCurrent(before)).toBeFalse();
+  expect(stored).toEqual(SESSION);
 });
