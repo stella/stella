@@ -1,5 +1,5 @@
 {
-  "reviewOnlyRules": 171,
+  "reviewOnlyRules": 169,
   "excludedSources": [
     {
       "file": ".ai/local-skills/dev/SKILL.md",
@@ -60,14 +60,6 @@
     {
       "file": ".ai/shared/modules/typescript.md",
       "reason": "Shared module consumed by several repositories; what enforces a rule differs per consumer, so stella's tags live in its local fragments."
-    },
-    {
-      "file": ".ai/local-skills/finish-pr/SKILL.md",
-      "reason": "A pull-request maintenance workflow; its lists are convergence conditions and reporting steps, not standing source-code rules."
-    },
-    {
-      "file": ".ai/local-skills/rabbit-round/SKILL.md",
-      "reason": "A review-processing workflow; its lists classify findings, disposition records and terminal states, not standing source-code rules."
     }
   ],
   "excludedSections": [
