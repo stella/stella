@@ -14,13 +14,6 @@ mod bridge;
 mod chatgpt_auth;
 mod chatgpt_auth_commands;
 mod clipboard;
-mod dictation;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-mod dictation_audio;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-mod dictation_engine;
-#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-mod dictation_worker;
 mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
@@ -39,6 +32,13 @@ mod desktop_telemetry;
 mod device_preference;
 mod device_proof;
 mod diagnostics;
+mod dictation;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_audio;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_engine;
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+mod dictation_worker;
 #[cfg(test)]
 mod e2e;
 mod feature_access;
@@ -273,6 +273,9 @@ pub fn run() {
                 let snapshot = manager.lock().await.get_snapshot();
                 tray::refresh(&app, &snapshot);
               });
+            }
+            feature_gate::DesktopFeature::Dictation => {
+              dictation::apply_feature_gate(app, enabled);
             }
             feature_gate::DesktopFeature::LocalAgents => {
               harness_commands::apply_feature_gate(app, enabled);
@@ -529,8 +532,6 @@ pub fn run() {
           }
         });
       }
-
-      dictation::start_at_launch(&handle);
 
       tracing::info!("stella desktop started");
       Ok(())

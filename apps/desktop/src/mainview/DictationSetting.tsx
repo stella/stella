@@ -20,6 +20,7 @@ type DictationModel =
   | { received: number; status: "downloading"; total: number };
 
 type DictationSnapshot = {
+  available: boolean;
   enabled: boolean;
   failure:
     "accessibility" | "microphone" | "modelMissing" | "transcription" | null;
@@ -28,7 +29,6 @@ type DictationSnapshot = {
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
   shortcutTaken: boolean;
-  supported: boolean;
 };
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -63,7 +63,7 @@ export const DictationSetting = () => {
     };
   }, []);
 
-  if (snapshot === null || !snapshot.supported) {
+  if (snapshot === null || !snapshot.available) {
     return null;
   }
 

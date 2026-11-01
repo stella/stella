@@ -4,6 +4,11 @@
 //! This module owns the preference, the speech model file and the shortcut.
 //! `dictation_engine` owns capture, transcription and insertion on one thread.
 
+#![cfg_attr(
+  not(all(target_os = "macos", target_arch = "aarch64")),
+  allow(dead_code, reason = "only the Apple Silicon engine drives these")
+)]
+
 use std::{
   path::{Path, PathBuf},
   sync::{Mutex, mpsc::Sender},
@@ -21,6 +26,7 @@ use crate::{
   clipboard_shortcut::ShortcutKeys,
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
+  feature_gate::{DesktopFeature, FeatureGates},
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
 
@@ -81,7 +87,7 @@ pub enum Failure {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DictationSnapshot {
-  supported: bool,
+  available: bool,
   enabled: bool,
   model: ModelState,
   model_bytes: u64,
@@ -120,10 +126,10 @@ impl DictationState {
     }))
   }
 
-  fn snapshot(&self) -> DictationSnapshot {
+  fn snapshot(&self, available: bool) -> DictationSnapshot {
     let inner = self.0.lock().unwrap_or_else(|error| error.into_inner());
     DictationSnapshot {
-      supported: SUPPORTED,
+      available,
       enabled: inner.enabled,
       model: inner.model,
       model_bytes: MODEL_BYTES,
@@ -146,6 +152,14 @@ fn change<T>(app: &AppHandle, apply: impl FnOnce(&mut Inner) -> T) -> T {
     tracing::warn!(%error, "dictation change event failed");
   }
   value
+}
+
+/// A build that can run the model, for an account the server enabled.
+fn available(app: &AppHandle) -> bool {
+  SUPPORTED
+    && app
+      .state::<FeatureGates>()
+      .is_enabled(DesktopFeature::Dictation)
 }
 
 fn model_path() -> Option<PathBuf> {
@@ -181,24 +195,12 @@ pub fn clear_failure(app: &AppHandle) {
 
 /// The only sign of recording away from the settings window.
 fn show_phase_in_tray(app: &AppHandle, phase: Phase) {
-  let handle = app.clone();
-  let title = match phase {
+  let mark = match phase {
     Phase::Idle => None,
     Phase::Recording => Some("●"),
     Phase::Transcribing => Some("…"),
   };
-  if app
-    .run_on_main_thread(move || {
-      if let Some(tray) = handle.tray_by_id("main")
-        && let Err(error) = tray.set_title(title)
-      {
-        tracing::warn!(%error, "dictation tray title failed");
-      }
-    })
-    .is_err()
-  {
-    tracing::warn!("dictation tray title skipped: the event loop is gone");
-  }
+  crate::tray::set_status_mark(app, mark);
 }
 
 fn on_shortcut(app: &AppHandle, _shortcut: &Shortcut, event: ShortcutEvent) {
@@ -245,15 +247,26 @@ fn stop(app: &AppHandle) {
   });
 }
 
-pub fn start_at_launch(app: &AppHandle) {
-  if app.state::<DictationState>().update(|inner| inner.enabled) {
+/// The server's decision, applied whenever it arrives or changes. Nothing
+/// listens for the shortcut until it says this account may dictate.
+pub fn apply_feature_gate(app: &AppHandle, enabled: bool) {
+  let (wanted, running) = app
+    .state::<DictationState>()
+    .update(|inner| (inner.enabled, inner.commands.is_some()));
+  if enabled && wanted && !running {
     start(app);
+  } else if !enabled && running {
+    stop(app);
   }
+  change(app, |_inner| ());
 }
 
 #[tauri::command]
-pub fn dictation_get_snapshot(state: State<'_, DictationState>) -> DictationSnapshot {
-  state.snapshot()
+pub fn dictation_get_snapshot(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+) -> DictationSnapshot {
+  state.snapshot(available(&app))
 }
 
 #[tauri::command]
@@ -262,7 +275,7 @@ pub fn dictation_set_enabled(
   state: State<'_, DictationState>,
   enabled: bool,
 ) -> Result<DictationSnapshot, String> {
-  if !SUPPORTED {
+  if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
   let unchanged = change(&app, |inner| {
@@ -282,7 +295,7 @@ pub fn dictation_set_enabled(
       stop(&app);
     }
   }
-  Ok(state.snapshot())
+  Ok(state.snapshot(true))
 }
 
 #[tauri::command]
@@ -290,7 +303,7 @@ pub fn dictation_download_model(
   app: AppHandle,
   state: State<'_, DictationState>,
 ) -> Result<DictationSnapshot, String> {
-  if !SUPPORTED {
+  if !available(&app) {
     return Err("dictation is not available on this computer".to_string());
   }
   let begin = change(&app, |inner| {
@@ -319,7 +332,7 @@ pub fn dictation_download_model(
       change(&handle, |inner| inner.model = model);
     });
   }
-  Ok(state.snapshot())
+  Ok(state.snapshot(true))
 }
 
 fn hex(bytes: &[u8]) -> String {
